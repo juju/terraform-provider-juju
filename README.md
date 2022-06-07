@@ -1,13 +1,11 @@
 # Terraform Provider for Juju
 
-The template repository built on the [Terraform Plugin SDK](https://github.com/hashicorp/terraform-plugin-sdk) can be found at [terraform-provider-scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding). See [Which SDK Should I Use?](https://www.terraform.io/docs/plugin/which-sdk.html) in the Terraform documentation for additional information._
-
-This repository is a *template* for a [Terraform](https://www.terraform.io) provider. It is intended as a starting point for creating Terraform providers.
+The provider can be used to interact with Juju - a model-driven Operator Lifecycle Manager (OLM).
 
 ## Requirements
 
-- [Terraform](https://www.terraform.io/downloads.html) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.17
+- [Terraform](https://www.terraform.io/downloads.html) >= 0.12.0
+- [Go](https://golang.org/doc/install) >= 1.18
 
 ## Building The Provider
 
@@ -32,10 +30,6 @@ go mod tidy
 ```
 
 Then commit the changes to `go.mod` and `go.sum`.
-
-## Using the provider
-
-Fill this in for each provider
 
 ## Developing the Provider
 
