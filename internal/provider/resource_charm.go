@@ -17,6 +17,7 @@ func resourceCharm() *schema.Resource {
 		DeleteContext: resourceCharmDelete,
 
 		Schema: map[string]*schema.Schema{
+			// TODO: this needs to be reviewed
 			"model": {
 				Description: "The identifier of the model where this Charm is to be installed.",
 				Type:        schema.TypeString,

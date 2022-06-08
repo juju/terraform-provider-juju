@@ -17,6 +17,7 @@ func resourceModel() *schema.Resource {
 		DeleteContext: resourceModelDelete,
 
 		Schema: map[string]*schema.Schema{
+			// TODO: this needs to be reviewed
 			"name": {
 				Description: "The name to be assigned to the model.",
 				Type:        schema.TypeString,

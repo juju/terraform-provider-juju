@@ -17,6 +17,7 @@ func resourceRelation() *schema.Resource {
 		DeleteContext: resourceRelationDelete,
 
 		Schema: map[string]*schema.Schema{
+			// TODO: this needs to be reviewed
 			"model": {
 				Description: "Model",
 				Type:        schema.TypeString,
