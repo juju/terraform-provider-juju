@@ -28,7 +28,7 @@ provider "juju" {
 
 ### Optional
 
-- `ca_certificate` (String) This is the certificate to use for authentication. This will be ignored if username / password specified. This can also be set by the `JUJU_CA_CERT` environment variable
+- `ca_certificate` (String) This is the certificate to use for identification. This can also be set by the `JUJU_CA_CERT` environment variable
 - `controller` (String) This is the Controller address to connect to, defaults to localhost:17070. This can also be set by the `JUJU_CONTROLLER` environment variable.
 - `password` (String, Sensitive) This is the password of the username to be used. This can also be set by the `JUJU_PASSWORD` environment variable
 - `username` (String) This is the username registered with the controller to be used. This can also be set by the `JUJU_USERNAME` environment variable
