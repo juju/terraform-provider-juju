@@ -4,8 +4,7 @@ import (
 	"context"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/juju/juju/api"
-	"github.com/juju/terraform-provider-juju/internal/juju/client"
+	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
 func dataSourceModel() *schema.Resource {
@@ -23,13 +22,11 @@ func dataSourceModel() *schema.Resource {
 }
 
 func dataSourceModelRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	conn := meta.(api.Connection)
-
-	juju := client.New(conn)
+	client := meta.(juju.Client)
 
 	modelName := d.Get("name").(string)
 
-	model, err := juju.Models.GetByName(modelName)
+	model, err := client.Models.GetByName(modelName)
 	if err != nil {
 		return diag.FromErr(err)
 	}
