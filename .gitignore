@@ -10,7 +10,7 @@ modules-dev/
 /pkg/
 *.backup
 ./*.tfstate
-.terraform/
+.terraform*
 *.log
 *.bak
 *~

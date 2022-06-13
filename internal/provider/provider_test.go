@@ -15,6 +15,7 @@ var providerFactories = map[string]func() (*schema.Provider, error){
 	},
 }
 
+// TODO: Expand these tests
 func TestProvider(t *testing.T) {
 	if err := New("dev")().InternalValidate(); err != nil {
 		t.Fatalf("err: %s", err)
