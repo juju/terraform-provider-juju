@@ -35,7 +35,7 @@ func New(version string) func() *schema.Provider {
 				},
 				"ca_certificate": {
 					Type:        schema.TypeString,
-					Description: fmt.Sprintf("This is the certificate to use for authentication. This will be ignored if username / password specified. This can also be set by the `JUJU_CA_CERT` environment variable"),
+					Description: fmt.Sprintf("This is the certificate to use for identification. This can also be set by the `JUJU_CA_CERT` environment variable"),
 					Optional:    true,
 					DefaultFunc: schema.EnvDefaultFunc("JUJU_CA_CERT", nil),
 				},
@@ -58,9 +58,6 @@ func New(version string) func() *schema.Provider {
 
 func configure(version string, p *schema.Provider) func(context.Context, *schema.ResourceData) (interface{}, diag.Diagnostics) {
 	return func(_ context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
-		// Setup a User-Agent for your API client (replace the provider name for yours):
-		// userAgent := p.UserAgent("terraform-provider-juju", version)
-		// TODO: myClient.UserAgent = userAgent
 
 		var diags diag.Diagnostics
 
