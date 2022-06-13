@@ -8,9 +8,8 @@ import (
 )
 
 func TestAcc_DataSourceModel(t *testing.T) {
-	t.Skip("data source not yet implemented, remove this once you add your own code")
-
-	resource.UnitTest(t, resource.TestCase{
+	// TODO: requires `juju create-model development` before executing
+	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{

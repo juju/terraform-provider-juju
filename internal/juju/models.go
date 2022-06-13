@@ -1,7 +1,6 @@
 package juju
 
 import (
-	"github.com/juju/errors"
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/jujuclient"
@@ -35,7 +34,7 @@ func (c *modelClient) GetByName(name string) (Model, error) {
 	defer client.Close()
 
 	modelDetails, err := c.store.ModelByName(c.controllerName, name)
-	if !errors.IsNotFound(err) {
+	if err != nil {
 		return Model{}, err
 	}
 

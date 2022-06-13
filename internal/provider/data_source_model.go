@@ -22,7 +22,7 @@ func dataSourceModel() *schema.Resource {
 }
 
 func dataSourceModelRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(juju.Client)
+	client := meta.(*juju.Client)
 
 	modelName := d.Get("name").(string)
 
@@ -32,6 +32,8 @@ func dataSourceModelRead(ctx context.Context, d *schema.ResourceData, meta inter
 	}
 
 	d.SetId(model.UUID)
+	d.Set("uuid", model.UUID)
+	d.Set("name", model.Name)
 
 	return nil
 }
