@@ -14,6 +14,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.1.1 // indirect
 	github.com/Masterminds/sprig/v3 v3.2.2 // indirect
 	github.com/agext/levenshtein v1.2.2 // indirect
+	github.com/apparentlymart/go-cidr v1.1.0 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.9.1 // indirect
@@ -73,6 +74,7 @@ require (
 	github.com/juju/clock v0.0.0-20220203021603-d9deb868a28a // indirect
 	github.com/juju/cmd/v3 v3.0.0-20220203030511-039f3566372a // indirect
 	github.com/juju/collections v0.0.0-20220203020748-febd7cad8a7a // indirect
+	github.com/juju/errors v0.0.0-20220316043928-e10eb17a9eeb // indirect
 	github.com/juju/featureflag v0.0.0-20220207005600-a9676d92ad24 // indirect
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d // indirect
 	github.com/juju/go4 v0.0.0-20160222163258-40d72ab9641a // indirect
@@ -179,6 +181,5 @@ require (
 
 require (
 	github.com/boltdb/bolt v1.3.1 // indirect
-	github.com/juju/errors v0.0.0-20220316043928-e10eb17a9eeb
 	github.com/juju/names/v4 v4.0.0-20220518060443-d77cb46f6093
 )
