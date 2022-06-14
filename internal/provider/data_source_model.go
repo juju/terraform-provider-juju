@@ -17,6 +17,11 @@ func dataSourceModel() *schema.Resource {
 				Type:        schema.TypeString,
 				Required:    true,
 			},
+			"uuid": {
+				Description: "The UUID of the model.",
+				Type:        schema.TypeString,
+				Computed:    true,
+			},
 		},
 	}
 }
