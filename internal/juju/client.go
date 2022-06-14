@@ -37,8 +37,11 @@ func NewClient(config Configuration) (*Client, error) {
 		ClientStore: jujuclient.NewFileClientStore(),
 	}
 
-	// TODO: determine how to obtain this
-	const controllerName = "overlord"
+	// TODO: should the controller be part of the provider configuration?
+	controllerName, err := store.CurrentController()
+	if err != nil {
+		return nil, err
+	}
 
 	return &Client{
 		Models: *newModelsClient(conn, store, controllerName),
