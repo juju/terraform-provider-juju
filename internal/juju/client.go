@@ -14,7 +14,7 @@ type Configuration struct {
 }
 
 type Client struct {
-	Models modelClient
+	Models modelsClient
 }
 
 func NewClient(config Configuration) (*Client, error) {
@@ -41,6 +41,6 @@ func NewClient(config Configuration) (*Client, error) {
 	const controllerName = "overlord"
 
 	return &Client{
-		Models: *newModelClient(conn, store, controllerName),
+		Models: *newModelsClient(conn, store, controllerName),
 	}, nil
 }

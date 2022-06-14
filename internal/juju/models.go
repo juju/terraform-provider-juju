@@ -14,14 +14,14 @@ type Model struct {
 	UUID string
 }
 
-type modelClient struct {
+type modelsClient struct {
 	conn           api.Connection
 	store          jujuclient.ClientStore
 	controllerName string
 }
 
-func newModelClient(conn api.Connection, store jujuclient.ClientStore, controllerName string) *modelClient {
-	return &modelClient{
+func newModelsClient(conn api.Connection, store jujuclient.ClientStore, controllerName string) *modelsClient {
+	return &modelsClient{
 		conn:           conn,
 		store:          store,
 		controllerName: controllerName,
@@ -29,7 +29,7 @@ func newModelClient(conn api.Connection, store jujuclient.ClientStore, controlle
 }
 
 // GetByName retrieves a model by name
-func (c *modelClient) GetByName(name string) (Model, error) {
+func (c *modelsClient) GetByName(name string) (Model, error) {
 	client := modelmanager.NewClient(c.conn)
 	defer client.Close()
 
