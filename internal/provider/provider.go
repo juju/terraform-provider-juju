@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/juju/juju/api/connector"
 	"github.com/juju/juju/juju/osenv"
-	"github.com/juju/terraform-provider-juju/internal/client"
+	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
 func New(version string) func() *schema.Provider {
@@ -74,18 +73,17 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 			})
 		}
 
-		simpleConfig := connector.SimpleConfig{
+		config := juju.Configuration{
 			ControllerAddresses: []string{controllerAddress},
 			Username:            username,
 			Password:            password,
 			CACert:              caCert,
 		}
-
-		internalClient, err := client.NewClient(simpleConfig)
+		client, err := juju.NewClient(config)
 		if err != nil {
 			return nil, diag.FromErr(err)
 		}
 
-		return &internalClient, diags
+		return client, diags
 	}
 }

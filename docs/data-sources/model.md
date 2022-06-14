@@ -23,10 +23,11 @@ data "juju_model" "this" {
 
 ### Required
 
-- `name` (String) The name to be assigned to the model.
+- `name` (String) The name of the model.
 
 ### Read-Only
 
 - `id` (String) The ID of this resource.
+- `uuid` (String) The UUID of the model.
 
 
