@@ -21,4 +21,5 @@ modules-dev/
 *.iml
 .idea
 .vscode
+.envrc
 vendor/
