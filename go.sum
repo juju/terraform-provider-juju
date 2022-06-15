@@ -18,6 +18,7 @@ cloud.google.com/go v0.72.0/go.mod h1:M+5Vjvlc2wnp6tjzE102Dw08nGShTscUx2nZMufOKP
 cloud.google.com/go v0.74.0/go.mod h1:VV1xSbzvo+9QJOxLDaJfTjx5e+MePCpCWwvftOeQmWk=
 cloud.google.com/go v0.78.0/go.mod h1:QjdrLG0uq+YwhjoVOLsS1t7TW8fs36kLs4XO5R5ECHg=
 cloud.google.com/go v0.79.0/go.mod h1:3bzgcEeQlzbuEAYu4mrWhKqWjmpprinYgKJLgKHnbb8=
+cloud.google.com/go v0.81.0 h1:at8Tk2zUz63cLPR0JPWm5vp77pEZmzxEQBEfRKn1VV8=
 cloud.google.com/go v0.81.0/go.mod h1:mk/AM35KwGk/Nm2YSeZbxXdrNK3KZOYHmLkOqC2V6E0=
 cloud.google.com/go/bigquery v1.0.1/go.mod h1:i/xbL2UlR5RvWAURpBYZTtm/cXjCha9lbfbpx4poX+o=
 cloud.google.com/go/bigquery v1.3.0/go.mod h1:PjpwJnslEMmckchkHFfq+HTD2DmtT67aNFKH1/VBDHE=
@@ -385,8 +386,8 @@ github.com/hashicorp/terraform-json v0.5.0/go.mod h1:eAbqb4w0pSlRmdvl8fOyHAi/+8j
 github.com/hashicorp/terraform-json v0.8.0/go.mod h1:3defM4kkMfttwiE7VakJDwCd4R+umhSQnvJwORXbprE=
 github.com/hashicorp/terraform-json v0.14.0 h1:sh9iZ1Y8IFJLx+xQiKHGud6/TSUCM0N8e17dKDpqV7s=
 github.com/hashicorp/terraform-json v0.14.0/go.mod h1:5A9HIWPkk4e5aeeXIBbkcOvaZbIYnAIkEyqP2pNSckM=
-github.com/hashicorp/terraform-plugin-docs v0.10.0 h1:LwoFJ3RoKElDFhBRomsDkaEn59OUNXa92M21VCuL7Vk=
-github.com/hashicorp/terraform-plugin-docs v0.10.0/go.mod h1:47ZcsxMUJxAjGzHf+dZ9q78oYf4PeJxO1N+i5XDtXBc=
+github.com/hashicorp/terraform-plugin-docs v0.10.1 h1:jiVYfhJ/hVXDAQN2XjLK3WH1A/YHgFCrFXPpxibvmjc=
+github.com/hashicorp/terraform-plugin-docs v0.10.1/go.mod h1:47ZcsxMUJxAjGzHf+dZ9q78oYf4PeJxO1N+i5XDtXBc=
 github.com/hashicorp/terraform-plugin-go v0.2.1/go.mod h1:10V6F3taeDWVAoLlkmArKttR3IULlRWFAGtQIQTIDr4=
 github.com/hashicorp/terraform-plugin-go v0.9.1 h1:vXdHaQ6aqL+OF076nMSBV+JKPdmXlzG5mzVDD04WyPs=
 github.com/hashicorp/terraform-plugin-go v0.9.1/go.mod h1:ItjVSlQs70otlzcCwlPcU8FRXLdO973oYFRZwAOxy8M=
