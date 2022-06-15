@@ -31,13 +31,13 @@ func testAccPreCheck(t *testing.T) {
 		t.Log("no CI environment detected, executing acceptance tests", v)
 	}
 
-	if v := os.Getenv("JUJU_USERNAME"); v == "" {
-		t.Fatal("JUJU_USERNAME must be set for acceptance tests")
+	if v := os.Getenv(JujuUsernameEnvKey); v == "" {
+		t.Fatalf("%s must be set for acceptance tests", JujuUsernameEnvKey)
 	}
-	if v := os.Getenv("JUJU_PASSWORD"); v == "" {
-		t.Fatal("JUJU_PASSWORD must be set for acceptance tests")
+	if v := os.Getenv(JujuPasswordEnvKey); v == "" {
+		t.Fatalf("%s must be set for acceptance tests", JujuPasswordEnvKey)
 	}
-	if v := os.Getenv("JUJU_CA_CERT"); v == "" {
-		t.Fatal("JUJU_CA_CERT must be set for acceptance tests")
+	if v := os.Getenv(JujuCACertEnvKey); v == "" {
+		t.Fatalf("%s must be set for acceptance tests", JujuCACertEnvKey)
 	}
 }

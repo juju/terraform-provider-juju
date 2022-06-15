@@ -2,13 +2,14 @@ package provider
 
 import (
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
-	"github.com/juju/juju/cmd/modelcmd"
-	"github.com/juju/juju/jujuclient"
-	"os"
 	"os/exec"
 	"regexp"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/juju/juju/cmd/modelcmd"
+	"github.com/juju/juju/jujuclient"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 )
@@ -28,6 +29,7 @@ func TestAcc_DataSourceModel(t *testing.T) {
 				),
 			},
 		},
+		CheckDestroy: testAccDataSourceModelDestroy,
 	})
 }
 
@@ -39,6 +41,20 @@ func testAccDataSourceModel(t *testing.T, modelName string) string {
 data "juju_model" "model" {
   name = %q
 }`, modelName)
+}
+
+// This function destroys the model created for this test
+func testAccDataSourceModelDestroy(s *terraform.State) error {
+
+	for _, rs := range s.RootModule().Resources {
+		err := destroyModel(rs.Primary.Attributes["name"])
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // addModel adds a model using the Juju command-line
@@ -56,12 +72,34 @@ func addModel(t *testing.T, modelName string) {
 		return
 	}
 
-	cmd := exec.Command("juju", "add-model", modelName)
-	// TODO: required - see task #42
-	cmd.Env = append(os.Environ(), "JUJU_CONTROLLER="+controllerName)
+	cmd := exec.Command("juju", "add-model", "--no-switch", modelName)
 
 	err = cmd.Run()
 	if err != nil {
 		t.Fatalf("error whilst creating model %s: %s", modelName, err)
 	}
+}
+
+// destroyModel destroys a model using the Juju command-line
+//
+// This function will be removed once we can support destroying a
+// model resource.
+func destroyModel(modelName string) error {
+	store := modelcmd.QualifyingClientStore{
+		ClientStore: jujuclient.NewFileClientStore(),
+	}
+
+	controllerName, err := store.CurrentController()
+	if err != nil {
+		return fmt.Errorf("warning: %s", controllerName)
+	}
+
+	cmd := exec.Command("juju", "destroy-model", "-y", modelName)
+
+	err = cmd.Run()
+	if err != nil {
+		return fmt.Errorf("error whilst destroying model %s: %s", modelName, err)
+	}
+
+	return nil
 }
