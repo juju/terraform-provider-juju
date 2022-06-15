@@ -38,17 +38,28 @@ resource "juju_model" "this" {
 
 ### Required
 
-- `name` (String) The name to be assigned to the model.
+- `name` (String) The name to be assigned to the model
 
 ### Optional
 
-- `cloud` (String) Cloud where the model will operate.
-- `cloud_config` (Map of String)
-- `cloud_region` (String) Cloud Region where the model will operate.
+- `cloud` (Block List, Max: 1) JuJu Cloud where the model will operate (see [below for nested schema](#nestedblock--cloud))
+- `config` (Map of String) Override default model configuration.
+- `controller` (String) The name of the controller to target. Optional
 
 ### Read-Only
 
 - `id` (String) The ID of this resource.
 - `type` (String) Type of the model. Set by the Juju's API server
+
+<a id="nestedblock--cloud"></a>
+### Nested Schema for `cloud`
+
+Required:
+
+- `name` (String) The name of the cloud
+
+Optional:
+
+- `region` (String) The region of the cloud
 
 
