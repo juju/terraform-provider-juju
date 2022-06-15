@@ -41,8 +41,25 @@ To generate or update documentation, run `go generate`.
 
 In order to run the full suite of Acceptance tests, run `make testacc`.
 
-*Note:* Acceptance tests create real resources, and often cost money to run.
+*Note:* Acceptance tests create real resources.
 
+Prior to running the tests locally, ensure you have the following environmental variables set:
+
+* `JUJU_CONTROLLER`
+* `JUJU_USERNAME`
+* `JUJU_PASSWORD`
+* `JUJU_CA_CERT`
+
+For example, here they are set using a controller named `overlord`:
+
+```shell
+export JUJU_CONTROLLER="127.0.0.1:17070"
+export JUJU_USERNAME="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.overlord.user)"
+export JUJU_PASSWORD="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.overlord.password)"
+export JUJU_CA_CERT="$(juju show-controller overlord | yq .overlord.details.ca-cert)"
+```
+
+Then, finally, run the tests: 
 ```shell
 make testacc
 ```

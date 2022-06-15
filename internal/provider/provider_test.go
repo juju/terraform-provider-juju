@@ -24,6 +24,13 @@ func TestProvider(t *testing.T) {
 }
 
 func testAccPreCheck(t *testing.T) {
+	// TODO: skipped whilst setting up workflows for acceptance tests
+	if v := os.Getenv("CI"); v != "" {
+		t.Skip("skip running acceptance tests on GitHub Actions")
+	} else {
+		t.Log("no CI environment detected, executing acceptance tests", v)
+	}
+
 	if v := os.Getenv("JUJU_USERNAME"); v == "" {
 		t.Fatal("JUJU_USERNAME must be set for acceptance tests")
 	}
