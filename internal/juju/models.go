@@ -3,13 +3,15 @@ package juju
 import (
 	"errors"
 	"fmt"
+	"log"
+	"time"
+
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/jujuclient"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v4"
-	"log"
 )
 
 type Model struct {
@@ -139,4 +141,25 @@ func (c *modelsClient) Read(uuid string) (*string, *params.ModelInfo, error) {
 	}
 
 	return controllerName, modelInfo, nil
+
+}
+
+func (c *modelsClient) Delete(uuid string) error {
+	client := modelmanager.NewClient(c.conn)
+	defer client.Close()
+
+	maxWait := 10 * time.Minute
+	timeout := 30 * time.Minute
+
+	tag := names.NewModelTag(uuid)
+
+	destroyStorage := true
+	forceDestroy := false
+
+	err := client.DestroyModel(tag, &destroyStorage, &forceDestroy, &maxWait, timeout)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

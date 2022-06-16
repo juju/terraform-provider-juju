@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -121,5 +122,18 @@ func resourceModelUpdate(ctx context.Context, d *schema.ResourceData, meta inter
 
 func resourceModelDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
-	return diag.Errorf("not implemented")
+	client := meta.(*juju.Client)
+
+	var diags diag.Diagnostics
+
+	modelUUID := d.Id()
+
+	err := client.Models.Delete(modelUUID)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	d.SetId("")
+
+	return diags
 }
