@@ -29,11 +29,13 @@ func resourceModel() *schema.Resource {
 				Description: "The name of the controller to target. Optional",
 				Type:        schema.TypeString,
 				Optional:    true,
+				Computed:    true,
 			},
 			"cloud": {
 				Description: "JuJu Cloud where the model will operate",
 				Type:        schema.TypeList,
 				Optional:    true,
+				Computed:    true,
 				MaxItems:    1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
@@ -85,7 +87,31 @@ func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta inter
 
 func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
-	return diag.Errorf("not implemented")
+	client := meta.(*juju.Client)
+
+	uuid := d.Id()
+	controllerName, modelInfo, err := client.Models.Read(uuid)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	cloudList := []map[string]interface{}{{"name": modelInfo.CloudTag, "region": modelInfo.CloudRegion}}
+
+	if err := d.Set("name", modelInfo.Name); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("controller", controllerName); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("cloud", cloudList); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("type", modelInfo.Type); err != nil {
+		return diag.FromErr(err)
+	}
+	// TODO: locate model config values form modelsAPI or other endpoint.
+
+	return nil
 }
 
 func resourceModelUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
