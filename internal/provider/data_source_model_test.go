@@ -15,7 +15,7 @@ import (
 )
 
 func TestAcc_DataSourceModel(t *testing.T) {
-	modelName := acctest.RandomWithPrefix("tf-test-model")
+	modelName := acctest.RandomWithPrefix("tf-datasource-model-test")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
