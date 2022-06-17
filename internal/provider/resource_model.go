@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -119,7 +120,22 @@ func resourceModelUpdate(ctx context.Context, d *schema.ResourceData, meta inter
 	return diag.Errorf("not implemented")
 }
 
+// Juju refers to model deletion as "destroy" so we call the Destroy function of our client here rather than delete
+// This function remains named Delete for parity across the provider and to stick within terraform naming conventions
 func resourceModelDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
-	return diag.Errorf("not implemented")
+	client := meta.(*juju.Client)
+
+	var diags diag.Diagnostics
+
+	modelUUID := d.Id()
+
+	err := client.Models.Destroy(modelUUID)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	d.SetId("")
+
+	return diags
 }
