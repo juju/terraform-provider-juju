@@ -144,7 +144,7 @@ func (c *modelsClient) Read(uuid string) (*string, *params.ModelInfo, error) {
 
 }
 
-func (c *modelsClient) Delete(uuid string) error {
+func (c *modelsClient) Destroy(uuid string) error {
 	client := modelmanager.NewClient(c.conn)
 	defer client.Close()
 
