@@ -1,10 +1,13 @@
 package juju
 
 import (
+	"errors"
+	"fmt"
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/jujuclient"
+	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v4"
 	"log"
 )
@@ -27,6 +30,21 @@ func newModelsClient(conn api.Connection, store jujuclient.ClientStore, controll
 		store:          store,
 		controllerName: controllerName,
 	}
+}
+
+func (c *modelsClient) getControllerNameByUUID(uuid string) (*string, error) {
+	controllers, err := c.store.AllControllers()
+	if err != nil {
+		return nil, err
+	}
+
+	for name, details := range controllers {
+		if details.ControllerUUID == uuid {
+			return &name, nil
+		}
+	}
+
+	return nil, errors.New(fmt.Sprintf("cannot find controller name from uuid: %s", uuid))
 }
 
 // GetByName retrieves a model by name
@@ -96,4 +114,29 @@ func (c *modelsClient) Create(name string, controller string, cloudList []interf
 	modelInfo, err := client.CreateModel(name, accountDetails.User, cloudName, cloudRegion, cloudCredential, cloudConfig)
 
 	return &modelInfo, nil
+}
+
+func (c *modelsClient) Read(uuid string) (*string, *params.ModelInfo, error) {
+	client := modelmanager.NewClient(c.conn)
+	defer client.Close()
+
+	models, err := client.ModelInfo([]names.ModelTag{names.NewModelTag(uuid)})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if len(models) > 1 {
+		return nil, nil, errors.New(fmt.Sprintf("more than one model returned for UUID: %s", uuid))
+	}
+	if len(models) < 1 {
+		return nil, nil, errors.New(fmt.Sprintf("no model returned for UUID: %s", uuid))
+	}
+
+	modelInfo := models[0].Result
+	controllerName, err := c.getControllerNameByUUID(modelInfo.ControllerUUID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return controllerName, modelInfo, nil
 }
