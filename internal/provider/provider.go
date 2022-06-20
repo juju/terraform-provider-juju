@@ -3,40 +3,48 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/juju/juju/juju/osenv"
 	"github.com/juju/terraform-provider-juju/internal/juju"
+)
+
+const (
+	JujuControllerEnvKey = "JUJU_CONTROLLER_ADDRESSES"
+	JujuUsernameEnvKey   = "JUJU_USERNAME"
+	JujuPasswordEnvKey   = "JUJU_PASSWORD"
+	JujuCACertEnvKey     = "JUJU_CA_CERT"
 )
 
 func New(version string) func() *schema.Provider {
 	return func() *schema.Provider {
 		p := &schema.Provider{
 			Schema: map[string]*schema.Schema{
-				"controller": {
+				"controller_addresses": {
 					Type:        schema.TypeString,
-					Description: fmt.Sprintf("This is the Controller address to connect to, defaults to localhost:17070. This can also be set by the `%s` environment variable.", osenv.JujuControllerEnvKey),
+					Description: fmt.Sprintf("This is the Controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `%s` environment variable.", JujuControllerEnvKey),
 					Optional:    true,
-					DefaultFunc: schema.EnvDefaultFunc(osenv.JujuControllerEnvKey, "localhost:17070"),
+					DefaultFunc: schema.EnvDefaultFunc(JujuControllerEnvKey, "localhost:17070"),
 				},
 				"username": {
 					Type:        schema.TypeString,
-					Description: fmt.Sprintf("This is the username registered with the controller to be used. This can also be set by the `JUJU_USERNAME` environment variable"),
+					Description: fmt.Sprintf("This is the username registered with the controller to be used. This can also be set by the `%s` environment variable", JujuUsernameEnvKey),
 					Optional:    true,
-					DefaultFunc: schema.EnvDefaultFunc("JUJU_USERNAME", nil),
+					DefaultFunc: schema.EnvDefaultFunc(JujuUsernameEnvKey, nil),
 				},
 				"password": {
 					Type:        schema.TypeString,
-					Description: fmt.Sprintf("This is the password of the username to be used. This can also be set by the `JUJU_PASSWORD` environment variable"),
+					Description: fmt.Sprintf("This is the password of the username to be used. This can also be set by the `%s` environment variable", JujuPasswordEnvKey),
 					Optional:    true,
 					Sensitive:   true,
-					DefaultFunc: schema.EnvDefaultFunc("JUJU_PASSWORD", nil),
+					DefaultFunc: schema.EnvDefaultFunc(JujuPasswordEnvKey, nil),
 				},
 				"ca_certificate": {
 					Type:        schema.TypeString,
-					Description: fmt.Sprintf("This is the certificate to use for identification. This can also be set by the `JUJU_CA_CERT` environment variable"),
+					Description: fmt.Sprintf("This is the certificate to use for identification. This can also be set by the `%s` environment variable", JujuCACertEnvKey),
 					Optional:    true,
-					DefaultFunc: schema.EnvDefaultFunc("JUJU_CA_CERT", nil),
+					DefaultFunc: schema.EnvDefaultFunc(JujuCACertEnvKey, nil),
 				},
 			},
 			DataSourcesMap: map[string]*schema.Resource{
@@ -60,7 +68,7 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 
 		var diags diag.Diagnostics
 
-		controllerAddress := d.Get("controller").(string)
+		ControllerAddresses := strings.Split(d.Get("controller_addresses").(string), ",")
 		username := d.Get("username").(string)
 		password := d.Get("password").(string)
 		caCert := d.Get("ca_certificate").(string)
@@ -74,7 +82,7 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 		}
 
 		config := juju.Configuration{
-			ControllerAddresses: []string{controllerAddress},
+			ControllerAddresses: ControllerAddresses,
 			Username:            username,
 			Password:            password,
 			CACert:              caCert,
