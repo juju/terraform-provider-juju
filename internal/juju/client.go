@@ -1,6 +1,7 @@
 package juju
 
 import (
+	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/connector"
 	"github.com/juju/juju/cmd/modelcmd"
 	"github.com/juju/juju/jujuclient"
@@ -17,20 +18,13 @@ type Client struct {
 	Models modelsClient
 }
 
-func NewClient(config Configuration) (*Client, error) {
-	connr, err := connector.NewSimple(connector.SimpleConfig{
-		ControllerAddresses: config.ControllerAddresses,
-		Username:            config.Username,
-		Password:            config.Password,
-		CACert:              config.CACert,
-	})
-	if err != nil {
-		return nil, err
-	}
+type ConnectionFactory struct {
+	config Configuration
+}
 
-	conn, err := connr.Connect()
-	if err != nil {
-		return nil, err
+func NewClient(config Configuration) (*Client, error) {
+	cf := ConnectionFactory{
+		config: config,
 	}
 
 	var store jujuclient.ClientStore = modelcmd.QualifyingClientStore{
@@ -44,6 +38,31 @@ func NewClient(config Configuration) (*Client, error) {
 	}
 
 	return &Client{
-		Models: *newModelsClient(conn, store, controllerName),
+		Models: *newModelsClient(cf, store, controllerName),
 	}, nil
+}
+
+func (cf *ConnectionFactory) GetConnection(model *string) (api.Connection, error) {
+	modelUUID := ""
+	if model != nil {
+		modelUUID = *model
+	}
+
+	connr, err := connector.NewSimple(connector.SimpleConfig{
+		ControllerAddresses: cf.config.ControllerAddresses,
+		Username:            cf.config.Username,
+		Password:            cf.config.Password,
+		CACert:              cf.config.CACert,
+		ModelUUID:           modelUUID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := connr.Connect()
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
 }
