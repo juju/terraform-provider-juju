@@ -23,9 +23,9 @@ func New(version string) func() *schema.Provider {
 			Schema: map[string]*schema.Schema{
 				"controller_addresses": {
 					Type:        schema.TypeString,
-					Description: fmt.Sprintf("This is the Controller addresses to connect to, defaults to ['localhost:17070'], multiple addresses can be provided in this format: ['<host>:<port>', '<host>:<port>', ...]. This can also be set by the `%s` environment variable.", JujuControllerEnvKey),
+					Description: fmt.Sprintf("This is the Controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `%s` environment variable.", JujuControllerEnvKey),
 					Optional:    true,
-					DefaultFunc: schema.EnvDefaultFunc(JujuControllerEnvKey, "['localhost:17070']"),
+					DefaultFunc: schema.EnvDefaultFunc(JujuControllerEnvKey, "localhost:17070"),
 				},
 				"username": {
 					Type:        schema.TypeString,
@@ -68,11 +68,7 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 
 		var diags diag.Diagnostics
 
-		ControllerAddresses := d.Get("controller_addresses").(string)
-		ControllerAddresses = strings.Replace(ControllerAddresses, "[", "", -1)
-		ControllerAddresses = strings.Replace(ControllerAddresses, "]", "", -1)
-		ControllerAddresses = strings.Replace(ControllerAddresses, "'", "", -1)
-		ControllerAddressesParsed := strings.Split(ControllerAddresses, ",")
+		ControllerAddresses := strings.Split(d.Get("controller_addresses").(string), ",")
 		username := d.Get("username").(string)
 		password := d.Get("password").(string)
 		caCert := d.Get("ca_certificate").(string)
@@ -86,7 +82,7 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 		}
 
 		config := juju.Configuration{
-			ControllerAddresses: ControllerAddressesParsed,
+			ControllerAddresses: ControllerAddresses,
 			Username:            username,
 			Password:            password,
 			CACert:              caCert,

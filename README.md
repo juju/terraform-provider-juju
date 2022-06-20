@@ -54,7 +54,7 @@ For example, here they are set using the currently active controller:
 
 ```shell
 CONTROLLER=$(juju whoami | yq .Controller)
-export JUJU_CONTROLLER_ADDRESSES="$(juju show-controller | yq .$CONTROLLER.details.api-endpoints)"
+export JUJU_CONTROLLER_ADDRESSES="$(juju show-controller | yq .$CONTROLLER.details.api-endpoints | tr -d "[]' ")"
 export JUJU_USERNAME="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.user)"
 export JUJU_PASSWORD="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password)"
 export JUJU_CA_CERT="$(juju show-controller $CONTROLLER | yq .$CONTROLLER.details.ca-cert)"
