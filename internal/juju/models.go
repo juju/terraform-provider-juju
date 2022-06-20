@@ -6,7 +6,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/jujuclient"
@@ -21,16 +20,16 @@ type Model struct {
 }
 
 type modelsClient struct {
-	conn           api.Connection
+	ConnectionFactory
 	store          jujuclient.ClientStore
 	controllerName string
 }
 
-func newModelsClient(conn api.Connection, store jujuclient.ClientStore, controllerName string) *modelsClient {
+func newModelsClient(cf ConnectionFactory, store jujuclient.ClientStore, controllerName string) *modelsClient {
 	return &modelsClient{
-		conn:           conn,
-		store:          store,
-		controllerName: controllerName,
+		ConnectionFactory: cf,
+		store:             store,
+		controllerName:    controllerName,
 	}
 }
 
@@ -51,7 +50,12 @@ func (c *modelsClient) getControllerNameByUUID(uuid string) (*string, error) {
 
 // GetByName retrieves a model by name
 func (c *modelsClient) GetByName(name string) (Model, error) {
-	client := modelmanager.NewClient(c.conn)
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return Model{}, err
+	}
+
+	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
 	modelDetails, err := c.store.ModelByName(c.controllerName, name)
@@ -83,7 +87,12 @@ func (c *modelsClient) GetByName(name string) (Model, error) {
 }
 
 func (c *modelsClient) Create(name string, controller string, cloudList []interface{}, cloudConfig map[string]interface{}) (*base.ModelInfo, error) {
-	client := modelmanager.NewClient(c.conn)
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
 	cloudCredential := names.CloudCredentialTag{}
@@ -99,7 +108,6 @@ func (c *modelsClient) Create(name string, controller string, cloudList []interf
 	}
 
 	if controller == "" {
-		var err error
 		controllerName, err = c.store.CurrentController()
 		if err != nil {
 			return nil, err
@@ -119,7 +127,12 @@ func (c *modelsClient) Create(name string, controller string, cloudList []interf
 }
 
 func (c *modelsClient) Read(uuid string) (*string, *params.ModelInfo, error) {
-	client := modelmanager.NewClient(c.conn)
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
 	models, err := client.ModelInfo([]names.ModelTag{names.NewModelTag(uuid)})
@@ -145,7 +158,12 @@ func (c *modelsClient) Read(uuid string) (*string, *params.ModelInfo, error) {
 }
 
 func (c *modelsClient) Destroy(uuid string) error {
-	client := modelmanager.NewClient(c.conn)
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+
+	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
 	maxWait := 10 * time.Minute
@@ -156,7 +174,7 @@ func (c *modelsClient) Destroy(uuid string) error {
 	destroyStorage := true
 	forceDestroy := false
 
-	err := client.DestroyModel(tag, &destroyStorage, &forceDestroy, &maxWait, timeout)
+	err = client.DestroyModel(tag, &destroyStorage, &forceDestroy, &maxWait, timeout)
 	if err != nil {
 		return err
 	}

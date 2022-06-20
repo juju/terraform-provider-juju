@@ -10,8 +10,6 @@ import (
 )
 
 func TestAcc_ResourceModel(t *testing.T) {
-	// TODO: Enable this acceptance test once full CRUD functionality has been coded
-	t.Skip("resource not yet implemented, remove this once you add your own code")
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 
 	resource.Test(t, resource.TestCase{
