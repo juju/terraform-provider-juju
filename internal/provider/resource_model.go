@@ -18,7 +18,7 @@ func resourceModel() *schema.Resource {
 		UpdateContext: resourceModelUpdate,
 		DeleteContext: resourceModelDelete,
 		Importer: &schema.ResourceImporter{
-			State: resourceModelImporter,
+			StateContext: resourceModelImporter,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -143,7 +143,7 @@ func resourceModelDelete(ctx context.Context, d *schema.ResourceData, meta inter
 	return diags
 }
 
-func resourceModelImporter(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+func resourceModelImporter(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 	client := meta.(*juju.Client)
 
 	//d.Id() here is the last argument passed to the `terraform import juju_model.RESOURCE_NAME MODEL_NAME` command
