@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -106,7 +107,7 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 		return diag.FromErr(err)
 	}
 
-	cloudList := []map[string]interface{}{{"name": modelInfo.CloudTag, "region": modelInfo.CloudRegion}}
+	cloudList := []map[string]interface{}{{"name": strings.TrimPrefix(modelInfo.CloudTag, juju.PrefixCloud), "region": modelInfo.CloudRegion}}
 
 	if err := d.Set("name", modelInfo.Name); err != nil {
 		return diag.FromErr(err)
