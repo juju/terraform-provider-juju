@@ -81,6 +81,15 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 			})
 		}
 
+		//TODO: remove this check when other auth methods are added
+		if username == "" && password == "" {
+			diags = append(diags, diag.Diagnostic{
+				Severity: diag.Error,
+				Summary:  "Username and password must be set",
+				Detail:   "Currently the provider can only authenticate using username and password based authentication, if both are empty the provider will panic",
+			})
+		}
+
 		config := juju.Configuration{
 			ControllerAddresses: ControllerAddresses,
 			Username:            username,
