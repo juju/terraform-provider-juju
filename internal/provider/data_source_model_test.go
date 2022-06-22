@@ -2,7 +2,6 @@ package provider
 
 import (
 	"fmt"
-	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
@@ -19,8 +18,7 @@ func TestAcc_DataSourceModel(t *testing.T) {
 			{
 				Config: testAccDataSourceModel(t, modelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestMatchResourceAttr(
-						"data.juju_model.model", "name", regexp.MustCompile("^"+modelName+"$")),
+					resource.TestCheckResourceAttr("data.juju_model.model", "name", modelName),
 				),
 			},
 		},
