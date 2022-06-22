@@ -37,6 +37,26 @@ func TestAcc_ResourceModel(t *testing.T) {
 					),
 				),
 			},
+		},
+	})
+}
+
+// TODO: Merge the import step into the main test once Read has been updated to handle extra config attributes
+func TestAcc_ResourceModelImport(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: providerFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceModelImport(t, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestMatchResourceAttr(
+						"juju_model.model", "name", regexp.MustCompile("^"+modelName+"$"),
+					),
+				),
+			},
 			{
 				ImportStateVerify: true,
 				ImportState:       true,
@@ -61,4 +81,12 @@ resource "juju_model" "model" {
     logging-config = "<root>=%s"
   }
 }`, modelName, logLevel)
+}
+
+// TODO: This should not be needed when import can be merged into the main test
+func testAccResourceModelImport(t *testing.T, modelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "model" {
+  name = %q
+}`, modelName)
 }
