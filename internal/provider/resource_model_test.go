@@ -11,16 +11,30 @@ import (
 
 func TestAcc_ResourceModel(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
+	logLevelInfo := "INFO"
+	logLevelDebug := "DEBUG"
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceModel(t, modelName),
+				Config: testAccResourceModel(t, modelName, logLevelInfo),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestMatchResourceAttr(
-						"juju_model.model", "name", regexp.MustCompile("^"+modelName+"$")),
+						"juju_model.model", "name", regexp.MustCompile("^"+modelName+"$"),
+					),
+					resource.TestCheckResourceAttr(
+						"juju_model.model", "config.logging-config", fmt.Sprintf("<root>=%s", logLevelInfo),
+					),
+				),
+			},
+			{
+				Config: testAccResourceModel(t, modelName, logLevelDebug),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						"juju_model.model", "config.logging-config", fmt.Sprintf("<root>=%s", logLevelDebug),
+					),
 				),
 			},
 			{
@@ -33,9 +47,18 @@ func TestAcc_ResourceModel(t *testing.T) {
 	})
 }
 
-func testAccResourceModel(t *testing.T, modelName string) string {
+func testAccResourceModel(t *testing.T, modelName string, logLevel string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "model" {
   name = %q
-}`, modelName)
+
+  cloud {
+    name = "localhost"
+    region = "localhost"
+  }
+
+  config = {
+    logging-config = "<root>=%s"
+  }
+}`, modelName, logLevel)
 }
