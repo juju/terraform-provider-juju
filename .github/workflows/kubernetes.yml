@@ -1,0 +1,59 @@
+name: Validate on kubernetes
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/kubernetes.yml"
+      - "**.go"
+  push:
+    branches:
+      - "microk8s-in-github-actions"
+    paths:
+      - ".github/workflows/kubernetes.yml"
+
+jobs:
+  kubernetes:
+    name: Test on kubernetes
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    strategy:
+      fail-fast: false
+      matrix:
+        microk8s: [1.24/stable]
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v3
+      - name: setup microk8s
+        uses: balchua/microk8s-actions@v0.2.2
+        with:
+          channel: "${{ matrix.microk8s }}"
+          addons: '["dns", "hostpath-storage", "ingress"]'
+      - name: Install Dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo snap install juju --classic
+      - name: bootstrap juju
+        shell: bash
+        run: |
+          sg microk8s <<EOF
+            set -eux
+            microk8s kubectl wait --for=condition=available -nkube-system deployment/coredns deployment/hostpath-provisioner --timeout=10m
+            juju bootstrap microk8s --debug uk8s --config test-mode=true --model-default test-mode=true
+          EOF
+      - name: "Set environment to configure provider"
+        # language=bash
+        run: |
+          CONTROLLER=$(juju whoami --format yaml | yq .controller)
+
+          echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq -o=json .$CONTROLLER.details.api-endpoints | jq -r '. | join(",")')" >> $GITHUB_ENV
+          echo "JUJU_USERNAME=$(juju show-controller | yq .$CONTROLLER.account.user)"  >> $GITHUB_ENV
+          echo "JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password)"  >> $GITHUB_ENV
+          echo "JUJU_CA_CERT<<EOF" >> $GITHUB_ENV
+          juju show-controller | yq .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+      - run: go mod download
+      - env:
+          TF_ACC: "1"
+        run: go test -v -cover ./internal/provider/
+        timeout-minutes: 10
