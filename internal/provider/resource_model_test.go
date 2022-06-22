@@ -23,6 +23,12 @@ func TestAcc_ResourceModel(t *testing.T) {
 						"juju_model.model", "name", regexp.MustCompile("^"+modelName+"$")),
 				),
 			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ImportStateId:     modelName,
+				ResourceName:      "juju_model.model",
+			},
 		},
 	})
 }

@@ -122,6 +122,19 @@ func (c *modelsClient) Create(name string, controller string, cloudList []interf
 	}
 
 	modelInfo, err := client.CreateModel(name, accountDetails.User, cloudName, cloudRegion, cloudCredential, cloudConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: integrate more gracefully
+	// This updates the client filestore with the model details which is required for tests to pass
+	err = c.store.UpdateModel(controllerName, name, jujuclient.ModelDetails{
+		ModelUUID: modelInfo.UUID,
+		ModelType: modelInfo.Type,
+	})
+	if err != nil {
+		return nil, err
+	}
 
 	return &modelInfo, nil
 }
