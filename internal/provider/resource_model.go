@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -34,12 +35,14 @@ func resourceModel() *schema.Resource {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Computed:    true,
+				ForceNew:    true,
 			},
 			"cloud": {
 				Description: "JuJu Cloud where the model will operate",
 				Type:        schema.TypeList,
 				Optional:    true,
 				Computed:    true,
+				ForceNew:    true,
 				MaxItems:    1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
@@ -71,8 +74,9 @@ func resourceModel() *schema.Resource {
 }
 
 func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
 	client := meta.(*juju.Client)
+
+	var diags diag.Diagnostics
 
 	name := d.Get("name").(string)
 	controller := d.Get("controller").(string)
@@ -84,14 +88,18 @@ func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta inter
 		return diag.FromErr(err)
 	}
 
+	// TODO: If controller and / or cloud are blank, we should set them to the default (returned in modelInfo)
+	// TODO: Should config track all key=value or just those explicitly set?
+
 	d.SetId(modelInfo.UUID)
 
-	return nil
+	return diags
 }
 
 func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
 	client := meta.(*juju.Client)
+
+	var diags diag.Diagnostics
 
 	uuid := d.Id()
 	controllerName, modelInfo, err := client.Models.Read(uuid)
@@ -99,7 +107,7 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 		return diag.FromErr(err)
 	}
 
-	cloudList := []map[string]interface{}{{"name": modelInfo.CloudTag, "region": modelInfo.CloudRegion}}
+	cloudList := []map[string]interface{}{{"name": strings.TrimPrefix(modelInfo.CloudTag, juju.PrefixCloud), "region": modelInfo.CloudRegion}}
 
 	if err := d.Set("name", modelInfo.Name); err != nil {
 		return diag.FromErr(err)
@@ -115,18 +123,29 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 	}
 	// TODO: locate model config values form modelsAPI or other endpoint.
 
-	return nil
+	return diags
 }
 
 func resourceModelUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
-	return diag.Errorf("not implemented")
+	client := meta.(*juju.Client)
+
+	var diags diag.Diagnostics
+
+	if d.HasChange("config") {
+		modelUUID := d.Id()
+		config := d.Get("config").(map[string]interface{})
+		err := client.Models.Update(modelUUID, config)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+	}
+
+	return diags
 }
 
 // Juju refers to model deletion as "destroy" so we call the Destroy function of our client here rather than delete
 // This function remains named Delete for parity across the provider and to stick within terraform naming conventions
 func resourceModelDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
 	client := meta.(*juju.Client)
 
 	var diags diag.Diagnostics

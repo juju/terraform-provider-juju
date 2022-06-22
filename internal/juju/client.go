@@ -7,6 +7,12 @@ import (
 	"github.com/juju/juju/jujuclient"
 )
 
+const (
+	PrefixCloud = "cloud-"
+	PrefixModel = "model-"
+	PrefixCharm = "charm-"
+)
+
 type Configuration struct {
 	ControllerAddresses []string
 	Username            string

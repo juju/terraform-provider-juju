@@ -3,6 +3,7 @@ package juju
 import (
 	"errors"
 	"fmt"
+	"github.com/juju/juju/api/client/modelconfig"
 	"log"
 	"time"
 
@@ -168,6 +169,23 @@ func (c *modelsClient) Read(uuid string) (*string, *params.ModelInfo, error) {
 
 	return controllerName, modelInfo, nil
 
+}
+
+func (c *modelsClient) Update(uuid string, config map[string]interface{}) error {
+	conn, err := c.GetConnection(&uuid)
+	if err != nil {
+		return err
+	}
+
+	client := modelconfig.NewClient(conn)
+	defer client.Close()
+
+	err = client.ModelSet(config)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *modelsClient) Destroy(uuid string) error {
