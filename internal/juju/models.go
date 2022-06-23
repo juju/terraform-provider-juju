@@ -14,12 +14,6 @@ import (
 	"github.com/juju/names/v4"
 )
 
-type Model struct {
-	Name string
-	Type string
-	UUID string
-}
-
 type modelsClient struct {
 	ConnectionFactory
 	store          jujuclient.ClientStore
@@ -50,10 +44,10 @@ func (c *modelsClient) getControllerNameByUUID(uuid string) (*string, error) {
 }
 
 // GetByName retrieves a model by name
-func (c *modelsClient) GetByName(name string) (Model, error) {
+func (c *modelsClient) GetByName(name string) (*params.ModelInfo, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
-		return Model{}, err
+		return nil, err
 	}
 
 	client := modelmanager.NewClient(conn)
@@ -61,7 +55,7 @@ func (c *modelsClient) GetByName(name string) (Model, error) {
 
 	modelDetails, err := c.store.ModelByName(c.controllerName, name)
 	if err != nil {
-		return Model{}, err
+		return nil, err
 	}
 
 	modelTag := names.NewModelTag(modelDetails.ModelUUID)
@@ -70,21 +64,17 @@ func (c *modelsClient) GetByName(name string) (Model, error) {
 		modelTag,
 	})
 	if err != nil {
-		return Model{}, err
+		return nil, err
 	}
 	if results[0].Error != nil {
-		return Model{}, results[0].Error
+		return nil, results[0].Error
 	}
 
 	modelInfo := results[0].Result
 
 	log.Printf("[DEBUG] Reading model: %s, %+v", name, modelInfo)
 
-	return Model{
-		Name: modelInfo.Name,
-		Type: modelInfo.Type,
-		UUID: modelInfo.UUID,
-	}, nil
+	return modelInfo, nil
 }
 
 func (c *modelsClient) Create(name string, controller string, cloudList []interface{}, cloudConfig map[string]interface{}) (*base.ModelInfo, error) {
