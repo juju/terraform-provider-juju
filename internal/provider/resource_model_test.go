@@ -2,7 +2,6 @@ package provider
 
 import (
 	"fmt"
-	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
@@ -21,9 +20,7 @@ func TestAcc_ResourceModel(t *testing.T) {
 			{
 				Config: testAccResourceModel(t, modelName, logLevelInfo),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestMatchResourceAttr(
-						"juju_model.model", "name", regexp.MustCompile("^"+modelName+"$"),
-					),
+					resource.TestCheckResourceAttr("juju_model.model", "name", modelName),
 					resource.TestCheckResourceAttr(
 						"juju_model.model", "config.logging-config", fmt.Sprintf("<root>=%s", logLevelInfo),
 					),
@@ -52,9 +49,7 @@ func TestAcc_ResourceModelImport(t *testing.T) {
 			{
 				Config: testAccResourceModelImport(t, modelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestMatchResourceAttr(
-						"juju_model.model", "name", regexp.MustCompile("^"+modelName+"$"),
-					),
+					resource.TestCheckResourceAttr("juju_model.model", "name", modelName),
 				),
 			},
 			{

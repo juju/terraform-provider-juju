@@ -31,6 +31,15 @@ func testAccPreCheck(t *testing.T) {
 		t.Fatalf("%s must be set for acceptance tests", JujuPasswordEnvKey)
 	}
 	if v := os.Getenv(JujuCACertEnvKey); v == "" {
-		t.Fatalf("%s must be set for acceptance tests", JujuCACertEnvKey)
+		if v := os.Getenv("JUJU_CA_CERT_FILE"); v != "" {
+			t.Logf("reading certificate from: %s", v)
+			cert, err := os.ReadFile(v)
+			if err != nil {
+				t.Fatalf("cannot read file specified by JUJU_CA_CERT_FILE for acceptance tests: %s", err)
+			}
+			os.Setenv(JujuCACertEnvKey, string(cert))
+		} else {
+			t.Fatalf("%s must be set for acceptance tests", JujuCACertEnvKey)
+		}
 	}
 }
