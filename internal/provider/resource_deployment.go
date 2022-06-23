@@ -16,13 +16,18 @@ func resourceDeployment() *schema.Resource {
 		DeleteContext: resourceDeploymentDelete,
 
 		Schema: map[string]*schema.Schema{
+			"name": {
+				Description: "A custom name for the application deployment. If empty, uses the charm's name.",
+				Type:        schema.TypeString,
+				Optional:    true,
+			},
 			"model": {
-				Description: "The identifier of the model where this Charm is to be installed.",
+				Description: "The name of the model where the charm is to be deployed.",
 				Type:        schema.TypeString,
 				Required:    true,
 			},
 			"charm": {
-				Description: "The name of the Charm to be installed from Charmhub.",
+				Description: "The name of the charm to be installed from Charmhub.",
 				Type:        schema.TypeList,
 				Required:    true,
 				MaxItems:    1,
@@ -33,31 +38,32 @@ func resourceDeployment() *schema.Resource {
 							Type:        schema.TypeString,
 							Required:    true,
 						},
-						"revision": &schema.Schema{
-							Description: "The revision of the charm to deploy.",
-							Type:        schema.TypeInt,
-							Optional:    true,
-							Default:     -1,
-						},
 						"channel": {
-							Description: "The channel to use when deploying a charm.",
+							Description: "The channel to use when deploying a charm. Specified as <track>/<risk>/<branch>.",
 							Type:        schema.TypeString,
-							Default:     "stable",
+							Default:     "latest/stable",
+							Optional:    true,
+						},
+						"revision": {
+							Description: "The revision of the charm to deploy.",
+							Type:        schema.TypeString,
+							Default:     "latest",
+							Optional:    true,
+						},
+						"series": {
+							Description: "The series on which to deploy.",
+							Type:        schema.TypeString,
+							Default:     "",
 							Optional:    true,
 						},
 					},
 				},
 			},
 			"units": {
-				Description: "The number of instances that represent the Charm.",
+				Description: "The number of application units to deploy for the charm.",
 				Type:        schema.TypeInt,
 				Optional:    true,
 				Default:     1,
-			},
-			"name": {
-				Description: "A custom name for the application deployment. If empty, uses the charm's name.",
-				Type:        schema.TypeString,
-				Optional:    true,
 			},
 			"config": {
 				Description: "Application specific configuration.",

@@ -1,12 +1,13 @@
 resource "juju_deployment" "this" {
   name = "foobar" # optional, set to charm name when absent
 
-  model = juju_model.development.uuid # required, model uuid
+  model = juju_model.development.name # required, model name
 
   charm {
     name     = "hello-kubecon" # required, supports CharmHub charms only
-    revision = ""              # optional, default: -1
-    channel  = ""              # optional, default: stable
+    channel  = "edge"          # optional, specified as <track>/<risk>/<branch>, default: latest/stable
+    revision = 14              # optional, default: -1
+    series   = "trusty"        # optional
   }
 
   # The number of instances, default: 1

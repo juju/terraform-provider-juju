@@ -16,12 +16,13 @@ A resource that represents a Juju deployment.
 resource "juju_deployment" "this" {
   name = "foobar" # optional, set to charm name when absent
 
-  model = juju_model.development.uuid # required, model uuid
+  model = juju_model.development.name # required, model name
 
   charm {
     name     = "hello-kubecon" # required, supports CharmHub charms only
-    revision = ""              # optional, default: -1
-    channel  = ""              # optional, default: stable
+    channel  = "edge"          # optional, specified as <track>/<risk>/<branch>, default: latest/stable
+    revision = 14              # optional, default: -1
+    series   = "trusty"        # optional
   }
 
   # The number of instances, default: 1
@@ -39,14 +40,14 @@ resource "juju_deployment" "this" {
 
 ### Required
 
-- `charm` (Block List, Min: 1, Max: 1) The name of the Charm to be installed from Charmhub. (see [below for nested schema](#nestedblock--charm))
-- `model` (String) The identifier of the model where this Charm is to be installed.
+- `charm` (Block List, Min: 1, Max: 1) The name of the charm to be installed from Charmhub. (see [below for nested schema](#nestedblock--charm))
+- `model` (String) The name of the model where the charm is to be deployed.
 
 ### Optional
 
 - `config` (Map of String) Application specific configuration.
 - `name` (String) A custom name for the application deployment. If empty, uses the charm's name.
-- `units` (Number) The number of instances that represent the Charm.
+- `units` (Number) The number of application units to deploy for the charm.
 
 ### Read-Only
 
@@ -61,7 +62,8 @@ Required:
 
 Optional:
 
-- `channel` (String) The channel to use when deploying a charm.
-- `revision` (Number) The revision of the charm to deploy.
+- `channel` (String) The channel to use when deploying a charm. Specified as <track>/<risk>/<branch>.
+- `revision` (String) The revision of the charm to deploy.
+- `series` (String) The series on which to deploy.
 
 
