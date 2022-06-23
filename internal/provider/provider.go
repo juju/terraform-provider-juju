@@ -73,16 +73,8 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 		password := d.Get("password").(string)
 		caCert := d.Get("ca_certificate").(string)
 
-		if !((username != "" && password != "") || (username == "" && password == "")) {
-			diags = append(diags, diag.Diagnostic{
-				Severity: diag.Error,
-				Summary:  "Username and password must both be present or both should be omitted",
-				Detail:   "If only one of username or password is defined, the provider will not be able to authenticate via the credentials method",
-			})
-		}
-
 		//TODO: remove this check when other auth methods are added
-		if username == "" && password == "" {
+		if username == "" || password == "" {
 			diags = append(diags, diag.Diagnostic{
 				Severity: diag.Error,
 				Summary:  "Username and password must be set",
