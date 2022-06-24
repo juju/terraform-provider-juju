@@ -2,6 +2,8 @@ package provider
 
 import (
 	"context"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -80,6 +82,7 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 				Summary:  "Username and password must be set",
 				Detail:   "Currently the provider can only authenticate using username and password based authentication, if both are empty the provider will panic",
 			})
+			return nil, diags
 		}
 
 		config := juju.Configuration{
@@ -93,6 +96,32 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 			return nil, diag.FromErr(err)
 		}
 
+		// Here we are testing that we can connect successfully to the Juju server
+		// this prevents having logic to check the connection is OK in every function
+		testConn, err := client.Models.GetConnection(nil)
+		if err != nil {
+			return nil, checkClientErr(err, diags, config)
+		}
+		testConn.Close()
+
 		return client, diags
 	}
+}
+
+func checkClientErr(err error, diags diag.Diagnostics, config juju.Configuration) diag.Diagnostics {
+
+	x509error := &x509.UnknownAuthorityError{}
+	if errors.As(err, x509error) {
+		var errMsg string = "Verify the ca_certificate property set on the provider"
+
+		if config.CACert == "" {
+			errMsg = "The ca_certificate provider property is not set and the Juju certificate authority is not trusted by your system"
+		}
+
+		return append(diags, diag.Diagnostic{
+			Summary: x509error.Error(),
+			Detail:  errMsg,
+		})
+	}
+	return diag.FromErr(err)
 }
