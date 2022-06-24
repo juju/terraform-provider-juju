@@ -480,6 +480,7 @@ github.com/juju/juju v0.0.0-20220609145112-917a8f103356/go.mod h1:suyYzoWvGVZck0
 github.com/juju/loggo v0.0.0-20210728185423-eebad3a902c4 h1:NO5tuyw++EGLnz56Q8KMyDZRwJwWO8jQnj285J3FOmY=
 github.com/juju/loggo v0.0.0-20210728185423-eebad3a902c4/go.mod h1:NIXFioti1SmKAlKNuUwbMenNdef59IF52+ZzuOmHYkg=
 github.com/juju/lru v0.0.0-20190314140547-92a0afabdc41 h1:/ucixsNZ+l94agL5LZioJ4ECyOz7kOYY+DKb/0NN6ME=
+github.com/juju/lru v0.0.0-20190314140547-92a0afabdc41/go.mod h1:RI/7Oj7RFK3hzCrjmJVrEeMryn8PEzl6kiIz4QFb48Y=
 github.com/juju/lumberjack v2.0.0-20200420012306-ddfd864a6ade+incompatible h1:7LYjAfMZm+i6+VzOUBGhku+iOYeh0ohjIy7N9zd7JR4=
 github.com/juju/lumberjack v2.0.0-20200420012306-ddfd864a6ade+incompatible/go.mod h1:YQBneJkXlAAye6yHFYH8CabVID+0Oq2by8DDKGj5OIU=
 github.com/juju/mgo/v2 v2.0.0-20220111072304-f200228f1090 h1:zX5GoH3Jp8k1EjUFkApu/YZAYEn0PYQfg/U6IDyNyYs=
@@ -516,6 +517,7 @@ github.com/juju/schema v1.0.1-0.20190814234152-1f8aaeef0989 h1:qx1Zh1bnHHVIMmRxq
 github.com/juju/schema v1.0.1-0.20190814234152-1f8aaeef0989/go.mod h1:Y+ThzXpUJ0E7NYYocAbuvJ7vTivXfrof/IfRPq/0abI=
 github.com/juju/testing v0.0.0-20220203020004-a0ff61f03494 h1:XEDzpuZb8Ma7vLja3+5hzUqVTvAqm5Y+ygvnDs5iTMM=
 github.com/juju/txn/v2 v2.0.0-20220204100656-93c9d8a9b89f h1:IMKfv0HgEfQNwWiWkPYNUJ0nI2yZ3JWety0+yQWf9eQ=
+github.com/juju/txn/v2 v2.0.0-20220204100656-93c9d8a9b89f/go.mod h1:Sh0uxANJLqw/GccwAhz4qIn+eWFVbAlQSBynFR4luY8=
 github.com/juju/usso v1.0.1 h1:zyQhSUJnhFZdPqVAmPeqXYlnYXv+i0Cp1Ii+aziMXGs=
 github.com/juju/usso v1.0.1/go.mod h1:3cvBcGVmWXyHhrBHBQtpNBzca/JRg4S5XH88Hj/NsYA=
 github.com/juju/utils/v3 v3.0.0-20220203023959-c3fbc78a33b0 h1:bn+2Adl1yWqYjm3KSFlFqsvfLg2eq+XNL7GGMYApdVw=

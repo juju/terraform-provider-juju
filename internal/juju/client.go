@@ -13,6 +13,7 @@ const (
 	PrefixCloud       = "cloud-"
 	PrefixModel       = "model-"
 	PrefixCharm       = "charm-"
+	UnspecifiedRevision = -1
 	connectionTimeout = 30 * time.Second
 )
 
@@ -24,7 +25,8 @@ type Configuration struct {
 }
 
 type Client struct {
-	Models modelsClient
+	Models      modelsClient
+	Deployments deploymentsClient
 }
 
 type ConnectionFactory struct {
@@ -47,7 +49,8 @@ func NewClient(config Configuration) (*Client, error) {
 	}
 
 	return &Client{
-		Models: *newModelsClient(cf, store, controllerName),
+		Models:      *newModelsClient(cf, store, controllerName),
+		Deployments: *newDeploymentsClient(cf),
 	}, nil
 }
 

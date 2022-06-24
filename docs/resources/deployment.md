@@ -63,7 +63,7 @@ Required:
 Optional:
 
 - `channel` (String) The channel to use when deploying a charm. Specified as <track>/<risk>/<branch>.
-- `revision` (String) The revision of the charm to deploy.
+- `revision` (Number) The revision of the charm to deploy.
 - `series` (String) The series on which to deploy.
 
 

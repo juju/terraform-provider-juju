@@ -77,6 +77,24 @@ func (c *modelsClient) GetByName(name string) (*params.ModelInfo, error) {
 	return modelInfo, nil
 }
 
+// ResolveUUID retrieves a model's using its name
+func (c *modelsClient) ResolveUUID(name string) (string, error) {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return "", err
+	}
+
+	client := modelmanager.NewClient(conn)
+	defer client.Close()
+
+	modelDetails, err := c.store.ModelByName(c.controllerName, name)
+	if err != nil {
+		return "", err
+	}
+
+	return modelDetails.ModelUUID, nil
+}
+
 func (c *modelsClient) Create(name string, controller string, cloudList []interface{}, cloudConfig map[string]interface{}) (*base.ModelInfo, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {

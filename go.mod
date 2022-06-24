@@ -9,6 +9,8 @@ require (
 	github.com/juju/juju v0.0.0-20220609145112-917a8f103356
 )
 
+require github.com/juju/charm/v8 v8.0.0-20220509231111-ed6d505a46f4
+
 require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.1.1 // indirect
@@ -69,7 +71,6 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/juju/ansiterm v0.0.0-20210929141451-8b71cc96ebdc // indirect
-	github.com/juju/charm/v8 v8.0.0-20220509231111-ed6d505a46f4 // indirect
 	github.com/juju/charmrepo/v6 v6.0.0-20220207014006-e6af52d614e4 // indirect
 	github.com/juju/clock v0.0.0-20220203021603-d9deb868a28a // indirect
 	github.com/juju/cmd/v3 v3.0.0-20220203030511-039f3566372a // indirect
@@ -85,6 +86,7 @@ require (
 	github.com/juju/idmclient/v2 v2.0.0-20220207024613-525e1ac3a890 // indirect
 	github.com/juju/jsonschema v0.0.0-20220207021905-6f321f9146b3 // indirect
 	github.com/juju/loggo v0.0.0-20210728185423-eebad3a902c4 // indirect
+	github.com/juju/lru v0.0.0-20190314140547-92a0afabdc41 // indirect
 	github.com/juju/lumberjack v2.0.0-20200420012306-ddfd864a6ade+incompatible // indirect
 	github.com/juju/mgo/v2 v2.0.0-20220111072304-f200228f1090 // indirect
 	github.com/juju/mutex/v2 v2.0.0-20220203023141-11eeddb42c6c // indirect
@@ -98,6 +100,7 @@ require (
 	github.com/juju/romulus v0.0.0-20220207004956-1a3bcf86b836 // indirect
 	github.com/juju/rpcreflect v0.0.0-20200416001309-bb46e9ba1476 // indirect
 	github.com/juju/schema v1.0.1-0.20190814234152-1f8aaeef0989 // indirect
+	github.com/juju/txn/v2 v2.0.0-20220204100656-93c9d8a9b89f // indirect
 	github.com/juju/usso v1.0.1 // indirect
 	github.com/juju/utils/v3 v3.0.0-20220203023959-c3fbc78a33b0 // indirect
 	github.com/juju/version/v2 v2.0.0-20220204124744-fc9915e3d935 // indirect
