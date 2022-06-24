@@ -1,44 +1,43 @@
 package provider
 
 import (
-	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
 
-func TestAcc_ResourceCharm(t *testing.T) {
-	t.Skip("resource not yet implemented, remove this once you add your own code")
-
+func TestAcc_ResourceDeployment(t *testing.T) {
 	resource.UnitTest(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
-		CheckDestroy:      testAccCheckCharmDestroy,
+		CheckDestroy:      testAccCheckDeploymentDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceCharm,
+				Config: testAccResourceDeployment,
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestMatchResourceAttr("juju_model.development", "name", regexp.MustCompile("^development")),
-					resource.TestMatchResourceAttr("juju_charm.postgres", "charm", regexp.MustCompile("^ch:postgres-k8s")),
+					resource.TestCheckResourceAttr("juju_deployment.model", "name", "development"),
+					resource.TestCheckResourceAttr("juju_deployment.this", "charm.#", "1"),
+					resource.TestCheckResourceAttr("juju_deployment.this", "charm.0.name", "tiny-bash"),
 				),
 			},
 		},
 	})
 }
 
-func testAccCheckCharmDestroy(s *terraform.State) error {
-
+func testAccCheckDeploymentDestroy(s *terraform.State) error {
 	return nil
 }
 
-const testAccResourceCharm = `
+const testAccResourceDeployment = `
 resource "juju_model" "development" {
   name = "development"
 }
 
-resource "juju_model" "postgres" {
-  model = juju_model.development.id
-  charm = "ch:postgres-k8s"
+resource "juju_deployment" "this" {
+  model = juju_model.development.name
+  charm {
+    name = "tiny-bash"
+  }
 }
 `
