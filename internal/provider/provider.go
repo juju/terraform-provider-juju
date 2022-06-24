@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -17,6 +18,12 @@ const (
 	JujuUsernameEnvKey   = "JUJU_USERNAME"
 	JujuPasswordEnvKey   = "JUJU_PASSWORD"
 	JujuCACertEnvKey     = "JUJU_CA_CERT"
+
+	authErrSummary   = "Username and password must be set"
+	authErrDetail    = "Currently the provider can only authenticate using username and password based authentication, if both are empty the provider will panic"
+	caErrDetail      = "Verify the ca_certificate property set on the provider"
+	caErrEmptyDetail = "The ca_certificate provider property is not set and the Juju certificate authority is not trusted by your system"
+	connErrDetail    = "Connection error, please check the controller_addresses property set on the provider"
 )
 
 func New(version string) func() *schema.Provider {
@@ -79,8 +86,8 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 		if username == "" || password == "" {
 			diags = append(diags, diag.Diagnostic{
 				Severity: diag.Error,
-				Summary:  "Username and password must be set",
-				Detail:   "Currently the provider can only authenticate using username and password based authentication, if both are empty the provider will panic",
+				Summary:  authErrSummary,
+				Detail:   authErrDetail,
 			})
 			return nil, diags
 		}
@@ -110,17 +117,28 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 
 func checkClientErr(err error, diags diag.Diagnostics, config juju.Configuration) diag.Diagnostics {
 
+	var errDetail string
+
 	x509error := &x509.UnknownAuthorityError{}
+	netOpError := &net.OpError{}
 	if errors.As(err, x509error) {
-		var errMsg string = "Verify the ca_certificate property set on the provider"
+		errDetail = caErrDetail
 
 		if config.CACert == "" {
-			errMsg = "The ca_certificate provider property is not set and the Juju certificate authority is not trusted by your system"
+			errDetail = caErrEmptyDetail
 		}
 
 		return append(diags, diag.Diagnostic{
 			Summary: x509error.Error(),
-			Detail:  errMsg,
+			Detail:  errDetail,
+		})
+	}
+	if errors.As(err, &netOpError) {
+		errDetail = connErrDetail
+
+		return append(diags, diag.Diagnostic{
+			Summary: netOpError.Error(),
+			Detail:  errDetail,
 		})
 	}
 	return diag.FromErr(err)

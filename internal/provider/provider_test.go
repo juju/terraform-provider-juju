@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -18,7 +19,6 @@ var providerFactories = map[string]func() (*schema.Provider, error){
 	},
 }
 
-// TODO: Expand these tests
 func TestProvider(t *testing.T) {
 	if err := New("dev")().InternalValidate(); err != nil {
 		t.Fatalf("err: %s", err)
@@ -26,6 +26,7 @@ func TestProvider(t *testing.T) {
 }
 
 func TestProviderConfigure(t *testing.T) {
+	testAccPreCheck(t)
 	provider := New("dev")()
 	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
 	if diags != nil {
@@ -34,6 +35,7 @@ func TestProviderConfigure(t *testing.T) {
 }
 
 func TestProviderConfigureUsername(t *testing.T) {
+	testAccPreCheck(t)
 	provider := New("dev")()
 	t.Setenv(JujuUsernameEnvKey, "")
 	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
@@ -41,12 +43,13 @@ func TestProviderConfigureUsername(t *testing.T) {
 		t.Errorf("provider should error")
 	}
 	err := diags[len(diags)-1]
-	if err.Summary != "Username and password must be set" {
+	if err.Summary != authErrSummary && err.Detail != authErrDetail {
 		t.Errorf("unexpected error: %+v", err)
 	}
 }
 
 func TestProviderConfigurePassword(t *testing.T) {
+	testAccPreCheck(t)
 	provider := New("dev")()
 	t.Setenv(JujuPasswordEnvKey, "")
 	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
@@ -54,7 +57,22 @@ func TestProviderConfigurePassword(t *testing.T) {
 		t.Errorf("provider should error")
 	}
 	err := diags[len(diags)-1]
-	if err.Summary != "Username and password must be set" {
+	if err.Summary != authErrSummary && err.Detail != authErrDetail {
+		t.Errorf("unexpected error: %+v", err)
+	}
+}
+
+func TestProviderConfigureAddresses(t *testing.T) {
+	testAccPreCheck(t)
+	provider := New("dev")()
+	// This IP is from a test network that should never be routed. https://www.rfc-editor.org/rfc/rfc5737#section-3
+	t.Setenv(JujuControllerEnvKey, "192.0.2.100:17070")
+	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
+	if diags == nil {
+		t.Errorf("provider should error")
+	}
+	err := diags[len(diags)-1]
+	if !strings.Contains(err.Summary, "dial tcp 192.0.2.100:17070:") {
 		t.Errorf("unexpected error: %+v", err)
 	}
 }
