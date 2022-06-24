@@ -95,10 +95,13 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 			return nil, diag.FromErr(err)
 		}
 
-		_, err = client.Models.GetConnection(nil)
+		// Here we are testing that we can connect successfully to the Juju server
+		// this prevents having logic to check the connection is OK in every function
+		testConn, err := client.Models.GetConnection(nil)
 		if err != nil {
 			return nil, checkClientErr(err, diags, config)
 		}
+		testConn.Close()
 
 		return client, diags
 	}
