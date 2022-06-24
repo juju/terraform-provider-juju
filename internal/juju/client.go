@@ -1,6 +1,8 @@
 package juju
 
 import (
+	"time"
+
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/connector"
 	"github.com/juju/juju/cmd/modelcmd"
@@ -8,9 +10,10 @@ import (
 )
 
 const (
-	PrefixCloud = "cloud-"
-	PrefixModel = "model-"
-	PrefixCharm = "charm-"
+	PrefixCloud       = "cloud-"
+	PrefixModel       = "model-"
+	PrefixCharm       = "charm-"
+	connectionTimeout = 30 * time.Second
 )
 
 type Configuration struct {
@@ -54,13 +57,20 @@ func (cf *ConnectionFactory) GetConnection(model *string) (api.Connection, error
 		modelUUID = *model
 	}
 
+	dialOptions := func(do *api.DialOpts) {
+		//this is set as a const above, in case we need to use it elsewhere to manage connection timings
+		do.Timeout = connectionTimeout
+		//default is 2 seconds, as we are changing the overall timeout it makes sense to reduce this as well
+		do.RetryDelay = 1 * time.Second
+	}
+
 	connr, err := connector.NewSimple(connector.SimpleConfig{
 		ControllerAddresses: cf.config.ControllerAddresses,
 		Username:            cf.config.Username,
 		Password:            cf.config.Password,
 		CACert:              cf.config.CACert,
 		ModelUUID:           modelUUID,
-	})
+	}, dialOptions)
 	if err != nil {
 		return nil, err
 	}
