@@ -82,6 +82,7 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 				Summary:  "Username and password must be set",
 				Detail:   "Currently the provider can only authenticate using username and password based authentication, if both are empty the provider will panic",
 			})
+			return nil, diags
 		}
 
 		config := juju.Configuration{
