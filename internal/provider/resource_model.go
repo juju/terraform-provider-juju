@@ -102,7 +102,7 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 	var diags diag.Diagnostics
 
 	uuid := d.Id()
-	controllerName, modelInfo, err := client.Models.Read(uuid)
+	controllerName, modelInfo, modelConfig, err := client.Models.Read(uuid)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -121,7 +121,17 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 	if err := d.Set("type", modelInfo.Type); err != nil {
 		return diag.FromErr(err)
 	}
+
 	// TODO: locate model config values form modelsAPI or other endpoint.
+	stateConfig := d.Get("config").(map[string]interface{})
+	for setting, _ := range stateConfig {
+		if value, exists := modelConfig[setting]; exists {
+			stateConfig[setting] = value
+		} else {
+			delete(stateConfig, setting)
+		}
+	}
+	d.Set("config", stateConfig)
 
 	return diags
 }
@@ -170,7 +180,6 @@ func resourceModelImporter(ctx context.Context, d *schema.ResourceData, meta int
 	modelName := d.Id()
 
 	model, err := client.Models.GetByName(modelName)
-
 	if err != nil {
 		return nil, err
 	}

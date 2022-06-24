@@ -130,35 +130,47 @@ func (c *modelsClient) Create(name string, controller string, cloudList []interf
 	return &modelInfo, nil
 }
 
-func (c *modelsClient) Read(uuid string) (*string, *params.ModelInfo, error) {
-	conn, err := c.GetConnection(nil)
+func (c *modelsClient) Read(uuid string) (*string, *params.ModelInfo, map[string]interface{}, error) {
+	modelmanagerConn, err := c.GetConnection(nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	client := modelmanager.NewClient(conn)
-	defer client.Close()
-
-	models, err := client.ModelInfo([]names.ModelTag{names.NewModelTag(uuid)})
+	modelconfigConn, err := c.GetConnection(&uuid)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
+	}
+
+	modelmanagerClient := modelmanager.NewClient(modelmanagerConn)
+	defer modelmanagerClient.Close()
+
+	modelconfigClient := modelconfig.NewClient(modelconfigConn)
+	defer modelconfigClient.Close()
+
+	models, err := modelmanagerClient.ModelInfo([]names.ModelTag{names.NewModelTag(uuid)})
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	if len(models) > 1 {
-		return nil, nil, errors.New(fmt.Sprintf("more than one model returned for UUID: %s", uuid))
+		return nil, nil, nil, errors.New(fmt.Sprintf("more than one model returned for UUID: %s", uuid))
 	}
 	if len(models) < 1 {
-		return nil, nil, errors.New(fmt.Sprintf("no model returned for UUID: %s", uuid))
+		return nil, nil, nil, errors.New(fmt.Sprintf("no model returned for UUID: %s", uuid))
 	}
 
 	modelInfo := models[0].Result
 	controllerName, err := c.getControllerNameByUUID(modelInfo.ControllerUUID)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return controllerName, modelInfo, nil
+	modelConfig, err := modelconfigClient.ModelGet()
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
+	return controllerName, modelInfo, modelConfig, nil
 }
 
 func (c *modelsClient) Update(uuid string, config map[string]interface{}) error {
