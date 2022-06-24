@@ -1,10 +1,12 @@
 package provider
 
 import (
+	"context"
 	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
 
 // providerFactories are used to instantiate a provider during acceptance testing.
@@ -20,6 +22,40 @@ var providerFactories = map[string]func() (*schema.Provider, error){
 func TestProvider(t *testing.T) {
 	if err := New("dev")().InternalValidate(); err != nil {
 		t.Fatalf("err: %s", err)
+	}
+}
+
+func TestProviderConfigure(t *testing.T) {
+	provider := New("dev")()
+	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
+	if diags != nil {
+		t.Errorf("%+v", diags)
+	}
+}
+
+func TestProviderConfigureUsername(t *testing.T) {
+	provider := New("dev")()
+	t.Setenv(JujuUsernameEnvKey, "")
+	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
+	if diags == nil {
+		t.Errorf("provider should error")
+	}
+	err := diags[len(diags)-1]
+	if err.Summary != "Username and password must be set" {
+		t.Errorf("unexpected error: %+v", err)
+	}
+}
+
+func TestProviderConfigurePassword(t *testing.T) {
+	provider := New("dev")()
+	t.Setenv(JujuPasswordEnvKey, "")
+	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
+	if diags == nil {
+		t.Errorf("provider should error")
+	}
+	err := diags[len(diags)-1]
+	if err.Summary != "Username and password must be set" {
+		t.Errorf("unexpected error: %+v", err)
 	}
 }
 
