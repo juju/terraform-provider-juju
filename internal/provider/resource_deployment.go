@@ -2,8 +2,10 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
 func resourceDeployment() *schema.Resource {
@@ -46,8 +48,8 @@ func resourceDeployment() *schema.Resource {
 						},
 						"revision": {
 							Description: "The revision of the charm to deploy.",
-							Type:        schema.TypeString,
-							Default:     "latest",
+							Type:        schema.TypeInt,
+							Default:     juju.UnspecifiedRevision,
 							Optional:    true,
 						},
 						"series": {
@@ -75,8 +77,37 @@ func resourceDeployment() *schema.Resource {
 }
 
 func resourceDeploymentCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
-	return diag.Errorf("not implemented")
+	client := meta.(*juju.Client)
+
+	modelName := d.Get("model").(string)
+	modelUUID, err := client.Models.ResolveUUID(modelName)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	name := d.Get("name").(string)
+	charm := d.Get("charm").([]interface{})[0].(map[string]interface{})
+	charmName := charm["name"].(string)
+	channel := charm["channel"].(string)
+	revision := charm["revision"].(int)
+	series := charm["series"].(string)
+
+	deployedName, err := client.Deployments.CreateDeployment(&juju.CreateDeploymentInput{
+		ApplicationName: name,
+		ModelUUID:       modelUUID,
+		CharmName:       charmName,
+		CharmChannel:    channel,
+		CharmRevision:   revision,
+		CharmSeries:     series,
+	})
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	// TODO: id generation - is there a natural ID we can use?
+	d.SetId(fmt.Sprintf("%s/%s", modelUUID, deployedName))
+
+	return nil
 }
 
 func resourceDeploymentRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {

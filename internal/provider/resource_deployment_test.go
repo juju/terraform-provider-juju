@@ -1,44 +1,53 @@
 package provider
 
 import (
-	"regexp"
+	"fmt"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
 
-func TestAcc_ResourceCharm(t *testing.T) {
-	t.Skip("resource not yet implemented, remove this once you add your own code")
+// TODO: test also for k8s substrate, tiny-bash charm is not supported
+func TestAcc_ResourceDeployment(t *testing.T) {
+	// TODO: remove once other operations are implemented
+	t.Skip("skipped until delete operation is implemented")
 
-	resource.UnitTest(t, resource.TestCase{
+	modelName := acctest.RandomWithPrefix("tf-test-deployment")
+
+	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
-		CheckDestroy:      testAccCheckCharmDestroy,
+		CheckDestroy:      testAccCheckDeploymentDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceCharm,
+				Config: testAccResourceDeployment(modelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestMatchResourceAttr("juju_model.development", "name", regexp.MustCompile("^development")),
-					resource.TestMatchResourceAttr("juju_charm.postgres", "charm", regexp.MustCompile("^ch:postgres-k8s")),
+					resource.TestCheckResourceAttr("juju_deployment.this", "name", modelName),
+					resource.TestCheckResourceAttr("juju_deployment.this", "charm.#", "1"),
+					resource.TestCheckResourceAttr("juju_deployment.this", "charm.0.name", "tiny-bash"),
 				),
 			},
 		},
 	})
 }
 
-func testAccCheckCharmDestroy(s *terraform.State) error {
-
+func testAccCheckDeploymentDestroy(s *terraform.State) error {
 	return nil
 }
 
-const testAccResourceCharm = `
-resource "juju_model" "development" {
-  name = "development"
+func testAccResourceDeployment(modelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
 }
 
-resource "juju_model" "postgres" {
-  model = juju_model.development.id
-  charm = "ch:postgres-k8s"
+resource "juju_deployment" "this" {
+  model = juju_model.this.name
+  charm {
+    name = "tiny-bash"
+  }
 }
-`
+`, modelName)
+}
