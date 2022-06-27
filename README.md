@@ -1,6 +1,18 @@
 # Terraform Provider for Juju
 
+> **Warning** The provider is under active development and will initially support only some Juju functionality. Use releases at your own risk.
+
 The provider can be used to interact with Juju - a model-driven Operator Lifecycle Manager (OLM).
+
+## Initial Scope
+
+Once complete, the initial released version of the provider will allow you to:
+
+- Manage models,
+- Deploy charms from CharmHub,
+- Manage integrations (previously named "relationships").
+
+There will also be support for importing these existing Juju resources.
 
 ## Requirements
 
