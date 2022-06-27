@@ -18,12 +18,6 @@ const (
 	JujuUsernameEnvKey   = "JUJU_USERNAME"
 	JujuPasswordEnvKey   = "JUJU_PASSWORD"
 	JujuCACertEnvKey     = "JUJU_CA_CERT"
-
-	authErrSummary   = "Username and password must be set"
-	authErrDetail    = "Currently the provider can only authenticate using username and password based authentication, if both are empty the provider will panic"
-	caErrDetail      = "Verify the ca_certificate property set on the provider"
-	caErrEmptyDetail = "The ca_certificate provider property is not set and the Juju certificate authority is not trusted by your system"
-	connErrDetail    = "Connection error, please check the controller_addresses property set on the provider"
 )
 
 func New(version string) func() *schema.Provider {
@@ -86,8 +80,8 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 		if username == "" || password == "" {
 			diags = append(diags, diag.Diagnostic{
 				Severity: diag.Error,
-				Summary:  authErrSummary,
-				Detail:   authErrDetail,
+				Summary:  "Username and password must be set",
+				Detail:   "Currently the provider can only authenticate using username and password based authentication, if both are empty the provider will panic",
 			})
 			return nil, diags
 		}
@@ -122,10 +116,10 @@ func checkClientErr(err error, diags diag.Diagnostics, config juju.Configuration
 	x509error := &x509.UnknownAuthorityError{}
 	netOpError := &net.OpError{}
 	if errors.As(err, x509error) {
-		errDetail = caErrDetail
+		errDetail = "Verify the ca_certificate property set on the provider"
 
 		if config.CACert == "" {
-			errDetail = caErrEmptyDetail
+			errDetail = "The ca_certificate provider property is not set and the Juju certificate authority is not trusted by your system"
 		}
 
 		return append(diags, diag.Diagnostic{
@@ -134,7 +128,7 @@ func checkClientErr(err error, diags diag.Diagnostics, config juju.Configuration
 		})
 	}
 	if errors.As(err, &netOpError) {
-		errDetail = connErrDetail
+		errDetail = "Connection error, please check the controller_addresses property set on the provider"
 
 		return append(diags, diag.Diagnostic{
 			Summary: netOpError.Error(),

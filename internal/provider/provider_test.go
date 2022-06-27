@@ -43,7 +43,7 @@ func TestProviderConfigureUsername(t *testing.T) {
 		t.Errorf("provider should error")
 	}
 	err := diags[len(diags)-1]
-	if err.Summary != authErrSummary && err.Detail != authErrDetail {
+	if err.Summary != "Username and password must be set" && err.Detail != "Currently the provider can only authenticate using username and password based authentication, if both are empty the provider will panic" {
 		t.Errorf("unexpected error: %+v", err)
 	}
 }
@@ -57,7 +57,7 @@ func TestProviderConfigurePassword(t *testing.T) {
 		t.Errorf("provider should error")
 	}
 	err := diags[len(diags)-1]
-	if err.Summary != authErrSummary && err.Detail != authErrDetail {
+	if err.Summary != "Username and password must be set" && err.Detail != "Currently the provider can only authenticate using username and password based authentication, if both are empty the provider will panic" {
 		t.Errorf("unexpected error: %+v", err)
 	}
 }
