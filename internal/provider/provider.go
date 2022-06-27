@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -110,17 +111,28 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 
 func checkClientErr(err error, diags diag.Diagnostics, config juju.Configuration) diag.Diagnostics {
 
+	var errDetail string
+
 	x509error := &x509.UnknownAuthorityError{}
+	netOpError := &net.OpError{}
 	if errors.As(err, x509error) {
-		var errMsg string = "Verify the ca_certificate property set on the provider"
+		errDetail = "Verify the ca_certificate property set on the provider"
 
 		if config.CACert == "" {
-			errMsg = "The ca_certificate provider property is not set and the Juju certificate authority is not trusted by your system"
+			errDetail = "The ca_certificate provider property is not set and the Juju certificate authority is not trusted by your system"
 		}
 
 		return append(diags, diag.Diagnostic{
 			Summary: x509error.Error(),
-			Detail:  errMsg,
+			Detail:  errDetail,
+		})
+	}
+	if errors.As(err, &netOpError) {
+		errDetail = "Connection error, please check the controller_addresses property set on the provider"
+
+		return append(diags, diag.Diagnostic{
+			Summary: netOpError.Error(),
+			Detail:  errDetail,
 		})
 	}
 	return diag.FromErr(err)
