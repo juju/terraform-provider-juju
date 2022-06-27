@@ -6,7 +6,7 @@ require (
 	github.com/bflad/tfproviderlint v0.28.1
 	github.com/hashicorp/terraform-plugin-docs v0.10.1
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.17.0
-	github.com/juju/juju v0.0.0-20220531015304-b7c8f6403cba
+	github.com/juju/juju v0.0.0-20220609145112-917a8f103356
 )
 
 require (
@@ -81,7 +81,7 @@ require (
 	github.com/juju/gojsonpointer v0.0.0-20150204194629-afe8b77aa08f // indirect
 	github.com/juju/gojsonreference v0.0.0-20150204194633-f0d24ac5ee33 // indirect
 	github.com/juju/gojsonschema v0.0.0-20150312170016-e1ad140384f2 // indirect
-	github.com/juju/http/v2 v2.0.0-20220519154824-1d0dd7a3175e // indirect
+	github.com/juju/http/v2 v2.0.0-20220615041531-27607e3f581a // indirect
 	github.com/juju/idmclient/v2 v2.0.0-20220207024613-525e1ac3a890 // indirect
 	github.com/juju/jsonschema v0.0.0-20220207021905-6f321f9146b3 // indirect
 	github.com/juju/loggo v0.0.0-20210728185423-eebad3a902c4 // indirect
@@ -143,15 +143,14 @@ require (
 	github.com/xdg-go/stringprep v1.0.2 // indirect
 	github.com/zclconf/go-cty v1.10.0 // indirect
 	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
-	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
-	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4 // indirect
-	golang.org/x/oauth2 v0.0.0-20220411215720-9780585627b5 // indirect
-	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
+	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
+	golang.org/x/net v0.0.0-20220607020251-c690dde0001d // indirect
+	golang.org/x/oauth2 v0.0.0-20220608161450-d0670ef3b1eb // indirect
+	golang.org/x/sys v0.0.0-20220608164250-635b8c9b7f68 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
-	golang.org/x/tools v0.1.10 // indirect
-	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f // indirect
+	golang.org/x/tools v0.1.11 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20220429170224-98d788798c3e // indirect
 	google.golang.org/grpc v1.46.0 // indirect
@@ -167,7 +166,7 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.23.4 // indirect
 	k8s.io/apimachinery v0.23.4 // indirect
 	k8s.io/client-go v0.23.4 // indirect
