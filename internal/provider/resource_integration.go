@@ -6,15 +6,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-func resourceRelation() *schema.Resource {
+func resourceIntegration() *schema.Resource {
 	return &schema.Resource{
-		// This description is used by the documentation generator and the language server.
-		Description: "A resource that represents a Juju Relation.",
+		Description: "A resource that represents a Juju Integration.",
 
-		CreateContext: resourceRelationCreate,
-		ReadContext:   resourceRelationRead,
-		UpdateContext: resourceRelationUpdate,
-		DeleteContext: resourceRelationDelete,
+		CreateContext: resourceIntegrationCreate,
+		ReadContext:   resourceIntegrationRead,
+		UpdateContext: resourceIntegrationUpdate,
+		DeleteContext: resourceIntegrationDelete,
 
 		Schema: map[string]*schema.Schema{
 			// TODO: this needs to be reviewed
@@ -24,17 +23,17 @@ func resourceRelation() *schema.Resource {
 				Required:    true,
 			},
 			"src": {
-				Description: "The name of an application providing the relation.",
+				Description: "The name of an application providing the integration.",
 				Type:        schema.TypeString,
 				Required:    true,
 			},
 			"dst": {
-				Description: "The name of an application requiring the relation",
+				Description: "The name of an application requiring the integration",
 				Type:        schema.TypeString,
 				Optional:    true,
 			},
-			"relations": {
-				Description: "The name of the relation as known by both charms.",
+			"integrations": {
+				Description: "The name of the integration as known by both charms.",
 				Type:        schema.TypeList,
 				Required:    true,
 				Elem: &schema.Schema{
@@ -45,22 +44,22 @@ func resourceRelation() *schema.Resource {
 	}
 }
 
-func resourceRelationCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
 	return diag.Errorf("not implemented")
 }
 
-func resourceRelationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceIntegrationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
 	return diag.Errorf("not implemented")
 }
 
-func resourceRelationUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceIntegrationUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
 	return diag.Errorf("not implemented")
 }
 
-func resourceRelationDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceIntegrationDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
 	return diag.Errorf("not implemented")
 }

@@ -8,16 +8,16 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
 
-func TestAcc_ResourceRelation(t *testing.T) {
+func TestAcc_ResourceIntegration(t *testing.T) {
 	t.Skip("resource not yet implemented, remove this once you add your own code")
 
 	resource.UnitTest(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
-		CheckDestroy:      testAccCheckRelationDestroy,
+		CheckDestroy:      testAccCheckIntegrationDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceRelation,
+				Config: testAccResourceIntegration,
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestMatchResourceAttr("juju_model.development", "name", regexp.MustCompile("^development")),
 					resource.TestMatchResourceAttr("juju_charm.postgres", "charm", regexp.MustCompile("^ch:postgres-k8s")),
@@ -28,12 +28,11 @@ func TestAcc_ResourceRelation(t *testing.T) {
 	})
 }
 
-func testAccCheckRelationDestroy(s *terraform.State) error {
-
+func testAccCheckIntegrationDestroy(s *terraform.State) error {
 	return nil
 }
 
-const testAccResourceRelation = `
+const testAccResourceIntegration = `
 resource "juju_model" "development" {
   name = "development"
 }
@@ -55,7 +54,7 @@ resource "juju_charm" "mattermost" {
   }
 }
 
-resource "juju_relation" "postgres_mattermost" {
+resource "juju_integration" "postgres_mattermost" {
   src = juju_charm.postgres.id
   dst = juju_charm.mattermost.id
 }
