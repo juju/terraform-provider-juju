@@ -3,6 +3,7 @@ package juju
 import (
 	"errors"
 	"fmt"
+
 	"github.com/juju/charm/v8"
 	jujuerrors "github.com/juju/errors"
 	"github.com/juju/juju/api/client/application"
@@ -28,6 +29,7 @@ type CreateDeploymentInput struct {
 	CharmChannel    string
 	CharmSeries     string
 	CharmRevision   int
+	Units           int
 }
 
 func newDeploymentsClient(cf ConnectionFactory) *deploymentsClient {
@@ -172,6 +174,7 @@ func (c deploymentsClient) CreateDeployment(input *CreateDeploymentInput) (strin
 			Origin: resultOrigin,
 		},
 		ApplicationName: appName,
+		NumUnits:        input.Units,
 		Series:          resultOrigin.Series,
 	})
 	return appName, err
