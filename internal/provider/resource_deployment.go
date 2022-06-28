@@ -123,7 +123,27 @@ func resourceDeploymentUpdate(ctx context.Context, d *schema.ResourceData, meta 
 	return diag.Errorf("not implemented")
 }
 
+// Juju refers to deletion as "destroy" so we call the Destroy function of our client here rather than delete
+// This function remains named Delete for parity across the provider and to stick within terraform naming conventions
 func resourceDeploymentDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
-	return diag.Errorf("not implemented")
+	client := meta.(*juju.Client)
+
+	modelName := d.Get("model").(string)
+	modelUUID, err := client.Models.ResolveUUID(modelName)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	var diags diag.Diagnostics
+
+	err = client.Deployments.DestroyDeployment(&juju.DestroyDeploymentInput{
+		ApplicationName: d.Get("name").(string),
+		ModelUUID:       modelUUID,
+	})
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	d.SetId("")
+	return diags
 }
