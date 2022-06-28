@@ -2,8 +2,9 @@ package provider
 
 import (
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -12,7 +13,7 @@ import (
 // TODO: test also for k8s substrate, tiny-bash charm is not supported
 func TestAcc_ResourceDeployment(t *testing.T) {
 	// TODO: remove once other operations are implemented
-	t.Skip("skipped until delete operation is implemented")
+	t.Skip("skipped until read operation is implemented")
 
 	modelName := acctest.RandomWithPrefix("tf-test-deployment")
 
@@ -24,7 +25,7 @@ func TestAcc_ResourceDeployment(t *testing.T) {
 			{
 				Config: testAccResourceDeployment(modelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_deployment.this", "name", modelName),
+					resource.TestCheckResourceAttr("juju_deployment.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_deployment.this", "charm.#", "1"),
 					resource.TestCheckResourceAttr("juju_deployment.this", "charm.0.name", "tiny-bash"),
 				),
