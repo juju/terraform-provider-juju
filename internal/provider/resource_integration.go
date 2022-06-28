@@ -16,28 +16,30 @@ func resourceIntegration() *schema.Resource {
 		DeleteContext: resourceIntegrationDelete,
 
 		Schema: map[string]*schema.Schema{
-			// TODO: this needs to be reviewed
 			"model": {
-				Description: "Model",
+				Description: "The name of the model to operate in.",
 				Type:        schema.TypeString,
 				Required:    true,
 			},
-			"src": {
-				Description: "The name of an application providing the integration.",
-				Type:        schema.TypeString,
-				Required:    true,
-			},
-			"dst": {
-				Description: "The name of an application requiring the integration",
-				Type:        schema.TypeString,
-				Optional:    true,
-			},
-			"integrations": {
-				Description: "The name of the integration as known by both charms.",
+			"application": {
+				Description: "The two applications to integrate.",
 				Type:        schema.TypeList,
 				Required:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
+				MaxItems:    2,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"name": &schema.Schema{
+							Description: "The name of the application.",
+							Type:        schema.TypeString,
+							Required:    true,
+						},
+						"integration": {
+							Description: "The integration name.",
+							Type:        schema.TypeString,
+							Default:     "",
+							Optional:    true,
+						},
+					},
 				},
 			},
 		},
