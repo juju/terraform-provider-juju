@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	"strings"
 )
 
 func resourceDeployment() *schema.Resource {
@@ -23,11 +24,14 @@ func resourceDeployment() *schema.Resource {
 				Description: "A custom name for the application deployment. If empty, uses the charm's name.",
 				Type:        schema.TypeString,
 				Optional:    true,
+				Computed:    true,
+				ForceNew:    true,
 			},
 			"model": {
 				Description: "The name of the model where the charm is to be deployed.",
 				Type:        schema.TypeString,
 				Required:    true,
+				ForceNew:    true,
 			},
 			"charm": {
 				Description: "The name of the charm to be installed from Charmhub.",
@@ -40,6 +44,7 @@ func resourceDeployment() *schema.Resource {
 							Description: "The name of the charm",
 							Type:        schema.TypeString,
 							Required:    true,
+							ForceNew:    true,
 						},
 						"channel": {
 							Description: "The channel to use when deploying a charm. Specified as <track>/<risk>/<branch>.",
@@ -50,14 +55,14 @@ func resourceDeployment() *schema.Resource {
 						"revision": {
 							Description: "The revision of the charm to deploy.",
 							Type:        schema.TypeInt,
-							Default:     juju.UnspecifiedRevision,
 							Optional:    true,
+							Computed:    true,
 						},
 						"series": {
 							Description: "The series on which to deploy.",
 							Type:        schema.TypeString,
-							Default:     "",
 							Optional:    true,
+							Computed:    true,
 						},
 					},
 				},
@@ -94,7 +99,7 @@ func resourceDeploymentCreate(ctx context.Context, d *schema.ResourceData, meta 
 	series := charm["series"].(string)
 	units := d.Get("units").(int)
 
-	deployedName, err := client.Deployments.CreateDeployment(&juju.CreateDeploymentInput{
+	response, err := client.Deployments.CreateDeployment(&juju.CreateDeploymentInput{
 		ApplicationName: name,
 		ModelUUID:       modelUUID,
 		CharmName:       charmName,
@@ -107,15 +112,59 @@ func resourceDeploymentCreate(ctx context.Context, d *schema.ResourceData, meta 
 		return diag.FromErr(err)
 	}
 
+	// These values can be computed, and so set from the response.
+	d.Set("name", response.AppName)
+
+	charm["revision"] = response.Revision
+	charm["series"] = response.Series
+	d.Set("charm", []map[string]interface{}{charm})
+
 	// TODO: id generation - is there a natural ID we can use?
-	d.SetId(fmt.Sprintf("%s/%s", modelUUID, deployedName))
+	d.SetId(fmt.Sprintf("%s/%s", modelUUID, response.AppName))
 
 	return nil
 }
 
 func resourceDeploymentRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
-	return diag.Errorf("not implemented")
+	client := meta.(*juju.Client)
+
+	id := strings.Split(d.Id(), "/")
+	modelUUID, appName := id[0], id[1]
+
+	response, err := client.Deployments.ReadDeployment(&juju.ReadDeploymentInput{
+		ModelUUID: modelUUID,
+		AppName:   appName,
+	})
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	if response == nil {
+		return nil
+	}
+
+	// TODO: This is a temporary fix to preserve the defined charm channel, as we cannot currently pull this from the API
+	// Remove these lines and uncomment under the next TODO
+	charmList := d.Get("charm").([]interface{})[0].(map[string]interface{})
+	charmList["name"] = response.Name
+	charmList["revision"] = response.Revision
+	charmList["series"] = response.Series
+
+	// TODO: Once we can pull the channel from the API, remove the above and uncomment below
+	//charmList := []map[string]interface{}{
+	//	{
+	//		"name":     response.Name,
+	//		"channel":  response.Channel,
+	//		"revision": response.Revision,
+	//		"series":   response.Series,
+	//	},
+	//}
+
+	d.Set("name", appName)
+	d.Set("charm", []map[string]interface{}{charmList})
+	d.Set("units", response.Units)
+
+	return nil
 }
 
 func resourceDeploymentUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
