@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -91,6 +92,7 @@ func resourceDeploymentCreate(ctx context.Context, d *schema.ResourceData, meta 
 	channel := charm["channel"].(string)
 	revision := charm["revision"].(int)
 	series := charm["series"].(string)
+	units := d.Get("units").(int)
 
 	deployedName, err := client.Deployments.CreateDeployment(&juju.CreateDeploymentInput{
 		ApplicationName: name,
@@ -99,6 +101,7 @@ func resourceDeploymentCreate(ctx context.Context, d *schema.ResourceData, meta 
 		CharmChannel:    channel,
 		CharmRevision:   revision,
 		CharmSeries:     series,
+		Units:           units,
 	})
 	if err != nil {
 		return diag.FromErr(err)
