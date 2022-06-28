@@ -32,6 +32,11 @@ type CreateDeploymentInput struct {
 	Units           int
 }
 
+type DestroyDeploymentInput struct {
+	ApplicationName string
+	ModelUUID       string
+}
+
 func newDeploymentsClient(cf ConnectionFactory) *deploymentsClient {
 	return &deploymentsClient{
 		ConnectionFactory: cf,
@@ -178,4 +183,29 @@ func (c deploymentsClient) CreateDeployment(input *CreateDeploymentInput) (strin
 		Series:          resultOrigin.Series,
 	})
 	return appName, err
+}
+
+func (c deploymentsClient) DestroyDeployment(input *DestroyDeploymentInput) error {
+	conn, err := c.GetConnection(&input.ModelUUID)
+	if err != nil {
+		return err
+	}
+
+	applicationAPIClient := apiapplication.NewClient(conn)
+	defer applicationAPIClient.Close()
+
+	var destroyParams = apiapplication.DestroyApplicationsParams{
+		Applications: []string{
+			input.ApplicationName,
+		},
+		DestroyStorage: true,
+	}
+
+	_, err = applicationAPIClient.DestroyApplications(destroyParams)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
