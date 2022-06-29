@@ -2,8 +2,8 @@
 # behavior.
 before:
   hooks:
-    # TODO: don't tidy beforehand to avoid current ambiguous import error
-    # - go mod tidy
+  # TODO: don't tidy beforehand to avoid current ambiguous import error
+  # - go mod tidy
 builds:
 - env:
     # goreleaser does not work with CGO, it could also complicate
@@ -16,23 +16,27 @@ builds:
   ldflags:
     - '-s -w -X main.version={{.Version}} -X main.commit={{.Commit}}'
   goos:
-    # TODO: remove restriction
+    # TODO: disabled => juju/utils symlink.go:25:8: undefined: New
     # - freebsd
-    # - windows
+    - windows
     - linux
     - darwin
   goarch:
     - amd64
-    - '386'
-    - arm
+    # TODO: the following are disabled due to => juju/lru maxLRUSize (untyped int constant 4294967295) overflows int
+    # - '386'
+    # - arm
     - arm64
   ignore:
     - goos: darwin
       goarch: '386'
+    # TODO: disabled => juju/utils symlink_windows.go:54:8: undefined: createSymbolicLink
+    - goos: windows
+      goarch: arm64
   binary: '{{ .ProjectName }}_v{{ .Version }}'
 archives:
-- format: zip
-  name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+  - format: zip
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
 checksum:
   extra_files:
     - glob: 'terraform-registry-manifest.json'
