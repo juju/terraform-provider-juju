@@ -9,7 +9,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 )
 
-// TODO: test also for k8s substrate, tiny-bash charm is not supported
 func TestAcc_ResourceDeployment(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-deployment")
 
@@ -24,6 +23,11 @@ func TestAcc_ResourceDeployment(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_deployment.this", "charm.#", "1"),
 					resource.TestCheckResourceAttr("juju_deployment.this", "charm.0.name", "tiny-bash"),
 				),
+			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      "juju_deployment.this",
 			},
 		},
 	})

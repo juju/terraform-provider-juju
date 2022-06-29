@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"fmt"
-
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -18,6 +17,12 @@ func resourceDeployment() *schema.Resource {
 		ReadContext:   resourceDeploymentRead,
 		UpdateContext: resourceDeploymentUpdate,
 		DeleteContext: resourceDeploymentDelete,
+
+		Importer: &schema.ResourceImporter{
+			// TODO: sync-up with read operation
+			//StateContext: resourceDeploymentImporter,
+			StateContext: schema.ImportStatePassthroughContext,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"name": {
@@ -119,17 +124,20 @@ func resourceDeploymentCreate(ctx context.Context, d *schema.ResourceData, meta 
 	charm["series"] = response.Series
 	d.Set("charm", []map[string]interface{}{charm})
 
-	// TODO: id generation - is there a natural ID we can use?
-	d.SetId(fmt.Sprintf("%s/%s", modelUUID, response.AppName))
+	id := fmt.Sprintf("%s:%s", modelName, response.AppName)
+	d.SetId(id)
 
 	return nil
 }
 
 func resourceDeploymentRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
-
-	id := strings.Split(d.Id(), "/")
-	modelUUID, appName := id[0], id[1]
+	id := strings.Split(d.Id(), ":")
+	modelName, appName := id[0], id[1]
+	modelUUID, err := client.Models.ResolveUUID(modelName)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	response, err := client.Deployments.ReadDeployment(&juju.ReadDeploymentInput{
 		ModelUUID: modelUUID,
@@ -144,11 +152,25 @@ func resourceDeploymentRead(ctx context.Context, d *schema.ResourceData, meta in
 	}
 
 	// TODO: This is a temporary fix to preserve the defined charm channel, as we cannot currently pull this from the API
+	// The if exists statement is also required to allow import to function when no exiting data is in the state
 	// Remove these lines and uncomment under the next TODO
-	charmList := d.Get("charm").([]interface{})[0].(map[string]interface{})
-	charmList["name"] = response.Name
-	charmList["revision"] = response.Revision
-	charmList["series"] = response.Series
+
+	var charmList map[string]interface{}
+	_, exists := d.GetOk("charm")
+	if exists {
+		charmList = d.Get("charm").([]interface{})[0].(map[string]interface{})
+		charmList["name"] = response.Name
+		charmList["revision"] = response.Revision
+		charmList["series"] = response.Series
+	} else {
+		charmList = map[string]interface{}{
+			"name":     response.Name,
+			"channel":  "latest/stable",
+			"revision": response.Revision,
+			"series":   response.Series,
+		}
+	}
+	d.Set("charm", []map[string]interface{}{charmList})
 
 	// TODO: Once we can pull the channel from the API, remove the above and uncomment below
 	//charmList := []map[string]interface{}{
@@ -159,11 +181,12 @@ func resourceDeploymentRead(ctx context.Context, d *schema.ResourceData, meta in
 	//		"series":   response.Series,
 	//	},
 	//}
-
+	//d.Set("charm", charmList)
+	d.Set("model", modelName)
 	d.Set("name", appName)
-	d.Set("charm", []map[string]interface{}{charmList})
 	d.Set("units", response.Units)
 
+	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
 	return nil
 }
 
