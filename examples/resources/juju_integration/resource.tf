@@ -2,12 +2,12 @@ resource "juju_integration" "this" {
   model = "development"
 
   application {
-    name        = "wordpress"
-    integration = "db" # can be optional
+    name     = "wordpress"
+    endpoint = "db" # can be optional
   }
 
   application {
-    name        = "percona-cluster"
-    integration = "server" # can be optional
+    name     = "percona-cluster"
+    endpoint = "server" # can be optional
   }
 }

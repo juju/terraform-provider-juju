@@ -33,8 +33,8 @@ func resourceIntegration() *schema.Resource {
 							Type:        schema.TypeString,
 							Required:    true,
 						},
-						"integration": {
-							Description: "The integration name.",
+						"endpoint": {
+							Description: "The endpoint name.",
 							Type:        schema.TypeString,
 							Default:     "",
 							Optional:    true,
