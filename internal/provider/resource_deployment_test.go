@@ -7,20 +7,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
 
 // TODO: test also for k8s substrate, tiny-bash charm is not supported
 func TestAcc_ResourceDeployment(t *testing.T) {
-	// TODO: remove once other operations are implemented
-	t.Skip("skipped until read operation is implemented")
-
 	modelName := acctest.RandomWithPrefix("tf-test-deployment")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
-		CheckDestroy:      testAccCheckDeploymentDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccResourceDeployment(modelName),
@@ -32,10 +27,6 @@ func TestAcc_ResourceDeployment(t *testing.T) {
 			},
 		},
 	})
-}
-
-func testAccCheckDeploymentDestroy(s *terraform.State) error {
-	return nil
 }
 
 func testAccResourceDeployment(modelName string) string {
