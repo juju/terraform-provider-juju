@@ -4,12 +4,15 @@ go 1.18
 
 require (
 	github.com/bflad/tfproviderlint v0.28.1
-	github.com/hashicorp/terraform-plugin-docs v0.10.1
+	github.com/hashicorp/terraform-plugin-docs v0.12.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.17.0
 	github.com/juju/juju v0.0.0-20220609145112-917a8f103356
 )
 
-require github.com/juju/charm/v8 v8.0.0-20220509231111-ed6d505a46f4
+require (
+	github.com/juju/charm/v8 v8.0.0-20220509231111-ed6d505a46f4
+	github.com/juju/errors v0.0.0-20220316043928-e10eb17a9eeb
+)
 
 require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
@@ -55,11 +58,11 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-plugin v1.4.4 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
-	github.com/hashicorp/go-version v1.5.0 // indirect
-	github.com/hashicorp/hc-install v0.3.2 // indirect
+	github.com/hashicorp/go-version v1.6.0 // indirect
+	github.com/hashicorp/hc-install v0.4.0 // indirect
 	github.com/hashicorp/hcl/v2 v2.12.0 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
-	github.com/hashicorp/terraform-exec v0.16.1 // indirect
+	github.com/hashicorp/terraform-exec v0.17.1 // indirect
 	github.com/hashicorp/terraform-json v0.14.0 // indirect
 	github.com/hashicorp/terraform-plugin-go v0.9.1 // indirect
 	github.com/hashicorp/terraform-plugin-log v0.4.0 // indirect
@@ -75,7 +78,6 @@ require (
 	github.com/juju/clock v0.0.0-20220203021603-d9deb868a28a // indirect
 	github.com/juju/cmd/v3 v3.0.0-20220203030511-039f3566372a // indirect
 	github.com/juju/collections v0.0.0-20220203020748-febd7cad8a7a // indirect
-	github.com/juju/errors v0.0.0-20220316043928-e10eb17a9eeb // indirect
 	github.com/juju/featureflag v0.0.0-20220207005600-a9676d92ad24 // indirect
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d // indirect
 	github.com/juju/go4 v0.0.0-20160222163258-40d72ab9641a // indirect
@@ -145,11 +147,11 @@ require (
 	github.com/vmihailenco/tagparser v0.1.1 // indirect
 	github.com/xdg-go/stringprep v1.0.2 // indirect
 	github.com/zclconf/go-cty v1.10.0 // indirect
-	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
+	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
 	golang.org/x/net v0.0.0-20220607020251-c690dde0001d // indirect
 	golang.org/x/oauth2 v0.0.0-20220608161450-d0670ef3b1eb // indirect
-	golang.org/x/sys v0.0.0-20220608164250-635b8c9b7f68 // indirect
+	golang.org/x/sys v0.0.0-20220627191245-f75cf1eec38b // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
