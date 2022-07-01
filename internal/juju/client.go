@@ -10,11 +10,11 @@ import (
 )
 
 const (
-	PrefixCloud       = "cloud-"
-	PrefixModel       = "model-"
-	PrefixCharm       = "charm-"
+	PrefixCloud         = "cloud-"
+	PrefixModel         = "model-"
+	PrefixCharm         = "charm-"
 	UnspecifiedRevision = -1
-	connectionTimeout = 30 * time.Second
+	connectionTimeout   = 30 * time.Second
 )
 
 type Configuration struct {
