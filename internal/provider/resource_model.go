@@ -106,7 +106,10 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 		return diag.FromErr(err)
 	}
 
-	cloudList := []map[string]interface{}{{"name": strings.TrimPrefix(modelInfo.CloudTag, juju.PrefixCloud), "region": modelInfo.CloudRegion}}
+	cloudList := []map[string]interface{}{{
+		"name":   strings.TrimPrefix(modelInfo.CloudTag, juju.PrefixCloud),
+		"region": modelInfo.CloudRegion},
+	}
 
 	if err := d.Set("name", modelInfo.Name); err != nil {
 		return diag.FromErr(err)
@@ -121,16 +124,14 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 		return diag.FromErr(err)
 	}
 
-	// TODO: locate model config values form modelsAPI or other endpoint.
-	stateConfig := d.Get("config").(map[string]interface{})
-	for setting, _ := range stateConfig {
-		if value, exists := modelConfig[setting]; exists {
-			stateConfig[setting] = value
-		} else {
-			delete(stateConfig, setting)
+	// Only read model config that is tracked in Terraform
+	config := d.Get("config").(map[string]interface{})
+	for k, _ := range config {
+		if value, exists := modelConfig[k]; exists {
+			config[k] = value
 		}
 	}
-	d.Set("config", stateConfig)
+	d.Set("config", config)
 
 	return diags
 }

@@ -68,8 +68,8 @@ resource "juju_model" "model" {
   name = %q
 
   cloud {
-    name = "localhost"
-    region = "localhost"
+   name = "localhost"
+   region = "localhost"
   }
 
   config = {
