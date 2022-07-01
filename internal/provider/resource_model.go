@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -128,7 +129,20 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 	config := d.Get("config").(map[string]interface{})
 	for k, _ := range config {
 		if value, exists := modelConfig[k]; exists {
-			config[k] = value
+			var serialised string
+			switch value.(type) {
+			// TODO: review for other possible types
+			case bool:
+				b, err := json.Marshal(value)
+				if err != nil {
+					return diag.FromErr(err)
+				}
+				serialised = string(b)
+			default:
+				serialised = value.(string)
+			}
+
+			config[k] = serialised
 		}
 	}
 	d.Set("config", config)
@@ -143,8 +157,19 @@ func resourceModelUpdate(ctx context.Context, d *schema.ResourceData, meta inter
 
 	if d.HasChange("config") {
 		modelUUID := d.Id()
-		config := d.Get("config").(map[string]interface{})
-		err := client.Models.Update(modelUUID, config)
+
+		oldConfig, newConfig := d.GetChange("config")
+		oldConfigMap := oldConfig.(map[string]interface{})
+		newConfigMap := newConfig.(map[string]interface{})
+
+		var unsetConfigKeys []string
+		for k, _ := range oldConfigMap {
+			if _, ok := newConfigMap[k]; !ok {
+				unsetConfigKeys = append(unsetConfigKeys, k)
+			}
+		}
+
+		err := client.Models.Update(modelUUID, newConfigMap, unsetConfigKeys)
 		if err != nil {
 			return diag.FromErr(err)
 		}

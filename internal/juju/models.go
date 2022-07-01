@@ -191,7 +191,7 @@ func (c *modelsClient) Read(uuid string) (*string, *params.ModelInfo, map[string
 	return controllerName, modelInfo, modelConfig, nil
 }
 
-func (c *modelsClient) Update(uuid string, config map[string]interface{}) error {
+func (c *modelsClient) Update(uuid string, config map[string]interface{}, unset []string) error {
 	conn, err := c.GetConnection(&uuid)
 	if err != nil {
 		return err
@@ -201,6 +201,11 @@ func (c *modelsClient) Update(uuid string, config map[string]interface{}) error 
 	defer client.Close()
 
 	err = client.ModelSet(config)
+	if err != nil {
+		return err
+	}
+
+	err = client.ModelUnset(unset...)
 	if err != nil {
 		return err
 	}
