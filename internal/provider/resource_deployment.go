@@ -195,8 +195,35 @@ func resourceDeploymentRead(ctx context.Context, d *schema.ResourceData, meta in
 }
 
 func resourceDeploymentUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
-	return diag.Errorf("not implemented")
+	client := meta.(*juju.Client)
+
+	appName := d.Get("name").(string)
+	modelName := d.Get("model").(string)
+	modelUUID, err := client.Models.ResolveModelUUID(modelName)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	updateDeploymentInput := juju.UpdateDeploymentInput{
+		ModelUUID: modelUUID,
+		AppName:   appName,
+	}
+
+	if d.HasChange("units") {
+		units := d.Get("units").(int)
+		updateDeploymentInput.Units = &units
+	}
+
+	if d.HasChange("charm.0.revision") {
+		revision := d.Get("charm.0.revision").(int)
+		updateDeploymentInput.Revision = &revision
+	}
+
+	err = client.Deployments.UpdateDeployment(&updateDeploymentInput)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	return nil
 }
 
 // Juju refers to deletion as "destroy" so we call the Destroy function of our client here rather than delete
