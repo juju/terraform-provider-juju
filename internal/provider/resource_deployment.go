@@ -100,9 +100,12 @@ func resourceDeploymentCreate(ctx context.Context, d *schema.ResourceData, meta 
 	charm := d.Get("charm").([]interface{})[0].(map[string]interface{})
 	charmName := charm["name"].(string)
 	channel := charm["channel"].(string)
-	revision := charm["revision"].(int)
 	series := charm["series"].(string)
 	units := d.Get("units").(int)
+	revision := charm["revision"].(int)
+	if _, exist := d.GetOk("charm.0.revision"); !exist {
+		revision = -1
+	}
 
 	response, err := client.Deployments.CreateDeployment(&juju.CreateDeploymentInput{
 		ApplicationName: name,
