@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/juju/juju/rpc/params"
+
+	"time"
 
 	"github.com/juju/charm/v8"
 	jujuerrors "github.com/juju/errors"
@@ -20,7 +23,6 @@ import (
 	"github.com/juju/juju/version"
 	"github.com/juju/loggo"
 	"github.com/juju/names/v4"
-	"time"
 )
 
 type deploymentsClient struct {
@@ -215,6 +217,7 @@ func (c deploymentsClient) CreateDeployment(input *CreateDeploymentInput) (*Crea
 		ApplicationName: appName,
 		NumUnits:        input.Units,
 		Series:          resultOrigin.Series,
+		CharmOrigin:     resultOrigin,
 	})
 	return &CreateDeploymentResponse{
 		AppName:  appName,
