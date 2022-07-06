@@ -1,13 +1,10 @@
 package juju
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
 	"github.com/juju/juju/rpc/params"
-
-	"time"
 
 	"github.com/juju/charm/v8"
 	jujuerrors "github.com/juju/errors"
@@ -16,12 +13,10 @@ import (
 	apicharms "github.com/juju/juju/api/client/charms"
 	apiclient "github.com/juju/juju/api/client/client"
 	apimodelconfig "github.com/juju/juju/api/client/modelconfig"
-	"github.com/juju/juju/charmhub"
 	"github.com/juju/juju/cmd/juju/application/utils"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/version"
-	"github.com/juju/loggo"
 	"github.com/juju/names/v4"
 )
 
@@ -265,27 +260,16 @@ func (c deploymentsClient) ReadDeployment(input *ReadDeploymentInput) (*ReadDepl
 
 	unitCount := len(appStatus.Units)
 
-	chLogger := loggo.GetLogger("juju.charmhub")
-	config, err := charmhub.CharmHubConfig(chLogger)
+	// NOTE: we are assuming that this is charm comes from CharmHub
+	charmURL, err := charm.ParseURL(appStatus.Charm)
 	if err != nil {
-		return nil, err
-	}
-
-	client, err := charmhub.NewClient(config)
-	if err != nil {
-		return nil, err
-	}
-
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
-	chInfo, err := client.Info(ctx, appInfo.Charm)
-	if err != nil {
-		return nil, err
+		return nil, errors.New(fmt.Sprintf("failed to parse charm: %v", err))
 	}
 
 	response := &ReadDeploymentResponse{
-		Name: appInfo.Charm,
-		//Channel:  appInfo.Channel, //TODO: This currently returns blank
-		Revision: chInfo.DefaultRelease.Revision.Revision,
+		Name:     appInfo.Charm,
+		Channel:  appStatus.CharmChannel,
+		Revision: charmURL.Revision,
 		Series:   appInfo.Series,
 		Units:    unitCount,
 	}
