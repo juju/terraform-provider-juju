@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -31,7 +32,7 @@ func dataSourceModelRead(ctx context.Context, d *schema.ResourceData, meta inter
 
 	modelName := d.Get("name").(string)
 
-	model, err := client.Models.GetByName(modelName)
+	model, err := client.Models.GetModelByName(modelName)
 	if err != nil {
 		return diag.FromErr(err)
 	}
