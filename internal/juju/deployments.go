@@ -198,7 +198,15 @@ func (c deploymentsClient) CreateDeployment(input *CreateDeploymentInput) (*Crea
 
 	// Add the charm to the model
 	origin = resolvedCharm.Origin.WithSeries(series)
-	charmURL = resolvedCharm.URL.WithRevision(*origin.Revision).WithArchitecture(origin.Architecture).WithSeries(series)
+
+	var deployRevision int
+	if input.CharmRevision > -1 {
+		deployRevision = input.CharmRevision
+	} else {
+		deployRevision = *origin.Revision
+	}
+
+	charmURL = resolvedCharm.URL.WithRevision(deployRevision).WithArchitecture(origin.Architecture).WithSeries(series)
 	resultOrigin, err := charmsAPIClient.AddCharm(charmURL, origin, false)
 	if err != nil {
 		return nil, err

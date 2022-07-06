@@ -2,17 +2,22 @@ package provider
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/juju/juju/api/client/modelconfig"
+	"github.com/juju/juju/rpc/params"
+	"github.com/juju/terraform-provider-juju/internal/juju"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 )
 
-func TestAcc_ResourceModel(t *testing.T) {
+func TestAcc_ResourceModel_Basic(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	logLevelInfo := "INFO"
 	logLevelDebug := "DEBUG"
 
+	resourceName := "juju_model.model"
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
@@ -20,46 +25,104 @@ func TestAcc_ResourceModel(t *testing.T) {
 			{
 				Config: testAccResourceModel(t, modelName, logLevelInfo),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_model.model", "name", modelName),
-					resource.TestCheckResourceAttr(
-						"juju_model.model", "config.logging-config", fmt.Sprintf("<root>=%s", logLevelInfo),
-					),
+					resource.TestCheckResourceAttr(resourceName, "name", modelName),
+					resource.TestCheckResourceAttr(resourceName, "config.logging-config", fmt.Sprintf("<root>=%s", logLevelInfo)),
 				),
 			},
 			{
 				Config: testAccResourceModel(t, modelName, logLevelDebug),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						"juju_model.model", "config.logging-config", fmt.Sprintf("<root>=%s", logLevelDebug),
-					),
+					resource.TestCheckResourceAttr(resourceName, "config.logging-config", fmt.Sprintf("<root>=%s", logLevelDebug)),
+				),
+			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ImportStateVerifyIgnore: []string{
+					"config.%",
+					"config.logging-config"},
+				ImportStateId: modelName,
+				ResourceName:  resourceName,
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceModel_UnsetConfig(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+
+	resourceName := "juju_model.this"
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: providerFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+
+  config = {
+	development = true
+  }
+}`, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", modelName),
+					resource.TestCheckResourceAttr(resourceName, "config.development", "true"),
+				),
+			},
+			{
+				Config: fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}`, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", modelName),
+					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
+					testAccCheckDevelopmentConfigIsUnset(modelName),
 				),
 			},
 		},
 	})
 }
 
-// TODO: Merge the import step into the main test once Read has been updated to handle extra config attributes
-func TestAcc_ResourceModelImport(t *testing.T) {
-	modelName := acctest.RandomWithPrefix("tf-test-model")
+func testAccCheckDevelopmentConfigIsUnset(modelName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		client := Provider.Meta().(*juju.Client)
 
-	resource.Test(t, resource.TestCase{
-		PreCheck:          func() { testAccPreCheck(t) },
-		ProviderFactories: providerFactories,
-		Steps: []resource.TestStep{
-			{
-				Config: testAccResourceModelImport(t, modelName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_model.model", "name", modelName),
-				),
-			},
-			{
-				ImportStateVerify: true,
-				ImportState:       true,
-				ImportStateId:     modelName,
-				ResourceName:      "juju_model.model",
-			},
-		},
-	})
+		uuid, err := client.Models.ResolveUUID(modelName)
+		if err != nil {
+			return err
+		}
+
+		conn, err := client.Models.GetConnection(&uuid)
+		if err != nil {
+			return err
+		}
+
+		// TODO: consider adding to client so we don't expose this layer (even in tests)
+		modelconfigClient := modelconfig.NewClient(conn)
+		defer modelconfigClient.Close()
+
+		metadata, err := modelconfigClient.ModelGetWithMetadata()
+		if err != nil {
+			return err
+		}
+
+		for k, actual := range metadata {
+			if k == "development" {
+				expected := params.ConfigValue{
+					Value:  false,
+					Source: "default",
+				}
+
+				if actual.Value != expected.Value || actual.Source != expected.Source {
+					return fmt.Errorf("expecting 'development' config for model: %s (%s), to be %#v but was: %#v",
+						modelName, uuid, expected, actual)
+				}
+			}
+		}
+		return nil
+	}
 }
 
 func testAccResourceModel(t *testing.T, modelName string, logLevel string) string {
@@ -68,20 +131,12 @@ resource "juju_model" "model" {
   name = %q
 
   cloud {
-    name = "localhost"
-    region = "localhost"
+   name   = "localhost"
+   region = "localhost"
   }
 
   config = {
     logging-config = "<root>=%s"
   }
 }`, modelName, logLevel)
-}
-
-// TODO: This should not be needed when import can be merged into the main test
-func testAccResourceModelImport(t *testing.T, modelName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "model" {
-  name = %q
-}`, modelName)
 }
