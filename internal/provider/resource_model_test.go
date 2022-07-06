@@ -2,11 +2,12 @@ package provider
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/terraform-provider-juju/internal/juju"
-	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -89,7 +90,7 @@ func testAccCheckDevelopmentConfigIsUnset(modelName string) resource.TestCheckFu
 	return func(s *terraform.State) error {
 		client := Provider.Meta().(*juju.Client)
 
-		uuid, err := client.Models.ResolveUUID(modelName)
+		uuid, err := client.Models.ResolveModelUUID(modelName)
 		if err != nil {
 			return err
 		}

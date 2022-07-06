@@ -3,9 +3,10 @@ package juju
 import (
 	"errors"
 	"fmt"
-	"github.com/juju/juju/api/client/modelconfig"
 	"log"
 	"time"
+
+	"github.com/juju/juju/api/client/modelconfig"
 
 	"github.com/juju/juju/api/base"
 	"github.com/juju/juju/api/client/modelmanager"
@@ -43,8 +44,8 @@ func (c *modelsClient) getControllerNameByUUID(uuid string) (*string, error) {
 	return nil, errors.New(fmt.Sprintf("cannot find controller name from uuid: %s", uuid))
 }
 
-// GetByName retrieves a model by name
-func (c *modelsClient) GetByName(name string) (*params.ModelInfo, error) {
+// GetModelByName retrieves a model by name
+func (c *modelsClient) GetModelByName(name string) (*params.ModelInfo, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -77,8 +78,8 @@ func (c *modelsClient) GetByName(name string) (*params.ModelInfo, error) {
 	return modelInfo, nil
 }
 
-// ResolveUUID retrieves a model's using its name
-func (c *modelsClient) ResolveUUID(name string) (string, error) {
+// ResolveModelUUID retrieves a model's using its name
+func (c *modelsClient) ResolveModelUUID(name string) (string, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return "", err
@@ -95,7 +96,7 @@ func (c *modelsClient) ResolveUUID(name string) (string, error) {
 	return modelDetails.ModelUUID, nil
 }
 
-func (c *modelsClient) Create(name string, controller string, cloudList []interface{}, cloudConfig map[string]interface{}) (*base.ModelInfo, error) {
+func (c *modelsClient) CreateModel(name string, controller string, cloudList []interface{}, cloudConfig map[string]interface{}) (*base.ModelInfo, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -148,7 +149,7 @@ func (c *modelsClient) Create(name string, controller string, cloudList []interf
 	return &modelInfo, nil
 }
 
-func (c *modelsClient) Read(uuid string) (*string, *params.ModelInfo, map[string]interface{}, error) {
+func (c *modelsClient) ReadModel(uuid string) (*string, *params.ModelInfo, map[string]interface{}, error) {
 	modelmanagerConn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, nil, nil, err
@@ -191,7 +192,7 @@ func (c *modelsClient) Read(uuid string) (*string, *params.ModelInfo, map[string
 	return controllerName, modelInfo, modelConfig, nil
 }
 
-func (c *modelsClient) Update(uuid string, config map[string]interface{}, unset []string) error {
+func (c *modelsClient) UpdateModel(uuid string, config map[string]interface{}, unset []string) error {
 	conn, err := c.GetConnection(&uuid)
 	if err != nil {
 		return err
@@ -213,7 +214,7 @@ func (c *modelsClient) Update(uuid string, config map[string]interface{}, unset 
 	return nil
 }
 
-func (c *modelsClient) Destroy(uuid string) error {
+func (c *modelsClient) DestroyModel(uuid string) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return err

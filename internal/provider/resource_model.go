@@ -83,7 +83,7 @@ func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta inter
 	cloud := d.Get("cloud").([]interface{})
 	config := d.Get("config").(map[string]interface{})
 
-	modelInfo, err := client.Models.Create(name, controller, cloud, config)
+	modelInfo, err := client.Models.CreateModel(name, controller, cloud, config)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -102,7 +102,7 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 	var diags diag.Diagnostics
 
 	uuid := d.Id()
-	controllerName, modelInfo, modelConfig, err := client.Models.Read(uuid)
+	controllerName, modelInfo, modelConfig, err := client.Models.ReadModel(uuid)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -169,7 +169,7 @@ func resourceModelUpdate(ctx context.Context, d *schema.ResourceData, meta inter
 			}
 		}
 
-		err := client.Models.Update(modelUUID, newConfigMap, unsetConfigKeys)
+		err := client.Models.UpdateModel(modelUUID, newConfigMap, unsetConfigKeys)
 		if err != nil {
 			return diag.FromErr(err)
 		}
@@ -187,7 +187,7 @@ func resourceModelDelete(ctx context.Context, d *schema.ResourceData, meta inter
 
 	modelUUID := d.Id()
 
-	err := client.Models.Destroy(modelUUID)
+	err := client.Models.DestroyModel(modelUUID)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -204,7 +204,7 @@ func resourceModelImporter(ctx context.Context, d *schema.ResourceData, meta int
 	//because we import based on model name we load it into `modelName` here for clarity
 	modelName := d.Id()
 
-	model, err := client.Models.GetByName(modelName)
+	model, err := client.Models.GetModelByName(modelName)
 	if err != nil {
 		return nil, err
 	}

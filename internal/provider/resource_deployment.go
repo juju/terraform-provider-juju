@@ -3,10 +3,11 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/terraform-provider-juju/internal/juju"
-	"strings"
 )
 
 func resourceDeployment() *schema.Resource {
@@ -91,7 +92,7 @@ func resourceDeploymentCreate(ctx context.Context, d *schema.ResourceData, meta 
 	client := meta.(*juju.Client)
 
 	modelName := d.Get("model").(string)
-	modelUUID, err := client.Models.ResolveUUID(modelName)
+	modelUUID, err := client.Models.ResolveModelUUID(modelName)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -137,7 +138,7 @@ func resourceDeploymentRead(ctx context.Context, d *schema.ResourceData, meta in
 	client := meta.(*juju.Client)
 	id := strings.Split(d.Id(), ":")
 	modelName, appName := id[0], id[1]
-	modelUUID, err := client.Models.ResolveUUID(modelName)
+	modelUUID, err := client.Models.ResolveModelUUID(modelName)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -204,7 +205,7 @@ func resourceDeploymentDelete(ctx context.Context, d *schema.ResourceData, meta 
 	client := meta.(*juju.Client)
 
 	modelName := d.Get("model").(string)
-	modelUUID, err := client.Models.ResolveUUID(modelName)
+	modelUUID, err := client.Models.ResolveModelUUID(modelName)
 	if err != nil {
 		return diag.FromErr(err)
 	}
