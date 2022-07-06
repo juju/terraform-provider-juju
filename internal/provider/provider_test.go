@@ -14,10 +14,20 @@ import (
 // providerFactories are used to instantiate a provider during acceptance testing.
 // The factory function will be invoked for every Terraform CLI command executed
 // to create a provider server to which the CLI can reattach.
-var providerFactories = map[string]func() (*schema.Provider, error){
-	"juju": func() (*schema.Provider, error) {
-		return New("dev")(), nil
-	},
+var providerFactories map[string]func() (*schema.Provider, error)
+
+// Provider makes a separate provider available for tests.
+// Note that testAccPreCheck needs to invoked before use.
+var Provider *schema.Provider
+
+func init() {
+	Provider = New("dev")()
+
+	providerFactories = map[string]func() (*schema.Provider, error){
+		"juju": func() (*schema.Provider, error) {
+			return New("dev")(), nil
+		},
+	}
 }
 
 func TestProvider(t *testing.T) {
@@ -152,5 +162,10 @@ func testAccPreCheck(t *testing.T) {
 		} else {
 			t.Fatalf("%s must be set for acceptance tests", JujuCACertEnvKey)
 		}
+	}
+
+	err := Provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
+	if err != nil {
+		t.Fatal(err)
 	}
 }

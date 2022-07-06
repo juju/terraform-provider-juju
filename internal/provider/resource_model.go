@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -106,7 +107,10 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 		return diag.FromErr(err)
 	}
 
-	cloudList := []map[string]interface{}{{"name": strings.TrimPrefix(modelInfo.CloudTag, juju.PrefixCloud), "region": modelInfo.CloudRegion}}
+	cloudList := []map[string]interface{}{{
+		"name":   strings.TrimPrefix(modelInfo.CloudTag, juju.PrefixCloud),
+		"region": modelInfo.CloudRegion},
+	}
 
 	if err := d.Set("name", modelInfo.Name); err != nil {
 		return diag.FromErr(err)
@@ -121,16 +125,27 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 		return diag.FromErr(err)
 	}
 
-	// TODO: locate model config values form modelsAPI or other endpoint.
-	stateConfig := d.Get("config").(map[string]interface{})
-	for setting, _ := range stateConfig {
-		if value, exists := modelConfig[setting]; exists {
-			stateConfig[setting] = value
-		} else {
-			delete(stateConfig, setting)
+	// Only read model config that is tracked in Terraform
+	config := d.Get("config").(map[string]interface{})
+	for k, _ := range config {
+		if value, exists := modelConfig[k]; exists {
+			var serialised string
+			switch value.(type) {
+			// TODO: review for other possible types
+			case bool:
+				b, err := json.Marshal(value)
+				if err != nil {
+					return diag.FromErr(err)
+				}
+				serialised = string(b)
+			default:
+				serialised = value.(string)
+			}
+
+			config[k] = serialised
 		}
 	}
-	d.Set("config", stateConfig)
+	d.Set("config", config)
 
 	return diags
 }
@@ -142,8 +157,19 @@ func resourceModelUpdate(ctx context.Context, d *schema.ResourceData, meta inter
 
 	if d.HasChange("config") {
 		modelUUID := d.Id()
-		config := d.Get("config").(map[string]interface{})
-		err := client.Models.Update(modelUUID, config)
+
+		oldConfig, newConfig := d.GetChange("config")
+		oldConfigMap := oldConfig.(map[string]interface{})
+		newConfigMap := newConfig.(map[string]interface{})
+
+		var unsetConfigKeys []string
+		for k, _ := range oldConfigMap {
+			if _, ok := newConfigMap[k]; !ok {
+				unsetConfigKeys = append(unsetConfigKeys, k)
+			}
+		}
+
+		err := client.Models.Update(modelUUID, newConfigMap, unsetConfigKeys)
 		if err != nil {
 			return diag.FromErr(err)
 		}
