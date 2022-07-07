@@ -2,8 +2,12 @@ package provider
 
 import (
 	"context"
+	"fmt"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/juju/juju/rpc/params"
+	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
 func resourceIntegration() *schema.Resource {
@@ -47,8 +51,41 @@ func resourceIntegration() *schema.Resource {
 }
 
 func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
-	return diag.Errorf("not implemented")
+
+	client := meta.(*juju.Client)
+
+	modelName := d.Get("model").(string)
+	modelUUID, err := client.Models.ResolveModelUUID(modelName)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	apps := d.Get("application").([]interface{})
+	for _, app := range apps {
+		if app == nil {
+			return diag.Errorf("you must provide a name for each application in an integration")
+		}
+	}
+	app1 := d.Get("application").([]interface{})[0].(map[string]interface{})
+	app2 := d.Get("application").([]interface{})[1].(map[string]interface{})
+
+	var endpoints []string
+	endpoints = append(endpoints, fmt.Sprintf("%v:%v", app1["name"].(string), app1["endpoint"].(string)))
+	endpoints = append(endpoints, fmt.Sprintf("%v:%v", app2["name"].(string), app2["endpoint"].(string)))
+
+	integration, err := client.Integrations.CreateIntegration(&juju.CreateIntegrationInput{
+		ModelUUID: modelUUID,
+		Endpoints: endpoints,
+	})
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	id := fmt.Sprintf("%s:%s", modelName, generateID(integration.Endpoints))
+
+	d.SetId(id)
+
+	return diag.Diagnostics{}
 }
 
 func resourceIntegrationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -64,4 +101,29 @@ func resourceIntegrationUpdate(ctx context.Context, d *schema.ResourceData, meta
 func resourceIntegrationDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
 	return diag.Errorf("not implemented")
+}
+
+func generateID(endpoints map[string]params.CharmRelation) string {
+
+	//In order to generate a stable iterable order we sort the endpoints keys by the role value (requirer is always first)
+	//TODO: verify we always get only 2 endpoints and that the role value is consistent
+	keys := make([]string, len(endpoints))
+	for k, v := range endpoints {
+		if v.Role == "requirer" {
+			keys[0] = k
+		} else if v.Role == "provider" {
+			keys[1] = k
+		}
+	}
+
+	var id string
+	for _, key := range keys {
+		ep := endpoints[key]
+		if id != "" {
+			id = fmt.Sprintf("%s:", id)
+		}
+		id = fmt.Sprintf("%s%s:%s", id, key, ep.Name)
+	}
+
+	return id
 }
