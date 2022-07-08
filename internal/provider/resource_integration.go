@@ -30,6 +30,7 @@ func resourceIntegration() *schema.Resource {
 				Type:        schema.TypeList,
 				Required:    true,
 				MaxItems:    2,
+				MinItems:    2,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"name": &schema.Schema{
@@ -60,18 +61,23 @@ func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta
 		return diag.FromErr(err)
 	}
 
+	var endpoints []string
+
 	apps := d.Get("application").([]interface{})
 	for _, app := range apps {
 		if app == nil {
-			return diag.Errorf("you must provide a name for each application in an integration")
+			return diag.Errorf("you must provide a non-empty name for each application in an integration")
+		}
+
+		//Here we check if the endpoint is empty and pass just the application name, this allows juju to attempt to infer endpoints
+		//If the endpoint is specifed we pass the format <applicationName>:<endpoint>
+		a := app.(map[string]interface{})
+		if a["endpoint"].(string) == "" {
+			endpoints = append(endpoints, a["name"].(string))
+		} else {
+			endpoints = append(endpoints, fmt.Sprintf("%v:%v", a["name"].(string), a["endpoint"].(string)))
 		}
 	}
-	app1 := d.Get("application").([]interface{})[0].(map[string]interface{})
-	app2 := d.Get("application").([]interface{})[1].(map[string]interface{})
-
-	var endpoints []string
-	endpoints = append(endpoints, fmt.Sprintf("%v:%v", app1["name"].(string), app1["endpoint"].(string)))
-	endpoints = append(endpoints, fmt.Sprintf("%v:%v", app2["name"].(string), app2["endpoint"].(string)))
 
 	integration, err := client.Integrations.CreateIntegration(&juju.CreateIntegrationInput{
 		ModelUUID: modelUUID,
