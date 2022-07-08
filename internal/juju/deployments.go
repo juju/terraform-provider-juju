@@ -1,25 +1,21 @@
 package juju
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"github.com/juju/juju/rpc/params"
-	"time"
+	"math"
 
 	"github.com/juju/charm/v8"
 	jujuerrors "github.com/juju/errors"
-	"github.com/juju/juju/api/client/application"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apicharms "github.com/juju/juju/api/client/charms"
 	apiclient "github.com/juju/juju/api/client/client"
 	apimodelconfig "github.com/juju/juju/api/client/modelconfig"
-	"github.com/juju/juju/charmhub"
 	"github.com/juju/juju/cmd/juju/application/utils"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/version"
-	"github.com/juju/loggo"
 	"github.com/juju/names/v4"
 )
 
@@ -35,11 +31,6 @@ type CreateDeploymentInput struct {
 	CharmSeries     string
 	CharmRevision   int
 	Units           int
-}
-
-type DestroyDeploymentInput struct {
-	ApplicationName string
-	ModelUUID       string
 }
 
 type CreateDeploymentResponse struct {
@@ -60,6 +51,20 @@ type ReadDeploymentResponse struct {
 	Series   string
 	Units    int
 	Config   map[string]interface{}
+}
+
+type UpdateDeploymentInput struct {
+	ModelUUID string
+	AppName   string
+	//Channel   string // TODO: Unsupported for now
+	Units    *int
+	Revision *int
+	//Series    string // TODO: Unsupported for now
+}
+
+type DestroyDeploymentInput struct {
+	ApplicationName string
+	ModelUUID       string
 }
 
 func newDeploymentsClient(cf ConnectionFactory) *deploymentsClient {
@@ -143,8 +148,6 @@ func (c deploymentsClient) CreateDeployment(input *CreateDeploymentInput) (*Crea
 	// Charm or bundle has been supplied as a URL so we resolve and
 	// deploy using the store but pass in the origin command line
 	// argument so users can target a specific origin.
-	rev := UnspecifiedRevision
-	origin.Revision = &rev
 	resolved, err := charmsAPIClient.ResolveCharms([]apicharms.CharmToResolve{{URL: charmURL, Origin: origin}})
 	if err != nil {
 		return nil, err
@@ -206,7 +209,11 @@ func (c deploymentsClient) CreateDeployment(input *CreateDeploymentInput) (*Crea
 	if input.CharmRevision > -1 {
 		deployRevision = input.CharmRevision
 	} else {
-		deployRevision = *origin.Revision
+		if origin.Revision != nil {
+			deployRevision = *origin.Revision
+		} else {
+			return nil, errors.New("no origin revision")
+		}
 	}
 
 	charmURL = resolvedCharm.URL.WithRevision(deployRevision).WithArchitecture(origin.Architecture).WithSeries(series)
@@ -215,8 +222,8 @@ func (c deploymentsClient) CreateDeployment(input *CreateDeploymentInput) (*Crea
 		return nil, err
 	}
 
-	err = applicationAPIClient.Deploy(application.DeployArgs{
-		CharmID: application.CharmID{
+	err = applicationAPIClient.Deploy(apiapplication.DeployArgs{
+		CharmID: apiapplication.CharmID{
 			URL:    charmURL,
 			Origin: resultOrigin,
 		},
@@ -271,32 +278,122 @@ func (c deploymentsClient) ReadDeployment(input *ReadDeploymentInput) (*ReadDepl
 
 	unitCount := len(appStatus.Units)
 
-	chLogger := loggo.GetLogger("juju.charmhub")
-	config, err := charmhub.CharmHubConfig(chLogger)
+	// NOTE: we are assuming that this charm comes from CharmHub
+	charmURL, err := charm.ParseURL(appStatus.Charm)
 	if err != nil {
-		return nil, err
-	}
-
-	client, err := charmhub.NewClient(config)
-	if err != nil {
-		return nil, err
-	}
-
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
-	chInfo, err := client.Info(ctx, appInfo.Charm)
-	if err != nil {
-		return nil, err
+		return nil, errors.New(fmt.Sprintf("failed to parse charm: %v", err))
 	}
 
 	response := &ReadDeploymentResponse{
-		Name: appInfo.Charm,
-		//Channel:  appInfo.Channel, //TODO: This currently returns blank
-		Revision: chInfo.DefaultRelease.Revision.Revision,
+		Name:     appInfo.Charm,
+		Channel:  appStatus.CharmChannel,
+		Revision: charmURL.Revision,
 		Series:   appInfo.Series,
 		Units:    unitCount,
 	}
 
 	return response, nil
+}
+
+func (c deploymentsClient) UpdateDeployment(input *UpdateDeploymentInput) error {
+	conn, err := c.GetConnection(&input.ModelUUID)
+	if err != nil {
+		return err
+	}
+
+	applicationAPIClient := apiapplication.NewClient(conn)
+	defer applicationAPIClient.Close()
+
+	charmsAPIClient := apicharms.NewClient(conn)
+	defer charmsAPIClient.Close()
+
+	clientAPIClient := apiclient.NewClient(conn)
+	defer clientAPIClient.Close()
+
+	status, err := clientAPIClient.Status(nil)
+	if err != nil {
+		return err
+	}
+	var appStatus params.ApplicationStatus
+	var exists bool
+	if appStatus, exists = status.Applications[input.AppName]; !exists {
+		return errors.New(fmt.Sprintf("no status returned for application: %s", input.AppName))
+	}
+
+	if input.Units != nil {
+		unitDiff := *input.Units - len(appStatus.Units)
+
+		if unitDiff > 0 {
+			_, err := applicationAPIClient.AddUnits(apiapplication.AddUnitsParams{
+				ApplicationName: input.AppName,
+				NumUnits:        unitDiff,
+			})
+			if err != nil {
+				return err
+			}
+		}
+
+		if unitDiff < 0 {
+			var unitNames []string
+			for unitName, _ := range appStatus.Units {
+				unitNames = append(unitNames, unitName)
+			}
+
+			unitAbs := int(math.Abs(float64(unitDiff)))
+			var unitsToDestroy []string
+			for i := 0; i < unitAbs; i++ {
+				unitsToDestroy = append(unitsToDestroy, unitNames[i])
+			}
+			_, err := applicationAPIClient.DestroyUnits(apiapplication.DestroyUnitsParams{
+				Units:          unitsToDestroy,
+				DestroyStorage: true,
+			})
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if input.Revision != nil {
+		// TODO: How do we actually set the revision?
+		// It looks like it is set by updating the charmURL which encodes the revision
+		oldURL, err := applicationAPIClient.GetCharmURL("", input.AppName)
+		if err != nil {
+			return err
+		}
+
+		newURL := oldURL.WithRevision(*input.Revision)
+
+		modelConstraints, err := clientAPIClient.GetModelConstraints()
+		if err != nil {
+			return err
+		}
+		platform, err := utils.DeducePlatform(constraints.Value{}, appStatus.Series, modelConstraints)
+		if err != nil {
+			return err
+		}
+
+		channel, err := charm.ParseChannel(appStatus.CharmChannel)
+
+		origin, err := utils.DeduceOrigin(newURL, channel, platform)
+		if err != nil {
+			return err
+		}
+
+		resultOrigin, err := charmsAPIClient.AddCharm(newURL, origin, false)
+
+		err = applicationAPIClient.SetCharm("", apiapplication.SetCharmConfig{
+			ApplicationName: input.AppName,
+			CharmID: apiapplication.CharmID{
+				URL:    newURL,
+				Origin: resultOrigin,
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c deploymentsClient) DestroyDeployment(input *DestroyDeploymentInput) error {
