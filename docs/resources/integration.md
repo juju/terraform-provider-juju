@@ -33,7 +33,7 @@ resource "juju_integration" "this" {
 
 ### Required
 
-- `application` (Block List, Min: 1, Max: 2) The two applications to integrate. (see [below for nested schema](#nestedblock--application))
+- `application` (Block List, Min: 2, Max: 2) The two applications to integrate. (see [below for nested schema](#nestedblock--application))
 - `model` (String) The name of the model to operate in.
 
 ### Read-Only
