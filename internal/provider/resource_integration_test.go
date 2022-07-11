@@ -11,7 +11,7 @@ import (
 
 func TestAcc_ResourceIntegration(t *testing.T) {
 	// TODO: remove once other operations are implemented
-	t.Skip("skipped until delete operation is implemented")
+	t.Skip("skipped until read operation is implemented")
 	modelName := acctest.RandomWithPrefix("tf-test-integration")
 
 	resource.UnitTest(t, resource.TestCase{
