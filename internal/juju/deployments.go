@@ -19,11 +19,11 @@ import (
 	"github.com/juju/names/v4"
 )
 
-type deploymentsClient struct {
+type applicationsClient struct {
 	ConnectionFactory
 }
 
-type CreateDeploymentInput struct {
+type CreateApplicationInput struct {
 	ApplicationName string
 	ModelUUID       string
 	CharmName       string
@@ -33,18 +33,18 @@ type CreateDeploymentInput struct {
 	Units           int
 }
 
-type CreateDeploymentResponse struct {
+type CreateApplicationResponse struct {
 	AppName  string
 	Revision int
 	Series   string
 }
 
-type ReadDeploymentInput struct {
+type ReadApplicationInput struct {
 	ModelUUID string
 	AppName   string
 }
 
-type ReadDeploymentResponse struct {
+type ReadApplicationResponse struct {
 	Name     string
 	Channel  string
 	Revision int
@@ -53,7 +53,7 @@ type ReadDeploymentResponse struct {
 	Config   map[string]interface{}
 }
 
-type UpdateDeploymentInput struct {
+type UpdateApplicationInput struct {
 	ModelUUID string
 	AppName   string
 	//Channel   string // TODO: Unsupported for now
@@ -62,13 +62,13 @@ type UpdateDeploymentInput struct {
 	//Series    string // TODO: Unsupported for now
 }
 
-type DestroyDeploymentInput struct {
+type DestroyApplicationInput struct {
 	ApplicationName string
 	ModelUUID       string
 }
 
-func newDeploymentsClient(cf ConnectionFactory) *deploymentsClient {
-	return &deploymentsClient{
+func newApplicationClient(cf ConnectionFactory) *applicationsClient {
+	return &applicationsClient{
 		ConnectionFactory: cf,
 	}
 }
@@ -86,7 +86,7 @@ func resolveCharmURL(charmName string) (*charm.URL, error) {
 	return charmURL, nil
 }
 
-func (c deploymentsClient) CreateDeployment(input *CreateDeploymentInput) (*CreateDeploymentResponse, error) {
+func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*CreateApplicationResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -232,14 +232,14 @@ func (c deploymentsClient) CreateDeployment(input *CreateDeploymentInput) (*Crea
 		Series:          resultOrigin.Series,
 		CharmOrigin:     resultOrigin,
 	})
-	return &CreateDeploymentResponse{
+	return &CreateApplicationResponse{
 		AppName:  appName,
 		Revision: *origin.Revision,
 		Series:   series,
 	}, err
 }
 
-func (c deploymentsClient) ReadDeployment(input *ReadDeploymentInput) (*ReadDeploymentResponse, error) {
+func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadApplicationResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -284,7 +284,7 @@ func (c deploymentsClient) ReadDeployment(input *ReadDeploymentInput) (*ReadDepl
 		return nil, errors.New(fmt.Sprintf("failed to parse charm: %v", err))
 	}
 
-	response := &ReadDeploymentResponse{
+	response := &ReadApplicationResponse{
 		Name:     appInfo.Charm,
 		Channel:  appStatus.CharmChannel,
 		Revision: charmURL.Revision,
@@ -295,7 +295,7 @@ func (c deploymentsClient) ReadDeployment(input *ReadDeploymentInput) (*ReadDepl
 	return response, nil
 }
 
-func (c deploymentsClient) UpdateDeployment(input *UpdateDeploymentInput) error {
+func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) error {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
@@ -396,7 +396,7 @@ func (c deploymentsClient) UpdateDeployment(input *UpdateDeploymentInput) error 
 	return nil
 }
 
-func (c deploymentsClient) DestroyDeployment(input *DestroyDeploymentInput) error {
+func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) error {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
