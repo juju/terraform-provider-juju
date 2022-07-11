@@ -40,7 +40,7 @@ resource "juju_model" "this" {
 	name = %q
 }
 
-resource "juju_deployment" "one" {
+resource "juju_application" "one" {
 	model = juju_model.this.name
 	name  = "one" 
 	
@@ -49,7 +49,7 @@ resource "juju_deployment" "one" {
 	}
 }
 
-resource "juju_deployment" "two" {
+resource "juju_application" "two" {
 	model = juju_model.this.name
 	name  = "two"
 
@@ -62,11 +62,11 @@ resource "juju_integration" "this" {
 	model = juju_model.this.name
 
 	application {
-		name = juju_deployment.one.name
+		name = juju_application.one.name
 	}
 
 	application {
-		name     = juju_deployment.two.name
+		name     = juju_application.two.name
 		endpoint = "db"
 	}
 }
