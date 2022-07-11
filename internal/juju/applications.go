@@ -3,8 +3,9 @@ package juju
 import (
 	"errors"
 	"fmt"
-	"github.com/juju/juju/rpc/params"
 	"math"
+
+	"github.com/juju/juju/rpc/params"
 
 	"github.com/juju/charm/v8"
 	jujuerrors "github.com/juju/errors"
@@ -157,8 +158,8 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	}
 	resolvedCharm := resolved[0]
 
-	if err != nil {
-		return nil, err
+	if resolvedCharm.Error != nil {
+		return nil, resolvedCharm.Error
 	}
 
 	// Figure out the actual series of the charm
