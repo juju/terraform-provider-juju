@@ -10,18 +10,18 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-func resourceDeployment() *schema.Resource {
+func resourceApplication() *schema.Resource {
 	return &schema.Resource{
-		Description: "A resource that represents a Juju deployment.",
+		Description: "A resource that represents a Juju application deployment.",
 
-		CreateContext: resourceDeploymentCreate,
-		ReadContext:   resourceDeploymentRead,
-		UpdateContext: resourceDeploymentUpdate,
-		DeleteContext: resourceDeploymentDelete,
+		CreateContext: resourceApplicationCreate,
+		ReadContext:   resourceApplicationRead,
+		UpdateContext: resourceApplicationUpdate,
+		DeleteContext: resourceApplicationDelete,
 
 		Importer: &schema.ResourceImporter{
 			// TODO: sync-up with read operation
-			//StateContext: resourceDeploymentImporter,
+			//StateContext: resourceApplicationImporter,
 			StateContext: schema.ImportStatePassthroughContext,
 		},
 
@@ -34,7 +34,7 @@ func resourceDeployment() *schema.Resource {
 				ForceNew:    true,
 			},
 			"model": {
-				Description: "The name of the model where the charm is to be deployed.",
+				Description: "The name of the model where the application is to be deployed.",
 				Type:        schema.TypeString,
 				Required:    true,
 				ForceNew:    true,
@@ -88,7 +88,7 @@ func resourceDeployment() *schema.Resource {
 	}
 }
 
-func resourceDeploymentCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
 
 	modelName := d.Get("model").(string)
@@ -108,7 +108,7 @@ func resourceDeploymentCreate(ctx context.Context, d *schema.ResourceData, meta 
 		revision = -1
 	}
 
-	response, err := client.Deployments.CreateDeployment(&juju.CreateDeploymentInput{
+	response, err := client.Applications.CreateApplication(&juju.CreateApplicationInput{
 		ApplicationName: name,
 		ModelUUID:       modelUUID,
 		CharmName:       charmName,
@@ -134,7 +134,7 @@ func resourceDeploymentCreate(ctx context.Context, d *schema.ResourceData, meta 
 	return nil
 }
 
-func resourceDeploymentRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
 	id := strings.Split(d.Id(), ":")
 	modelName, appName := id[0], id[1]
@@ -143,7 +143,7 @@ func resourceDeploymentRead(ctx context.Context, d *schema.ResourceData, meta in
 		return diag.FromErr(err)
 	}
 
-	response, err := client.Deployments.ReadDeployment(&juju.ReadDeploymentInput{
+	response, err := client.Applications.ReadApplication(&juju.ReadApplicationInput{
 		ModelUUID: modelUUID,
 		AppName:   appName,
 	})
@@ -194,7 +194,7 @@ func resourceDeploymentRead(ctx context.Context, d *schema.ResourceData, meta in
 	return nil
 }
 
-func resourceDeploymentUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
 
 	appName := d.Get("name").(string)
@@ -203,22 +203,22 @@ func resourceDeploymentUpdate(ctx context.Context, d *schema.ResourceData, meta 
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	updateDeploymentInput := juju.UpdateDeploymentInput{
+	updateApplicationInput := juju.UpdateApplicationInput{
 		ModelUUID: modelUUID,
 		AppName:   appName,
 	}
 
 	if d.HasChange("units") {
 		units := d.Get("units").(int)
-		updateDeploymentInput.Units = &units
+		updateApplicationInput.Units = &units
 	}
 
 	if d.HasChange("charm.0.revision") {
 		revision := d.Get("charm.0.revision").(int)
-		updateDeploymentInput.Revision = &revision
+		updateApplicationInput.Revision = &revision
 	}
 
-	err = client.Deployments.UpdateDeployment(&updateDeploymentInput)
+	err = client.Applications.UpdateApplication(&updateApplicationInput)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -228,7 +228,7 @@ func resourceDeploymentUpdate(ctx context.Context, d *schema.ResourceData, meta 
 
 // Juju refers to deletion as "destroy" so we call the Destroy function of our client here rather than delete
 // This function remains named Delete for parity across the provider and to stick within terraform naming conventions
-func resourceDeploymentDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceApplicationDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
 
 	modelName := d.Get("model").(string)
@@ -239,7 +239,7 @@ func resourceDeploymentDelete(ctx context.Context, d *schema.ResourceData, meta 
 
 	var diags diag.Diagnostics
 
-	err = client.Deployments.DestroyDeployment(&juju.DestroyDeploymentInput{
+	err = client.Applications.DestroyApplication(&juju.DestroyApplicationInput{
 		ApplicationName: d.Get("name").(string),
 		ModelUUID:       modelUUID,
 	})

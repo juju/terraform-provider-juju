@@ -1,4 +1,4 @@
-resource "juju_deployment" "this" {
+resource "juju_application" "this" {
   name = "foobar" # optional, set to charm name when absent
 
   model = juju_model.development.name # required, model name
