@@ -114,7 +114,7 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*params.Re
 		}
 	}
 
-	if relation.Id != 0 && relation.Key == "" {
+	if relation.Id == 0 && relation.Key == "" {
 		keyReversed := fmt.Sprintf("%v:%v %v:%v", apps[1][0], apps[1][1], apps[0][0], apps[0][1])
 		for _, v := range relations {
 			if v.Key == keyReversed {
@@ -123,7 +123,7 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*params.Re
 		}
 	}
 
-	if relation.Id != 0 && relation.Key == "" {
+	if relation.Id == 0 && relation.Key == "" {
 		return nil, fmt.Errorf("relation not found in model")
 	}
 
