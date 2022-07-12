@@ -61,22 +61,10 @@ func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta
 		return diag.FromErr(err)
 	}
 
-	var endpoints []string
-
 	apps := d.Get("application").([]interface{})
-	for _, app := range apps {
-		if app == nil {
-			return diag.Errorf("you must provide a non-empty name for each application in an integration")
-		}
-
-		//Here we check if the endpoint is empty and pass just the application name, this allows juju to attempt to infer endpoints
-		//If the endpoint is specifed we pass the format <applicationName>:<endpoint>
-		a := app.(map[string]interface{})
-		if a["endpoint"].(string) == "" {
-			endpoints = append(endpoints, a["name"].(string))
-		} else {
-			endpoints = append(endpoints, fmt.Sprintf("%v:%v", a["name"].(string), a["endpoint"].(string)))
-		}
+	endpoints, err := parseEndpoints(apps)
+	if err != nil {
+		return diag.FromErr(err)
 	}
 
 	integration, err := client.Integrations.CreateIntegration(&juju.CreateIntegrationInput{
@@ -105,8 +93,33 @@ func resourceIntegrationUpdate(ctx context.Context, d *schema.ResourceData, meta
 }
 
 func resourceIntegrationDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
-	return diag.Errorf("not implemented")
+
+	client := meta.(*juju.Client)
+
+	modelName := d.Get("model").(string)
+	modelUUID, err := client.Models.ResolveModelUUID(modelName)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	apps := d.Get("application").([]interface{})
+	endpoints, err := parseEndpoints(apps)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	err = client.Integrations.DestroyIntegration(&juju.DestroyIntegrationInput{
+		ModelUUID: modelUUID,
+		Endpoints: endpoints,
+	})
+
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	d.SetId("")
+
+	return diag.Diagnostics{}
 }
 
 func generateID(endpoints map[string]params.CharmRelation) string {
@@ -132,4 +145,27 @@ func generateID(endpoints map[string]params.CharmRelation) string {
 	}
 
 	return id
+}
+
+//This function can be used to parse the terraform data into usable juju endpoints
+func parseEndpoints(apps []interface{}) ([]string, error) {
+
+	var endpoints []string
+
+	for _, app := range apps {
+		if app == nil {
+			return nil, fmt.Errorf("you must provide a non-empty name for each application in an integration")
+		}
+
+		//Here we check if the endpoint is empty and pass just the application name, this allows juju to attempt to infer endpoints
+		//If the endpoint is specifed we pass the format <applicationName>:<endpoint>
+		a := app.(map[string]interface{})
+		if a["endpoint"].(string) == "" {
+			endpoints = append(endpoints, a["name"].(string))
+		} else {
+			endpoints = append(endpoints, fmt.Sprintf("%v:%v", a["name"].(string), a["endpoint"].(string)))
+		}
+	}
+
+	return endpoints, nil
 }
