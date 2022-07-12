@@ -1,9 +1,12 @@
 package juju
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	apiapplication "github.com/juju/juju/api/client/application"
+	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/rpc/params"
 )
 
@@ -11,16 +14,7 @@ type integrationsClient struct {
 	ConnectionFactory
 }
 
-type CreateIntegrationInput struct {
-	ModelUUID string
-	Endpoints []string
-}
-
-type CreateIntegrationResponse struct {
-	Endpoints map[string]params.CharmRelation
-}
-
-type DestroyIntegrationInput struct {
+type IntegrationInput struct {
 	ModelUUID string
 	Endpoints []string
 }
@@ -31,7 +25,7 @@ func newIntegrationsClient(cf ConnectionFactory) *integrationsClient {
 	}
 }
 
-func (c integrationsClient) CreateIntegration(input *CreateIntegrationInput) (*CreateIntegrationResponse, error) {
+func (c integrationsClient) CreateIntegration(input *IntegrationInput) (map[string]params.CharmRelation, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -48,14 +42,10 @@ func (c integrationsClient) CreateIntegration(input *CreateIntegrationInput) (*C
 		return nil, err
 	}
 
-	resp := CreateIntegrationResponse{
-		Endpoints: response.Endpoints,
-	}
-
-	return &resp, nil
+	return response.Endpoints, nil
 }
 
-func (c integrationsClient) DestroyIntegration(input *DestroyIntegrationInput) error {
+func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
@@ -77,4 +67,65 @@ func (c integrationsClient) DestroyIntegration(input *DestroyIntegrationInput) e
 	}
 
 	return nil
+}
+
+func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*params.RelationStatus, error) {
+	conn, err := c.GetConnection(&input.ModelUUID)
+	if err != nil {
+		return nil, err
+	}
+
+	apps := make([][]string, 0, len(input.Endpoints))
+	for _, v := range input.Endpoints {
+
+		app := strings.Split(v, ":")
+		apps = append(apps, []string{
+			app[0],
+			app[1],
+		})
+	}
+
+	client := apiapplication.NewClient(conn)
+	defer client.Close()
+
+	clientAPIClient := apiclient.NewClient(conn)
+	defer clientAPIClient.Close()
+
+	status, err := clientAPIClient.Status(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	relations := status.Relations
+
+	var relation params.RelationStatus
+
+	if len(relations) == 0 {
+		return nil, fmt.Errorf("no relations exist in specified model")
+	}
+
+	// the key is built assuming that the ID is "<requirer>:<endpoint> <provider>:<endpoint>"
+	key := fmt.Sprintf("%v:%v %v:%v", apps[0][0], apps[0][1], apps[1][0], apps[1][1])
+
+	for _, v := range relations {
+		if v.Key == key {
+			relation = v
+			break
+		}
+	}
+
+	if relation.Id != 0 && relation.Key == "" {
+		keyReversed := fmt.Sprintf("%v:%v %v:%v", apps[1][0], apps[1][1], apps[0][0], apps[0][1])
+		for _, v := range relations {
+			if v.Key == keyReversed {
+				return nil, fmt.Errorf("check the endpoint order in your ID")
+			}
+		}
+	}
+
+	if relation.Id != 0 && relation.Key == "" {
+		return nil, fmt.Errorf("relation not found in model")
+	}
+
+	return &relation, nil
 }
