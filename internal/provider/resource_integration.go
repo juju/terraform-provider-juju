@@ -20,6 +20,10 @@ func resourceIntegration() *schema.Resource {
 		UpdateContext: resourceIntegrationUpdate,
 		DeleteContext: resourceIntegrationDelete,
 
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
+
 		Schema: map[string]*schema.Schema{
 			"model": {
 				Description: "The name of the model to operate in.",
@@ -28,7 +32,7 @@ func resourceIntegration() *schema.Resource {
 			},
 			"application": {
 				Description: "The two applications to integrate.",
-				Type:        schema.TypeList,
+				Type:        schema.TypeSet,
 				Required:    true,
 				MaxItems:    2,
 				MinItems:    2,
@@ -63,7 +67,7 @@ func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta
 		return diag.FromErr(err)
 	}
 
-	apps := d.Get("application").([]interface{})
+	apps := d.Get("application").(*schema.Set).List()
 	endpoints, err := parseEndpoints(apps)
 	if err != nil {
 		return diag.FromErr(err)
@@ -157,7 +161,7 @@ func resourceIntegrationDelete(ctx context.Context, d *schema.ResourceData, meta
 		return diag.FromErr(err)
 	}
 
-	apps := d.Get("application").([]interface{})
+	apps := d.Get("application").(*schema.Set).List()
 	endpoints, err := parseEndpoints(apps)
 	if err != nil {
 		return diag.FromErr(err)
