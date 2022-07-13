@@ -3,11 +3,11 @@ resource "juju_integration" "this" {
 
   application {
     name     = "wordpress"
-    endpoint = "db" # can be optional
+    endpoint = "db"
   }
 
   application {
     name     = "percona-cluster"
-    endpoint = "server" # can be optional
+    endpoint = "server"
   }
 }

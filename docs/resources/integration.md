@@ -18,12 +18,12 @@ resource "juju_integration" "this" {
 
   application {
     name     = "wordpress"
-    endpoint = "db" # can be optional
+    endpoint = "db"
   }
 
   application {
     name     = "percona-cluster"
-    endpoint = "server" # can be optional
+    endpoint = "server"
   }
 }
 ```
@@ -51,4 +51,11 @@ Optional:
 
 - `endpoint` (String) The endpoint name.
 
+## Import
 
+Import is supported using the following syntax:
+
+```shell
+# Integrations can be imported by using the format: model_name:app1:endpoint:app2:endpoint, for example:
+$ terraform import juju_integration.wordpress_db development:wordpress:db:percona-cluster:server
+```
