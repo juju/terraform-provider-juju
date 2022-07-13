@@ -1,0 +1,43 @@
+---
+# generated using template templates/index.md.tmpl
+page_title: "Juju Provider"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# Juju Provider
+
+The provider can be used to interact with [Juju][0] - a model-driven Operator Lifecycle Manager (OLM) by Canonical.
+
+Initially this provider allows you to:
+
+* Manage models,
+* Manage applications and deploy charms from CharmHub,
+* Manage integrations.
+
+In future the provider will be extended to support more of Juju's capabilities.
+
+## Prerequisites
+
+### Juju CLI configuration store
+
+The provider has a dependency on Juju CLI configuration store.
+
+In order to operate, the provider expects configuration to be found in one of the following locations:
+
+* `$XDG_DATA_HOME/juju`
+* `~/.local/share/juju`
+
+The intention is to remove this dependency in future.
+
+{{ if .HasExample -}}
+## Example Usage
+
+{{tffile "examples/provider/provider.tf"}}
+{{- end }}
+
+{{ .SchemaMarkdown | trimspace }}
+
+
+[0]: https://juju.is "Juju | Operator lifecycle manager for K8s and traditional workloads"
