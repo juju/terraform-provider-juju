@@ -22,8 +22,8 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:db", "two:db")),
-					resource.TestCheckResourceAttr("juju_integration.this", "application.0.endpoint", "db"),
 					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "one", "endpoint": "db"}),
 				),
 			},
 		},
