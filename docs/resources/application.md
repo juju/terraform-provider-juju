@@ -14,22 +14,20 @@ A resource that represents a Juju application deployment.
 
 ```terraform
 resource "juju_application" "this" {
-  name = "foobar" # optional, set to charm name when absent
+  name = "my-application"
 
-  model = juju_model.development.name # required, model name
+  model = juju_model.development.name
 
   charm {
-    name     = "hello-kubecon" # required, supports CharmHub charms only
-    channel  = "edge"          # optional, specified as <track>/<risk>/<branch>, default: latest/stable
-    revision = 14              # optional, default: -1
-    series   = "trusty"        # optional
+    name     = "hello-kubecon"
+    channel  = "edge"
+    revision = 14
+    series   = "trusty"
   }
 
-  # The number of instances, default: 1
   units = 3
 
   config = {
-    # Application specific configuration
     external-hostname = "..."
   }
 }
@@ -66,4 +64,11 @@ Optional:
 - `revision` (Number) The revision of the charm to deploy.
 - `series` (String) The series on which to deploy.
 
+## Import
 
+Import is supported using the following syntax:
+
+```shell
+# Applications can be imported using the format: `model_name:application_name`, for example:
+$ terraform import juju_application.wordpress development:wordpress
+```
