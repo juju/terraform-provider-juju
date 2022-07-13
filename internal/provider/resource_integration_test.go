@@ -26,6 +26,11 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "one", "endpoint": "db"}),
 				),
 			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      "juju_integration.this",
+			},
 		},
 	})
 }
