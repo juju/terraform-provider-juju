@@ -10,8 +10,6 @@ import (
 )
 
 func TestAcc_ResourceIntegration(t *testing.T) {
-	// TODO: remove once other operations are implemented
-	t.Skip("skipped until read operation is implemented")
 	modelName := acctest.RandomWithPrefix("tf-test-integration")
 
 	resource.UnitTest(t, resource.TestCase{
@@ -24,6 +22,8 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:db", "two:db")),
+					resource.TestCheckResourceAttr("juju_integration.this", "application.0.endpoint", "db"),
+					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
 				),
 			},
 		},

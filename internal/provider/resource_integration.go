@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -41,8 +42,9 @@ func resourceIntegration() *schema.Resource {
 						"endpoint": {
 							Description: "The endpoint name.",
 							Type:        schema.TypeString,
-							Default:     "",
+							Default:     nil,
 							Optional:    true,
+							Computed:    true,
 						},
 					},
 				},
@@ -67,7 +69,7 @@ func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta
 		return diag.FromErr(err)
 	}
 
-	integration, err := client.Integrations.CreateIntegration(&juju.CreateIntegrationInput{
+	resultEndpoints, err := client.Integrations.CreateIntegration(&juju.IntegrationInput{
 		ModelUUID: modelUUID,
 		Endpoints: endpoints,
 	})
@@ -75,7 +77,19 @@ func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta
 		return diag.FromErr(err)
 	}
 
-	id := fmt.Sprintf("%s:%s", modelName, generateID(integration.Endpoints))
+	applications := []map[string]interface{}{}
+
+	for key, val := range resultEndpoints {
+		applications = append(applications, map[string]interface{}{
+			"name":     key,
+			"endpoint": val.Name,
+		})
+	}
+
+	id := generateID(modelName, resultEndpoints)
+	if err := d.Set("application", applications); err != nil {
+		return diag.FromErr(err)
+	}
 
 	d.SetId(id)
 
@@ -83,8 +97,49 @@ func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta
 }
 
 func resourceIntegrationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
-	return diag.Errorf("not implemented")
+
+	client := meta.(*juju.Client)
+
+	id := strings.Split(d.Id(), ":")
+
+	modelName := id[0]
+
+	modelID, err := client.Models.ResolveModelUUID(modelName)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	int := &juju.IntegrationInput{
+		ModelUUID: modelID,
+		Endpoints: []string{
+			fmt.Sprintf("%v:%v", id[1], id[2]),
+			fmt.Sprintf("%v:%v", id[3], id[4]),
+		},
+	}
+
+	integrations, err := client.Integrations.ReadIntegration(int)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	applications := []map[string]interface{}{}
+
+	for _, ep := range integrations.Endpoints {
+		applications = append(applications, map[string]interface{}{
+			"name":     ep.ApplicationName,
+			"endpoint": ep.Name,
+		})
+	}
+
+	if err := d.Set("model", modelName); err != nil {
+		return diag.FromErr(err)
+	}
+
+	if err := d.Set("application", applications); err != nil {
+		return diag.FromErr(err)
+	}
+
+	return diag.Diagnostics{}
 }
 
 func resourceIntegrationUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -108,7 +163,7 @@ func resourceIntegrationDelete(ctx context.Context, d *schema.ResourceData, meta
 		return diag.FromErr(err)
 	}
 
-	err = client.Integrations.DestroyIntegration(&juju.DestroyIntegrationInput{
+	err = client.Integrations.DestroyIntegration(&juju.IntegrationInput{
 		ModelUUID: modelUUID,
 		Endpoints: endpoints,
 	})
@@ -122,7 +177,7 @@ func resourceIntegrationDelete(ctx context.Context, d *schema.ResourceData, meta
 	return diag.Diagnostics{}
 }
 
-func generateID(endpoints map[string]params.CharmRelation) string {
+func generateID(modelName string, endpoints map[string]params.CharmRelation) string {
 
 	//In order to generate a stable iterable order we sort the endpoints keys by the role value (requirer is always first)
 	//TODO: verify we always get only 2 endpoints and that the role value is consistent
@@ -135,13 +190,10 @@ func generateID(endpoints map[string]params.CharmRelation) string {
 		}
 	}
 
-	var id string
+	id := modelName
 	for _, key := range keys {
 		ep := endpoints[key]
-		if id != "" {
-			id = fmt.Sprintf("%s:", id)
-		}
-		id = fmt.Sprintf("%s%s:%s", id, key, ep.Name)
+		id = fmt.Sprintf("%s:%s:%s", id, key, ep.Name)
 	}
 
 	return id
