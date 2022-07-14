@@ -111,8 +111,8 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*params.Re
 		return nil, fmt.Errorf("no relations exist in specified model")
 	}
 
-	// the key is built assuming that the ID is "<requirer>:<endpoint> <provider>:<endpoint>"
-	key := fmt.Sprintf("%v:%v %v:%v", apps[0][0], apps[0][1], apps[1][0], apps[1][1])
+	// the key is built assuming that the ID is "<provider>:<endpoint> <requirer>:<endpoint>"
+	key := fmt.Sprintf("%v:%v %v:%v", apps[1][0], apps[1][1], apps[0][0], apps[0][1])
 
 	for _, v := range relations {
 		if v.Key == key {
