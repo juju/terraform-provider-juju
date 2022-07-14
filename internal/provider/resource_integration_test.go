@@ -18,7 +18,7 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 		CheckDestroy:      testAccCheckIntegrationDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceIntegration(modelName),
+				Config: testAccResourceIntegration(modelName, "two"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:db", "two:db")),
@@ -31,6 +31,15 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 				ImportState:       true,
 				ResourceName:      "juju_integration.this",
 			},
+			{
+				Config: testAccResourceIntegration(modelName, "three"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:db", "three:db")),
+					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "three", "endpoint": "db"}),
+				),
+			},
 		},
 	})
 }
@@ -39,7 +48,7 @@ func testAccCheckIntegrationDestroy(s *terraform.State) error {
 	return nil
 }
 
-func testAccResourceIntegration(modelName string) string {
+func testAccResourceIntegration(modelName string, integrationName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
@@ -63,6 +72,15 @@ resource "juju_application" "two" {
 	}
 }
 
+resource "juju_application" "three" {
+	model = juju_model.this.name
+	name  = "three"
+
+	charm {
+		name = "postgresql"
+	}
+}
+
 resource "juju_integration" "this" {
 	model = juju_model.this.name
 
@@ -71,9 +89,9 @@ resource "juju_integration" "this" {
 	}
 
 	application {
-		name     = juju_application.two.name
+		name     = juju_application.%s.name
 		endpoint = "db"
 	}
 }
-`, modelName)
+`, modelName, integrationName)
 }

@@ -147,8 +147,59 @@ func resourceIntegrationRead(ctx context.Context, d *schema.ResourceData, meta i
 }
 
 func resourceIntegrationUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
-	return diag.Errorf("not implemented")
+
+	client := meta.(*juju.Client)
+
+	modelName := d.Get("model").(string)
+	modelUUID, err := client.Models.ResolveModelUUID(modelName)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	var old, new interface{}
+	var oldEndpoints, endpoints []string
+
+	if d.HasChange("application") {
+		old, new = d.GetChange("application")
+		oldEndpoints, err = parseEndpoints(old.(*schema.Set).List())
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		endpoints, err = parseEndpoints(new.(*schema.Set).List())
+		if err != nil {
+			return diag.FromErr(err)
+		}
+	}
+
+	input := &juju.UpdateIntegrationInput{
+		ModelUUID:    modelUUID,
+		ID:           d.Id(),
+		Endpoints:    endpoints,
+		OldEndpoints: oldEndpoints,
+	}
+
+	resultEndpoints, err := client.Integrations.UpdateIntegration(input)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	applications := []map[string]interface{}{}
+
+	for key, val := range resultEndpoints {
+		applications = append(applications, map[string]interface{}{
+			"name":     key,
+			"endpoint": val.Name,
+		})
+	}
+
+	id := generateID(modelName, resultEndpoints)
+	if err := d.Set("application", applications); err != nil {
+		return diag.FromErr(err)
+	}
+
+	d.SetId(id)
+
+	return nil
 }
 
 func resourceIntegrationDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {

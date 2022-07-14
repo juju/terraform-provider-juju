@@ -19,6 +19,13 @@ type IntegrationInput struct {
 	Endpoints []string
 }
 
+type UpdateIntegrationInput struct {
+	ModelUUID    string
+	ID           string
+	Endpoints    []string
+	OldEndpoints []string
+}
+
 func newIntegrationsClient(cf ConnectionFactory) *integrationsClient {
 	return &integrationsClient{
 		ConnectionFactory: cf,
@@ -128,4 +135,39 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*params.Re
 	}
 
 	return &relation, nil
+}
+
+func (c integrationsClient) UpdateIntegration(input *UpdateIntegrationInput) (map[string]params.CharmRelation, error) {
+	conn, err := c.GetConnection(&input.ModelUUID)
+	if err != nil {
+		return nil, err
+	}
+
+	client := apiapplication.NewClient(conn)
+	defer client.Close()
+
+	response, err := client.AddRelation(
+		input.Endpoints,
+		[]string(nil),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	//TODO: check integration status
+
+	var force bool = false
+	var timeout time.Duration = 30 * time.Second
+	err = client.DestroyRelation(
+		&force,
+		&timeout,
+		input.OldEndpoints...,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	//TODO: check deletion success and force?
+
+	return response.Endpoints, nil
 }
