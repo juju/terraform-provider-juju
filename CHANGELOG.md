@@ -1,4 +1,18 @@
-## 0.3.0 (Unreleased)
+## 0.4.0 (Unreleased)
+
+## 0.3.0 (July 14, 2022)
+
+NOTES:
+
+* provider: The provider has a dependency on Juju CLI configuration store. It expects configuration to be found in either `$XDG_DATA_HOME/juju` or `~/.local/share/juju`.
+
+FEATURES:
+
+* **New Resource** `juju_integration`
+
+BUG FIXES
+
+* resource/juju_application: If a malformed id is supplied during import then return an error message instead of panicking.
 
 ## 0.2.0 (July 11, 2022)
 
