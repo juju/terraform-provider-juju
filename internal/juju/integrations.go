@@ -112,6 +112,7 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*params.Re
 	}
 
 	// the key is built assuming that the ID is "<provider>:<endpoint> <requirer>:<endpoint>"
+	// the relations that come back from status have the key formatted as "<requirer>:<endpoint> <provider>:<endpoint>"
 	key := fmt.Sprintf("%v:%v %v:%v", apps[1][0], apps[1][1], apps[0][0], apps[0][1])
 
 	for _, v := range relations {
