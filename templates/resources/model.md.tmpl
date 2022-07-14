@@ -1,0 +1,34 @@
+---
+# generated using template templates/resources/model.md.tmpl
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+{{ if .HasExample -}}
+## Example Usage
+{{tffile "examples/resources/juju_model/resource.tf"}}
+{{- end }}
+
+{{ .SchemaMarkdown | trimspace }}
+
+{{ if .HasImport -}}
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/juju_model/import.sh"}}
+{{- end }}
+
+### Limitations of Import
+
+Any entries of the `config` attribute specified in the Terraform configuration are ignored. You can add entries to the `config` map and manage them using Terraform after import.
+
+Once imported you must add the desired model configuration and run a Terraform apply. This will report no changes but Terraform will be tracking the specified model configuration.
+
+The limitation is intentional. It exists as, without it, Terraform would import all model configuration including defaults. It may not be desirable to manage defaults using Terraform.
