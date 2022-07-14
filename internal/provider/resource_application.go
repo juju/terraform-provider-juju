@@ -20,8 +20,6 @@ func resourceApplication() *schema.Resource {
 		DeleteContext: resourceApplicationDelete,
 
 		Importer: &schema.ResourceImporter{
-			// TODO: sync-up with read operation
-			//StateContext: resourceApplicationImporter,
 			StateContext: schema.ImportStatePassthroughContext,
 		},
 
@@ -137,6 +135,10 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
 	id := strings.Split(d.Id(), ":")
+	//If importing with an incorrect ID we need to catch and provide a user-friendly error
+	if len(id) != 2 {
+		return diag.Errorf("unable to parse model and application name from provided ID")
+	}
 	modelName, appName := id[0], id[1]
 	modelUUID, err := client.Models.ResolveModelUUID(modelName)
 	if err != nil {
