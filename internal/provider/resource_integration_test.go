@@ -12,7 +12,7 @@ import (
 func TestAcc_ResourceIntegration(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-integration")
 
-	resource.UnitTest(t, resource.TestCase{
+	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
 		CheckDestroy:      testAccCheckIntegrationDestroy,
@@ -21,7 +21,7 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 				Config: testAccResourceIntegration(modelName, "two"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:db", "two:db")),
+					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "two:db", "one:db")),
 					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "one", "endpoint": "db"}),
 				),
@@ -35,7 +35,7 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 				Config: testAccResourceIntegration(modelName, "three"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:db", "three:db")),
+					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "three:db", "one:db")),
 					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "three", "endpoint": "db"}),
 				),

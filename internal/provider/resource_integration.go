@@ -234,13 +234,13 @@ func resourceIntegrationDelete(ctx context.Context, d *schema.ResourceData, meta
 
 func generateID(modelName string, endpoints map[string]params.CharmRelation) string {
 
-	//In order to generate a stable iterable order we sort the endpoints keys by the role value (requirer is always first)
+	//In order to generate a stable iterable order we sort the endpoints keys by the role value (provider is always first to match `juju status` output)
 	//TODO: verify we always get only 2 endpoints and that the role value is consistent
 	keys := make([]string, len(endpoints))
 	for k, v := range endpoints {
-		if v.Role == "requirer" {
+		if v.Role == "provider" {
 			keys[0] = k
-		} else if v.Role == "provider" {
+		} else if v.Role == "requirer" {
 			keys[1] = k
 		}
 	}
