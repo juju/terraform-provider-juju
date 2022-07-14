@@ -33,7 +33,8 @@ func main() {
 
 	opts := &plugin.ServeOpts{
 		ProviderFunc: provider.New(version),
-		ProviderAddr: "registry.terraform.io/canonical/juju", //TODO: Confirm correct published name
+		// TODO: Published name is to be confirmed - see card #41
+		ProviderAddr: "registry.terraform.io/canonical/juju",
 		Debug:        debugMode,
 	}
 
