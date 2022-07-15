@@ -265,10 +265,10 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, err
 	}
 	if len(apps) > 1 {
-		return nil, errors.New(fmt.Sprintf("more than one result for application: %s", input.AppName))
+		return nil, fmt.Errorf("more than one result for application: %s", input.AppName)
 	}
 	if len(apps) < 1 {
-		return nil, errors.New(fmt.Sprintf("no results for application: %s", input.AppName))
+		return nil, fmt.Errorf("no results for application: %s", input.AppName)
 	}
 	appInfo := apps[0].Result
 
@@ -279,7 +279,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	var appStatus params.ApplicationStatus
 	var exists bool
 	if appStatus, exists = status.Applications[input.AppName]; !exists {
-		return nil, errors.New(fmt.Sprintf("no status returned for application: %s", input.AppName))
+		return nil, fmt.Errorf("no status returned for application: %s", input.AppName)
 	}
 
 	unitCount := len(appStatus.Units)
@@ -287,11 +287,11 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	// NOTE: we are assuming that this charm comes from CharmHub
 	charmURL, err := charm.ParseURL(appStatus.Charm)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("failed to parse charm: %v", err))
+		return nil, fmt.Errorf("failed to parse charm: %v", err)
 	}
 
 	response := &ReadApplicationResponse{
-		Name:     appInfo.Charm,
+		Name:     charmURL.Name,
 		Channel:  appStatus.CharmChannel,
 		Revision: charmURL.Revision,
 		Series:   appInfo.Series,
@@ -323,7 +323,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	var appStatus params.ApplicationStatus
 	var exists bool
 	if appStatus, exists = status.Applications[input.AppName]; !exists {
-		return errors.New(fmt.Sprintf("no status returned for application: %s", input.AppName))
+		return fmt.Errorf("no status returned for application: %s", input.AppName)
 	}
 
 	if input.Units != nil {
@@ -341,7 +341,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 
 		if unitDiff < 0 {
 			var unitNames []string
-			for unitName, _ := range appStatus.Units {
+			for unitName := range appStatus.Units {
 				unitNames = append(unitNames, unitName)
 			}
 
@@ -380,6 +380,9 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		}
 
 		channel, err := charm.ParseChannel(appStatus.CharmChannel)
+		if err != nil {
+			return err
+		}
 
 		origin, err := utils.DeduceOrigin(newURL, channel, platform)
 		if err != nil {
@@ -387,6 +390,9 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		}
 
 		resultOrigin, err := charmsAPIClient.AddCharm(newURL, origin, false)
+		if err != nil {
+			return err
+		}
 
 		err = applicationAPIClient.SetCharm("", apiapplication.SetCharmConfig{
 			ApplicationName: input.AppName,
