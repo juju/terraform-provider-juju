@@ -1,3 +1,8 @@
+// Package juju is a facade to make interacting with Juju clients simpler. It also acts as an insulating layer
+// protecting the provider package from upstream changes.
+// The long-term intention is for this package to be removed. Eventually, it would be nice for this package to
+// be replaced with more granular clients in Juju itself. Note that much of this code is duplicated from Juju CLI
+// commands.
 package juju
 
 import (

@@ -30,6 +30,7 @@ func newModelsClient(cf ConnectionFactory, store jujuclient.ClientStore, control
 }
 
 func (c *modelsClient) getControllerNameByUUID(uuid string) (*string, error) {
+	// TODO: find alternative for this so dependency on the client store can be removed
 	controllers, err := c.store.AllControllers()
 	if err != nil {
 		return nil, err
@@ -54,6 +55,7 @@ func (c *modelsClient) GetModelByName(name string) (*params.ModelInfo, error) {
 	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
+	// TODO: remove dependency on store, see ListModelSummaries call instead
 	modelDetails, err := c.store.ModelByName(c.controllerName, name)
 	if err != nil {
 		return nil, err
