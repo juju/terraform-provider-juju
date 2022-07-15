@@ -8,6 +8,7 @@ package juju
 import (
 	"errors"
 	"fmt"
+	"github.com/juju/juju/core/model"
 	"math"
 
 	"github.com/juju/juju/rpc/params"
@@ -61,6 +62,7 @@ type ReadApplicationResponse struct {
 
 type UpdateApplicationInput struct {
 	ModelUUID string
+	ModelType string
 	AppName   string
 	//Channel   string // TODO: Unsupported for now
 	Units    *int
@@ -327,35 +329,47 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	}
 
 	if input.Units != nil {
-		unitDiff := *input.Units - len(appStatus.Units)
-
-		if unitDiff > 0 {
-			_, err := applicationAPIClient.AddUnits(apiapplication.AddUnitsParams{
+		// TODO: Refactor this to a separate function
+		if input.ModelType == model.CAAS.String() {
+			_, err := applicationAPIClient.ScaleApplication(apiapplication.ScaleApplicationParams{
 				ApplicationName: input.AppName,
-				NumUnits:        unitDiff,
+				Scale:           *input.Units,
+				Force:           false,
 			})
 			if err != nil {
 				return err
 			}
-		}
+		} else {
+			unitDiff := *input.Units - len(appStatus.Units)
 
-		if unitDiff < 0 {
-			var unitNames []string
-			for unitName := range appStatus.Units {
-				unitNames = append(unitNames, unitName)
+			if unitDiff > 0 {
+				_, err := applicationAPIClient.AddUnits(apiapplication.AddUnitsParams{
+					ApplicationName: input.AppName,
+					NumUnits:        unitDiff,
+				})
+				if err != nil {
+					return err
+				}
 			}
 
-			unitAbs := int(math.Abs(float64(unitDiff)))
-			var unitsToDestroy []string
-			for i := 0; i < unitAbs; i++ {
-				unitsToDestroy = append(unitsToDestroy, unitNames[i])
-			}
-			_, err := applicationAPIClient.DestroyUnits(apiapplication.DestroyUnitsParams{
-				Units:          unitsToDestroy,
-				DestroyStorage: true,
-			})
-			if err != nil {
-				return err
+			if unitDiff < 0 {
+				var unitNames []string
+				for unitName, _ := range appStatus.Units {
+					unitNames = append(unitNames, unitName)
+				}
+
+				unitAbs := int(math.Abs(float64(unitDiff)))
+				var unitsToDestroy []string
+				for i := 0; i < unitAbs; i++ {
+					unitsToDestroy = append(unitsToDestroy, unitNames[i])
+				}
+				_, err := applicationAPIClient.DestroyUnits(apiapplication.DestroyUnitsParams{
+					Units:          unitsToDestroy,
+					DestroyStorage: true,
+				})
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

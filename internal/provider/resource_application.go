@@ -201,12 +201,13 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 
 	appName := d.Get("name").(string)
 	modelName := d.Get("model").(string)
-	modelUUID, err := client.Models.ResolveModelUUID(modelName)
+	modelInfo, err := client.Models.GetModelByName(modelName)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 	updateApplicationInput := juju.UpdateApplicationInput{
-		ModelUUID: modelUUID,
+		ModelUUID: modelInfo.UUID,
+		ModelType: modelInfo.Type,
 		AppName:   appName,
 	}
 
