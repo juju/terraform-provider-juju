@@ -5,15 +5,15 @@ name: Tests
 on:
   pull_request:
     paths-ignore:
-      - 'README.md'
-      - 'project-docs/**'
+      - "README.md"
+      - "project-docs/**"
   push:
     branches:
-      - 'main'
+      - "main"
       - "add-linting-for-go"
     paths-ignore:
-      - 'README.md'
-      - 'project-docs/**'
+      - "README.md"
+      - "project-docs/**"
   workflow_dispatch:
 
 # Testing only needs permissions to read the repository contents.
@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v3
         with:
-          go-version-file: 'go.mod'
+          go-version-file: "go.mod"
           cache: true
       - run: go mod download
       - run: go build -v .
@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v3
         with:
-          go-version-file: 'go.mod'
+          go-version-file: "go.mod"
           cache: true
       - run: go generate ./...
       - name: git diff
@@ -68,16 +68,16 @@ jobs:
       fail-fast: false
       matrix:
         terraform:
-          - '0.15.*'
-          - '1.0.*'
-          - '1.1.*'
-          - '1.2.*'
+          - "0.15.*"
+          - "1.0.*"
+          - "1.1.*"
+          - "1.2.*"
 
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v3
         with:
-          go-version-file: 'go.mod'
+          go-version-file: "go.mod"
           cache: true
       - uses: hashicorp/setup-terraform@v2
         with:
@@ -89,7 +89,7 @@ jobs:
         # language=bash
         run: |
           CONTROLLER=$(juju whoami --format yaml | yq .controller)
-  
+
           echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq -o=json .$CONTROLLER.details.api-endpoints | jq -r '. | join(",")')" >> $GITHUB_ENV
           echo "JUJU_USERNAME=$(juju show-controller | yq .$CONTROLLER.account.user)"  >> $GITHUB_ENV
           echo "JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password)"  >> $GITHUB_ENV
