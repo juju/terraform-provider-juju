@@ -25,18 +25,17 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
-      # TODO: allow signing artifacts (see Card #75)
       # This uses an action (hashicorp/ghaction-import-gpg) that assumes you set your
       # private key in the `GPG_PRIVATE_KEY` secret and passphrase in the `PASSPHRASE`
       # secret. If you would rather own your own GPG handling, please fork this action
       # or use an alternative one for key handling.
-      #      - name: Import GPG key
-      #        id: import_gpg
-      #        uses: hashicorp/ghaction-import-gpg@v2.1.0
-      #        env:
-      #          # These secrets will need to be configured for the repository:
-      #          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-      #          PASSPHRASE: ${{ secrets.PASSPHRASE }}
+      - name: Import GPG key
+        id: import_gpg
+        uses: hashicorp/ghaction-import-gpg@v2.1.0
+        env:
+          # These secrets will need to be configured for the repository:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          PASSPHRASE: ${{ secrets.PASSPHRASE }}
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v3
         with:
@@ -44,5 +43,4 @@ jobs:
         env:
           # GitHub sets the GITHUB_TOKEN secret automatically.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # TODO: allow signing artifacts (see Card #75)
-          # GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
