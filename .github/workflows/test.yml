@@ -14,7 +14,6 @@ on:
     paths-ignore:
       - "README.md"
       - "project-docs/**"
-  workflow_dispatch:
 
 # Testing only needs permissions to read the repository contents.
 permissions:
@@ -37,6 +36,7 @@ jobs:
 
   generate:
     runs-on: ubuntu-latest
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v3
@@ -52,6 +52,7 @@ jobs:
   # This runs golangci-lint against the codebase
   lint:
     name: golangci-lint
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -66,7 +67,9 @@ jobs:
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
     name: Terraform Provider Acceptance Tests
-    needs: build
+    needs:
+      - generate
+      - lint
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -89,7 +92,6 @@ jobs:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
       - uses: ./.github/actions/setup-juju
-        if: ${{ !env.ACT }} # skip when running locally with `act`
       - name: "Set environment to configure provider"
         # language=bash
         run: |
