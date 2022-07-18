@@ -44,6 +44,27 @@ func (c *modelsClient) getControllerNameByUUID(uuid string) (*string, error) {
 	return nil, fmt.Errorf("cannot find controller name from uuid: %s", uuid)
 }
 
+func (c *modelsClient) resolveModelUUIDWithClient(client modelmanager.Client, name string) (string, error) {
+	// TODO: User should be definable, but is currently not implemented in the provider
+	modelUUID := ""
+	modelSummaries, err := client.ListModelSummaries("admin", false)
+	if err != nil {
+		return "", err
+	}
+	for _, modelSummary := range modelSummaries {
+		if modelSummary.Name == name {
+			modelUUID = modelSummary.UUID
+			break
+		}
+	}
+
+	if modelUUID == "" {
+		return "", fmt.Errorf("model not found for defined user")
+	}
+
+	return modelUUID, nil
+}
+
 // GetModelByName retrieves a model by name
 func (c *modelsClient) GetModelByName(name string) (*params.ModelInfo, error) {
 	conn, err := c.GetConnection(nil)
@@ -54,13 +75,12 @@ func (c *modelsClient) GetModelByName(name string) (*params.ModelInfo, error) {
 	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
-	// TODO: remove dependency on store, see ListModelSummaries call instead
-	modelDetails, err := c.store.ModelByName(c.controllerName, name)
+	modelUUID, err := c.resolveModelUUIDWithClient(*client, name)
 	if err != nil {
 		return nil, err
 	}
 
-	modelTag := names.NewModelTag(modelDetails.ModelUUID)
+	modelTag := names.NewModelTag(modelUUID)
 
 	results, err := client.ModelInfo([]names.ModelTag{
 		modelTag,
@@ -89,12 +109,12 @@ func (c *modelsClient) ResolveModelUUID(name string) (string, error) {
 	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
-	modelDetails, err := c.store.ModelByName(c.controllerName, name)
+	modelUUID, err := c.resolveModelUUIDWithClient(*client, name)
 	if err != nil {
-		return "", err
+		return "", nil
 	}
 
-	return modelDetails.ModelUUID, nil
+	return modelUUID, nil
 }
 
 func (c *modelsClient) CreateModel(name string, controller string, cloudList []interface{}, cloudConfig map[string]interface{}) (*base.ModelInfo, error) {
@@ -118,6 +138,7 @@ func (c *modelsClient) CreateModel(name string, controller string, cloudList []i
 		cloudRegion = cloudMap["region"].(string)
 	}
 
+	// TODO: This makes the provider dependant on the local file store. If there is an alternative call it should be used
 	if controller == "" {
 		controllerName, err = c.store.CurrentController()
 		if err != nil {
@@ -127,22 +148,13 @@ func (c *modelsClient) CreateModel(name string, controller string, cloudList []i
 		controllerName = controller
 	}
 
+	// TODO: This makes the provider dependant on the local file store. If there is an alternative call it should be used
 	accountDetails, err := c.store.AccountDetails(controllerName)
 	if err != nil {
 		return nil, err
 	}
 
 	modelInfo, err := client.CreateModel(name, accountDetails.User, cloudName, cloudRegion, cloudCredential, cloudConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: integrate more gracefully
-	// This updates the client filestore with the model details which is required for tests to pass
-	err = c.store.UpdateModel(controllerName, name, jujuclient.ModelDetails{
-		ModelUUID: modelInfo.UUID,
-		ModelType: modelInfo.Type,
-	})
 	if err != nil {
 		return nil, err
 	}
