@@ -8,8 +8,9 @@ package juju
 import (
 	"errors"
 	"fmt"
-	"github.com/juju/juju/core/model"
 	"math"
+
+	"github.com/juju/juju/core/model"
 
 	"github.com/juju/juju/rpc/params"
 
@@ -354,7 +355,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 
 			if unitDiff < 0 {
 				var unitNames []string
-				for unitName, _ := range appStatus.Units {
+				for unitName := range appStatus.Units {
 					unitNames = append(unitNames, unitName)
 				}
 

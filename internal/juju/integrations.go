@@ -84,7 +84,6 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*params.Re
 
 	apps := make([][]string, 0, len(input.Endpoints))
 	for _, v := range input.Endpoints {
-
 		app := strings.Split(v, ":")
 		apps = append(apps, []string{
 			app[0],

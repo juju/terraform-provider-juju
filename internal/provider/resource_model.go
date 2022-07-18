@@ -127,7 +127,7 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 
 	// Only read model config that is tracked in Terraform
 	config := d.Get("config").(map[string]interface{})
-	for k, _ := range config {
+	for k := range config {
 		if value, exists := modelConfig[k]; exists {
 			var serialised string
 			switch value.(type) {
@@ -145,7 +145,9 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 			config[k] = serialised
 		}
 	}
-	d.Set("config", config)
+	if err = d.Set("config", config); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return diags
 }
@@ -163,7 +165,7 @@ func resourceModelUpdate(ctx context.Context, d *schema.ResourceData, meta inter
 		newConfigMap := newConfig.(map[string]interface{})
 
 		var unsetConfigKeys []string
-		for k, _ := range oldConfigMap {
+		for k := range oldConfigMap {
 			if _, ok := newConfigMap[k]; !ok {
 				unsetConfigKeys = append(unsetConfigKeys, k)
 			}
@@ -209,7 +211,9 @@ func resourceModelImporter(ctx context.Context, d *schema.ResourceData, meta int
 		return nil, err
 	}
 
-	d.Set("name", model.Name)
+	if err = d.Set("name", model.Name); err != nil {
+		return nil, err
+	}
 	d.SetId(model.UUID)
 
 	return []*schema.ResourceData{d}, nil

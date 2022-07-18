@@ -68,7 +68,6 @@ func New(version string) func() *schema.Provider {
 
 func configure(version string, p *schema.Provider) func(context.Context, *schema.ResourceData) (interface{}, diag.Diagnostics) {
 	return func(_ context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
-
 		var diags diag.Diagnostics
 
 		ControllerAddresses := strings.Split(d.Get("controller_addresses").(string), ",")
@@ -110,7 +109,6 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 }
 
 func checkClientErr(err error, diags diag.Diagnostics, config juju.Configuration) diag.Diagnostics {
-
 	var errDetail string
 
 	x509error := &x509.UnknownAuthorityError{}

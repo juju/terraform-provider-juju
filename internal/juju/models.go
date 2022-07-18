@@ -1,7 +1,6 @@
 package juju
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -42,7 +41,7 @@ func (c *modelsClient) getControllerNameByUUID(uuid string) (*string, error) {
 		}
 	}
 
-	return nil, errors.New(fmt.Sprintf("cannot find controller name from uuid: %s", uuid))
+	return nil, fmt.Errorf("cannot find controller name from uuid: %s", uuid)
 }
 
 // GetModelByName retrieves a model by name
@@ -174,10 +173,10 @@ func (c *modelsClient) ReadModel(uuid string) (*string, *params.ModelInfo, map[s
 	}
 
 	if len(models) > 1 {
-		return nil, nil, nil, errors.New(fmt.Sprintf("more than one model returned for UUID: %s", uuid))
+		return nil, nil, nil, fmt.Errorf("more than one model returned for UUID: %s", uuid)
 	}
 	if len(models) < 1 {
-		return nil, nil, nil, errors.New(fmt.Sprintf("no model returned for UUID: %s", uuid))
+		return nil, nil, nil, fmt.Errorf("no model returned for UUID: %s", uuid)
 	}
 
 	modelInfo := models[0].Result
