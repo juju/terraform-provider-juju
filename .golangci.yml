@@ -1,0 +1,7 @@
+run:
+  timeout: 5m
+linters:
+  enable:
+    - misspell
+    - prealloc
+    - whitespace

@@ -58,7 +58,6 @@ func resourceIntegration() *schema.Resource {
 }
 
 func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-
 	client := meta.(*juju.Client)
 
 	modelName := d.Get("model").(string)
@@ -101,7 +100,6 @@ func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta
 }
 
 func resourceIntegrationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-
 	client := meta.(*juju.Client)
 
 	id := strings.Split(d.Id(), ":")
@@ -147,7 +145,6 @@ func resourceIntegrationRead(ctx context.Context, d *schema.ResourceData, meta i
 }
 
 func resourceIntegrationUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-
 	client := meta.(*juju.Client)
 
 	modelName := d.Get("model").(string)
@@ -203,7 +200,6 @@ func resourceIntegrationUpdate(ctx context.Context, d *schema.ResourceData, meta
 }
 
 func resourceIntegrationDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-
 	client := meta.(*juju.Client)
 
 	modelName := d.Get("model").(string)
@@ -233,7 +229,6 @@ func resourceIntegrationDelete(ctx context.Context, d *schema.ResourceData, meta
 }
 
 func generateID(modelName string, endpoints map[string]params.CharmRelation) string {
-
 	//In order to generate a stable iterable order we sort the endpoints keys by the role value (provider is always first to match `juju status` output)
 	//TODO: verify we always get only 2 endpoints and that the role value is consistent
 	keys := make([]string, len(endpoints))
@@ -256,7 +251,6 @@ func generateID(modelName string, endpoints map[string]params.CharmRelation) str
 
 //This function can be used to parse the terraform data into usable juju endpoints
 func parseEndpoints(apps []interface{}) ([]string, error) {
-
 	var endpoints []string
 
 	for _, app := range apps {
@@ -265,7 +259,7 @@ func parseEndpoints(apps []interface{}) ([]string, error) {
 		}
 
 		//Here we check if the endpoint is empty and pass just the application name, this allows juju to attempt to infer endpoints
-		//If the endpoint is specifed we pass the format <applicationName>:<endpoint>
+		//If the endpoint is specified we pass the format <applicationName>:<endpoint>
 		a := app.(map[string]interface{})
 		if a["endpoint"].(string) == "" {
 			endpoints = append(endpoints, a["name"].(string))

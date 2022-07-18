@@ -120,11 +120,15 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	// These values can be computed, and so set from the response.
-	d.Set("name", response.AppName)
+	if err = d.Set("name", response.AppName); err != nil {
+		return diag.FromErr(err)
+	}
 
 	charm["revision"] = response.Revision
 	charm["series"] = response.Series
-	d.Set("charm", []map[string]interface{}{charm})
+	if err = d.Set("charm", []map[string]interface{}{charm}); err != nil {
+		return diag.FromErr(err)
+	}
 
 	id := fmt.Sprintf("%s:%s", modelName, response.AppName)
 	d.SetId(id)
@@ -176,7 +180,9 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 			"series":   response.Series,
 		}
 	}
-	d.Set("charm", []map[string]interface{}{charmList})
+	if err = d.Set("charm", []map[string]interface{}{charmList}); err != nil {
+		return diag.FromErr(err)
+	}
 
 	// TODO: Once we can pull the channel from the API, remove the above and uncomment below
 	//charmList := []map[string]interface{}{
@@ -188,9 +194,15 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 	//	},
 	//}
 	//d.Set("charm", charmList)
-	d.Set("model", modelName)
-	d.Set("name", appName)
-	d.Set("units", response.Units)
+	if err = d.Set("model", modelName); err != nil {
+		return diag.FromErr(err)
+	}
+	if err = d.Set("name", appName); err != nil {
+		return diag.FromErr(err)
+	}
+	if err = d.Set("units", response.Units); err != nil {
+		return diag.FromErr(err)
+	}
 
 	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
 	return nil

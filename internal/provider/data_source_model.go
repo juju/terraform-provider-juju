@@ -38,8 +38,12 @@ func dataSourceModelRead(ctx context.Context, d *schema.ResourceData, meta inter
 	}
 
 	d.SetId(model.UUID)
-	d.Set("uuid", model.UUID)
-	d.Set("name", model.Name)
+	if err = d.Set("uuid", model.UUID); err != nil {
+		return diag.FromErr(err)
+	}
+	if err = d.Set("name", model.Name); err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
