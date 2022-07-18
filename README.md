@@ -78,3 +78,12 @@ Then, finally, run the tests:
 make testacc
 ```
 
+#### Linting
+
+This repository uses [golangci-lint](https://golangci-lint.run/) as a linting tool as it can run multiple linters. The configuration for this tool is all handled in the file `.golangci.yaml` in the root of the repository allowing all runs of the tool to run with the same settings. When installed you can run the analysis with:
+
+```shell
+golangci-lint run
+```
+
+You can also integrate `golangci-lint` with some IDEs following instructions available here: [Editor integration](https://golangci-lint.run/usage/integrations)
