@@ -27,6 +27,7 @@ type Client struct {
 	Models       modelsClient
 	Applications applicationsClient
 	Integrations integrationsClient
+	Offers       offersClient
 }
 
 type ConnectionFactory struct {
