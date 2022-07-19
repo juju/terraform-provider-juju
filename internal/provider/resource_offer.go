@@ -5,6 +5,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
 func resourceOffer() *schema.Resource {
@@ -52,8 +53,41 @@ func resourceOffer() *schema.Resource {
 }
 
 func resourceOfferCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
-	return diag.Errorf("not implemented")
+	client := meta.(*juju.Client)
+
+	var diags diag.Diagnostics
+	modelName := d.Get("model").(string)
+	modelUUID, err := client.Models.ResolveModelUUID(modelName)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	result, errs := client.Offers.CreateOffer(&juju.OfferInput{
+		ModelName:       modelName,
+		ModelUUID:       modelUUID,
+		Name:            d.Get("name").(string),
+		ApplicationName: d.Get("application_name").(string),
+		Endpoint:        d.Get("endpoint").(string),
+	})
+	if errs != nil {
+		if len(errs) == 1 {
+			return diag.FromErr(errs[0])
+		} else {
+			for _, v := range errs {
+				diags = append(diags, diag.FromErr(v)...)
+			}
+			return diags
+		}
+	}
+
+	if err = d.Set("url", result.OfferURL); err != nil {
+		return diag.FromErr(err)
+	}
+
+	//TODO: check that a URL is unique
+	d.SetId(result.OfferURL)
+
+	return diags
 }
 
 func resourceOfferRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {

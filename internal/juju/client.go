@@ -43,6 +43,7 @@ func NewClient(config Configuration) (*Client, error) {
 		Models:       *newModelsClient(cf),
 		Applications: *newApplicationClient(cf),
 		Integrations: *newIntegrationsClient(cf),
+		Offers:       *newOffersClient(cf),
 	}, nil
 }
 
