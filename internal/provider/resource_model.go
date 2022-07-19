@@ -79,11 +79,10 @@ func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta inter
 	var diags diag.Diagnostics
 
 	name := d.Get("name").(string)
-	controller := d.Get("controller").(string)
 	cloud := d.Get("cloud").([]interface{})
 	config := d.Get("config").(map[string]interface{})
 
-	modelInfo, err := client.Models.CreateModel(name, controller, cloud, config)
+	modelInfo, err := client.Models.CreateModel(name, cloud, config)
 	if err != nil {
 		return diag.FromErr(err)
 	}
