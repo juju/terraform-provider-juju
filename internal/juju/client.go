@@ -13,6 +13,7 @@ const (
 	PrefixCloud         = "cloud-"
 	PrefixModel         = "model-"
 	PrefixCharm         = "charm-"
+	PrefixUser          = "user-"
 	UnspecifiedRevision = -1
 	connectionTimeout   = 30 * time.Second
 )

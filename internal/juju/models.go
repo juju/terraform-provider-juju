@@ -2,13 +2,16 @@ package juju
 
 import (
 	"fmt"
+	"github.com/juju/juju/api"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/juju/juju/api/client/modelconfig"
 
 	"github.com/juju/juju/api/base"
 	"github.com/juju/juju/api/client/modelmanager"
+	"github.com/juju/juju/api/controller/controller"
 	"github.com/juju/juju/jujuclient"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v4"
@@ -16,7 +19,7 @@ import (
 
 type modelsClient struct {
 	ConnectionFactory
-	store          jujuclient.ClientStore
+	store          jujuclient.ClientStore // TODO: This is currently not being used, but it may be needed in future so it is being retained for now
 	controllerName string
 }
 
@@ -28,20 +31,41 @@ func newModelsClient(cf ConnectionFactory, store jujuclient.ClientStore, control
 	}
 }
 
-func (c *modelsClient) getControllerNameByUUID(uuid string) (*string, error) {
-	// TODO: find alternative for this so dependency on the client store can be removed
-	controllers, err := c.store.AllControllers()
-	if err != nil {
-		return nil, err
-	}
+func (c *modelsClient) getControllerNameByUUID(conn api.Connection, uuid string) (*string, error) {
+	client := controller.NewClient(conn)
+	defer client.Close()
 
-	for name, details := range controllers {
-		if details.ControllerUUID == uuid {
-			return &name, nil
+	controllerConfig, err := client.ControllerConfig()
+	if err != nil {
+		return nil, fmt.Errorf("cannot find controller name from uuid: %s", uuid)
+	}
+	controllerName := controllerConfig.ControllerName()
+
+	return &controllerName, nil
+}
+
+func (c *modelsClient) getCurrentUser(conn api.Connection) string {
+	return strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
+}
+
+func (c *modelsClient) resolveModelUUIDWithClient(client modelmanager.Client, name string, user string) (string, error) {
+	modelUUID := ""
+	modelSummaries, err := client.ListModelSummaries(user, false)
+	if err != nil {
+		return "", err
+	}
+	for _, modelSummary := range modelSummaries {
+		if modelSummary.Name == name {
+			modelUUID = modelSummary.UUID
+			break
 		}
 	}
 
-	return nil, fmt.Errorf("cannot find controller name from uuid: %s", uuid)
+	if modelUUID == "" {
+		return "", fmt.Errorf("model not found for defined user")
+	}
+
+	return modelUUID, nil
 }
 
 // GetModelByName retrieves a model by name
@@ -51,16 +75,16 @@ func (c *modelsClient) GetModelByName(name string) (*params.ModelInfo, error) {
 		return nil, err
 	}
 
+	currentUser := c.getCurrentUser(conn)
 	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
-	// TODO: remove dependency on store, see ListModelSummaries call instead
-	modelDetails, err := c.store.ModelByName(c.controllerName, name)
+	modelUUID, err := c.resolveModelUUIDWithClient(*client, name, currentUser)
 	if err != nil {
 		return nil, err
 	}
 
-	modelTag := names.NewModelTag(modelDetails.ModelUUID)
+	modelTag := names.NewModelTag(modelUUID)
 
 	results, err := client.ModelInfo([]names.ModelTag{
 		modelTag,
@@ -86,29 +110,32 @@ func (c *modelsClient) ResolveModelUUID(name string) (string, error) {
 		return "", err
 	}
 
+	currentUser := c.getCurrentUser(conn)
 	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
-	modelDetails, err := c.store.ModelByName(c.controllerName, name)
+	modelUUID, err := c.resolveModelUUIDWithClient(*client, name, currentUser)
 	if err != nil {
-		return "", err
+		return "", nil
 	}
 
-	return modelDetails.ModelUUID, nil
+	return modelUUID, nil
 }
 
-func (c *modelsClient) CreateModel(name string, controller string, cloudList []interface{}, cloudConfig map[string]interface{}) (*base.ModelInfo, error) {
+func (c *modelsClient) CreateModel(name string, cloudList []interface{}, cloudConfig map[string]interface{}) (*base.ModelInfo, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
 	}
+
+	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
 
 	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
 	cloudCredential := names.CloudCredentialTag{}
 
-	var controllerName string
+	//var controllerName string
 	var cloudName string
 	var cloudRegion string
 
@@ -118,31 +145,7 @@ func (c *modelsClient) CreateModel(name string, controller string, cloudList []i
 		cloudRegion = cloudMap["region"].(string)
 	}
 
-	if controller == "" {
-		controllerName, err = c.store.CurrentController()
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		controllerName = controller
-	}
-
-	accountDetails, err := c.store.AccountDetails(controllerName)
-	if err != nil {
-		return nil, err
-	}
-
-	modelInfo, err := client.CreateModel(name, accountDetails.User, cloudName, cloudRegion, cloudCredential, cloudConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: integrate more gracefully
-	// This updates the client filestore with the model details which is required for tests to pass
-	err = c.store.UpdateModel(controllerName, name, jujuclient.ModelDetails{
-		ModelUUID: modelInfo.UUID,
-		ModelType: modelInfo.Type,
-	})
+	modelInfo, err := client.CreateModel(name, currentUser, cloudName, cloudRegion, cloudCredential, cloudConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +183,7 @@ func (c *modelsClient) ReadModel(uuid string) (*string, *params.ModelInfo, map[s
 	}
 
 	modelInfo := models[0].Result
-	controllerName, err := c.getControllerNameByUUID(modelInfo.ControllerUUID)
+	controllerName, err := c.getControllerNameByUUID(modelmanagerConn, modelInfo.ControllerUUID)
 	if err != nil {
 		return nil, nil, nil, err
 	}
