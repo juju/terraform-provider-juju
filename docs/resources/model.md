@@ -15,7 +15,6 @@ A resource that represent a Juju Model.
 resource "juju_model" "this" {
   name = "development"
 
-  controller = "overlord"
   cloud {
     name   = "aws"
     region = "eu-west-1"
@@ -41,7 +40,6 @@ resource "juju_model" "this" {
 
 - `cloud` (Block List, Max: 1) JuJu Cloud where the model will operate (see [below for nested schema](#nestedblock--cloud))
 - `config` (Map of String) Override default model configuration.
-- `controller` (String) The name of the controller to target. Optional
 
 ### Read-Only
 

@@ -11,37 +11,47 @@ import (
 
 	"github.com/juju/juju/api/base"
 	"github.com/juju/juju/api/client/modelmanager"
-	"github.com/juju/juju/api/controller/controller"
-	"github.com/juju/juju/jujuclient"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v4"
 )
 
 type modelsClient struct {
 	ConnectionFactory
-	store          jujuclient.ClientStore // TODO: This is currently not being used, but it may be needed in future so it is being retained for now
-	controllerName string
 }
 
-func newModelsClient(cf ConnectionFactory, store jujuclient.ClientStore, controllerName string) *modelsClient {
+type CreateModelInput struct {
+	Name      string
+	CloudList []interface{}
+	Config    map[string]interface{}
+}
+
+type CreateModelResponse struct {
+	ModelInfo base.ModelInfo
+}
+
+type ReadModelInput struct {
+	UUID string
+}
+
+type ReadModelResponse struct {
+	ModelInfo   params.ModelInfo
+	ModelConfig map[string]interface{}
+}
+
+type UpdateModelInput struct {
+	UUID   string
+	Config map[string]interface{}
+	Unset  []string
+}
+
+type DestroyModelInput struct {
+	UUID string
+}
+
+func newModelsClient(cf ConnectionFactory) *modelsClient {
 	return &modelsClient{
 		ConnectionFactory: cf,
-		store:             store,
-		controllerName:    controllerName,
 	}
-}
-
-func (c *modelsClient) getControllerNameByUUID(conn api.Connection, uuid string) (*string, error) {
-	client := controller.NewClient(conn)
-	defer client.Close()
-
-	controllerConfig, err := client.ControllerConfig()
-	if err != nil {
-		return nil, fmt.Errorf("cannot find controller name from uuid: %s", uuid)
-	}
-	controllerName := controllerConfig.ControllerName()
-
-	return &controllerName, nil
 }
 
 func (c *modelsClient) getCurrentUser(conn api.Connection) string {
@@ -122,7 +132,7 @@ func (c *modelsClient) ResolveModelUUID(name string) (string, error) {
 	return modelUUID, nil
 }
 
-func (c *modelsClient) CreateModel(name string, cloudList []interface{}, cloudConfig map[string]interface{}) (*base.ModelInfo, error) {
+func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -135,33 +145,32 @@ func (c *modelsClient) CreateModel(name string, cloudList []interface{}, cloudCo
 
 	cloudCredential := names.CloudCredentialTag{}
 
-	//var controllerName string
 	var cloudName string
 	var cloudRegion string
 
-	for _, cloud := range cloudList {
+	for _, cloud := range input.CloudList {
 		cloudMap := cloud.(map[string]interface{})
 		cloudName = cloudMap["name"].(string)
 		cloudRegion = cloudMap["region"].(string)
 	}
 
-	modelInfo, err := client.CreateModel(name, currentUser, cloudName, cloudRegion, cloudCredential, cloudConfig)
+	modelInfo, err := client.CreateModel(input.Name, currentUser, cloudName, cloudRegion, cloudCredential, input.Config)
 	if err != nil {
 		return nil, err
 	}
 
-	return &modelInfo, nil
+	return &CreateModelResponse{ModelInfo: modelInfo}, nil
 }
 
-func (c *modelsClient) ReadModel(uuid string) (*string, *params.ModelInfo, map[string]interface{}, error) {
+func (c *modelsClient) ReadModel(uuid string) (*ReadModelResponse, error) {
 	modelmanagerConn, err := c.GetConnection(nil)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	modelconfigConn, err := c.GetConnection(&uuid)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	modelmanagerClient := modelmanager.NewClient(modelmanagerConn)
@@ -172,32 +181,31 @@ func (c *modelsClient) ReadModel(uuid string) (*string, *params.ModelInfo, map[s
 
 	models, err := modelmanagerClient.ModelInfo([]names.ModelTag{names.NewModelTag(uuid)})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	if len(models) > 1 {
-		return nil, nil, nil, fmt.Errorf("more than one model returned for UUID: %s", uuid)
+		return nil, fmt.Errorf("more than one model returned for UUID: %s", uuid)
 	}
 	if len(models) < 1 {
-		return nil, nil, nil, fmt.Errorf("no model returned for UUID: %s", uuid)
+		return nil, fmt.Errorf("no model returned for UUID: %s", uuid)
 	}
 
-	modelInfo := models[0].Result
-	controllerName, err := c.getControllerNameByUUID(modelmanagerConn, modelInfo.ControllerUUID)
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	modelInfo := *models[0].Result
 
 	modelConfig, err := modelconfigClient.ModelGet()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	return controllerName, modelInfo, modelConfig, nil
+	return &ReadModelResponse{
+		ModelInfo:   modelInfo,
+		ModelConfig: modelConfig,
+	}, nil
 }
 
-func (c *modelsClient) UpdateModel(uuid string, config map[string]interface{}, unset []string) error {
-	conn, err := c.GetConnection(&uuid)
+func (c *modelsClient) UpdateModel(input UpdateModelInput) error {
+	conn, err := c.GetConnection(&input.UUID)
 	if err != nil {
 		return err
 	}
@@ -205,12 +213,12 @@ func (c *modelsClient) UpdateModel(uuid string, config map[string]interface{}, u
 	client := modelconfig.NewClient(conn)
 	defer client.Close()
 
-	err = client.ModelSet(config)
+	err = client.ModelSet(input.Config)
 	if err != nil {
 		return err
 	}
 
-	err = client.ModelUnset(unset...)
+	err = client.ModelUnset(input.Unset...)
 	if err != nil {
 		return err
 	}
@@ -218,7 +226,7 @@ func (c *modelsClient) UpdateModel(uuid string, config map[string]interface{}, u
 	return nil
 }
 
-func (c *modelsClient) DestroyModel(uuid string) error {
+func (c *modelsClient) DestroyModel(input DestroyModelInput) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return err
@@ -230,7 +238,7 @@ func (c *modelsClient) DestroyModel(uuid string) error {
 	maxWait := 10 * time.Minute
 	timeout := 30 * time.Minute
 
-	tag := names.NewModelTag(uuid)
+	tag := names.NewModelTag(input.UUID)
 
 	destroyStorage := true
 	forceDestroy := false

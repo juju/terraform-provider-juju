@@ -5,8 +5,6 @@ import (
 
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/connector"
-	"github.com/juju/juju/cmd/modelcmd"
-	"github.com/juju/juju/jujuclient"
 )
 
 const (
@@ -40,18 +38,8 @@ func NewClient(config Configuration) (*Client, error) {
 		config: config,
 	}
 
-	var store jujuclient.ClientStore = modelcmd.QualifyingClientStore{
-		ClientStore: jujuclient.NewFileClientStore(),
-	}
-
-	// TODO: should the controller be part of the provider configuration?
-	controllerName, err := store.CurrentController()
-	if err != nil {
-		return nil, err
-	}
-
 	return &Client{
-		Models:       *newModelsClient(cf, store, controllerName),
+		Models:       *newModelsClient(cf),
 		Applications: *newApplicationClient(cf),
 		Integrations: *newIntegrationsClient(cf),
 	}, nil
