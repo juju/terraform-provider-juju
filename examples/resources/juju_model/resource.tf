@@ -1,7 +1,6 @@
 resource "juju_model" "this" {
   name = "development"
 
-  controller = "overlord"
   cloud {
     name   = "aws"
     region = "eu-west-1"

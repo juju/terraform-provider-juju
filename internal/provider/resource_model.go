@@ -30,13 +30,6 @@ func resourceModel() *schema.Resource {
 				Required:    true,
 				ForceNew:    true,
 			},
-			"controller": {
-				Description: "The name of the controller to target. Optional",
-				Type:        schema.TypeString,
-				Optional:    true,
-				Computed:    true,
-				ForceNew:    true,
-			},
 			"cloud": {
 				Description: "JuJu Cloud where the model will operate",
 				Type:        schema.TypeList,
@@ -82,15 +75,19 @@ func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta inter
 	cloud := d.Get("cloud").([]interface{})
 	config := d.Get("config").(map[string]interface{})
 
-	modelInfo, err := client.Models.CreateModel(name, cloud, config)
+	response, err := client.Models.CreateModel(juju.CreateModelInput{
+		Name:      name,
+		CloudList: cloud,
+		Config:    config,
+	})
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	// TODO: If controller and / or cloud are blank, we should set them to the default (returned in modelInfo)
+	// TODO: If cloud is blank, we should set it to the default (returned in modelInfo)
 	// TODO: Should config track all key=value or just those explicitly set?
 
-	d.SetId(modelInfo.UUID)
+	d.SetId(response.ModelInfo.UUID)
 
 	return diags
 }
@@ -101,33 +98,30 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 	var diags diag.Diagnostics
 
 	uuid := d.Id()
-	controllerName, modelInfo, modelConfig, err := client.Models.ReadModel(uuid)
+	response, err := client.Models.ReadModel(uuid)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
 	cloudList := []map[string]interface{}{{
-		"name":   strings.TrimPrefix(modelInfo.CloudTag, juju.PrefixCloud),
-		"region": modelInfo.CloudRegion},
+		"name":   strings.TrimPrefix(response.ModelInfo.CloudTag, juju.PrefixCloud),
+		"region": response.ModelInfo.CloudRegion},
 	}
 
-	if err := d.Set("name", modelInfo.Name); err != nil {
-		return diag.FromErr(err)
-	}
-	if err := d.Set("controller", controllerName); err != nil {
+	if err := d.Set("name", response.ModelInfo.Name); err != nil {
 		return diag.FromErr(err)
 	}
 	if err := d.Set("cloud", cloudList); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("type", modelInfo.Type); err != nil {
+	if err := d.Set("type", response.ModelInfo.Type); err != nil {
 		return diag.FromErr(err)
 	}
 
 	// Only read model config that is tracked in Terraform
 	config := d.Get("config").(map[string]interface{})
 	for k := range config {
-		if value, exists := modelConfig[k]; exists {
+		if value, exists := response.ModelConfig[k]; exists {
 			var serialised string
 			switch value.(type) {
 			// TODO: review for other possible types
@@ -170,7 +164,11 @@ func resourceModelUpdate(ctx context.Context, d *schema.ResourceData, meta inter
 			}
 		}
 
-		err := client.Models.UpdateModel(modelUUID, newConfigMap, unsetConfigKeys)
+		err := client.Models.UpdateModel(juju.UpdateModelInput{
+			UUID:   modelUUID,
+			Config: newConfigMap,
+			Unset:  unsetConfigKeys,
+		})
 		if err != nil {
 			return diag.FromErr(err)
 		}
@@ -188,7 +186,9 @@ func resourceModelDelete(ctx context.Context, d *schema.ResourceData, meta inter
 
 	modelUUID := d.Id()
 
-	err := client.Models.DestroyModel(modelUUID)
+	err := client.Models.DestroyModel(juju.DestroyModelInput{
+		UUID: modelUUID,
+	})
 	if err != nil {
 		return diag.FromErr(err)
 	}
