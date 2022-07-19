@@ -12,12 +12,16 @@ type offersClient struct {
 	ConnectionFactory
 }
 
-type OfferInput struct {
+type CreateOfferInput struct {
 	ModelName       string
 	ModelUUID       string
 	Name            string
 	ApplicationName string
 	Endpoint        string
+}
+
+type DestroyOfferInput struct {
+	OfferURL string
 }
 
 type OfferResponse struct {
@@ -30,7 +34,7 @@ func newOffersClient(cf ConnectionFactory) *offersClient {
 	}
 }
 
-func (c offersClient) CreateOffer(input *OfferInput) (*OfferResponse, []error) {
+func (c offersClient) CreateOffer(input *CreateOfferInput) (*OfferResponse, []error) {
 	var errs []error
 
 	conn, err := c.GetConnection(nil)
@@ -77,6 +81,25 @@ func (c offersClient) CreateOffer(input *OfferInput) (*OfferResponse, []error) {
 		OfferURL: offer.OfferURL,
 	}
 	return &resp, nil
+}
+
+func (c offersClient) DestroyOffer(input *DestroyOfferInput) error {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+
+	client := applicationoffers.NewClient(conn)
+	defer client.Close()
+
+	//TODO: verify destruction after attaching
+	forceDestroy := false
+	err = client.DestroyOffers(forceDestroy, input.OfferURL)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func findApplicationOffers(client *applicationoffers.Client, filter crossmodel.ApplicationOfferFilter) (*crossmodel.ApplicationOfferDetails, error) {

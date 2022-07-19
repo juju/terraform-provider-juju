@@ -62,7 +62,7 @@ func resourceOfferCreate(ctx context.Context, d *schema.ResourceData, meta inter
 		return diag.FromErr(err)
 	}
 
-	result, errs := client.Offers.CreateOffer(&juju.OfferInput{
+	result, errs := client.Offers.CreateOffer(&juju.CreateOfferInput{
 		ModelName:       modelName,
 		ModelUUID:       modelUUID,
 		Name:            d.Get("name").(string),
@@ -96,6 +96,18 @@ func resourceOfferRead(ctx context.Context, d *schema.ResourceData, meta interfa
 }
 
 func resourceOfferDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
-	return diag.Errorf("not implemented")
+	client := meta.(*juju.Client)
+
+	var diags diag.Diagnostics
+
+	err := client.Offers.DestroyOffer(&juju.DestroyOfferInput{
+		OfferURL: d.Get("url").(string),
+	})
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	d.SetId("")
+
+	return diags
 }
