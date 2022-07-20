@@ -13,18 +13,19 @@ type offersClient struct {
 }
 
 type CreateOfferInput struct {
+	ApplicationName string
+	Endpoint        string
 	ModelName       string
 	ModelUUID       string
 	Name            string
-	ApplicationName string
-	Endpoint        string
 }
 
-type DestroyOfferInput struct {
+type CreateOfferResponse struct {
+	Name     string
 	OfferURL string
 }
 
-type OfferResponse struct {
+type DestroyOfferInput struct {
 	OfferURL string
 }
 
@@ -34,7 +35,7 @@ func newOffersClient(cf ConnectionFactory) *offersClient {
 	}
 }
 
-func (c offersClient) CreateOffer(input *CreateOfferInput) (*OfferResponse, []error) {
+func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse, []error) {
 	var errs []error
 
 	conn, err := c.GetConnection(nil)
@@ -77,7 +78,8 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*OfferResponse, []er
 		return nil, append(errs, err)
 	}
 
-	resp := OfferResponse{
+	resp := CreateOfferResponse{
+		Name:     offer.OfferName,
 		OfferURL: offer.OfferURL,
 	}
 	return &resp, nil

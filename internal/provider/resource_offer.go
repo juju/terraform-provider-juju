@@ -62,10 +62,19 @@ func resourceOfferCreate(ctx context.Context, d *schema.ResourceData, meta inter
 		return diag.FromErr(err)
 	}
 
+	//here we verify if the name property is set, if not set to the application name
+	var offerName string
+	name, ok := d.GetOk("Name")
+	if ok {
+		offerName = name.(string)
+	} else {
+		offerName = d.Get("application_name").(string)
+	}
+
 	result, errs := client.Offers.CreateOffer(&juju.CreateOfferInput{
 		ModelName:       modelName,
 		ModelUUID:       modelUUID,
-		Name:            d.Get("name").(string),
+		Name:            offerName,
 		ApplicationName: d.Get("application_name").(string),
 		Endpoint:        d.Get("endpoint").(string),
 	})
@@ -80,6 +89,10 @@ func resourceOfferCreate(ctx context.Context, d *schema.ResourceData, meta inter
 		}
 	}
 
+	//in case the name was unset by user we make sure it's set here
+	if err = d.Set("name", result.Name); err != nil {
+		return diag.FromErr(err)
+	}
 	if err = d.Set("url", result.OfferURL); err != nil {
 		return diag.FromErr(err)
 	}
