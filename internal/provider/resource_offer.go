@@ -64,7 +64,7 @@ func resourceOfferCreate(ctx context.Context, d *schema.ResourceData, meta inter
 
 	//here we verify if the name property is set, if not set to the application name
 	var offerName string
-	name, ok := d.GetOk("Name")
+	name, ok := d.GetOk("name")
 	if ok {
 		offerName = name.(string)
 	} else {
