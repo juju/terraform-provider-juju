@@ -1,0 +1,82 @@
+# Terraform Provider testing workflow.
+name: Canary Build & Test
+
+# This GitHub action runs your tests for each pull request.
+on:
+  schedule:
+    - cron: "0 0 * * *"  # Run at 12AM UTC, every day
+
+# Testing only needs permissions to read the repository contents.
+permissions:
+  contents: read
+
+jobs:
+  # Ensure project builds before running testing matrix
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: pozetroninc/github-action-get-latest-release@v0.5.0
+        id: get_release
+        with:
+          repository: juju/juju
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - run: go get -v -u github.com/juju/juju@${{ steps.get_release.outputs.release }}
+      - run: go mod tidy -go 1.16
+      - run: go mod tidy -go 1.18
+      - run: go build -v .
+
+  # Run acceptance tests in a matrix with Terraform CLI versions
+  test:
+    name: Terraform Provider Acceptance Tests
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        terraform:
+          - "0.15.*"
+          - "1.0.*"
+          - "1.1.*"
+          - "1.2.*"
+
+    steps:
+      - uses: pozetroninc/github-action-get-latest-release@v0.5.0
+        id: get_release
+        with:
+          repository: juju/juju
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ matrix.terraform }}
+          terraform_wrapper: false
+      - uses: ./.github/actions/setup-juju
+      - name: "Set environment to configure provider"
+        # language=bash
+        run: |
+          CONTROLLER=$(juju whoami --format yaml | yq .controller)
+
+          echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq -o=json .$CONTROLLER.details.api-endpoints | jq -r '. | join(",")')" >> $GITHUB_ENV
+          echo "JUJU_USERNAME=$(juju show-controller | yq .$CONTROLLER.account.user)"  >> $GITHUB_ENV
+          echo "JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password)"  >> $GITHUB_ENV
+          echo "JUJU_CA_CERT<<EOF" >> $GITHUB_ENV
+          juju show-controller | yq .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+      - run: go get -v -u github.com/juju/juju@${{ steps.get_release.outputs.release }}
+      - run: go mod tidy -go 1.16
+      - run: go mod tidy -go 1.18
+      - env:
+          TF_ACC: "1"
+        run: go test -v -cover ./internal/provider/
+        timeout-minutes: 10
