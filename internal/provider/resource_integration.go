@@ -72,7 +72,7 @@ func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta
 		return diag.FromErr(err)
 	}
 
-	resultEndpoints, err := client.Integrations.CreateIntegration(&juju.IntegrationInput{
+	response, err := client.Integrations.CreateIntegration(&juju.IntegrationInput{
 		ModelUUID: modelUUID,
 		Endpoints: endpoints,
 	})
@@ -82,14 +82,14 @@ func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta
 
 	applications := []map[string]interface{}{}
 
-	for key, val := range resultEndpoints {
+	for key, val := range response.Endpoints {
 		applications = append(applications, map[string]interface{}{
 			"name":     key,
 			"endpoint": val.Name,
 		})
 	}
 
-	id := generateID(modelName, resultEndpoints)
+	id := generateID(modelName, response.Endpoints)
 	if err := d.Set("application", applications); err != nil {
 		return diag.FromErr(err)
 	}
@@ -119,14 +119,14 @@ func resourceIntegrationRead(ctx context.Context, d *schema.ResourceData, meta i
 		},
 	}
 
-	integrations, err := client.Integrations.ReadIntegration(int)
+	response, err := client.Integrations.ReadIntegration(int)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
 	applications := []map[string]interface{}{}
 
-	for _, ep := range integrations.Endpoints {
+	for _, ep := range response.EndpointStatuses {
 		applications = append(applications, map[string]interface{}{
 			"name":     ep.ApplicationName,
 			"endpoint": ep.Name,
@@ -175,21 +175,21 @@ func resourceIntegrationUpdate(ctx context.Context, d *schema.ResourceData, meta
 		OldEndpoints: oldEndpoints,
 	}
 
-	resultEndpoints, err := client.Integrations.UpdateIntegration(input)
+	response, err := client.Integrations.UpdateIntegration(input)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
 	applications := []map[string]interface{}{}
 
-	for key, val := range resultEndpoints {
+	for key, val := range response.Endpoints {
 		applications = append(applications, map[string]interface{}{
 			"name":     key,
 			"endpoint": val.Name,
 		})
 	}
 
-	id := generateID(modelName, resultEndpoints)
+	id := generateID(modelName, response.Endpoints)
 	if err := d.Set("application", applications); err != nil {
 		return diag.FromErr(err)
 	}
