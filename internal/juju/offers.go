@@ -2,6 +2,7 @@ package juju
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/juju/juju/api/client/applicationoffers"
 	"github.com/juju/juju/core/crossmodel"
@@ -23,6 +24,18 @@ type CreateOfferInput struct {
 type CreateOfferResponse struct {
 	Name     string
 	OfferURL string
+}
+
+type ReadOfferInput struct {
+	OfferURL string
+}
+
+type ReadOfferResponse struct {
+	ApplicationName string
+	Endpoint        string
+	ModelName       string
+	Name            string
+	OfferURL        string
 }
 
 type DestroyOfferInput struct {
@@ -85,6 +98,37 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 	return &resp, nil
 }
 
+func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, error) {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	client := applicationoffers.NewClient(conn)
+	defer client.Close()
+
+	result, err := client.ApplicationOffer(input.OfferURL)
+	if err != nil {
+		return nil, err
+	}
+
+	var response ReadOfferResponse
+	response.Name = result.OfferName
+	response.ApplicationName = result.ApplicationName
+	response.OfferURL = result.OfferURL
+	response.Endpoint = result.Endpoints[0].Name
+
+	//no model name is returned but it can be parsed from the resulting offer URL to ensure parity
+	//TODO: verify if we can fetch information another way
+	modelName, ok := parseModelFromURL(result.OfferURL)
+	if !ok {
+		return nil, fmt.Errorf("unable to parse model name from offer URL")
+	}
+	response.ModelName = modelName
+
+	return &response, nil
+}
+
 func (c offersClient) DestroyOffer(input *DestroyOfferInput) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
@@ -115,4 +159,18 @@ func findApplicationOffers(client *applicationoffers.Client, filter crossmodel.A
 	}
 
 	return offers[0], nil
+}
+
+func parseModelFromURL(url string) (result string, success bool) {
+	start := strings.Index(url, "/")
+	if start == -1 {
+		return result, false
+	}
+	newURL := url[start+1:]
+	end := strings.Index(newURL, ".")
+	if end == -1 {
+		return result, false
+	}
+	result = newURL[:end]
+	return result, true
 }
