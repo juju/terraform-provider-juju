@@ -45,6 +45,20 @@ type DestroyOfferInput struct {
 	OfferURL string
 }
 
+type ConsumeRemoteOfferInput struct {
+	ModelUUID string
+	OfferURL  string
+}
+
+type ConsumeRemoteOfferResponse struct {
+	SAASName string
+}
+
+type RemoveRemoteOfferInput struct {
+	ModelUUID string
+	OfferURL  string
+}
+
 func newOffersClient(cf ConnectionFactory) *offersClient {
 	return &offersClient{
 		ConnectionFactory: cf,
@@ -179,7 +193,7 @@ func parseModelFromURL(url string) (result string, success bool) {
 }
 
 //This function allows the integration resource to consume the offers managed by the offer resource
-func (c offersClient) ConsumeRemoteOffer(input *ConsumeOfferInput) (*ConsumeOfferResponse, error) {
+func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*ConsumeRemoteOfferResponse, error) {
 	modelConn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -238,7 +252,7 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeOfferInput) (*ConsumeOffe
 		return nil, err
 	}
 
-	response := ConsumeOfferResponse{
+	response := ConsumeRemoteOfferResponse{
 		SAASName: localName,
 	}
 
@@ -246,7 +260,7 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeOfferInput) (*ConsumeOffe
 }
 
 //This function allows the integration resource to destroy the offers managed by the offer resource
-func (c offersClient) RemoveRemoteOffer(input *RemoveOfferInput) []error {
+func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 	var errors []error
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {

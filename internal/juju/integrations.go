@@ -39,20 +39,6 @@ type ReadIntegrationResponse struct {
 	Applications []Application
 }
 
-type ConsumeOfferInput struct {
-	ModelUUID string
-	OfferURL  string
-}
-
-type ConsumeOfferResponse struct {
-	SAASName string
-}
-
-type RemoveOfferInput struct {
-	ModelUUID string
-	OfferURL  string
-}
-
 type UpdateIntegrationResponse struct {
 	Applications []Application
 }
@@ -62,14 +48,6 @@ type UpdateIntegrationInput struct {
 	ID           string
 	Endpoints    []string
 	OldEndpoints []string
-}
-
-type IntegrationResponse struct {
-	Endpoints map[string]params.CharmRelation
-}
-
-type ReadIntegrationResponse struct {
-	EndpointStatuses []params.EndpointStatus
 }
 
 func newIntegrationsClient(cf ConnectionFactory) *integrationsClient {

@@ -78,9 +78,9 @@ func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta
 	if len(endpoints) == 0 {
 		return diag.Errorf("you must provide at least one local application")
 	}
-	var offerResponse = &juju.ConsumeOfferResponse{}
+	var offerResponse = &juju.ConsumeRemoteOfferResponse{}
 	if offerURL != nil {
-		offerResponse, err = client.Offers.ConsumeRemoteOffer(&juju.ConsumeOfferInput{
+		offerResponse, err = client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
 			ModelUUID: modelUUID,
 			OfferURL:  *offerURL,
 		})
@@ -177,12 +177,12 @@ func resourceIntegrationUpdate(ctx context.Context, d *schema.ResourceData, meta
 		}
 	}
 
-	var offerResponse *juju.ConsumeOfferResponse
+	var offerResponse *juju.ConsumeRemoteOfferResponse
 	//check if the offer url is present and is not the same as before the change
 	if oldOfferURL != offerURL && !(oldOfferURL == nil && offerURL == nil) {
 		if oldOfferURL != nil {
 			//destroy old offer
-			errs := client.Offers.RemoveRemoteOffer(&juju.RemoveOfferInput{
+			errs := client.Offers.RemoveRemoteOffer(&juju.RemoveRemoteOfferInput{
 				ModelUUID: modelUUID,
 				OfferURL:  *oldOfferURL,
 			})
@@ -194,7 +194,7 @@ func resourceIntegrationUpdate(ctx context.Context, d *schema.ResourceData, meta
 			}
 		}
 		if offerURL != nil {
-			offerResponse, err = client.Offers.ConsumeRemoteOffer(&juju.ConsumeOfferInput{
+			offerResponse, err = client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
 				ModelUUID: modelUUID,
 				OfferURL:  *offerURL,
 			})
@@ -247,7 +247,7 @@ func resourceIntegrationDelete(ctx context.Context, d *schema.ResourceData, meta
 
 	//If one of the endpoints is an offer then we need to remove the remote offer rather than destroying the integration
 	if offer != nil {
-		errs := client.Offers.RemoveRemoteOffer(&juju.RemoveOfferInput{
+		errs := client.Offers.RemoveRemoteOffer(&juju.RemoveRemoteOfferInput{
 			ModelUUID: modelUUID,
 			OfferURL:  *offer,
 		})
