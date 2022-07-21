@@ -237,10 +237,7 @@ func parseApplications(remoteApplications map[string]params.RemoteApplicationSta
 	case []params.EndpointStatus:
 		if len(remoteApplications) != 0 {
 			for index, endpoint := range endpoints {
-				for key, remote := range remoteApplications {
-					if endpoint.ApplicationName != key {
-						continue
-					}
+				if remote, exists := remoteApplications[endpoint.ApplicationName]; exists {
 					a := Application{
 						Name:     endpoint.ApplicationName,
 						Endpoint: endpoint.Name,
@@ -266,10 +263,7 @@ func parseApplications(remoteApplications map[string]params.RemoteApplicationSta
 	case map[string]params.CharmRelation:
 		if len(remoteApplications) != 0 {
 			for index, endpoint := range endpoints {
-				for key, remote := range remoteApplications {
-					if index != key {
-						continue
-					}
+				if remote, exists := remoteApplications[index]; exists {
 					a := Application{
 						Name:     index,
 						Endpoint: endpoint.Name,
