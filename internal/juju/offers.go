@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	apiapplication "github.com/juju/juju/api/client/application"
 	"github.com/juju/juju/api/client/applicationoffers"
+	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/core/crossmodel"
 	"github.com/juju/juju/rpc/params"
+	"github.com/juju/names/v4"
 )
 
 type offersClient struct {
@@ -173,4 +176,133 @@ func parseModelFromURL(url string) (result string, success bool) {
 	}
 	result = newURL[:end]
 	return result, true
+}
+
+//This function allows the integration resource to consume the offers managed by the offer resource
+func (c offersClient) ConsumeRemoteOffer(input *ConsumeOfferInput) (*ConsumeOfferResponse, error) {
+	modelConn, err := c.GetConnection(&input.ModelUUID)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	offersClient := applicationoffers.NewClient(conn)
+	defer offersClient.Close()
+	client := apiapplication.NewClient(modelConn)
+	defer client.Close()
+
+	url, err := crossmodel.ParseOfferURL(input.OfferURL)
+	if err != nil {
+		return nil, err
+	}
+
+	if url.HasEndpoint() {
+		return nil, fmt.Errorf("saas offer %q shouldn't include endpoint", input.OfferURL)
+	}
+
+	consumeDetails, err := offersClient.GetConsumeDetails(url.AsLocal().String())
+	if err != nil {
+		return nil, err
+	}
+
+	offerURL, err := crossmodel.ParseOfferURL(consumeDetails.Offer.OfferURL)
+	if err != nil {
+		return nil, err
+	}
+	offerURL.Source = url.Source
+	consumeDetails.Offer.OfferURL = offerURL.String()
+
+	consumeArgs := crossmodel.ConsumeApplicationArgs{
+		Offer:            *consumeDetails.Offer,
+		ApplicationAlias: consumeDetails.Offer.OfferName,
+		Macaroon:         consumeDetails.Macaroon,
+	}
+	if consumeDetails.ControllerInfo != nil {
+		controllerTag, err := names.ParseControllerTag(consumeDetails.ControllerInfo.ControllerTag)
+		if err != nil {
+			return nil, err
+		}
+		consumeArgs.ControllerInfo = &crossmodel.ControllerInfo{
+			ControllerTag: controllerTag,
+			Alias:         consumeDetails.ControllerInfo.Alias,
+			Addrs:         consumeDetails.ControllerInfo.Addrs,
+			CACert:        consumeDetails.ControllerInfo.CACert,
+		}
+	}
+
+	localName, err := client.Consume(consumeArgs)
+	if err != nil {
+		return nil, err
+	}
+
+	response := ConsumeOfferResponse{
+		SAASName: localName,
+	}
+
+	return &response, nil
+}
+
+//This function allows the integration resource to destroy the offers managed by the offer resource
+func (c offersClient) RemoveRemoteOffer(input *RemoveOfferInput) []error {
+	var errors []error
+	conn, err := c.GetConnection(&input.ModelUUID)
+	if err != nil {
+		errors = append(errors, err)
+		return errors
+	}
+
+	client := apiapplication.NewClient(conn)
+	defer client.Close()
+	clientAPIClient := apiclient.NewClient(conn)
+	defer clientAPIClient.Close()
+
+	status, err := clientAPIClient.Status(nil)
+	if err != nil {
+		errors = append(errors, err)
+		return errors
+	}
+
+	remoteApplications := status.RemoteApplications
+
+	if len(remoteApplications) == 0 {
+		errors = append(errors, fmt.Errorf("no offers found in model"))
+		return errors
+	}
+
+	var offerName string
+	for _, v := range remoteApplications {
+		if v.Err != nil {
+			errors = append(errors, v.Err)
+			return errors
+		}
+		if v.OfferURL != input.OfferURL {
+			continue
+		}
+		offerName = v.OfferName
+	}
+
+	returnErrors, err := client.DestroyConsumedApplication(apiapplication.DestroyConsumedApplicationParams{
+		SaasNames: []string{
+			offerName,
+		},
+	})
+	if err != nil {
+		errors = append(errors, err)
+		return errors
+	}
+
+	for _, v := range returnErrors {
+		if v.Error != nil {
+			errors = append(errors, v.Error)
+		}
+	}
+
+	if len(errors) > 0 {
+		return errors
+	}
+
+	return nil
 }
