@@ -1,13 +1,13 @@
 resource "juju_integration" "this" {
-  model = "development"
+  model = juju_model.development.name
 
   application {
-    name     = "wordpress"
+    name     = juju_application.wordpress.name
     endpoint = "db"
   }
 
   application {
-    name     = "percona-cluster"
+    name     = juju_application.percona-cluster.name
     endpoint = "server"
   }
 }

@@ -34,7 +34,11 @@ The intention is to remove this dependency in future.
 {{ if .HasExample -}}
 ## Example Usage
 
+Terraform 0.13 and later:
 {{tffile "examples/provider/provider.tf"}}
+
+Terraform 0.12 and earlier:
+{{tffile "examples/provider/provider_0.12.tf"}}
 {{- end }}
 
 {{ .SchemaMarkdown | trimspace }}
