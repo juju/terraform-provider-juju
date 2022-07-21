@@ -26,13 +26,21 @@ type UpdateIntegrationInput struct {
 	OldEndpoints []string
 }
 
+type IntegrationResponse struct {
+	Endpoints map[string]params.CharmRelation
+}
+
+type ReadIntegrationResponse struct {
+	EndpointStatuses []params.EndpointStatus
+}
+
 func newIntegrationsClient(cf ConnectionFactory) *integrationsClient {
 	return &integrationsClient{
 		ConnectionFactory: cf,
 	}
 }
 
-func (c integrationsClient) CreateIntegration(input *IntegrationInput) (map[string]params.CharmRelation, error) {
+func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*IntegrationResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -49,34 +57,10 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (map[stri
 		return nil, err
 	}
 
-	return response.Endpoints, nil
+	return &IntegrationResponse{Endpoints: response.Endpoints}, nil
 }
 
-func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
-	if err != nil {
-		return err
-	}
-
-	client := apiapplication.NewClient(conn)
-	defer client.Close()
-
-	var force bool = false
-	var timeout time.Duration = 30 * time.Second
-
-	err = client.DestroyRelation(
-		&force,
-		&timeout,
-		input.Endpoints...,
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*params.RelationStatus, error) {
+func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadIntegrationResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -134,10 +118,10 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*params.Re
 		return nil, fmt.Errorf("relation not found in model")
 	}
 
-	return &relation, nil
+	return &ReadIntegrationResponse{EndpointStatuses: relation.Endpoints}, nil
 }
 
-func (c integrationsClient) UpdateIntegration(input *UpdateIntegrationInput) (map[string]params.CharmRelation, error) {
+func (c integrationsClient) UpdateIntegration(input *UpdateIntegrationInput) (*IntegrationResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -169,5 +153,29 @@ func (c integrationsClient) UpdateIntegration(input *UpdateIntegrationInput) (ma
 
 	//TODO: check deletion success and force?
 
-	return response.Endpoints, nil
+	return &IntegrationResponse{Endpoints: response.Endpoints}, nil
+}
+
+func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
+	conn, err := c.GetConnection(&input.ModelUUID)
+	if err != nil {
+		return err
+	}
+
+	client := apiapplication.NewClient(conn)
+	defer client.Close()
+
+	var force bool = false
+	var timeout time.Duration = 30 * time.Second
+
+	err = client.DestroyRelation(
+		&force,
+		&timeout,
+		input.Endpoints...,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
