@@ -10,6 +10,7 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
+//Currently offers are handled as a part of the integration resource in order to have parity with the CLI. An alternative considered was to create a resource specifically for managing cross model integrations.
 func resourceIntegration() *schema.Resource {
 	return &schema.Resource{
 		Description: "A resource that represents a Juju Integration.",
@@ -319,7 +320,7 @@ func parseEndpoints(apps []interface{}) (endpoints []string, offer *string, err 
 
 		//Here we check if the endpoint is empty and pass just the application name, this allows juju to attempt to infer endpoints
 		//If the endpoint is specified we pass the format <applicationName>:<endpoint>
-		//first check if we have an offer_url
+		//first check if we have an offer_url, in this case don't return the endpoint
 		if offerURL != "" {
 			offer = &offerURL
 			continue

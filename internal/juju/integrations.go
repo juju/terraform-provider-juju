@@ -1,3 +1,5 @@
+//In comments and in code we refer to integrations which are known in juju 2.x as relations.
+//calls to the upstream juju client currently reference relations
 package juju
 
 import (
@@ -73,7 +75,7 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 		return nil, err
 	}
 
-	//relation is created - fetch the status in order to validate
+	//integration is created - fetch the status in order to validate
 	status, err := getStatus(conn)
 	if err != nil {
 		return nil, err
@@ -100,10 +102,10 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 		return nil, err
 	}
 
-	relations := status.Relations
-	var relation params.RelationStatus
-	if len(relations) == 0 {
-		return nil, fmt.Errorf("no relations exist in specified model")
+	integrations := status.Relations
+	var integration params.RelationStatus
+	if len(integrations) == 0 {
+		return nil, fmt.Errorf("no integrations exist in specified model")
 	}
 
 	apps := make([][]string, 0, len(input.Endpoints))
@@ -115,30 +117,30 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 		})
 	}
 	// the key is built assuming that the ID is "<provider>:<endpoint> <requirer>:<endpoint>"
-	// the relations that come back from status have the key formatted as "<requirer>:<endpoint> <provider>:<endpoint>"
+	// the integrations that come back from status have the key formatted as "<requirer>:<endpoint> <provider>:<endpoint>"
 	key := fmt.Sprintf("%v:%v %v:%v", apps[1][0], apps[1][1], apps[0][0], apps[0][1])
 
-	for _, v := range relations {
+	for _, v := range integrations {
 		if v.Key == key {
-			relation = v
+			integration = v
 			break
 		}
 	}
 
-	if relation.Id == 0 && relation.Key == "" {
+	if integration.Id == 0 && integration.Key == "" {
 		keyReversed := fmt.Sprintf("%v:%v %v:%v", apps[1][0], apps[1][1], apps[0][0], apps[0][1])
-		for _, v := range relations {
+		for _, v := range integrations {
 			if v.Key == keyReversed {
 				return nil, fmt.Errorf("check the endpoint order in your ID")
 			}
 		}
 	}
 
-	if relation.Id == 0 && relation.Key == "" {
-		return nil, fmt.Errorf("relation not found in model")
+	if integration.Id == 0 && integration.Key == "" {
+		return nil, fmt.Errorf("integration not found in model")
 	}
 
-	applications := parseApplications(status.RemoteApplications, relation.Endpoints)
+	applications := parseApplications(status.RemoteApplications, integration.Endpoints)
 
 	return &ReadIntegrationResponse{
 		Applications: applications,
@@ -164,8 +166,8 @@ func (c integrationsClient) UpdateIntegration(input *UpdateIntegrationInput) (*U
 
 	//TODO: check integration status
 
-	//If the length of this slice is only 1 then the relation has already been destroyed by the remote offer being removed
-	//If the length is 2 we need to destroy the relation
+	//If the length of this slice is only 1 then the integration has already been destroyed by the remote offer being removed
+	//If the length is 2 we need to destroy the integration
 	if len(input.OldEndpoints) == 2 {
 		var force bool = false
 		var timeout time.Duration = 30 * time.Second
@@ -181,7 +183,7 @@ func (c integrationsClient) UpdateIntegration(input *UpdateIntegrationInput) (*U
 
 	//TODO: check deletion success and force?
 
-	//relation is updated - fetch the status in order to validate
+	//integration is updated - fetch the status in order to validate
 	status, err := getStatus(conn)
 	if err != nil {
 		return nil, err
