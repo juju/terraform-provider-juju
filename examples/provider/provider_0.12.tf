@@ -1,13 +1,6 @@
-terraform {
-  required_providers {
-    juju = {
-      version = "~> 0.3.1"
-      source  = "juju/juju"
-    }
-  }
-}
-
 provider "juju" {
+  version = "~> 0.3.1"
+
   controller_addresses = "10.225.205.241:17070,10.225.205.242:17070"
 
   username = "jujuuser"
