@@ -43,13 +43,11 @@ resource "juju_integration" "this" {
 <a id="nestedblock--application"></a>
 ### Nested Schema for `application`
 
-Required:
-
-- `name` (String) The name of the application.
-
 Optional:
 
 - `endpoint` (String) The endpoint name.
+- `name` (String) The name of the application.
+- `offer_url` (String) The URL of a remote application.
 
 ## Import
 
