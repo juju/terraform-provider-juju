@@ -38,20 +38,20 @@ func resourceIntegration() *schema.Resource {
 				MinItems:    2,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"name": &schema.Schema{
+						"name": {
 							Description: "The name of the application.",
-							Type:        schema.TypeString,
-							Optional:    true,
-						},
-						"offer_url": &schema.Schema{
-							Description: "The URL of a remote application.",
 							Type:        schema.TypeString,
 							Optional:    true,
 						},
 						"endpoint": {
 							Description: "The endpoint name.",
 							Type:        schema.TypeString,
-							Default:     nil,
+							Optional:    true,
+							Computed:    true,
+						},
+						"offer_url": {
+							Description: "The URL of a remote application.",
+							Type:        schema.TypeString,
 							Optional:    true,
 							Computed:    true,
 						},
@@ -343,9 +343,12 @@ func parseApplications(apps []juju.Application) []map[string]interface{} {
 
 		if app.OfferURL != nil {
 			a["offer_url"] = app.OfferURL
+			a["endpoint"] = ""
+			a["name"] = ""
 		} else {
 			a["endpoint"] = app.Endpoint
 			a["name"] = app.Name
+			a["offer_url"] = ""
 		}
 		applications = append(applications, a)
 	}
