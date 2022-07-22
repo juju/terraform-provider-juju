@@ -241,7 +241,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 
 	charmID := apiapplication.CharmID{
 		URL:    charmURL,
-		Origin: resultOrigin,
+		Origin: resolvedCharm.Origin,
 	}
 
 	// populate the required resources for this charm
@@ -274,7 +274,6 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 // processResources is a helper function to process the charm
 // metadata and request the download of any additional resource.
 func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, resourcesAPIClient *apiresources.Client, charmID apiapplication.CharmID, appName string) (map[string]string, error) {
-
 	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL.String())
 	if err != nil {
 		return nil, err
