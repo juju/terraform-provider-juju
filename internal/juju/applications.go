@@ -231,6 +231,11 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		return nil, err
 	}
 
+	// TODO: This should probably be set within the schema
+	// For now this is the default required behaviour
+	appConfig := make(map[string]string, 1)
+	appConfig["trust"] = "true"
+
 	err = applicationAPIClient.Deploy(apiapplication.DeployArgs{
 		CharmID: apiapplication.CharmID{
 			URL:    charmURL,
@@ -240,6 +245,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		NumUnits:        input.Units,
 		Series:          resultOrigin.Series,
 		CharmOrigin:     resultOrigin,
+		Config:          appConfig,
 	})
 	return &CreateApplicationResponse{
 		AppName:  appName,
