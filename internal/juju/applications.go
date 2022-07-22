@@ -15,11 +15,13 @@ import (
 	"github.com/juju/juju/rpc/params"
 
 	"github.com/juju/charm/v8"
+	charmresources "github.com/juju/charm/v8/resource"
 	jujuerrors "github.com/juju/errors"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apicharms "github.com/juju/juju/api/client/charms"
 	apiclient "github.com/juju/juju/api/client/client"
 	apimodelconfig "github.com/juju/juju/api/client/modelconfig"
+	apiresources "github.com/juju/juju/api/client/resources"
 	"github.com/juju/juju/cmd/juju/application/utils"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/environs/config"
@@ -112,6 +114,12 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 
 	modelconfigAPIClient := apimodelconfig.NewClient(conn)
 	defer modelconfigAPIClient.Close()
+
+	resourcesAPIClient, err := apiresources.NewClient(conn)
+	if err != nil {
+		return nil, err
+	}
+	defer resourcesAPIClient.Close()
 
 	appName := input.ApplicationName
 	if appName == "" {
@@ -231,27 +239,89 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		return nil, err
 	}
 
+	charmID := apiapplication.CharmID{
+		URL:    charmURL,
+		Origin: resultOrigin,
+	}
+
+	// populate the required resources for this charm
+	resources, err := c.processResources(charmsAPIClient, resourcesAPIClient, charmID, input.ApplicationName)
+	if err != nil {
+		return nil, err
+	}
+
 	// TODO: This should probably be set within the schema
 	// For now this is the default required behaviour
 	appConfig := make(map[string]string, 1)
 	appConfig["trust"] = "true"
 
 	err = applicationAPIClient.Deploy(apiapplication.DeployArgs{
-		CharmID: apiapplication.CharmID{
-			URL:    charmURL,
-			Origin: resultOrigin,
-		},
+		CharmID:         charmID,
 		ApplicationName: appName,
 		NumUnits:        input.Units,
 		Series:          resultOrigin.Series,
 		CharmOrigin:     resultOrigin,
 		Config:          appConfig,
+		Resources:       resources,
 	})
 	return &CreateApplicationResponse{
 		AppName:  appName,
 		Revision: *origin.Revision,
 		Series:   series,
 	}, err
+}
+
+// processResources is a helper function to process the charm
+// metadata and request the download of any additional resource.
+func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, resourcesAPIClient *apiresources.Client, charmID apiapplication.CharmID, appName string) (map[string]string, error) {
+
+	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL.String())
+	if err != nil {
+		return nil, err
+	}
+
+	// check if we have resources to request
+	if len(charmInfo.Meta.Resources) == 0 {
+		return nil, nil
+	}
+
+	pendingResources := []charmresources.Resource{}
+	for _, v := range charmInfo.Meta.Resources {
+		aux := charmresources.Resource{
+			Meta: charmresources.Meta{
+				Name:        v.Name,
+				Type:        v.Type,
+				Path:        v.Path,
+				Description: v.Description,
+			},
+			Origin:   charmresources.OriginStore,
+			Revision: charmInfo.Revision,
+		}
+		pendingResources = append(pendingResources, aux)
+	}
+
+	resourcesReq := apiresources.AddPendingResourcesArgs{
+		ApplicationID: appName,
+		CharmID: apiresources.CharmID{
+			URL:    charmID.URL,
+			Origin: charmID.Origin,
+		},
+		CharmStoreMacaroon: nil,
+		Resources:          pendingResources,
+	}
+
+	toRequest, err := resourcesAPIClient.AddPendingResources(resourcesReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// now build a map with the resource name and the corresponding UUID
+	toReturn := map[string]string{}
+	for i, argsResource := range pendingResources {
+		toReturn[argsResource.Meta.Name] = toRequest[i]
+	}
+
+	return toReturn, nil
 }
 
 func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadApplicationResponse, error) {
