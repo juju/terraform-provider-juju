@@ -3,6 +3,7 @@ package juju
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	apiapplication "github.com/juju/juju/api/client/application"
 	"github.com/juju/juju/api/client/applicationoffers"
@@ -155,7 +156,26 @@ func (c offersClient) DestroyOffer(input *DestroyOfferInput) error {
 	client := applicationoffers.NewClient(conn)
 	defer client.Close()
 
-	//TODO: verify destruction after attaching
+	offer, err := client.ApplicationOffer(input.OfferURL)
+	if err != nil {
+		return err
+	}
+
+	//This code loops until it detects 0 connections in the offer or 3 minutes elapses
+	if len(offer.Connections) > 0 {
+		end := time.Now().Add(3 * time.Minute)
+		for ok := true; ok; ok = len(offer.Connections) > 0 {
+			if time.Now().After(end) {
+				return fmt.Errorf("unable to remove offer, connections are still active")
+			}
+			time.Sleep(10 * time.Second)
+			offer, err = client.ApplicationOffer(input.OfferURL)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	forceDestroy := false
 	err = client.DestroyOffers(forceDestroy, input.OfferURL)
 	if err != nil {
