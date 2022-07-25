@@ -49,6 +49,9 @@ func resourceIntegration() *schema.Resource {
 							Optional:    true,
 							Computed:    true,
 						},
+						//TODO: find an alternative to setting Computed: true in `offer_url`
+						//`offer_url` has the property `Computed` set to true even though it will never be computed.
+						//This is due to an issue with the plugin-sdk/v2 and `schema.TypeSet` meaning that a plan will always show needed changes despite the read op storing the correct state
 						"offer_url": {
 							Description: "The URL of a remote application.",
 							Type:        schema.TypeString,

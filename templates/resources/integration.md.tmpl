@@ -1,0 +1,43 @@
+---
+# generated using template templates/resources/integration.md.tmpl
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+{{ if .HasExample -}}
+## Example Usage
+{{tffile "examples/resources/juju_integration/resource.tf"}}
+{{- end }}
+
+{{ .SchemaMarkdown | trimspace }}
+
+
+### Notes
+When creating this resource the `offer_url` property will show `(known after apply)` as below:
+```
+  + resource "juju_integration" "this" {
+      + id    = (known after apply)
+      + model = "this"
+
+      + application {
+          + endpoint  = (known after apply)
+          + name      = "one"
+          + offer_url = (known after apply)
+        }
+    }
+```
+This is due to a bug in the sdk this provider uses - this property will never be computed and can only be provided by the user.
+
+{{ if .HasImport -}}
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/juju_integration/import.sh"}}
+{{- end }}
