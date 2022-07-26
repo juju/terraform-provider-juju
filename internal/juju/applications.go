@@ -241,10 +241,11 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 
 	charmID := apiapplication.CharmID{
 		URL:    charmURL,
-		Origin: resolvedCharm.Origin,
+		Origin: resultOrigin,
 	}
 
 	// populate the required resources for this charm
+
 	resources, err := c.processResources(charmsAPIClient, resourcesAPIClient, charmID, input.ApplicationName)
 	if err != nil {
 		return nil, err
