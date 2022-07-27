@@ -119,6 +119,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	if err != nil {
 		return nil, err
 	}
+
 	defer resourcesAPIClient.Close()
 
 	appName := input.ApplicationName
@@ -244,8 +245,6 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		Origin: resultOrigin,
 	}
 
-	// populate the required resources for this charm
-
 	resources, err := c.processResources(charmsAPIClient, resourcesAPIClient, charmID, input.ApplicationName)
 	if err != nil {
 		return nil, err
@@ -294,8 +293,9 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 				Path:        v.Path,
 				Description: v.Description,
 			},
-			Origin:   charmresources.OriginStore,
-			Revision: charmInfo.Revision,
+			Origin: charmresources.OriginStore,
+			// TODO: prepare for resources with different versions
+			Revision: -1,
 		}
 		pendingResources = append(pendingResources, aux)
 	}
