@@ -57,6 +57,7 @@ func New(version string) func() *schema.Provider {
 				"juju_model":       resourceModel(),
 				"juju_application": resourceApplication(),
 				"juju_integration": resourceIntegration(),
+				"juju_offer":       resourceOffer(),
 			},
 		}
 
