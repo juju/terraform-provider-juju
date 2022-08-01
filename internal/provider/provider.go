@@ -12,6 +12,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/terraform-provider-juju/internal/juju"
+
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -78,14 +80,14 @@ func getProviderConfigFunc(field string) schema.SchemaDefaultFunc {
 	if value != "" {
 		return func() (any, error) { return value, nil }
 	}
+	log.Debug().Msgf("environment variable for %s not found check CLI", field)
 	// Use local juju CLI if available and get the variable
-	// TODO: avoid querying the controller several times
 	controllerConfig, err := juju.GetLocalControllerConfig()
 	if err != nil {
 		// Something failed with the local client, return empty
 		return func() (any, error) { return "", nil }
 	}
-
+	log.Debug().Msgf("no Juju CLI available waiting for %s value", field)
 	toReturn, found := controllerConfig[field]
 	if !found {
 		// que requested field was not found, return empty

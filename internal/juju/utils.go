@@ -96,6 +96,7 @@ func populateControllerConfig() {
 		err = json.Unmarshal(marshalled, &controllerConfig)
 		if err != nil {
 			log.Error().Err(err).Msg("error unmarshalling provider configuration from Juju CLI")
+			return
 		}
 		break
 	}
