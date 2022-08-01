@@ -32,13 +32,11 @@ func New(version string) func() *schema.Provider {
 					Description: fmt.Sprintf("This is the Controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `%s` environment variable.", JujuControllerEnvKey),
 					Optional:    true,
 					DefaultFunc: getProviderConfigFunc(JujuControllerEnvKey),
-					// DefaultFunc: schema.EnvDefaultFunc(JujuControllerEnvKey, "localhost:17070"),
 				},
 				"username": {
 					Type:        schema.TypeString,
 					Description: fmt.Sprintf("This is the username registered with the controller to be used. This can also be set by the `%s` environment variable", JujuUsernameEnvKey),
 					Optional:    true,
-					//DefaultFunc: schema.EnvDefaultFunc(JujuUsernameEnvKey, nil),
 					DefaultFunc: getProviderConfigFunc(JujuUsernameEnvKey),
 				},
 				"password": {
@@ -47,14 +45,12 @@ func New(version string) func() *schema.Provider {
 					Optional:    true,
 					Sensitive:   true,
 					DefaultFunc: getProviderConfigFunc(JujuPasswordEnvKey),
-					//DefaultFunc: schema.EnvDefaultFunc(JujuPasswordEnvKey, nil),
 				},
 				"ca_certificate": {
 					Type:        schema.TypeString,
 					Description: fmt.Sprintf("This is the certificate to use for identification. This can also be set by the `%s` environment variable", JujuCACertEnvKey),
 					Optional:    true,
 					DefaultFunc: getProviderConfigFunc(JujuCACertEnvKey),
-					//DefaultFunc: schema.EnvDefaultFunc(JujuCACertEnvKey, nil),
 				},
 			},
 			DataSourcesMap: map[string]*schema.Resource{
