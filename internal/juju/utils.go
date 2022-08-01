@@ -49,7 +49,6 @@ var singleQuery sync.Once
 // GetLocalControllerConfig runs the locally installed juju command,
 // if available, to get the current controller configuration.
 func GetLocalControllerConfig() (map[string]string, error) {
-
 	// populate the controller config information only once
 	singleQuery.Do(populateControllerConfig)
 

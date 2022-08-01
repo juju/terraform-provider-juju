@@ -95,7 +95,6 @@ func getProviderConfigFunc(field string) schema.SchemaDefaultFunc {
 	}
 
 	return func() (any, error) { return toReturn, nil }
-
 }
 
 func configure(version string, p *schema.Provider) func(context.Context, *schema.ResourceData) (interface{}, diag.Diagnostics) {
