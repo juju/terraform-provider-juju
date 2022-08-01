@@ -115,12 +115,8 @@ func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
 	t.Setenv(JujuCACertEnvKey, invalidCA)
 	t.Setenv("JUJU_CA_CERT_FILE", "")
 	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
-	if diags == nil {
-		t.Fatal("provider should error")
-	}
-	err := diags[len(diags)-1]
-	if err.Detail != "Verify the ca_certificate property set on the provider" {
-		t.Errorf("unexpected error: %+v", err)
+	if len(diags) > 0 {
+		t.Errorf("no errors were expected %s", diags[len(diags)-1].Summary)
 	}
 }
 
