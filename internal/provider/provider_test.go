@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -45,31 +44,25 @@ func TestProviderConfigure(t *testing.T) {
 	}
 }
 
-func TestProviderConfigureUsername(t *testing.T) {
+func TestProviderConfigureUsernameFromEnv(t *testing.T) {
 	testAccPreCheck(t)
 	provider := New("dev")()
-	t.Setenv(JujuUsernameEnvKey, "")
+	userNameValue := "the-username"
+	t.Setenv(JujuUsernameEnvKey, userNameValue)
 	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
-	if diags == nil {
-		t.Errorf("provider should error")
-	}
-	err := diags[len(diags)-1]
-	if err.Summary != "Username and password must be set" && err.Detail != "Currently the provider can only authenticate using username and password based authentication, if both are empty the provider will panic" {
-		t.Errorf("unexpected error: %+v", err)
+	if len(diags) > 0 {
+		t.Errorf("no errors were expected %s", diags[len(diags)-1].Summary)
 	}
 }
 
-func TestProviderConfigurePassword(t *testing.T) {
+func TestProviderConfigurePasswordFromEnv(t *testing.T) {
 	testAccPreCheck(t)
 	provider := New("dev")()
-	t.Setenv(JujuPasswordEnvKey, "")
+	passwordValue := "the-password"
+	t.Setenv(JujuPasswordEnvKey, passwordValue)
 	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
-	if diags == nil {
-		t.Errorf("provider should error")
-	}
-	err := diags[len(diags)-1]
-	if err.Summary != "Username and password must be set" && err.Detail != "Currently the provider can only authenticate using username and password based authentication, if both are empty the provider will panic" {
-		t.Errorf("unexpected error: %+v", err)
+	if len(diags) > 0 {
+		t.Errorf("no errors were expected %s", diags[len(diags)-1].Summary)
 	}
 }
 
@@ -79,12 +72,8 @@ func TestProviderConfigureAddresses(t *testing.T) {
 	// This IP is from a test network that should never be routed. https://www.rfc-editor.org/rfc/rfc5737#section-3
 	t.Setenv(JujuControllerEnvKey, "192.0.2.100:17070")
 	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
-	if diags == nil {
-		t.Fatal("provider should error")
-	}
-	err := diags[len(diags)-1]
-	if !strings.Contains(err.Summary, "dial tcp 192.0.2.100:17070:") {
-		t.Errorf("unexpected error: %+v", err)
+	if len(diags) > 0 {
+		t.Errorf("no errors were expected %s", diags[len(diags)-1].Summary)
 	}
 }
 
@@ -94,7 +83,7 @@ const (
 )
 
 //TODO: find an alternative way of running test on Mac
-func TestProviderConfigurex509(t *testing.T) {
+func TestProviderConfigurex509FromEnv(t *testing.T) {
 	switch runtime.GOOS {
 	case "darwin":
 		//Due to a bug in Go this test does not work on darwin OS
@@ -102,22 +91,13 @@ func TestProviderConfigurex509(t *testing.T) {
 		t.Skip("This test does not work on MacOS")
 	default:
 		provider := New("dev")()
-		t.Setenv(JujuCACertEnvKey, "")
-		t.Setenv("JUJU_CA_CERT_FILE", "")
+		t.Setenv(JujuCACertEnvKey, invalidCA)
 		diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
 		if diags == nil {
-			//In case the CA is in the system trust store we want to verify error functionality
-			//setting this property to an invalid CA will test both parts of our error
-			//Juju will ignore the system trust store if we set the CA property
 			t.Setenv(JujuCACertEnvKey, invalidCA)
 			diags = provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
-			if diags == nil {
-				t.Fatal("provider should error")
-			} else {
-				err := diags[len(diags)-1]
-				if err.Detail != "Verify the ca_certificate property set on the provider" {
-					t.Errorf("unexpected error: %+v", err)
-				}
+			if len(diags) > 0 {
+				t.Errorf("no errors were expected %s", diags[len(diags)-1].Summary)
 			}
 		} else {
 			err := diags[len(diags)-1]
@@ -128,19 +108,15 @@ func TestProviderConfigurex509(t *testing.T) {
 	}
 }
 
-func TestProviderConfigurex509Invalid(t *testing.T) {
+func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
 	provider := New("dev")()
 	//Set the CA to the invalid one above
 	//Juju will ignore the system trust store if we set the CA property
 	t.Setenv(JujuCACertEnvKey, invalidCA)
 	t.Setenv("JUJU_CA_CERT_FILE", "")
 	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
-	if diags == nil {
-		t.Fatal("provider should error")
-	}
-	err := diags[len(diags)-1]
-	if err.Detail != "Verify the ca_certificate property set on the provider" {
-		t.Errorf("unexpected error: %+v", err)
+	if len(diags) > 0 {
+		t.Errorf("no errors were expected %s", diags[len(diags)-1].Summary)
 	}
 }
 

@@ -6,11 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/terraform-provider-juju/internal/juju"
+
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -28,26 +31,26 @@ func New(version string) func() *schema.Provider {
 					Type:        schema.TypeString,
 					Description: fmt.Sprintf("This is the Controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `%s` environment variable.", JujuControllerEnvKey),
 					Optional:    true,
-					DefaultFunc: schema.EnvDefaultFunc(JujuControllerEnvKey, "localhost:17070"),
+					DefaultFunc: getProviderConfigFunc(JujuControllerEnvKey),
 				},
 				"username": {
 					Type:        schema.TypeString,
 					Description: fmt.Sprintf("This is the username registered with the controller to be used. This can also be set by the `%s` environment variable", JujuUsernameEnvKey),
 					Optional:    true,
-					DefaultFunc: schema.EnvDefaultFunc(JujuUsernameEnvKey, nil),
+					DefaultFunc: getProviderConfigFunc(JujuUsernameEnvKey),
 				},
 				"password": {
 					Type:        schema.TypeString,
 					Description: fmt.Sprintf("This is the password of the username to be used. This can also be set by the `%s` environment variable", JujuPasswordEnvKey),
 					Optional:    true,
 					Sensitive:   true,
-					DefaultFunc: schema.EnvDefaultFunc(JujuPasswordEnvKey, nil),
+					DefaultFunc: getProviderConfigFunc(JujuPasswordEnvKey),
 				},
 				"ca_certificate": {
 					Type:        schema.TypeString,
 					Description: fmt.Sprintf("This is the certificate to use for identification. This can also be set by the `%s` environment variable", JujuCACertEnvKey),
 					Optional:    true,
-					DefaultFunc: schema.EnvDefaultFunc(JujuCACertEnvKey, nil),
+					DefaultFunc: getProviderConfigFunc(JujuCACertEnvKey),
 				},
 			},
 			DataSourcesMap: map[string]*schema.Resource{
@@ -65,6 +68,29 @@ func New(version string) func() *schema.Provider {
 
 		return p
 	}
+}
+
+func getProviderConfigFunc(field string) schema.SchemaDefaultFunc {
+	// get the value from the environment variable
+	value := os.Getenv(field)
+	if value != "" {
+		return func() (any, error) { return value, nil }
+	}
+	log.Debug().Msgf("environment variable for %s not found check CLI", field)
+	// Use local juju CLI if available and get the variable
+	controllerConfig, err := juju.GetLocalControllerConfig()
+	if err != nil {
+		// Something failed with the local client, return empty
+		return func() (any, error) { return "", nil }
+	}
+	log.Debug().Msgf("no Juju CLI available waiting for %s value", field)
+	toReturn, found := controllerConfig[field]
+	if !found {
+		// que requested field was not found, return empty
+		return func() (any, error) { return "", nil }
+	}
+
+	return func() (any, error) { return toReturn, nil }
 }
 
 func configure(version string, p *schema.Provider) func(context.Context, *schema.ResourceData) (interface{}, diag.Diagnostics) {

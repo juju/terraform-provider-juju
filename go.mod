@@ -12,6 +12,7 @@ require (
 require (
 	github.com/juju/charm/v8 v8.0.0-20220509231111-ed6d505a46f4
 	github.com/juju/errors v0.0.0-20220316043928-e10eb17a9eeb
+	github.com/rs/zerolog v1.27.0
 )
 
 require (
@@ -34,7 +35,7 @@ require (
 	github.com/aws/smithy-go v1.8.0 // indirect
 	github.com/bflad/gopaniccheck v0.1.0 // indirect
 	github.com/bgentry/speakeasy v0.1.0 // indirect
-	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
+	github.com/coreos/go-systemd/v22 v22.3.3-0.20220203105225-a9a7ef127534 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/fatih/color v1.13.0 // indirect
