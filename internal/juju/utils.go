@@ -12,8 +12,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// providerConfigOutput is the JSON output from the
-// `juju show-controller --no-password --format=json` command
+// controllerConfig is a representation of the output
+// returned when running the CLI command
+// `juju show-controller --show-password`
 type controllerConfig struct {
 	ProviderDetails struct {
 		UUID                   string   `json:"uuid"`
