@@ -374,7 +374,6 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("failed to parse charm: %v", err)
 	}
 
-	charmsAPIClient.CharmInfo(charmURL.String())
 	conf, _ := applicationAPIClient.GetConfig("", charmURL.Name)
 	log.Debug().Msgf("Application Config : %v", conf)
 
@@ -463,9 +462,12 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	}
 
 	if input.Trust != nil {
-		applicationAPIClient.Set(input.AppName, map[string]string{
+		err := applicationAPIClient.Set(input.AppName, map[string]string{
 			"trust": fmt.Sprintf("%v", *input.Trust),
 		})
+		if err != nil {
+			return err
+		}
 	}
 
 	if input.Revision != nil {
