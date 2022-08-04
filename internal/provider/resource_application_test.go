@@ -22,6 +22,7 @@ func TestAcc_ResourceApplication_Basic(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "tiny-bash"),
+					resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 				),
 			},
 			{
@@ -78,6 +79,7 @@ resource "juju_application" "this" {
   charm {
     name = "tiny-bash"
   }
+  trust = true
 }
 `, modelName)
 }
@@ -95,6 +97,7 @@ resource "juju_application" "this" {
     name     = "ubuntu"
     revision = %d
   }
+  trust = true
 }
 `, modelName, units, revision)
 }

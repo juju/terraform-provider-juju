@@ -11,7 +11,6 @@ import (
 	"math"
 
 	"github.com/juju/juju/core/model"
-
 	"github.com/juju/juju/rpc/params"
 
 	"github.com/juju/charm/v8"
@@ -27,6 +26,8 @@ import (
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/version"
 	"github.com/juju/names/v4"
+
+	"github.com/rs/zerolog/log"
 )
 
 type applicationsClient struct {
@@ -41,6 +42,7 @@ type CreateApplicationInput struct {
 	CharmSeries     string
 	CharmRevision   int
 	Units           int
+	Trust           bool
 }
 
 type CreateApplicationResponse struct {
@@ -60,6 +62,7 @@ type ReadApplicationResponse struct {
 	Revision int
 	Series   string
 	Units    int
+	Trust    bool
 	Config   map[string]interface{}
 }
 
@@ -70,6 +73,7 @@ type UpdateApplicationInput struct {
 	//Channel   string // TODO: Unsupported for now
 	Units    *int
 	Revision *int
+	Trust    *bool
 	//Series    string // TODO: Unsupported for now
 }
 
@@ -252,8 +256,9 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 
 	// TODO: This should probably be set within the schema
 	// For now this is the default required behaviour
-	appConfig := make(map[string]string, 1)
-	appConfig["trust"] = "true"
+	appConfig := make(map[string]string)
+
+	appConfig["trust"] = fmt.Sprintf("%v", input.Trust)
 
 	err = applicationAPIClient.Deploy(apiapplication.DeployArgs{
 		CharmID:         charmID,
@@ -369,12 +374,18 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("failed to parse charm: %v", err)
 	}
 
+	charmsAPIClient.CharmInfo(charmURL.String())
+	conf, _ := applicationAPIClient.GetConfig("", charmURL.Name)
+	log.Debug().Msgf("Application Config : %v", conf)
+
 	response := &ReadApplicationResponse{
 		Name:     charmURL.Name,
 		Channel:  appStatus.CharmChannel,
 		Revision: charmURL.Revision,
 		Series:   appInfo.Series,
 		Units:    unitCount,
+		// This should be dynamically read from the app config, but "trust" is not there
+		Trust: true,
 	}
 
 	return response, nil
@@ -449,6 +460,12 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 				}
 			}
 		}
+	}
+
+	if input.Trust != nil {
+		applicationAPIClient.Set(input.AppName, map[string]string{
+			"trust": fmt.Sprintf("%v", *input.Trust),
+		})
 	}
 
 	if input.Revision != nil {

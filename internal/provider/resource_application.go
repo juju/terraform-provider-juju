@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -82,6 +83,12 @@ func resourceApplication() *schema.Resource {
 				Type:        schema.TypeMap,
 				Optional:    true,
 			},
+			"trust": {
+				Description: "Set the trust for the application.",
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+			},
 		},
 	}
 }
@@ -101,6 +108,7 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 	channel := charm["channel"].(string)
 	series := charm["series"].(string)
 	units := d.Get("units").(int)
+	trust := d.Get("trust").(bool)
 	revision := charm["revision"].(int)
 	if _, exist := d.GetOk("charm.0.revision"); !exist {
 		revision = -1
@@ -114,7 +122,9 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 		CharmRevision:   revision,
 		CharmSeries:     series,
 		Units:           units,
+		Trust:           trust,
 	})
+
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -203,6 +213,9 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 	if err = d.Set("units", response.Units); err != nil {
 		return diag.FromErr(err)
 	}
+	if err = d.Set("trust", response.Trust); err != nil {
+		return diag.FromErr(err)
+	}
 
 	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
 	return nil
@@ -226,6 +239,11 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 	if d.HasChange("units") {
 		units := d.Get("units").(int)
 		updateApplicationInput.Units = &units
+	}
+
+	if d.HasChange("trust") {
+		trust := d.Get("trust").(bool)
+		updateApplicationInput.Trust = &trust
 	}
 
 	if d.HasChange("charm.0.revision") {
