@@ -26,8 +26,6 @@ import (
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/version"
 	"github.com/juju/names/v4"
-
-	"github.com/rs/zerolog/log"
 )
 
 type applicationsClient struct {
@@ -374,8 +372,22 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("failed to parse charm: %v", err)
 	}
 
-	conf, _ := applicationAPIClient.GetConfig("", charmURL.Name)
-	log.Debug().Msgf("Application Config : %v", conf)
+	conf, err := applicationAPIClient.Get("master", input.AppName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get app configuration %v", err)
+	}
+
+	trustValue := false
+	if conf != nil {
+		aux, found := conf.ApplicationConfig["trust"]
+		if found {
+			m := aux.(map[string]any)
+			target, found := m["value"]
+			if found {
+				trustValue = target.(bool)
+			}
+		}
+	}
 
 	response := &ReadApplicationResponse{
 		Name:     charmURL.Name,
@@ -383,8 +395,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		Revision: charmURL.Revision,
 		Series:   appInfo.Series,
 		Units:    unitCount,
-		// This should be dynamically read from the app config, but "trust" is not there
-		Trust: true,
+		Trust:    trustValue,
 	}
 
 	return response, nil
@@ -413,6 +424,15 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	var exists bool
 	if appStatus, exists = status.Applications[input.AppName]; !exists {
 		return fmt.Errorf("no status returned for application: %s", input.AppName)
+	}
+
+	if input.Trust != nil {
+		err := applicationAPIClient.SetConfig("master", input.AppName, "", map[string]string{
+			"trust": fmt.Sprintf("%v", *input.Trust),
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	if input.Units != nil {
@@ -458,15 +478,6 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 					return err
 				}
 			}
-		}
-	}
-
-	if input.Trust != nil {
-		err := applicationAPIClient.Set(input.AppName, map[string]string{
-			"trust": fmt.Sprintf("%v", *input.Trust),
-		})
-		if err != nil {
-			return err
 		}
 	}
 
