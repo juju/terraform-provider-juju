@@ -25,7 +25,6 @@ resource "juju_application" "this" {
     series   = "trusty"
   }
 
-  trust = true
   units = 3
 
   config = {
