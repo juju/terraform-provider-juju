@@ -45,6 +45,7 @@ resource "juju_application" "this" {
 
 - `config` (Map of String) Application specific configuration.
 - `name` (String) A custom name for the application deployment. If empty, uses the charm's name.
+- `trust` (Boolean) Set the trust for the application.
 - `units` (Number) The number of application units to deploy for the charm.
 
 ### Read-Only
