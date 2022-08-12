@@ -445,7 +445,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	}
 
 	// TODO: (2022-08-12) The strategy to follow to consolidate Juju
-	// information with the information exsiting in the deployment plan
+	// information with the information existing in the deployment plan
 	// has to be defined. Meanwhile, I will comment this section.
 
 	// conf, err := applicationAPIClient.Get("master", input.AppName)
