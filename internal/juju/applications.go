@@ -335,7 +335,7 @@ func (c applicationsClient) processExpose(applicationAPIClient *apiapplication.C
 }
 
 func splitCommaDelimitedList(list string) []string {
-	var items []string
+	items := make([]string, 1)
 	for _, token := range strings.Split(list, ",") {
 		token = strings.TrimSpace(token)
 		if len(token) == 0 {
