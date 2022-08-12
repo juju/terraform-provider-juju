@@ -444,6 +444,10 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("failed to parse charm: %v", err)
 	}
 
+	// TODO: (2022-08-12) The strategy to follow to consolidate Juju
+	// information with the information exsiting in the deployment plan
+	// has to be defined. Meanwhile, I will comment this section.
+
 	// conf, err := applicationAPIClient.Get("master", input.AppName)
 	// if err != nil {
 	// 	return nil, fmt.Errorf("failed to get app configuration %v", err)
