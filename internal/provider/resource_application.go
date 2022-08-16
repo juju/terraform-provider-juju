@@ -290,7 +290,6 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 }
 
 func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-
 	client := meta.(*juju.Client)
 
 	appName := d.Get("name").(string)
