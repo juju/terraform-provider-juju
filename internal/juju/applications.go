@@ -448,23 +448,23 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	// information with the information existing in the deployment plan
 	// has to be defined. Meanwhile, I will comment this section.
 
-	// conf, err := applicationAPIClient.Get("master", input.AppName)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to get app configuration %v", err)
-	// }
+	conf, err := applicationAPIClient.Get("master", input.AppName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get app configuration %v", err)
+	}
 
 	// trust field
-	// trustValue := false
-	// if conf != nil {
-	// 	aux, found := conf.ApplicationConfig["trust"]
-	// 	if found {
-	// 		m := aux.(map[string]any)
-	// 		target, found := m["value"]
-	// 		if found {
-	// 			trustValue = target.(bool)
-	// 		}
-	// 	}
-	// }
+	trustValue := false
+	if conf != nil {
+		aux, found := conf.ApplicationConfig["trust"]
+		if found {
+			m := aux.(map[string]any)
+			target, found := m["value"]
+			if found {
+				trustValue = target.(bool)
+			}
+		}
+	}
 
 	// process expose field
 	// log.Debug().Msg("read application")
@@ -498,12 +498,10 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		Revision: charmURL.Revision,
 		Series:   appInfo.Series,
 		Units:    unitCount,
-		//Trust:    trustValue,
+		Trust:    trustValue,
 		//Expose:   exposed,
 		//Config:   conf.ApplicationConfig,
 	}
-
-	log.Debug().Msgf("ReadApplicationResponse is: %#v", response)
 
 	return response, nil
 }
@@ -558,7 +556,6 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		for k, v := range input.Expose {
 			exposeMap[k] = v.(string)
 		}
-		log.Debug().Msgf("try to update the expose with %#v", exposeMap)
 		err := c.processExpose(applicationAPIClient, input.AppName, exposeMap)
 		if err != nil {
 			log.Error().Err(err).Msg("error when trying to expose")

@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/rs/zerolog/log"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -43,7 +42,6 @@ func resourceApplication() *schema.Resource {
 				Description: "The name of the charm to be installed from Charmhub.",
 				Type:        schema.TypeList,
 				Required:    true,
-				MaxItems:    1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"name": {
@@ -84,7 +82,7 @@ func resourceApplication() *schema.Resource {
 				Type:        schema.TypeMap,
 				Optional:    true,
 				DefaultFunc: func() (interface{}, error) {
-					return make(map[string]string), nil
+					return make(map[string]interface{}), nil
 				},
 			},
 			"trust": {
@@ -292,7 +290,6 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 }
 
 func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	log.Debug().Msg("resourceApplicationUpdate invoked")
 
 	client := meta.(*juju.Client)
 
@@ -321,19 +318,14 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 	if d.HasChange("expose") {
 		expose, exposeWasSet := d.GetOk("expose")
 		if exposeWasSet {
-			log.Debug().Interface("exposeValue", expose).Msg("expose was set")
 			if expose.([]interface{})[0] == nil {
 				// no params in expose
-				log.Debug().Msg("expose has no params")
 				updateApplicationInput.Expose = make(map[string]interface{})
 			} else {
 				// expose has params
-
-				log.Debug().Interface("setParams", expose).Msg("params are set")
 				updateApplicationInput.Expose = expose.([]interface{})[0].(map[string]interface{})
 			}
 		} else {
-			log.Debug().Msg("expose was not set in a change")
 			// if there is a change and we have no expose, we have
 			// to unexpose
 			updateApplicationInput.Unexpose = true
