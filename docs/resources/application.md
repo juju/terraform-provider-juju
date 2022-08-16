@@ -38,7 +38,7 @@ resource "juju_application" "this" {
 
 ### Required
 
-- `charm` (Block List, Min: 1, Max: 1) The name of the charm to be installed from Charmhub. (see [below for nested schema](#nestedblock--charm))
+- `charm` (Block List, Min: 1) The name of the charm to be installed from Charmhub. (see [below for nested schema](#nestedblock--charm))
 - `model` (String) The name of the model where the application is to be deployed.
 
 ### Optional
