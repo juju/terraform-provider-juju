@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/rs/zerolog/log"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -277,14 +278,28 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 	// fields returned by Juju not addressed in the deployment
 	// plan.
 
-	// exposeValue := []map[string]interface{}{response.Expose}
-	// if err = d.Set("expose", exposeValue); err != nil {
-	// 	return diag.FromErr(err)
-	// }
+	log.Debug().Interface("expose", d.Get("exposed")).Msg("expose before reading")
+	log.Debug().Interface("expose", response.Expose).Msg("expose from the read")
+	exposeValue := []map[string]interface{}{response.Expose}
+	if err = d.Set("expose", exposeValue); err != nil {
+		return diag.FromErr(err)
+	}
 
-	// if err = d.Set("config", response.Config); err != nil {
-	// 	return diag.FromErr(err)
-	// }
+	log.Debug().Interface("config", d.Get("config")).Msg("config before reading")
+	log.Debug().Interface("config", response.Config).Msg("config from the read")
+	// config will contain a long map with many fields this plan
+	// may not be aware of. We run a diff and only focus on those
+	// entries we know from the previous state. If they were removed
+	// from the previous state that has been modified.
+	previousConfig := d.Get("config").(map[string]interface{})
+	newConfig := make(map[string]interface{}, 0)
+	for k := range previousConfig {
+		newConfig[k] = response.Config[k]
+	}
+	if err = d.Set("config", newConfig); err != nil {
+		return diag.FromErr(err)
+	}
+	log.Debug().Interface("newConfig", newConfig).Msg("config after filtering")
 
 	return nil
 }
@@ -315,21 +330,28 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	if d.HasChange("expose") {
-		expose, exposeWasSet := d.GetOk("expose")
-		if exposeWasSet {
-			if expose.([]interface{})[0] == nil {
-				// no params in expose
-				updateApplicationInput.Expose = make(map[string]interface{})
-			} else {
-				// expose has params
-				updateApplicationInput.Expose = expose.([]interface{})[0].(map[string]interface{})
-			}
-		} else {
-			// if there is a change and we have no expose, we have
-			// to unexpose
-			updateApplicationInput.Unexpose = true
-			updateApplicationInput.Expose = nil
-		}
+		oldExpose, newExpose := d.GetChange("expose")
+		expose, unexpose := computeExposeDeltas(oldExpose, newExpose)
+
+		updateApplicationInput.Expose = expose
+		updateApplicationInput.Unexpose = unexpose
+
+		// expose, exposeWasSet := d.GetOk("expose")
+		// oldExpose, newExpose := d.GetChange("expose")
+		// if exposeWasSet {
+		// 	if expose.([]interface{})[0] == nil {
+		// 		// no params in expose
+		// 		updateApplicationInput.Expose = make(map[string]interface{})
+		// 	} else {
+		// 		// expose has params
+		// 		updateApplicationInput.Expose = expose.([]interface{})[0].(map[string]interface{})
+		// 	}
+		// } else {
+		// 	// if there is a change and we have no expose, we have
+		// 	// to unexpose
+		// 	updateApplicationInput.Unexpose = true
+		// 	updateApplicationInput.Expose = nil
+		// }
 	}
 
 	if d.HasChange("charm.0.revision") {
@@ -338,8 +360,11 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	if d.HasChange("config") {
-		config := d.Get("config").(map[string]interface{})
-		updateApplicationInput.Config = config
+		config := d.Get("config").([]map[string]interface{})[0]
+		updateApplicationInput.Config = make(map[string]string, len(config))
+		for k, v := range config {
+			updateApplicationInput.Config[k] = v.(string)
+		}
 	}
 
 	err = client.Applications.UpdateApplication(&updateApplicationInput)
@@ -348,6 +373,47 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	return nil
+}
+
+// compuseExposeDeltas ...
+func computeExposeDeltas(oldExpose interface{}, newExpose interface{}) (map[string]interface{}, []string) {
+	var old map[string]interface{}
+	var new map[string]interface{}
+
+	if oldExpose != nil {
+		old = oldExpose.([]map[string]interface{})[0]
+	}
+	if newExpose != nil {
+		new = newExpose.([]map[string]interface{})[0]
+	}
+
+	toExpose := make(map[string]interface{})
+	toUnexpose := make([]string, 0)
+	// if new is nil we unexpose everything
+	if new == nil {
+		// set all the endpoints to be unexposed
+		for k, _ := range old {
+			toUnexpose = append(toUnexpose, k)
+		}
+		return nil, toUnexpose
+	}
+
+	// if we have new endpoints we have to expose them
+	for endpoint, v := range new {
+		_, found := old[endpoint]
+		if found {
+			// this was already set
+			// If it is different, unexpose and then expose
+			if v != old[endpoint] {
+				toUnexpose = append(toUnexpose, endpoint)
+				toExpose[endpoint] = v
+			}
+		} else {
+			// this was not set, expose it
+			toExpose[endpoint] = v
+		}
+	}
+	return toExpose, toUnexpose
 }
 
 // Juju refers to deletion as "destroy" so we call the Destroy function of our client here rather than delete
