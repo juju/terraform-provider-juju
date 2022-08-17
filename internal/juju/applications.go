@@ -461,7 +461,11 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 			// The API returns the configuration entries as interfaces
 			// In the terraform plan we introduce strings...
 			// so we force this conversion
-			conf[k] = v.(map[string]interface{})["value"].(string)
+			aux := v.(map[string]interface{})
+			// set if we find the value key
+			if value := aux["value"]; value != nil {
+				conf[k] = fmt.Sprintf("%s", value)
+			}
 		}
 	}
 
