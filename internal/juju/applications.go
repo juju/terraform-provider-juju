@@ -302,8 +302,11 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	}, err
 }
 
-// processExpose is a local function that executes an expose request
-// if the
+// processExpose is a local function that executes an expose request.
+// If the exposeConfig argument is nil it simply exits. If not,
+// an expose request is done populating the request arguments with
+// the endpoints, spaces, and cidrs contained in the exposeConfig
+// map.
 func (c applicationsClient) processExpose(applicationAPIClient *apiapplication.Client, applicationName string, exposeConfig map[string]string) error {
 	// nothing to do
 	if exposeConfig == nil {
@@ -444,10 +447,6 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("failed to parse charm: %v", err)
 	}
 
-	// TODO: (2022-08-12) The strategy to follow to consolidate Juju
-	// information with the information existing in the deployment plan
-	// has to be defined. Meanwhile, I will comment this section.
-
 	conf, err := applicationAPIClient.Get("master", input.AppName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get app configuration %v", err)
@@ -466,6 +465,9 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		}
 	}
 
+	// TODO: (2022-08-12) The strategy to follow to consolidate Juju
+	// information with the information existing in the deployment plan
+	// has to be defined. Meanwhile, I will comment this section.
 	// process expose field
 	// log.Debug().Msg("read application")
 	// var exposed map[string]interface{} = nil
