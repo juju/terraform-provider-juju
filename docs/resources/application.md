@@ -38,12 +38,13 @@ resource "juju_application" "this" {
 
 ### Required
 
-- `charm` (Block List, Min: 1, Max: 1) The name of the charm to be installed from Charmhub. (see [below for nested schema](#nestedblock--charm))
+- `charm` (Block List, Min: 1) The name of the charm to be installed from Charmhub. (see [below for nested schema](#nestedblock--charm))
 - `model` (String) The name of the model where the application is to be deployed.
 
 ### Optional
 
 - `config` (Map of String) Application specific configuration.
+- `expose` (Block List, Max: 1) Makes an application publicly available over the network (see [below for nested schema](#nestedblock--expose))
 - `name` (String) A custom name for the application deployment. If empty, uses the charm's name.
 - `trust` (Boolean) Set the trust for the application.
 - `units` (Number) The number of application units to deploy for the charm.
@@ -64,6 +65,16 @@ Optional:
 - `channel` (String) The channel to use when deploying a charm. Specified as <track>/<risk>/<branch>.
 - `revision` (Number) The revision of the charm to deploy.
 - `series` (String) The series on which to deploy.
+
+
+<a id="nestedblock--expose"></a>
+### Nested Schema for `expose`
+
+Optional:
+
+- `cidrs` (String) A comma-delimited list of CIDRs that should be able to access the application ports once exposed.
+- `endpoints` (String) Expose only the ports that charms have opened for this comma-delimited list of endpoints
+- `spaces` (String) A comma-delimited list of spaces that should be able to access the application ports once exposed.
 
 ## Import
 

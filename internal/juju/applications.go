@@ -9,9 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/rpc/params"
+	"github.com/rs/zerolog/log"
 
 	"github.com/juju/charm/v8"
 	charmresources "github.com/juju/charm/v8/resource"
@@ -41,6 +43,8 @@ type CreateApplicationInput struct {
 	CharmRevision   int
 	Units           int
 	Trust           bool
+	Expose          map[string]string
+	Config          map[string]string
 }
 
 type CreateApplicationResponse struct {
@@ -61,7 +65,8 @@ type ReadApplicationResponse struct {
 	Series   string
 	Units    int
 	Trust    bool
-	Config   map[string]interface{}
+	// Config   map[string]interface{}
+	// Expose   map[string]interface{}
 }
 
 type UpdateApplicationInput struct {
@@ -72,6 +77,11 @@ type UpdateApplicationInput struct {
 	Units    *int
 	Revision *int
 	Trust    *bool
+	Expose   map[string]interface{}
+	// Unexpose will be true when the expose
+	// field becomes empty
+	Unexpose bool
+	Config   map[string]interface{}
 	//Series    string // TODO: Unsupported for now
 }
 
@@ -254,7 +264,12 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 
 	// TODO: This should probably be set within the schema
 	// For now this is the default required behaviour
-	appConfig := make(map[string]string)
+	var appConfig map[string]string
+	if input.Config != nil {
+		appConfig = input.Config
+	} else {
+		appConfig = make(map[string]string)
+	}
 
 	appConfig["trust"] = fmt.Sprintf("%v", input.Trust)
 
@@ -267,11 +282,71 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		Config:          appConfig,
 		Resources:       resources,
 	})
+
+	if err != nil {
+		// unfortunate error during deployment
+		return &CreateApplicationResponse{
+			AppName:  appName,
+			Revision: *origin.Revision,
+			Series:   series,
+		}, err
+	}
+
+	// If we have managed to deploy something, now we have
+	// to check if we have to expose something
+	err = c.processExpose(applicationAPIClient, input.ApplicationName, input.Expose)
 	return &CreateApplicationResponse{
 		AppName:  appName,
 		Revision: *origin.Revision,
 		Series:   series,
 	}, err
+}
+
+// processExpose is a local function that executes an expose request.
+// If the exposeConfig argument is nil it simply exits. If not,
+// an expose request is done populating the request arguments with
+// the endpoints, spaces, and cidrs contained in the exposeConfig
+// map.
+func (c applicationsClient) processExpose(applicationAPIClient *apiapplication.Client, applicationName string, exposeConfig map[string]string) error {
+	// nothing to do
+	if exposeConfig == nil {
+		return nil
+	}
+
+	// create one entry with spaces and the CIDRs per endpoint. If no endpoint
+	// use an empty value ("")
+	listEndpoints := splitCommaDelimitedList(exposeConfig["endpoints"])
+	listSpaces := splitCommaDelimitedList(exposeConfig["spaces"])
+	listCIDRs := splitCommaDelimitedList(exposeConfig["cidrs"])
+
+	// build params and send the request
+	if len(listEndpoints) == 0 {
+		listEndpoints = append(listEndpoints, "")
+	}
+
+	requestParams := make(map[string]params.ExposedEndpoint)
+	for _, epName := range listEndpoints {
+		requestParams[epName] = params.ExposedEndpoint{
+			ExposeToSpaces: listSpaces,
+			ExposeToCIDRs:  listCIDRs,
+		}
+	}
+
+	log.Trace().Interface("ExposeParams", requestParams).Msg("call expose API endpoint")
+
+	return applicationAPIClient.Expose(applicationName, requestParams)
+}
+
+func splitCommaDelimitedList(list string) []string {
+	items := make([]string, 1)
+	for _, token := range strings.Split(list, ",") {
+		token = strings.TrimSpace(token)
+		if len(token) == 0 {
+			continue
+		}
+		items = append(items, token)
+	}
+	return items
 }
 
 // processResources is a helper function to process the charm
@@ -377,6 +452,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("failed to get app configuration %v", err)
 	}
 
+	// trust field
 	trustValue := false
 	if conf != nil {
 		aux, found := conf.ApplicationConfig["trust"]
@@ -389,6 +465,35 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		}
 	}
 
+	// TODO: (2022-08-12) The strategy to follow to consolidate Juju
+	// information with the information existing in the deployment plan
+	// has to be defined. Meanwhile, I will comment this section.
+	// process expose field
+	// log.Debug().Msg("read application")
+	// var exposed map[string]interface{} = nil
+	// if appStatus.Exposed {
+	// 	// rebuild
+	// 	log.Debug().Msg("it was previously exposed")
+	// 	exposed = make(map[string]interface{}, 1)
+	// 	endpoints := []string{""}
+	// 	spaces := ""
+	// 	cidrs := ""
+	// 	for epName, value := range appStatus.ExposedEndpoints {
+	// 		if epName != "" {
+	// 			endpoints = append(endpoints, epName)
+	// 		}
+	// 		if len(spaces) == 0 {
+	// 			spaces = strings.Join(value.ExposeToSpaces, ",")
+	// 		}
+	// 		if len(cidrs) == 0 {
+	// 			cidrs = strings.Join(value.ExposeToCIDRs, ",")
+	// 		}
+	// 	}
+	// 	exposed["endpoints"] = strings.Join(endpoints, ",")
+	// 	exposed["spaces"] = spaces
+	// 	exposed["cidrs"] = cidrs
+	// }
+
 	response := &ReadApplicationResponse{
 		Name:     charmURL.Name,
 		Channel:  appStatus.CharmChannel,
@@ -396,6 +501,8 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		Series:   appInfo.Series,
 		Units:    unitCount,
 		Trust:    trustValue,
+		//Expose:   exposed,
+		//Config:   conf.ApplicationConfig,
 	}
 
 	return response, nil
@@ -426,11 +533,34 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		return fmt.Errorf("no status returned for application: %s", input.AppName)
 	}
 
+	// process trust
 	if input.Trust != nil {
 		err := applicationAPIClient.SetConfig("master", input.AppName, "", map[string]string{
 			"trust": fmt.Sprintf("%v", *input.Trust),
 		})
 		if err != nil {
+			return err
+		}
+	}
+
+	// process expose
+	if input.Unexpose {
+		// TODO: (2022-08-10) right now we only unexpose all the possible endpoints.
+		// Additional logic must be set up to specify what endpoints
+		// should be unexpose in case this is simply a change, not a
+		// complete removal.
+		if err := applicationAPIClient.Unexpose(input.AppName, nil); err != nil {
+			log.Error().Err(err).Msg("error when trying to unexpose")
+			return err
+		}
+	} else if input.Expose != nil {
+		exposeMap := make(map[string]string)
+		for k, v := range input.Expose {
+			exposeMap[k] = v.(string)
+		}
+		err := c.processExpose(applicationAPIClient, input.AppName, exposeMap)
+		if err != nil {
+			log.Error().Err(err).Msg("error when trying to expose")
 			return err
 		}
 	}

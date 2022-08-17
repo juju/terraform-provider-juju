@@ -42,10 +42,9 @@ func resourceApplication() *schema.Resource {
 				Description: "The name of the charm to be installed from Charmhub.",
 				Type:        schema.TypeList,
 				Required:    true,
-				MaxItems:    1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"name": &schema.Schema{
+						"name": {
 							Description: "The name of the charm",
 							Type:        schema.TypeString,
 							Required:    true,
@@ -82,12 +81,44 @@ func resourceApplication() *schema.Resource {
 				Description: "Application specific configuration.",
 				Type:        schema.TypeMap,
 				Optional:    true,
+				DefaultFunc: func() (interface{}, error) {
+					return make(map[string]interface{}), nil
+				},
 			},
 			"trust": {
 				Description: "Set the trust for the application.",
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Default:     false,
+			},
+			"expose": {
+				Description: "Makes an application publicly available over the network",
+				Type:        schema.TypeList,
+				Optional:    true,
+				Default:     nil,
+				MaxItems:    1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"endpoints": {
+							Description: "Expose only the ports that charms have opened for this comma-delimited list of endpoints",
+							Type:        schema.TypeString,
+							Default:     "",
+							Optional:    true,
+						},
+						"spaces": {
+							Description: "A comma-delimited list of spaces that should be able to access the application ports once exposed.",
+							Type:        schema.TypeString,
+							Default:     "",
+							Optional:    true,
+						},
+						"cidrs": {
+							Description: "A comma-delimited list of CIDRs that should be able to access the application ports once exposed.",
+							Type:        schema.TypeString,
+							Default:     "",
+							Optional:    true,
+						},
+					},
+				},
 			},
 		},
 	}
@@ -109,6 +140,24 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 	series := charm["series"].(string)
 	units := d.Get("units").(int)
 	trust := d.Get("trust").(bool)
+	// populate the config parameter
+	configField := d.Get("config").(map[string]interface{})
+	config := make(map[string]string)
+	for k, v := range configField {
+		config[k] = v.(string)
+	}
+	// if expose is nil, it was not defined
+	var expose map[string]string = nil
+	exposeField, exposeWasSet := d.GetOk("expose")
+	if exposeWasSet {
+		// this was set, by default get no fields there
+		expose = make(map[string]string, 0)
+		aux := exposeField.([]interface{})[0]
+		if aux != nil {
+			expose = aux.(map[string]string)
+		}
+	}
+
 	revision := charm["revision"].(int)
 	if _, exist := d.GetOk("charm.0.revision"); !exist {
 		revision = -1
@@ -122,7 +171,9 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 		CharmRevision:   revision,
 		CharmSeries:     series,
 		Units:           units,
+		Config:          config,
 		Trust:           trust,
+		Expose:          expose,
 	})
 
 	if err != nil {
@@ -213,11 +264,28 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 	if err = d.Set("units", response.Units); err != nil {
 		return diag.FromErr(err)
 	}
+
 	if err = d.Set("trust", response.Trust); err != nil {
 		return diag.FromErr(err)
 	}
 
-	// TODO: Add client function to handle the appropriate JuJu API Facade Endpoint
+	// TODO: (2022-08-12) The information contained in the deployment plan
+	// does not have to be exactly the same returned by Juju.
+	// Operations such as expose or config, will return more
+	// information than the one required for the plan.
+	// Additional logic has to be added here to ignore those
+	// fields returned by Juju not addressed in the deployment
+	// plan.
+
+	// exposeValue := []map[string]interface{}{response.Expose}
+	// if err = d.Set("expose", exposeValue); err != nil {
+	// 	return diag.FromErr(err)
+	// }
+
+	// if err = d.Set("config", response.Config); err != nil {
+	// 	return diag.FromErr(err)
+	// }
+
 	return nil
 }
 
@@ -246,9 +314,32 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 		updateApplicationInput.Trust = &trust
 	}
 
+	if d.HasChange("expose") {
+		expose, exposeWasSet := d.GetOk("expose")
+		if exposeWasSet {
+			if expose.([]interface{})[0] == nil {
+				// no params in expose
+				updateApplicationInput.Expose = make(map[string]interface{})
+			} else {
+				// expose has params
+				updateApplicationInput.Expose = expose.([]interface{})[0].(map[string]interface{})
+			}
+		} else {
+			// if there is a change and we have no expose, we have
+			// to unexpose
+			updateApplicationInput.Unexpose = true
+			updateApplicationInput.Expose = nil
+		}
+	}
+
 	if d.HasChange("charm.0.revision") {
 		revision := d.Get("charm.0.revision").(int)
 		updateApplicationInput.Revision = &revision
+	}
+
+	if d.HasChange("config") {
+		config := d.Get("config").(map[string]interface{})
+		updateApplicationInput.Config = config
 	}
 
 	err = client.Applications.UpdateApplication(&updateApplicationInput)
