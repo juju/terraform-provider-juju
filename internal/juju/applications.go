@@ -462,8 +462,10 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 			// In the terraform plan we introduce strings...
 			// so we force this conversion
 			aux := v.(map[string]interface{})
-			// set if we find the value key
-			if value := aux["value"]; value != nil {
+			// set if we find the value key.
+			// TODO cast the value to the corresponding type
+			// indicated in the type field
+			if value, found := aux["value"]; found {
 				conf[k] = fmt.Sprintf("%s", value)
 			}
 		}
@@ -471,7 +473,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	// trust field which has to be included into the configuration
 	trustValue := false
-	if returnedConf != nil {
+	if returnedConf.ApplicationConfig != nil {
 		aux, found := returnedConf.ApplicationConfig["trust"]
 		if found {
 			m := aux.(map[string]any)
@@ -489,8 +491,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	var exposed map[string]interface{} = nil
 	if appStatus.Exposed {
 		// rebuild
-		log.Debug().Msg("it was previously exposed")
-		exposed = make(map[string]interface{}, 1)
+		exposed = make(map[string]interface{}, 0)
 		endpoints := []string{""}
 		spaces := ""
 		cidrs := ""
@@ -568,26 +569,26 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 
 	// process configuration
 	auxConfig := input.Config
-	if auxConfig != nil {
-		// trust goes inside the config
-		if input.Trust != nil {
-			auxConfig["trust"] = fmt.Sprintf("%v", *input.Trust)
-		} else {
-			auxConfig = map[string]string{
-				"trust": fmt.Sprintf("%v", *input.Trust),
-			}
+
+	// trust goes inside the config
+	if input.Trust != nil {
+		if auxConfig == nil {
+			auxConfig = make(map[string]string)
 		}
+		auxConfig["trust"] = fmt.Sprintf("%v", *input.Trust)
 	}
+
 	if auxConfig != nil {
 		err := applicationAPIClient.SetConfig("master", input.AppName, "", auxConfig)
 		if err != nil {
+			log.Error().Err(err).Msg("error setting configuration params")
 			return err
 		}
 	}
 
 	// unexpose corresponding endpoints
 	if len(input.Unexpose) != 0 {
-		log.Debug().Interface("endpoints", input.Unexpose).Msg("Unexposing endpoints")
+		log.Trace().Interface("endpoints", input.Unexpose).Msg("Unexposing endpoints")
 		if err := applicationAPIClient.Unexpose(input.AppName, input.Unexpose); err != nil {
 			log.Error().Err(err).Msg("error when trying to unexpose")
 			return err
@@ -595,7 +596,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	}
 	// expose endpoints if required
 	if input.Expose != nil {
-		log.Debug().Interface("endpoints", input.Unexpose).Msg("Expose endpoints")
+		log.Trace().Interface("endpoints", input.Unexpose).Msg("Expose endpoints")
 		exposeMap := make(map[string]string)
 		for k, v := range input.Expose {
 			exposeMap[k] = v.(string)

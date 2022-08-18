@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/rs/zerolog/log"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -270,23 +269,14 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 		return diag.FromErr(err)
 	}
 
-	// TODO: (2022-08-12) The information contained in the deployment plan
-	// does not have to be exactly the same returned by Juju.
-	// Operations such as expose or config, will return more
-	// information than the one required for the plan.
-	// Additional logic has to be added here to ignore those
-	// fields returned by Juju not addressed in the deployment
-	// plan.
-
-	log.Debug().Interface("expose", d.Get("exposed")).Msg("expose before reading")
-	log.Debug().Interface("expose", response.Expose).Msg("expose from the read")
-	exposeValue := []map[string]interface{}{response.Expose}
+	var exposeValue []map[string]interface{} = nil
+	if response.Expose != nil {
+		exposeValue = []map[string]interface{}{response.Expose}
+	}
 	if err = d.Set("expose", exposeValue); err != nil {
 		return diag.FromErr(err)
 	}
 
-	log.Debug().Interface("config", d.Get("config")).Msg("config before reading")
-	log.Debug().Interface("config", response.Config).Msg("config from the read")
 	// config will contain a long map with many fields this plan
 	// may not be aware of. We run a diff and only focus on those
 	// entries we know from the previous state. If they were removed
@@ -299,7 +289,6 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 	if err = d.Set("config", newConfig); err != nil {
 		return diag.FromErr(err)
 	}
-	log.Debug().Interface("newConfig", newConfig).Msg("config after filtering")
 
 	return nil
 }
@@ -331,27 +320,12 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 
 	if d.HasChange("expose") {
 		oldExpose, newExpose := d.GetChange("expose")
-		expose, unexpose := computeExposeDeltas(oldExpose, newExpose)
+		_, exposeWasSet := d.GetOk("expose")
+
+		expose, unexpose := computeExposeDeltas(oldExpose, newExpose, exposeWasSet)
 
 		updateApplicationInput.Expose = expose
 		updateApplicationInput.Unexpose = unexpose
-
-		// expose, exposeWasSet := d.GetOk("expose")
-		// oldExpose, newExpose := d.GetChange("expose")
-		// if exposeWasSet {
-		// 	if expose.([]interface{})[0] == nil {
-		// 		// no params in expose
-		// 		updateApplicationInput.Expose = make(map[string]interface{})
-		// 	} else {
-		// 		// expose has params
-		// 		updateApplicationInput.Expose = expose.([]interface{})[0].(map[string]interface{})
-		// 	}
-		// } else {
-		// 	// if there is a change and we have no expose, we have
-		// 	// to unexpose
-		// 	updateApplicationInput.Unexpose = true
-		// 	updateApplicationInput.Expose = nil
-		// }
 	}
 
 	if d.HasChange("charm.0.revision") {
@@ -360,7 +334,7 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	if d.HasChange("config") {
-		config := d.Get("config").([]map[string]interface{})[0]
+		config := d.Get("config").(map[string]interface{})
 		updateApplicationInput.Config = make(map[string]string, len(config))
 		for k, v := range config {
 			updateApplicationInput.Config[k] = v.(string)
@@ -375,16 +349,28 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 	return nil
 }
 
-// compuseExposeDeltas ...
-func computeExposeDeltas(oldExpose interface{}, newExpose interface{}) (map[string]interface{}, []string) {
-	var old map[string]interface{}
-	var new map[string]interface{}
+// computeExposeDeltas computes the differences between the previously
+// stored expose value and the current one. The valueSet argument is used
+// to indicate whether the value was already set or not in the latest
+// read of the plan.
+func computeExposeDeltas(oldExpose interface{}, newExpose interface{}, valueSet bool) (map[string]interface{}, []string) {
+	var old map[string]interface{} = nil
+	var new map[string]interface{} = nil
 
 	if oldExpose != nil {
-		old = oldExpose.([]map[string]interface{})[0]
+		aux := oldExpose.([]interface{})
+		if len(aux) != 0 && aux[0] != nil {
+			old = aux[0].(map[string]interface{})
+		}
 	}
 	if newExpose != nil {
-		new = newExpose.([]map[string]interface{})[0]
+		aux := newExpose.([]interface{})
+		if len(aux) != 0 && aux[0] != nil {
+			new = aux[0].(map[string]interface{})
+		}
+	}
+	if new == nil && valueSet {
+		new = make(map[string]interface{})
 	}
 
 	toExpose := make(map[string]interface{})
@@ -392,10 +378,12 @@ func computeExposeDeltas(oldExpose interface{}, newExpose interface{}) (map[stri
 	// if new is nil we unexpose everything
 	if new == nil {
 		// set all the endpoints to be unexposed
-		for k, _ := range old {
-			toUnexpose = append(toUnexpose, k)
-		}
+		toUnexpose = append(toUnexpose, old["endpoints"].(string))
 		return nil, toUnexpose
+	}
+
+	if old != nil {
+		old = make(map[string]interface{})
 	}
 
 	// if we have new endpoints we have to expose them
