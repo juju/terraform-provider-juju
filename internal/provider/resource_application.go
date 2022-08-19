@@ -147,14 +147,14 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 		config[k] = v.(string)
 	}
 	// if expose is nil, it was not defined
-	var expose map[string]string = nil
+	var expose map[string]interface{} = nil
 	exposeField, exposeWasSet := d.GetOk("expose")
 	if exposeWasSet {
 		// this was set, by default get no fields there
-		expose = make(map[string]string, 0)
+		expose = make(map[string]interface{}, 0)
 		aux := exposeField.([]interface{})[0]
 		if aux != nil {
-			expose = aux.(map[string]string)
+			expose = aux.(map[string]interface{})
 		}
 	}
 

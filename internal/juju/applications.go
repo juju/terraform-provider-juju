@@ -43,7 +43,7 @@ type CreateApplicationInput struct {
 	CharmRevision   int
 	Units           int
 	Trust           bool
-	Expose          map[string]string
+	Expose          map[string]interface{}
 	Config          map[string]string
 }
 
@@ -306,10 +306,19 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 // an expose request is done populating the request arguments with
 // the endpoints, spaces, and cidrs contained in the exposeConfig
 // map.
-func (c applicationsClient) processExpose(applicationAPIClient *apiapplication.Client, applicationName string, exposeConfig map[string]string) error {
+func (c applicationsClient) processExpose(applicationAPIClient *apiapplication.Client, applicationName string, expose map[string]interface{}) error {
 	// nothing to do
-	if exposeConfig == nil {
+	if expose == nil {
 		return nil
+	}
+
+	exposeConfig := make(map[string]string)
+	for k, v := range expose {
+		if v != nil {
+			exposeConfig[k] = v.(string)
+		} else {
+			exposeConfig[k] = ""
+		}
 	}
 
 	// create one entry with spaces and the CIDRs per endpoint. If no endpoint
@@ -319,6 +328,7 @@ func (c applicationsClient) processExpose(applicationAPIClient *apiapplication.C
 	listCIDRs := splitCommaDelimitedList(exposeConfig["cidrs"])
 
 	if len(listEndpoints)+len(listSpaces)+len(listCIDRs) == 0 {
+		log.Trace().Msgf("call expose application [%s]", applicationName)
 		return applicationAPIClient.Expose(applicationName, nil)
 	}
 
@@ -597,11 +607,11 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	// expose endpoints if required
 	if input.Expose != nil {
 		log.Trace().Interface("endpoints", input.Unexpose).Msg("Expose endpoints")
-		exposeMap := make(map[string]string)
-		for k, v := range input.Expose {
-			exposeMap[k] = v.(string)
-		}
-		err := c.processExpose(applicationAPIClient, input.AppName, exposeMap)
+		// exposeMap := make(map[string]string)
+		// for k, v := range input.Expose {
+		// 	exposeMap[k] = v.(string)
+		// }
+		err := c.processExpose(applicationAPIClient, input.AppName, input.Expose)
 		if err != nil {
 			log.Error().Err(err).Msg("error when trying to expose")
 			return err
