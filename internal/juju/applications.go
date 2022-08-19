@@ -43,7 +43,7 @@ type CreateApplicationInput struct {
 	CharmRevision   int
 	Units           int
 	Trust           bool
-	Expose          map[string]string
+	Expose          map[string]interface{}
 	Config          map[string]string
 }
 
@@ -65,8 +65,8 @@ type ReadApplicationResponse struct {
 	Series   string
 	Units    int
 	Trust    bool
-	// Config   map[string]interface{}
-	// Expose   map[string]interface{}
+	Config   map[string]string
+	Expose   map[string]interface{}
 }
 
 type UpdateApplicationInput struct {
@@ -78,10 +78,9 @@ type UpdateApplicationInput struct {
 	Revision *int
 	Trust    *bool
 	Expose   map[string]interface{}
-	// Unexpose will be true when the expose
-	// field becomes empty
-	Unexpose bool
-	Config   map[string]interface{}
+	// Unexpose indicates what endpoints to unexpose
+	Unexpose []string
+	Config   map[string]string
 	//Series    string // TODO: Unsupported for now
 }
 
@@ -307,10 +306,19 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 // an expose request is done populating the request arguments with
 // the endpoints, spaces, and cidrs contained in the exposeConfig
 // map.
-func (c applicationsClient) processExpose(applicationAPIClient *apiapplication.Client, applicationName string, exposeConfig map[string]string) error {
+func (c applicationsClient) processExpose(applicationAPIClient *apiapplication.Client, applicationName string, expose map[string]interface{}) error {
 	// nothing to do
-	if exposeConfig == nil {
+	if expose == nil {
 		return nil
+	}
+
+	exposeConfig := make(map[string]string)
+	for k, v := range expose {
+		if v != nil {
+			exposeConfig[k] = v.(string)
+		} else {
+			exposeConfig[k] = ""
+		}
 	}
 
 	// create one entry with spaces and the CIDRs per endpoint. If no endpoint
@@ -318,6 +326,11 @@ func (c applicationsClient) processExpose(applicationAPIClient *apiapplication.C
 	listEndpoints := splitCommaDelimitedList(exposeConfig["endpoints"])
 	listSpaces := splitCommaDelimitedList(exposeConfig["spaces"])
 	listCIDRs := splitCommaDelimitedList(exposeConfig["cidrs"])
+
+	if len(listEndpoints)+len(listSpaces)+len(listCIDRs) == 0 {
+		log.Trace().Msgf("call expose application [%s]", applicationName)
+		return applicationAPIClient.Expose(applicationName, nil)
+	}
 
 	// build params and send the request
 	if len(listEndpoints) == 0 {
@@ -338,7 +351,7 @@ func (c applicationsClient) processExpose(applicationAPIClient *apiapplication.C
 }
 
 func splitCommaDelimitedList(list string) []string {
-	items := make([]string, 1)
+	items := make([]string, 0)
 	for _, token := range strings.Split(list, ",") {
 		token = strings.TrimSpace(token)
 		if len(token) == 0 {
@@ -447,15 +460,31 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("failed to parse charm: %v", err)
 	}
 
-	conf, err := applicationAPIClient.Get("master", input.AppName)
+	returnedConf, err := applicationAPIClient.Get("master", input.AppName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get app configuration %v", err)
 	}
 
-	// trust field
+	conf := make(map[string]string, 0)
+	if returnedConf.ApplicationConfig != nil {
+		for k, v := range returnedConf.ApplicationConfig {
+			// The API returns the configuration entries as interfaces
+			// In the terraform plan we introduce strings...
+			// so we force this conversion
+			aux := v.(map[string]interface{})
+			// set if we find the value key.
+			// TODO cast the value to the corresponding type
+			// indicated in the type field
+			if value, found := aux["value"]; found {
+				conf[k] = fmt.Sprintf("%s", value)
+			}
+		}
+	}
+
+	// trust field which has to be included into the configuration
 	trustValue := false
-	if conf != nil {
-		aux, found := conf.ApplicationConfig["trust"]
+	if returnedConf.ApplicationConfig != nil {
+		aux, found := returnedConf.ApplicationConfig["trust"]
 		if found {
 			m := aux.(map[string]any)
 			target, found := m["value"]
@@ -465,34 +494,36 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		}
 	}
 
-	// TODO: (2022-08-12) The strategy to follow to consolidate Juju
-	// information with the information existing in the deployment plan
-	// has to be defined. Meanwhile, I will comment this section.
-	// process expose field
-	// log.Debug().Msg("read application")
-	// var exposed map[string]interface{} = nil
-	// if appStatus.Exposed {
-	// 	// rebuild
-	// 	log.Debug().Msg("it was previously exposed")
-	// 	exposed = make(map[string]interface{}, 1)
-	// 	endpoints := []string{""}
-	// 	spaces := ""
-	// 	cidrs := ""
-	// 	for epName, value := range appStatus.ExposedEndpoints {
-	// 		if epName != "" {
-	// 			endpoints = append(endpoints, epName)
-	// 		}
-	// 		if len(spaces) == 0 {
-	// 			spaces = strings.Join(value.ExposeToSpaces, ",")
-	// 		}
-	// 		if len(cidrs) == 0 {
-	// 			cidrs = strings.Join(value.ExposeToCIDRs, ",")
-	// 		}
-	// 	}
-	// 	exposed["endpoints"] = strings.Join(endpoints, ",")
-	// 	exposed["spaces"] = spaces
-	// 	exposed["cidrs"] = cidrs
-	// }
+	// the expose field requires additional logic because
+	// the API returns populated cidrs by default. Additionally,
+	// we populate the unexpose field in the response structure
+	// to indicate endpoints that has to be removed by comparing
+	var exposed map[string]interface{} = nil
+	if appStatus.Exposed {
+		// rebuild
+		exposed = make(map[string]interface{}, 0)
+		endpoints := []string{""}
+		spaces := ""
+		cidrs := ""
+		for epName, value := range appStatus.ExposedEndpoints {
+			if epName != "" {
+				endpoints = append(endpoints, epName)
+			}
+			if len(spaces) == 0 {
+				spaces = strings.Join(value.ExposeToSpaces, ",")
+			}
+			if len(cidrs) == 0 {
+				// by default the API sets
+				// cidrs: "0.0.0.0/0,::/0"
+				// ignore them
+				aux := removeDefaultCidrs(value.ExposeToCIDRs)
+				cidrs = strings.Join(aux, ",")
+			}
+		}
+		exposed["endpoints"] = strings.Join(endpoints, ",")
+		exposed["spaces"] = spaces
+		exposed["cidrs"] = cidrs
+	}
 
 	response := &ReadApplicationResponse{
 		Name:     charmURL.Name,
@@ -501,11 +532,24 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		Series:   appInfo.Series,
 		Units:    unitCount,
 		Trust:    trustValue,
-		//Expose:   exposed,
-		//Config:   conf.ApplicationConfig,
+		Expose:   exposed,
+		Config:   conf,
 	}
 
 	return response, nil
+}
+
+// removeDefaultCidrs is an auxiliar function to remove
+// the "0.0.0.0/0 and ::/0" strings from an array of
+// cidrs
+func removeDefaultCidrs(cidrs []string) []string {
+	toReturn := make([]string, 0)
+	for _, cidr := range cidrs {
+		if cidr != "0.0.0.0/0" && cidr != "::/0" {
+			toReturn = append(toReturn, cidr)
+		}
+	}
+	return toReturn
 }
 
 func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) error {
@@ -533,32 +577,41 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		return fmt.Errorf("no status returned for application: %s", input.AppName)
 	}
 
-	// process trust
+	// process configuration
+	auxConfig := input.Config
+
+	// trust goes inside the config
 	if input.Trust != nil {
-		err := applicationAPIClient.SetConfig("master", input.AppName, "", map[string]string{
-			"trust": fmt.Sprintf("%v", *input.Trust),
-		})
+		if auxConfig == nil {
+			auxConfig = make(map[string]string)
+		}
+		auxConfig["trust"] = fmt.Sprintf("%v", *input.Trust)
+	}
+
+	if auxConfig != nil {
+		err := applicationAPIClient.SetConfig("master", input.AppName, "", auxConfig)
 		if err != nil {
+			log.Error().Err(err).Msg("error setting configuration params")
 			return err
 		}
 	}
 
-	// process expose
-	if input.Unexpose {
-		// TODO: (2022-08-10) right now we only unexpose all the possible endpoints.
-		// Additional logic must be set up to specify what endpoints
-		// should be unexpose in case this is simply a change, not a
-		// complete removal.
-		if err := applicationAPIClient.Unexpose(input.AppName, nil); err != nil {
+	// unexpose corresponding endpoints
+	if len(input.Unexpose) != 0 {
+		log.Trace().Interface("endpoints", input.Unexpose).Msg("Unexposing endpoints")
+		if err := applicationAPIClient.Unexpose(input.AppName, input.Unexpose); err != nil {
 			log.Error().Err(err).Msg("error when trying to unexpose")
 			return err
 		}
-	} else if input.Expose != nil {
-		exposeMap := make(map[string]string)
-		for k, v := range input.Expose {
-			exposeMap[k] = v.(string)
-		}
-		err := c.processExpose(applicationAPIClient, input.AppName, exposeMap)
+	}
+	// expose endpoints if required
+	if input.Expose != nil {
+		log.Trace().Interface("endpoints", input.Unexpose).Msg("Expose endpoints")
+		// exposeMap := make(map[string]string)
+		// for k, v := range input.Expose {
+		// 	exposeMap[k] = v.(string)
+		// }
+		err := c.processExpose(applicationAPIClient, input.AppName, input.Expose)
 		if err != nil {
 			log.Error().Err(err).Msg("error when trying to expose")
 			return err
