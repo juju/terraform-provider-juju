@@ -6,7 +6,7 @@
 # `juju run-action grafana/0 get-admin-password --wait`
 #
 # Next, browse to the main Grafana login page. Use the 
-# grafana/0 unit IP and port 3000 (http://10.1.250.216:3000)
+# grafana/0 unit IP and port 3000 (e.g. http://10.1.250.216:3000)
 # and introduce the user (admin) and password provided in 
 # the previous step. Check that the prometheus datasource is 
 # already available and you can use it.
