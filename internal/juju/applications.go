@@ -479,6 +479,13 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 				conf[k] = fmt.Sprintf("%s", value)
 			}
 		}
+		// repeat the same steps for charm config values
+		for k, v := range returnedConf.CharmConfig {
+			aux := v.(map[string]interface{})
+			if value, found := aux["value"]; found {
+				conf[k] = fmt.Sprintf("%s", value)
+			}
+		}
 	}
 
 	// trust field which has to be included into the configuration
