@@ -1,3 +1,9 @@
+## 0.4.1 (August 25, 2022)
+
+NOTES:
+
+* The provider now receives the values for the `CharmConfig` while reading an already deployed application's status.
+
 ## 0.4.0 (August 19, 2022)
 
 FEATURES:
