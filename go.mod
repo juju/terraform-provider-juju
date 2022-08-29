@@ -12,7 +12,7 @@ require (
 require (
 	github.com/juju/charm/v8 v8.0.0-20220509231111-ed6d505a46f4
 	github.com/juju/errors v0.0.0-20220316043928-e10eb17a9eeb
-	github.com/rs/zerolog v1.27.0
+	github.com/rs/zerolog v1.28.0
 )
 
 require (
