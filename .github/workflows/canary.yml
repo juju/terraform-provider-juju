@@ -27,7 +27,6 @@ jobs:
           go-version-file: "go.mod"
           cache: true
       - run: go get -v -u github.com/juju/juju@${{ steps.get_release.outputs.release }}
-      - run: go mod tidy -go 1.16
       - run: go mod tidy -go 1.18
       - run: go build -v .
 
@@ -74,7 +73,6 @@ jobs:
           juju show-controller | yq .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
       - run: go get -v -u github.com/juju/juju@${{ steps.get_release.outputs.release }}
-      - run: go mod tidy -go 1.16
       - run: go mod tidy -go 1.18
       - env:
           TF_ACC: "1"
