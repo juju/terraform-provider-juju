@@ -158,7 +158,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		return nil, fmt.Errorf("specifying a revision requires a channel for future upgrades")
 	}
 
-	modelConstraints, err := clientAPIClient.GetModelConstraints()
+	modelConstraints, err := modelconfigAPIClient.GetModelConstraints()
 	if err != nil {
 		return nil, err
 	}
@@ -574,6 +574,9 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	clientAPIClient := apiclient.NewClient(conn)
 	defer clientAPIClient.Close()
 
+	modelconfigAPIClient := apimodelconfig.NewClient(conn)
+	defer modelconfigAPIClient.Close()
+
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
 		return err
@@ -681,7 +684,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 
 		newURL := oldURL.WithRevision(*input.Revision)
 
-		modelConstraints, err := clientAPIClient.GetModelConstraints()
+		modelConstraints, err := modelconfigAPIClient.GetModelConstraints()
 		if err != nil {
 			return err
 		}
