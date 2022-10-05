@@ -15,8 +15,8 @@ import (
 	"github.com/juju/juju/rpc/params"
 	"github.com/rs/zerolog/log"
 
-	"github.com/juju/charm/v8"
-	charmresources "github.com/juju/charm/v8/resource"
+	"github.com/juju/charm/v9"
+	charmresources "github.com/juju/charm/v9/resource"
 	jujuerrors "github.com/juju/errors"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apicharms "github.com/juju/juju/api/client/charms"
@@ -677,7 +677,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	if input.Revision != nil {
 		// TODO: How do we actually set the revision?
 		// It looks like it is set by updating the charmURL which encodes the revision
-		oldURL, err := applicationAPIClient.GetCharmURL("", input.AppName)
+		oldURL, _, err := applicationAPIClient.GetCharmURLOrigin("", input.AppName)
 		if err != nil {
 			return err
 		}
