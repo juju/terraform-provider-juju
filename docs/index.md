@@ -20,6 +20,8 @@ In future the provider will be extended to support more of Juju's capabilities.
 
 ## Prerequisites
 
+* [Juju][0] `2.9.33+`
+
 ### Juju CLI configuration store
 
 The provider has a dependency on Juju CLI configuration store.
