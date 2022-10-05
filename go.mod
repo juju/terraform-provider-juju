@@ -6,11 +6,11 @@ require (
 	github.com/bflad/tfproviderlint v0.28.1
 	github.com/hashicorp/terraform-plugin-docs v0.13.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.23.0
-	github.com/juju/juju v0.0.0-20220609145112-917a8f103356
+	github.com/juju/juju v0.0.0-20220627005306-38dadead12cc
 )
 
 require (
-	github.com/juju/charm/v8 v8.0.0-20220509231111-ed6d505a46f4
+	github.com/juju/charm/v9 v9.0.0-20220131034618-d197db1afa3d
 	github.com/juju/errors v0.0.0-20220316043928-e10eb17a9eeb
 	github.com/rs/zerolog v1.28.0
 )
@@ -76,7 +76,7 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/juju/ansiterm v0.0.0-20210929141451-8b71cc96ebdc // indirect
-	github.com/juju/charmrepo/v6 v6.0.0-20220207014006-e6af52d614e4 // indirect
+	github.com/juju/charmrepo/v7 v7.0.0-20210923152136-0ae2f26643bf // indirect
 	github.com/juju/clock v0.0.0-20220203021603-d9deb868a28a // indirect
 	github.com/juju/cmd/v3 v3.0.0-20220203030511-039f3566372a // indirect
 	github.com/juju/collections v0.0.0-20220203020748-febd7cad8a7a // indirect
