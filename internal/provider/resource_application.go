@@ -222,10 +222,6 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 		return nil
 	}
 
-	// TODO: This is a temporary fix to preserve the defined charm channel, as we cannot currently pull this from the API
-	// The if exists statement is also required to allow import to function when no exiting data is in the state
-	// Remove these lines and uncomment under the next TODO
-
 	var charmList map[string]interface{}
 	_, exists := d.GetOk("charm")
 	if exists {
@@ -236,7 +232,7 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 	} else {
 		charmList = map[string]interface{}{
 			"name":     response.Name,
-			"channel":  "latest/stable",
+			"channel":  response.Channel,
 			"revision": response.Revision,
 			"series":   response.Series,
 		}
@@ -245,16 +241,6 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 		return diag.FromErr(err)
 	}
 
-	// TODO: Once we can pull the channel from the API, remove the above and uncomment below
-	//charmList := []map[string]interface{}{
-	//	{
-	//		"name":     response.Name,
-	//		"channel":  response.Channel,
-	//		"revision": response.Revision,
-	//		"series":   response.Series,
-	//	},
-	//}
-	//d.Set("charm", charmList)
 	if err = d.Set("model", modelName); err != nil {
 		return diag.FromErr(err)
 	}
