@@ -21,7 +21,7 @@ runs:
       # language=bash
       run: |
         set -euxo pipefail
-        sudo snap install juju --classic
+        sudo snap install juju --channel=2.9/stable --classic
         lxc network set lxdbr0 ipv6.address none
     - name: bootstrap
       shell: bash
