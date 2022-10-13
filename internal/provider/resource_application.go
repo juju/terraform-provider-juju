@@ -227,6 +227,7 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 	if exists {
 		charmList = d.Get("charm").([]interface{})[0].(map[string]interface{})
 		charmList["name"] = response.Name
+		charmList["channel"] = response.Channel
 		charmList["revision"] = response.Revision
 		charmList["series"] = response.Series
 	} else {
