@@ -60,6 +60,7 @@ resource "juju_application" "one" {
 	
 	charm {
 		name = "hello-juju"
+		series = "focal"
 	}
 }
 
@@ -69,6 +70,7 @@ resource "juju_application" "two" {
 
 	charm {
 		name = "postgresql"
+		series = "focal"
 	}
 }
 
@@ -78,6 +80,7 @@ resource "juju_application" "three" {
 
 	charm {
 		name = "postgresql"
+		series = "focal"
 	}
 }
 
