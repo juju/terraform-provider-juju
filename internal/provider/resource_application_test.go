@@ -89,7 +89,7 @@ resource "juju_application" "this" {
   model = juju_model.this.name
   name = "test-app"
   charm {
-    name = "tiny-bash"
+    name = "ubuntu"
   }
   trust = true
   expose{}
