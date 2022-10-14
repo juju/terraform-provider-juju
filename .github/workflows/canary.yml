@@ -27,7 +27,7 @@ jobs:
           go-version-file: "go.mod"
           cache: true
       - run: go get -v -u github.com/juju/juju@${{ steps.get_release.outputs.release }}
-      - run: go mod tidy -go 1.18
+      - run: go mod tidy -go 1.19
       - run: go build -v .
 
   # Run acceptance tests in a matrix with Terraform CLI versions
@@ -73,7 +73,7 @@ jobs:
           juju show-controller | yq .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
       - run: go get -v -u github.com/juju/juju@${{ steps.get_release.outputs.release }}
-      - run: go mod tidy -go 1.18
+      - run: go mod tidy -go 1.19
       - env:
           TF_ACC: "1"
         run: go test -v -cover ./internal/provider/

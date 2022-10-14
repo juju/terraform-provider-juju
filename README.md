@@ -17,7 +17,7 @@ There will also be support for importing these existing Juju resources.
 ## Requirements
 
 - [Terraform](https://www.terraform.io/downloads.html) >= 0.12.0
-- [Go](https://golang.org/doc/install) >= 1.18
+- [Go](https://golang.org/doc/install) >= 1.19
 
 ## Building The Provider
 
