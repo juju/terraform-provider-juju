@@ -61,7 +61,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.47.2
+          version: v1.50.0
 
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
