@@ -15,8 +15,8 @@ import (
 	"github.com/juju/juju/rpc/params"
 	"github.com/rs/zerolog/log"
 
-	"github.com/juju/charm/v9"
-	charmresources "github.com/juju/charm/v9/resource"
+	"github.com/juju/charm/v8"
+	charmresources "github.com/juju/charm/v8/resource"
 	jujuerrors "github.com/juju/errors"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apicharms "github.com/juju/juju/api/client/charms"
