@@ -43,6 +43,10 @@ go mod tidy
 
 Then commit the changes to `go.mod` and `go.sum`.
 
+## Using the Provider
+
+Please, refer to the [Terraform docs for the Juju provider](https://registry.terraform.io/providers/juju/juju/latest/docs).
+
 ## Developing the Provider
 
 If you wish to work on the provider, you'll first need [Go](http://www.golang.org) installed on your machine (see [Requirements](#requirements) above).
