@@ -265,10 +265,10 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 		return diag.FromErr(err)
 	}
 
-	// config will contain a long map with many fields this plan
-	// may not be aware of. We focus on those config entries that
-	// are not the default value. If they are known in the previous
-	// status they will be ignored.
+	// We focus on those config entries that
+	// are not the default value. If the value was the same
+	// we ignore it. If no changes were made, jump to the
+	// next step.
 	previousConfig := d.Get("config").(map[string]interface{})
 	// update the values from the previous config
 	changes := false

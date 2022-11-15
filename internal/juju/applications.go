@@ -469,6 +469,10 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	conf := make(map[string]string, 0)
 	if returnedConf.ApplicationConfig != nil {
 		for k, v := range returnedConf.ApplicationConfig {
+			// skip the trust value. We have an independent field for that
+			if k == "trust" {
+				continue
+			}
 			// The API returns the configuration entries as interfaces
 			// In the terraform plan we introduce strings...
 			// so we force this conversion
