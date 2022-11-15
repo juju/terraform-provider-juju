@@ -204,6 +204,7 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 	if len(id) != 2 {
 		return diag.Errorf("unable to parse model and application name from provided ID")
 	}
+
 	modelName, appName := id[0], id[1]
 	modelUUID, err := client.Models.ResolveModelUUID(modelName)
 	if err != nil {
@@ -265,16 +266,24 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 	}
 
 	// config will contain a long map with many fields this plan
-	// may not be aware of. We run a diff and only focus on those
-	// entries we know from the previous state. If they were removed
-	// from the previous state that has been modified.
+	// may not be aware of. We focus on those config entries that
+	// are not the default value. If they are known in the previous
+	// status they will be ignored.
 	previousConfig := d.Get("config").(map[string]interface{})
-	newConfig := make(map[string]interface{}, 0)
-	for k := range previousConfig {
-		newConfig[k] = response.Config[k]
+	// update the values from the previous config
+	changes := false
+	for k, v := range response.Config {
+		if previousConfig[k] != v {
+			previousConfig[k] = v
+			changes = true
+		}
 	}
-	if err = d.Set("config", newConfig); err != nil {
-		return diag.FromErr(err)
+	// we only set changes if there is any difference between
+	// the previous and the current config values
+	if changes {
+		if err = d.Set("config", previousConfig); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil

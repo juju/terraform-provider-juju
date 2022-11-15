@@ -432,6 +432,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	apps, err := applicationAPIClient.ApplicationsInfo([]names.ApplicationTag{names.NewApplicationTag(input.AppName)})
 	if err != nil {
+		log.Error().Err(err).Msg("found when querying the applications info")
 		return nil, err
 	}
 	if len(apps) > 1 {
@@ -472,18 +473,26 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 			// In the terraform plan we introduce strings...
 			// so we force this conversion
 			aux := v.(map[string]interface{})
-			// set if we find the value key.
-			// TODO cast the value to the corresponding type
-			// indicated in the type field
-			if value, found := aux["value"]; found {
-				conf[k] = fmt.Sprintf("%s", value)
+			// set if we find the value key and this is not a default
+			// value.
+			// TODO this returns a dictonary with entries using different
+			// type values. Cast the value to the corresponding type.
+			// indicated in the type field"
+			isDefault, found := aux["source"]
+			if found && isDefault != "default" {
+				if value, found := aux["value"]; found {
+					conf[k] = fmt.Sprintf("%s", value)
+				}
 			}
 		}
 		// repeat the same steps for charm config values
 		for k, v := range returnedConf.CharmConfig {
 			aux := v.(map[string]interface{})
-			if value, found := aux["value"]; found {
-				conf[k] = fmt.Sprintf("%s", value)
+			isDefault, found := aux["source"]
+			if found && isDefault != "default" {
+				if value, found := aux["value"]; found {
+					conf[k] = fmt.Sprintf("%s", value)
+				}
 			}
 		}
 	}
