@@ -5,6 +5,7 @@ import (
 
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/connector"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -73,8 +74,8 @@ func (cf *ConnectionFactory) GetConnection(model *string) (api.Connection, error
 
 	conn, err := connr.Connect()
 	if err != nil {
+		log.Error().Err(err).Msg("connection not established")
 		return nil, err
 	}
-
 	return conn, nil
 }

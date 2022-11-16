@@ -12,7 +12,7 @@ require (
 )
 
 require (
-	github.com/juju/charm/v9 v9.0.0-20220131034618-d197db1afa3d
+	github.com/juju/charm/v8 v8.0.6
 	github.com/juju/errors v1.0.0
 	github.com/rs/zerolog v1.28.0
 )
@@ -78,7 +78,6 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/juju/ansiterm v1.0.0 // indirect
-	github.com/juju/charm/v8 v8.0.6 // indirect
 	github.com/juju/charmrepo/v6 v6.0.3 // indirect
 	github.com/juju/clock v1.0.2 // indirect
 	github.com/juju/cmd/v3 v3.0.0 // indirect
