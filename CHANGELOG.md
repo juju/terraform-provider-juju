@@ -1,3 +1,11 @@
+## 0.4.2 (November 17, 2022)
+
+NOTES:
+
+* Added support for Juju 2.9.37
+* Fix issue [96](https://github.com/juju/terraform-provider-juju/issues/96)
+* Fix issue [95](https://github.com/juju/terraform-provider-juju/issues/95)
+
 ## 0.4.1 (August 25, 2022)
 
 NOTES:
