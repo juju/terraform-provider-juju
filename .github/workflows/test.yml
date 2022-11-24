@@ -90,7 +90,11 @@ jobs:
         with:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
-      - uses: ./.github/actions/setup-juju
+      - name: Setup operator environment
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: lxd
+          juju-channel: 2.9/stable
       - name: "Set environment to configure provider"
         # language=bash
         run: |

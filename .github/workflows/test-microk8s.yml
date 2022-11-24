@@ -62,7 +62,13 @@ jobs:
         with:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
-      - uses: ./.github/actions/setup-juju
+      - name: Setup operator environment
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: microk8s
+          juju-channel: 2.9/stable
+          channel: 1.25-strict/stable
+          microk8s-group: snap_microk8s
       - name: "Set environment to configure provider"
         run: |
           CONTROLLER=$(juju whoami --format yaml | yq .controller)
