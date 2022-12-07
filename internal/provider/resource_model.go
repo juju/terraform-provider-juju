@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/juju/juju/core/constraints"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -57,6 +58,11 @@ func resourceModel() *schema.Resource {
 				Type:        schema.TypeMap,
 				Optional:    true,
 			},
+			"constraints": {
+				Description: "Constraints imposed to this model",
+				Type:        schema.TypeString,
+				Optional:    true,
+			},
 			"type": {
 				Description: "Type of the model. Set by the Juju's API server",
 				Type:        schema.TypeString,
@@ -74,11 +80,22 @@ func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta inter
 	name := d.Get("name").(string)
 	cloud := d.Get("cloud").([]interface{})
 	config := d.Get("config").(map[string]interface{})
+	readConstraints := d.Get("constraints").(string)
+
+	var parsedConstraints constraints.Value = constraints.Value{}
+	var err error
+	if readConstraints != "" {
+		parsedConstraints, err = constraints.Parse(readConstraints)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+	}
 
 	response, err := client.Models.CreateModel(juju.CreateModelInput{
-		Name:      name,
-		CloudList: cloud,
-		Config:    config,
+		Name:        name,
+		CloudList:   cloud,
+		Config:      config,
+		Constraints: parsedConstraints,
 	})
 	if err != nil {
 		return diag.FromErr(err)
@@ -112,6 +129,9 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 		return diag.FromErr(err)
 	}
 	if err := d.Set("cloud", cloudList); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := d.Set("constraints", response.ModelConstraints); err != nil {
 		return diag.FromErr(err)
 	}
 	if err := d.Set("type", response.ModelInfo.Type); err != nil {

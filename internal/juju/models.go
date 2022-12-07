@@ -2,10 +2,12 @@ package juju
 
 import (
 	"fmt"
-	"github.com/juju/juju/api"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/juju/juju/api"
+	"github.com/juju/juju/core/constraints"
 
 	"github.com/juju/juju/api/client/modelconfig"
 
@@ -20,9 +22,10 @@ type modelsClient struct {
 }
 
 type CreateModelInput struct {
-	Name      string
-	CloudList []interface{}
-	Config    map[string]interface{}
+	Name        string
+	CloudList   []interface{}
+	Config      map[string]interface{}
+	Constraints constraints.Value
 }
 
 type CreateModelResponse struct {
@@ -34,8 +37,9 @@ type ReadModelInput struct {
 }
 
 type ReadModelResponse struct {
-	ModelInfo   params.ModelInfo
-	ModelConfig map[string]interface{}
+	ModelInfo        params.ModelInfo
+	ModelConfig      map[string]interface{}
+	ModelConstraints constraints.Value
 }
 
 type UpdateModelInput struct {
@@ -159,7 +163,17 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 		return nil, err
 	}
 
+	// set constraints when required
+	if input.Constraints.String() != "" {
+		return &CreateModelResponse{ModelInfo: modelInfo}, nil
+	}
+
+	// we have to set constraints
+	modelClient := modelconfig.NewClient(conn)
+	modelClient.SetModelConstraints(input.Constraints)
+
 	return &CreateModelResponse{ModelInfo: modelInfo}, nil
+
 }
 
 func (c *modelsClient) ReadModel(uuid string) (*ReadModelResponse, error) {
@@ -198,9 +212,15 @@ func (c *modelsClient) ReadModel(uuid string) (*ReadModelResponse, error) {
 		return nil, err
 	}
 
+	modelConstraints, err := modelconfigClient.GetModelConstraints()
+	if err != nil {
+		return nil, err
+	}
+
 	return &ReadModelResponse{
-		ModelInfo:   modelInfo,
-		ModelConfig: modelConfig,
+		ModelInfo:        modelInfo,
+		ModelConfig:      modelConfig,
+		ModelConstraints: modelConstraints,
 	}, nil
 }
 
