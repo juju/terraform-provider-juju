@@ -177,7 +177,6 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 	}
 
 	return &CreateModelResponse{ModelInfo: modelInfo}, nil
-
 }
 
 func (c *modelsClient) ReadModel(uuid string) (*ReadModelResponse, error) {
