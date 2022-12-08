@@ -43,9 +43,10 @@ type ReadModelResponse struct {
 }
 
 type UpdateModelInput struct {
-	UUID   string
-	Config map[string]interface{}
-	Unset  []string
+	UUID        string
+	Config      map[string]interface{}
+	Unset       []string
+	Constraints *constraints.Value
 }
 
 type DestroyModelInput struct {
@@ -170,7 +171,10 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 
 	// we have to set constraints
 	modelClient := modelconfig.NewClient(conn)
-	modelClient.SetModelConstraints(input.Constraints)
+	err = modelClient.SetModelConstraints(input.Constraints)
+	if err != nil {
+		return nil, err
+	}
 
 	return &CreateModelResponse{ModelInfo: modelInfo}, nil
 
@@ -233,14 +237,25 @@ func (c *modelsClient) UpdateModel(input UpdateModelInput) error {
 	client := modelconfig.NewClient(conn)
 	defer client.Close()
 
-	err = client.ModelSet(input.Config)
-	if err != nil {
-		return err
+	if input.Config != nil {
+		err = client.ModelSet(input.Config)
+		if err != nil {
+			return err
+		}
 	}
 
-	err = client.ModelUnset(input.Unset...)
-	if err != nil {
-		return err
+	if input.Unset != nil {
+		err = client.ModelUnset(input.Unset...)
+		if err != nil {
+			return err
+		}
+	}
+
+	if input.Constraints != nil {
+		err = client.SetModelConstraints(*input.Constraints)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -54,7 +54,7 @@ func resourceModel() *schema.Resource {
 				},
 			},
 			"config": {
-				Description: "Override default model configuration.",
+				Description: "Override default model configuration",
 				Type:        schema.TypeMap,
 				Optional:    true,
 			},
@@ -131,7 +131,7 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 	if err := d.Set("cloud", cloudList); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("constraints", response.ModelConstraints); err != nil {
+	if err := d.Set("constraints", response.ModelConstraints.String()); err != nil {
 		return diag.FromErr(err)
 	}
 	if err := d.Set("type", response.ModelInfo.Type); err != nil {
@@ -169,29 +169,50 @@ func resourceModelUpdate(ctx context.Context, d *schema.ResourceData, meta inter
 	client := meta.(*juju.Client)
 
 	var diags diag.Diagnostics
+	anyChange := false
+
+	// items that could be changed
+	var newConfigMap map[string]interface{}
+	var newConstraints *constraints.Value = nil
+	var unsetConfigKeys []string
+
+	var err error
 
 	if d.HasChange("config") {
-		modelUUID := d.Id()
-
+		anyChange = true
 		oldConfig, newConfig := d.GetChange("config")
 		oldConfigMap := oldConfig.(map[string]interface{})
-		newConfigMap := newConfig.(map[string]interface{})
+		newConfigMap = newConfig.(map[string]interface{})
 
-		var unsetConfigKeys []string
 		for k := range oldConfigMap {
 			if _, ok := newConfigMap[k]; !ok {
 				unsetConfigKeys = append(unsetConfigKeys, k)
 			}
 		}
+	}
 
-		err := client.Models.UpdateModel(juju.UpdateModelInput{
-			UUID:   modelUUID,
-			Config: newConfigMap,
-			Unset:  unsetConfigKeys,
-		})
+	if d.HasChange("constraints") {
+		anyChange = true
+		_, constr := d.GetChange("constraints")
+		aux, err := constraints.Parse(constr.(string))
 		if err != nil {
 			return diag.FromErr(err)
 		}
+		newConstraints = &aux
+	}
+
+	if !anyChange {
+		return diags
+	}
+
+	err = client.Models.UpdateModel(juju.UpdateModelInput{
+		UUID:        d.Id(),
+		Config:      newConfigMap,
+		Unset:       unsetConfigKeys,
+		Constraints: newConstraints,
+	})
+	if err != nil {
+		return diag.FromErr(err)
 	}
 
 	return diags
