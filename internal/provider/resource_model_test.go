@@ -37,6 +37,12 @@ func TestAcc_ResourceModel_Basic(t *testing.T) {
 				),
 			},
 			{
+				Config: testAccConstraintsModel(t, modelName, "cores=1 mem=1024M"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "constraints", "cores=1 mem=1024M"),
+				),
+			},
+			{
 				ImportStateVerify: true,
 				ImportState:       true,
 				ImportStateVerifyIgnore: []string{
@@ -140,4 +146,18 @@ resource "juju_model" "model" {
     logging-config = "<root>=%s"
   }
 }`, modelName, logLevel)
+}
+
+func testAccConstraintsModel(t *testing.T, modelName string, constraints string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "model" {
+  name = %q
+
+  cloud {
+   name   = "localhost"
+   region = "localhost"
+  }
+
+  constraints = "%s"
+}`, modelName, constraints)
 }
