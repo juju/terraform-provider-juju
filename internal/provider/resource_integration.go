@@ -33,7 +33,7 @@ func resourceIntegration() *schema.Resource {
 			"via": {
 				Description: "A comma separated list of CIDRs for outbound traffic",
 				Type:        schema.TypeString,
-				Required:    false,
+				Optional:    true,
 			},
 			"application": {
 				Description: "The two applications to integrate.",
