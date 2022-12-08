@@ -39,7 +39,7 @@ func TestAcc_ResourceModel_Basic(t *testing.T) {
 			{
 				Config: testAccConstraintsModel(t, modelName, "cores=1 mem=1G"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "constraints", "cores=1 mem=1G"),
+					resource.TestCheckResourceAttr(resourceName, "constraints", "cores=1 mem=1024M"),
 				),
 			},
 			{
