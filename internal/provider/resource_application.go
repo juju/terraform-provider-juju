@@ -141,11 +141,10 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 	units := d.Get("units").(int)
 	trust := d.Get("trust").(bool)
 	// populate the config parameter
+	// terraform only permits a single type. We have to treat
+	// strings to have different types
 	configField := d.Get("config").(map[string]interface{})
-	config := make(map[string]string)
-	for k, v := range configField {
-		config[k] = v.(string)
-	}
+
 	// if expose is nil, it was not defined
 	var expose map[string]interface{} = nil
 	exposeField, exposeWasSet := d.GetOk("expose")
@@ -171,7 +170,7 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 		CharmRevision:   revision,
 		CharmSeries:     series,
 		Units:           units,
-		Config:          config,
+		Config:          configField,
 		Trust:           trust,
 		Expose:          expose,
 	})
@@ -269,14 +268,28 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 	// are not the default value. If the value was the same
 	// we ignore it. If no changes were made, jump to the
 	// next step.
+	// Terraform does not allow to have several types
+	// for a schema attribute. We have to transform the string
+	// with the potential type we want to compare with.
 	previousConfig := d.Get("config").(map[string]interface{})
+	// known previously
 	// update the values from the previous config
 	changes := false
+
 	for k, v := range response.Config {
-		if previousConfig[k] != v {
-			previousConfig[k] = v
+		// Add if the value has changed from the previous state
+		if previousValue, found := previousConfig[k]; found {
+			if !juju.EqualConfigEntries(v, previousValue) {
+				// remember that this terraform schema type only accepts strings
+				previousConfig[k] = juju.ConfigEntryToString(v)
+				changes = true
+			}
+		} else if !v.IsDefault {
+			// Add if the value is not default
+			previousConfig[k] = juju.ConfigEntryToString(v)
 			changes = true
 		}
+
 	}
 	// we only set changes if there is any difference between
 	// the previous and the current config values
@@ -330,10 +343,20 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	if d.HasChange("config") {
-		config := d.Get("config").(map[string]interface{})
-		updateApplicationInput.Config = make(map[string]string, len(config))
-		for k, v := range config {
-			updateApplicationInput.Config[k] = v.(string)
+		oldConfig, newConfig := d.GetChange("config")
+		oldConfigMap := oldConfig.(map[string]interface{})
+		newConfigMap := newConfig.(map[string]interface{})
+		//updateApplicationInput.Config = make(map[string]string, len(config))
+		for k, v := range newConfigMap {
+			// we've lost the type of the config value. We compare the string
+			// values.
+			if !juju.EqualConfigEntries(oldConfigMap[k], v) {
+				if updateApplicationInput.Config == nil {
+					// initialize just in case
+					updateApplicationInput.Config = make(map[string]interface{})
+				}
+				updateApplicationInput.Config[k] = v
+			}
 		}
 	}
 
