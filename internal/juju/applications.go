@@ -55,6 +55,10 @@ func EqualConfigEntries(a interface{}, b interface{}) bool {
 	return a == b
 }
 
+func (ce *ConfigEntry) String() string {
+	return ConfigEntryToString(ce.Value)
+}
+
 // ConfigEntryToString returns the string representation based on
 // the current value.
 func ConfigEntryToString(input interface{}) string {
@@ -516,31 +520,22 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 			aux := v.(map[string]interface{})
 			// set if we find the value key and this is not a default
 			// value.
-			// TODO this returns a dictonary with entries using different
-			// type values. Cast the value to the corresponding type.
-			// indicated in the type field"
-			//isDefault, found := aux["source"]
-			//if found && isDefault != "default" {
 			if value, found := aux["value"]; found {
 				conf[k] = ConfigEntry{
 					Value:     value,
 					IsDefault: aux["source"] == "default",
 				}
 			}
-			//}
 		}
 		// repeat the same steps for charm config values
 		for k, v := range returnedConf.CharmConfig {
 			aux := v.(map[string]interface{})
-			// isDefault, found := aux["source"]
-			// if found && isDefault != "default" {
 			if value, found := aux["value"]; found {
 				conf[k] = ConfigEntry{
 					Value:     value,
 					IsDefault: aux["source"] == "default",
 				}
 			}
-			//}
 		}
 	}
 
