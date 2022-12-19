@@ -639,15 +639,18 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	}
 
 	// process configuration
-	var auxConfig map[string]interface{}
+	var auxConfig map[string]string
 	if input.Config != nil {
-		auxConfig = make(map[string]interface{})
+		auxConfig = make(map[string]string)
+		for k, v := range input.Config {
+			auxConfig[k] = ConfigEntryToString(v)
+		}
 	}
 
 	// trust goes inside the config
 	if input.Trust != nil {
 		if auxConfig == nil {
-			auxConfig = make(map[string]interface{})
+			auxConfig = make(map[string]string)
 		}
 		auxConfig["trust"] = fmt.Sprintf("%v", *input.Trust)
 	}
