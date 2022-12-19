@@ -62,13 +62,13 @@ func (ce *ConfigEntry) String() string {
 // ConfigEntryToString returns the string representation based on
 // the current value.
 func ConfigEntryToString(input interface{}) string {
-	switch input.(type) {
+	switch t := input.(type) {
 	case bool:
-		return strconv.FormatBool(input.(bool))
+		return strconv.FormatBool(t)
 	case int64:
-		return strconv.FormatInt(input.(int64), 10)
+		return strconv.FormatInt(t, 10)
 	case float64:
-		return strconv.FormatFloat(input.(float64), 'f', 0, 64)
+		return strconv.FormatFloat(t, 'f', 0, 64)
 	default:
 		return input.(string)
 	}

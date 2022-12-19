@@ -289,7 +289,6 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 			previousConfig[k] = v.String()
 			changes = true
 		}
-
 	}
 	// we only set changes if there is any difference between
 	// the previous and the current config values
