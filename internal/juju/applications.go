@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/juju/juju/core/model"
@@ -34,6 +36,44 @@ type applicationsClient struct {
 	ConnectionFactory
 }
 
+// ConfigEntry is an auxiliar struct to
+// keep information about juju config entries.
+// Specially, we want to know if they have the
+// default value.
+type ConfigEntry struct {
+	Value     interface{}
+	IsDefault bool
+}
+
+// EqualConfigEntries compare two juju configuration entries.
+// If both entries share the same type, otherwise they are
+// considered to be different.
+func EqualConfigEntries(a interface{}, b interface{}) bool {
+	if reflect.TypeOf(a) != reflect.TypeOf(b) {
+		return false
+	}
+	return a == b
+}
+
+func (ce *ConfigEntry) String() string {
+	return ConfigEntryToString(ce.Value)
+}
+
+// ConfigEntryToString returns the string representation based on
+// the current value.
+func ConfigEntryToString(input interface{}) string {
+	switch t := input.(type) {
+	case bool:
+		return strconv.FormatBool(t)
+	case int64:
+		return strconv.FormatInt(t, 10)
+	case float64:
+		return strconv.FormatFloat(t, 'f', 0, 64)
+	default:
+		return input.(string)
+	}
+}
+
 type CreateApplicationInput struct {
 	ApplicationName string
 	ModelUUID       string
@@ -44,7 +84,7 @@ type CreateApplicationInput struct {
 	Units           int
 	Trust           bool
 	Expose          map[string]interface{}
-	Config          map[string]string
+	Config          map[string]interface{}
 }
 
 type CreateApplicationResponse struct {
@@ -65,7 +105,7 @@ type ReadApplicationResponse struct {
 	Series   string
 	Units    int
 	Trust    bool
-	Config   map[string]string
+	Config   map[string]ConfigEntry
 	Expose   map[string]interface{}
 }
 
@@ -80,7 +120,7 @@ type UpdateApplicationInput struct {
 	Expose   map[string]interface{}
 	// Unexpose indicates what endpoints to unexpose
 	Unexpose []string
-	Config   map[string]string
+	Config   map[string]interface{}
 	//Series    string // TODO: Unsupported for now
 }
 
@@ -261,13 +301,16 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		return nil, err
 	}
 
-	// TODO: This should probably be set within the schema
-	// For now this is the default required behaviour
+	// The deploy API endpoint expects string values for the
+	// constraints.
 	var appConfig map[string]string
-	if input.Config != nil {
-		appConfig = input.Config
-	} else {
+	if input.Config == nil {
 		appConfig = make(map[string]string)
+	} else {
+		appConfig = make(map[string]string, len(input.Config))
+		for k, v := range input.Config {
+			appConfig[k] = ConfigEntryToString(v)
+		}
 	}
 
 	appConfig["trust"] = fmt.Sprintf("%v", input.Trust)
@@ -466,7 +509,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("failed to get app configuration %v", err)
 	}
 
-	conf := make(map[string]string, 0)
+	conf := make(map[string]ConfigEntry, 0)
 	if returnedConf.ApplicationConfig != nil {
 		for k, v := range returnedConf.ApplicationConfig {
 			// skip the trust value. We have an independent field for that
@@ -474,28 +517,23 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 				continue
 			}
 			// The API returns the configuration entries as interfaces
-			// In the terraform plan we introduce strings...
-			// so we force this conversion
 			aux := v.(map[string]interface{})
 			// set if we find the value key and this is not a default
 			// value.
-			// TODO this returns a dictonary with entries using different
-			// type values. Cast the value to the corresponding type.
-			// indicated in the type field"
-			isDefault, found := aux["source"]
-			if found && isDefault != "default" {
-				if value, found := aux["value"]; found {
-					conf[k] = fmt.Sprintf("%s", value)
+			if value, found := aux["value"]; found {
+				conf[k] = ConfigEntry{
+					Value:     value,
+					IsDefault: aux["source"] == "default",
 				}
 			}
 		}
 		// repeat the same steps for charm config values
 		for k, v := range returnedConf.CharmConfig {
 			aux := v.(map[string]interface{})
-			isDefault, found := aux["source"]
-			if found && isDefault != "default" {
-				if value, found := aux["value"]; found {
-					conf[k] = fmt.Sprintf("%s", value)
+			if value, found := aux["value"]; found {
+				conf[k] = ConfigEntry{
+					Value:     value,
+					IsDefault: aux["source"] == "default",
 				}
 			}
 		}
@@ -601,7 +639,13 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	}
 
 	// process configuration
-	auxConfig := input.Config
+	var auxConfig map[string]string
+	if input.Config != nil {
+		auxConfig = make(map[string]string)
+		for k, v := range input.Config {
+			auxConfig[k] = ConfigEntryToString(v)
+		}
+	}
 
 	// trust goes inside the config
 	if input.Trust != nil {
@@ -630,10 +674,6 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	// expose endpoints if required
 	if input.Expose != nil {
 		log.Trace().Interface("endpoints", input.Unexpose).Msg("Expose endpoints")
-		// exposeMap := make(map[string]string)
-		// for k, v := range input.Expose {
-		// 	exposeMap[k] = v.(string)
-		// }
 		err := c.processExpose(applicationAPIClient, input.AppName, input.Expose)
 		if err != nil {
 			log.Error().Err(err).Msg("error when trying to expose")
