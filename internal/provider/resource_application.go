@@ -120,6 +120,29 @@ func resourceApplication() *schema.Resource {
 					},
 				},
 			},
+			"placement": {
+				Description: "Specify the target location for the application's units",
+				Type: schema.TypeList,
+				Optional: true,
+				Default: nil,
+				MaxItems: 1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"scope": {
+							Description: "The scope of the placement directive. Scope may be a container type (lxd, kvm), instance.MachineScope, or an environment name.",
+							Type: schema.TypeString,
+							Default: "",
+							Optional: true,
+						},
+						"directive": {
+							Description: "A scope-specific placement directive.",
+							Type: schema.TypeString,
+							Default: "",
+							Optional: true,
+						},
+					},
+				},
+			},
 		},
 	}
 }
