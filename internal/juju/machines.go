@@ -1,27 +1,17 @@
 package juju
 
 import (
-	"errors"
 	"fmt"
-	"math"
-	"reflect"
-	"strconv"
-	"strings"
 
-	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/rpc/params"
-	"github.com/rs/zerolog/log"
 
-	jujuerrors "github.com/juju/errors"
 	apiclient "github.com/juju/juju/api/client/client"
 	apimachinemanager "github.com/juju/juju/api/client/machinemanager"
 	apimodelconfig "github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/core/constraints"
+	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/series"
 	"github.com/juju/juju/storage"
-	"github.com/juju/juju/environs/config"
-	"github.com/juju/juju/version"
-	"github.com/juju/names/v4"
 )
 
 type machinesClient struct {
@@ -36,7 +26,7 @@ type CreateMachineInput struct {
 }
 
 type CreateMachineResponse struct {
-	Machine   string
+	Machines   []params.AddMachinesResult
 }
 
 type ReadMachineInput struct {
@@ -47,6 +37,12 @@ type ReadMachineInput struct {
 type ReadMachineResponse struct {
 	MachineId         string
 	MachineStatus     params.MachineStatus
+}
+
+func newMachinesClient(cf ConnectionFactory) *machinesClient {
+	return &machinesClient{
+		ConnectionFactory: cf,
+	}
 }
 
 func (c machinesClient) CreateMachine(input*CreateMachineInput) (*CreateMachineResponse, error) {
@@ -61,6 +57,8 @@ func (c machinesClient) CreateMachine(input*CreateMachineInput) (*CreateMachineR
 	modelconfigAPIClient := apimodelconfig.NewClient(conn)
 	defer modelconfigAPIClient.Close()
 
+
+	var machineParams params.AddMachineParams
 	var machineConstraints constraints.Value
 
 	if input.Constraints == ""{
@@ -70,45 +68,48 @@ func (c machinesClient) CreateMachine(input*CreateMachineInput) (*CreateMachineR
 		}
 		machineConstraints = modelConstraints
 	} else {
-		userConstraints, err := constraints.ParseConstraints(input.Constraints)
+		userConstraints, err := constraints.Parse(input.Constraints)
 		if err != nil {
 			return nil, err
 		}
 		machineConstraints = userConstraints
 	}
 
-	var diskConstraints storage.Constraints
-
 	if input.Disks != "" {
 		userDisks, err := storage.ParseConstraints(input.Disks)
 		if err != nil {
 			return nil, err
 		}
-		diskConstraints = userDisks
+		fmt.Println(userDisks)
+		machineParams.Disks = []storage.Constraints{userDisks}
+	} else {
+		machineParams.Disks = nil
 	}
 
-	base, err := series.GetBaseFromSeries(input.Series)
+	seriesBase, err := series.GetBaseFromSeries(input.Series)
 	if err != nil {
 		return nil, err
 	}
 
-	var addMachineArgs params.AddMachineParams
+	jobs := []model.MachineJob{model.JobHostUnits}
+	var paramsBase params.Base
+	paramsBase.Name = seriesBase.Name
+	paramsBase.Channel = series.Channel.String(seriesBase.Channel)
+	
+	machineParams.Jobs = jobs
 
-	addMachineArgs.Base = base
-	addMachineArgs.Constraints = machineConstraints
-	addMachineArgs.Disks = diskConstraints
+	machineParams.Base = &paramsBase
+	machineParams.Constraints = machineConstraints
 
-	var addMachines = params.AddMachines
-	addMachines.MachineParams = [1]params.AddMachineParams{addMachineArgs}
+	addMachineArgs := []params.AddMachineParams{machineParams}
 
 	machines, err := machineAPIClient.AddMachines(addMachineArgs)
-
 	return &CreateMachineResponse {
-			Machine: "",
+			Machines: machines,
 	}, err
 }
 
-func (c machineAPIClient) ReadMachine(input *ReadMachineInput) (*ReadMachineResponse, error) {
+func (c machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -132,7 +133,7 @@ func (c machineAPIClient) ReadMachine(input *ReadMachineInput) (*ReadMachineResp
 
 	response := &ReadMachineResponse{
 		MachineId: machineStatus.Id,
-		MachineStatus: machineStatus
+		MachineStatus: machineStatus,
 	}
 
 	return response, nil

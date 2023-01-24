@@ -25,17 +25,16 @@ func resourceMachine() *schema.Resource {
 		},
 
 		Schema: map[string]*schema.Schema{
+			"name": {
+				Description: "A name for the machine resource in Terraform.",
+				Type: schema.TypeString,
+				Required: true,
+			},
 			"model": {
 				Description: "The Juju model in which to add a new machine.",
 				Type: schema.TypeString,
 				Required: true,
 				ForceNew: true,
-			},
-			"no-browser-login": {
-				Description: "Do not use web browser for authentication",
-				Type: schema.TypeBool,
-				Optional: true,
-				Default: false,
 			},
 			"constraints": {
 				Description: "Machine constraints that overwrite those available from 'juju get-model-constraints' and provider's defaults.",
@@ -54,19 +53,19 @@ func resourceMachine() *schema.Resource {
 			"series": {
 				Description: "The operating system series to install on the new machine(s).",
 				Type: schema.TypeString,
-				Optional: true,
+				Required: true,
 				ForceNew: true,
 			},
-			"machineId": {
+			"machine_id": {
 				Description: "The id of the machine Juju creates.",
 				Type: schema.TypeString,
 				Computed: true,
 			},
-		}
+		},
 	}
 }
 
-func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
 
 	modelName := d.Get("model").(string)
@@ -74,14 +73,11 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 	if err != nil {
 		return diag.FromErr(err)
 	}
-
-	noBrowserLogin := d.Get("no-browser-login").(bool)
 	constraints := d.Get("constraints").(string)
 	disks := d.Get("disks").(string)
 	series := d.Get("series").(string)
 
 	response, err := client.Machines.CreateMachine(&juju.CreateMachineInput{
-		NoBrowserLogin: noBrowserLogin,
 		Constraints:    constraints,
 		ModelUUID:      modelUUID,
 		Disks:          disks,
@@ -91,4 +87,72 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 	if err != nil {
 		return diag.FromErr(err)
 	}
+	if response.Machines[0].Error != nil {
+		return diag.FromErr(err)
+	}
+	id := fmt.Sprintf("%s:%s", modelName, response.Machines[0].Machine)
+	d.Set("machine_id", "machine")
+	d.SetId(id)
+	return nil
+}
+
+func resourceMachineRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	client := meta.(*juju.Client)
+	id := strings.Split(d.Id(), ":")
+	
+	if len(id) != 2 {
+		return diag.Errorf("unable to parse model and machine ID from provided ID")
+	}
+
+	modelName, machineId := id[0], id[1]
+	modelUUID, err := client.Models.ResolveModelUUID(modelName)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	
+	response, err := client.Machines.ReadMachine(&juju.ReadMachineInput{
+		ModelUUID: modelUUID,
+		MachineId: machineId,
+	})
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	if response == nil {
+		return nil
+	}
+
+	if err = d.Set("model", modelName); err != nil {
+		return diag.FromErr(err)
+	}
+	if err = d.Set("name", d.Get("name")); err != nil {
+		return diag.FromErr(err)
+	}
+	if err = d.Set("constraints", ""); err != nil {
+		return diag.FromErr(err)
+	}
+	if err = d.Set("disks", ""); err != nil {
+		return diag.FromErr(err)
+	}
+	if err = d.Set("series", d.Get("series")); err != nil {
+		return diag.FromErr(err)
+	}
+	if err = d.Set("machine_id", machineId); err != nil {
+		return diag.FromErr(err)
+	}
+
+	return diags
+}
+
+func resourceMachineUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	var diags diag.Diagnostics
+	return diags
+}
+
+func resourceMachineDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	var diags diag.Diagnostics
+	
+	return diags
 }
