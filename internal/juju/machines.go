@@ -9,7 +9,6 @@ import (
 	apimachinemanager "github.com/juju/juju/api/client/machinemanager"
 	apimodelconfig "github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/core/constraints"
-	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/series"
 	"github.com/juju/juju/storage"
@@ -100,16 +99,12 @@ func (c machinesClient) CreateMachine(input*CreateMachineInput) (*CreateMachineR
 	
 	machineParams.Jobs = jobs
 
-	instanceId := instance.Id(input.InstanceId)
-
 	machineParams.Base = &paramsBase
 	machineParams.Constraints = machineConstraints
-	machineParams.InstanceId = instanceId
 
 	addMachineArgs := []params.AddMachineParams{machineParams}
 
 	machines, err := machineAPIClient.AddMachines(addMachineArgs)
-	fmt.Println(machines)
 	return &CreateMachineResponse {
 			Machines: machines,
 	}, err

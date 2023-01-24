@@ -28,7 +28,9 @@ func resourceMachine() *schema.Resource {
 			"name": {
 				Description: "A name for the machine resource in Terraform.",
 				Type: schema.TypeString,
-				Required: true,
+				Optional: true,
+				Computed: true,
+				ForceNew: true,
 			},
 			"model": {
 				Description: "The Juju model in which to add a new machine.",
@@ -60,6 +62,7 @@ func resourceMachine() *schema.Resource {
 				Description: "The id of the machine Juju creates.",
 				Type: schema.TypeString,
 				Computed: true,
+				Optional: true,
 			},
 		},
 	}
@@ -83,7 +86,6 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 		ModelUUID:      modelUUID,
 		Disks:          disks,
 		Series:         series,
-		InstanceId:     name,
 	})
 
 	if err != nil {
@@ -92,7 +94,7 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 	if response.Machines[0].Error != nil {
 		return diag.FromErr(err)
 	}
-	id := fmt.Sprintf("%s:%s", modelName, response.Machines[0].Machine)
+	id := fmt.Sprintf("%s:%s:%s", modelName, response.Machines[0].Machine, name)
 	d.Set("machine_id", "machine")
 	d.SetId(id)
 	return nil
@@ -104,11 +106,11 @@ func resourceMachineRead(ctx context.Context, d *schema.ResourceData, meta inter
 	client := meta.(*juju.Client)
 	id := strings.Split(d.Id(), ":")
 	
-	if len(id) != 2 {
-		return diag.Errorf("unable to parse model and machine ID from provided ID")
+	if len(id) != 3 {
+		return diag.Errorf("unable to parse model, machine ID, and name from provided ID")
 	}
 
-	modelName, machineId := id[0], id[1]
+	modelName, machineId, machineName := id[0], id[1], id[2]
 	modelUUID, err := client.Models.ResolveModelUUID(modelName)
 	if err != nil {
 		return diag.FromErr(err)
@@ -129,7 +131,7 @@ func resourceMachineRead(ctx context.Context, d *schema.ResourceData, meta inter
 	if err = d.Set("model", modelName); err != nil {
 		return diag.FromErr(err)
 	}
-	if err = d.Set("name", d.Get("name")); err != nil {
+	if err = d.Set("name", machineName); err != nil {
 		return diag.FromErr(err)
 	}
 	if err = d.Set("series", response.MachineStatus.Series); err != nil {
