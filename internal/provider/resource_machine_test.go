@@ -21,6 +21,11 @@ func TestAcc_ResourceMachine_Basic(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
 				),
 			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      "juju_machine.this",
+			},
 		},
 	})
 }

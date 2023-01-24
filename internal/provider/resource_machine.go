@@ -73,6 +73,7 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 	if err != nil {
 		return diag.FromErr(err)
 	}
+	name := d.Get("name").(string)
 	constraints := d.Get("constraints").(string)
 	disks := d.Get("disks").(string)
 	series := d.Get("series").(string)
@@ -82,6 +83,7 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 		ModelUUID:      modelUUID,
 		Disks:          disks,
 		Series:         series,
+		InstanceId:     name,
 	})
 
 	if err != nil {
@@ -130,13 +132,7 @@ func resourceMachineRead(ctx context.Context, d *schema.ResourceData, meta inter
 	if err = d.Set("name", d.Get("name")); err != nil {
 		return diag.FromErr(err)
 	}
-	if err = d.Set("constraints", ""); err != nil {
-		return diag.FromErr(err)
-	}
-	if err = d.Set("disks", ""); err != nil {
-		return diag.FromErr(err)
-	}
-	if err = d.Set("series", d.Get("series")); err != nil {
+	if err = d.Set("series", response.MachineStatus.Series); err != nil {
 		return diag.FromErr(err)
 	}
 	if err = d.Set("machine_id", machineId); err != nil {
