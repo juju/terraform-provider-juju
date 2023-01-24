@@ -85,6 +85,7 @@ type CreateApplicationInput struct {
 	Trust           bool
 	Expose          map[string]interface{}
 	Config          map[string]interface{}
+	Constraints     constraints.Value
 }
 
 type CreateApplicationResponse struct {
@@ -99,14 +100,16 @@ type ReadApplicationInput struct {
 }
 
 type ReadApplicationResponse struct {
-	Name     string
-	Channel  string
-	Revision int
-	Series   string
-	Units    int
-	Trust    bool
-	Config   map[string]ConfigEntry
-	Expose   map[string]interface{}
+	Name        string
+	Channel     string
+	Revision    int
+	Series      string
+	Units       int
+	Trust       bool
+	Config      map[string]ConfigEntry
+	Constraints constraints.Value
+	Expose      map[string]interface{}
+	Principal   bool
 }
 
 type UpdateApplicationInput struct {
@@ -122,6 +125,7 @@ type UpdateApplicationInput struct {
 	Unexpose []string
 	Config   map[string]interface{}
 	//Series    string // TODO: Unsupported for now
+	Constraints *constraints.Value
 }
 
 type DestroyApplicationInput struct {
@@ -322,6 +326,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		Series:          resultOrigin.Series,
 		CharmOrigin:     resultOrigin,
 		Config:          appConfig,
+		Cons:            input.Constraints,
 		Resources:       resources,
 	})
 
@@ -337,6 +342,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	// If we have managed to deploy something, now we have
 	// to check if we have to expose something
 	err = c.processExpose(applicationAPIClient, input.ApplicationName, input.Expose)
+
 	return &CreateApplicationResponse{
 		AppName:  appName,
 		Revision: *origin.Revision,
@@ -486,6 +492,20 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	}
 	appInfo := apps[0].Result
 
+	var appConstraints constraints.Value = constraints.Value{}
+	// constraints do not apply to subordinate applications.
+	if appInfo.Principal {
+		queryConstraints, err := applicationAPIClient.GetConstraints(input.AppName)
+		if err != nil {
+			log.Error().Err(err).Msg("found when querying the application constraints")
+			return nil, err
+		}
+		if len(queryConstraints) != 1 {
+			return nil, fmt.Errorf("expected one set of application constraints, received %d", len(queryConstraints))
+		}
+		appConstraints = queryConstraints[0]
+	}
+
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
 		return nil, err
@@ -584,14 +604,16 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	}
 
 	response := &ReadApplicationResponse{
-		Name:     charmURL.Name,
-		Channel:  appStatus.CharmChannel,
-		Revision: charmURL.Revision,
-		Series:   appInfo.Series,
-		Units:    unitCount,
-		Trust:    trustValue,
-		Expose:   exposed,
-		Config:   conf,
+		Name:        charmURL.Name,
+		Channel:     appStatus.CharmChannel,
+		Revision:    charmURL.Revision,
+		Series:      appInfo.Series,
+		Units:       unitCount,
+		Trust:       trustValue,
+		Expose:      exposed,
+		Config:      conf,
+		Constraints: appConstraints,
+		Principal:   appInfo.Principal,
 	}
 
 	return response, nil
@@ -772,6 +794,15 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 			return err
 		}
 	}
+
+	if input.Constraints != nil {
+		err := applicationAPIClient.SetConstraints(input.AppName, *input.Constraints)
+		if err != nil {
+			log.Error().Err(err).Msg("error setting application constraints")
+			return err
+		}
+	}
+
 	return nil
 }
 

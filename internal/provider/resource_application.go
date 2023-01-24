@@ -7,7 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-
+	"github.com/juju/juju/core/constraints"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -85,6 +85,13 @@ func resourceApplication() *schema.Resource {
 					return make(map[string]interface{}), nil
 				},
 			},
+			"constraints": {
+				Description: "Constraints imposed on this application.",
+				Type:        schema.TypeString,
+				Optional:    true,
+				// Set as "computed" to pre-populate and preserve any implicit constraints
+				Computed: true,
+			},
 			"trust": {
 				Description: "Set the trust for the application.",
 				Type:        schema.TypeBool,
@@ -119,6 +126,11 @@ func resourceApplication() *schema.Resource {
 						},
 					},
 				},
+			},
+			"principal": {
+				Description: "Whether this is a Principal application",
+				Type:        schema.TypeBool,
+				Computed:    true,
 			},
 		},
 	}
@@ -162,6 +174,15 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 		revision = -1
 	}
 
+	var parsedConstraints constraints.Value = constraints.Value{}
+	readConstraints := d.Get("constraints").(string)
+	if readConstraints != "" {
+		parsedConstraints, err = constraints.Parse(readConstraints)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+	}
+
 	response, err := client.Applications.CreateApplication(&juju.CreateApplicationInput{
 		ApplicationName: name,
 		ModelUUID:       modelUUID,
@@ -171,6 +192,7 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 		CharmSeries:     series,
 		Units:           units,
 		Config:          configField,
+		Constraints:     parsedConstraints,
 		Trust:           trust,
 		Expose:          expose,
 	})
@@ -193,7 +215,7 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 	id := fmt.Sprintf("%s:%s", modelName, response.AppName)
 	d.SetId(id)
 
-	return nil
+	return resourceApplicationRead(ctx, d, meta)
 }
 
 func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -254,6 +276,17 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 
 	if err = d.Set("trust", response.Trust); err != nil {
 		return diag.FromErr(err)
+	}
+
+	if err = d.Set("principal", response.Principal); err != nil {
+		return diag.FromErr(err)
+	}
+
+	// constraints do not apply to subordinate applications.
+	if response.Principal {
+		if err = d.Set("constraints", response.Constraints.String()); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	var exposeValue []map[string]interface{} = nil
@@ -358,12 +391,21 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 		}
 	}
 
+	if d.HasChange("constraints") {
+		_, newConstraints := d.GetChange("constraints")
+		appConstraints, err := constraints.Parse(newConstraints.(string))
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		updateApplicationInput.Constraints = &appConstraints
+	}
+
 	err = client.Applications.UpdateApplication(&updateApplicationInput)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	return nil
+	return resourceApplicationRead(ctx, d, meta)
 }
 
 // computeExposeDeltas computes the differences between the previously
