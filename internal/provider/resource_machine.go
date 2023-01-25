@@ -17,7 +17,6 @@ func resourceMachine() *schema.Resource {
 		
 		CreateContext: resourceMachineCreate,
 		ReadContext: resourceMachineRead,
-		UpdateContext: resourceMachineUpdate,
 		DeleteContext: resourceMachineDelete,
 
 		Importer: &schema.ResourceImporter{
@@ -141,11 +140,6 @@ func resourceMachineRead(ctx context.Context, d *schema.ResourceData, meta inter
 		return diag.FromErr(err)
 	}
 
-	return diags
-}
-
-func resourceMachineUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	var diags diag.Diagnostics
 	return diags
 }
 
