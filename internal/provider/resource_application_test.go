@@ -71,6 +71,14 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
 			},
 			{
+				Config: testAccResourceApplicationUpdatesConfig(modelName, "theserver", 100),
+				Check:  resource.TestCheckResourceAttr("juju_application.this", "config.servername", "theserver"),
+			},
+			{
+				Config: testAccResourceApplicationUpdatesConfig(modelName, "theserver", 100),
+				Check:  resource.TestCheckResourceAttr("juju_application.this", "config.maxConn", "100"),
+			},
+			{
 				ImportStateVerify: true,
 				ImportState:       true,
 				ResourceName:      "juju_application.this",
@@ -119,4 +127,24 @@ resource "juju_application" "this" {
   %s
 }
 `, modelName, units, revision, exposeStr)
+}
+
+func testAccResourceApplicationUpdatesConfig(modelName string, serverName string, maxConn int) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model = juju_model.this.name
+  name = "test-app"
+  charm {
+    name     = "apache"
+  }
+  config = {
+	servername = %s
+	mpm_maxclients = %d
+  }
+}
+`, modelName, serverName, maxConn)
 }
