@@ -146,6 +146,7 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 	series := charm["series"].(string)
 	units := d.Get("units").(int)
 	trust := d.Get("trust").(bool)
+	placement := d.Get("placement").(string)
 	// populate the config parameter
 	// terraform only permits a single type. We have to treat
 	// strings to have different types
@@ -179,6 +180,7 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 		Config:          configField,
 		Trust:           trust,
 		Expose:          expose,
+		Placement:       placement,
 	})
 
 	if err != nil {
@@ -302,6 +304,10 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 		if err = d.Set("config", previousConfig); err != nil {
 			return diag.FromErr(err)
 		}
+	}
+
+	if err = d.Set("placement", response.Placement); err != nil {
+		return diag.FromErr(err)
 	}
 
 	return nil

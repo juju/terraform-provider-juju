@@ -327,7 +327,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		if err != nil {
 			return nil, err
 		}
-		placements[0] = appPlacement
+		placements = []*instance.Placement{appPlacement}
 	}
 
 	err = applicationAPIClient.Deploy(apiapplication.DeployArgs{
@@ -512,6 +512,19 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("no status returned for application: %s", input.AppName)
 	}
 
+	var placementBuilder strings.Builder
+	placementCount := 0
+	for _, v := range appStatus.Units {
+		placementBuilder.WriteString(v.Machine)
+		placementCount += 1
+		if placementCount != len(appStatus.Units) {
+			// Don't put a comma after the last machine
+			placementBuilder.WriteString(",")
+		}
+	}
+
+	placement := placementBuilder.String()
+
 	unitCount := len(appStatus.Units)
 
 	// NOTE: we are assuming that this charm comes from CharmHub
@@ -600,14 +613,15 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	}
 
 	response := &ReadApplicationResponse{
-		Name:     charmURL.Name,
-		Channel:  appStatus.CharmChannel,
-		Revision: charmURL.Revision,
-		Series:   appInfo.Series,
-		Units:    unitCount,
-		Trust:    trustValue,
-		Expose:   exposed,
-		Config:   conf,
+		Name:      charmURL.Name,
+		Channel:   appStatus.CharmChannel,
+		Revision:  charmURL.Revision,
+		Series:    appInfo.Series,
+		Units:     unitCount,
+		Trust:     trustValue,
+		Expose:    exposed,
+		Config:    conf,
+		Placement: placement,
 	}
 
 	return response, nil

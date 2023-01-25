@@ -152,6 +152,12 @@ resource "juju_model" "this" {
 	name = %q
 }
 
+resource "juju_machine" "this" {
+	name = "this_machine"
+	series = "focal"
+	model = juju_model.this.name
+}
+
 resource "juju_application" "placement" {
 	model = juju_model.this.name
 	units = 1
@@ -161,7 +167,7 @@ resource "juju_application" "placement" {
 		name = "hello-juju"
 	}
 
-	placement = "0"
+	placement = split(":", juju_machine.this.id)[1]
 }
 `, modelName)
 }
