@@ -2,6 +2,7 @@ package juju
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/juju/juju/rpc/params"
 
@@ -38,6 +39,11 @@ type ReadMachineInput struct {
 type ReadMachineResponse struct {
 	MachineId         string
 	MachineStatus     params.MachineStatus
+}
+
+type DestroyMachineInput struct {
+	ModelUUID string
+	MachineId string
 }
 
 func newMachinesClient(cf ConnectionFactory) *machinesClient {
@@ -137,4 +143,22 @@ func (c machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineRespon
 	}
 
 	return response, nil
+}
+
+func (c machinesClient) DestroyMachine(input *DestroyMachineInput) error {
+	conn, err := c.GetConnection(&input.ModelUUID)
+	if err != nil {
+		return err
+	}
+
+	machineAPIClient := apimachinemanager.NewClient(conn)
+	defer machineAPIClient.Close()
+
+	_, err = machineAPIClient.DestroyMachinesWithParams(false, false, (*time.Duration)(nil), input.MachineId)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

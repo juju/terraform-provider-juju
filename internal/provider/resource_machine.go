@@ -145,6 +145,25 @@ func resourceMachineRead(ctx context.Context, d *schema.ResourceData, meta inter
 
 func resourceMachineDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
-	
+
+	client := meta.(*juju.Client)
+
+	id := strings.Split(d.Id(), ":")
+
+	modelName, machineId, _ := id[0], id[1], id[2]
+	modelUUID, err := client.Models.ResolveModelUUID(modelName)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	err = client.Machines.DestroyMachine(&juju.DestroyMachineInput{
+		ModelUUID: modelUUID,
+		MachineId: machineId,
+	})
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	d.SetId("")
 	return diags
 }
