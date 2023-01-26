@@ -51,7 +51,7 @@ func resourceApplication() *schema.Resource {
 							ForceNew:    true,
 						},
 						"channel": {
-							Description: "The channel to use when deploying a charm. Specified as <track>/<risk>/<branch>.",
+							Description: "The channel to use when deploying a charm. Specified as \\<track>/\\<risk>/\\<branch>.",
 							Type:        schema.TypeString,
 							Default:     "latest/stable",
 							Optional:    true,

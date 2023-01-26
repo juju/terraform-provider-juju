@@ -44,7 +44,7 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationUpdates(modelName, 1, 21, true),
+				Config: testAccResourceApplicationUpdates(modelName, 1, 21, true, "machinename"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
@@ -52,22 +52,23 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application.this", "units", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "21"),
 					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
+					resource.TestCheckResourceAttr("juju_application.this", "config.hostname", "machinename"),
 				),
 			},
 			{
-				Config: testAccResourceApplicationUpdates(modelName, 2, 21, true),
+				Config: testAccResourceApplicationUpdates(modelName, 2, 21, true, "machinename"),
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
 			},
 			{
-				Config: testAccResourceApplicationUpdates(modelName, 2, 21, true),
+				Config: testAccResourceApplicationUpdates(modelName, 2, 21, true, "machinename"),
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "21"),
 			},
 			{
-				Config: testAccResourceApplicationUpdates(modelName, 2, 21, false),
+				Config: testAccResourceApplicationUpdates(modelName, 2, 21, false, "machinename"),
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "expose.#", "0"),
 			},
 			{
-				Config: testAccResourceApplicationUpdates(modelName, 2, 21, true),
+				Config: testAccResourceApplicationUpdates(modelName, 2, 21, true, "machinename"),
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
 			},
 			{
@@ -105,7 +106,7 @@ resource "juju_application" "this" {
 `, modelName)
 }
 
-func testAccResourceApplicationUpdates(modelName string, units int, revision int, expose bool) string {
+func testAccResourceApplicationUpdates(modelName string, units int, revision int, expose bool, hostname string) string {
 	exposeStr := "expose{}"
 	if !expose {
 		exposeStr = ""
@@ -125,8 +126,11 @@ resource "juju_application" "this" {
   }
   trust = true
   %s
+  config = {
+	hostname = "%s"
+  }
 }
-`, modelName, units, revision, exposeStr)
+`, modelName, units, revision, exposeStr, hostname)
 }
 
 func testAccResourceApplicationUpdatesConfig(modelName string, serverName string, maxConn int) string {
