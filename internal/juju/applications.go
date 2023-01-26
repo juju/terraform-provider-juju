@@ -319,15 +319,19 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 
 	appConfig["trust"] = fmt.Sprintf("%v", input.Trust)
 
-	var placements []*instance.Placement
+	placements := []*instance.Placement{}
 	if input.Placement == "" {
 		placements = nil
 	} else {
-		appPlacement, err := instance.ParsePlacement(input.Placement)
-		if err != nil {
-			return nil, err
+		placementDirectives := strings.Split(input.Placement, ",")
+
+		for _, directive := range placementDirectives {
+			appPlacement, err := instance.ParsePlacement(directive)
+			if err != nil {
+				return nil, err
+			}
+			placements = append(placements, appPlacement)
 		}
-		placements = []*instance.Placement{appPlacement}
 	}
 
 	err = applicationAPIClient.Deploy(apiapplication.DeployArgs{
