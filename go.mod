@@ -6,8 +6,8 @@ require (
 	github.com/bflad/tfproviderlint v0.28.1
 	github.com/hashicorp/terraform-plugin-docs v0.13.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.24.1
-	// v2.9.38
-	github.com/juju/juju v0.0.0-20230105012444-6d211be0d72d
+	// v2.9.37
+	github.com/juju/juju v0.0.0-20221102165234-51672c0e4243
 
 )
 
