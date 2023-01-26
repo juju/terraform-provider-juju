@@ -275,7 +275,6 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 	// known previously
 	// update the values from the previous config
 	changes := false
-	// log.Debug().Msgf("--> Previous config was %s", previousConfig)
 	for k, v := range response.Config {
 		// Add if the value has changed from the previous state
 		if previousValue, found := previousConfig[k]; found {
@@ -348,7 +347,9 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 		for k, v := range newConfigMap {
 			// we've lost the type of the config value. We compare the string
 			// values.
-			if !juju.EqualConfigEntries(oldConfigMap[k], v.(juju.ConfigEntry)) {
+			oldEntry := fmt.Sprintf("%#v", oldConfigMap[k])
+			newEntry := fmt.Sprintf("%#v", v)
+			if oldEntry != newEntry {
 				if updateApplicationInput.Config == nil {
 					// initialize just in case
 					updateApplicationInput.Config = make(map[string]interface{})
