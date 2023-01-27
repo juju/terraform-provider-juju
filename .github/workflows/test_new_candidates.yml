@@ -18,8 +18,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        juju_target:
+        juju_track:
           - "2.9"
+        juju_risk:
+          - "candidate"
+          - "edge"
         terraform:
           - "0.15.*"
           - "1.0.*"
@@ -27,17 +30,20 @@ jobs:
           - "1.2.*"
 
     steps:
-      - uses: dawidd6/action-download-artifact@v2
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
         id: download_artifact
         with:
           workflow_conclusion: success
-          name: ${{ matrix.juju_target }} 
+          name: ${{ matrix.juju_track }}-${{ matrix.juju_risk }} 
           if_no_artifact_found: ignore
-      - shell: bash
+      - name: Check latest juju version tested
+        shell: bash
         run: |
-          candidate=$(snap info juju | grep candidate/${{ matrix.juju_target }} | awk '{print $2}')
+          channel=${{ matrix.juju_track }}/${{ matrix.juju_risk}}
+          candidate=$(snap info juju | grep $channel | awk '{print $2}')
           last_tested=NA
-          if [ -f ${{ matrix.juju_target }} ]; then
+          if [ -f ${{ channel }} ]; then
             last_tested=$(cat juju-last-candidate-version)
           fi
           echo "Last tested was $last_tested"
@@ -54,23 +60,47 @@ jobs:
             fi 
           fi
           echo "next-test=$next_test" >> $GITHUB_ENV
-          echo "$next_test" > ~/${{ matrix.juju_target }}
-      - if: ${{ env.next-test != 'NA' }}
+          echo "$next_test" > ~/${{ channel }}
+      - name: Checkout branch
+        if: ${{ env.next-test != 'NA' }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ env.juju_target }}
-      - if: ${{ env.next-test != 'NA' }}
+          ref: ${{ env.juju_track }}
+      - name: Setup go
+        if: ${{ env.next-test != 'NA' }}
         uses: actions/setup-go@v3
         with:
           go-version-file: "go.mod"
           cache: true
-      - if: ${{ env.next-test != 'NA' }}
+      - name: Install terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ matrix.terraform }}
+          terraform_wrapper: false
+      - name: Install target juju
+        if: ${{ env.next-test != 'NA' }}
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: lxd
-          juju-channel: ${{ matrix.juju_target }}   
+          juju-channel: ${{ matrix.juju_track }}/${{ matrix.juju_risk}}
+      - name: "Set environment to configure provider"
+        # language=bash
+        run: |
+          CONTROLLER=$(juju whoami --format yaml | yq .controller)
+
+          echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq .$CONTROLLER.details.api-endpoints | yq -r '. | join(",")')" >> $GITHUB_ENV
+          echo "JUJU_USERNAME=$(juju show-controller | yq .$CONTROLLER.account.user)"  >> $GITHUB_ENV
+          echo "JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password)"  >> $GITHUB_ENV
+          echo "JUJU_CA_CERT<<EOF" >> $GITHUB_ENV
+          juju show-controller | yq .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+      - name: Run integration tests
+        env:
+          TF_ACC: "1"
+        run: go test -v -cover ./internal/provider/
+        timeout-minutes: 25   
       - if: ${{ env.next-test != 'NA' }}
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ matrix.juju_target }}
-          path: ~/${{ matrix.juju_target }}
+          name: ${{ matrix.juju_track }}-${{ matrix.juju_risk}}
+          path: ~/${{ matrix.juju_track }}-${{ matrix.juju_risk}}
