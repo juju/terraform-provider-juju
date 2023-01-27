@@ -44,8 +44,7 @@ jobs:
           if_no_artifact_found: ignore
       - name: Check latest juju version tested
         run: |
-
-          channel="${{ matrix.juju_track }}/${{ matrix.juju_risk }}"
+          channel=$(echo "${{ matrix.juju_track }}/${{ matrix.juju_risk }}")
           echo "Target channel is $channel"
           candidate=$(snap info juju | grep $channel | awk '{print $2}')
           last_tested=NA
