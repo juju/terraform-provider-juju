@@ -1,9 +1,13 @@
 name: Test new juju candidates
 
+
+on:
+  pull_request:
+    
 # Commented for testing
-# on:
 #   schedule:
 #     - cron: "0 0 * * *"  # Run at 12AM UTC, every day
+
 
 # Testing only needs permissions to read the repository contents.
 permissions:
