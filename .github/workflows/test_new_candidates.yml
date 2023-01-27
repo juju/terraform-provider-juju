@@ -43,9 +43,11 @@ jobs:
           name: "${{ matrix.juju_track }}-${{ matrix.juju_risk }}" 
           if_no_artifact_found: ignore
       - name: Check latest juju version tested
+        shell: bash
         run: |
-          echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
-          echo "channel=$(echo "${{ matrix.juju_track }}/${{ matrix.juju_risk }})" >> $GITHUB_ENV
+          channel=$(echo ${{ matrix.juju_track }}/${{ matrix.juju_risk }})
+          echo "channel=$channel" >> $GITHUB_ENV
+          
           echo "Target channel is $channel"
           candidate=$(snap info juju | grep $channel | awk '{print $2}')
           last_tested=NA
