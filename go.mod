@@ -14,7 +14,7 @@ require (
 require (
 	github.com/juju/charm/v8 v8.0.6
 	github.com/juju/errors v1.0.0
-	github.com/rs/zerolog v1.28.0
+	github.com/rs/zerolog v1.29.0
 )
 
 require (
