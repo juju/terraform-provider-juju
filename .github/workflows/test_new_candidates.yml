@@ -1,7 +1,8 @@
 name: Test new juju candidates
 
-
 on:
+  pull_request:
+    
   push:
     
 # Commented for testing
@@ -15,7 +16,7 @@ permissions:
 
 jobs:
   # Ensure project builds before running testing matrix
-  test:
+  test-candidates:
     name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -39,17 +40,17 @@ jobs:
         id: download_artifact
         with:
           workflow_conclusion: success
-          name: ${{ matrix.juju_track }}-${{ matrix.juju_risk }} 
+          name: "${{ matrix.juju_track }}-${{ matrix.juju_risk }}" 
           if_no_artifact_found: ignore
       - name: Check latest juju version tested
         shell: bash
         run: |
-          channel="${{ matrix.juju_track }}/${{ matrix.juju_risk}}"
+          channel="${{ matrix.juju_track }}/${{ matrix.juju_risk }}"
           echo "Target channel is $channel"
           candidate=$(snap info juju | grep $channel | awk '{print $2}')
           last_tested=NA
           if [ -f ${{ channel }} ]; then
-            last_tested=$(cat juju-last-candidate-version)
+            last_tested=$(cat $channel)
           fi
           echo "Last tested was $last_tested"
           echo "Latest juju version found is $candidate"
@@ -65,7 +66,7 @@ jobs:
             fi 
           fi
           echo "next-test=$next_test" >> $GITHUB_ENV
-          echo "$next_test" > ~/${{ channel }}
+          echo "$next_test" > ~/$channel
       - name: Checkout branch
         if: ${{ env.next-test != 'NA' }}
         uses: actions/checkout@v3
@@ -107,5 +108,5 @@ jobs:
       - if: ${{ env.next-test != 'NA' }}
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ matrix.juju_track }}-${{ matrix.juju_risk}}
-          path: ~/${{ matrix.juju_track }}-${{ matrix.juju_risk}}
+          name: "${{ matrix.juju_track }}-${{ matrix.juju_risk}}"
+          path: "~/${{ matrix.juju_track }}-${{ matrix.juju_risk}}"
