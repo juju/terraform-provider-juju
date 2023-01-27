@@ -35,7 +35,7 @@ jobs:
           if_no_artifact_found: ignore
       - shell: bash
         run: |
-          candidate=$(snap info juju | grep ${{ matrix.juju_target }} | awk '{print $2}')
+          candidate=$(snap info juju | grep candidate/${{ matrix.juju_target }} | awk '{print $2}')
           last_tested=NA
           if [ -f ${{ matrix.juju_target }} ]; then
             last_tested=$(cat juju-last-candidate-version)
