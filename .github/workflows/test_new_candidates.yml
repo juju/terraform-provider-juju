@@ -44,7 +44,8 @@ jobs:
           if_no_artifact_found: ignore
       - name: Check latest juju version tested
         run: |
-          channel=$(echo "${{ matrix.juju_track }}/${{ matrix.juju_risk }}")
+          echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
+          echo "channel=$(echo "${{ matrix.juju_track }}/${{ matrix.juju_risk }})" >> $GITHUB_ENV
           echo "Target channel is $channel"
           candidate=$(snap info juju | grep $channel | awk '{print $2}')
           last_tested=NA
@@ -87,7 +88,7 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: lxd
-          juju-channel: ${{ matrix.juju_track }}/${{ matrix.juju_risk}}
+          juju-channel: ${{ env.channel }}
       - name: "Set environment to configure provider"
         # language=bash
         run: |
