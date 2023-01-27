@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 4
       matrix:
         juju_track:
           - "2.9"
@@ -41,7 +41,7 @@ jobs:
           channel=$(echo ${{ matrix.juju_track }}/${{ matrix.juju_risk }})
           echo "Target channel is $channel"
           echo "channel=$channel" >> $GITHUB_ENV
-          id=$(echo ${{ matrix.juju_track }}-${{ matrix.juju_risk }})
+          id=$(echo ${{ matrix.juju_track }}-${{ matrix.juju_risk }}-${{ matrix. terraform }})
           echo "Target id is $id"
           echo "id=$id" >> $GITHUB_ENV
       - name: Download artifact
