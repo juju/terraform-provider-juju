@@ -1,0 +1,76 @@
+name: Test new juju candidates
+
+# Commented for testing
+# on:
+#   schedule:
+#     - cron: "0 0 * * *"  # Run at 12AM UTC, every day
+
+# Testing only needs permissions to read the repository contents.
+permissions:
+  contents: read
+
+jobs:
+  # Ensure project builds before running testing matrix
+  test:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        juju_target:
+          - "2.9"
+        terraform:
+          - "0.15.*"
+          - "1.0.*"
+          - "1.1.*"
+          - "1.2.*"
+
+    steps:
+      - uses: dawidd6/action-download-artifact@v2
+        id: download_artifact
+        with:
+          workflow_conclusion: success
+          name: ${{ matrix.juju_target }} 
+          if_no_artifact_found: ignore
+      - shell: bash
+        run: |
+          candidate=$(snap info juju | grep ${{ matrix.juju_target }} | awk '{print $2}')
+          last_tested=NA
+          if [ -f ${{ matrix.juju_target }} ]; then
+            last_tested=$(cat juju-last-candidate-version)
+          fi
+          echo "Last tested was $last_tested"
+          echo "Latest juju version found is $candidate"
+          next_test=NA
+          if [[ "$candidate" == "^" ]]; then
+            echo "No candidate to test"
+          else
+            if [[ "$candidate" == "$last_tested" ]]; then
+              echo "Candidate $candidate was already tested"
+            else
+              echo "Candidate $candidate has to be tested"
+              next_test="$candidate"
+            fi 
+          fi
+          echo "next-test=$next_test" >> $GITHUB_ENV
+          echo "$next_test" > ~/${{ matrix.juju_target }}
+      - if: ${{ env.next-test != 'NA' }}
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ env.juju_target }}
+      - if: ${{ env.next-test != 'NA' }}
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - if: ${{ env.next-test != 'NA' }}
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: lxd
+          juju-channel: ${{ matrix.juju_target }}   
+      - if: ${{ env.next-test != 'NA' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.juju_target }}
+          path: ~/${{ matrix.juju_target }}
