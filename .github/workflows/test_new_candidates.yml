@@ -2,7 +2,7 @@ name: Test new juju candidates
 
 
 on:
-  pull_request:
+  push:
     
 # Commented for testing
 #   schedule:
