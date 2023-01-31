@@ -66,7 +66,6 @@ jobs:
       - generate
       - lint
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -75,7 +74,7 @@ jobs:
           - "1.0.*"
           - "1.1.*"
           - "1.2.*"
-
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v3
@@ -105,5 +104,5 @@ jobs:
       - run: go mod download
       - env:
           TF_ACC: "1"
-        run: go test -v -cover ./internal/provider/
-        timeout-minutes: 25
+        run: go test -timeout 30m -v -cover ./internal/provider/
+        timeout-minutes: 30
