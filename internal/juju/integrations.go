@@ -1,5 +1,5 @@
-//In comments and in code we refer to integrations which are known in juju 2.x as relations.
-//calls to the upstream juju client currently reference relations
+// In comments and in code we refer to integrations which are known in juju 2.x as relations.
+// calls to the upstream juju client currently reference relations
 package juju
 
 import (
@@ -31,6 +31,7 @@ type Offer struct {
 type IntegrationInput struct {
 	ModelUUID string
 	Endpoints []string
+	ViaCIDRs  string
 }
 
 type CreateIntegrationResponse struct {
@@ -50,6 +51,7 @@ type UpdateIntegrationInput struct {
 	ID           string
 	Endpoints    []string
 	OldEndpoints []string
+	ViaCIDRs     string
 }
 
 func newIntegrationsClient(cf ConnectionFactory) *integrationsClient {
@@ -67,9 +69,10 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 	client := apiapplication.NewClient(conn)
 	defer client.Close()
 
+	listViaCIDRs := splitCommaDelimitedList(input.ViaCIDRs)
 	response, err := client.AddRelation(
 		input.Endpoints,
-		[]string(nil),
+		listViaCIDRs,
 	)
 	if err != nil {
 		return nil, err
@@ -156,9 +159,10 @@ func (c integrationsClient) UpdateIntegration(input *UpdateIntegrationInput) (*U
 	client := apiapplication.NewClient(conn)
 	defer client.Close()
 
+	listViaCIDRs := splitCommaDelimitedList(input.ViaCIDRs)
 	response, err := client.AddRelation(
 		input.Endpoints,
-		[]string(nil),
+		listViaCIDRs,
 	)
 	if err != nil {
 		return nil, err
@@ -231,7 +235,7 @@ func getStatus(conn api.Connection) (*params.FullStatus, error) {
 	return status, nil
 }
 
-//This function takes remote applications and endpoint status and combines them into a more usable format to return to the provider
+// This function takes remote applications and endpoint status and combines them into a more usable format to return to the provider
 func parseApplications(remoteApplications map[string]params.RemoteApplicationStatus, src interface{}) []Application {
 	applications := make([]Application, 0, 2)
 
