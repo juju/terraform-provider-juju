@@ -25,6 +25,23 @@ func TestAcc_ResourceApplication_Basic(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu"),
 					resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
+					resource.TestCheckResourceAttr("juju_application.this", "principal", "true"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationConstraints(t, modelName, "arch=amd64 cores=1 mem=4096M"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 cores=1 mem=4096M"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationConstraintsSubordinate(t, modelName, "arch=amd64 cores=1 mem=4096M"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 cores=1 mem=4096M"),
+					resource.TestCheckResourceAttr("juju_application.this", "principal", "true"),
+					resource.TestCheckResourceAttr("juju_application.subordinate", "principal", "false"),
 				),
 			},
 			{
@@ -123,4 +140,56 @@ resource "juju_application" "this" {
   }
 }
 `, modelName, units, revision, exposeStr, hostname)
+}
+
+func testAccResourceApplicationConstraints(t *testing.T, modelName string, constraints string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model = juju_model.this.name
+  units = 0
+  name = "test-app"
+  charm {
+    name     = "ubuntu"
+    revision = 21
+  }
+  trust = true
+  expose{}
+  constraints = "%s"
+}
+`, modelName, constraints)
+}
+
+func testAccResourceApplicationConstraintsSubordinate(t *testing.T, modelName string, constraints string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model = juju_model.this.name
+  units = 0
+  name = "test-app"
+  charm {
+    name     = "ubuntu"
+    revision = 21
+  }
+  trust = true
+  expose{}
+  constraints = "%s"
+}
+
+resource "juju_application" "subordinate" {
+	model = juju_model.this.name
+	units = 0
+	name = "test-subordinate"
+	charm {
+		name = "nrpe"
+		revision = 96
+	}
+} 
+`, modelName, constraints)
 }
