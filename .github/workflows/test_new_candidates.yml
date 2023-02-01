@@ -108,7 +108,7 @@ jobs:
         id: test
         env:
           TF_ACC: "1"
-        run: go test -v -cover ./internal/provider/
+        run: go test -timeout 30m -v -cover ./internal/provider/
         timeout-minutes: 30   
       - if: success()
         uses: actions/upload-artifact@v3
