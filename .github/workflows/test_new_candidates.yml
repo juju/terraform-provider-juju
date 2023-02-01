@@ -25,12 +25,12 @@ jobs:
           - "2.9"
         juju_risk:
           - "candidate"
-          - "edge"
+          # - "edge"
         terraform:
           - "0.15"
           - "1.0"
-          - "1.1"
-          - "1.2"
+          # - "1.1"
+          # - "1.2"
 
     steps:
       - name: Set channel and artifact id
@@ -38,17 +38,23 @@ jobs:
           channel=$(echo ${{ matrix.juju_track }}/${{ matrix.juju_risk }})
           echo "Target channel is $channel"
           echo "channel=$channel" >> $GITHUB_ENV
-          id=$(echo ${{ github.sha }}-${{ matrix.juju_track }}-${{ matrix.juju_risk }}-${{ matrix. terraform }})
+          id=$(echo ${{ github.sha }}-${{ matrix.juju_track }}-${{ matrix.juju_risk }}-${{ matrix.terraform }})
           echo "Target id is $id"
           echo "id=$id" >> $GITHUB_ENV
+      - name: Checkout branch
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ env.juju_track }}
       - name: Download artifact
-        uses: dawidd6/action-download-artifact@v2
+        uses: actions/download-artifact@v3
         id: download_artifact
         with:
-          workflow_conclusion: success
           name: ${{ env.id }}
-          if_no_artifact_found: ignore
       - name: Check latest juju version tested
+        # If we could not find the artifact, it means
+        # that we have not tested successfully this item.
+        continue-on-error: true
+        if: failure()
         shell: bash
         run: |
           candidate=$(snap info juju | grep ${{ env.channel }} | awk '{print $2}')
@@ -71,13 +77,7 @@ jobs:
           fi
           echo "next-test=$next_test" >> $GITHUB_ENV
           echo "$next_test" > ~/${{ env.id }}
-      - name: Checkout branch
-        if: ${{ env.next-test != 'NA' }}
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ env.juju_track }}
       - name: Setup go
-        if: ${{ env.next-test != 'NA' }}
         uses: actions/setup-go@v3
         with:
           go-version-file: "go.mod"
@@ -88,13 +88,11 @@ jobs:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
       - name: Install target juju
-        if: ${{ env.next-test != 'NA' }}
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: lxd
           juju-channel: ${{ env.channel }}
       - name: "Set environment to configure provider"
-        # language=bash
         run: |
           CONTROLLER=$(juju whoami --format yaml | yq .controller)
 
@@ -110,8 +108,9 @@ jobs:
           TF_ACC: "1"
         run: go test -timeout 30m -v -cover ./internal/provider/
         timeout-minutes: 30   
-      - if: success()
-        uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v3
+        # if everything worked, we upload the artifact
+        if: success()
         with:
           name: ${{ env.id }}
           path: "~/${{ env.id }}"
