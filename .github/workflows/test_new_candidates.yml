@@ -53,16 +53,12 @@ jobs:
           if_no_artifact_found: ignore
           workflow_conclusion: success
       - name: Check latest juju version tested
-        # If we could not find the artifact, it means
-        # that we have not tested successfully this item.
-        continue-on-error: true
-        if: failure()
         shell: bash
         run: |
           candidate=$(snap info juju | grep ${{ env.channel }} | awk '{print $2}')
           last_tested=NA
-          if [ -f ${{ env.channel }} ]; then
-            last_tested=$(cat ${{ env.channel }})
+          if [ -f ${{ env.id }} ]; then
+            last_tested=$(cat ${{ env.id }})
           fi
           echo "Last tested was $last_tested"
           echo "Latest juju version found is $candidate"
@@ -80,21 +76,25 @@ jobs:
           echo "next-test=$next_test" >> $GITHUB_ENV
           echo "$next_test" > ~/${{ env.id }}
       - name: Setup go
+        if: ${{ env.next-test != 'NA' }}
         uses: actions/setup-go@v3
         with:
           go-version-file: "go.mod"
           cache: true
       - name: Install terraform
+        if: ${{ env.next-test != 'NA' }}
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
       - name: Install target juju
+        if: ${{ env.next-test != 'NA' }}
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: lxd
           juju-channel: ${{ env.channel }}
       - name: "Set environment to configure provider"
+        if: ${{ env.next-test != 'NA' }}
         run: |
           CONTROLLER=$(juju whoami --format yaml | yq .controller)
 
@@ -105,14 +105,14 @@ jobs:
           juju show-controller | yq .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
       - name: Run integration tests
+        if: ${{ env.next-test != 'NA' }}
         id: test
         env:
           TF_ACC: "1"
         run: go test -timeout 30m -v -cover ./internal/provider/
         timeout-minutes: 30   
       - uses: actions/upload-artifact@v3
-        # if everything worked, we upload the artifact
-        if: success()
+        if: ${{ env.next-test != 'NA' }}
         with:
           name: ${{ env.id }}
           path: "~/${{ env.id }}"
