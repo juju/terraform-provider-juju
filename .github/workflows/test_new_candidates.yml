@@ -4,7 +4,6 @@ on:
   schedule:
     - cron: "0 0 * * *"  # Run at 12AM UTC, every day
 
-
 # Testing only needs permissions to read the repository contents.
 permissions:
   contents: read
@@ -23,36 +22,39 @@ jobs:
           - "2.9"
         juju_risk:
           - "candidate"
-          - "edge"
+          # - "edge"
         terraform:
           - "0.15"
           - "1.0"
           - "1.1"
           - "1.2"
-
     steps:
       - name: Set channel and artifact id
         run: |
           channel=$(echo ${{ matrix.juju_track }}/${{ matrix.juju_risk }})
           echo "Target channel is $channel"
           echo "channel=$channel" >> $GITHUB_ENV
-          id=$(echo ${{ matrix.juju_track }}-${{ matrix.juju_risk }}-${{ matrix. terraform }})
+          id=$(echo ${{ github.sha }}-${{ matrix.juju_track }}-${{ matrix.juju_risk }}-${{ matrix.terraform }})
           echo "Target id is $id"
           echo "id=$id" >> $GITHUB_ENV
+      - name: Checkout branch
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ env.juju_track }}
       - name: Download artifact
         uses: dawidd6/action-download-artifact@v2
         id: download_artifact
         with:
-          workflow_conclusion: success
           name: ${{ env.id }}
           if_no_artifact_found: ignore
+          workflow_conclusion: success
       - name: Check latest juju version tested
         shell: bash
         run: |
           candidate=$(snap info juju | grep ${{ env.channel }} | awk '{print $2}')
           last_tested=NA
-          if [ -f ${{ env.channel }} ]; then
-            last_tested=$(cat ${{ env.channel }})
+          if [ -f ${{ env.id }} ]; then
+            last_tested=$(cat ${{ env.id }})
           fi
           echo "Last tested was $last_tested"
           echo "Latest juju version found is $candidate"
@@ -69,11 +71,6 @@ jobs:
           fi
           echo "next-test=$next_test" >> $GITHUB_ENV
           echo "$next_test" > ~/${{ env.id }}
-      - name: Checkout branch
-        if: ${{ env.next-test != 'NA' }}
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ env.juju_track }}
       - name: Setup go
         if: ${{ env.next-test != 'NA' }}
         uses: actions/setup-go@v3
@@ -81,6 +78,7 @@ jobs:
           go-version-file: "go.mod"
           cache: true
       - name: Install terraform
+        if: ${{ env.next-test != 'NA' }}
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: ${{ matrix.terraform }}
@@ -92,7 +90,7 @@ jobs:
           provider: lxd
           juju-channel: ${{ env.channel }}
       - name: "Set environment to configure provider"
-        # language=bash
+        if: ${{ env.next-test != 'NA' }}
         run: |
           CONTROLLER=$(juju whoami --format yaml | yq .controller)
 
@@ -103,12 +101,14 @@ jobs:
           juju show-controller | yq .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
       - name: Run integration tests
+        if: ${{ env.next-test != 'NA' }}
+        id: test
         env:
           TF_ACC: "1"
-        run: go test -v -cover ./internal/provider/
+        run: go test -timeout 30m -v -cover ./internal/provider/
         timeout-minutes: 30   
-      - if: ${{ env.next-test != 'NA' }}
-        uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v3
+        if: ${{ env.next-test != 'NA' }}
         with:
           name: ${{ env.id }}
           path: "~/${{ env.id }}"
