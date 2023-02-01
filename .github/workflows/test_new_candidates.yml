@@ -36,7 +36,7 @@ jobs:
           channel=$(echo ${{ matrix.juju_track }}/${{ matrix.juju_risk }})
           echo "Target channel is $channel"
           echo "channel=$channel" >> $GITHUB_ENV
-          id=$(echo ${{ matrix.juju_track }}-${{ matrix.juju_risk }}-${{ matrix. terraform }})
+          id=$(echo ${{ github.sha }}-${{ matrix.juju_track }}-${{ matrix.juju_risk }}-${{ matrix. terraform }})
           echo "Target id is $id"
           echo "id=$id" >> $GITHUB_ENV
       - name: Download artifact
@@ -103,11 +103,12 @@ jobs:
           juju show-controller | yq .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
       - name: Run integration tests
+        id: test
         env:
           TF_ACC: "1"
         run: go test -v -cover ./internal/provider/
         timeout-minutes: 30   
-      - if: ${{ env.next-test != 'NA' }}
+      - if: success()
         uses: actions/upload-artifact@v3
         with:
           name: ${{ env.id }}
