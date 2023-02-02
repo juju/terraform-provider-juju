@@ -2,6 +2,7 @@ package juju
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -14,8 +15,6 @@ import (
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v4"
-
-	"github.com/rs/zerolog/log"
 )
 
 type modelsClient struct {
