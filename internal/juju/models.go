@@ -18,14 +18,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const (
-	// WaitModelTimeout set the maximum time for models to be set up
-	WaitModelTimeout = time.Minute * 10
-	// WaitModelInterval sets the time to wait between model status
-	// requests
-	WaitModelInterval = time.Second * 5
-)
-
 type modelsClient struct {
 	ConnectionFactory
 }
