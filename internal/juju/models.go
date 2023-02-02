@@ -2,7 +2,6 @@ package juju
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -15,6 +14,16 @@ import (
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v4"
+
+	"github.com/rs/zerolog/log"
+)
+
+const (
+	// WaitModelTimeout set the maximum time for models to be set up
+	WaitModelTimeout = time.Minute * 10
+	// WaitModelInterval sets the time to wait between model status
+	// requests
+	WaitModelInterval = time.Second * 5
 )
 
 type modelsClient struct {
@@ -165,12 +174,18 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 	}
 
 	// set constraints when required
-	if input.Constraints.String() != "" {
+	if input.Constraints.String() == "" {
 		return &CreateModelResponse{ModelInfo: modelInfo}, nil
 	}
 
-	// we have to set constraints
-	modelClient := modelconfig.NewClient(conn)
+	// we have to set constraints ...
+	// stablish a new connection with the target model and set constraints
+	connModel, err := c.GetConnection(&modelInfo.UUID)
+	if err != nil {
+		return nil, err
+	}
+
+	modelClient := modelconfig.NewClient(connModel)
 	err = modelClient.SetModelConstraints(input.Constraints)
 	if err != nil {
 		return nil, err
