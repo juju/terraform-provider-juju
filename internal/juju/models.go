@@ -165,12 +165,18 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 	}
 
 	// set constraints when required
-	if input.Constraints.String() != "" {
+	if input.Constraints.String() == "" {
 		return &CreateModelResponse{ModelInfo: modelInfo}, nil
 	}
 
-	// we have to set constraints
-	modelClient := modelconfig.NewClient(conn)
+	// we have to set constraints ...
+	// establish a new connection with the created model through the modelconfig api to set constraints
+	connModel, err := c.GetConnection(&modelInfo.UUID)
+	if err != nil {
+		return nil, err
+	}
+
+	modelClient := modelconfig.NewClient(connModel)
 	err = modelClient.SetModelConstraints(input.Constraints)
 	if err != nil {
 		return nil, err
