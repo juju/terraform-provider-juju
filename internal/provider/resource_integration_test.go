@@ -98,3 +98,78 @@ resource "juju_integration" "this" {
 }
 `, modelName, integrationName)
 }
+
+func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
+	srcModelName := acctest.RandomWithPrefix("tf-test-integration")
+	dstModelName := acctest.RandomWithPrefix("tf-test-integration-dst")
+	via := "127.0.0.1/32,127.0.0.3/32"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: providerFactories,
+		CheckDestroy:      testAccCheckIntegrationDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceIntegrationWithVia(srcModelName, dstModelName, via),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_integration.this", "model", srcModelName),
+					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", srcModelName, "that:db", "this:db")),
+					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "this", "endpoint": "db"}),
+					resource.TestCheckResourceAttr("juju_integration.this", "via", via),
+				),
+			},
+		},
+	})
+}
+
+func testAccResourceIntegrationWithVia(srcModelName string, dstModelName string, viaCIDRs string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_model" "that" {
+	name = %q
+}
+
+resource "juju_application" "this" {
+	model = juju_model.this.name
+	name  = "this" 
+	
+	charm {
+		name = "hello-juju"
+		series = "focal"
+	}
+}
+
+resource "juju_application" "that" {
+	model = juju_model.that.name
+	name  = "that"
+
+	charm {
+		name = "postgresql"
+		series = "focal"
+	}
+}
+
+resource "juju_offer" "that" {
+	model            = juju_model.that.name
+	application_name = juju_application.that.name
+	endpoint         = "db"
+}
+
+resource "juju_integration" "this" {
+	model = juju_model.this.name
+	via = %q
+
+	application {
+		name = juju_application.this.name
+	}
+
+	application {
+		offer_url = juju_offer.that.url
+	}
+}
+`, srcModelName, dstModelName, viaCIDRs)
+}

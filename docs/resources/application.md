@@ -44,6 +44,7 @@ resource "juju_application" "this" {
 ### Optional
 
 - `config` (Map of String) Application specific configuration.
+- `constraints` (String) Constraints imposed on this application.
 - `expose` (Block List, Max: 1) Makes an application publicly available over the network (see [below for nested schema](#nestedblock--expose))
 - `name` (String) A custom name for the application deployment. If empty, uses the charm's name.
 - `trust` (Boolean) Set the trust for the application.
@@ -52,6 +53,7 @@ resource "juju_application" "this" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
+- `principal` (Boolean) Whether this is a Principal application
 
 <a id="nestedblock--charm"></a>
 ### Nested Schema for `charm`
