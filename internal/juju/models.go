@@ -170,7 +170,7 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 	}
 
 	// we have to set constraints ...
-	// stablish a new connection with the target model and set constraints
+	// establish a new connection with the created model through the modelconfig api to set constraints
 	connModel, err := c.GetConnection(&modelInfo.UUID)
 	if err != nil {
 		return nil, err
