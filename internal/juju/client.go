@@ -46,7 +46,7 @@ func NewClient(config Configuration) (*Client, error) {
 		Applications: *newApplicationClient(cf),
 		Integrations: *newIntegrationsClient(cf),
 		Offers:       *newOffersClient(cf),
-		SSHKeys:      *newSSHKeyClient(cf),
+		SSHKeys:      *newSSHKeysClient(cf),
 	}, nil
 }
 
