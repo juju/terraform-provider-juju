@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -65,16 +66,33 @@ func resourceCredential() *schema.Resource {
 	}
 }
 
+func AttributeEntryToString(input interface{}) string {
+	switch t := input.(type) {
+	case bool:
+		return strconv.FormatBool(t)
+	case int64:
+		return strconv.FormatInt(t, 10)
+	case float64:
+		return strconv.FormatFloat(t, 'f', 0, 64)
+	default:
+		return input.(string)
+	}
+}
+
 func resourceCredentialCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
 
 	var diags diag.Diagnostics
 
-	attributes := d.Get("attributes").(map[string]string)
+	attributesRaw := d.Get("attributes").(map[string]interface{})
 	authType := d.Get("auth_type").(string)
 	cloud := d.Get("cloud").([]interface{})
 	credentialName := d.Get("name").(string)
 
+	attributes := make(map[string]string)
+	for key, value := range attributesRaw {
+		attributes[key] = AttributeEntryToString(value)
+	}
 	response, err := client.Credentials.CreateCredential(juju.CreateCredentialInput{
 		Attributes: attributes,
 		AuthType:   authType,
