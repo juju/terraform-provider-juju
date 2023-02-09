@@ -49,19 +49,16 @@ func resourceCredential() *schema.Resource {
 				Description: "The name to be assigned to the credential",
 				Type:        schema.TypeString,
 				Required:    true,
-				ForceNew:    true,
 			},
 			"auth_type": {
 				Description: "Credential authorization type",
 				Type:        schema.TypeString,
 				Required:    true,
-				ForceNew:    true,
 			},
 			"attributes": {
 				Description: "Credential attributes accordingly to the cloud",
 				Type:        schema.TypeMap,
 				Required:    true,
-				ForceNew:    true,
 				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
 		},
@@ -82,7 +79,7 @@ func resourceCredentialCreate(ctx context.Context, d *schema.ResourceData, meta 
 		Attributes: attributes,
 		AuthType:   authType,
 		CloudList:  cloud,
-		Name:       name,
+		Name:       credentialName,
 	})
 	if err != nil {
 		return diag.FromErr(err)
@@ -110,10 +107,10 @@ func resourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta in
 		return diag.FromErr(err)
 	}
 
-	if err := d.Set("name", response.Label); err != nil {
+	if err := d.Set("name", response.CloudCredential.Label); err != nil {
 		return diag.FromErr(err)
 	}
-	if err := d.Set("auth_type", response.AuthType()); err != nil {
+	if err := d.Set("auth_type", response.CloudCredential.AuthType()); err != nil {
 		return diag.FromErr(err)
 	}
 
@@ -123,27 +120,22 @@ func resourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta in
 // TODO
 func resourceCredentialUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
-
 	var diags diag.Diagnostics
-	anyChange := false
-
+	err := client.Credentials.UpdateCredential(juju.UpdateCredentialInput{})
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	return diags
 }
 
 // TODO
 func resourceCredentialDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
 	var diags diag.Diagnostics
-
-	modelUUID := d.Id()
 
 	return diags
 }
 
 // TODO
 func resourceCredentialImporter(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	client := meta.(*juju.Client)
-
 	return []*schema.ResourceData{d}, nil
 }

@@ -120,3 +120,7 @@ func (c *credentialsClient) ReadCredential(credentialName, cloudName string) (*R
 
 	return nil, fmt.Errorf("credential %s not found for cloud %s", credentialName, cloudName)
 }
+
+func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error {
+	return nil
+}
