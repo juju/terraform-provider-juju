@@ -25,9 +25,10 @@ type Configuration struct {
 }
 
 type Client struct {
-	Models       modelsClient
 	Applications applicationsClient
+	Credentials  credentialsClient
 	Integrations integrationsClient
+	Models       modelsClient
 	Offers       offersClient
 }
 
@@ -41,9 +42,10 @@ func NewClient(config Configuration) (*Client, error) {
 	}
 
 	return &Client{
-		Models:       *newModelsClient(cf),
 		Applications: *newApplicationClient(cf),
+		Credentials:  *newCredentialsClient(cf),
 		Integrations: *newIntegrationsClient(cf),
+		Models:       *newModelsClient(cf),
 		Offers:       *newOffersClient(cf),
 	}, nil
 }
