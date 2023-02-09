@@ -4,11 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/juju/juju/core/constraints"
-
 	cloudapi "github.com/juju/juju/api/client/cloud"
 	jujucloud "github.com/juju/juju/cloud"
-	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v4"
 )
 
@@ -25,27 +22,25 @@ type CreateCredentialInput struct {
 
 type CreateCredentialResponse struct {
 	CloudCredential jujucloud.Credential
+	CloudName       string
 }
 
 type ReadCredentialInput struct {
-	UUID string
+	Name string
 }
 
 type ReadCredentialResponse struct {
-	ModelInfo        params.ModelInfo
-	ModelConfig      map[string]interface{}
-	ModelConstraints constraints.Value
+	CloudCredential jujucloud.Credential
 }
 
 type UpdateCredentialInput struct {
-	UUID        string
-	Config      map[string]interface{}
-	Unset       []string
-	Constraints *constraints.Value
+	Name       string
+	AuthType   string
+	Attributes map[string]string
 }
 
 type DestroyCredentialInput struct {
-	UUID string
+	Name string
 }
 
 func newCredentialsClient(cf ConnectionFactory) *credentialsClient {
@@ -88,5 +83,40 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 		return nil, err
 	}
 
-	return &CreateCredentialResponse{CloudCredential: cloudCredential}, nil
+	return &CreateCredentialResponse{CloudCredential: cloudCredential, CloudName: cloudName}, nil
+}
+
+func (c *credentialsClient) ReadCredential(credentialName, cloudName string) (*ReadCredentialResponse, error) {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	client := cloudapi.NewClient(conn)
+	defer client.Close()
+
+	credentialContents, err := client.CredentialContents(cloudName, credentialName, false)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, content := range credentialContents {
+		if content.Error != nil {
+			continue
+		}
+		remoteCredential := content.Result.Content
+		if remoteCredential.Name == credentialName {
+			cloudCredential := jujucloud.NewNamedCredential(
+				credentialName,
+				jujucloud.AuthType(remoteCredential.AuthType),
+				remoteCredential.Attributes,
+				*remoteCredential.Valid, // to be confirmed if corresponds to revoked
+			)
+			return &ReadCredentialResponse{
+				CloudCredential: cloudCredential,
+			}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("credential %s not found for cloud %s", credentialName, cloudName)
 }
