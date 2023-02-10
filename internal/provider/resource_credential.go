@@ -63,6 +63,12 @@ func resourceCredential() *schema.Resource {
 				Optional:    true,
 				Default:     false,
 			},
+			"controller_credential": {
+				Description: "Add credentials to the controller",
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     true,
+			},
 			"name": {
 				Description: "The name to be assigned to the credential",
 				Type:        schema.TypeString,
@@ -94,6 +100,7 @@ func resourceCredentialCreate(ctx context.Context, d *schema.ResourceData, meta 
 	authType := d.Get("auth_type").(string)
 	clientCredential := d.Get("client_credential").(bool)
 	cloud := d.Get("cloud").([]interface{})
+	controllerCredential := d.Get("controller_credential").(bool)
 	credentialName := d.Get("name").(string)
 
 	attributes := make(map[string]string)
@@ -101,11 +108,12 @@ func resourceCredentialCreate(ctx context.Context, d *schema.ResourceData, meta 
 		attributes[key] = AttributeEntryToString(value)
 	}
 	response, err := client.Credentials.CreateCredential(juju.CreateCredentialInput{
-		Attributes:       attributes,
-		AuthType:         authType,
-		ClientCredential: clientCredential,
-		CloudList:        cloud,
-		Name:             credentialName,
+		Attributes:           attributes,
+		AuthType:             authType,
+		ClientCredential:     clientCredential,
+		CloudList:            cloud,
+		ControllerCredential: controllerCredential,
+		Name:                 credentialName,
 	})
 	if err != nil {
 		return diag.FromErr(err)

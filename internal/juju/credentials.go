@@ -16,11 +16,12 @@ type credentialsClient struct {
 }
 
 type CreateCredentialInput struct {
-	Attributes       map[string]string
-	AuthType         string
-	ClientCredential bool
-	CloudList        []interface{}
-	Name             string
+	Attributes           map[string]string
+	AuthType             string
+	ClientCredential     bool
+	CloudList            []interface{}
+	ControllerCredential bool
+	Name                 string
 }
 
 type CreateCredentialResponse struct {
@@ -80,9 +81,16 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 		false,
 	)
 
+	if input.ControllerCredential == false && input.ClientCredential == false { // not proud of that
+		// Just in case none of them are set
+		return nil, fmt.Errorf("controller_credential or/and client_credential must be set to true")
+	}
+
 	//  First add credential to the controller
-	if err := client.AddCredential(cloudCredTag.String(), cloudCredential); err != nil {
-		return nil, err
+	if input.ControllerCredential {
+		if err := client.AddCredential(cloudCredTag.String(), cloudCredential); err != nil {
+			return nil, err
+		}
 	}
 
 	// if is set will add to the client too
