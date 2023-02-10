@@ -46,6 +46,7 @@ func NewClient(config Configuration) (*Client, error) {
 		Applications: *newApplicationClient(cf),
 		Integrations: *newIntegrationsClient(cf),
 		Offers:       *newOffersClient(cf),
+		Users:        *newUsersClient(cf),
 	}, nil
 }
 
