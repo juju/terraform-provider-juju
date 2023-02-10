@@ -22,7 +22,7 @@ func resourceUser() *schema.Resource {
 		UpdateContext: resourceUserUpdate,
 		DeleteContext: resourceUserDelete,
 		Importer: &schema.ResourceImporter{
-			StateContext: resourceUserImporter,
+			State: schema.ImportStatePassthrough,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -146,24 +146,4 @@ func resourceUserDelete(ctx context.Context, d *schema.ResourceData, meta interf
 	d.SetId("")
 
 	return diags
-}
-
-func resourceUserImporter(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	client := meta.(*juju.Client)
-
-	//d.Id() here is the last argument passed to the `terraform import juju_model.RESOURCE_NAME USER_NAME` command
-	//because we import based on model name we load it into `modelName` here for clarity
-	name := d.Id()
-
-	user, err := client.Users.ReadUser(name)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = d.Set("name", user.UserInfo.Username); err != nil {
-		return nil, err
-	}
-	d.SetId(user.UserInfo.Username)
-
-	return []*schema.ResourceData{d}, nil
 }
