@@ -134,7 +134,7 @@ func (c *credentialsClient) ReadCredential(input ReadCredentialInput) (*ReadCred
 	defer client.Close()
 
 	var clientCredentialFound jujucloud.Credential
-	if clientCredential == true {
+	if clientCredential {
 		existingCredentials, err := getExistingClientCredential(cloudName, credentialName)
 		if err != nil {
 			return nil, err
