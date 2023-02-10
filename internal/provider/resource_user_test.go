@@ -9,7 +9,7 @@ import (
 )
 
 func TestAcc_ResourceUser_Basic(t *testing.T) {
-	userName := "tftestuser"
+	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 
 	resourceName := "juju_user.user"
@@ -24,13 +24,11 @@ func TestAcc_ResourceUser_Basic(t *testing.T) {
 				),
 			},
 			{
-				ImportStateVerify: true,
-				ImportState:       true,
-				ImportStateVerifyIgnore: []string{
-					"config.%",
-					"config.logging-config"},
-				ImportStateId: userName,
-				ResourceName:  resourceName,
+				ImportStateVerify:       true,
+				ImportState:             true,
+				ImportStateVerifyIgnore: []string{"password"},
+				ImportStateId:           userName,
+				ResourceName:            resourceName,
 			},
 		},
 	})
