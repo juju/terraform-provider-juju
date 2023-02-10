@@ -16,11 +16,11 @@ type credentialsClient struct {
 }
 
 type CreateCredentialInput struct {
-	Attributes map[string]string
-	AuthType   string
-	CloudList  []interface{}
-	Controller bool
-	Name       string
+	Attributes       map[string]string
+	AuthType         string
+	ClientCredential bool
+	CloudList        []interface{}
+	Name             string
 }
 
 type CreateCredentialResponse struct {
@@ -80,27 +80,27 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 		false,
 	)
 
-	//  First add credential to the client
-	store := jujuclient.NewFileClientStore()
-	existingCredentials, err := store.CredentialForCloud(cloudName)
-	if err != nil && !errors.Is(err, errors.NotFound) {
-		return nil, errors.Annotate(err, "reading existing credentials for cloud")
-	}
-	if errors.Is(err, errors.NotFound) {
-		existingCredentials = &jujucloud.CloudCredential{
-			AuthCredentials: make(map[string]jujucloud.Credential),
-		}
-	}
-	// will overwrite if already exists
-	existingCredentials.AuthCredentials[input.Name] = cloudCredential
-	if err := store.UpdateCredential(cloudName, *existingCredentials); err != nil {
-		return nil, fmt.Errorf("credential %s not added for cloud %s: %s", input.Name, cloudName, err)
+	//  First add credential to the controller
+	if err := client.AddCredential(cloudCredTag.String(), cloudCredential); err != nil {
+		return nil, err
 	}
 
-	// if is set will add to the controller too
-	if input.Controller {
-		if err := client.AddCredential(cloudCredTag.String(), cloudCredential); err != nil {
-			return nil, err
+	// if is set will add to the client too
+	if input.ClientCredential {
+		store := jujuclient.NewFileClientStore()
+		existingCredentials, err := store.CredentialForCloud(cloudName)
+		if err != nil && !errors.Is(err, errors.NotFound) {
+			return nil, errors.Annotate(err, "reading existing credentials for cloud")
+		}
+		if errors.Is(err, errors.NotFound) {
+			existingCredentials = &jujucloud.CloudCredential{
+				AuthCredentials: make(map[string]jujucloud.Credential),
+			}
+		}
+		// will overwrite if already exists
+		existingCredentials.AuthCredentials[input.Name] = cloudCredential
+		if err := store.UpdateCredential(cloudName, *existingCredentials); err != nil {
+			return nil, fmt.Errorf("credential %s not added for cloud %s: %s", input.Name, cloudName, err)
 		}
 	}
 

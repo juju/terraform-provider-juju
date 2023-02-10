@@ -46,27 +46,27 @@ func resourceCredential() *schema.Resource {
 					},
 				},
 			},
-			"name": {
-				Description: "The name to be assigned to the credential",
-				Type:        schema.TypeString,
-				Required:    true,
-			},
-			"auth_type": {
-				Description: "Credential authorization type",
-				Type:        schema.TypeString,
-				Required:    true,
-			},
 			"attributes": {
 				Description: "Credential attributes accordingly to the cloud",
 				Type:        schema.TypeMap,
 				Required:    true,
 				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
-			"controller": {
-				Description: "Add credentials to the controller too.",
+			"auth_type": {
+				Description: "Credential authorization type",
+				Type:        schema.TypeString,
+				Required:    true,
+			},
+			"client_credential": {
+				Description: "Add credentials to the client",
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Default:     false,
+			},
+			"name": {
+				Description: "The name to be assigned to the credential",
+				Type:        schema.TypeString,
+				Required:    true,
 			},
 		},
 	}
@@ -92,8 +92,8 @@ func resourceCredentialCreate(ctx context.Context, d *schema.ResourceData, meta 
 
 	attributesRaw := d.Get("attributes").(map[string]interface{})
 	authType := d.Get("auth_type").(string)
+	clientCredential := d.Get("client_credential").(bool)
 	cloud := d.Get("cloud").([]interface{})
-	controller := d.Get("controller").(bool)
 	credentialName := d.Get("name").(string)
 
 	attributes := make(map[string]string)
@@ -101,11 +101,11 @@ func resourceCredentialCreate(ctx context.Context, d *schema.ResourceData, meta 
 		attributes[key] = AttributeEntryToString(value)
 	}
 	response, err := client.Credentials.CreateCredential(juju.CreateCredentialInput{
-		Attributes: attributes,
-		AuthType:   authType,
-		CloudList:  cloud,
-		Controller: controller,
-		Name:       credentialName,
+		Attributes:       attributes,
+		AuthType:         authType,
+		ClientCredential: clientCredential,
+		CloudList:        cloud,
+		Name:             credentialName,
 	})
 	if err != nil {
 		return diag.FromErr(err)
