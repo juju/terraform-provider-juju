@@ -49,7 +49,7 @@ func resourceCredential() *schema.Resource {
 			"attributes": {
 				Description: "Credential attributes accordingly to the cloud",
 				Type:        schema.TypeMap,
-				Required:    true,
+				Optional:    true,
 				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
 			"auth_type": {
@@ -119,7 +119,7 @@ func resourceCredentialCreate(ctx context.Context, d *schema.ResourceData, meta 
 		return diag.FromErr(err)
 	}
 
-	id := fmt.Sprintf("%s:%s", credentialName, response.CloudName)
+	id := fmt.Sprintf("%s:%s:%t:%t", credentialName, response.CloudName, clientCredential, controllerCredential)
 	d.SetId(id)
 
 	return diags
@@ -131,12 +131,12 @@ func resourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta in
 	var diags diag.Diagnostics
 
 	id := strings.Split(d.Id(), ":") // to be improved
-	if len(id) != 2 {
+	if len(id) != 4 {
 		return diag.Errorf("unable to parse credential name and cloud name from provided ID")
 	}
-	credentialName, cloudName := id[0], id[1]
+	credentialName, cloudName, clientCredential, controllerCredential := id[0], id[1], id[2], id[3]
 
-	response, err := client.Credentials.ReadCredential(credentialName, cloudName)
+	response, err := client.Credentials.ReadCredential(credentialName, cloudName, clientCredential, controllerCredential)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -144,14 +144,24 @@ func resourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta in
 	if err := d.Set("name", response.CloudCredential.Label); err != nil {
 		return diag.FromErr(err)
 	}
+
 	if err := d.Set("auth_type", response.CloudCredential.AuthType()); err != nil {
 		return diag.FromErr(err)
 	}
 
+	configuredAttributes := d.Get("attributes").(map[string]interface{})
+	receivedAttributes := response.CloudCredential.Attributes()
+	for configAtr := range configuredAttributes {
+		if value, exists := receivedAttributes[configAtr]; exists {
+			configuredAttributes[configAtr] = AttributeEntryToString(value)
+		}
+	}
+	if err = d.Set("attributes", configuredAttributes); err != nil {
+		return diag.FromErr(err)
+	}
 	return diags
 }
 
-// TODO
 func resourceCredentialUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
 	var diags diag.Diagnostics

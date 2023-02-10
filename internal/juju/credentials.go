@@ -53,6 +53,15 @@ func newCredentialsClient(cf ConnectionFactory) *credentialsClient {
 	}
 }
 
+func getCloudCredentialTag(cloudName, currentUser, name string) (*names.CloudCredentialTag, error) {
+	id := fmt.Sprintf("%s/%s/%s", cloudName, currentUser, name)
+	if !names.IsValidCloudCredential(id) {
+		return nil, fmt.Errorf("invalid cloud credential to cloud %s with user %s and credential name %s", cloudName, currentUser, name)
+	}
+	cloudCredentialTag := names.NewCloudCredentialTag(id)
+	return &cloudCredentialTag, nil
+}
+
 func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*CreateCredentialResponse, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
@@ -69,11 +78,12 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 	}
 
 	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
-	id := fmt.Sprintf("%s/%s/%s", cloudName, currentUser, input.Name)
-	if !names.IsValidCloudCredential(id) {
+
+	cloudCredTag, err := getCloudCredentialTag(cloudName, currentUser, input.Name)
+	if err != nil {
 		return nil, err
 	}
-	cloudCredTag := names.NewCloudCredentialTag(id)
+
 	cloudCredential := jujucloud.NewNamedCredential(
 		input.Name,
 		jujucloud.AuthType(input.AuthType),
@@ -115,7 +125,7 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 	return &CreateCredentialResponse{CloudCredential: cloudCredential, CloudName: cloudName}, nil
 }
 
-func (c *credentialsClient) ReadCredential(credentialName, cloudName string) (*ReadCredentialResponse, error) {
+func (c *credentialsClient) ReadCredential(credentialName, cloudName, clientCredential, controllerCredential string) (*ReadCredentialResponse, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -124,27 +134,59 @@ func (c *credentialsClient) ReadCredential(credentialName, cloudName string) (*R
 	client := cloudapi.NewClient(conn)
 	defer client.Close()
 
-	credentialContents, err := client.CredentialContents(cloudName, credentialName, false)
-	if err != nil {
-		return nil, err
+	var clientCredentialFound jujucloud.Credential
+	if clientCredential == "true" {
+		store := jujuclient.NewFileClientStore()
+		existingCredentials, err := store.CredentialForCloud(cloudName)
+		if err != nil && !errors.Is(err, errors.NotFound) {
+			return nil, errors.Annotate(err, "reading existing credentials for cloud")
+		}
+		clientCredentialFound = existingCredentials.AuthCredentials[credentialName]
 	}
 
-	for _, content := range credentialContents {
-		if content.Error != nil {
-			continue
+	var controllerCredentialFound jujucloud.Credential
+	if controllerCredential == "true" {
+		// reading from the controller
+		credentialContents, err := client.CredentialContents(cloudName, credentialName, false)
+		if err != nil {
+			return nil, err
 		}
-		remoteCredential := content.Result.Content
-		if remoteCredential.Name == credentialName {
-			cloudCredential := jujucloud.NewNamedCredential(
-				credentialName,
-				jujucloud.AuthType(remoteCredential.AuthType),
-				remoteCredential.Attributes,
-				*remoteCredential.Valid, // to be confirmed if corresponds to revoked
-			)
-			return &ReadCredentialResponse{
-				CloudCredential: cloudCredential,
-			}, nil
+
+		for _, content := range credentialContents {
+			if content.Error != nil {
+				continue
+			}
+			remoteCredential := content.Result.Content
+			if remoteCredential.Name == credentialName {
+				controllerCredentialFound = jujucloud.NewNamedCredential(
+					credentialName,
+					jujucloud.AuthType(remoteCredential.AuthType),
+					remoteCredential.Attributes,
+					false, //  CredentialContents does not provides this field
+				)
+				break
+			}
 		}
+	}
+
+	if controllerCredential == "true" && clientCredential == "true" {
+		// compare if they are the same
+		// lets just check auth_type for now
+		if clientCredentialFound.AuthType() != controllerCredentialFound.AuthType() {
+			return nil, fmt.Errorf("client and controller credentials have different auth type: %s, %s", clientCredentialFound.AuthType(), controllerCredentialFound.AuthType())
+		}
+	}
+
+	if controllerCredential == "true" {
+		return &ReadCredentialResponse{
+			CloudCredential: controllerCredentialFound,
+		}, nil
+	}
+
+	if clientCredential == "true" {
+		return &ReadCredentialResponse{
+			CloudCredential: clientCredentialFound,
+		}, nil
 	}
 
 	return nil, fmt.Errorf("credential %s not found for cloud %s", credentialName, cloudName)
