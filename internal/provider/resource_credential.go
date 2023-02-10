@@ -62,6 +62,12 @@ func resourceCredential() *schema.Resource {
 				Required:    true,
 				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
+			"controller": {
+				Description: "Add credentials to the controller too.",
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+			},
 		},
 	}
 }
@@ -87,6 +93,7 @@ func resourceCredentialCreate(ctx context.Context, d *schema.ResourceData, meta 
 	attributesRaw := d.Get("attributes").(map[string]interface{})
 	authType := d.Get("auth_type").(string)
 	cloud := d.Get("cloud").([]interface{})
+	controller := d.Get("controller").(bool)
 	credentialName := d.Get("name").(string)
 
 	attributes := make(map[string]string)
@@ -97,6 +104,7 @@ func resourceCredentialCreate(ctx context.Context, d *schema.ResourceData, meta 
 		Attributes: attributes,
 		AuthType:   authType,
 		CloudList:  cloud,
+		Controller: controller,
 		Name:       credentialName,
 	})
 	if err != nil {
