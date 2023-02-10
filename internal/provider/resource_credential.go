@@ -73,6 +73,7 @@ func resourceCredential() *schema.Resource {
 				Description: "The name to be assigned to the credential",
 				Type:        schema.TypeString,
 				Required:    true,
+				ForceNew:    true,
 			},
 		},
 	}
@@ -136,7 +137,22 @@ func resourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta in
 	}
 	credentialName, cloudName, clientCredential, controllerCredential := id[0], id[1], id[2], id[3]
 
-	response, err := client.Credentials.ReadCredential(credentialName, cloudName, clientCredential, controllerCredential)
+	clientCredentialBool, err := strconv.ParseBool(clientCredential)
+	if err != nil {
+		return diag.Errorf("unable to parse client credential from provided ID")
+	}
+
+	controllerCredentialBool, err := strconv.ParseBool(controllerCredential)
+	if err != nil {
+		return diag.Errorf("unable to parse controller credential from provided ID")
+	}
+
+	response, err := client.Credentials.ReadCredential(juju.ReadCredentialInput{
+		ClientCredential:     clientCredentialBool,
+		CloudName:            cloudName,
+		ControllerCredential: controllerCredentialBool,
+		Name:                 credentialName,
+	})
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -149,11 +165,12 @@ func resourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta in
 		return diag.FromErr(err)
 	}
 
-	configuredAttributes := d.Get("attributes").(map[string]interface{})
 	receivedAttributes := response.CloudCredential.Attributes()
+
+	configuredAttributes := d.Get("attributes").(map[string]interface{})
 	for configAtr := range configuredAttributes {
-		if value, exists := receivedAttributes[configAtr]; exists {
-			configuredAttributes[configAtr] = AttributeEntryToString(value)
+		if receivedValue, exists := receivedAttributes[configAtr]; exists {
+			configuredAttributes[configAtr] = AttributeEntryToString(receivedValue)
 		}
 	}
 	if err = d.Set("attributes", configuredAttributes); err != nil {
@@ -165,10 +182,38 @@ func resourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta in
 func resourceCredentialUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
 	var diags diag.Diagnostics
-	err := client.Credentials.UpdateCredential(juju.UpdateCredentialInput{})
+
+	id := strings.Split(d.Id(), ":") // to be improved
+	if len(id) != 4 {
+		return diag.Errorf("unable to parse credential name and cloud name from provided ID")
+	}
+	credentialName, cloudName := id[0], id[1]
+
+	if !(d.HasChange("auth_type") || d.HasChange("client_credential") || d.HasChange("controller_credential") || d.HasChange("attributes")) {
+		return diags
+	}
+
+	newAuthType := d.Get("auth_type").(string)
+	newClientCredential := d.Get("client_credential").(bool)
+	newControllerCredential := d.Get("controller_credential").(bool)
+	var newAttributes map[string]string
+	attributesRaw := d.Get("attributes").(map[string]interface{})
+	for key, value := range attributesRaw {
+		newAttributes[key] = AttributeEntryToString(value)
+	}
+
+	err := client.Credentials.UpdateCredential(juju.UpdateCredentialInput{
+		Attributes:           newAttributes,
+		AuthType:             newAuthType,
+		ClientCredential:     newClientCredential,
+		CloudName:            cloudName,
+		ControllerCredential: newControllerCredential,
+		Name:                 credentialName,
+	})
 	if err != nil {
 		return diag.FromErr(err)
 	}
+
 	return diags
 }
 

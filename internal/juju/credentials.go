@@ -30,7 +30,10 @@ type CreateCredentialResponse struct {
 }
 
 type ReadCredentialInput struct {
-	Name string
+	Name                 string
+	ClientCredential     bool
+	CloudName            string
+	ControllerCredential bool
 }
 
 type ReadCredentialResponse struct {
@@ -38,9 +41,12 @@ type ReadCredentialResponse struct {
 }
 
 type UpdateCredentialInput struct {
-	Name       string
-	AuthType   string
-	Attributes map[string]string
+	Attributes           map[string]string
+	AuthType             string
+	ClientCredential     bool
+	CloudName            string
+	ControllerCredential bool
+	Name                 string
 }
 
 type DestroyCredentialInput struct {
@@ -63,6 +69,8 @@ func getCloudCredentialTag(cloudName, currentUser, name string) (*names.CloudCre
 }
 
 func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*CreateCredentialResponse, error) {
+	credentialName := input.Name
+
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -79,13 +87,13 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 
 	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
 
-	cloudCredTag, err := getCloudCredentialTag(cloudName, currentUser, input.Name)
+	cloudCredTag, err := getCloudCredentialTag(cloudName, currentUser, credentialName)
 	if err != nil {
 		return nil, err
 	}
 
 	cloudCredential := jujucloud.NewNamedCredential(
-		input.Name,
+		credentialName,
 		jujucloud.AuthType(input.AuthType),
 		input.Attributes,
 		false,
@@ -96,36 +104,27 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 		return nil, fmt.Errorf("controller_credential or/and client_credential must be set to true")
 	}
 
-	//  First add credential to the controller
 	if input.ControllerCredential {
 		if err := client.AddCredential(cloudCredTag.String(), cloudCredential); err != nil {
 			return nil, err
 		}
 	}
 
-	// if is set will add to the client too
 	if input.ClientCredential {
-		store := jujuclient.NewFileClientStore()
-		existingCredentials, err := store.CredentialForCloud(cloudName)
-		if err != nil && !errors.Is(err, errors.NotFound) {
-			return nil, errors.Annotate(err, "reading existing credentials for cloud")
-		}
-		if errors.Is(err, errors.NotFound) {
-			existingCredentials = &jujucloud.CloudCredential{
-				AuthCredentials: make(map[string]jujucloud.Credential),
-			}
-		}
-		// will overwrite if already exists
-		existingCredentials.AuthCredentials[input.Name] = cloudCredential
-		if err := store.UpdateCredential(cloudName, *existingCredentials); err != nil {
-			return nil, fmt.Errorf("credential %s not added for cloud %s: %s", input.Name, cloudName, err)
+		if err := updateClientCredential(cloudName, credentialName, cloudCredential); err != nil {
+			return nil, err
 		}
 	}
 
 	return &CreateCredentialResponse{CloudCredential: cloudCredential, CloudName: cloudName}, nil
 }
 
-func (c *credentialsClient) ReadCredential(credentialName, cloudName, clientCredential, controllerCredential string) (*ReadCredentialResponse, error) {
+func (c *credentialsClient) ReadCredential(input ReadCredentialInput) (*ReadCredentialResponse, error) {
+	clientCredential := input.ClientCredential
+	cloudName := input.CloudName
+	controllerCredential := input.ControllerCredential
+	credentialName := input.Name
+
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -135,17 +134,16 @@ func (c *credentialsClient) ReadCredential(credentialName, cloudName, clientCred
 	defer client.Close()
 
 	var clientCredentialFound jujucloud.Credential
-	if clientCredential == "true" {
-		store := jujuclient.NewFileClientStore()
-		existingCredentials, err := store.CredentialForCloud(cloudName)
-		if err != nil && !errors.Is(err, errors.NotFound) {
-			return nil, errors.Annotate(err, "reading existing credentials for cloud")
+	if clientCredential == true {
+		existingCredentials, err := getExistingClientCredential(cloudName, credentialName)
+		if err != nil {
+			return nil, err
 		}
 		clientCredentialFound = existingCredentials.AuthCredentials[credentialName]
 	}
 
 	var controllerCredentialFound jujucloud.Credential
-	if controllerCredential == "true" {
+	if controllerCredential {
 		// reading from the controller
 		credentialContents, err := client.CredentialContents(cloudName, credentialName, false)
 		if err != nil {
@@ -169,7 +167,7 @@ func (c *credentialsClient) ReadCredential(credentialName, cloudName, clientCred
 		}
 	}
 
-	if controllerCredential == "true" && clientCredential == "true" {
+	if controllerCredential && clientCredential {
 		// compare if they are the same
 		// lets just check auth_type for now
 		if clientCredentialFound.AuthType() != controllerCredentialFound.AuthType() {
@@ -177,13 +175,13 @@ func (c *credentialsClient) ReadCredential(credentialName, cloudName, clientCred
 		}
 	}
 
-	if controllerCredential == "true" {
+	if controllerCredential {
 		return &ReadCredentialResponse{
 			CloudCredential: controllerCredentialFound,
 		}, nil
 	}
 
-	if clientCredential == "true" {
+	if clientCredential {
 		return &ReadCredentialResponse{
 			CloudCredential: clientCredentialFound,
 		}, nil
@@ -193,5 +191,68 @@ func (c *credentialsClient) ReadCredential(credentialName, cloudName, clientCred
 }
 
 func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error {
+	cloudName := input.CloudName
+	credentialName := input.Name
+
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+
+	client := cloudapi.NewClient(conn)
+	defer client.Close()
+
+	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
+
+	cloudCredTag, err := getCloudCredentialTag(cloudName, currentUser, credentialName)
+	if err != nil {
+		return err
+	}
+
+	cloudCredential := jujucloud.NewNamedCredential(
+		input.Name,
+		jujucloud.AuthType(input.AuthType),
+		input.Attributes,
+		false,
+	)
+
+	if input.ControllerCredential {
+		if _, err := client.UpdateCredentialsCheckModels(*cloudCredTag, cloudCredential); err != nil {
+			return err
+		}
+	}
+
+	if input.ClientCredential {
+		if err := updateClientCredential(cloudName, credentialName, cloudCredential); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func getExistingClientCredential(cloudName, credentialName string) (*jujucloud.CloudCredential, error) {
+	store := jujuclient.NewFileClientStore()
+	existingCredentials, err := store.CredentialForCloud(cloudName)
+	if err != nil && !errors.Is(err, errors.NotFound) {
+		return nil, errors.Annotate(err, "reading existing credentials for cloud")
+	}
+	if errors.Is(err, errors.NotFound) {
+		return nil, fmt.Errorf("credential %s not found for cloud %s: %s", credentialName, cloudName, err)
+	}
+	return existingCredentials, nil
+}
+
+func updateClientCredential(cloudName string, credentialName string, cloudCredential jujucloud.Credential) error {
+	existingCredentials, err := getExistingClientCredential(cloudName, credentialName)
+	if err != nil {
+		return err
+	}
+	// will overwrite if already exists
+	existingCredentials.AuthCredentials[credentialName] = cloudCredential
+	store := jujuclient.NewFileClientStore()
+	if err := store.UpdateCredential(cloudName, *existingCredentials); err != nil {
+		return fmt.Errorf("credential %s not added for cloud %s: %s", credentialName, cloudName, err)
+	}
 	return nil
 }
