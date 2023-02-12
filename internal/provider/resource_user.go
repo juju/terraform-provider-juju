@@ -37,11 +37,6 @@ func resourceUser() *schema.Resource {
 				Type:        schema.TypeString,
 				Optional:    true,
 			},
-			"model": {
-				Description: "The model to be assigned to the user",
-				Type:        schema.TypeString,
-				Optional:    true,
-			},
 			"password": {
 				Description: "The password to be assigned to the user",
 				Type:        schema.TypeString,
@@ -58,13 +53,11 @@ func resourceUserCreate(ctx context.Context, d *schema.ResourceData, meta interf
 
 	name := d.Get("name").(string)
 	displayName := d.Get("display_name").(string)
-	model := d.Get("model").(string)
 	password := d.Get("password").(string)
 
 	_, err := client.Users.CreateUser(juju.CreateUserInput{
 		Name:        name,
 		DisplayName: displayName,
-		Model:       model,
 		Password:    password,
 	})
 	if err != nil {
