@@ -96,13 +96,13 @@ func resourceUserUpdate(ctx context.Context, d *schema.ResourceData, meta interf
 	var diags diag.Diagnostics
 	anyChange := false
 
-	var newDisplayName string
+	var newPassword string
 
 	var err error
 
-	if d.HasChange("display_name") {
+	if d.HasChange("password") {
 		anyChange = true
-		newDisplayName = d.Get("display_name").(string)
+		newPassword = d.Get("password").(string)
 	}
 
 	if !anyChange {
@@ -110,8 +110,8 @@ func resourceUserUpdate(ctx context.Context, d *schema.ResourceData, meta interf
 	}
 
 	err = client.Users.UpdateUser(juju.UpdateUserInput{
-		Name:        d.Id(),
-		DisplayName: newDisplayName,
+		Name:     d.Id(),
+		Password: newPassword,
 	})
 	if err != nil {
 		return diag.FromErr(err)
