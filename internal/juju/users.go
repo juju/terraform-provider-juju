@@ -2,9 +2,6 @@ package juju
 
 import (
 	"fmt"
-	"strings"
-
-	"github.com/juju/juju/api"
 
 	"github.com/juju/juju/api/client/usermanager"
 	"github.com/juju/juju/rpc/params"
@@ -50,10 +47,6 @@ func newUsersClient(cf ConnectionFactory) *usersClient {
 	return &usersClient{
 		ConnectionFactory: cf,
 	}
-}
-
-func (c *usersClient) getCurrentUser(conn api.Connection) string {
-	return strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
 }
 
 func (c *usersClient) CreateUser(input CreateUserInput) (*CreateUserResponse, error) {
