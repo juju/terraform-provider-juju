@@ -23,8 +23,8 @@ ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC1I8QDP79MaHEIAlfh933zqcE8LyUt9doytF3YySBU
 			{
 				Config: testAccResourceSSHKey(modelName, sshKey1, sshKey2),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "key.#]", "2")),
+					resource.TestCheckResourceAttr("juju_ssh_keys.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_ssh_keys.this", "key.#]", "2")),
 			},
 		},
 	})
