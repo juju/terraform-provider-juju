@@ -131,26 +131,20 @@ func resourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta in
 
 	var diags diag.Diagnostics
 
-	id := strings.Split(d.Id(), ":") // to be improved
+	id := strings.Split(d.Id(), ":")
 	if len(id) != 4 {
 		return diag.Errorf("unable to parse credential name and cloud name from provided ID")
 	}
-	credentialName, cloudName, clientCredential, controllerCredential := id[0], id[1], id[2], id[3]
-
-	clientCredentialBool, err := strconv.ParseBool(clientCredential)
+	credentialName, cloudName, clientCredentialStr, controllerCredentialStr := id[0], id[1], id[2], id[3]
+	clientCredential, controllerCredential, err := convertOptionsBool(clientCredentialStr, controllerCredentialStr)
 	if err != nil {
-		return diag.Errorf("unable to parse client credential from provided ID")
-	}
-
-	controllerCredentialBool, err := strconv.ParseBool(controllerCredential)
-	if err != nil {
-		return diag.Errorf("unable to parse controller credential from provided ID")
+		return diag.FromErr(err)
 	}
 
 	response, err := client.Credentials.ReadCredential(juju.ReadCredentialInput{
-		ClientCredential:     clientCredentialBool,
+		ClientCredential:     clientCredential,
 		CloudName:            cloudName,
-		ControllerCredential: controllerCredentialBool,
+		ControllerCredential: controllerCredential,
 		Name:                 credentialName,
 	})
 	if err != nil {
@@ -183,20 +177,21 @@ func resourceCredentialUpdate(ctx context.Context, d *schema.ResourceData, meta 
 	client := meta.(*juju.Client)
 	var diags diag.Diagnostics
 
-	id := strings.Split(d.Id(), ":") // to be improved
+	id := strings.Split(d.Id(), ":")
 	if len(id) != 4 {
 		return diag.Errorf("unable to parse credential name and cloud name from provided ID")
 	}
 	credentialName, cloudName := id[0], id[1]
 
-	if !(d.HasChange("auth_type") || d.HasChange("client_credential") || d.HasChange("controller_credential") || d.HasChange("attributes")) {
+	if !d.HasChange("auth_type") && !d.HasChange("client_credential") && !d.HasChange("controller_credential") && !d.HasChange("attributes") {
+		// no changes
 		return diags
 	}
 
 	newAuthType := d.Get("auth_type").(string)
 	newClientCredential := d.Get("client_credential").(bool)
 	newControllerCredential := d.Get("controller_credential").(bool)
-	var newAttributes map[string]string
+	newAttributes := make(map[string]string)
 	attributesRaw := d.Get("attributes").(map[string]interface{})
 	for key, value := range attributesRaw {
 		newAttributes[key] = AttributeEntryToString(value)
@@ -214,14 +209,55 @@ func resourceCredentialUpdate(ctx context.Context, d *schema.ResourceData, meta 
 		return diag.FromErr(err)
 	}
 
+	newID := fmt.Sprintf("%s:%s:%t:%t", credentialName, cloudName, newClientCredential, newControllerCredential)
+	d.SetId(newID)
+
 	return diags
 }
 
-// TODO
 func resourceCredentialDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	// When removing cloud credential from a controller, Juju performs additional
+	// checks to ensure that there are no models using this credential. The provider will not force the removal
+	client := meta.(*juju.Client)
 	var diags diag.Diagnostics
 
+	id := strings.Split(d.Id(), ":")
+	if len(id) != 4 {
+		return diag.Errorf("unable to parse credential name and cloud name from provided ID")
+	}
+	credentialName, cloudName, clientCredentialStr, controllerCredentialStr := id[0], id[1], id[2], id[3]
+	clientCredential, controllerCredential, err := convertOptionsBool(clientCredentialStr, controllerCredentialStr)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	err = client.Credentials.DestroyCredential(juju.DestroyCredentialInput{
+		ClientCredential:     clientCredential,
+		CloudName:            cloudName,
+		ControllerCredential: controllerCredential,
+		Name:                 credentialName,
+	})
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	d.SetId("")
+
 	return diags
+}
+
+func convertOptionsBool(clientCredentialStr, controllerCredentialStr string) (bool, bool, error) {
+	clientCredentialBool, err := strconv.ParseBool(clientCredentialStr)
+	if err != nil {
+		return false, false, fmt.Errorf("unable to parse client credential from provided ID")
+	}
+
+	controllerCredentialBool, err := strconv.ParseBool(controllerCredentialStr)
+	if err != nil {
+		return false, false, fmt.Errorf("unable to parse controller credential from provided ID")
+	}
+
+	return clientCredentialBool, controllerCredentialBool, nil
 }
 
 // TODO

@@ -50,7 +50,10 @@ type UpdateCredentialInput struct {
 }
 
 type DestroyCredentialInput struct {
-	Name string
+	ClientCredential     bool
+	CloudName            string
+	ControllerCredential bool
+	Name                 string
 }
 
 func newCredentialsClient(cf ConnectionFactory) *credentialsClient {
@@ -99,7 +102,7 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 		false,
 	)
 
-	if input.ControllerCredential == false && input.ClientCredential == false { // not proud of that
+	if !input.ControllerCredential && !input.ControllerCredential {
 		// Just in case none of them are set
 		return nil, fmt.Errorf("controller_credential or/and client_credential must be set to true")
 	}
@@ -144,7 +147,6 @@ func (c *credentialsClient) ReadCredential(input ReadCredentialInput) (*ReadCred
 
 	var controllerCredentialFound jujucloud.Credential
 	if controllerCredential {
-		// reading from the controller
 		credentialContents, err := client.CredentialContents(cloudName, credentialName, false)
 		if err != nil {
 			return nil, err
@@ -216,14 +218,14 @@ func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error 
 		false,
 	)
 
-	if input.ControllerCredential {
-		if _, err := client.UpdateCredentialsCheckModels(*cloudCredTag, cloudCredential); err != nil {
+	if input.ClientCredential {
+		if err := updateClientCredential(cloudName, credentialName, cloudCredential); err != nil {
 			return err
 		}
 	}
 
-	if input.ClientCredential {
-		if err := updateClientCredential(cloudName, credentialName, cloudCredential); err != nil {
+	if input.ControllerCredential {
+		if _, err := client.UpdateCredentialsCheckModels(*cloudCredTag, cloudCredential); err != nil {
 			return err
 		}
 	}
@@ -253,6 +255,56 @@ func updateClientCredential(cloudName string, credentialName string, cloudCreden
 	store := jujuclient.NewFileClientStore()
 	if err := store.UpdateCredential(cloudName, *existingCredentials); err != nil {
 		return fmt.Errorf("credential %s not added for cloud %s: %s", credentialName, cloudName, err)
+	}
+	return nil
+}
+
+func (c *credentialsClient) DestroyCredential(input DestroyCredentialInput) error {
+	cloudName := input.CloudName
+	credentialName := input.Name
+
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+
+	client := cloudapi.NewClient(conn)
+	defer client.Close()
+
+	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
+
+	cloudCredTag, err := getCloudCredentialTag(cloudName, currentUser, credentialName)
+	if err != nil {
+		return err
+	}
+
+	if input.ControllerCredential {
+		if err := client.RevokeCredential(*cloudCredTag, false); err != nil {
+			return err
+		}
+	}
+
+	if input.ClientCredential {
+		if err := destroyClientCredential(cloudName, credentialName); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func destroyClientCredential(cloudName string, credentialName string) error {
+	existingCredentials, err := getExistingClientCredential(cloudName, credentialName)
+	if err != nil {
+		return err
+	}
+	if _, ok := existingCredentials.AuthCredentials[credentialName]; !ok {
+		return fmt.Errorf("credential %s not found for cloud %s", credentialName, cloudName)
+	}
+	delete(existingCredentials.AuthCredentials, credentialName)
+	store := jujuclient.NewFileClientStore()
+	if err := store.UpdateCredential(cloudName, *existingCredentials); err != nil {
+		return fmt.Errorf("credential %s not deleted for cloud %s: %s", credentialName, cloudName, err)
 	}
 	return nil
 }
