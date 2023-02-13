@@ -9,9 +9,8 @@ import (
 )
 
 // The User resource maps to a juju user that is operated via
-// `juju add-user [--model <modelname>]`, `juju remove-user`
-// Display name and model are optional. If no model is given,
-// the user is granted global (login) permissions.
+// `juju add-user`, `juju remove-user`
+// Display name is optional.
 func resourceUser() *schema.Resource {
 	return &schema.Resource{
 		// This description is used by the documentation generator and the language server.
