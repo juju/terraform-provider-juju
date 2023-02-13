@@ -36,7 +36,7 @@ resource "juju_model" "this" {
 	name = %q
 }
 
-resource "juju_ssh_key" "this" {
+resource "juju_ssh_keys" "this" {
 	model = juju_model.this.name
 	key = {
 		payload= %q
