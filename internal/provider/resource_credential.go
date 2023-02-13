@@ -50,7 +50,7 @@ func resourceCredential() *schema.Resource {
 				Description: "Credential attributes accordingly to the cloud",
 				Type:        schema.TypeMap,
 				Optional:    true,
-				Elem:        &schema.Schema{Type: schema.TypeString},
+				Elem:        &schema.Schema{Type: schema.TypeString, Optional: true},
 			},
 			"auth_type": {
 				Description: "Credential authorization type",
