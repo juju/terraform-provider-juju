@@ -25,6 +25,7 @@ type CreateModelInput struct {
 	Name        string
 	CloudList   []interface{}
 	Config      map[string]interface{}
+	Credential  string
 	Constraints constraints.Value
 }
 
@@ -148,8 +149,6 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
-	cloudCredential := names.CloudCredentialTag{}
-
 	var cloudName string
 	var cloudRegion string
 
@@ -157,6 +156,14 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 		cloudMap := cloud.(map[string]interface{})
 		cloudName = cloudMap["name"].(string)
 		cloudRegion = cloudMap["region"].(string)
+	}
+
+	cloudCredential := names.CloudCredentialTag{}
+	if input.Credential != "" {
+		cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
+		if err != nil {
+			return err
+		}
 	}
 
 	modelInfo, err := client.CreateModel(input.Name, currentUser, cloudName, cloudRegion, cloudCredential, input.Config)

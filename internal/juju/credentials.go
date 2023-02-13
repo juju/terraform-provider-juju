@@ -62,7 +62,7 @@ func newCredentialsClient(cf ConnectionFactory) *credentialsClient {
 	}
 }
 
-func getCloudCredentialTag(cloudName, currentUser, name string) (*names.CloudCredentialTag, error) {
+func GetCloudCredentialTag(cloudName, currentUser, name string) (*names.CloudCredentialTag, error) {
 	id := fmt.Sprintf("%s/%s/%s", cloudName, currentUser, name)
 	if !names.IsValidCloudCredential(id) {
 		return nil, fmt.Errorf("invalid cloud credential to cloud %s with user %s and credential name %s", cloudName, currentUser, name)
@@ -90,7 +90,7 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 
 	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
 
-	cloudCredTag, err := getCloudCredentialTag(cloudName, currentUser, credentialName)
+	cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +206,7 @@ func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error 
 
 	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
 
-	cloudCredTag, err := getCloudCredentialTag(cloudName, currentUser, credentialName)
+	cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
 	if err != nil {
 		return err
 	}
@@ -273,7 +273,7 @@ func (c *credentialsClient) DestroyCredential(input DestroyCredentialInput) erro
 
 	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
 
-	cloudCredTag, err := getCloudCredentialTag(cloudName, currentUser, credentialName)
+	cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
 	if err != nil {
 		return err
 	}
