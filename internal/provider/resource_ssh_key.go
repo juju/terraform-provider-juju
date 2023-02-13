@@ -120,7 +120,9 @@ func sshKeysUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}
 	foundChanges := false
 	if d.HasChange("model") {
 		modelName := d.Get("model").(string)
-		d.Set("model", modelName)
+		if err := d.Set("model", modelName); err != nil {
+			return diag.FromErr(err)
+		}
 		foundChanges = true
 		d.SetId(fmt.Sprintf("keys-%s", modelName))
 	}
