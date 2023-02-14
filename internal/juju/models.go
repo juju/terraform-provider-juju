@@ -45,9 +45,11 @@ type ReadModelResponse struct {
 
 type UpdateModelInput struct {
 	UUID        string
+	CloudList   []interface{}
 	Config      map[string]interface{}
 	Unset       []string
 	Constraints *constraints.Value
+	Credential  string
 }
 
 type DestroyModelInput struct {
@@ -158,15 +160,15 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 		cloudRegion = cloudMap["region"].(string)
 	}
 
-	cloudCredential := names.CloudCredentialTag{}
+	cloudCredTag := &names.CloudCredentialTag{}
 	if input.Credential != "" {
-		cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
+		cloudCredTag, err = GetCloudCredentialTag(cloudName, currentUser, input.Credential)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	modelInfo, err := client.CreateModel(input.Name, currentUser, cloudName, cloudRegion, cloudCredential, input.Config)
+	modelInfo, err := client.CreateModel(input.Name, currentUser, cloudName, cloudRegion, *cloudCredTag, input.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -266,6 +268,24 @@ func (c *modelsClient) UpdateModel(input UpdateModelInput) error {
 	if input.Constraints != nil {
 		err = client.SetModelConstraints(*input.Constraints)
 		if err != nil {
+			return err
+		}
+	}
+
+	if input.Credential != "" {
+		var cloudName string
+		for _, cloud := range input.CloudList {
+			cloudMap := cloud.(map[string]interface{})
+			cloudName = cloudMap["name"].(string)
+		}
+		tag := names.NewModelTag(input.UUID)
+		currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
+		cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, input.Credential)
+		if err != nil {
+			return err
+		}
+		client := modelmanager.NewClient(conn)
+		if err := client.ChangeModelCredential(tag, *cloudCredTag); err != nil {
 			return err
 		}
 	}

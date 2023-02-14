@@ -86,6 +86,7 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 	for _, cloud := range input.CloudList {
 		cloudMap := cloud.(map[string]interface{})
 		cloudName = cloudMap["name"].(string)
+		// cloudRegion = cloudMap["region"].(string)
 	}
 
 	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
@@ -102,7 +103,7 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 		false,
 	)
 
-	if !input.ControllerCredential && !input.ControllerCredential {
+	if !input.ControllerCredential && !input.ClientCredential {
 		// Just in case none of them are set
 		return nil, fmt.Errorf("controller_credential or/and client_credential must be set to true")
 	}
@@ -138,7 +139,7 @@ func (c *credentialsClient) ReadCredential(input ReadCredentialInput) (*ReadCred
 
 	var clientCredentialFound jujucloud.Credential
 	if clientCredential {
-		existingCredentials, err := getExistingClientCredential(cloudName, credentialName)
+		existingCredentials, err := getExistingClientCredential(cloudName)
 		if err != nil {
 			return nil, err
 		}
@@ -233,20 +234,20 @@ func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error 
 	return nil
 }
 
-func getExistingClientCredential(cloudName, credentialName string) (*jujucloud.CloudCredential, error) {
+func getExistingClientCredential(cloudName string) (*jujucloud.CloudCredential, error) {
 	store := jujuclient.NewFileClientStore()
 	existingCredentials, err := store.CredentialForCloud(cloudName)
 	if err != nil && !errors.Is(err, errors.NotFound) {
 		return nil, errors.Annotate(err, "reading existing credentials for cloud")
 	}
 	if errors.Is(err, errors.NotFound) {
-		return nil, fmt.Errorf("credential %s not found for cloud %s: %s", credentialName, cloudName, err)
+		return nil, fmt.Errorf("credential not found for cloud %s: %s", cloudName, err)
 	}
 	return existingCredentials, nil
 }
 
 func updateClientCredential(cloudName string, credentialName string, cloudCredential jujucloud.Credential) error {
-	existingCredentials, err := getExistingClientCredential(cloudName, credentialName)
+	existingCredentials, err := getExistingClientCredential(cloudName)
 	if err != nil {
 		return err
 	}
@@ -294,7 +295,7 @@ func (c *credentialsClient) DestroyCredential(input DestroyCredentialInput) erro
 }
 
 func destroyClientCredential(cloudName string, credentialName string) error {
-	existingCredentials, err := getExistingClientCredential(cloudName, credentialName)
+	existingCredentials, err := getExistingClientCredential(cloudName)
 	if err != nil {
 		return err
 	}
