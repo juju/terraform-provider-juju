@@ -21,6 +21,12 @@ type modelsClient struct {
 	ConnectionFactory
 }
 
+type GrantModelInput struct {
+	User       string
+	Access     string
+	ModelUUIDs []string
+}
+
 type CreateModelInput struct {
 	Name        string
 	CloudList   []interface{}
@@ -49,8 +55,21 @@ type UpdateModelInput struct {
 	Constraints *constraints.Value
 }
 
+type UpdateAccessModelInput struct {
+	Model  string
+	Grant  []string
+	Revoke []string
+	Access string
+}
+
 type DestroyModelInput struct {
 	UUID string
+}
+
+type DestroyAccessModelInput struct {
+	Model  string
+	Revoke []string
+	Access string
 }
 
 func newModelsClient(cf ConnectionFactory) *modelsClient {
@@ -286,6 +305,93 @@ func (c *modelsClient) DestroyModel(input DestroyModelInput) error {
 	err = client.DestroyModel(tag, &destroyStorage, &forceDestroy, &maxWait, timeout)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (c *modelsClient) GrantModel(input GrantModelInput) error {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+
+	client := modelmanager.NewClient(conn)
+	defer client.Close()
+
+	err = client.GrantModel(input.User, input.Access, input.ModelUUIDs...)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *modelsClient) UpdateAccessModel(input UpdateAccessModelInput) error {
+	id := strings.Split(input.Model, ":")
+	model := id[0]
+	access := id[1]
+
+	uuid, err := c.ResolveModelUUID(model)
+	if err != nil {
+		return err
+	}
+
+	conn, err := c.GetConnection(&uuid)
+	if err != nil {
+		return err
+	}
+
+	client := modelmanager.NewClient(conn)
+	defer client.Close()
+
+	for _, user := range input.Revoke {
+		err := client.RevokeModel(user, access, uuid)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, user := range input.Grant {
+		if input.Access != access {
+			err := client.GrantModel(user, input.Access, uuid)
+			if err != nil {
+				return err
+			}
+		} else {
+			err := client.GrantModel(user, access, uuid)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (c *modelsClient) DestroyAccessModel(input DestroyAccessModelInput) error {
+	id := strings.Split(input.Model, ":")
+	model := id[0]
+	access := id[1]
+
+	uuid, err := c.ResolveModelUUID(model)
+	if err != nil {
+		return err
+	}
+
+	conn, err := c.GetConnection(&uuid)
+	if err != nil {
+		return err
+	}
+
+	client := modelmanager.NewClient(conn)
+	defer client.Close()
+
+	for _, user := range input.Revoke {
+		err := client.RevokeModel(user, access, uuid)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

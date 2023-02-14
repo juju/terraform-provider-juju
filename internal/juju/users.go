@@ -32,6 +32,10 @@ type ReadUserResponse struct {
 	UserInfo params.UserInfo
 }
 
+type ReadModelUserResponse struct {
+	ModelUserInfo []params.ModelUserInfo
+}
+
 type UpdateUserInput struct {
 	Name        string
 	DisplayName string
@@ -91,6 +95,29 @@ func (c *usersClient) ReadUser(name string) (*ReadUserResponse, error) {
 
 	return &ReadUserResponse{
 		UserInfo: userInfo,
+	}, nil
+}
+
+func (c *usersClient) ModelUserInfo(uuid string) (*ReadModelUserResponse, error) {
+	usermanagerConn, err := c.GetConnection(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	usermanagerClient := usermanager.NewClient(usermanagerConn)
+	defer usermanagerClient.Close()
+
+	users, err := usermanagerClient.ModelUserInfo(uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(users) < 1 {
+		return nil, fmt.Errorf("no users returned for model name: %s", uuid)
+	}
+
+	return &ReadModelUserResponse{
+		ModelUserInfo: users,
 	}, nil
 }
 
