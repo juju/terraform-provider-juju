@@ -2,6 +2,8 @@ package provider
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -63,7 +65,7 @@ func resourceUserCreate(ctx context.Context, d *schema.ResourceData, meta interf
 		return diag.FromErr(err)
 	}
 
-	d.SetId(name)
+	d.SetId(fmt.Sprintf("user-%s", name))
 
 	return diags
 }
@@ -73,7 +75,8 @@ func resourceUserRead(ctx context.Context, d *schema.ResourceData, meta interfac
 
 	var diags diag.Diagnostics
 
-	name := d.Id()
+	id := strings.Split(d.Id(), "-")
+	name := id[1]
 	response, err := client.Users.ReadUser(name)
 	if err != nil {
 		return diag.FromErr(err)
@@ -108,8 +111,10 @@ func resourceUserUpdate(ctx context.Context, d *schema.ResourceData, meta interf
 		return diags
 	}
 
+	id := strings.Split(d.Id(), "-")
+	name := id[1]
 	err = client.Users.UpdateUser(juju.UpdateUserInput{
-		Name:     d.Id(),
+		Name:     name,
 		Password: newPassword,
 	})
 	if err != nil {
@@ -126,7 +131,8 @@ func resourceUserDelete(ctx context.Context, d *schema.ResourceData, meta interf
 
 	var diags diag.Diagnostics
 
-	name := d.Id()
+	id := strings.Split(d.Id(), "-")
+	name := id[1]
 
 	err := client.Users.DestroyUser(juju.DestroyUserInput{
 		Name: name,
