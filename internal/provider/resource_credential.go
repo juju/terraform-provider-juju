@@ -38,11 +38,6 @@ func resourceCredential() *schema.Resource {
 							Type:        schema.TypeString,
 							Required:    true,
 						},
-						"region": &schema.Schema{
-							Description: "The region of the cloud",
-							Type:        schema.TypeString,
-							Optional:    true,
-						},
 					},
 				},
 			},
@@ -136,8 +131,24 @@ func resourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta in
 		return diag.Errorf("unable to parse credential name and cloud name from provided ID")
 	}
 	credentialName, cloudName, clientCredentialStr, controllerCredentialStr := id[0], id[1], id[2], id[3]
+
+	cloudList := []map[string]interface{}{{
+		"name":   cloudName,
+	}}
+	if err := d.Set("cloud", cloudList); err != nil {
+		return diag.FromErr(err)
+	}
+
 	clientCredential, controllerCredential, err := convertOptionsBool(clientCredentialStr, controllerCredentialStr)
 	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	if err := d.Set("client_credential", clientCredential); err != nil {
+		return diag.FromErr(err)
+	}
+
+	if err := d.Set("controller_credential", controllerCredential); err != nil {
 		return diag.FromErr(err)
 	}
 

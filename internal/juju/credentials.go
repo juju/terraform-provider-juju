@@ -86,7 +86,6 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 	for _, cloud := range input.CloudList {
 		cloudMap := cloud.(map[string]interface{})
 		cloudName = cloudMap["name"].(string)
-		// cloudRegion = cloudMap["region"].(string)
 	}
 
 	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
@@ -148,7 +147,7 @@ func (c *credentialsClient) ReadCredential(input ReadCredentialInput) (*ReadCred
 
 	var controllerCredentialFound jujucloud.Credential
 	if controllerCredential {
-		credentialContents, err := client.CredentialContents(cloudName, credentialName, false)
+		credentialContents, err := client.CredentialContents(cloudName, credentialName, true)
 		if err != nil {
 			return nil, err
 		}
