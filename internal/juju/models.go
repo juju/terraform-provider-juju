@@ -284,8 +284,14 @@ func (c *modelsClient) UpdateModel(input UpdateModelInput) error {
 		if err != nil {
 			return err
 		}
-		client := modelmanager.NewClient(conn)
-		if err := client.ChangeModelCredential(tag, *cloudCredTag); err != nil {
+		// open new connection to get facade versions correctly
+		connModelManager, err := c.GetConnection(nil)
+		if err != nil {
+			return err
+		}
+		clientModelManager := modelmanager.NewClient(connModelManager)
+		defer clientModelManager.Close()
+		if err := clientModelManager.ChangeModelCredential(tag, *cloudCredTag); err != nil {
 			return err
 		}
 	}
