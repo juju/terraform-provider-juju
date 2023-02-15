@@ -353,7 +353,7 @@ func (c *modelsClient) UpdateAccessModel(input UpdateAccessModelInput) error {
 	}
 
 	for _, user := range input.Grant {
-		if input.Access != access {
+		if input.Access != access && input.Access != "" {
 			err := client.GrantModel(user, input.Access, uuid)
 			if err != nil {
 				return err
