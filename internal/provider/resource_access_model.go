@@ -19,9 +19,6 @@ func resourceAccessModel() *schema.Resource {
 		ReadContext:   resourceAccessModelRead,
 		UpdateContext: resourceAccessModelUpdate,
 		DeleteContext: resourceAccessModelDelete,
-		Importer: &schema.ResourceImporter{
-			StateContext: schema.ImportStatePassthroughContext,
-		},
 
 		Schema: map[string]*schema.Schema{
 			"model": {
