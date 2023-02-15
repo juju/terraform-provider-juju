@@ -107,14 +107,14 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 		false,
 	)
 
-	if input.ControllerCredential {
-		if err := client.AddCredential(cloudCredTag.String(), cloudCredential); err != nil {
+	if input.ClientCredential {
+		if err := updateClientCredential(cloudName, credentialName, cloudCredential); err != nil {
 			return nil, err
 		}
 	}
 
-	if input.ClientCredential {
-		if err := updateClientCredential(cloudName, credentialName, cloudCredential); err != nil {
+	if input.ControllerCredential {
+		if err := client.AddCredential(cloudCredTag.String(), cloudCredential); err != nil {
 			return nil, err
 		}
 	}
