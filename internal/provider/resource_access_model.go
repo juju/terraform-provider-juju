@@ -54,7 +54,11 @@ func resourceAccessModelCreate(ctx context.Context, d *schema.ResourceData, meta
 
 	model := d.Get("model").(string)
 	access := d.Get("access").(string)
-	users := d.Get("users").([]string)
+	usersInterface := d.Get("users").([]interface{})
+	users := make([]string, len(usersInterface))
+	for i, v := range usersInterface {
+		users[i] = v.(string)
+	}
 
 	uuid, err := client.Models.ResolveModelUUID(model)
 	if err != nil {
@@ -141,8 +145,16 @@ func resourceAccessModelUpdate(ctx context.Context, d *schema.ResourceData, meta
 	if d.HasChange("users") {
 		anyChange = true
 		oldUsers, newUsers := d.GetChange("users")
-		oldUsersList := oldUsers.([]string)
-		newUsersList = newUsers.([]string)
+		oldUsersInterface := oldUsers.([]interface{})
+		oldUsersList := make([]string, len(oldUsersInterface))
+		for i, v := range oldUsersInterface {
+			oldUsersList[i] = v.(string)
+		}
+		newUsersInterface := newUsers.([]interface{})
+		newUsersList = make([]string, len(newUsersInterface))
+		for i, v := range newUsersInterface {
+			newUsersList[i] = v.(string)
+		}
 		missingUserList = getMissingUsers(oldUsersList, newUsersList)
 	}
 
@@ -199,7 +211,11 @@ func resourceAccessModelDelete(ctx context.Context, d *schema.ResourceData, meta
 
 	var diags diag.Diagnostics
 
-	users := d.Get("users").([]string)
+	usersInterface := d.Get("users").([]interface{})
+	users := make([]string, len(usersInterface))
+	for i, v := range usersInterface {
+		users[i] = v.(string)
+	}
 	access := d.Get("access").(string)
 
 	err := client.Models.DestroyAccessModel(juju.DestroyAccessModelInput{
