@@ -72,7 +72,10 @@ func GetCloudCredentialTag(cloudName, currentUser, name string) (*names.CloudCre
 }
 
 func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*CreateCredentialResponse, error) {
-	credentialName := input.Name
+	if !input.ControllerCredential && !input.ClientCredential {
+		// Just in case none of them are set
+		return nil, fmt.Errorf("controller_credential or/and client_credential must be set to true")
+	}
 
 	conn, err := c.GetConnection(nil)
 	if err != nil {
@@ -90,6 +93,8 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 
 	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
 
+	credentialName := input.Name
+
 	cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
 	if err != nil {
 		return nil, err
@@ -101,11 +106,6 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 		input.Attributes,
 		false,
 	)
-
-	if !input.ControllerCredential && !input.ClientCredential {
-		// Just in case none of them are set
-		return nil, fmt.Errorf("controller_credential or/and client_credential must be set to true")
-	}
 
 	if input.ControllerCredential {
 		if err := client.AddCredential(cloudCredTag.String(), cloudCredential); err != nil {
@@ -193,6 +193,11 @@ func (c *credentialsClient) ReadCredential(input ReadCredentialInput) (*ReadCred
 }
 
 func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error {
+	if !input.ControllerCredential && !input.ClientCredential {
+		// Just in case none of them are set
+		return fmt.Errorf("controller_credential or/and client_credential must be set to true")
+	}
+
 	cloudName := input.CloudName
 	credentialName := input.Name
 
