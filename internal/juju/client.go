@@ -30,6 +30,7 @@ type Client struct {
 	Integrations integrationsClient
 	Models       modelsClient
 	Offers       offersClient
+	Users        usersClient
 }
 
 type ConnectionFactory struct {
@@ -47,6 +48,7 @@ func NewClient(config Configuration) (*Client, error) {
 		Integrations: *newIntegrationsClient(cf),
 		Models:       *newModelsClient(cf),
 		Offers:       *newOffersClient(cf),
+		Users:        *newUsersClient(cf),
 	}, nil
 }
 
