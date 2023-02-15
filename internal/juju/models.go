@@ -337,7 +337,7 @@ func (c *modelsClient) UpdateAccessModel(input UpdateAccessModelInput) error {
 		return err
 	}
 
-	conn, err := c.GetConnection(&uuid)
+	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return err
 	}
