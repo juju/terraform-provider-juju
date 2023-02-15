@@ -27,7 +27,7 @@ func TestAcc_ResourceUser_Basic(t *testing.T) {
 				ImportStateVerify:       true,
 				ImportState:             true,
 				ImportStateVerifyIgnore: []string{"password"},
-				ImportStateId:           userName,
+				ImportStateId:           fmt.Sprintf("user:%s", userName),
 				ResourceName:            resourceName,
 			},
 		},
