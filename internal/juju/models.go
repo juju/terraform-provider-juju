@@ -353,33 +353,28 @@ func (c *modelsClient) UpdateAccessModel(input UpdateAccessModelInput) error {
 	}
 
 	for _, user := range input.Grant {
-		if input.Access != access && input.Access != "" {
-			err := client.GrantModel(user, input.Access, uuid)
-			if err != nil {
-				return err
-			}
-		} else {
-			err := client.GrantModel(user, access, uuid)
-			if err != nil {
-				return err
-			}
+		err := client.GrantModel(user, access, uuid)
+		if err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
+// Note we do a revoke against `read` to remove the user from the model access
+// If a user has had `write`, then removing that access would decrease their
+// access to `read` and the user will remain part of the model access.
 func (c *modelsClient) DestroyAccessModel(input DestroyAccessModelInput) error {
 	id := strings.Split(input.Model, ":")
 	model := id[0]
-	access := id[1]
 
 	uuid, err := c.ResolveModelUUID(model)
 	if err != nil {
 		return err
 	}
 
-	conn, err := c.GetConnection(&uuid)
+	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return err
 	}
@@ -388,7 +383,7 @@ func (c *modelsClient) DestroyAccessModel(input DestroyAccessModelInput) error {
 	defer client.Close()
 
 	for _, user := range input.Revoke {
-		err := client.RevokeModel(user, access, uuid)
+		err := client.RevokeModel(user, "read", uuid)
 		if err != nil {
 			return err
 		}

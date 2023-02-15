@@ -42,6 +42,7 @@ func resourceAccessModel() *schema.Resource {
 				Description: "Type of access to the model",
 				Type:        schema.TypeString,
 				Required:    true,
+				ForceNew:    true,
 			},
 		},
 	}
@@ -89,6 +90,11 @@ func resourceAccessModelRead(ctx context.Context, d *schema.ResourceData, meta i
 	var diags diag.Diagnostics
 
 	id := strings.Split(d.Id(), ":")
+	usersInterface := d.Get("users").([]interface{})
+	stateUsers := make([]string, len(usersInterface))
+	for i, v := range usersInterface {
+		stateUsers[i] = v.(string)
+	}
 
 	uuid, err := client.Models.ResolveModelUUID(id[0])
 	if err != nil {
@@ -106,11 +112,13 @@ func resourceAccessModelRead(ctx context.Context, d *schema.ResourceData, meta i
 		return diag.FromErr(err)
 	}
 
-	users := []string{}
+	var users []string
 
-	for _, modelUser := range response.ModelUserInfo {
-		if string(modelUser.Access) == id[1] {
-			users = append(users, modelUser.UserName)
+	for _, user := range stateUsers {
+		for _, modelUser := range response.ModelUserInfo {
+			if user == modelUser.UserName && string(modelUser.Access) == id[1] {
+				users = append(users, modelUser.UserName)
+			}
 		}
 	}
 
@@ -139,6 +147,7 @@ func resourceAccessModelUpdate(ctx context.Context, d *schema.ResourceData, meta
 	var newAccess string
 	var newUsersList []string
 	var missingUserList []string
+	var addedUserList []string
 
 	var err error
 
@@ -156,12 +165,7 @@ func resourceAccessModelUpdate(ctx context.Context, d *schema.ResourceData, meta
 			newUsersList[i] = v.(string)
 		}
 		missingUserList = getMissingUsers(oldUsersList, newUsersList)
-	}
-
-	if d.HasChange("access") {
-		anyChange = true
-		_, accessChanged := d.GetChange("access")
-		newAccess = accessChanged.(string)
+		addedUserList = getAddedUsers(oldUsersList, newUsersList)
 	}
 
 	if !anyChange {
@@ -170,18 +174,12 @@ func resourceAccessModelUpdate(ctx context.Context, d *schema.ResourceData, meta
 
 	err = client.Models.UpdateAccessModel(juju.UpdateAccessModelInput{
 		Model:  d.Id(),
-		Grant:  newUsersList,
+		Grant:  addedUserList,
 		Revoke: missingUserList,
 		Access: newAccess,
 	})
 	if err != nil {
 		return diag.FromErr(err)
-	}
-
-	if newAccess != "" {
-		id := strings.Split(d.Id(), ":")
-		model := id[0]
-		d.SetId(fmt.Sprintf("%s:%s", model, newAccess))
 	}
 
 	return diags
@@ -202,6 +200,23 @@ func getMissingUsers(oldUsers, newUsers []string) []string {
 		}
 	}
 	return missing
+}
+
+func getAddedUsers(oldUsers, newUsers []string) []string {
+	var added []string
+	for _, user := range newUsers {
+		found := false
+		for _, oldUser := range oldUsers {
+			if user == oldUser {
+				found = true
+				break
+			}
+		}
+		if !found {
+			added = append(added, user)
+		}
+	}
+	return added
 }
 
 // Juju refers to deletions as "destroy" so we call the Destroy function of our client here rather than delete
