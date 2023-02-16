@@ -8,6 +8,7 @@ import (
 
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/core/constraints"
+	"github.com/pkg/errors"
 
 	"github.com/juju/juju/api/client/modelconfig"
 
@@ -141,6 +142,11 @@ func (c *modelsClient) ResolveModelUUID(name string) (string, error) {
 }
 
 func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse, error) {
+	modelName := input.Name
+	if !names.IsValidModelName(modelName) {
+		return nil, errors.Errorf("%q is not a valid name: model names may only contain lowercase letters, digits and hyphens", modelName)
+	}
+
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -168,7 +174,7 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 		}
 	}
 
-	modelInfo, err := client.CreateModel(input.Name, currentUser, cloudName, cloudRegion, *cloudCredTag, input.Config)
+	modelInfo, err := client.CreateModel(modelName, currentUser, cloudName, cloudRegion, *cloudCredTag, input.Config)
 	if err != nil {
 		return nil, err
 	}

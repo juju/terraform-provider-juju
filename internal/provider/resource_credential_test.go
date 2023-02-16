@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
@@ -11,6 +12,7 @@ import (
 func TestAcc_ResourceCredential_Basic(t *testing.T) {
 	credentialName := acctest.RandomWithPrefix("tf-test-credential")
 	authType := "certificate"
+	authTypeInvalid := "invalid"
 	token := "123abc"
 
 	resourceName := "juju_credential.credential"
@@ -18,6 +20,13 @@ func TestAcc_ResourceCredential_Basic(t *testing.T) {
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{
+			{
+				// Mind that ExpectError should be the first step
+				// "When tests have an ExpectError[...]; this results in any previous state being cleared. "
+				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
+				Config:      testAccResourceCredential(t, credentialName, authTypeInvalid),
+				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: supported auth-types (.*), \"%s\" not supported", authTypeInvalid)),
+			},
 			{
 				Config: testAccResourceCredential(t, credentialName, authType),
 				Check: resource.ComposeTestCheckFunc(

@@ -68,6 +68,7 @@ func resourceModel() *schema.Resource {
 				Description: "Credential used to add the model",
 				Type:        schema.TypeString,
 				Optional:    true,
+				Computed:    true,
 			},
 			"type": {
 				Description: "Type of the model. Set by the Juju's API server",
