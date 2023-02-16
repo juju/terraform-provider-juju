@@ -73,6 +73,15 @@ func GetCloudCredentialTag(cloudName, currentUser, name string) (*names.CloudCre
 
 // Based on:
 // https://github.com/juju/juju/blob/develop/state/cloudcredentials.go#L388
+func supportedAuth(cloud jujucloud.Cloud, authTypeReceived string) bool {
+	for _, authType := range cloud.AuthTypes {
+		if authTypeReceived == string(authType) {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *credentialsClient) ValidateCredentialForCloud(cloudName, authTypeReceived string) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
@@ -89,16 +98,7 @@ func (c *credentialsClient) ValidateCredentialForCloud(cloudName, authTypeReceiv
 		return err
 	}
 
-	supportedAuth := func() bool {
-		for _, authType := range cloud.AuthTypes {
-			if authTypeReceived == string(authType) {
-				return true
-			}
-		}
-		return false
-	}
-
-	if !supportedAuth() {
+	if !supportedAuth(cloud, authTypeReceived) {
 		return errors.NotSupportedf("supported auth-types %q, %q", cloud.AuthTypes, authTypeReceived)
 	}
 	return nil
