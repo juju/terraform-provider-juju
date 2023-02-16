@@ -71,10 +71,53 @@ func GetCloudCredentialTag(cloudName, currentUser, name string) (*names.CloudCre
 	return &cloudCredentialTag, nil
 }
 
+// Based on:
+// https://github.com/juju/juju/blob/develop/state/cloudcredentials.go#L388
+func (c *credentialsClient) ValidateCredentialForCloud(cloudName, authTypeReceived string) error {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+
+	client := cloudapi.NewClient(conn)
+	defer client.Close()
+
+	cloudTag := names.NewCloudTag(cloudName)
+
+	cloud, err := client.Cloud(cloudTag)
+	if err != nil {
+		return err
+	}
+
+	supportedAuth := func() bool {
+		for _, authType := range cloud.AuthTypes {
+			if authTypeReceived == string(authType) {
+				return true
+			}
+		}
+		return false
+	}
+
+	if !supportedAuth() {
+		return errors.NotSupportedf("supported auth-types %q, %q", cloud.AuthTypes, authTypeReceived)
+	}
+	return nil
+}
+
 func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*CreateCredentialResponse, error) {
 	if !input.ControllerCredential && !input.ClientCredential {
 		// Just in case none of them are set
 		return nil, fmt.Errorf("controller_credential or/and client_credential must be set to true")
+	}
+
+	var cloudName string
+	for _, cloud := range input.CloudList {
+		cloudMap := cloud.(map[string]interface{})
+		cloudName = cloudMap["name"].(string)
+	}
+
+	if err := c.ValidateCredentialForCloud(cloudName, input.AuthType); err != nil {
+		return nil, err
 	}
 
 	conn, err := c.GetConnection(nil)
@@ -84,12 +127,6 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 
 	client := cloudapi.NewClient(conn)
 	defer client.Close()
-
-	var cloudName string
-	for _, cloud := range input.CloudList {
-		cloudMap := cloud.(map[string]interface{})
-		cloudName = cloudMap["name"].(string)
-	}
 
 	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
 
@@ -199,7 +236,10 @@ func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error 
 	}
 
 	cloudName := input.CloudName
-	credentialName := input.Name
+
+	if err := c.ValidateCredentialForCloud(cloudName, input.AuthType); err != nil {
+		return err
+	}
 
 	conn, err := c.GetConnection(nil)
 	if err != nil {
@@ -210,6 +250,8 @@ func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error 
 	defer client.Close()
 
 	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
+
+	credentialName := input.Name
 
 	cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
 	if err != nil {
