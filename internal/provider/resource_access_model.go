@@ -19,6 +19,9 @@ func resourceAccessModel() *schema.Resource {
 		ReadContext:   resourceAccessModelRead,
 		UpdateContext: resourceAccessModelUpdate,
 		DeleteContext: resourceAccessModelDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: resourceAccessModelImporter,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"model": {
@@ -242,4 +245,25 @@ func resourceAccessModelDelete(ctx context.Context, d *schema.ResourceData, meta
 	d.SetId("")
 
 	return diags
+}
+
+func resourceAccessModelImporter(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+	id := strings.Split(d.Id(), ":")
+	model := id[0]
+	access := id[1]
+	users := strings.Split(id[2], ",")
+
+	if err := d.Set("model", model); err != nil {
+		return nil, err
+	}
+	if err := d.Set("access", access); err != nil {
+		return nil, err
+	}
+	if err := d.Set("users", users); err != nil {
+		return nil, err
+	}
+
+	d.SetId(fmt.Sprintf("%s:%s", model, access))
+
+	return []*schema.ResourceData{d}, nil
 }

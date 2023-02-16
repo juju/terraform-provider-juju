@@ -27,6 +27,12 @@ func TestAcc_ResourceAccessModel_Basic(t *testing.T) {
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", userName),
 				),
 			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ImportStateId:     fmt.Sprintf("%s:%s:%s", modelName, access, userName),
+				ResourceName:      resourceName,
+			},
 		},
 	})
 }
