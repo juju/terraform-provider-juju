@@ -125,24 +125,6 @@ resource "juju_application" "this" {
 `, modelName, appInvalidName)
 }
 
-func testAccResourceApplicationBasicInvalid(modelName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "this" {
-  name = %q
-}
-
-resource "juju_application" "this" {
-  model = juju_model.this.name
-  name = "test_app_invalid"
-  charm {
-    name = "ubuntu"
-  }
-  trust = true
-  expose{}
-}
-`, modelName)
-}
-
 func testAccResourceApplicationUpdates(modelName string, units int, revision int, expose bool, hostname string) string {
 	exposeStr := "expose{}"
 	if !expose {
