@@ -11,6 +11,7 @@ import (
 
 func TestAcc_ResourceCredential_Basic(t *testing.T) {
 	credentialName := acctest.RandomWithPrefix("tf-test-credential")
+	credentialInvalidName := "tf%test_credential"
 	authType := "certificate"
 	authTypeInvalid := "invalid"
 	token := "123abc"
@@ -26,6 +27,10 @@ func TestAcc_ResourceCredential_Basic(t *testing.T) {
 				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
 				Config:      testAccResourceCredential(t, credentialName, authTypeInvalid),
 				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: supported auth-types (.*), \"%s\" not supported", authTypeInvalid)),
+			},
+			{
+				Config:      testAccResourceCredential(t, credentialInvalidName, authType),
+				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: \"%s\" is not a valid credential name", credentialInvalidName)),
 			},
 			{
 				Config: testAccResourceCredential(t, credentialName, authType),

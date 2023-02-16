@@ -110,6 +110,11 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 		return nil, fmt.Errorf("controller_credential or/and client_credential must be set to true")
 	}
 
+	credentialName := input.Name
+	if !names.IsValidCloudCredentialName(credentialName) {
+		return nil, errors.Errorf("%q is not a valid credential name", credentialName)
+	}
+
 	var cloudName string
 	for _, cloud := range input.CloudList {
 		cloudMap := cloud.(map[string]interface{})
@@ -129,8 +134,6 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 	defer client.Close()
 
 	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
-
-	credentialName := input.Name
 
 	cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
 	if err != nil {
@@ -235,6 +238,11 @@ func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error 
 		return fmt.Errorf("controller_credential or/and client_credential must be set to true")
 	}
 
+	credentialName := input.Name
+	if !names.IsValidCloudCredentialName(credentialName) {
+		return errors.Errorf("%q is not a valid credential name", credentialName)
+	}
+
 	cloudName := input.CloudName
 
 	if err := c.ValidateCredentialForCloud(cloudName, input.AuthType); err != nil {
@@ -250,8 +258,6 @@ func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error 
 	defer client.Close()
 
 	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
-
-	credentialName := input.Name
 
 	cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
 	if err != nil {
