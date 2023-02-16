@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
@@ -11,16 +12,25 @@ import (
 
 func TestAcc_ResourceApplication_Basic(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
+	appName := "test-app"
+	appInvalidName := "test_app"
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationBasic(modelName),
+				// Mind that ExpectError should be the first step
+				// "When tests have an ExpectError[...]; this results in any previous state being cleared. "
+				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
+				Config:      testAccResourceApplicationBasic(modelName, appInvalidName),
+				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: invalid application name \"%s\", unexpected character _", appInvalidName)),
+			},
+			{
+				Config: testAccResourceApplicationBasic(modelName, appName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_application.this", "name", "test-app"),
+					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu"),
 					resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
@@ -97,7 +107,7 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 	})
 }
 
-func testAccResourceApplicationBasic(modelName string) string {
+func testAccResourceApplicationBasic(modelName, appInvalidName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
   name = %q
@@ -105,7 +115,25 @@ resource "juju_model" "this" {
 
 resource "juju_application" "this" {
   model = juju_model.this.name
-  name = "test-app"
+  name = %q
+  charm {
+    name = "ubuntu"
+  }
+  trust = true
+  expose{}
+}
+`, modelName, appInvalidName)
+}
+
+func testAccResourceApplicationBasicInvalid(modelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model = juju_model.this.name
+  name = "test_app_invalid"
   charm {
     name = "ubuntu"
   }
