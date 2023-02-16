@@ -327,6 +327,9 @@ func (c *modelsClient) GrantModel(input GrantModelInput) error {
 	return nil
 }
 
+// Note we do a revoke against `read` to remove the user from the model access
+// If a user has had `write`, then removing that access would decrease their
+// access to `read` and the user will remain part of the model access.
 func (c *modelsClient) UpdateAccessModel(input UpdateAccessModelInput) error {
 	id := strings.Split(input.Model, ":")
 	model := id[0]
@@ -346,7 +349,7 @@ func (c *modelsClient) UpdateAccessModel(input UpdateAccessModelInput) error {
 	defer client.Close()
 
 	for _, user := range input.Revoke {
-		err := client.RevokeModel(user, access, uuid)
+		err := client.RevokeModel(user, "read", uuid)
 		if err != nil {
 			return err
 		}
