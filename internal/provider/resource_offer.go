@@ -17,7 +17,7 @@ func resourceOffer() *schema.Resource {
 		ReadContext:   resourceOfferRead,
 		DeleteContext: resourceOfferDelete,
 		Importer: &schema.ResourceImporter{
-			StateContext: resourceOfferImporter,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
 			"model": {
@@ -152,8 +152,4 @@ func resourceOfferDelete(ctx context.Context, d *schema.ResourceData, meta inter
 	d.SetId("")
 
 	return diags
-}
-
-func resourceOfferImporter(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	return []*schema.ResourceData{d}, nil
 }
