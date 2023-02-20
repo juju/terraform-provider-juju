@@ -32,6 +32,11 @@ func TestAcc_ResourceOffer_Basic(t *testing.T) {
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.that", "application.*", map[string]string{"name": "", "endpoint": "", "offer_url": fmt.Sprintf("%v/%v.%v", "admin", modelName, "this")}),
 				),
 			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      "juju_offer.this",
+			},
 		},
 	})
 }
