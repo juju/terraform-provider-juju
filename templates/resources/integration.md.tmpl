@@ -24,6 +24,7 @@ When creating this resource the `offer_url` property will show `(known after app
   + resource "juju_integration" "this" {
       + id    = (known after apply)
       + model = "this"
+      + via   = "10.0.0.0/24,10.0.1.0/24"
 
       + application {
           + endpoint  = (known after apply)

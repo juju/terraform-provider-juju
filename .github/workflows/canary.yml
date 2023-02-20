@@ -69,5 +69,5 @@ jobs:
       - run: go mod tidy -go 1.19
       - env:
           TF_ACC: "1"
-        run: go test -v -cover ./internal/provider/
-        timeout-minutes: 10
+        run: go test -timeout 30m -v -cover ./internal/provider/
+        timeout-minutes: 25
