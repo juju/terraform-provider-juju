@@ -221,6 +221,7 @@ func getAddedUsers(oldUsers, newUsers []string) []string {
 	return added
 }
 
+// resourceAccessModelDelete deletes the access model resource
 // Juju refers to deletions as "destroy" so we call the Destroy function of our client here rather than delete
 // This function remains named Delete for parity across the provider and to stick within terraform naming conventions
 func resourceAccessModelDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
