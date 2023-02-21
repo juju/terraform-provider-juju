@@ -12,26 +12,27 @@ type sshKeysClient struct {
 	ConnectionFactory
 }
 
-type CreateSSHKeysInput struct {
+type CreateSSHKeyInput struct {
 	ModelName string
 	ModelUUID string
-	Keys      []string
+	Payload   string
 }
 
-type ReadSSHKeysInput struct {
+type ReadSSHKeyInput struct {
 	ModelName string
 	ModelUUID string
+	User      string
 }
 
-type ReadSSHKeysOutput struct {
+type ReadSSHKeyOutput struct {
 	ModelName string
-	Keys      []string
+	Payload   string
 }
 
-type DeleteSSHKeysInput struct {
+type DeleteSSHKeyInput struct {
 	ModelName string
 	ModelUUID string
-	Keys      []string
+	User      string
 }
 
 func newSSHKeysClient(cf ConnectionFactory) *sshKeysClient {
@@ -40,7 +41,7 @@ func newSSHKeysClient(cf ConnectionFactory) *sshKeysClient {
 	}
 }
 
-func (c *sshKeysClient) CreateSSHKeys(input *CreateSSHKeysInput) error {
+func (c *sshKeysClient) CreateSSHKey(input *CreateSSHKeyInput) error {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
@@ -51,7 +52,7 @@ func (c *sshKeysClient) CreateSSHKeys(input *CreateSSHKeysInput) error {
 
 	// NOTE
 	// Juju only stores ssh keys at a global level.
-	params, err := client.AddKeys("admin", input.Keys...)
+	params, err := client.AddKeys("admin", input.Payload)
 	if err != nil {
 		return err
 	}
@@ -72,7 +73,7 @@ func (c *sshKeysClient) CreateSSHKeys(input *CreateSSHKeysInput) error {
 	return nil
 }
 
-func (c *sshKeysClient) ReadSSHKeys(input *ReadSSHKeysInput) (*ReadSSHKeysOutput, error) {
+func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -91,12 +92,19 @@ func (c *sshKeysClient) ReadSSHKeys(input *ReadSSHKeysInput) (*ReadSSHKeysOutput
 	keys := make([]string, 0)
 	keys = append(keys, returnedKeys[0].Result...)
 
-	return &ReadSSHKeysOutput{
-		ModelName: input.ModelName,
-		Keys:      keys}, nil
+	for _, k := range keys {
+		if input.User == getUserFromSSHKey(k) {
+			return &ReadSSHKeyOutput{
+				ModelName: input.ModelName,
+				Payload:   k,
+			}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no ssh key found for %s", input.User)
 }
 
-func (c *sshKeysClient) DeleteSSHKeys(input *DeleteSSHKeysInput) error {
+func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
@@ -106,12 +114,7 @@ func (c *sshKeysClient) DeleteSSHKeys(input *DeleteSSHKeysInput) error {
 	defer client.Close()
 
 	// NOTE: Right now Juju uses global users for keys
-	// find the user of the key
-	users := make([]string, len(input.Keys))
-	for i, k := range input.Keys {
-		users[i] = getUserFromSSHKey(k)
-	}
-	params, err := client.DeleteKeys("admin", users...)
+	params, err := client.DeleteKeys("admin", input.User)
 	if len(params) != 0 {
 		messages := make([]string, 0)
 		for _, e := range params {

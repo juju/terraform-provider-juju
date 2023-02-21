@@ -153,6 +153,14 @@ func resolveCharmURL(charmName string) (*charm.URL, error) {
 }
 
 func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*CreateApplicationResponse, error) {
+	appName := input.ApplicationName
+	if appName == "" {
+		appName = input.CharmName
+	}
+	if err := names.ValidateApplicationName(appName); err != nil {
+		return nil, err
+	}
+
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -176,14 +184,6 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	}
 
 	defer resourcesAPIClient.Close()
-
-	appName := input.ApplicationName
-	if appName == "" {
-		appName = input.CharmName
-	}
-	if err := names.ValidateApplicationName(appName); err != nil {
-		return nil, err
-	}
 
 	channel, err := charm.ParseChannel(input.CharmChannel)
 	if err != nil {

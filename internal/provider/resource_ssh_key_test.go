@@ -12,36 +12,38 @@ func TestAcc_ResourceSSHKey_Basic(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-sshkey")
 	sshKey1 := `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC1I8QDP79MaHEIAlfh933zqcE8LyUt9doytF3YySBUDWippk8MAaKAJJtNb+Qsi+Kx/RsSY02VxMy9xRTp9d/Vr+U5BctKqhqf3ZkJdTIcy+z4hYpFS8A4bECJFHOnKIekIHD9glHkqzS5Vm6E4g/KMNkKylHKlDXOafhNZAiJ1ynxaZIuedrceFJNC47HnocQEtusPKpR09HGXXYhKMEubgF5tsTO4ks6pplMPvbdjxYcVOg4Wv0N/LJ4ffAucG9edMcKOTnKqZycqqZPE6KsTpSZMJi2Kl3mBrJE7JbR1YMlNwG6NlUIdIqVoTLZgLsTEkHqWi6OExykbVTqFuoWJJY2BmRAcP9T3FdLYbqcajfWshwvPM2AmYb8V3zBvzEKL1rpvG26fd3kGhk3Vu07qAUhHLMi3P0McEky4cLiEWgI7UyHFLI2yMRZgz23UUtxhRSkvCJagRlVG/s4yoylzBQJir8G3qmb36WjBXxpqAXhfLxw05EQI1JGV3ReYOs= jimmy@somewhere`
 
-	sshKey2 := `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDODoxj6zJiP8XEfqjOw4X76+/Dymuu96RLMmeGRvLbloKKggbnm8Jw/prGWUsbJ+m3m3hZZDqHJfDMpdYvRlnJABeo9IhIKaYrcb6x1OafCK/ZoV/NOhN8qDbGkIud1JwpTZnNYQlNwAyW8xxldA8RtTlprUSdCw8wY/MKP1uTSwDNK18tDx0zHCfg+iqiAO0enHt2925Qc28a45FQxywJEmLJtPB7zuTRIBtkY2mBmVLCPAvWfANWA5ZwI4+nRcxjla++keGjxvcDzXAC37qStbTgsrAGXHdwPTGGmJEijYzvVF9xcU9cKY5O6BN3+hS+aI69AQwNviuaCKBAeRZXq6EVMXzYRhnlEnsFTJQCqpr3ag7+jJRQ/ZQf27/yEANXDQb2oTlxsSIQzekBmMzRAJ0BhLYKyx1BdZflJSSxfI6C6duCS00FKRuqKFm+xgx0AsBv3T9+3xwcjnitywf2EtXDgP3nk00m2K0bjttAfVS551iNphTh4QJHDaSzTBc= johnny@elsewhere`
+	sshKey2 := `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC1I8QDP79MaHEIAlfh933zqcE8LyUt9doytF3YySBUDWippk8MAaKAJJtNb+Qsi+Kx/RsSY02VxMy9xRTp9d/Vr+U5BctKqhqf3ZkJdTIcy+z4hYpFS8A4bECJFHOnKIekIHD9glHkqzS5Vm6E4g/KMNkKylHKlDXOafhNZAiJ1ynxaZIuedrceFJNC47HnocQEtusPKpR09HGXXYhKMEubgF5tsTO4ks6pplMPvbdjxYcVOg4Wv0N/LJ4ffAucG9edMcKOTnKqZycqqZPE6KsTpSZMJi2Kl3mBrJE7JbR1YMlNwG6NlUIdIqVoTLZgLsTEkHqWi6OExykbVTqFuoWJJY2BmRAcP9T3FdLYbqcajfWshwvPM2AmYb8V3zBvzEKL1rpvG26fd3kGhk3Vu07qAUhHLMi3P0McEky4cLiEWgI7UyHFLI2yMRZgz23UUtxhRSkvCJagRlVG/s4yoylzBQJir8G3qmb36WjBXxpqAXhfLxw05EQI1JGV3ReYOs= jimmy@somewhere`
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceSSHKey(modelName, sshKey1, sshKey2),
+				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_ssh_keys.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_ssh_keys.this", "key.#]", "2")),
+					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
+			},
+			// we update the key
+			{
+				Config: testAccResourceSSHKey(modelName, sshKey2),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey2)),
 			},
 		},
 	})
 }
 
-func testAccResourceSSHKey(modelName string, sshKey1 string, sshKey2 string) string {
+func testAccResourceSSHKey(modelName string, sshKey string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
 }
 
-resource "juju_ssh_keys" "this" {
+resource "juju_ssh_key" "this" {
 	model = juju_model.this.name
-	key {
-		payload= %q
-	}
-	key {
-		payload= %q
-	}
+	payload= %q
 }
-`, modelName, sshKey1, sshKey2)
+`, modelName, sshKey)
 }
