@@ -22,6 +22,12 @@ type modelsClient struct {
 	ConnectionFactory
 }
 
+type GrantModelInput struct {
+	User       string
+	Access     string
+	ModelUUIDs []string
+}
+
 type CreateModelInput struct {
 	Name        string
 	CloudList   []interface{}
@@ -53,8 +59,21 @@ type UpdateModelInput struct {
 	Credential  string
 }
 
+type UpdateAccessModelInput struct {
+	Model  string
+	Grant  []string
+	Revoke []string
+	Access string
+}
+
 type DestroyModelInput struct {
 	UUID string
+}
+
+type DestroyAccessModelInput struct {
+	Model  string
+	Revoke []string
+	Access string
 }
 
 func newModelsClient(cf ConnectionFactory) *modelsClient {
@@ -325,6 +344,91 @@ func (c *modelsClient) DestroyModel(input DestroyModelInput) error {
 	err = client.DestroyModel(tag, &destroyStorage, &forceDestroy, &maxWait, timeout)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (c *modelsClient) GrantModel(input GrantModelInput) error {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+
+	client := modelmanager.NewClient(conn)
+	defer client.Close()
+
+	err = client.GrantModel(input.User, input.Access, input.ModelUUIDs...)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Note we do a revoke against `read` to remove the user from the model access
+// If a user has had `write`, then removing that access would decrease their
+// access to `read` and the user will remain part of the model access.
+func (c *modelsClient) UpdateAccessModel(input UpdateAccessModelInput) error {
+	id := strings.Split(input.Model, ":")
+	model := id[0]
+	access := id[1]
+
+	uuid, err := c.ResolveModelUUID(model)
+	if err != nil {
+		return err
+	}
+
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+
+	client := modelmanager.NewClient(conn)
+	defer client.Close()
+
+	for _, user := range input.Revoke {
+		err := client.RevokeModel(user, "read", uuid)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, user := range input.Grant {
+		err := client.GrantModel(user, access, uuid)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Note we do a revoke against `read` to remove the user from the model access
+// If a user has had `write`, then removing that access would decrease their
+// access to `read` and the user will remain part of the model access.
+func (c *modelsClient) DestroyAccessModel(input DestroyAccessModelInput) error {
+	id := strings.Split(input.Model, ":")
+	model := id[0]
+
+	uuid, err := c.ResolveModelUUID(model)
+	if err != nil {
+		return err
+	}
+
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+
+	client := modelmanager.NewClient(conn)
+	defer client.Close()
+
+	for _, user := range input.Revoke {
+		err := client.RevokeModel(user, "read", uuid)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
