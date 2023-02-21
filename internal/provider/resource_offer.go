@@ -16,7 +16,9 @@ func resourceOffer() *schema.Resource {
 		CreateContext: resourceOfferCreate,
 		ReadContext:   resourceOfferRead,
 		DeleteContext: resourceOfferDelete,
-
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
 		Schema: map[string]*schema.Schema{
 			"model": {
 				Description: "The name of the model to operate in.",
@@ -109,7 +111,7 @@ func resourceOfferRead(ctx context.Context, d *schema.ResourceData, meta interfa
 	var diags diag.Diagnostics
 
 	result, err := client.Offers.ReadOffer(&juju.ReadOfferInput{
-		OfferURL: d.Get("url").(string),
+		OfferURL: d.Id(),
 	})
 	if err != nil {
 		return diag.FromErr(err)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/core/constraints"
+	"github.com/pkg/errors"
 
 	"github.com/juju/juju/api/client/modelconfig"
 
@@ -31,6 +32,7 @@ type CreateModelInput struct {
 	Name        string
 	CloudList   []interface{}
 	Config      map[string]interface{}
+	Credential  string
 	Constraints constraints.Value
 }
 
@@ -50,9 +52,11 @@ type ReadModelResponse struct {
 
 type UpdateModelInput struct {
 	UUID        string
+	CloudList   []interface{}
 	Config      map[string]interface{}
 	Unset       []string
 	Constraints *constraints.Value
+	Credential  string
 }
 
 type UpdateAccessModelInput struct {
@@ -157,6 +161,11 @@ func (c *modelsClient) ResolveModelUUID(name string) (string, error) {
 }
 
 func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse, error) {
+	modelName := input.Name
+	if !names.IsValidModelName(modelName) {
+		return nil, errors.Errorf("%q is not a valid name: model names may only contain lowercase letters, digits and hyphens", modelName)
+	}
+
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -167,8 +176,6 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
-	cloudCredential := names.CloudCredentialTag{}
-
 	var cloudName string
 	var cloudRegion string
 
@@ -178,7 +185,15 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 		cloudRegion = cloudMap["region"].(string)
 	}
 
-	modelInfo, err := client.CreateModel(input.Name, currentUser, cloudName, cloudRegion, cloudCredential, input.Config)
+	cloudCredTag := &names.CloudCredentialTag{}
+	if input.Credential != "" {
+		cloudCredTag, err = GetCloudCredentialTag(cloudName, currentUser, input.Credential)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	modelInfo, err := client.CreateModel(modelName, currentUser, cloudName, cloudRegion, *cloudCredTag, input.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -278,6 +293,30 @@ func (c *modelsClient) UpdateModel(input UpdateModelInput) error {
 	if input.Constraints != nil {
 		err = client.SetModelConstraints(*input.Constraints)
 		if err != nil {
+			return err
+		}
+	}
+
+	if input.Credential != "" {
+		var cloudName string
+		for _, cloud := range input.CloudList {
+			cloudMap := cloud.(map[string]interface{})
+			cloudName = cloudMap["name"].(string)
+		}
+		tag := names.NewModelTag(input.UUID)
+		currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
+		cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, input.Credential)
+		if err != nil {
+			return err
+		}
+		// open new connection to get facade versions correctly
+		connModelManager, err := c.GetConnection(nil)
+		if err != nil {
+			return err
+		}
+		clientModelManager := modelmanager.NewClient(connModelManager)
+		defer clientModelManager.Close()
+		if err := clientModelManager.ChangeModelCredential(tag, *cloudCredTag); err != nil {
 			return err
 		}
 	}
