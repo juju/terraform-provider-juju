@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -39,10 +40,11 @@ func resourceAccessModel() *schema.Resource {
 				},
 			},
 			"access": {
-				Description: "Type of access to the model",
-				Type:        schema.TypeString,
-				Required:    true,
-				ForceNew:    true,
+				Description:  "Type of access to the model",
+				ValidateFunc: validation.StringInSlice([]string{"admin", "read", "write"}, false),
+				Type:         schema.TypeString,
+				ForceNew:     true,
+				Required:     true,
 			},
 		},
 	}

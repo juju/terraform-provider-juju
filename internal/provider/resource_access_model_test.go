@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
@@ -32,6 +33,24 @@ func TestAcc_ResourceAccessModel_Basic(t *testing.T) {
 				ImportState:       true,
 				ImportStateId:     fmt.Sprintf("%s:%s:%s", modelName, access, userName),
 				ResourceName:      resourceName,
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceAccessModel_Invalid(t *testing.T) {
+	userName := acctest.RandomWithPrefix("tfuser")
+	userPassword := acctest.RandomWithPrefix("tf-test-user")
+	modelName := "testing"
+	access := "bogus"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: providerFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccResourceAccessModel(t, userName, userPassword, modelName, access),
+				ExpectError: regexp.MustCompile(".*expected access to be one of [admin read write], got .*"),
 			},
 		},
 	})
