@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	"github.com/juju/terraform-provider-juju/internal/utils"
 )
 
 func resourceSSHKey() *schema.Resource {
@@ -32,9 +33,9 @@ func resourceSSHKey() *schema.Resource {
 			},
 			"payload": {
 				Description: "SSH key payload.",
+				Type:        schema.TypeString,
 				Required:    true,
 				ForceNew:    true,
-				Sensitive:   true,
 			},
 		},
 	}
@@ -68,7 +69,7 @@ func sshKeyCreate(ctx context.Context, d *schema.ResourceData, meta interface{})
 		diags = append(diags, diag.FromErr(err)...)
 	}
 
-	d.SetId(fmt.Sprintf("sshkeys:%s:%s", modelName, user))
+	d.SetId(fmt.Sprintf("sshkey:%s:%s", modelName, user))
 
 	return diags
 }
@@ -76,15 +77,14 @@ func sshKeyCreate(ctx context.Context, d *schema.ResourceData, meta interface{})
 func sshKeyRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
 
-	modelName := d.Get("model").(string)
+	// sshkey:model:user
+	tokens := strings.Split(d.Id(), ":")
+	modelName := tokens[1]
+	user := tokens[2]
+
 	modelUUID, err := client.Models.GetModelByName(modelName)
 	if err != nil {
 		return diag.FromErr(err)
-	}
-
-	user := getUserFromSSHKey(d.Get("payload").(string))
-	if user == "" {
-		return diag.Errorf("malformed SSH key, user not found")
 	}
 
 	result, err := client.SSHKeys.ReadSSHKey(&juju.ReadSSHKeyInput{
@@ -103,7 +103,8 @@ func sshKeyRead(ctx context.Context, d *schema.ResourceData, meta interface{}) d
 	if err = d.Set("payload", result.Payload); err != nil {
 		return diag.FromErr(err)
 	}
-	d.SetId(fmt.Sprintf("sshkeys:%s:%s", modelName, user))
+
+	d.SetId(fmt.Sprintf("sshkey:%s:%s", modelName, user))
 
 	return diag.Diagnostics{}
 }
@@ -124,7 +125,7 @@ func sshKeyUpdate(ctx context.Context, d *schema.ResourceData, meta interface{})
 		return diag.FromErr(err)
 	}
 
-	user := getUserFromSSHKey(d.Get("payload").(string))
+	user := utils.GetUserFromSSHKey(d.Get("payload").(string))
 	if user == "" {
 		return diag.Errorf("malformed SSH key, user not found")
 	}
@@ -165,7 +166,7 @@ func sshKeyDelete(ctx context.Context, d *schema.ResourceData, meta interface{})
 		return diag.FromErr(err)
 	}
 
-	user := getUserFromSSHKey(d.Get("payload").(string))
+	user := utils.GetUserFromSSHKey(d.Get("payload").(string))
 	if user == "" {
 		return diag.Errorf("malformed SSH key, user not found")
 	}
@@ -192,5 +193,6 @@ func getUserFromSSHKey(key string) string {
 	if end < 0 {
 		return ""
 	}
-	return key[end+2:]
+	user := key[end+2:]
+	return user
 }

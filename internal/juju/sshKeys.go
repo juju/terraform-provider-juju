@@ -2,10 +2,11 @@ package juju
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/juju/juju/api/client/keymanager"
+	"github.com/juju/terraform-provider-juju/internal/utils"
 	"github.com/juju/utils/v3/ssh"
+	"github.com/rs/zerolog/log"
 )
 
 type sshKeysClient struct {
@@ -89,15 +90,14 @@ func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, e
 		return nil, err
 	}
 
-	keys := make([]string, 0)
-	keys = append(keys, returnedKeys[0].Result...)
-
-	for _, k := range keys {
-		if input.User == getUserFromSSHKey(k) {
-			return &ReadSSHKeyOutput{
-				ModelName: input.ModelName,
-				Payload:   k,
-			}, nil
+	for _, res := range returnedKeys {
+		for _, k := range res.Result {
+			if input.User == utils.GetUserFromSSHKey(k) {
+				return &ReadSSHKeyOutput{
+					ModelName: input.ModelName,
+					Payload:   k,
+				}, nil
+			}
 		}
 	}
 
@@ -112,6 +112,25 @@ func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 
 	client := keymanager.NewClient(conn)
 	defer client.Close()
+
+	// NOTE: Unfortunately Juju will return an error if we try to
+	// remove the last ssh key from the controller. This is something
+	// that impacts the current Juju logic. As a temporal workaround
+	// we will check if this is the latest SSH key of this model and
+	// skip the delete.
+	returnedKeys, err := client.ListKeys(ssh.FullKeys, "admin")
+	if err != nil {
+		return err
+	}
+	// only check if there is one key
+	if len(returnedKeys) == 1 {
+		k := returnedKeys[0].Result[0]
+		if input.User == utils.GetUserFromSSHKey(k) {
+			// This is the latest key, do not remove it
+			log.Warn().Msgf("ssh key from user %s is the last one and will not be removed", input.User)
+			return nil
+		}
+	}
 
 	// NOTE: Right now Juju uses global users for keys
 	params, err := client.DeleteKeys("admin", input.User)
@@ -130,14 +149,4 @@ func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	}
 
 	return err
-}
-
-// getUserFromSSHKey returns the user of the key
-// returning the string after the = symbol
-func getUserFromSSHKey(key string) string {
-	end := strings.LastIndex(key, "=")
-	if end < 0 {
-		return ""
-	}
-	return key[end+2:]
 }
