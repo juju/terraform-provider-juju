@@ -108,7 +108,7 @@ jobs:
         run: go test -timeout 30m -v -cover ./internal/provider/
         timeout-minutes: 30   
       - uses: actions/upload-artifact@v3
-        if: ${{ env.next-test != 'NA' }}
+        if: ${{ success() }}
         with:
           name: ${{ env.id }}
           path: "~/${{ env.id }}"

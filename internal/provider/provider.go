@@ -57,10 +57,14 @@ func New(version string) func() *schema.Provider {
 				"juju_model": dataSourceModel(),
 			},
 			ResourcesMap: map[string]*schema.Resource{
-				"juju_model":       resourceModel(),
-				"juju_application": resourceApplication(),
-				"juju_integration": resourceIntegration(),
-				"juju_offer":       resourceOffer(),
+				"juju_application":  resourceApplication(),
+				"juju_access_model": resourceAccessModel(),
+				"juju_credential":   resourceCredential(),
+				"juju_integration":  resourceIntegration(),
+				"juju_model":        resourceModel(),
+				"juju_offer":        resourceOffer(),
+				"juju_ssh_key":      resourceSSHKey(),
+				"juju_user":         resourceUser(),
 			},
 		}
 
