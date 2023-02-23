@@ -38,7 +38,7 @@ resource "juju_integration" "this" {
 
 ### Optional
 
-- `via` (String) A comma separated list of CIDRs for outbound traffic
+- `via` (String) A comma separated list of CIDRs for outbound traffic.
 
 ### Read-Only
 

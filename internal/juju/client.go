@@ -30,6 +30,7 @@ type Client struct {
 	Integrations integrationsClient
 	Models       modelsClient
 	Offers       offersClient
+	SSHKeys      sshKeysClient
 	Users        usersClient
 }
 
@@ -48,6 +49,7 @@ func NewClient(config Configuration) (*Client, error) {
 		Integrations: *newIntegrationsClient(cf),
 		Models:       *newModelsClient(cf),
 		Offers:       *newOffersClient(cf),
+		SSHKeys:      *newSSHKeysClient(cf),
 		Users:        *newUsersClient(cf),
 	}, nil
 }
