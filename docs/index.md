@@ -40,7 +40,7 @@ Terraform 0.13 and later:
 terraform {
   required_providers {
     juju = {
-      version = "~> 0.5.0"
+      version = "~> 0.3.1"
       source  = "juju/juju"
     }
   }
