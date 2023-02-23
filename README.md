@@ -11,8 +11,9 @@ Once complete, the initial released version of the provider will allow you to:
 - Manage models,
 - Deploy charms from CharmHub,
 - Manage integrations (previously named "relationships").
-
-There will also be support for importing these existing Juju resources.
+- Manage users
+- Manage credentials
+- Manage SSH keys
 
 ## Requirements
 

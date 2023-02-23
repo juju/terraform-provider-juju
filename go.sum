@@ -630,8 +630,8 @@ github.com/juju/idmclient/v2 v2.0.0 h1:PsGa092JGy6iFNHZCcao+bigVsTyz1C+tHNRdYmKv
 github.com/juju/idmclient/v2 v2.0.0/go.mod h1:EOiFbPmnkqKvCUS/DHpDRWhL7eKF0AJaTvMjIYlIUak=
 github.com/juju/jsonschema v1.0.0 h1:2ScR9hhVdHxft+Te3fnclVx61MmlikHNEOirTGi+hV4=
 github.com/juju/jsonschema v1.0.0/go.mod h1:SlFW+jFtpWX0P4Tb+zTTPR4ufttLrnJIdQPePxVEfkM=
-github.com/juju/juju v0.0.0-20221102165234-51672c0e4243 h1:BL+zEgnN6WNcht7gX9wHfnibQ+u/fmRkv0UpqeWOk9I=
-github.com/juju/juju v0.0.0-20221102165234-51672c0e4243/go.mod h1:1rW/RaZ5EeZAAFYg0CVdgGP0WeVO2hbVYM4Z2ITPUvc=
+github.com/juju/juju v0.0.0-20230105012444-6d211be0d72d h1:M5iLH2O47Nvoqr3Smq0Zzbx/mt/OuKGEONJmzlFwTIc=
+github.com/juju/juju v0.0.0-20230105012444-6d211be0d72d/go.mod h1:fOy3LTxFGxABu9e3tg+a8Fu7NFjy24yZt/IIkgKFLvs=
 github.com/juju/loggo v0.0.0-20170605014607-8232ab8918d9/go.mod h1:vgyd7OREkbtVEN/8IXZe5Ooef3LQePvuBm9UWj6ZL8U=
 github.com/juju/loggo v0.0.0-20200526014432-9ce3a2e09b5e/go.mod h1:vgyd7OREkbtVEN/8IXZe5Ooef3LQePvuBm9UWj6ZL8U=
 github.com/juju/loggo v0.0.0-20210728185423-eebad3a902c4/go.mod h1:NIXFioti1SmKAlKNuUwbMenNdef59IF52+ZzuOmHYkg=
@@ -711,8 +711,8 @@ github.com/juju/version/v2 v2.0.0 h1:0OjCOlgA2UBbB8fSCgd8fmGsntrSbAWXEJil47bQptY
 github.com/juju/version/v2 v2.0.0/go.mod h1:ZeFjNy+UFEWJDDPdzW7Cm9NeU6dsViGaFYhXzycLQrw=
 github.com/juju/webbrowser v1.0.0 h1:JLdmbFtCGY6Qf2jmS6bVaenJFGIFkdF1/BjUm76af78=
 github.com/juju/webbrowser v1.0.0/go.mod h1:RwVlbBcF91Q4vS+iwlkJ6bZTE3EwlrjbYlM3WMVD6Bc=
-github.com/juju/worker/v3 v3.0.1 h1:CSq24xVLBD6SGYs9nadfXrOcvcV0iYqcTgMdrg+ph6k=
-github.com/juju/worker/v3 v3.0.1/go.mod h1:3eE974i5h/HcwNpiLgmqkmqy9GWIjJMtQTTn1ZOZYGM=
+github.com/juju/worker/v3 v3.1.0 h1:rt1yXAGTXYosC4kOcjdlvi0SnISyDtOUj3cKfOtZTLE=
+github.com/juju/worker/v3 v3.1.0/go.mod h1:C7MMHkc7dqghNul0WYnBlFgKPXXSGpJBkgibxqfymII=
 github.com/julienschmidt/httprouter v1.1.1-0.20151013225520-77a895ad01eb/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
 github.com/julienschmidt/httprouter v1.3.0 h1:U0609e9tgbseu3rBINet9P48AI/D3oJs4dN7jwJOQ1U=
