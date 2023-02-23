@@ -6,8 +6,8 @@ require (
 	github.com/bflad/tfproviderlint v0.28.1
 	github.com/hashicorp/terraform-plugin-docs v0.13.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.25.0
-	// v2.9.37
-	github.com/juju/juju v0.0.0-20221102165234-51672c0e4243
+	// 2.9.38
+	github.com/juju/juju v0.0.0-20230105012444-6d211be0d72d
 
 )
 
@@ -124,7 +124,7 @@ require (
 	github.com/juju/usso v1.0.1 // indirect
 	github.com/juju/version/v2 v2.0.0 // indirect
 	github.com/juju/webbrowser v1.0.0 // indirect
-	github.com/juju/worker/v3 v3.0.1 // indirect
+	github.com/juju/worker/v3 v3.1.0 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/kr/pretty v0.3.1-0.20220829230305-3cd153a126da // indirect
