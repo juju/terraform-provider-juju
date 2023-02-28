@@ -112,7 +112,7 @@ type ReadApplicationResponse struct {
 	Constraints constraints.Value
 	Expose      map[string]interface{}
 	Principal   bool
-  Placement string
+	Placement   string
 }
 
 type UpdateApplicationInput struct {
@@ -128,7 +128,7 @@ type UpdateApplicationInput struct {
 	Unexpose []string
 	Config   map[string]interface{}
 	//Series    string // TODO: Unsupported for now
-	Placement map[string]interface{}
+	Placement   map[string]interface{}
 	Constraints *constraints.Value
 }
 
@@ -647,7 +647,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		Config:      conf,
 		Constraints: appConstraints,
 		Principal:   appInfo.Principal,
-    Placement: placement,
+		Placement:   placement,
 	}
 
 	return response, nil
