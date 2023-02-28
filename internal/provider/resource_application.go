@@ -132,6 +132,7 @@ func resourceApplication() *schema.Resource {
 				Type: schema.TypeString,
 				Optional: true,
 				Default: "",
+			},
 			"principal": {
 				Description: "Whether this is a Principal application",
 				Type:        schema.TypeBool,
