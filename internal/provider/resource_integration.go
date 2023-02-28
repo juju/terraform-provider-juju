@@ -10,7 +10,7 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-//Currently offers are handled as a part of the integration resource in order to have parity with the CLI. An alternative considered was to create a resource specifically for managing cross model integrations.
+// Currently offers are handled as a part of the integration resource in order to have parity with the CLI. An alternative considered was to create a resource specifically for managing cross model integrations.
 func resourceIntegration() *schema.Resource {
 	return &schema.Resource{
 		Description: "A resource that represents a Juju Integration.",
@@ -29,6 +29,11 @@ func resourceIntegration() *schema.Resource {
 				Description: "The name of the model to operate in.",
 				Type:        schema.TypeString,
 				Required:    true,
+			},
+			"via": {
+				Description: "A comma separated list of CIDRs for outbound traffic.",
+				Type:        schema.TypeString,
+				Optional:    true,
 			},
 			"application": {
 				Description: "The two applications to integrate.",
@@ -97,9 +102,11 @@ func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta
 		endpoints = append(endpoints, offerResponse.SAASName)
 	}
 
+	viaCIDRs := d.Get("via").(string)
 	response, err := client.Integrations.CreateIntegration(&juju.IntegrationInput{
 		ModelUUID: modelUUID,
 		Endpoints: endpoints,
+		ViaCIDRs:  viaCIDRs,
 	})
 	if err != nil {
 		return diag.FromErr(err)
@@ -209,11 +216,13 @@ func resourceIntegrationUpdate(ctx context.Context, d *schema.ResourceData, meta
 		}
 	}
 
+	viaCIDRs := d.Get("via").(string)
 	input := &juju.UpdateIntegrationInput{
 		ModelUUID:    modelUUID,
 		ID:           d.Id(),
 		Endpoints:    endpoints,
 		OldEndpoints: oldEndpoints,
+		ViaCIDRs:     viaCIDRs,
 	}
 
 	response, err := client.Integrations.UpdateIntegration(input)
@@ -297,8 +306,8 @@ func generateID(modelName string, apps []juju.Application) string {
 	return id
 }
 
-//This function can be used to parse the terraform data into usable juju endpoints
-//it also does some sanity checks on inputs and returns user friendly errors
+// This function can be used to parse the terraform data into usable juju endpoints
+// it also does some sanity checks on inputs and returns user friendly errors
 func parseEndpoints(apps []interface{}) (endpoints []string, offer *string, err error) {
 	for _, app := range apps {
 		if app == nil {

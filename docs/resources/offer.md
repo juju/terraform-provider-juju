@@ -52,4 +52,15 @@ resource "juju_integration" "this" {
 - `id` (String) The ID of this resource.
 - `url` (String) The offer URL.
 
+## Import
 
+Import is supported using the following syntax:
+
+```shell
+# Offers can be imported by using the URL as in the juju show-offers output.
+# Example:
+# $juju show-offer mysql
+# Store            URL             Access  Description                                    Endpoint  Interface  Role
+# mycontroller     admin/db.mysql  admin   MariaDB Server is one of the most ...          mysql     mysql      provider
+$ terraform import juju_offer.db admin/db.mysql
+```

@@ -8,6 +8,7 @@ import (
 
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/core/constraints"
+	"github.com/pkg/errors"
 
 	"github.com/juju/juju/api/client/modelconfig"
 
@@ -21,10 +22,17 @@ type modelsClient struct {
 	ConnectionFactory
 }
 
+type GrantModelInput struct {
+	User       string
+	Access     string
+	ModelUUIDs []string
+}
+
 type CreateModelInput struct {
 	Name        string
 	CloudList   []interface{}
 	Config      map[string]interface{}
+	Credential  string
 	Constraints constraints.Value
 }
 
@@ -44,13 +52,28 @@ type ReadModelResponse struct {
 
 type UpdateModelInput struct {
 	UUID        string
+	CloudList   []interface{}
 	Config      map[string]interface{}
 	Unset       []string
 	Constraints *constraints.Value
+	Credential  string
+}
+
+type UpdateAccessModelInput struct {
+	Model  string
+	Grant  []string
+	Revoke []string
+	Access string
 }
 
 type DestroyModelInput struct {
 	UUID string
+}
+
+type DestroyAccessModelInput struct {
+	Model  string
+	Revoke []string
+	Access string
 }
 
 func newModelsClient(cf ConnectionFactory) *modelsClient {
@@ -138,6 +161,11 @@ func (c *modelsClient) ResolveModelUUID(name string) (string, error) {
 }
 
 func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse, error) {
+	modelName := input.Name
+	if !names.IsValidModelName(modelName) {
+		return nil, errors.Errorf("%q is not a valid name: model names may only contain lowercase letters, digits and hyphens", modelName)
+	}
+
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -148,8 +176,6 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
-	cloudCredential := names.CloudCredentialTag{}
-
 	var cloudName string
 	var cloudRegion string
 
@@ -159,18 +185,32 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 		cloudRegion = cloudMap["region"].(string)
 	}
 
-	modelInfo, err := client.CreateModel(input.Name, currentUser, cloudName, cloudRegion, cloudCredential, input.Config)
+	cloudCredTag := &names.CloudCredentialTag{}
+	if input.Credential != "" {
+		cloudCredTag, err = GetCloudCredentialTag(cloudName, currentUser, input.Credential)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	modelInfo, err := client.CreateModel(modelName, currentUser, cloudName, cloudRegion, *cloudCredTag, input.Config)
 	if err != nil {
 		return nil, err
 	}
 
 	// set constraints when required
-	if input.Constraints.String() != "" {
+	if input.Constraints.String() == "" {
 		return &CreateModelResponse{ModelInfo: modelInfo}, nil
 	}
 
-	// we have to set constraints
-	modelClient := modelconfig.NewClient(conn)
+	// we have to set constraints ...
+	// establish a new connection with the created model through the modelconfig api to set constraints
+	connModel, err := c.GetConnection(&modelInfo.UUID)
+	if err != nil {
+		return nil, err
+	}
+
+	modelClient := modelconfig.NewClient(connModel)
 	err = modelClient.SetModelConstraints(input.Constraints)
 	if err != nil {
 		return nil, err
@@ -257,6 +297,30 @@ func (c *modelsClient) UpdateModel(input UpdateModelInput) error {
 		}
 	}
 
+	if input.Credential != "" {
+		var cloudName string
+		for _, cloud := range input.CloudList {
+			cloudMap := cloud.(map[string]interface{})
+			cloudName = cloudMap["name"].(string)
+		}
+		tag := names.NewModelTag(input.UUID)
+		currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
+		cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, input.Credential)
+		if err != nil {
+			return err
+		}
+		// open new connection to get facade versions correctly
+		connModelManager, err := c.GetConnection(nil)
+		if err != nil {
+			return err
+		}
+		clientModelManager := modelmanager.NewClient(connModelManager)
+		defer clientModelManager.Close()
+		if err := clientModelManager.ChangeModelCredential(tag, *cloudCredTag); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -280,6 +344,91 @@ func (c *modelsClient) DestroyModel(input DestroyModelInput) error {
 	err = client.DestroyModel(tag, &destroyStorage, &forceDestroy, &maxWait, timeout)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (c *modelsClient) GrantModel(input GrantModelInput) error {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+
+	client := modelmanager.NewClient(conn)
+	defer client.Close()
+
+	err = client.GrantModel(input.User, input.Access, input.ModelUUIDs...)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Note we do a revoke against `read` to remove the user from the model access
+// If a user has had `write`, then removing that access would decrease their
+// access to `read` and the user will remain part of the model access.
+func (c *modelsClient) UpdateAccessModel(input UpdateAccessModelInput) error {
+	id := strings.Split(input.Model, ":")
+	model := id[0]
+	access := id[1]
+
+	uuid, err := c.ResolveModelUUID(model)
+	if err != nil {
+		return err
+	}
+
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+
+	client := modelmanager.NewClient(conn)
+	defer client.Close()
+
+	for _, user := range input.Revoke {
+		err := client.RevokeModel(user, "read", uuid)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, user := range input.Grant {
+		err := client.GrantModel(user, access, uuid)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Note we do a revoke against `read` to remove the user from the model access
+// If a user has had `write`, then removing that access would decrease their
+// access to `read` and the user will remain part of the model access.
+func (c *modelsClient) DestroyAccessModel(input DestroyAccessModelInput) error {
+	id := strings.Split(input.Model, ":")
+	model := id[0]
+
+	uuid, err := c.ResolveModelUUID(model)
+	if err != nil {
+		return err
+	}
+
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+
+	client := modelmanager.NewClient(conn)
+	defer client.Close()
+
+	for _, user := range input.Revoke {
+		err := client.RevokeModel(user, "read", uuid)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

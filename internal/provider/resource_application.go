@@ -7,7 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-
+	"github.com/juju/juju/core/constraints"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -51,7 +51,7 @@ func resourceApplication() *schema.Resource {
 							ForceNew:    true,
 						},
 						"channel": {
-							Description: "The channel to use when deploying a charm. Specified as <track>/<risk>/<branch>.",
+							Description: "The channel to use when deploying a charm. Specified as \\<track>/\\<risk>/\\<branch>.",
 							Type:        schema.TypeString,
 							Default:     "latest/stable",
 							Optional:    true,
@@ -84,6 +84,13 @@ func resourceApplication() *schema.Resource {
 				DefaultFunc: func() (interface{}, error) {
 					return make(map[string]interface{}), nil
 				},
+			},
+			"constraints": {
+				Description: "Constraints imposed on this application.",
+				Type:        schema.TypeString,
+				Optional:    true,
+				// Set as "computed" to pre-populate and preserve any implicit constraints
+				Computed: true,
 			},
 			"trust": {
 				Description: "Set the trust for the application.",
@@ -119,6 +126,11 @@ func resourceApplication() *schema.Resource {
 						},
 					},
 				},
+			},
+			"principal": {
+				Description: "Whether this is a Principal application",
+				Type:        schema.TypeBool,
+				Computed:    true,
 			},
 		},
 	}
@@ -162,6 +174,15 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 		revision = -1
 	}
 
+	var parsedConstraints constraints.Value = constraints.Value{}
+	readConstraints := d.Get("constraints").(string)
+	if readConstraints != "" {
+		parsedConstraints, err = constraints.Parse(readConstraints)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+	}
+
 	response, err := client.Applications.CreateApplication(&juju.CreateApplicationInput{
 		ApplicationName: name,
 		ModelUUID:       modelUUID,
@@ -171,6 +192,7 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 		CharmSeries:     series,
 		Units:           units,
 		Config:          configField,
+		Constraints:     parsedConstraints,
 		Trust:           trust,
 		Expose:          expose,
 	})
@@ -193,7 +215,7 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 	id := fmt.Sprintf("%s:%s", modelName, response.AppName)
 	d.SetId(id)
 
-	return nil
+	return resourceApplicationRead(ctx, d, meta)
 }
 
 func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -256,6 +278,17 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 		return diag.FromErr(err)
 	}
 
+	if err = d.Set("principal", response.Principal); err != nil {
+		return diag.FromErr(err)
+	}
+
+	// constraints do not apply to subordinate applications.
+	if response.Principal {
+		if err = d.Set("constraints", response.Constraints.String()); err != nil {
+			return diag.FromErr(err)
+		}
+	}
+
 	var exposeValue []map[string]interface{} = nil
 	if response.Expose != nil {
 		exposeValue = []map[string]interface{}{response.Expose}
@@ -275,7 +308,6 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 	// known previously
 	// update the values from the previous config
 	changes := false
-	// log.Debug().Msgf("--> Previous config was %s", previousConfig)
 	for k, v := range response.Config {
 		// Add if the value has changed from the previous state
 		if previousValue, found := previousConfig[k]; found {
@@ -348,7 +380,9 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 		for k, v := range newConfigMap {
 			// we've lost the type of the config value. We compare the string
 			// values.
-			if !juju.EqualConfigEntries(oldConfigMap[k], v.(juju.ConfigEntry)) {
+			oldEntry := fmt.Sprintf("%#v", oldConfigMap[k])
+			newEntry := fmt.Sprintf("%#v", v)
+			if oldEntry != newEntry {
 				if updateApplicationInput.Config == nil {
 					// initialize just in case
 					updateApplicationInput.Config = make(map[string]interface{})
@@ -358,12 +392,21 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 		}
 	}
 
+	if d.HasChange("constraints") {
+		_, newConstraints := d.GetChange("constraints")
+		appConstraints, err := constraints.Parse(newConstraints.(string))
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		updateApplicationInput.Constraints = &appConstraints
+	}
+
 	err = client.Applications.UpdateApplication(&updateApplicationInput)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	return nil
+	return resourceApplicationRead(ctx, d, meta)
 }
 
 // computeExposeDeltas computes the differences between the previously

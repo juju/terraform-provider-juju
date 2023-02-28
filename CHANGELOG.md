@@ -1,3 +1,18 @@
+## 0.5.0 (February 23, 2023)
+
+NOTES:
+
+* The Juju API is upgraded to 2.9.38.
+* At this moment the manipulation of users may lead to problematic situations as Juju only disables users instead of removing them. A new release will be done when [LP2007258](https://bugs.launchpad.net/juju/+bug/2007258) is addressed. Meanwhile, proceed with caution.
+* Once an SSH key has been added to a model, Juju does not allow all the SSH keys to be removed. In order to bypass this limitation, the provider does not remove an SSH key if it is the last one and displays a warning message informing about it.
+
+FEATURES:
+
+* **New resource**: `juju_user`
+* **New resource**: `juju_credential`
+* **New resource**: `juju_ssh_key`
+* Cross-model relations can be set using the `via` argument.
+
 ## 0.4.2 (November 17, 2022)
 
 NOTES:

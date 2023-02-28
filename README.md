@@ -11,8 +11,9 @@ Once complete, the initial released version of the provider will allow you to:
 - Manage models,
 - Deploy charms from CharmHub,
 - Manage integrations (previously named "relationships").
-
-There will also be support for importing these existing Juju resources.
+- Manage users
+- Manage credentials
+- Manage SSH keys
 
 ## Requirements
 
@@ -70,10 +71,10 @@ For example, here they are set using the currently active controller:
 
 ```shell
 CONTROLLER=$(juju whoami | yq .Controller)
-export JUJU_CONTROLLER_ADDRESSES="$(juju show-controller | yq .$CONTROLLER.details.api-endpoints | tr -d "[]' ")"
-export JUJU_USERNAME="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.user)"
-export JUJU_PASSWORD="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password)"
-export JUJU_CA_CERT="$(juju show-controller $CONTROLLER | yq .$CONTROLLER.details.ca-cert)"
+export JUJU_CONTROLLER_ADDRESSES="$(juju show-controller | yq '.['$CONTROLLER']'.details.\"api-endpoints\" | tr -d "[]' "|tr -d '"'|tr -d '\n')"
+export JUJU_USERNAME="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.user|tr -d '"')"
+export JUJU_PASSWORD="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password|tr -d '"')"
+export JUJU_CA_CERT="$(juju show-controller $(echo $CONTROLLER|tr -d '"') | yq '.['$CONTROLLER']'.details.\"ca-cert\"|tr -d '"'|sed 's/\\n/\n/g')"
 ```
 
 Then, finally, run the tests:

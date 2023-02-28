@@ -14,6 +14,7 @@ A resource that represents a Juju Integration.
 ```terraform
 resource "juju_integration" "this" {
   model = juju_model.development.name
+  via   = "10.0.0.0/24,10.0.1.0/24"
 
   application {
     name     = juju_application.wordpress.name
@@ -35,6 +36,10 @@ resource "juju_integration" "this" {
 - `application` (Block Set, Min: 2, Max: 2) The two applications to integrate. (see [below for nested schema](#nestedblock--application))
 - `model` (String) The name of the model to operate in.
 
+### Optional
+
+- `via` (String) A comma separated list of CIDRs for outbound traffic.
+
 ### Read-Only
 
 - `id` (String) The ID of this resource.
@@ -55,6 +60,7 @@ When creating this resource the `offer_url` property will show `(known after app
   + resource "juju_integration" "this" {
       + id    = (known after apply)
       + model = "this"
+      + via   = "10.0.0.0/24,10.0.1.0/24"
 
       + application {
           + endpoint  = (known after apply)
