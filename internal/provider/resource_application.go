@@ -131,7 +131,7 @@ func resourceApplication() *schema.Resource {
 				Description: "Specify the target location for the application's units",
 				Type: schema.TypeString,
 				Optional: true,
-				Default: "",
+				Computed: true,
 			},
 			"principal": {
 				Description: "Whether this is a Principal application",
