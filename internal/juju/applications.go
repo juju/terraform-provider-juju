@@ -27,6 +27,7 @@ import (
 	apiresources "github.com/juju/juju/api/client/resources"
 	"github.com/juju/juju/cmd/juju/application/utils"
 	"github.com/juju/juju/core/constraints"
+	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/version"
 	"github.com/juju/names/v4"
@@ -85,6 +86,7 @@ type CreateApplicationInput struct {
 	Trust           bool
 	Expose          map[string]interface{}
 	Config          map[string]interface{}
+	Placement       string
 	Constraints     constraints.Value
 }
 
@@ -110,6 +112,7 @@ type ReadApplicationResponse struct {
 	Constraints constraints.Value
 	Expose      map[string]interface{}
 	Principal   bool
+	Placement   string
 }
 
 type UpdateApplicationInput struct {
@@ -125,6 +128,7 @@ type UpdateApplicationInput struct {
 	Unexpose []string
 	Config   map[string]interface{}
 	//Series    string // TODO: Unsupported for now
+	Placement   map[string]interface{}
 	Constraints *constraints.Value
 }
 
@@ -319,6 +323,21 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 
 	appConfig["trust"] = fmt.Sprintf("%v", input.Trust)
 
+	placements := []*instance.Placement{}
+	if input.Placement == "" {
+		placements = nil
+	} else {
+		placementDirectives := strings.Split(input.Placement, ",")
+
+		for _, directive := range placementDirectives {
+			appPlacement, err := instance.ParsePlacement(directive)
+			if err != nil {
+				return nil, err
+			}
+			placements = append(placements, appPlacement)
+		}
+	}
+
 	err = applicationAPIClient.Deploy(apiapplication.DeployArgs{
 		CharmID:         charmID,
 		ApplicationName: appName,
@@ -328,6 +347,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		Config:          appConfig,
 		Cons:            input.Constraints,
 		Resources:       resources,
+		Placement:       placements,
 	})
 
 	if err != nil {
@@ -516,6 +536,19 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("no status returned for application: %s", input.AppName)
 	}
 
+	var placementBuilder strings.Builder
+	placementCount := 0
+	for _, v := range appStatus.Units {
+		placementBuilder.WriteString(v.Machine)
+		placementCount += 1
+		if placementCount != len(appStatus.Units) {
+			// Don't put a comma after the last machine
+			placementBuilder.WriteString(",")
+		}
+	}
+
+	placement := placementBuilder.String()
+
 	unitCount := len(appStatus.Units)
 
 	// NOTE: we are assuming that this charm comes from CharmHub
@@ -614,6 +647,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		Config:      conf,
 		Constraints: appConstraints,
 		Principal:   appInfo.Principal,
+		Placement:   placement,
 	}
 
 	return response, nil
