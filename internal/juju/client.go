@@ -13,7 +13,6 @@ const (
 	PrefixModel         = "model-"
 	PrefixCharm         = "charm-"
 	PrefixUser          = "user-"
-	PrefixMachine       = "machine-"
 	UnspecifiedRevision = -1
 	connectionTimeout   = 30 * time.Second
 )
@@ -28,7 +27,6 @@ type Configuration struct {
 type Client struct {
 	Models       modelsClient
 	Applications applicationsClient
-	Machines     machinesClient
 	Integrations integrationsClient
 	Offers       offersClient
 	Users        usersClient
@@ -47,7 +45,6 @@ func NewClient(config Configuration) (*Client, error) {
 		Models:       *newModelsClient(cf),
 		Applications: *newApplicationClient(cf),
 		Integrations: *newIntegrationsClient(cf),
-		Machines:     *newMachinesClient(cf),
 		Offers:       *newOffersClient(cf),
 		Users:        *newUsersClient(cf),
 	}, nil
