@@ -14,9 +14,9 @@ import (
 func resourceMachine() *schema.Resource {
 	return &schema.Resource{
 		Description: "A resource that represents a Juju machine deployment. Refer to the juju add-machine CLI command for more information and limitations.",
-		
+
 		CreateContext: resourceMachineCreate,
-		ReadContext: resourceMachineRead,
+		ReadContext:   resourceMachineRead,
 		DeleteContext: resourceMachineDelete,
 
 		Importer: &schema.ResourceImporter{
@@ -26,42 +26,42 @@ func resourceMachine() *schema.Resource {
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Description: "A name for the machine resource in Terraform.",
-				Type: schema.TypeString,
-				Optional: true,
-				Computed: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Computed:    true,
+				ForceNew:    true,
 			},
 			"model": {
 				Description: "The Juju model in which to add a new machine.",
-				Type: schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
 			},
 			"constraints": {
 				Description: "Machine constraints that overwrite those available from 'juju get-model-constraints' and provider's defaults.",
-				Type: schema.TypeString,
-				Optional: true,
-				Default: "",
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "",
+				ForceNew:    true,
 			},
 			"disks": {
 				Description: "Storage constraints for disks to attach to the machine(s).",
-				Type: schema.TypeString,
-				Optional: true,
-				Default: "",
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "",
+				ForceNew:    true,
 			},
 			"series": {
 				Description: "The operating system series to install on the new machine(s).",
-				Type: schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
 			},
 			"machine_id": {
 				Description: "The id of the machine Juju creates.",
-				Type: schema.TypeString,
-				Computed: true,
-				Optional: true,
+				Type:        schema.TypeString,
+				Computed:    true,
+				Optional:    true,
 			},
 		},
 	}
@@ -81,10 +81,10 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 	series := d.Get("series").(string)
 
 	response, err := client.Machines.CreateMachine(&juju.CreateMachineInput{
-		Constraints:    constraints,
-		ModelUUID:      modelUUID,
-		Disks:          disks,
-		Series:         series,
+		Constraints: constraints,
+		ModelUUID:   modelUUID,
+		Disks:       disks,
+		Series:      series,
 	})
 
 	if err != nil {
@@ -104,7 +104,7 @@ func resourceMachineRead(ctx context.Context, d *schema.ResourceData, meta inter
 
 	client := meta.(*juju.Client)
 	id := strings.Split(d.Id(), ":")
-	
+
 	if len(id) != 3 {
 		return diag.Errorf("unable to parse model, machine ID, and name from provided ID")
 	}
@@ -114,7 +114,7 @@ func resourceMachineRead(ctx context.Context, d *schema.ResourceData, meta inter
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	
+
 	response, err := client.Machines.ReadMachine(&juju.ReadMachineInput{
 		ModelUUID: modelUUID,
 		MachineId: machineId,

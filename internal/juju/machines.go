@@ -20,15 +20,15 @@ type machinesClient struct {
 }
 
 type CreateMachineInput struct {
-	ModelUUID      string
-	Constraints    string
-	Disks          string
-	Series         string
-	InstanceId     string
+	ModelUUID   string
+	Constraints string
+	Disks       string
+	Series      string
+	InstanceId  string
 }
 
 type CreateMachineResponse struct {
-	Machines   []params.AddMachinesResult
+	Machines []params.AddMachinesResult
 }
 
 type ReadMachineInput struct {
@@ -37,8 +37,8 @@ type ReadMachineInput struct {
 }
 
 type ReadMachineResponse struct {
-	MachineId         string
-	MachineStatus     params.MachineStatus
+	MachineId     string
+	MachineStatus params.MachineStatus
 }
 
 type DestroyMachineInput struct {
@@ -52,7 +52,7 @@ func newMachinesClient(cf ConnectionFactory) *machinesClient {
 	}
 }
 
-func (c machinesClient) CreateMachine(input*CreateMachineInput) (*CreateMachineResponse, error) {
+func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachineResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -64,12 +64,11 @@ func (c machinesClient) CreateMachine(input*CreateMachineInput) (*CreateMachineR
 	modelconfigAPIClient := apimodelconfig.NewClient(conn)
 	defer modelconfigAPIClient.Close()
 
-
 	var machineParams params.AddMachineParams
 	var machineConstraints constraints.Value
 
-	if input.Constraints == ""{
-	    modelConstraints, err := modelconfigAPIClient.GetModelConstraints()
+	if input.Constraints == "" {
+		modelConstraints, err := modelconfigAPIClient.GetModelConstraints()
 		if err != nil {
 			return nil, err
 		}
@@ -102,7 +101,7 @@ func (c machinesClient) CreateMachine(input*CreateMachineInput) (*CreateMachineR
 	var paramsBase params.Base
 	paramsBase.Name = seriesBase.Name
 	paramsBase.Channel = series.Channel.String(seriesBase.Channel)
-	
+
 	machineParams.Jobs = jobs
 
 	machineParams.Base = &paramsBase
@@ -111,8 +110,8 @@ func (c machinesClient) CreateMachine(input*CreateMachineInput) (*CreateMachineR
 	addMachineArgs := []params.AddMachineParams{machineParams}
 
 	machines, err := machineAPIClient.AddMachines(addMachineArgs)
-	return &CreateMachineResponse {
-			Machines: machines,
+	return &CreateMachineResponse{
+		Machines: machines,
 	}, err
 }
 
@@ -138,7 +137,7 @@ func (c machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineRespon
 		return nil, fmt.Errorf("no status returned for machine: %s", input.MachineId)
 	}
 	response := &ReadMachineResponse{
-		MachineId: machineStatus.Id,
+		MachineId:     machineStatus.Id,
 		MachineStatus: machineStatus,
 	}
 

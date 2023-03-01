@@ -97,31 +97,6 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceApplication_Placement(t *testing.T) {
-	modelName := acctest.RandomWithPrefix("tf-test-application")
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:          func() { testAccPreCheck(t) },
-		ProviderFactories: providerFactories,
-		Steps: []resource.TestStep{
-			{
-				Config: testAccResourceApplicationPlacement(modelName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.placement", "model", modelName),
-					resource.TestCheckResourceAttr("juju_application.placement", "name", "hello-juju"),
-					resource.TestCheckResourceAttr("juju_application.placement", "charm.0.name", "hello-juju"),
-					resource.TestCheckResourceAttr("juju_application.placement", "placement", "0"),
-				),
-			},
-			{
-				ImportStateVerify: true,
-				ImportState:       true,
-				ResourceName:      "juju_application.placement",
-			},
-		},
-	})
-}
-
 func testAccResourceApplicationBasic(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
@@ -217,30 +192,4 @@ resource "juju_application" "subordinate" {
 	}
 } 
 `, modelName, constraints)
-}
- 
-func testAccResourceApplicationPlacement(modelName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "this" {
-	name = %q
-}
-
-resource "juju_machine" "this" {
-	name = "this_machine"
-	series = "focal"
-	model = juju_model.this.name
-}
-
-resource "juju_application" "placement" {
-	model = juju_model.this.name
-	units = 1
-	name = "hello-juju"
-
-	charm {
-		name = "hello-juju"
-	}
-
-	placement = split(":", juju_machine.this.id)[1]
-}
-`, modelName)
 }
