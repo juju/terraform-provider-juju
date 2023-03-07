@@ -61,7 +61,8 @@ func resourceMachine() *schema.Resource {
 				Description: "The id of the machine Juju creates.",
 				Type:        schema.TypeString,
 				Computed:    true,
-				Optional:    true,
+				Optional:    false,
+				Required:    false,
 			},
 		},
 	}
