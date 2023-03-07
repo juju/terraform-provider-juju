@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/juju/core/constraints"
+	"github.com/juju/names/v4"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -63,6 +64,12 @@ func resourceModel() *schema.Resource {
 				Type:        schema.TypeString,
 				Optional:    true,
 			},
+			"credential": {
+				Description: "Credential used to add the model",
+				Type:        schema.TypeString,
+				Optional:    true,
+				Computed:    true,
+			},
 			"type": {
 				Description: "Type of the model. Set by the Juju's API server",
 				Type:        schema.TypeString,
@@ -80,6 +87,7 @@ func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta inter
 	name := d.Get("name").(string)
 	cloud := d.Get("cloud").([]interface{})
 	config := d.Get("config").(map[string]interface{})
+	credential := d.Get("credential").(string)
 	readConstraints := d.Get("constraints").(string)
 
 	var parsedConstraints constraints.Value = constraints.Value{}
@@ -96,6 +104,7 @@ func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta inter
 		CloudList:   cloud,
 		Config:      config,
 		Constraints: parsedConstraints,
+		Credential:  credential,
 	})
 	if err != nil {
 		return diag.FromErr(err)
@@ -132,6 +141,14 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 		return diag.FromErr(err)
 	}
 	if err := d.Set("constraints", response.ModelConstraints.String()); err != nil {
+		return diag.FromErr(err)
+	}
+	tag, err := names.ParseCloudCredentialTag(response.ModelInfo.CloudCredentialTag)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	credential := tag.Name()
+	if err := d.Set("credential", credential); err != nil {
 		return diag.FromErr(err)
 	}
 	if err := d.Set("type", response.ModelInfo.Type); err != nil {
@@ -175,7 +192,7 @@ func resourceModelUpdate(ctx context.Context, d *schema.ResourceData, meta inter
 	var newConfigMap map[string]interface{}
 	var newConstraints *constraints.Value = nil
 	var unsetConfigKeys []string
-
+	var newCredential string
 	var err error
 
 	if d.HasChange("config") {
@@ -201,15 +218,25 @@ func resourceModelUpdate(ctx context.Context, d *schema.ResourceData, meta inter
 		newConstraints = &aux
 	}
 
+	if d.HasChange("credential") {
+		anyChange = true
+		_, cred := d.GetChange("credential")
+		newCredential = cred.(string)
+	}
+
 	if !anyChange {
 		return diags
 	}
 
+	cloud := d.Get("cloud").([]interface{})
+
 	err = client.Models.UpdateModel(juju.UpdateModelInput{
 		UUID:        d.Id(),
+		CloudList:   cloud,
 		Config:      newConfigMap,
 		Unset:       unsetConfigKeys,
 		Constraints: newConstraints,
+		Credential:  newCredential,
 	})
 	if err != nil {
 		return diag.FromErr(err)
