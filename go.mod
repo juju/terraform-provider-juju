@@ -6,8 +6,8 @@ require (
 	github.com/bflad/tfproviderlint v0.28.1
 	github.com/hashicorp/terraform-plugin-docs v0.14.1
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.25.0
-	// 2.9.38
-	github.com/juju/juju v0.0.0-20230105012444-6d211be0d72d
+	// 2.9.42
+	github.com/juju/juju v0.0.0-20230228224222-7b871e782195
 
 )
 
@@ -93,8 +93,8 @@ require (
 	github.com/juju/charmrepo/v6 v6.0.3 // indirect
 	github.com/juju/clock v1.0.2 // indirect
 	github.com/juju/cmd/v3 v3.0.0 // indirect
-	github.com/juju/collections v1.0.0 // indirect
-	github.com/juju/description/v3 v3.0.12 // indirect
+	github.com/juju/collections v1.0.2 // indirect
+	github.com/juju/description/v3 v3.0.13 // indirect
 	github.com/juju/featureflag v1.0.0 // indirect
 	github.com/juju/gnuflag v1.0.0 // indirect
 	github.com/juju/go4 v0.0.0-20160222163258-40d72ab9641a // indirect
@@ -127,7 +127,7 @@ require (
 	github.com/juju/worker/v3 v3.1.0 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
-	github.com/kr/pretty v0.3.1-0.20220829230305-3cd153a126da // indirect
+	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lestrrat/go-jspointer v0.0.0-20160229021354-f4881e611bdb // indirect
 	github.com/lestrrat/go-jsref v0.0.0-20160601013240-e452c7b5801d // indirect
