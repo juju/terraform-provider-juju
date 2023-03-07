@@ -95,7 +95,7 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 		return diag.FromErr(err)
 	}
 	id := fmt.Sprintf("%s:%s:%s", modelName, response.Machines[0].Machine, name)
-	d.Set("machine_id", "machine")
+	d.Set("machine_id", response.Machines[0].Machine)
 	d.SetId(id)
 	return nil
 }
