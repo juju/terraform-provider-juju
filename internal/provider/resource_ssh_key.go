@@ -54,7 +54,7 @@ func sshKeyCreate(ctx context.Context, d *schema.ResourceData, meta interface{})
 
 	payload := d.Get("payload").(string)
 
-	user := getUserFromSSHKey(payload)
+	user := utils.GetUserFromSSHKey(payload)
 	if user == "" {
 		return diag.Errorf("malformed SSH key, user not found")
 	}
@@ -184,15 +184,4 @@ func sshKeyDelete(ctx context.Context, d *schema.ResourceData, meta interface{})
 	d.SetId("")
 
 	return diags
-}
-
-// getUserFromSSHKey returns the user of the key
-// returning the string after the = symbol
-func getUserFromSSHKey(key string) string {
-	end := strings.LastIndex(key, "=")
-	if end < 0 {
-		return ""
-	}
-	user := key[end+2:]
-	return user
 }

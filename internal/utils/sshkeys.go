@@ -3,15 +3,15 @@ package utils
 import "strings"
 
 // GetUserFromSSHKey returns the user of the key
-// returning the string after the "=" character
 func GetUserFromSSHKey(key string) string {
-	end := strings.LastIndex(key, "=")
-	if end < 0 {
+	// The key is broken down into component values.
+	// components[0] is the type of key (e.g. ssh-rsa)
+	// components[1] is the key string itself
+	// components[2] is the key's comment field (e.g. user@server)
+	components := strings.Fields(key)
+	if len(components) < 3 {
 		return ""
+	} else {
+		return components[2]
 	}
-	if (end + 2) >= len(key) {
-		return ""
-	}
-	user := key[end+2:]
-	return user
 }

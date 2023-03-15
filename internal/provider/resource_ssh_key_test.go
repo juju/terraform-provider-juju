@@ -35,6 +35,24 @@ func TestAcc_ResourceSSHKey_Basic(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceSSHKey_ED25519(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-sshkey")
+	sshKey1 := `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID3gjJTJtYZU55HTUr+hu0JF9p152yiC9czJi9nKojuW jimmy@somewhere`
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: providerFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceSSHKey(modelName, sshKey1),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
+			},
+		},
+	})
+}
+
 func testAccResourceSSHKey(modelName string, sshKey string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
