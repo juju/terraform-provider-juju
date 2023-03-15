@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -328,6 +329,8 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		placements = nil
 	} else {
 		placementDirectives := strings.Split(input.Placement, ",")
+		// force this to be sorted
+		sort.Strings(placementDirectives)
 
 		for _, directive := range placementDirectives {
 			appPlacement, err := instance.ParsePlacement(directive)
@@ -536,18 +539,16 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("no status returned for application: %s", input.AppName)
 	}
 
-	var placementBuilder strings.Builder
+	allocatedMachines := make([]string, 0)
 	placementCount := 0
 	for _, v := range appStatus.Units {
-		placementBuilder.WriteString(v.Machine)
+		allocatedMachines = append(allocatedMachines, v.Machine)
 		placementCount += 1
-		if placementCount != len(appStatus.Units) {
-			// Don't put a comma after the last machine
-			placementBuilder.WriteString(",")
-		}
 	}
+	// sort the list
+	sort.Strings(allocatedMachines)
 
-	placement := placementBuilder.String()
+	placement := strings.Join(allocatedMachines, ",")
 
 	unitCount := len(appStatus.Units)
 
