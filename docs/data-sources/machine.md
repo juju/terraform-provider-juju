@@ -24,9 +24,11 @@ data "juju_machine" "this" {
 
 ### Required
 
-- `machine_id` (String) The id of the machine Juju creates.
+- `machine_id` (String) The Juju id of the machine.
 - `model` (String) The name of the model.
 
 ### Read-Only
 
 - `id` (String) The ID of this resource.
+
+
