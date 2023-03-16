@@ -1,3 +1,23 @@
+## 0.6.0 (March 16, 2023)
+
+NOTES:
+
+* The Juju API is upgraded to 2.9.42
+
+FEATURES:
+
+* **New resource**: `juju_machine` enable users to provision machines using juju. (Thanks @jadonn)
+* **New data source**: `juju_machine` enable users to incorporate already provisioned machines to their plans. (Thanks @gboutry)
+
+ENHANCEMENTS:
+
+* Applications now have a `placement` directive to indicate target machines.
+
+BUG FIXES:
+
+* Fixed parsing problem with ED25519 ssh keys. (Thanks @jsimpso)
+* Fixed wrong application import due to inconsistent order of elements in application placement
+
 ## 0.5.0 (February 23, 2023)
 
 NOTES:
