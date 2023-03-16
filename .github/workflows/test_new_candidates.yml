@@ -73,7 +73,7 @@ jobs:
           echo "$next_test" > ~/${{ env.id }}
       - name: Setup go
         if: ${{ env.next-test != 'NA' }}
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version-file: "go.mod"
           cache: true
