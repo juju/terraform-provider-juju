@@ -3,11 +3,14 @@ package provider
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/juju/core/constraints"
+	"github.com/juju/juju/core/instance"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -129,9 +132,75 @@ func resourceApplication() *schema.Resource {
 			},
 			"placement": {
 				Description: "Specify the target location for the application's units",
-				Type: schema.TypeString,
-				Optional: true,
-				Computed: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Computed:    true,
+				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+					oldDirectives := strings.Split(old, ",")
+					newDirectives := strings.Split(new, ",")
+
+					sort.Strings(oldDirectives)
+					sort.Strings(newDirectives)
+					if len(oldDirectives) != len(newDirectives) {
+						return false
+					}
+					var oldPlacements []string
+					for index := 0; index < len(oldDirectives); index++ {
+						oldPlacement, _ := instance.ParsePlacement(oldDirectives[index])
+						if oldPlacement == nil {
+							oldPlacements = append(oldPlacements, "")
+						} else {
+							var oldPlacementBuilder strings.Builder
+							if oldPlacement.Scope == "#" {
+								splitDirective := strings.Split(oldPlacement.Directive, "/")
+								if len(splitDirective) == 3 && splitDirective[1] == "lxd" {
+									oldPlacementBuilder.WriteString(splitDirective[1])
+									oldPlacementBuilder.WriteString(":")
+									oldPlacementBuilder.WriteString(splitDirective[0])
+									oldPlacements = append(oldPlacements, oldPlacementBuilder.String())
+								} else {
+									oldPlacements = append(oldPlacements, oldPlacement.Directive)
+								}
+							} else if oldPlacement.Scope == "lxd" {
+								oldPlacementBuilder.WriteString(oldPlacement.Scope)
+								oldPlacementBuilder.WriteString(":")
+								oldPlacementBuilder.WriteString(oldPlacement.Directive)
+								oldPlacements = append(oldPlacements, oldPlacementBuilder.String())
+							} else {
+								oldPlacements = append(oldPlacements, oldPlacement.Scope)
+							}
+						}
+					}
+					var newPlacements []string
+					for index := 0; index < len(newDirectives); index++ {
+						newPlacement, _ := instance.ParsePlacement(newDirectives[index])
+
+						if newPlacement == nil {
+							newPlacements = append(newPlacements, "")
+						} else {
+							var newPlacementBuilder strings.Builder
+							if newPlacement.Scope == "#" {
+								splitDirective := strings.Split(newPlacement.Directive, "/")
+								if len(splitDirective) == 3 && splitDirective[1] == "lxd" {
+									newPlacementBuilder.WriteString(splitDirective[1])
+									newPlacementBuilder.WriteString(":")
+									newPlacementBuilder.WriteString(splitDirective[0])
+									newPlacements = append(newPlacements, newPlacementBuilder.String())
+								} else {
+									newPlacements = append(newPlacements, newPlacement.Directive)
+								}
+							} else if newPlacement.Scope == "lxd" {
+								newPlacementBuilder.WriteString(newPlacement.Scope)
+								newPlacementBuilder.WriteString(":")
+								newPlacementBuilder.WriteString(newPlacement.Directive)
+								newPlacements = append(newPlacements, newPlacementBuilder.String())
+							} else {
+								newPlacements = append(newPlacements, newPlacement.Scope)
+							}
+						}
+					}
+					return reflect.DeepEqual(oldPlacements, newPlacements)
+				},
 			},
 			"principal": {
 				Description: "Whether this is a Principal application",
