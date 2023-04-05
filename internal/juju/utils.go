@@ -115,17 +115,13 @@ func populateControllerConfig() {
 }
 
 // WaitForAppAvailable blocks the execution flow and waits until all the
-// application names can be queried or the context ends. The tickTime param
-// indicates the frequency the api is queried.
+// application names can be queried before the context is done. The
+// tickTime param indicates the frequency used to query the API.
 func WaitForAppsAvailable(ctx context.Context, client *apiapplication.Client, appsName []string, tickTime time.Duration) error {
 	// build app tags for these apps
 	tags := make([]names.ApplicationTag, len(appsName))
-	// we create a map of applications to improve later search
-	toBeFound := make(map[string]bool, len(appsName))
 	for i, n := range appsName {
-		t := names.NewApplicationTag(n)
-		tags[i] = t
-		toBeFound[t.String()] = true
+		tags[i] = names.NewApplicationTag(n)
 	}
 
 	tick := time.NewTicker(tickTime)
@@ -138,26 +134,20 @@ func WaitForAppsAvailable(ctx context.Context, client *apiapplication.Client, ap
 			if err != nil {
 				return err
 			}
-			totalFound := 0
+			totalAvailable := 0
 			for _, entry := range returned {
 				// there's no info available yet
 				if entry.Result == nil {
 					continue
 				}
-				log.Info().Msgf("with entry.Result.Tag %s", entry.Result.Tag)
-				_, found := toBeFound[entry.Result.Tag]
-				if found {
-					log.Debug().Msgf("app %s is available", entry.Result.Tag)
-					totalFound++
-				}
-				// we found all the apps
-				if totalFound == len(appsName) {
-					return nil
-				}
+				totalAvailable++
+			}
+			// All the entries were available
+			if totalAvailable == len(appsName) {
+				return nil
 			}
 		case <-ctx.Done():
 			return errors.New("the context was done waiting for apps")
 		}
 	}
-	return nil
 }
