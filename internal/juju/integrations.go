@@ -18,7 +18,7 @@ import (
 const (
 	// IntegrationQueryTick defines the time to wait between ticks
 	// when querying the API
-	IntegrationApiWait = time.Second * 1
+	IntegrationApiWait = time.Second * 5
 )
 
 type integrationsClient struct {
@@ -81,7 +81,7 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 	// wait for the apps to be available
 	ctx, cancel := context.WithTimeout(context.Background(), input.TimeOut)
 	defer cancel()
-	
+
 	err = WaitForAppsAvailable(ctx, client, input.Endpoints, IntegrationApiWait)
 	if err != nil {
 		return nil, errors.New("the applications were not available to be integrated")
