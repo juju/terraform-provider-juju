@@ -1,14 +1,18 @@
 package juju
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
 	"encoding/json"
 
+	apiapplication "github.com/juju/juju/api/client/application"
+	"github.com/juju/names/v4"
 	"github.com/rs/zerolog/log"
 )
 
@@ -108,4 +112,52 @@ func populateControllerConfig() {
 	localProviderConfig["JUJU_PASSWORD"] = controllerConfig.Account.Password
 
 	log.Debug().Str("localProviderConfig", fmt.Sprintf("%#v", localProviderConfig)).Msg("local provider config was set")
+}
+
+// WaitForAppAvailable blocks the execution flow and waits until all the
+// application names can be queried or the context ends. The tickTime param
+// indicates the frequency the api is queried.
+func WaitForAppsAvailable(ctx context.Context, client *apiapplication.Client, appsName []string, tickTime time.Duration) error {
+	// build app tags for these apps
+	tags := make([]names.ApplicationTag, len(appsName))
+	// we create a map of applications to improve later search
+	toBeFound := make(map[string]bool, len(appsName))
+	for i, n := range appsName {
+		t := names.NewApplicationTag(n)
+		tags[i] = t
+		toBeFound[t.String()] = true
+	}
+
+	tick := time.NewTicker(tickTime)
+	for {
+		select {
+		case <-tick.C:
+			returned, err := client.ApplicationsInfo(tags)
+			// if there is no error and we get as many app infos as
+			// requested apps, we can assume the apps are available
+			if err != nil {
+				return err
+			}
+			totalFound := 0
+			for _, entry := range returned {
+				// there's no info available yet
+				if entry.Result == nil {
+					continue
+				}
+				log.Info().Msgf("with entry.Result.Tag %s", entry.Result.Tag)
+				_, found := toBeFound[entry.Result.Tag]
+				if found {
+					log.Debug().Msgf("app %s is available", entry.Result.Tag)
+					totalFound++
+				}
+				// we found all the apps
+				if totalFound == len(appsName) {
+					return nil
+				}
+			}
+		case <-ctx.Done():
+			return errors.New("the context was done waiting for apps")
+		}
+	}
+	return nil
 }

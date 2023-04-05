@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -34,6 +35,12 @@ func resourceIntegration() *schema.Resource {
 				Description: "A comma separated list of CIDRs for outbound traffic.",
 				Type:        schema.TypeString,
 				Optional:    true,
+			},
+			"timeout": {
+				Description: "Time to wait for applications to be available before integratin the apps in seconds",
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Default:     60,
 			},
 			"application": {
 				Description: "The two applications to integrate.",
@@ -103,10 +110,13 @@ func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	viaCIDRs := d.Get("via").(string)
+	numSeconds := d.Get("timeout").(int)
+	timeout := time.Duration(time.Second * time.Duration(numSeconds))
 	response, err := client.Integrations.CreateIntegration(&juju.IntegrationInput{
 		ModelUUID: modelUUID,
 		Endpoints: endpoints,
 		ViaCIDRs:  viaCIDRs,
+		TimeOut:   timeout,
 	})
 	if err != nil {
 		return diag.FromErr(err)

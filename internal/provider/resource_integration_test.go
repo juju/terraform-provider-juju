@@ -95,6 +95,8 @@ resource "juju_integration" "this" {
 		name     = juju_application.%s.name
 		endpoint = "db"
 	}
+
+	timeout = 60
 }
 `, modelName, integrationName)
 }
