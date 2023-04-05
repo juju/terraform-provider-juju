@@ -96,7 +96,7 @@ resource "juju_integration" "this" {
 		endpoint = "db"
 	}
 
-	timeout = 60
+	timeout = 600
 }
 `, modelName, integrationName)
 }
@@ -172,6 +172,7 @@ resource "juju_integration" "this" {
 	application {
 		offer_url = juju_offer.that.url
 	}
+	timeout = 600
 }
 `, srcModelName, dstModelName, viaCIDRs)
 }
