@@ -124,6 +124,20 @@ func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta
 	return diag.Diagnostics{}
 }
 
+func IsIntegrationNotFound(err error) bool {
+	return strings.Contains(err.Error(), "no integrations exist")
+}
+
+func handleIntegrationNotFoundError(err error, d *schema.ResourceData, resource string) diag.Diagnostics {
+	if IsIntegrationNotFound(err) {
+		// Integration manually removed
+		d.SetId("")
+		return diag.Diagnostics{}
+	}
+
+	return diag.FromErr(err)
+}
+
 func resourceIntegrationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
 
@@ -146,7 +160,7 @@ func resourceIntegrationRead(ctx context.Context, d *schema.ResourceData, meta i
 
 	response, err := client.Integrations.ReadIntegration(int)
 	if err != nil {
-		return diag.FromErr(err)
+		return handleIntegrationNotFoundError(err, d, d.Id())
 	}
 
 	applications := parseApplications(response.Applications)
