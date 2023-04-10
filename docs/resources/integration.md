@@ -25,9 +25,6 @@ resource "juju_integration" "this" {
     name     = juju_application.percona-cluster.name
     endpoint = "server"
   }
-
-  # timeout 90 seconds for the apps to be available
-  timeout = 90
 }
 ```
 
@@ -41,7 +38,6 @@ resource "juju_integration" "this" {
 
 ### Optional
 
-- `timeout` (Number) Time to wait for applications to be available before integratin the apps in seconds
 - `via` (String) A comma separated list of CIDRs for outbound traffic.
 
 ### Read-Only

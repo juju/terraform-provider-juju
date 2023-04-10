@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -35,12 +34,6 @@ func resourceIntegration() *schema.Resource {
 				Description: "A comma separated list of CIDRs for outbound traffic.",
 				Type:        schema.TypeString,
 				Optional:    true,
-			},
-			"timeout": {
-				Description: "Time to wait for applications to be available before integratin the apps in seconds",
-				Type:        schema.TypeInt,
-				Optional:    true,
-				Default:     60,
 			},
 			"application": {
 				Description: "The two applications to integrate.",
@@ -87,7 +80,7 @@ func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	apps := d.Get("application").(*schema.Set).List()
-	endpoints, offerURL, err := parseEndpoints(apps)
+	endpoints, offerURL, appNames, err := parseEndpoints(apps)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -108,15 +101,12 @@ func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta
 	if offerResponse.SAASName != "" {
 		endpoints = append(endpoints, offerResponse.SAASName)
 	}
-
 	viaCIDRs := d.Get("via").(string)
-	numSeconds := d.Get("timeout").(int)
-	timeout := time.Duration(time.Second * time.Duration(numSeconds))
 	response, err := client.Integrations.CreateIntegration(&juju.IntegrationInput{
 		ModelUUID: modelUUID,
+		Apps:      appNames,
 		Endpoints: endpoints,
 		ViaCIDRs:  viaCIDRs,
-		TimeOut:   timeout,
 	})
 	if err != nil {
 		return diag.FromErr(err)
@@ -188,11 +178,11 @@ func resourceIntegrationUpdate(ctx context.Context, d *schema.ResourceData, meta
 
 	if d.HasChange("application") {
 		old, new = d.GetChange("application")
-		oldEndpoints, oldOfferURL, err = parseEndpoints(old.(*schema.Set).List())
+		oldEndpoints, oldOfferURL, _, err = parseEndpoints(old.(*schema.Set).List())
 		if err != nil {
 			return diag.FromErr(err)
 		}
-		endpoints, offerURL, err = parseEndpoints(new.(*schema.Set).List())
+		endpoints, offerURL, _, err = parseEndpoints(new.(*schema.Set).List())
 		if err != nil {
 			return diag.FromErr(err)
 		}
@@ -263,7 +253,7 @@ func resourceIntegrationDelete(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	apps := d.Get("application").(*schema.Set).List()
-	endpoints, offer, err := parseEndpoints(apps)
+	endpoints, offer, _, err := parseEndpoints(apps)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -318,10 +308,10 @@ func generateID(modelName string, apps []juju.Application) string {
 
 // This function can be used to parse the terraform data into usable juju endpoints
 // it also does some sanity checks on inputs and returns user friendly errors
-func parseEndpoints(apps []interface{}) (endpoints []string, offer *string, err error) {
+func parseEndpoints(apps []interface{}) (endpoints []string, offer *string, appNames []string, err error) {
 	for _, app := range apps {
 		if app == nil {
-			return nil, nil, fmt.Errorf("you must provide a non-empty name for each application in an integration")
+			return nil, nil, nil, fmt.Errorf("you must provide a non-empty name for each application in an integration")
 		}
 		a := app.(map[string]interface{})
 		name := a["name"].(string)
@@ -329,15 +319,15 @@ func parseEndpoints(apps []interface{}) (endpoints []string, offer *string, err 
 		endpoint := a["endpoint"].(string)
 
 		if name == "" && offerURL == "" {
-			return nil, nil, fmt.Errorf("you must provide one of \"name\" or \"offer_url\"")
+			return nil, nil, nil, fmt.Errorf("you must provide one of \"name\" or \"offer_url\"")
 		}
 
 		if name != "" && offerURL != "" {
-			return nil, nil, fmt.Errorf("you must only provider one of \"name\" or \"offer_url\" and not both")
+			return nil, nil, nil, fmt.Errorf("you must only provider one of \"name\" or \"offer_url\" and not both")
 		}
 
 		if offerURL != "" && endpoint != "" {
-			return nil, nil, fmt.Errorf("\"offer_url\" cannot be provided with \"endpoint\"")
+			return nil, nil, nil, fmt.Errorf("\"offer_url\" cannot be provided with \"endpoint\"")
 		}
 
 		//Here we check if the endpoint is empty and pass just the application name, this allows juju to attempt to infer endpoints
@@ -352,9 +342,13 @@ func parseEndpoints(apps []interface{}) (endpoints []string, offer *string, err 
 		} else {
 			endpoints = append(endpoints, fmt.Sprintf("%v:%v", name, endpoint))
 		}
+		// If there is no appname and this is not an offer, we have an app name
+		if name != "" && offerURL == "" {
+			appNames = append(appNames, name)
+		}
 	}
 
-	return endpoints, offer, nil
+	return endpoints, offer, appNames, nil
 }
 
 func parseApplications(apps []juju.Application) []map[string]interface{} {

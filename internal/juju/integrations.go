@@ -18,7 +18,10 @@ import (
 const (
 	// IntegrationQueryTick defines the time to wait between ticks
 	// when querying the API
-	IntegrationApiWait = time.Second * 5
+	IntegrationApiTickWait = time.Second * 5
+	// IntegrationAppAvailableTimeout indicates the time to wait
+	// for applications to be available before integrating them
+	IntegrationAppAvailableTimeout = time.Second * 60
 )
 
 type integrationsClient struct {
@@ -38,9 +41,9 @@ type Offer struct {
 
 type IntegrationInput struct {
 	ModelUUID string
+	Apps      []string
 	Endpoints []string
 	ViaCIDRs  string
-	TimeOut   time.Duration
 }
 
 type CreateIntegrationResponse struct {
@@ -79,10 +82,10 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 	defer client.Close()
 
 	// wait for the apps to be available
-	ctx, cancel := context.WithTimeout(context.Background(), input.TimeOut)
+	ctx, cancel := context.WithTimeout(context.Background(), IntegrationAppAvailableTimeout)
 	defer cancel()
 
-	err = WaitForAppsAvailable(ctx, client, input.Endpoints, IntegrationApiWait)
+	err = WaitForAppsAvailable(ctx, client, input.Apps, IntegrationApiTickWait)
 	if err != nil {
 		return nil, errors.New("the applications were not available to be integrated")
 	}

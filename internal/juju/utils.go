@@ -118,6 +118,9 @@ func populateControllerConfig() {
 // application names can be queried before the context is done. The
 // tickTime param indicates the frequency used to query the API.
 func WaitForAppsAvailable(ctx context.Context, client *apiapplication.Client, appsName []string, tickTime time.Duration) error {
+	if len(appsName) == 0 {
+		return nil
+	}
 	// build app tags for these apps
 	tags := make([]names.ApplicationTag, len(appsName))
 	for i, n := range appsName {
