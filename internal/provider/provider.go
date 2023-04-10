@@ -56,6 +56,7 @@ func New(version string) func() *schema.Provider {
 			DataSourcesMap: map[string]*schema.Resource{
 				"juju_model":   dataSourceModel(),
 				"juju_machine": dataSourceMachine(),
+				"juju_offer":   dataSourceOffer(),
 			},
 			ResourcesMap: map[string]*schema.Resource{
 				"juju_application":  resourceApplication(),
