@@ -21,9 +21,9 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 				Config: testAccResourceIntegration(modelName, "two"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "two:db", "one:db")),
+					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "two:db-admin", "one:backend-db-admin")),
 					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "one", "endpoint": "db"}),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "one", "endpoint": "backend-db-admin"}),
 				),
 			},
 			{
@@ -32,12 +32,11 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 				ResourceName:      "juju_integration.this",
 			},
 			{
-				Config: testAccResourceIntegration(modelName, "three"),
+				Config: testAccResourceIntegration(modelName, "two"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "three:db", "one:db")),
+					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "two:db-admin", "one:backend-db-admin")),
 					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "three", "endpoint": "db"}),
 				),
 			},
 		},
@@ -59,7 +58,7 @@ resource "juju_application" "one" {
 	name  = "one" 
 	
 	charm {
-		name = "hello-juju"
+		name = "pgbouncer"
 		series = "focal"
 	}
 }
@@ -74,26 +73,17 @@ resource "juju_application" "two" {
 	}
 }
 
-resource "juju_application" "three" {
-	model = juju_model.this.name
-	name  = "three"
-
-	charm {
-		name = "postgresql"
-		series = "focal"
-	}
-}
-
 resource "juju_integration" "this" {
 	model = juju_model.this.name
 
 	application {
-		name = juju_application.one.name
+		name     = juju_application.%s.name
+		endpoint = "db-admin"
 	}
 
 	application {
-		name     = juju_application.%s.name
-		endpoint = "db"
+		name = juju_application.one.name
+		endpoint = "backend-db-admin"
 	}
 }
 `, modelName, integrationName)
@@ -102,6 +92,8 @@ resource "juju_integration" "this" {
 func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
 	srcModelName := acctest.RandomWithPrefix("tf-test-integration")
 	dstModelName := acctest.RandomWithPrefix("tf-test-integration-dst")
+	// srcModelName := "modela"
+	// dstModelName := "modelb"
 	via := "127.0.0.1/32,127.0.0.3/32"
 
 	resource.Test(t, resource.TestCase{
@@ -112,63 +104,67 @@ func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
 			{
 				Config: testAccResourceIntegrationWithVia(srcModelName, dstModelName, via),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.this", "model", srcModelName),
-					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", srcModelName, "that:db", "this:db")),
-					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "this", "endpoint": "db"}),
-					resource.TestCheckResourceAttr("juju_integration.this", "via", via),
+					resource.TestCheckResourceAttr("juju_integration.a", "model", srcModelName),
+					resource.TestCheckResourceAttr("juju_integration.a", "id", fmt.Sprintf("%v:%v:%v", srcModelName, "a:db-admin", "b:backend-db-admin")),
+					resource.TestCheckResourceAttr("juju_integration.a", "application.#", "2"),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.a", "application.*", map[string]string{"name": "a", "endpoint": "db-admin"}),
+					resource.TestCheckResourceAttr("juju_integration.a", "via", via),
 				),
 			},
 		},
 	})
 }
 
+// testAccResourceIntegrationWithVia generates a plan where a
+// postgresql:db-admin relates to a pgbouncer:backend-db-admin using
+// and offer of pgbouncer.
 func testAccResourceIntegrationWithVia(srcModelName string, dstModelName string, viaCIDRs string) string {
 	return fmt.Sprintf(`
-resource "juju_model" "this" {
+resource "juju_model" "a" {
 	name = %q
 }
 
-resource "juju_model" "that" {
-	name = %q
-}
-
-resource "juju_application" "this" {
-	model = juju_model.this.name
-	name  = "this" 
+resource "juju_application" "a" {
+	model = juju_model.a.name
+	name  = "a" 
 	
-	charm {
-		name = "hello-juju"
-		series = "focal"
-	}
-}
-
-resource "juju_application" "that" {
-	model = juju_model.that.name
-	name  = "that"
-
 	charm {
 		name = "postgresql"
 		series = "focal"
 	}
 }
 
-resource "juju_offer" "that" {
-	model            = juju_model.that.name
-	application_name = juju_application.that.name
-	endpoint         = "db"
+resource "juju_model" "b" {
+	name = %q
 }
 
-resource "juju_integration" "this" {
-	model = juju_model.this.name
+resource "juju_application" "b" {
+	model = juju_model.b.name
+	name  = "b"
+	
+	charm {
+		name = "pgbouncer"
+		series = "focal"
+	}
+}
+
+resource "juju_offer" "b" {
+	model            = juju_model.b.name
+	application_name = juju_application.b.name
+	endpoint         = "backend-db-admin"
+}
+
+resource "juju_integration" "a" {
+	model = juju_model.a.name
 	via = %q
 
 	application {
-		name = juju_application.this.name
+		name = juju_application.a.name
+		endpoint = "db-admin"
 	}
-
+	
 	application {
-		offer_url = juju_offer.that.url
+		offer_url = juju_offer.b.url
 	}
 }
 `, srcModelName, dstModelName, viaCIDRs)

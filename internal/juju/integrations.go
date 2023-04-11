@@ -3,14 +3,25 @@
 package juju
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/juju/errors"
 	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/rpc/params"
+)
+
+const (
+	// IntegrationQueryTick defines the time to wait between ticks
+	// when querying the API
+	IntegrationApiTickWait = time.Second * 5
+	// IntegrationAppAvailableTimeout indicates the time to wait
+	// for applications to be available before integrating them
+	IntegrationAppAvailableTimeout = time.Second * 60
 )
 
 type integrationsClient struct {
@@ -30,6 +41,7 @@ type Offer struct {
 
 type IntegrationInput struct {
 	ModelUUID string
+	Apps      []string
 	Endpoints []string
 	ViaCIDRs  string
 }
@@ -68,6 +80,15 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 
 	client := apiapplication.NewClient(conn)
 	defer client.Close()
+
+	// wait for the apps to be available
+	ctx, cancel := context.WithTimeout(context.Background(), IntegrationAppAvailableTimeout)
+	defer cancel()
+
+	err = WaitForAppsAvailable(ctx, client, input.Apps, IntegrationApiTickWait)
+	if err != nil {
+		return nil, errors.New("the applications were not available to be integrated")
+	}
 
 	listViaCIDRs := splitCommaDelimitedList(input.ViaCIDRs)
 	response, err := client.AddRelation(

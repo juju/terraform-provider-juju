@@ -1,16 +1,28 @@
 package juju
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/juju/juju/api/client/application"
 	apiapplication "github.com/juju/juju/api/client/application"
 	"github.com/juju/juju/api/client/applicationoffers"
 	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/core/crossmodel"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v4"
+)
+
+const (
+	// OfferAppAvailableTimeout is the time to wait for an app to be available
+	// before creating an offer.
+	OfferAppAvailableTimeout = time.Second * 60
+	// OfferApiTickWait is the time to wait between consecutive requests
+	// to the API
+	OfferApiTickWait = time.Second * 5
 )
 
 type offersClient struct {
@@ -80,6 +92,24 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 	offerName := input.Name
 	if offerName == "" {
 		offerName = input.ApplicationName
+	}
+
+	// connect to the corresponding model
+	modelConn, err := c.GetConnection(&input.ModelUUID)
+	if err != nil {
+		return nil, append(errs, err)
+	}
+	defer modelConn.Close()
+	applicationClient := application.NewClient(modelConn)
+	defer applicationClient.Close()
+
+	// wait for the app to be available
+	ctx, cancel := context.WithTimeout(context.Background(), OfferAppAvailableTimeout)
+	defer cancel()
+
+	err = WaitForAppsAvailable(ctx, applicationClient, []string{input.ApplicationName}, OfferApiTickWait)
+	if err != nil {
+		return nil, append(errs, errors.New("the application was not available to be offered"))
 	}
 
 	result, err := client.Offer(input.ModelUUID, input.ApplicationName, []string{input.Endpoint}, "admin", offerName, "")
@@ -215,7 +245,7 @@ func parseModelFromURL(url string) (result string, success bool) {
 	return result, true
 }
 
-//This function allows the integration resource to consume the offers managed by the offer resource
+// This function allows the integration resource to consume the offers managed by the offer resource
 func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*ConsumeRemoteOfferResponse, error) {
 	modelConn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
@@ -282,7 +312,7 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 	return &response, nil
 }
 
-//This function allows the integration resource to destroy the offers managed by the offer resource
+// This function allows the integration resource to destroy the offers managed by the offer resource
 func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 	var errors []error
 	conn, err := c.GetConnection(&input.ModelUUID)
