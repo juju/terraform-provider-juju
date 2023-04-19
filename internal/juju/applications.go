@@ -6,17 +6,21 @@
 package juju
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/rpc/params"
 	"github.com/rs/zerolog/log"
+	"gopkg.in/yaml.v3"
 
 	"github.com/juju/charm/v8"
 	charmresources "github.com/juju/charm/v8/resource"
@@ -29,6 +33,7 @@ import (
 	"github.com/juju/juju/cmd/juju/application/utils"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
+	coreresources "github.com/juju/juju/core/resources"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/version"
 	"github.com/juju/names/v4"
@@ -89,6 +94,7 @@ type CreateApplicationInput struct {
 	Config          map[string]interface{}
 	Placement       string
 	Constraints     constraints.Value
+	Resources       []map[string]interface{}
 }
 
 type CreateApplicationResponse struct {
@@ -114,6 +120,7 @@ type ReadApplicationResponse struct {
 	Expose      map[string]interface{}
 	Principal   bool
 	Placement   string
+	Resources   []map[string]interface{}
 }
 
 type UpdateApplicationInput struct {
@@ -187,7 +194,6 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	if err != nil {
 		return nil, err
 	}
-
 	defer resourcesAPIClient.Close()
 
 	channel, err := charm.ParseChannel(input.CharmChannel)
@@ -305,7 +311,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		Origin: resultOrigin,
 	}
 
-	resources, err := c.processResources(charmsAPIClient, resourcesAPIClient, charmID, input.ApplicationName)
+	resources, err := c.processResources(charmsAPIClient, resourcesAPIClient, charmID, input.ApplicationName, input.Resources)
 	if err != nil {
 		return nil, err
 	}
@@ -434,20 +440,21 @@ func splitCommaDelimitedList(list string) []string {
 	return items
 }
 
-// processResources is a helper function to process the charm
-// metadata and request the download of any additional resource.
-func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, resourcesAPIClient *apiresources.Client, charmID apiapplication.CharmID, appName string) (map[string]string, error) {
+// helper function to determine which resources come from the charm store and which ones should
+// be uploaded
+func fetchAndComputeResources(charmsAPIClient *apicharms.Client, resourcesAPIClient *apiresources.Client, charmID apiapplication.CharmID, appName string, resources []map[string]interface{}) ([]charmresources.Resource, []charmresources.Resource, error) {
 	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL.String())
+
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// check if we have resources to request
-	if len(charmInfo.Meta.Resources) == 0 {
-		return nil, nil
+	if len(charmInfo.Meta.Resources) == 0 && len(resources) == 0 {
+		return nil, nil, nil
 	}
 
-	pendingResources := []charmresources.Resource{}
+	storeResources := []charmresources.Resource{}
 	for _, v := range charmInfo.Meta.Resources {
 		aux := charmresources.Resource{
 			Meta: charmresources.Meta{
@@ -460,31 +467,107 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 			// TODO: prepare for resources with different versions
 			Revision: -1,
 		}
-		pendingResources = append(pendingResources, aux)
+		storeResources = append(storeResources, aux)
 	}
 
-	resourcesReq := apiresources.AddPendingResourcesArgs{
-		ApplicationID: appName,
-		CharmID: apiresources.CharmID{
-			URL:    charmID.URL,
-			Origin: charmID.Origin,
-		},
-		CharmStoreMacaroon: nil,
-		Resources:          pendingResources,
+	// override the resources with the ones provided by the user
+	toUploadResources := make([]charmresources.Resource, 0)
+	for _, v := range resources {
+		found := false
+	nested:
+		// Iterating over a slice returns copies of the elements
+		for i, storeResource := range storeResources {
+			resourceType, err := charmresources.ParseType(v["type"].(string))
+			if err != nil {
+				return nil, nil, err
+			}
+			found = storeResource.Meta.Name == v["name"]
+			if found {
+				if storeResource.Meta.Type != resourceType {
+					return nil, nil, fmt.Errorf("resource %q type does not match charm metadata", v["name"])
+				}
+
+				storeResource.Meta.Path = v["path"].(string)
+				storeResource.Origin = charmresources.OriginUpload
+				toUploadResources = append(toUploadResources, storeResource)
+				// remove the resource from the store resources list
+				storeResources = append(storeResources[:i], storeResources[i+1:]...)
+				break nested
+			}
+		}
+		if !found {
+			return nil, nil, fmt.Errorf("resource %q not found in charm metadata", v["name"])
+		}
 	}
 
-	toRequest, err := resourcesAPIClient.AddPendingResources(resourcesReq)
+	return storeResources, toUploadResources, nil
+}
+
+// processResources is a helper function to process the charm
+// metadata and request the download of any additional resources.
+func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, resourcesAPIClient *apiresources.Client, charmID apiapplication.CharmID, appName string, resources []map[string]interface{}) (map[string]string, error) {
+	storeResources, toUploadResources, err := fetchAndComputeResources(charmsAPIClient, resourcesAPIClient, charmID, appName, resources)
 	if err != nil {
 		return nil, err
 	}
 
 	// now build a map with the resource name and the corresponding UUID
+	// upload the resources that are not in the store
 	toReturn := map[string]string{}
-	for i, argsResource := range pendingResources {
-		toReturn[argsResource.Meta.Name] = toRequest[i]
+	if len(storeResources) > 0 {
+		resourcesReq := apiresources.AddPendingResourcesArgs{
+			ApplicationID: appName,
+			CharmID: apiresources.CharmID{
+				URL:    charmID.URL,
+				Origin: charmID.Origin,
+			},
+			CharmStoreMacaroon: nil,
+			Resources:          storeResources,
+		}
+
+		toRequest, err := resourcesAPIClient.AddPendingResources(resourcesReq)
+		if err != nil {
+			return nil, err
+		}
+		for i, storeResource := range storeResources {
+			toReturn[storeResource.Meta.Name] = toRequest[i]
+		}
+	}
+
+	for _, uploadResource := range toUploadResources {
+		reader, err := resource2Reader(resourcesAPIClient, appName, uploadResource)
+		if err != nil {
+			return nil, err
+		}
+		pendingId, err := resourcesAPIClient.UploadPendingResource(appName, uploadResource, uploadResource.Meta.Path, reader)
+		if err != nil {
+			return nil, err
+		}
+		toReturn[uploadResource.Meta.Name] = pendingId
 	}
 
 	return toReturn, nil
+}
+
+// resource2Reader is a helper function to convert a resource into a readable stream
+func resource2Reader(resourcesAPIClient *apiresources.Client, appName string, resource charmresources.Resource) (io.ReadSeeker, error) {
+	if resource.Meta.Type == charmresources.TypeContainerImage {
+		if err := coreresources.ValidateDockerRegistryPath(resource.Meta.Path); err != nil {
+			return nil, err
+		}
+
+		// does not support local docker images
+		dockerImageInfo := params.DockerImageInfo{
+			RegistryPath: resource.Meta.Path,
+		}
+		yamlBytes, err := yaml.Marshal(dockerImageInfo)
+		if err != nil {
+			return nil, err
+		}
+		reader := bytes.NewReader(yamlBytes)
+		return reader, nil
+	}
+	return nil, fmt.Errorf("resource type %q not supported", resource.Meta.Type)
 }
 
 func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadApplicationResponse, error) {
@@ -502,6 +585,12 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	clientAPIClient := apiclient.NewClient(conn)
 	defer clientAPIClient.Close()
 
+	resourcesAPIClient, err := apiresources.NewClient(conn)
+	if err != nil {
+		return nil, err
+	}
+	defer resourcesAPIClient.Close()
+
 	apps, err := applicationAPIClient.ApplicationsInfo([]names.ApplicationTag{names.NewApplicationTag(input.AppName)})
 	if err != nil {
 		log.Error().Err(err).Msg("found when querying the applications info")
@@ -514,7 +603,10 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("no results for application: %s", input.AppName)
 	}
 	appInfo := apps[0].Result
-
+	// Happens when the application is not found on the controller but is present in tfstate
+	if appInfo == nil {
+		return nil, fmt.Errorf("no results for application: %s", input.AppName)
+	}
 	var appConstraints constraints.Value = constraints.Value{}
 	// constraints do not apply to subordinate applications.
 	if appInfo.Principal {
@@ -637,6 +729,29 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		exposed["cidrs"] = cidrs
 	}
 
+	// read resources
+	appResources, err := resourcesAPIClient.ListResources([]string{input.AppName})
+	if err != nil {
+		return nil, err
+	}
+	if len(appResources) != 1 {
+		return nil, fmt.Errorf("expected one set of application resources, received %d", len(appResources))
+	}
+	resources := make([]map[string]interface{}, 0)
+	for _, appResource := range appResources[0].Resources {
+		// skip the store resources
+		if appResource.Origin == charmresources.OriginStore {
+			continue
+		}
+		resource := map[string]interface{}{
+			"name": appResource.Name,
+		}
+		if appResource.Type == charmresources.TypeContainerImage {
+			resource["oci_image"] = appResource.Meta.Path
+		}
+		resources = append(resources, resource)
+	}
+
 	response := &ReadApplicationResponse{
 		Name:        charmURL.Name,
 		Channel:     appStatus.CharmChannel,
@@ -649,6 +764,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		Constraints: appConstraints,
 		Principal:   appInfo.Principal,
 		Placement:   placement,
+		Resources:   resources,
 	}
 
 	return response, nil
@@ -863,5 +979,26 @@ func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) e
 		return err
 	}
 
-	return nil
+	period := time.NewTicker(5 * time.Second)
+	defer period.Stop()
+	timeout := time.After(5 * time.Minute)
+	for {
+		select {
+		case <-period.C:
+			log.Trace().Msg("Waiting for application to be destroyed")
+			_, err := c.ReadApplication(&ReadApplicationInput{
+				AppName:   input.ApplicationName,
+				ModelUUID: input.ModelUUID,
+			})
+
+			if err != nil {
+				if strings.Contains(err.Error(), "no results for application") {
+					return nil
+				}
+				return err
+			}
+		case <-timeout:
+			return fmt.Errorf("timed out waiting for application %s to be destroyed", input.ApplicationName)
+		}
+	}
 }

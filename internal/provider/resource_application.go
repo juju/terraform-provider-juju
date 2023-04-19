@@ -129,14 +129,35 @@ func resourceApplication() *schema.Resource {
 			},
 			"placement": {
 				Description: "Specify the target location for the application's units",
-				Type: schema.TypeString,
-				Optional: true,
-				Computed: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Computed:    true,
 			},
 			"principal": {
 				Description: "Whether this is a Principal application",
 				Type:        schema.TypeBool,
 				Computed:    true,
+			},
+			"resource": {
+				Description: "Resource to associate with the application.",
+				Type:        schema.TypeSet,
+				Optional:    true,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"name": {
+							Description: "The name of the resource.",
+							Type:        schema.TypeString,
+							Required:    true,
+							ForceNew:    true,
+						},
+						"oci_image": {
+							Description: "OCI image to use for the resource.",
+							Type:        schema.TypeString,
+							Required:    true,
+							ForceNew:    true,
+						},
+					},
+				},
 			},
 		},
 	}
@@ -159,6 +180,13 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 	units := d.Get("units").(int)
 	trust := d.Get("trust").(bool)
 	placement := d.Get("placement").(string)
+
+	readResources := d.Get("resource").(*schema.Set)
+	parsedResources, err := parseResources(readResources.List())
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
 	// populate the config parameter
 	// terraform only permits a single type. We have to treat
 	// strings to have different types
@@ -203,6 +231,7 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 		Trust:           trust,
 		Expose:          expose,
 		Placement:       placement,
+		Resources:       parsedResources,
 	})
 
 	if err != nil {
@@ -342,6 +371,9 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 		return diag.FromErr(err)
 	}
 
+	if err = d.Set("resource", response.Resources); err != nil {
+		return diag.FromErr(err)
+	}
 	return nil
 }
 
@@ -474,6 +506,23 @@ func computeExposeDeltas(oldExpose interface{}, newExpose interface{}, valueSet 
 		}
 	}
 	return toExpose, toUnexpose
+}
+
+// parses schema resources into a format we can use
+func parseResources(inputResources []interface{}) ([]map[string]interface{}, error) {
+	parsedResources := make([]map[string]interface{}, 0)
+	for _, inputResource := range inputResources {
+		// only supports oci-image for now
+		readResource := inputResource.(map[string]interface{})
+		parsedResource := make(map[string]interface{}, 0)
+		if ociImage := readResource["oci_image"]; ociImage != "" {
+			parsedResource["name"] = readResource["name"]
+			parsedResource["path"] = ociImage
+			parsedResource["type"] = "oci-image"
+		}
+		parsedResources = append(parsedResources, parsedResource)
+	}
+	return parsedResources, nil
 }
 
 // Juju refers to deletion as "destroy" so we call the Destroy function of our client here rather than delete

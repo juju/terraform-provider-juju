@@ -107,6 +107,41 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 	})
 }
 
+// uncomment when K8S test infrastructure is ready
+// func TestAcc_ResourceApplication_CustomResource(t *testing.T) {
+// 	modelName := acctest.RandomWithPrefix("tf-test-application")
+// 	appName := "test-app"
+
+// 	resource.Test(t, resource.TestCase{
+// 		PreCheck:          func() { testAccPreCheck(t) },
+// 		ProviderFactories: providerFactories,
+// 		Steps: []resource.TestStep{
+// 			{
+// 				Config:      testAccResourceApplicationCustomOciImage(modelName, appName, "gosherve-oci", "image..."),
+// 				ExpectError: regexp.MustCompile("resource \".+\" not found in charm metadata"),
+// 			},
+// 			{
+// 				Config: testAccResourceApplicationCustomOciImage(modelName, appName, "", ""),
+// 				Check: resource.ComposeTestCheckFunc(
+// 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+// 					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
+// 					resource.TestCheckResourceAttr("juju_application.this", "resource.#", "0"),
+// 				),
+// 			},
+// 			{
+// 				Config: testAccResourceApplicationCustomOciImage(modelName, appName, "gosherve-image", "jnsgruk/gosherve:latest"),
+// 				Check: resource.ComposeTestCheckFunc(
+// 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+// 					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
+// 					resource.TestCheckResourceAttr("juju_application.this", "resource.#", "1"),
+// 					resource.TestCheckResourceAttr("juju_application.this", "resource.0.name", "gosherve-image"),
+// 					resource.TestCheckResourceAttr("juju_application.this", "resource.0.oci_image", "jnsgruk/gosherve:latest"),
+// 				),
+// 			},
+// 		},
+// 	})
+// }
+
 func testAccResourceApplicationBasic(modelName, appInvalidName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
@@ -203,3 +238,30 @@ resource "juju_application" "subordinate" {
 } 
 `, modelName, constraints)
 }
+
+// uncomment when K8S test infrastructure is ready
+// func testAccResourceApplicationCustomOciImage(modelName, appName string, ociName, ociImage string) string {
+// 	resourceStr := ""
+// 	if ociName != "" {
+// 		resourceStr = fmt.Sprintf(`
+// resource{
+//   name      = "%s"
+//   oci_image = "%s"
+// }`, ociName, ociImage)
+// 	}
+// 	return fmt.Sprintf(`
+// resource "juju_model" "this" {
+//   name = %q
+// }
+
+// resource "juju_application" "this" {
+//   model = juju_model.this.name
+//   name = %q
+//   charm {
+//     name   = "hello-kubecon"
+//     series = "jammy"
+//   }
+//   %s
+// }
+// `, modelName, appName, resourceStr)
+// }
