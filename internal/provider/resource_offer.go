@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -59,10 +60,13 @@ func resourceOfferCreate(ctx context.Context, d *schema.ResourceData, meta inter
 
 	var diags diag.Diagnostics
 	modelName := d.Get("model").(string)
-	modelUUID, err := client.Models.ResolveModelUUID(modelName)
+	modelInfo, err := client.Models.GetModelByName(modelName)
 	if err != nil {
 		return diag.FromErr(err)
 	}
+
+	modelUUID := modelInfo.UUID
+	modelOwner := strings.TrimPrefix(modelInfo.OwnerTag, juju.PrefixUser)
 
 	//here we verify if the name property is set, if not set to the application name
 	var offerName string
@@ -76,6 +80,7 @@ func resourceOfferCreate(ctx context.Context, d *schema.ResourceData, meta inter
 	result, errs := client.Offers.CreateOffer(&juju.CreateOfferInput{
 		ModelName:       modelName,
 		ModelUUID:       modelUUID,
+		ModelOwner:      modelOwner,
 		Name:            offerName,
 		ApplicationName: d.Get("application_name").(string),
 		Endpoint:        d.Get("endpoint").(string),

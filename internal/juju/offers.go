@@ -34,6 +34,7 @@ type CreateOfferInput struct {
 	Endpoint        string
 	ModelName       string
 	ModelUUID       string
+	ModelOwner      string
 	Name            string
 }
 
@@ -132,6 +133,7 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 	filter := crossmodel.ApplicationOfferFilter{
 		OfferName: offerName,
 		ModelName: input.ModelName,
+		OwnerName: input.ModelOwner,
 	}
 
 	offer, err := findApplicationOffers(client, filter)
