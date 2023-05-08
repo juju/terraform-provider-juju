@@ -129,9 +129,9 @@ func resourceApplication() *schema.Resource {
 			},
 			"placement": {
 				Description: "Specify the target location for the application's units",
-				Type: schema.TypeString,
-				Optional: true,
-				Computed: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Computed:    true,
 			},
 			"principal": {
 				Description: "Whether this is a Principal application",
