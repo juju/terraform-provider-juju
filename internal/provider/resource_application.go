@@ -226,6 +226,21 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 	return resourceApplicationRead(ctx, d, meta)
 }
 
+func IsApplicationNotFound(err error) bool {
+	return strings.Contains(err.Error(), "no results for application")
+}
+
+func handleApplicationNotFoundError(err error, d *schema.ResourceData) diag.Diagnostics {
+	if IsApplicationNotFound(err) {
+		// Integration manually removed
+		d.SetId("")
+		return diag.Diagnostics{}
+	}
+
+	return diag.FromErr(err)
+}
+
+
 func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
 	id := strings.Split(d.Id(), ":")
@@ -245,7 +260,7 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 		AppName:   appName,
 	})
 	if err != nil {
-		return diag.FromErr(err)
+		return handleApplicationNotFoundError(err, d)
 	}
 
 	if response == nil {

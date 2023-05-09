@@ -128,7 +128,7 @@ func IsIntegrationNotFound(err error) bool {
 	return strings.Contains(err.Error(), "no integrations exist")
 }
 
-func handleIntegrationNotFoundError(err error, d *schema.ResourceData, resource string) diag.Diagnostics {
+func handleIntegrationNotFoundError(err error, d *schema.ResourceData) diag.Diagnostics {
 	if IsIntegrationNotFound(err) {
 		// Integration manually removed
 		d.SetId("")
@@ -160,7 +160,7 @@ func resourceIntegrationRead(ctx context.Context, d *schema.ResourceData, meta i
 
 	response, err := client.Integrations.ReadIntegration(int)
 	if err != nil {
-		return handleIntegrationNotFoundError(err, d, d.Id())
+		return handleIntegrationNotFoundError(err, d)
 	}
 
 	applications := parseApplications(response.Applications)

@@ -102,6 +102,20 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 	return nil
 }
 
+func IsMachineNotFound(err error) bool {
+	return strings.Contains(err.Error(), "no status returned for machine")
+}
+
+func handleMachineNotFoundError(err error, d *schema.ResourceData) diag.Diagnostics {
+	if IsMachineNotFound(err) {
+		// Machine manually removed
+		d.SetId("")
+		return diag.Diagnostics{}
+	}
+
+	return diag.FromErr(err)
+}
+
 func resourceMachineRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	var diags diag.Diagnostics
 
@@ -123,7 +137,7 @@ func resourceMachineRead(ctx context.Context, d *schema.ResourceData, meta inter
 		MachineId: machineId,
 	})
 	if err != nil {
-		return diag.FromErr(err)
+		return handleMachineNotFoundError(err, d)
 	}
 
 	if response == nil {

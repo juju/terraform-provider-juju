@@ -118,6 +118,20 @@ func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta inter
 	return diags
 }
 
+func IsModelNotFound(err error) bool {
+	return strings.Contains(err.Error(), "no model returned")
+}
+
+func handleModelNotFoundError(err error, d *schema.ResourceData) diag.Diagnostics {
+	if IsModelNotFound(err) {
+		// Model manually removed
+		d.SetId("")
+		return diag.Diagnostics{}
+	}
+
+	return diag.FromErr(err)
+}
+
 func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
 
@@ -126,7 +140,7 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 	uuid := d.Id()
 	response, err := client.Models.ReadModel(uuid)
 	if err != nil {
-		return diag.FromErr(err)
+		return handleModelNotFoundError(err, d)
 	}
 
 	cloudList := []map[string]interface{}{{
