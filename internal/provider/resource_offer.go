@@ -110,6 +110,20 @@ func resourceOfferCreate(ctx context.Context, d *schema.ResourceData, meta inter
 	return diags
 }
 
+func IsOfferNotFound(err error) bool {
+	return strings.Contains(err.Error(), "expected to find one result for url")
+}
+
+func handleOfferNotFoundError(err error, d *schema.ResourceData) diag.Diagnostics {
+	if IsOfferNotFound(err) {
+		// Offer manually removed
+		d.SetId("")
+		return diag.Diagnostics{}
+	}
+
+	return diag.FromErr(err)
+}
+
 func resourceOfferRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
 
@@ -119,7 +133,7 @@ func resourceOfferRead(ctx context.Context, d *schema.ResourceData, meta interfa
 		OfferURL: d.Id(),
 	})
 	if err != nil {
-		return diag.FromErr(err)
+		return handleOfferNotFoundError(err, d)
 	}
 
 	if err = d.Set("model", result.ModelName); err != nil {
