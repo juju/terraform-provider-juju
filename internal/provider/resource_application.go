@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -129,9 +130,9 @@ func resourceApplication() *schema.Resource {
 			},
 			"placement": {
 				Description: "Specify the target location for the application's units",
-				Type: schema.TypeString,
-				Optional: true,
-				Computed: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Computed:    true,
 			},
 			"principal": {
 				Description: "Whether this is a Principal application",
@@ -226,12 +227,8 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 	return resourceApplicationRead(ctx, d, meta)
 }
 
-func IsApplicationNotFound(err error) bool {
-	return strings.Contains(err.Error(), "no results for application")
-}
-
 func handleApplicationNotFoundError(err error, d *schema.ResourceData) diag.Diagnostics {
-	if IsApplicationNotFound(err) {
+	if errors.As(err, &juju.ApplicationNotFoundError) {
 		// Integration manually removed
 		d.SetId("")
 		return diag.Diagnostics{}
@@ -239,7 +236,6 @@ func handleApplicationNotFoundError(err error, d *schema.ResourceData) diag.Diag
 
 	return diag.FromErr(err)
 }
-
 
 func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)

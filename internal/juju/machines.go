@@ -121,9 +121,6 @@ func (c machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineRespon
 		return nil, err
 	}
 
-	machineAPIClient := apimachinemanager.NewClient(conn)
-	defer machineAPIClient.Close()
-
 	clientAPIClient := apiclient.NewClient(conn)
 	defer clientAPIClient.Close()
 

@@ -34,6 +34,17 @@ import (
 	"github.com/juju/names/v4"
 )
 
+var ApplicationNotFoundError = &applicationNotFoundError{}
+
+// ApplicationNotFoundError
+type applicationNotFoundError struct {
+	appName string
+}
+
+func (ae *applicationNotFoundError) Error() string {
+	return fmt.Sprintf("application %s not found", ae.appName)
+}
+
 type applicationsClient struct {
 	ConnectionFactory
 }
@@ -513,6 +524,10 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	if len(apps) < 1 {
 		return nil, fmt.Errorf("no results for application: %s", input.AppName)
 	}
+	if apps[0].Error != nil {
+		return nil, &applicationNotFoundError{input.AppName}
+	}
+
 	appInfo := apps[0].Result
 
 	var appConstraints constraints.Value = constraints.Value{}
