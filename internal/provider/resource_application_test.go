@@ -71,31 +71,31 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationUpdates(modelName, 1, 21, true, "machinename"),
+				Config: testAccResourceApplicationUpdates(modelName, 1, 10, true, "machinename"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "jameinel-ubuntu-lite"),
 					resource.TestCheckResourceAttr("juju_application.this", "units", "1"),
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "21"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "10"),
 					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "config.hostname", "machinename"),
 				),
 			},
 			{
-				Config: testAccResourceApplicationUpdates(modelName, 2, 21, true, "machinename"),
+				Config: testAccResourceApplicationUpdates(modelName, 2, 10, true, "machinename"),
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
 			},
 			{
-				Config: testAccResourceApplicationUpdates(modelName, 2, 21, true, "machinename"),
-				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "21"),
+				Config: testAccResourceApplicationUpdates(modelName, 2, 10, true, "machinename"),
+				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "10"),
 			},
 			{
-				Config: testAccResourceApplicationUpdates(modelName, 2, 21, false, "machinename"),
+				Config: testAccResourceApplicationUpdates(modelName, 2, 10, false, "machinename"),
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "expose.#", "0"),
 			},
 			{
-				Config: testAccResourceApplicationUpdates(modelName, 2, 21, true, "machinename"),
+				Config: testAccResourceApplicationUpdates(modelName, 2, 10, true, "machinename"),
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
 			},
 			{
@@ -117,7 +117,7 @@ resource "juju_application" "this" {
   model = juju_model.this.name
   name = %q
   charm {
-    name = "ubuntu"
+    name = "jameinel-ubuntu-lite"
   }
   trust = true
   expose{}
@@ -140,7 +140,7 @@ resource "juju_application" "this" {
   units = %d
   name = "test-app"
   charm {
-    name     = "ubuntu"
+    name     = "jameinel-ubuntu-lite"
     revision = %d
   }
   trust = true
@@ -163,8 +163,8 @@ resource "juju_application" "this" {
   units = 0
   name = "test-app"
   charm {
-    name     = "ubuntu"
-    revision = 21
+    name     = "jameinel-ubuntu-lite"
+    revision = 10
   }
   trust = true
   expose{}
@@ -184,8 +184,8 @@ resource "juju_application" "this" {
   units = 0
   name = "test-app"
   charm {
-    name     = "ubuntu"
-    revision = 21
+    name     = "jameinel-ubuntu-lite"
+    revision = 10
   }
   trust = true
   expose{}

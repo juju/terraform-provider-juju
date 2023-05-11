@@ -34,7 +34,7 @@ import (
 	"github.com/juju/names/v4"
 )
 
-var ApplicationNotFound = &applicationNotFoundError{}
+var ApplicationNotFoundError = &applicationNotFoundError{}
 
 // ApplicationNotFoundError
 type applicationNotFoundError struct {
