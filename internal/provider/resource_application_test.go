@@ -79,7 +79,9 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application.this", "units", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "10"),
 					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
-					resource.TestCheckResourceAttr("juju_application.this", "config.hostname", "machinename"),
+					// (juanmanuel-tirado) Uncomment and test when running
+					// a different charm with other config
+					//resource.TestCheckResourceAttr("juju_application.this", "config.hostname", "machinename"),
 				),
 			},
 			{
@@ -145,9 +147,9 @@ resource "juju_application" "this" {
   }
   trust = true
   %s
-  config = {
-	hostname = "%s"
-  }
+  # config = {
+  #	 hostname = "%s"
+  # }
 }
 `, modelName, units, revision, exposeStr, hostname)
 }
