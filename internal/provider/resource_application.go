@@ -54,8 +54,8 @@ func resourceApplication() *schema.Resource {
 						"channel": {
 							Description: "The channel to use when deploying a charm. Specified as \\<track>/\\<risk>/\\<branch>.",
 							Type:        schema.TypeString,
-							Default:     "latest/stable",
 							Optional:    true,
+							Computed:    true,
 						},
 						"revision": {
 							Description: "The revision of the charm to deploy.",
@@ -156,6 +156,10 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 	charm := d.Get("charm").([]interface{})[0].(map[string]interface{})
 	charmName := charm["name"].(string)
 	channel := charm["channel"].(string)
+	if channel == "" {
+		// if no channel was set we will request the stable by default
+		channel = "stable"
+	}
 	series := charm["series"].(string)
 	units := d.Get("units").(int)
 	trust := d.Get("trust").(bool)

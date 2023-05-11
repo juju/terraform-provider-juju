@@ -654,7 +654,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	response := &ReadApplicationResponse{
 		Name:        charmURL.Name,
-		Channel:     appStatus.CharmChannel,
+		Channel:     appInfo.Channel,
 		Revision:    charmURL.Revision,
 		Series:      appInfo.Series,
 		Units:       unitCount,
