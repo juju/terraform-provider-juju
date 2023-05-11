@@ -637,18 +637,9 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		exposed["cidrs"] = cidrs
 	}
 
-	// (juanmanuel-tirado) In certain scenarios depending on how
-	// charms are uploaded to CharmHub, Juju may register the
-	// latest/stable channel as stable. We check this case here
-	// and force it to be latest/stable
-	normalizedChannel := appInfo.Channel
-	if normalizedChannel == "stable" {
-		normalizedChannel = "latest/stable"
-	}
-
 	response := &ReadApplicationResponse{
 		Name:        charmURL.Name,
-		Channel:     normalizedChannel,
+		Channel:     appInfo.Channel,
 		Revision:    charmURL.Revision,
 		Series:      appInfo.Series,
 		Units:       unitCount,
