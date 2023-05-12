@@ -1,3 +1,23 @@
+## 0.7.0 (May 12, 2023)
+
+Notes:
+
+* This is a periodic release with some bug fixes.
+
+FEATURES:
+
+* **New data source**: `juju_offer` enable users to incorporate already existing offers. (Thanks @gboutry)
+
+BUG FIXES:
+
+* Wait for apps before integrate by @juanmanuel-tirado in https://github.com/juju/terraform-provider-juju/pull/189
+* Remove integration from state if it was removed manually (#186) by @amandahla in https://github.com/juju/terraform-provider-juju/pull/192
+* Add OwnerName to ApplicationOfferFilter by @hemanthnakkina in https://github.com/juju/terraform-provider-juju/pull/201
+* Remove Application,Machine,Model and Offer from state if it was removed manually by @amandahla in https://github.com/juju/terraform-provider-juju/pull/205
+* [JUJU-3654] Added ApplicationNotFound error for better error control. by @juanmanuel-tirado in https://github.com/juju/terraform-provider-juju/pull/206
+* [JUJU-3315] Force "stable" channel to be "latest/stable" when reading apps. by @juanmanuel-tirado in https://github.com/juju/terraform-provider-juju/pull/204
+
+
 ## 0.6.0 (March 16, 2023)
 
 NOTES:
