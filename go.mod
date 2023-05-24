@@ -212,3 +212,8 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
+
+// This is copied from the go.mod file in github.com/lxc/lxd
+// It is needed to avoid this error when running go list -m
+// go: google.golang.org/grpc/naming@v0.0.0-00010101000000-000000000000: invalid version: unknown revision 000000000000
+replace google.golang.org/grpc/naming => google.golang.org/grpc v1.29.1
