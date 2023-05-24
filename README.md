@@ -71,10 +71,10 @@ For example, here they are set using the currently active controller:
 
 ```shell
 export CONTROLLER=$(juju whoami | yq .Controller)
-export JUJU_CONTROLLER_ADDRESSES="$(juju show-controller | yq '.['$CONTROLLER']'.details.\"api-endpoints\" | tr -d "[]' "|tr -d '"'|tr -d '\n')"
+export JUJU_CONTROLLER_ADDRESSES="$(juju show-controller | yq '.[$CONTROLLER]'.details.\"api-endpoints\" | tr -d "[]' "|tr -d '"'|tr -d '\n')"
 export JUJU_USERNAME="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.user|tr -d '"')"
 export JUJU_PASSWORD="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password|tr -d '"')"
-export JUJU_CA_CERT="$(juju show-controller $(echo $CONTROLLER|tr -d '"') | yq '.['$CONTROLLER']'.details.\"ca-cert\"|tr -d '"'|sed 's/\\n/\n/g')"
+export JUJU_CA_CERT="$(juju show-controller $(echo $CONTROLLER|tr -d '"') | yq '.[$CONTROLLER]'.details.\"ca-cert\"|tr -d '"'|sed 's/\\n/\n/g')"
 ```
 
 Then, finally, run the tests:
