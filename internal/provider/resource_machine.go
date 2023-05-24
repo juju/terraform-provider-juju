@@ -80,12 +80,18 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 	constraints := d.Get("constraints").(string)
 	disks := d.Get("disks").(string)
 	series := d.Get("series").(string)
+	ssh_address := d.Get("ssh_address").(string)
+	public_key := d.Get("public_key").(string)
+	private_key := d.Get("private_key").(string)
 
 	response, err := client.Machines.CreateMachine(&juju.CreateMachineInput{
 		Constraints: constraints,
 		ModelUUID:   modelUUID,
 		Disks:       disks,
 		Series:      series,
+		SSHAddress:  ssh_address,
+		PublicKey:   public_key,
+		PrivateKey:  private_key,
 	})
 
 	if err != nil {
