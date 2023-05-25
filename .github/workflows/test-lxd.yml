@@ -54,10 +54,12 @@ jobs:
       - uses: actions/setup-go@v4
         with:
           go-version-file: "go.mod"
+          cache: false
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.50.0
+          version: v1.52.2
+          args: --print-issued-lines=true
 
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
@@ -104,5 +106,6 @@ jobs:
       - run: go mod download
       - env:
           TF_ACC: "1"
+          TEST_CLOUD: "lxd"
         run: go test -timeout 30m -v -cover ./internal/provider/
         timeout-minutes: 30
