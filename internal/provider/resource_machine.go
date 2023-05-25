@@ -69,18 +69,21 @@ func resourceMachine() *schema.Resource {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
+				ForceNew:    true,
 			},
 			"public_key": {
 				Description: "The file path to read the public key from.",
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
+				ForceNew:    true,
 			},
 			"private_key": {
 				Description: "The file path to read the private key from.",
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
+				ForceNew:    true,
 			},
 		},
 	}
