@@ -64,6 +64,24 @@ func resourceMachine() *schema.Resource {
 				Optional:    false,
 				Required:    false,
 			},
+			"ssh_address": {
+				Description: "The user@host directive for manual provisioning an existing machine via ssh.",
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "",
+			},
+			"public_key": {
+				Description: "The file path to read the public key from.",
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "",
+			},
+			"private_key": {
+				Description: "The file path to read the private key from.",
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "",
+			},
 		},
 	}
 }
