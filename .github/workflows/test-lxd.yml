@@ -60,7 +60,7 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           version: v1.52.2
-          args: --print-issued-lines=true --format=github-actions
+          args: --print-issued-lines=true --out-format=github-actions
 
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
