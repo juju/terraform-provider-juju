@@ -11,7 +11,6 @@ import (
 )
 
 func TestAcc_ResourceApplication_Basic(t *testing.T) {
-
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}

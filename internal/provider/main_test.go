@@ -36,7 +36,6 @@ func TypeTestingCloudFromString(from string) (CloudTesting, error) {
 var testingCloud CloudTesting
 
 func TestMain(m *testing.M) {
-
 	testCloud := os.Getenv("TEST_CLOUD")
 
 	var err error
