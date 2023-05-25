@@ -5,3 +5,6 @@ linters:
     - misspell
     - prealloc
     - whitespace
+output:
+  print-issued-lines: true
+  format: github-actions
