@@ -75,7 +75,6 @@ func newMachinesClient(cf ConnectionFactory) *machinesClient {
 // existing machine using ssh_address, public_key and private_key in the CreateMachineInput
 // TODO (cderici): only the ssh scope is supported, include winrm at some point
 func (i *CreateMachineInput) manualProvision(client manual.ProvisioningClientAPI, config *config.Config) error {
-
 	// Read the public key
 	cmdCtx, err := cmd.DefaultContext()
 	if err != nil {
@@ -91,7 +90,7 @@ func (i *CreateMachineInput) manualProvision(client manual.ProvisioningClientAPI
 	if at := strings.Index(i.SSHAddress, "@"); at != -1 {
 		user, host = i.SSHAddress[:at], i.SSHAddress[at+1:]
 	} else {
-		return errors.Errorf("invalid ssh_address, expected <user@host>, given ", i.SSHAddress)
+		return errors.Errorf("invalid ssh_address, expected <user@host>, given %v", i.SSHAddress)
 	}
 
 	// Prep args for the ProvisionMachine call
