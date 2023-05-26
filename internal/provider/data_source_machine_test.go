@@ -9,6 +9,9 @@ import (
 )
 
 func TestAcc_DataSourceMachine(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
 	modelName := acctest.RandomWithPrefix("tf-datasource-machine-test-model")
 
 	resource.Test(t, resource.TestCase{
