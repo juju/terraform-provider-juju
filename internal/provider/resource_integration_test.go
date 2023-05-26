@@ -10,6 +10,9 @@ import (
 )
 
 func TestAcc_ResourceIntegration(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
 	modelName := acctest.RandomWithPrefix("tf-test-integration")
 
 	resource.Test(t, resource.TestCase{
@@ -90,6 +93,9 @@ resource "juju_integration" "this" {
 }
 
 func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
 	srcModelName := acctest.RandomWithPrefix("tf-test-integration")
 	dstModelName := acctest.RandomWithPrefix("tf-test-integration-dst")
 	// srcModelName := "modela"

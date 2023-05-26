@@ -68,6 +68,10 @@ func TestAcc_ResourceApplication_Basic(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_Updates(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 
 	resource.Test(t, resource.TestCase{
