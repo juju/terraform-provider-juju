@@ -64,7 +64,7 @@ jobs:
 
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
-    name: Terraform Provider Acceptance Tests
+    name: Integration
     needs:
       - generate
       - lint
