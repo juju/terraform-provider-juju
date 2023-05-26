@@ -84,11 +84,11 @@ func (i *CreateMachineInput) manualProvision(client manual.ProvisioningClientAPI
 	// Read the public keys
 	cmdCtx, err := cmd.DefaultContext()
 	if err != nil {
-		return errors.Trace(err)
+		return "", errors.Trace(err)
 	}
 	authKeys, err := common.ReadAuthorizedKeys(cmdCtx, i.PublicKey)
 	if err != nil {
-		return errors.Annotatef(err, "cannot reading authorized-keys")
+		return "", errors.Annotatef(err, "cannot reading authorized-keys")
 	}
 
 	// Extract the user and host in the SSHAddress
@@ -96,7 +96,7 @@ func (i *CreateMachineInput) manualProvision(client manual.ProvisioningClientAPI
 	if at := strings.Index(i.SSHAddress, "@"); at != -1 {
 		user, host = i.SSHAddress[:at], i.SSHAddress[at+1:]
 	} else {
-		return errors.Errorf("invalid ssh_address, expected <user@host>, given %v", i.SSHAddress)
+		return "", errors.Errorf("invalid ssh_address, expected <user@host>, given %v", i.SSHAddress)
 	}
 
 	// Prep args for the ProvisionMachine call
@@ -116,12 +116,11 @@ func (i *CreateMachineInput) manualProvision(client manual.ProvisioningClientAPI
 	}
 
 	// Call the ProvisionMachine
-	// Note that the returned machineId is ignored
-	_, err = sshprovisioner.ProvisionMachine(provisionArgs)
+	machineId, err := sshprovisioner.ProvisionMachine(provisionArgs)
 	if err != nil {
-		return errors.Trace(err)
+		return "", errors.Trace(err)
 	}
-	return nil
+	return machineId, nil
 }
 
 func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachineResponse, error) {
@@ -147,15 +146,16 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		err = input.manualProvision(machineAPIClient, cfg)
+		machineId, err := input.manualProvision(machineAPIClient, cfg)
 		if err != nil {
 			return nil, errors.Trace(err)
-		}
-		// Set the Placement so AddMachines would know that
-		// it's manually provisioned
-		machineParams.Placement = &instance.Placement{
-			Scope:     "ssh",
-			Directive: input.SSHAddress,
+		} else {
+			return &CreateMachineResponse{
+				Machines: []params.AddMachinesResult{{
+					Machine: machineId,
+					Error:   nil,
+				}},
+			}, nil
 		}
 	}
 
@@ -199,7 +199,6 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 	machineParams.Base = &paramsBase
 
 	addMachineArgs := []params.AddMachineParams{machineParams}
-
 	machines, err := machineAPIClient.AddMachines(addMachineArgs)
 	return &CreateMachineResponse{
 		Machines: machines,
