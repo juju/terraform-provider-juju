@@ -1,0 +1,115 @@
+# Terraform Provider testing workflow using different terraform versions
+# and clouds.
+name: Integration tests
+
+# This GitHub action runs your tests for each pull request.
+on:
+  pull_request:
+    paths-ignore:
+      - "README.md"
+      - "project-docs/**"
+  push:
+    branches:
+      - "main"
+    paths-ignore:
+      - "README.md"
+      - "project-docs/**"
+
+# Testing only needs permissions to read the repository contents.
+permissions:
+  contents: read
+
+jobs:
+  # Ensure project builds before running testing matrix
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+      - run: go build -v .
+
+  generate:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - run: go generate ./...
+      - name: git diff
+        run: |
+          git diff --compact-summary --exit-code || \
+            (echo; echo "Unexpected difference in directories after code generation. Run 'go generate ./...' command and commit."; exit 1)
+
+  # This runs golangci-lint against the codebase
+  lint:
+    name: golangci-lint
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: "go.mod"
+          cache: false
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.52.2
+          args: --print-issued-lines=true
+
+  # Run acceptance tests in a matrix with Terraform CLI versions
+  test:
+    name: Terraform Provider Acceptance Tests
+    needs:
+      - generate
+      - lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Different clouds
+        cloud:
+          - "lxd"
+          - "microk8s"
+        terraform:
+          - "1.3.*"
+          - "1.4.*"
+          - "1.5.*"
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ matrix.terraform }}
+          terraform_wrapper: false
+      - name: Setup operator environment
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: ${{ matrix.cloud }}
+          juju-channel: 2.9/stable
+      - name: "Set environment to configure provider"
+        # language=bash
+        run: |
+          CONTROLLER=$(juju whoami --format yaml | yq .controller)
+
+          echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq .$CONTROLLER.details.api-endpoints | yq -r '. | join(",")')" >> $GITHUB_ENV
+          echo "JUJU_USERNAME=$(juju show-controller | yq .$CONTROLLER.account.user)"  >> $GITHUB_ENV
+          echo "JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password)"  >> $GITHUB_ENV
+          echo "JUJU_CA_CERT<<EOF" >> $GITHUB_ENV
+          juju show-controller | yq .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+      - run: go mod download
+      - env:
+          TF_ACC: "1"
+          TEST_CLOUD: ${{ matrix.cloud }}
+        run: go test -timeout 30m -v -cover ./internal/provider/
+        timeout-minutes: 40
