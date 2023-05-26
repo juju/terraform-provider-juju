@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"github.com/juju/cmd/v3"
 	"github.com/juju/errors"
-	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/environs/manual/sshprovisioner"
+	"github.com/juju/juju/juju/osenv"
+	"github.com/juju/utils/v3/ssh"
 	"strings"
 
 	"github.com/juju/juju/cmd/juju/common"
@@ -74,8 +75,13 @@ func newMachinesClient(cf ConnectionFactory) *machinesClient {
 // manualProvision calls the sshprovisioner.ProvisionMachine on the Juju side to provision an
 // existing machine using ssh_address, public_key and private_key in the CreateMachineInput
 // TODO (cderici): only the ssh scope is supported, include winrm at some point
-func (i *CreateMachineInput) manualProvision(client manual.ProvisioningClientAPI, config *config.Config) error {
-	// Read the public key
+func (i *CreateMachineInput) manualProvision(client manual.ProvisioningClientAPI, config *config.Config) (string, error) {
+	// Load the Juju client keys
+	sshDir := osenv.JujuXDGDataHomePath("ssh")
+	if err := ssh.LoadClientKeys(sshDir); err != nil {
+		return "", errors.Annotate(err, "cannot load ssh client keys")
+	}
+	// Read the public keys
 	cmdCtx, err := cmd.DefaultContext()
 	if err != nil {
 		return errors.Trace(err)
