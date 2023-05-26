@@ -15,6 +15,9 @@ import (
 )
 
 func TestAcc_ResourceModel_Basic(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	modelInvalidName := acctest.RandomWithPrefix("tf_test_model")
 	logLevelInfo := "INFO"
