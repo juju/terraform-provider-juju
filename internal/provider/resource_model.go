@@ -131,10 +131,13 @@ func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta inter
 
 	// TODO: Should config track all key=value or just those explicitly set?
 
-	d.SetId(response.ModelInfo.UUID)
-
 	// Compute the cloud value
-	d.Set("cloud", []any{cloudSectionOutput})
+	err = d.Set("cloud", []any{cloudSectionOutput})
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	d.SetId(response.ModelInfo.UUID)
 
 	return diags
 }
