@@ -121,20 +121,25 @@ func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta inter
 
 	// build an object
 	cloudSectionOutput := make(map[string]interface{})
+	cloudChanged := false
 	// no cloud value was defined, use the response
 	if cloudNameInput == "" {
 		cloudSectionOutput["name"] = response.ModelInfo.Cloud
+		cloudChanged = true
 	}
 	if cloudRegionInput == "" {
 		cloudSectionOutput["region"] = response.ModelInfo.CloudRegion
+		cloudChanged = true
 	}
 
 	// TODO: Should config track all key=value or just those explicitly set?
 
-	// Compute the cloud value
-	err = d.Set("cloud", []any{cloudSectionOutput})
-	if err != nil {
-		return diag.FromErr(err)
+	// Set the cloud value if required
+	if cloudChanged {
+		err = d.Set("cloud", []any{cloudSectionOutput})
+		if err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	d.SetId(response.ModelInfo.UUID)
