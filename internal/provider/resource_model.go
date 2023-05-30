@@ -50,6 +50,7 @@ func resourceModel() *schema.Resource {
 							Description: "The region of the cloud",
 							Type:        schema.TypeString,
 							Optional:    true,
+							Computed:    true,
 						},
 					},
 				},
@@ -110,8 +111,36 @@ func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta inter
 		return diag.FromErr(err)
 	}
 
-	// TODO: If cloud is blank, we should set it to the default (returned in modelInfo)
+	// compute the cloud information required
+	var cloudNameInput, cloudRegionInput string = "", ""
+	for _, c := range cloud {
+		cloudEntry := c.(map[string]interface{})
+		cloudNameInput = cloudEntry["name"].(string)
+		cloudRegionInput = cloudEntry["region"].(string)
+	}
+
+	// build an object
+	cloudSectionOutput := make(map[string]interface{})
+	cloudChanged := false
+	// no cloud value was defined, use the response
+	if cloudNameInput == "" {
+		cloudSectionOutput["name"] = response.ModelInfo.Cloud
+		cloudChanged = true
+	}
+	if cloudRegionInput == "" {
+		cloudSectionOutput["region"] = response.ModelInfo.CloudRegion
+		cloudChanged = true
+	}
+
 	// TODO: Should config track all key=value or just those explicitly set?
+
+	// Set the cloud value if required
+	if cloudChanged {
+		err = d.Set("cloud", []any{cloudSectionOutput})
+		if err != nil {
+			return diag.FromErr(err)
+		}
+	}
 
 	d.SetId(response.ModelInfo.UUID)
 
@@ -151,6 +180,7 @@ func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interfa
 	if err := d.Set("name", response.ModelInfo.Name); err != nil {
 		return diag.FromErr(err)
 	}
+
 	if err := d.Set("cloud", cloudList); err != nil {
 		return diag.FromErr(err)
 	}
