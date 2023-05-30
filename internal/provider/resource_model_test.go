@@ -15,9 +15,7 @@ import (
 )
 
 func TestAcc_ResourceModel_Basic(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
+
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	modelInvalidName := acctest.RandomWithPrefix("tf_test_model")
 	logLevelInfo := "INFO"
@@ -32,24 +30,24 @@ func TestAcc_ResourceModel_Basic(t *testing.T) {
 				// Mind that ExpectError should be the first step
 				// "When tests have an ExpectError[...]; this results in any previous state being cleared. "
 				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
-				Config:      testAccResourceModel(t, modelInvalidName, logLevelInfo),
+				Config:      testAccResourceModel(t, modelInvalidName, testingCloud.CloudName(), logLevelInfo),
 				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: \"%s\" is not a valid name: model names may only contain lowercase letters, digits and hyphens", modelInvalidName)),
 			},
 			{
-				Config: testAccResourceModel(t, modelName, logLevelInfo),
+				Config: testAccResourceModel(t, modelName, testingCloud.CloudName(), logLevelInfo),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckResourceAttr(resourceName, "config.logging-config", fmt.Sprintf("<root>=%s", logLevelInfo)),
 				),
 			},
 			{
-				Config: testAccResourceModel(t, modelName, logLevelDebug),
+				Config: testAccResourceModel(t, modelName, testingCloud.CloudName(), logLevelDebug),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "config.logging-config", fmt.Sprintf("<root>=%s", logLevelDebug)),
 				),
 			},
 			{
-				Config: testAccConstraintsModel(t, modelName, "cores=1 mem=1024M"),
+				Config: testAccConstraintsModel(t, modelName, testingCloud.CloudName(), "cores=1 mem=1024M"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "constraints", "cores=1 mem=1024M"),
 				),
@@ -144,32 +142,32 @@ func testAccCheckDevelopmentConfigIsUnset(modelName string) resource.TestCheckFu
 	}
 }
 
-func testAccResourceModel(t *testing.T, modelName string, logLevel string) string {
+func testAccResourceModel(t *testing.T, modelName string, cloudName string, logLevel string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "model" {
   name = %q
 
   cloud {
-   name   = "localhost"
+   name   = %q
    region = "localhost"
   }
 
   config = {
     logging-config = "<root>=%s"
   }
-}`, modelName, logLevel)
+}`, modelName, cloudName, logLevel)
 }
 
-func testAccConstraintsModel(t *testing.T, modelName string, constraints string) string {
+func testAccConstraintsModel(t *testing.T, modelName string, cloudName string, constraints string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "model" {
   name = %q
 
   cloud {
-   name   = "localhost"
+   name   = %q
    region = "localhost"
   }
 
   constraints = "%s"
-}`, modelName, constraints)
+}`, modelName, cloudName, constraints)
 }

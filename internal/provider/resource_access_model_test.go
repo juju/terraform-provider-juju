@@ -13,9 +13,9 @@ func TestAcc_ResourceAccessModel_Basic(t *testing.T) {
 	// (juanmanuel-tirado) This test fails when using microk8s but
 	// only in github actions. I could not reproduce this issue
 	// locally.
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
+	// if testingCloud != LXDCloudTesting {
+	// 	t.Skip(t.Name() + " only runs with LXD")
+	// }
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 	modelName := "testing"
