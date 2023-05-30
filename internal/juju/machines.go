@@ -72,57 +72,6 @@ func newMachinesClient(cf ConnectionFactory) *machinesClient {
 	}
 }
 
-// manualProvision calls the sshprovisioner.ProvisionMachine on the Juju side to provision an
-// existing machine using ssh_address, public_key and private_key in the CreateMachineInput
-// TODO (cderici): only the ssh scope is supported, include winrm at some point
-func (i *CreateMachineInput) manualProvision(client manual.ProvisioningClientAPI, config *config.Config) (string, error) {
-	// Load the Juju client keys
-	sshDir := osenv.JujuXDGDataHomePath("ssh")
-	if err := ssh.LoadClientKeys(sshDir); err != nil {
-		return "", errors.Annotate(err, "cannot load ssh client keys")
-	}
-	// Read the public keys
-	cmdCtx, err := cmd.DefaultContext()
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	authKeys, err := common.ReadAuthorizedKeys(cmdCtx, i.PublicKey)
-	if err != nil {
-		return "", errors.Annotatef(err, "cannot reading authorized-keys")
-	}
-
-	// Extract the user and host in the SSHAddress
-	var host, user string
-	if at := strings.Index(i.SSHAddress, "@"); at != -1 {
-		user, host = i.SSHAddress[:at], i.SSHAddress[at+1:]
-	} else {
-		return "", errors.Errorf("invalid ssh_address, expected <user@host>, given %v", i.SSHAddress)
-	}
-
-	// Prep args for the ProvisionMachine call
-	provisionArgs := manual.ProvisionMachineArgs{
-		Host:           host,
-		User:           user,
-		Client:         client,
-		Stdin:          cmdCtx.Stdin,
-		Stdout:         cmdCtx.Stdout,
-		Stderr:         cmdCtx.Stderr,
-		AuthorizedKeys: authKeys,
-		PrivateKey:     i.PrivateKey,
-		UpdateBehavior: &params.UpdateBehavior{
-			EnableOSRefreshUpdate: config.EnableOSRefreshUpdate(),
-			EnableOSUpgrade:       config.EnableOSUpgrade(),
-		},
-	}
-
-	// Call the ProvisionMachine
-	machineId, err := sshprovisioner.ProvisionMachine(provisionArgs)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	return machineId, nil
-}
-
 func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachineResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
@@ -146,7 +95,8 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		machineId, err := input.manualProvision(machineAPIClient, cfg)
+		machineId, err := manualProvision(machineAPIClient, cfg,
+			input.SSHAddress, input.PublicKey, input.PrivateKey)
 		if err != nil {
 			return nil, errors.Trace(err)
 		} else {
@@ -203,6 +153,61 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 	return &CreateMachineResponse{
 		Machines: machines,
 	}, err
+}
+
+// manualProvision calls the sshprovisioner.ProvisionMachine on the Juju side to provision an
+// existing machine using ssh_address, public_key and private_key in the CreateMachineInput
+// TODO (cderici): only the ssh scope is supported, include winrm at some point
+func manualProvision(client manual.ProvisioningClientAPI,
+	config *config.Config, sshAddress string, publicKey string,
+	privateKey string) (string,
+	error) {
+	// Load the Juju client keys
+	sshDir := osenv.JujuXDGDataHomePath("ssh")
+	if err := ssh.LoadClientKeys(sshDir); err != nil {
+		return "", errors.Annotate(err, "cannot load ssh client keys")
+	}
+	// Read the public keys
+	cmdCtx, err := cmd.DefaultContext()
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	authKeys, err := common.ReadAuthorizedKeys(cmdCtx, publicKey)
+	if err != nil {
+		return "", errors.Annotatef(err, "cannot reading authorized-keys")
+	}
+
+	// Extract the user and host in the SSHAddress
+	var host, user string
+	if at := strings.Index(sshAddress, "@"); at != -1 {
+		user, host = sshAddress[:at], sshAddress[at+1:]
+	} else {
+		return "", errors.Errorf("invalid ssh_address, expected <user@host>, "+
+			"given %v", sshAddress)
+	}
+
+	// Prep args for the ProvisionMachine call
+	provisionArgs := manual.ProvisionMachineArgs{
+		Host:           host,
+		User:           user,
+		Client:         client,
+		Stdin:          cmdCtx.Stdin,
+		Stdout:         cmdCtx.Stdout,
+		Stderr:         cmdCtx.Stderr,
+		AuthorizedKeys: authKeys,
+		PrivateKey:     privateKey,
+		UpdateBehavior: &params.UpdateBehavior{
+			EnableOSRefreshUpdate: config.EnableOSRefreshUpdate(),
+			EnableOSUpgrade:       config.EnableOSUpgrade(),
+		},
+	}
+
+	// Call the ProvisionMachine
+	machineId, err := sshprovisioner.ProvisionMachine(provisionArgs)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return machineId, nil
 }
 
 func (c machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineResponse, error) {
