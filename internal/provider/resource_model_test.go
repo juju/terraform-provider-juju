@@ -15,7 +15,6 @@ import (
 )
 
 func TestAcc_ResourceModel_Basic(t *testing.T) {
-
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	modelInvalidName := acctest.RandomWithPrefix("tf_test_model")
 	logLevelInfo := "INFO"

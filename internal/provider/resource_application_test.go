@@ -11,7 +11,6 @@ import (
 )
 
 func TestAcc_ResourceApplication_Basic(t *testing.T) {
-
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 	appInvalidName := "test_app"
@@ -84,7 +83,6 @@ func TestAcc_ResourceApplication_Basic(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_Updates(t *testing.T) {
-
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 
 	resource.Test(t, resource.TestCase{
@@ -222,7 +220,6 @@ func testAccResourceApplicationUpdates(modelName string, units int, revision int
 		}
 		`, modelName, units, revision, exposeStr, hostname)
 	}
-
 }
 
 // testAccResourceApplicationConstraints will return two set for constraint
