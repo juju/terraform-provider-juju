@@ -2,6 +2,8 @@ package juju
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/juju/cmd/v3"
 	"github.com/juju/errors"
 	"github.com/juju/juju/environs/manual/sshprovisioner"
@@ -191,9 +193,9 @@ func manualProvision(client manual.ProvisioningClientAPI,
 		Host:           host,
 		User:           user,
 		Client:         client,
-		Stdin:          cmdCtx.Stdin,
-		Stdout:         cmdCtx.Stdout,
-		Stderr:         cmdCtx.Stderr,
+		Stdin:          os.Stdin,
+		Stdout:         os.Stdout,
+		Stderr:         os.Stderr,
 		AuthorizedKeys: authKeys,
 		PrivateKey:     privateKey,
 		UpdateBehavior: &params.UpdateBehavior{
