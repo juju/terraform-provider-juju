@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"github.com/juju/errors"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -104,6 +105,19 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 	sshAddress := d.Get("ssh_address").(string)
 	publicKeyFile := d.Get("public_key_file").(string)
 	privateKeyFile := d.Get("private_key_file").(string)
+
+	if sshAddress != "" {
+		// Check and fail if any constraints are given along with manual
+		// provision directive
+		if constraints != "" {
+			return diag.FromErr(errors.NotValidf("Manual provision and constraints are mutually exclusive"))
+		}
+		// Check and fail if series is given along with manual provision
+		// directive
+		if series != "" {
+			return diag.FromErr(errors.NotValidf("Manual provision and constraints are mutually exclusive"))
+		}
+	}
 
 	response, err := client.Machines.CreateMachine(&juju.CreateMachineInput{
 		Constraints:    constraints,
