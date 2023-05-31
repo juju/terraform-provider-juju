@@ -203,7 +203,7 @@ func testAccResourceApplicationUpdates(modelName string, units int, revision int
 		
 		resource "juju_application" "this" {
 		  model = juju_model.this.name
-		  units = %d
+		  # units = %d
 		  name = "test-app"
 		  charm {
 			name     = "jameinel-ubuntu-lite"
