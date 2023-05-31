@@ -71,14 +71,14 @@ func resourceMachine() *schema.Resource {
 				Default:     "",
 				ForceNew:    true,
 			},
-			"public_key": {
+			"public_key_file": {
 				Description: "The file path to read the public key from.",
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
 				ForceNew:    true,
 			},
-			"private_key": {
+			"private_key_file": {
 				Description: "The file path to read the private key from.",
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -102,17 +102,17 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 	disks := d.Get("disks").(string)
 	series := d.Get("series").(string)
 	sshAddress := d.Get("ssh_address").(string)
-	publicKey := d.Get("public_key").(string)
-	privateKey := d.Get("private_key").(string)
+	publicKeyFile := d.Get("public_key_file").(string)
+	privateKeyFile := d.Get("private_key_file").(string)
 
 	response, err := client.Machines.CreateMachine(&juju.CreateMachineInput{
-		Constraints: constraints,
-		ModelUUID:   modelUUID,
-		Disks:       disks,
-		Series:      series,
-		SSHAddress:  sshAddress,
-		PublicKey:   publicKey,
-		PrivateKey:  privateKey,
+		Constraints:    constraints,
+		ModelUUID:      modelUUID,
+		Disks:          disks,
+		Series:         series,
+		SSHAddress:     sshAddress,
+		PublicKeyFile:  publicKeyFile,
+		PrivateKeyFile: privateKeyFile,
 	})
 
 	if err != nil {

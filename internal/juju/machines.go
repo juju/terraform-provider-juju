@@ -43,10 +43,10 @@ type CreateMachineInput struct {
 	SSHAddress string
 
 	// PublicKey is the file path to read the public key from
-	PublicKey string
+	PublicKeyFile string
 
 	// PrivateKey is the file path to read the private key from
-	PrivateKey string
+	PrivateKeyFile string
 }
 
 type CreateMachineResponse struct {
@@ -98,7 +98,7 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 			return nil, errors.Trace(err)
 		}
 		machineId, err := manualProvision(machineAPIClient, cfg,
-			input.SSHAddress, input.PublicKey, input.PrivateKey)
+			input.SSHAddress, input.PublicKeyFile, input.PrivateKeyFile)
 		if err != nil {
 			return nil, errors.Trace(err)
 		} else {
