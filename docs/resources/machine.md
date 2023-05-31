@@ -34,8 +34,8 @@ resource "juju_machine" "this_machine" {
 - `constraints` (String) Machine constraints that overwrite those available from 'juju get-model-constraints' and provider's defaults.
 - `disks` (String) Storage constraints for disks to attach to the machine(s).
 - `name` (String) A name for the machine resource in Terraform.
-- `private_key` (String) The file path to read the private key from.
-- `public_key` (String) The file path to read the public key from.
+- `private_key_file` (String) The file path to read the private key from.
+- `public_key_file` (String) The file path to read the public key from.
 - `ssh_address` (String) The user@host directive for manual provisioning an existing machine via ssh.
 
 ### Read-Only
