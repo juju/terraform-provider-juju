@@ -103,27 +103,30 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 					//resource.TestCheckResourceAttr("juju_application.this", "config.hostname", "machinename"),
 				),
 			},
-			// {
-			// 	Config: testAccResourceApplicationUpdates(modelName, 2, 10, true, "machinename"),
-			// 	Check:  resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
-			// },
+			{
+				SkipFunc: func() (bool, error) {
+					return testingCloud != LXDCloudTesting, nil
+				},
+				Config: testAccResourceApplicationUpdates(modelName, 2, 10, true, "machinename"),
+				Check:  resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
+			},
 			{
 				Config: testAccResourceApplicationUpdates(modelName, 2, 10, true, "machinename"),
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "10"),
 			},
-			// {
-			// 	Config: testAccResourceApplicationUpdates(modelName, 2, 10, false, "machinename"),
-			// 	Check:  resource.TestCheckResourceAttr("juju_application.this", "expose.#", "0"),
-			// },
-			// {
-			// 	Config: testAccResourceApplicationUpdates(modelName, 2, 10, true, "machinename"),
-			// 	Check:  resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
-			// },
-			// {
-			// 	ImportStateVerify: true,
-			// 	ImportState:       true,
-			// 	ResourceName:      "juju_application.this",
-			// },
+			{
+				Config: testAccResourceApplicationUpdates(modelName, 2, 10, false, "machinename"),
+				Check:  resource.TestCheckResourceAttr("juju_application.this", "expose.#", "0"),
+			},
+			{
+				Config: testAccResourceApplicationUpdates(modelName, 2, 10, true, "machinename"),
+				Check:  resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
+			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      "juju_application.this",
+			},
 		},
 	})
 }
@@ -203,7 +206,7 @@ func testAccResourceApplicationUpdates(modelName string, units int, revision int
 		
 		resource "juju_application" "this" {
 		  model = juju_model.this.name
-		  # units = %d
+		  units = %d
 		  name = "test-app"
 		  charm {
 			name     = "jameinel-ubuntu-lite"
