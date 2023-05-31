@@ -565,7 +565,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	placement := strings.Join(allocatedMachines, ",")
 
-	unitCount := appStatus.Scale
+	unitCount := len(appStatus.Units)
 
 	// NOTE: we are assuming that this charm comes from CharmHub
 	charmURL, err := charm.ParseURL(appStatus.Charm)
