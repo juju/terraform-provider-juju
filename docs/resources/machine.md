@@ -27,7 +27,6 @@ resource "juju_machine" "this_machine" {
 ### Required
 
 - `model` (String) The Juju model in which to add a new machine.
-- `series` (String) The operating system series to install on the new machine(s).
 
 ### Optional
 
@@ -36,7 +35,8 @@ resource "juju_machine" "this_machine" {
 - `name` (String) A name for the machine resource in Terraform.
 - `private_key_file` (String) The file path to read the private key from.
 - `public_key_file` (String) The file path to read the public key from.
-- `ssh_address` (String) The user@host directive for manual provisioning an existing machine via ssh.
+- `series` (String) The operating system series to install on the new machine(s).
+- `ssh_address` (String) The user@host directive for manual provisioning an existing machine via ssh. Requires public_key_file & private_key_file arguments.
 
 ### Read-Only
 
