@@ -176,7 +176,7 @@ func testAccResourceApplicationBasic(modelName, appInvalidName string) string {
 		}
 		
 		resource "juju_application" "this" {
-		  model = jameinel-ubuntu-lite
+		  model = juju_model.this.name
 		  name = %q
 		  charm {
 			name = "jameinel-ubuntu-lite"
