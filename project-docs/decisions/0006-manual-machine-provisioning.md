@@ -26,6 +26,13 @@ probably to add the capability to accept keys directly into Juju's ssh
 provisioner (which might also have some security repercussions to be 
 discussed). 
 
+Also the `public_key_file` and the `private_key_file` are made to be required
+arguments to the `ssh_address` directive, in order to save the provider from
+dealing with loading the default juju client keys. This will probably be
+resolved when/if we have separate client keys for different clients of juju
+(e.g. juju cli, pylibjuju, terraform provider etc.). Currently on the
+terraform provider, any manual provision will require ssh keys to be inputted.
+
 Another consideration in doing it this way is that it ties the provider very
 tightly to the Juju packages, as we're importing a bunch of packages
 including but not limited to `cmd`, `ssh`, `sshprovisioner`,
