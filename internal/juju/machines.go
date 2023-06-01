@@ -7,8 +7,6 @@ import (
 	"github.com/juju/cmd/v3"
 	"github.com/juju/errors"
 	"github.com/juju/juju/environs/manual/sshprovisioner"
-	"github.com/juju/juju/juju/osenv"
-	"github.com/juju/utils/v3/ssh"
 	"strings"
 
 	"github.com/juju/juju/cmd/juju/common"
@@ -164,11 +162,6 @@ func manualProvision(client manual.ProvisioningClientAPI,
 	config *config.Config, sshAddress string, publicKey string,
 	privateKey string) (string,
 	error) {
-	// Load the Juju client keys
-	sshDir := osenv.JujuXDGDataHomePath("ssh")
-	if err := ssh.LoadClientKeys(sshDir); err != nil {
-		return "", errors.Annotate(err, "cannot load ssh client keys")
-	}
 	// Read the public keys
 	cmdCtx, err := cmd.DefaultContext()
 	if err != nil {
