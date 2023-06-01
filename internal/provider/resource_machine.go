@@ -115,7 +115,7 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 		// Check and fail if series is given along with manual provision
 		// directive
 		if series != "" {
-			return diag.FromErr(errors.NotValidf("Manual provision and constraints are mutually exclusive"))
+			return diag.FromErr(errors.NotValidf("Manual provision and series are mutually exclusive"))
 		}
 	}
 
