@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"github.com/juju/errors"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -39,11 +38,12 @@ func resourceMachine() *schema.Resource {
 				ForceNew:    true,
 			},
 			"constraints": {
-				Description: "Machine constraints that overwrite those available from 'juju get-model-constraints' and provider's defaults.",
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				ForceNew:    true,
+				Description:   "Machine constraints that overwrite those available from 'juju get-model-constraints' and provider's defaults.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				Default:       "",
+				ForceNew:      true,
+				ConflictsWith: []string{"ssh_address"},
 			},
 			"disks": {
 				Description: "Storage constraints for disks to attach to the machine(s).",
@@ -53,10 +53,11 @@ func resourceMachine() *schema.Resource {
 				ForceNew:    true,
 			},
 			"series": {
-				Description: "The operating system series to install on the new machine(s).",
-				Type:        schema.TypeString,
-				Required:    true,
-				ForceNew:    true,
+				Description:   "The operating system series to install on the new machine(s).",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				ConflictsWith: []string{"ssh_address"},
 			},
 			"machine_id": {
 				Description: "The id of the machine Juju creates.",
@@ -68,11 +69,12 @@ func resourceMachine() *schema.Resource {
 			"ssh_address": {
 				Description: "The user@host directive for manual provisioning an existing machine via ssh. " +
 					"Requires public_key_file & private_key_file arguments.",
-				Type:         schema.TypeString,
-				Optional:     true,
-				Default:      "",
-				ForceNew:     true,
-				RequiredWith: []string{"public_key_file", "private_key_file"},
+				Type:          schema.TypeString,
+				Optional:      true,
+				Default:       "",
+				ForceNew:      true,
+				RequiredWith:  []string{"public_key_file", "private_key_file"},
+				ConflictsWith: []string{"series", "constraints"},
 			},
 			"public_key_file": {
 				Description: "The file path to read the public key from.",
@@ -108,17 +110,9 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 	publicKeyFile := d.Get("public_key_file").(string)
 	privateKeyFile := d.Get("private_key_file").(string)
 
-	if sshAddress != "" {
-		// Check and fail if any constraints are given along with manual
-		// provision directive
-		if constraints != "" {
-			return diag.FromErr(errors.NotValidf("Manual provision and constraints are mutually exclusive"))
-		}
-		// Check and fail if series is given along with manual provision
-		// directive
-		if series != "" {
-			return diag.FromErr(errors.NotValidf("Manual provision and series are mutually exclusive"))
-		}
+	// Series argument is required if we're not manually provisioning
+	if sshAddress == "" && series == "" {
+		return diag.Errorf("series argument is required")
 	}
 
 	response, err := client.Machines.CreateMachine(&juju.CreateMachineInput{
