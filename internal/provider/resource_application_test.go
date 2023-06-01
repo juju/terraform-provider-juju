@@ -84,7 +84,10 @@ func TestAcc_ResourceApplication_Basic(t *testing.T) {
 
 func TestAcc_ResourceApplication_Updates(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
-
+	appName := "jameinel-ubuntu-lite"
+	if testingCloud != LXDCloudTesting {
+		appName = "hello-kubecon"
+	}
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
@@ -94,7 +97,7 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "jameinel-ubuntu-lite"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", appName),
 					resource.TestCheckResourceAttr("juju_application.this", "units", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "10"),
 					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
@@ -131,6 +134,23 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 	})
 }
 
+func TestAcc_Simple(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: providerFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationUpdates(modelName, 2, 10, true, "machinename"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
+				),
+			},
+		},
+	})
+}
+
 func testAccResourceApplicationBasic(modelName, appInvalidName string) string {
 	if testingCloud == LXDCloudTesting {
 		return fmt.Sprintf(`
@@ -156,7 +176,7 @@ func testAccResourceApplicationBasic(modelName, appInvalidName string) string {
 		}
 		
 		resource "juju_application" "this" {
-		  model = juju_model.this.name
+		  model = jameinel-ubuntu-lite
 		  name = %q
 		  charm {
 			name = "jameinel-ubuntu-lite"
@@ -209,15 +229,13 @@ func testAccResourceApplicationUpdates(modelName string, units int, revision int
 		  units = %d
 		  name = "test-app"
 		  charm {
-			name     = "jameinel-ubuntu-lite"
+			name     = "hello-kubecon"
 			revision = %d
 		  }
 		  trust = true
 		  %s
-		  # config = {
-		  #	 hostname = "%s"
-		  # }
 		  config = {
+		  	# hostname = "%s"
 			juju-external-hostname="myhostname"
 		  }
 		}

@@ -110,6 +110,7 @@ type CreateApplicationResponse struct {
 
 type ReadApplicationInput struct {
 	ModelUUID string
+	ModelType string
 	AppName   string
 }
 
@@ -566,6 +567,10 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	placement := strings.Join(allocatedMachines, ",")
 
 	unitCount := len(appStatus.Units)
+	// if we have a CAAS we use scale instead of units length
+	if input.ModelType == model.CAAS.String() {
+		unitCount = appStatus.Scale
+	}
 
 	// NOTE: we are assuming that this charm comes from CharmHub
 	charmURL, err := charm.ParseURL(appStatus.Charm)
