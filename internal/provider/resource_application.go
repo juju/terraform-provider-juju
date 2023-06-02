@@ -250,13 +250,15 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 	}
 
 	modelName, appName := id[0], id[1]
-	modelUUID, err := client.Models.ResolveModelUUID(modelName)
+
+	modelInfo, err := client.Models.GetModelByName(modelName)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
 	response, err := client.Applications.ReadApplication(&juju.ReadApplicationInput{
-		ModelUUID: modelUUID,
+		ModelUUID: modelInfo.UUID,
+		ModelType: modelInfo.Type,
 		AppName:   appName,
 	})
 	if err != nil {
