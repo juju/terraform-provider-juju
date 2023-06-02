@@ -110,9 +110,17 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 	publicKeyFile := d.Get("public_key_file").(string)
 	privateKeyFile := d.Get("private_key_file").(string)
 
-	// Series argument is required if we're not manually provisioning
-	if sshAddress == "" && series == "" {
-		return diag.Errorf("series argument is required")
+	if sshAddress == "" {
+		// If not provisioning manually, check the series argument.
+		// If not set, get it from the model default.
+		// TODO (cderici): revisit this part when switched to juju 3.x.
+		if series == "" {
+			modelInfo, err := client.Models.GetModelByName(modelName)
+			if err != nil {
+				return diag.FromErr(err)
+			}
+			series = modelInfo.DefaultSeries
+		}
 	}
 
 	response, err := client.Machines.CreateMachine(&juju.CreateMachineInput{
