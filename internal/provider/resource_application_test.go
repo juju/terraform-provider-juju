@@ -113,8 +113,18 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
 			},
 			{
+				SkipFunc: func() (bool, error) {
+					return testingCloud != LXDCloudTesting, nil
+				},
 				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "10"),
+			},
+			{
+				SkipFunc: func() (bool, error) {
+					return testingCloud != MicroK8sTesting, nil
+				},
+				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
+				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "19"),
 			},
 			{
 				Config: testAccResourceApplicationUpdates(modelName, 2, false, "machinename"),
