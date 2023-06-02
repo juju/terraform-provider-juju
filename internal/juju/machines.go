@@ -134,18 +134,19 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 		machineParams.Disks = nil
 	}
 
-	seriesBase, err := series.GetBaseFromSeries(input.Series)
-	if err != nil {
-		return nil, err
-	}
-
 	jobs := []model.MachineJob{model.JobHostUnits}
-	var paramsBase params.Base
-	paramsBase.Name = seriesBase.Name
-	paramsBase.Channel = series.Channel.String(seriesBase.Channel)
-
 	machineParams.Jobs = jobs
 
+	var paramsBase params.Base
+	if input.Series != "" {
+		seriesBase, err := series.GetBaseFromSeries(input.Series)
+		if err != nil {
+			return nil, err
+		}
+
+		paramsBase.Name = seriesBase.Name
+		paramsBase.Channel = series.Channel.String(seriesBase.Channel)
+	}
 	machineParams.Base = &paramsBase
 
 	addMachineArgs := []params.AddMachineParams{machineParams}
