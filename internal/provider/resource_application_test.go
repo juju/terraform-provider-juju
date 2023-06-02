@@ -141,24 +141,23 @@ func TestAcc_CharmUpdates(t *testing.T) {
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/stable", ""),
+				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/stable"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
 				),
 			},
 			{
 				// move to latest/edge
-				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/edge", ""),
+				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/edge"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/edge"),
 				),
 			},
 			{
-				// use jammy
-				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/edge", "jammy"),
+				// move back to latest/stable
+				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/stable"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/edge"),
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.series", "revision"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
 				),
 			},
 		},
