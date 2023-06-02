@@ -10,6 +10,9 @@ import (
 )
 
 func TestAcc_ResourceCredential_Basic(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
 	credentialName := acctest.RandomWithPrefix("tf-test-credential")
 	credentialInvalidName := "tf%test_credential"
 	authType := "certificate"

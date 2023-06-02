@@ -11,10 +11,6 @@ import (
 )
 
 func TestAcc_ResourceApplication_Basic(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 	appInvalidName := "test_app"
@@ -43,6 +39,10 @@ func TestAcc_ResourceApplication_Basic(t *testing.T) {
 				),
 			},
 			{
+				SkipFunc: func() (bool, error) {
+					// cores constraint is not valid in K8s
+					return testingCloud != LXDCloudTesting, nil
+				},
 				Config: testAccResourceApplicationConstraints(t, modelName, "arch=amd64 cores=1 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
@@ -50,6 +50,21 @@ func TestAcc_ResourceApplication_Basic(t *testing.T) {
 				),
 			},
 			{
+				// specific constraints for k8s
+				SkipFunc: func() (bool, error) {
+					return testingCloud != MicroK8sTesting, nil
+				},
+				Config: testAccResourceApplicationConstraints(t, modelName, "arch=amd64 mem=4096M"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 mem=4096M"),
+				),
+			},
+			{
+				SkipFunc: func() (bool, error) {
+					// skip if we are not in lxd environment
+					return testingCloud != LXDCloudTesting, nil
+				},
 				Config: testAccResourceApplicationConstraintsSubordinate(t, modelName, "arch=amd64 cores=1 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
@@ -69,7 +84,10 @@ func TestAcc_ResourceApplication_Basic(t *testing.T) {
 
 func TestAcc_ResourceApplication_Updates(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
-
+	appName := "jameinel-ubuntu-lite"
+	if testingCloud != LXDCloudTesting {
+		appName = "hello-kubecon"
+	}
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
@@ -79,7 +97,7 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "jameinel-ubuntu-lite"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", appName),
 					resource.TestCheckResourceAttr("juju_application.this", "units", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "10"),
 					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
@@ -89,6 +107,9 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 				),
 			},
 			{
+				SkipFunc: func() (bool, error) {
+					return testingCloud != LXDCloudTesting, nil
+				},
 				Config: testAccResourceApplicationUpdates(modelName, 2, 10, true, "machinename"),
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
 			},
@@ -113,22 +134,61 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 	})
 }
 
-func testAccResourceApplicationBasic(modelName, appInvalidName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "this" {
-  name = %q
+func TestAcc_Simple(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: providerFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationUpdates(modelName, 2, 10, true, "machinename"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
+				),
+			},
+		},
+	})
 }
 
-resource "juju_application" "this" {
-  model = juju_model.this.name
-  name = %q
-  charm {
-    name = "jameinel-ubuntu-lite"
-  }
-  trust = true
-  expose{}
-}
-`, modelName, appInvalidName)
+func testAccResourceApplicationBasic(modelName, appInvalidName string) string {
+	if testingCloud == LXDCloudTesting {
+		return fmt.Sprintf(`
+		resource "juju_model" "this" {
+		  name = %q
+		}
+		
+		resource "juju_application" "this" {
+		  model = juju_model.this.name
+		  name = %q
+		  charm {
+			name = "jameinel-ubuntu-lite"
+		  }
+		  trust = true
+		  expose{}
+		}
+		`, modelName, appInvalidName)
+	} else {
+		// if we have a K8s deployment we need the machine hostname
+		return fmt.Sprintf(`
+		resource "juju_model" "this" {
+		  name = %q
+		}
+		
+		resource "juju_application" "this" {
+		  model = juju_model.this.name
+		  name = %q
+		  charm {
+			name = "jameinel-ubuntu-lite"
+		  }
+		  trust = true
+		  expose{}
+		  config = {
+			juju-external-hostname="myhostname"
+		  }
+		}
+		`, modelName, appInvalidName)
+	}
 }
 
 func testAccResourceApplicationUpdates(modelName string, units int, revision int, expose bool, hostname string) string {
@@ -136,30 +196,59 @@ func testAccResourceApplicationUpdates(modelName string, units int, revision int
 	if !expose {
 		exposeStr = ""
 	}
-	return fmt.Sprintf(`
-resource "juju_model" "this" {
-  name = %q
+
+	if testingCloud == LXDCloudTesting {
+		return fmt.Sprintf(`
+		resource "juju_model" "this" {
+		  name = %q
+		}
+		
+		resource "juju_application" "this" {
+		  model = juju_model.this.name
+		  units = %d
+		  name = "test-app"
+		  charm {
+			name     = "jameinel-ubuntu-lite"
+			revision = %d
+		  }
+		  trust = true
+		  %s
+		  # config = {
+		  #	 hostname = "%s"
+		  # }
+		}
+		`, modelName, units, revision, exposeStr, hostname)
+	} else {
+		return fmt.Sprintf(`
+		resource "juju_model" "this" {
+		  name = %q
+		}
+		
+		resource "juju_application" "this" {
+		  model = juju_model.this.name
+		  units = %d
+		  name = "test-app"
+		  charm {
+			name     = "hello-kubecon"
+			revision = %d
+		  }
+		  trust = true
+		  %s
+		  config = {
+		  	# hostname = "%s"
+			juju-external-hostname="myhostname"
+		  }
+		}
+		`, modelName, units, revision, exposeStr, hostname)
+	}
 }
 
-resource "juju_application" "this" {
-  model = juju_model.this.name
-  units = %d
-  name = "test-app"
-  charm {
-    name     = "jameinel-ubuntu-lite"
-    revision = %d
-  }
-  trust = true
-  %s
-  # config = {
-  #	 hostname = "%s"
-  # }
-}
-`, modelName, units, revision, exposeStr, hostname)
-}
-
+// testAccResourceApplicationConstraints will return two set for constraint
+// applications. The version to be used in K8s sets the juju-external-hostname
+// because we set the expose parameter.
 func testAccResourceApplicationConstraints(t *testing.T, modelName string, constraints string) string {
-	return fmt.Sprintf(`
+	if testingCloud == LXDCloudTesting {
+		return fmt.Sprintf(`
 resource "juju_model" "this" {
   name = %q
 }
@@ -172,11 +261,34 @@ resource "juju_application" "this" {
     name     = "jameinel-ubuntu-lite"
     revision = 10
   }
-  trust = true
+  
+  trust = true 
   expose{}
   constraints = "%s"
 }
 `, modelName, constraints)
+	} else {
+		return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model = juju_model.this.name
+  name = "test-app"
+  charm {
+    name     = "jameinel-ubuntu-lite"
+	revision = 10
+  }
+  trust = true
+  expose{}
+  constraints = "%s"
+  config = {
+    juju-external-hostname="myhostname"
+  }
+}
+`, modelName, constraints)
+	}
 }
 
 func testAccResourceApplicationConstraintsSubordinate(t *testing.T, modelName string, constraints string) string {
@@ -199,13 +311,13 @@ resource "juju_application" "this" {
 }
 
 resource "juju_application" "subordinate" {
-	model = juju_model.this.name
-	units = 0
-	name = "test-subordinate"
-	charm {
-		name = "nrpe"
-		revision = 96
-	}
+  model = juju_model.this.name
+  units = 0
+  name = "test-subordinate"
+  charm {
+    name = "nrpe"
+    revision = 96
+    }
 } 
 `, modelName, constraints)
 }
