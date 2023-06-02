@@ -93,13 +93,12 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationUpdates(modelName, 1, 10, true, "machinename"),
+				Config: testAccResourceApplicationUpdates(modelName, 1, true, "machinename"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", appName),
 					resource.TestCheckResourceAttr("juju_application.this", "units", "1"),
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "10"),
 					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
 					// (juanmanuel-tirado) Uncomment and test when running
 					// a different charm with other config
@@ -110,19 +109,19 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 				SkipFunc: func() (bool, error) {
 					return testingCloud != LXDCloudTesting, nil
 				},
-				Config: testAccResourceApplicationUpdates(modelName, 2, 10, true, "machinename"),
+				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
 			},
 			{
-				Config: testAccResourceApplicationUpdates(modelName, 2, 10, true, "machinename"),
+				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "10"),
 			},
 			{
-				Config: testAccResourceApplicationUpdates(modelName, 2, 10, false, "machinename"),
+				Config: testAccResourceApplicationUpdates(modelName, 2, false, "machinename"),
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "expose.#", "0"),
 			},
 			{
-				Config: testAccResourceApplicationUpdates(modelName, 2, 10, true, "machinename"),
+				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
 				Check:  resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
 			},
 			{
@@ -134,17 +133,32 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 	})
 }
 
-func TestAcc_Simple(t *testing.T) {
-	modelName := acctest.RandomWithPrefix("tf-test-application")
+func TestAcc_CharmUpdates(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-charmupdates")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationUpdates(modelName, 2, 10, true, "machinename"),
+				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/stable", ""),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
+				),
+			},
+			{
+				// move to latest/edge
+				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/edge", ""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/edge"),
+				),
+			},
+			{
+				// use jammy
+				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/edge", "jammy"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/edge"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.series", "revision"),
 				),
 			},
 		},
@@ -191,7 +205,7 @@ func testAccResourceApplicationBasic(modelName, appInvalidName string) string {
 	}
 }
 
-func testAccResourceApplicationUpdates(modelName string, units int, revision int, expose bool, hostname string) string {
+func testAccResourceApplicationUpdates(modelName string, units int, expose bool, hostname string) string {
 	exposeStr := "expose{}"
 	if !expose {
 		exposeStr = ""
@@ -209,7 +223,6 @@ func testAccResourceApplicationUpdates(modelName string, units int, revision int
 		  name = "test-app"
 		  charm {
 			name     = "jameinel-ubuntu-lite"
-			revision = %d
 		  }
 		  trust = true
 		  %s
@@ -217,7 +230,7 @@ func testAccResourceApplicationUpdates(modelName string, units int, revision int
 		  #	 hostname = "%s"
 		  # }
 		}
-		`, modelName, units, revision, exposeStr, hostname)
+		`, modelName, units, exposeStr, hostname)
 	} else {
 		return fmt.Sprintf(`
 		resource "juju_model" "this" {
@@ -230,7 +243,6 @@ func testAccResourceApplicationUpdates(modelName string, units int, revision int
 		  name = "test-app"
 		  charm {
 			name     = "hello-kubecon"
-			revision = %d
 		  }
 		  trust = true
 		  %s
@@ -239,7 +251,41 @@ func testAccResourceApplicationUpdates(modelName string, units int, revision int
 			juju-external-hostname="myhostname"
 		  }
 		}
-		`, modelName, units, revision, exposeStr, hostname)
+		`, modelName, units, exposeStr, hostname)
+	}
+}
+
+func testAccResourceApplicationUpdatesCharm(modelName string, channel string) string {
+	if testingCloud == LXDCloudTesting {
+		return fmt.Sprintf(`
+		resource "juju_model" "this" {
+		  name = %q
+		}
+		
+		resource "juju_application" "this" {
+		  model = juju_model.this.name
+		  name = "test-app"
+		  charm {
+			name     = "ubuntu"
+			channel = %q
+		  }
+		}
+		`, modelName, channel)
+	} else {
+		return fmt.Sprintf(`
+		resource "juju_model" "this" {
+		  name = %q
+		}
+		
+		resource "juju_application" "this" {
+		  model = juju_model.this.name
+		  name = "test-app"
+		  charm {
+			name     = "hello-kubecon"
+			channel = %q
+		  }
+		}
+		`, modelName, channel)
 	}
 }
 

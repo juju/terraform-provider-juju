@@ -131,10 +131,13 @@ type ReadApplicationResponse struct {
 type UpdateApplicationInput struct {
 	ModelUUID string
 	ModelType string
+	ModelInfo *params.ModelInfo
 	AppName   string
 	//Channel   string // TODO: Unsupported for now
 	Units    *int
 	Revision *int
+	Channel  string
+	Series   string
 	Trust    *bool
 	Expose   map[string]interface{}
 	// Unexpose indicates what endpoints to unexpose
@@ -804,47 +807,16 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		}
 	}
 
-	if input.Revision != nil {
-		// TODO: How do we actually set the revision?
-		// It looks like it is set by updating the charmURL which encodes the revision
-		oldURL, _, err := applicationAPIClient.GetCharmURLOrigin("", input.AppName)
+	// use the revision, channel, and series info to create the
+	// corresponding SetCharm info
+
+	if input.Revision != nil || input.Channel != "" || input.Series != "" {
+		setCharmConfig, err := c.computeSetCharmConfig(input, appStatus.Series, appStatus.CharmChannel, applicationAPIClient, modelconfigAPIClient, charmsAPIClient)
 		if err != nil {
 			return err
 		}
 
-		newURL := oldURL.WithRevision(*input.Revision)
-
-		modelConstraints, err := modelconfigAPIClient.GetModelConstraints()
-		if err != nil {
-			return err
-		}
-		platform, err := utils.DeducePlatform(constraints.Value{}, appStatus.Series, modelConstraints)
-		if err != nil {
-			return err
-		}
-
-		channel, err := charm.ParseChannel(appStatus.CharmChannel)
-		if err != nil {
-			return err
-		}
-
-		origin, err := utils.DeduceOrigin(newURL, channel, platform)
-		if err != nil {
-			return err
-		}
-
-		resultOrigin, err := charmsAPIClient.AddCharm(newURL, origin, false)
-		if err != nil {
-			return err
-		}
-
-		err = applicationAPIClient.SetCharm("", apiapplication.SetCharmConfig{
-			ApplicationName: input.AppName,
-			CharmID: apiapplication.CharmID{
-				URL:    newURL,
-				Origin: resultOrigin,
-			},
-		})
+		err = applicationAPIClient.SetCharm("", *setCharmConfig)
 		if err != nil {
 			return err
 		}
@@ -884,4 +856,65 @@ func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) e
 	}
 
 	return nil
+}
+
+// computeSetCharmConfig populates the corresponding configuration object
+// to indicate juju what charm to be deployed.
+func (c applicationsClient) computeSetCharmConfig(input *UpdateApplicationInput, currentSeries string, currentChannel string, applicationAPIClient *apiapplication.Client, modelconfigAPIClient *apimodelconfig.Client, charmsAPIClient *apicharms.Client) (*apiapplication.SetCharmConfig, error) {
+	oldURL, _, err := applicationAPIClient.GetCharmURLOrigin("", input.AppName)
+	if err != nil {
+		return nil, err
+	}
+
+	newURL := oldURL
+	if input.Revision != nil {
+		newURL = oldURL.WithRevision(*input.Revision)
+	}
+
+	modelConstraints, err := modelconfigAPIClient.GetModelConstraints()
+	if err != nil {
+		return nil, err
+	}
+
+	// if no series were set, we will use the current one or the default
+	series := input.Series
+	if series == "" {
+		series = currentSeries
+	}
+
+	platform, err := utils.DeducePlatform(constraints.Value{}, series, modelConstraints)
+	if err != nil {
+		return nil, err
+	}
+
+	// if no channel, use the current channel
+	channel := input.Channel
+	if channel == "" {
+		channel = currentChannel
+	}
+
+	parsedChannel, err := charm.ParseChannel(channel)
+	if err != nil {
+		return nil, err
+	}
+
+	origin, err := utils.DeduceOrigin(newURL, parsedChannel, platform)
+	if err != nil {
+		return nil, err
+	}
+
+	resultOrigin, err := charmsAPIClient.AddCharm(newURL, origin, false)
+	if err != nil {
+		return nil, err
+	}
+
+	toReturn := apiapplication.SetCharmConfig{
+		ApplicationName: input.AppName,
+		CharmID: apiapplication.CharmID{
+			URL:    newURL,
+			Origin: resultOrigin,
+		},
+	}
+
+	return &toReturn, nil
 }
