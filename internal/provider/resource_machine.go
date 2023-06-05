@@ -51,6 +51,7 @@ func resourceMachine() *schema.Resource {
 				Optional:    true,
 				Default:     "",
 				ForceNew:    true,
+				ConflictsWith: []string{"ssh_address"},
 			},
 			"series": {
 				Description:   "The operating system series to install on the new machine(s).",
