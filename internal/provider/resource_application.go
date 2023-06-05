@@ -285,6 +285,7 @@ func resourceApplicationRead(ctx context.Context, d *schema.ResourceData, meta i
 			"series":   response.Series,
 		}
 	}
+
 	if err = d.Set("charm", []map[string]interface{}{charmList}); err != nil {
 		return diag.FromErr(err)
 	}
@@ -400,6 +401,16 @@ func resourceApplicationUpdate(ctx context.Context, d *schema.ResourceData, meta
 	if d.HasChange("charm.0.revision") {
 		revision := d.Get("charm.0.revision").(int)
 		updateApplicationInput.Revision = &revision
+	}
+
+	if d.HasChange("charm.0.series") {
+		series := d.Get("charm.0.series").(string)
+		updateApplicationInput.Series = series
+	}
+
+	if d.HasChange("charm.0.channel") {
+		channel := d.Get("charm.0.channel").(string)
+		updateApplicationInput.Channel = channel
 	}
 
 	if d.HasChange("config") {
