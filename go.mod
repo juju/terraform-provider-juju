@@ -13,6 +13,7 @@ require (
 
 require (
 	github.com/juju/charm/v8 v8.0.6
+	github.com/juju/cmd/v3 v3.0.0
 	github.com/juju/errors v1.0.0
 	github.com/juju/names/v4 v4.0.0
 	github.com/juju/utils/v3 v3.0.2
@@ -23,6 +24,8 @@ require (
 require (
 	cloud.google.com/go/compute v1.18.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
+	github.com/Azure/go-ntlmssp v0.0.0-20211209120228-48547f28849e // indirect
+	github.com/ChrisTrenkamp/goxpath v0.0.0-20210404020558-97928f7e12b6 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.1.1 // indirect
 	github.com/Masterminds/sprig/v3 v3.2.2 // indirect
@@ -57,6 +60,7 @@ require (
 	github.com/go-macaroon-bakery/macaroonpb v1.0.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/godbus/dbus/v5 v5.0.4 // indirect
+	github.com/gofrs/uuid v4.2.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
@@ -91,6 +95,12 @@ require (
 	github.com/hashicorp/yamux v0.0.0-20181012175058-2f1d1f20f75d // indirect
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
+	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
+	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
+	github.com/jcmturner/gofork v1.0.0 // indirect
+	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
+	github.com/jcmturner/gokrb5/v8 v8.4.2 // indirect
+	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/jessevdk/go-flags v1.5.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -98,7 +108,6 @@ require (
 	github.com/juju/blobstore/v2 v2.0.0 // indirect
 	github.com/juju/charmrepo/v6 v6.0.3 // indirect
 	github.com/juju/clock v1.0.2 // indirect
-	github.com/juju/cmd/v3 v3.0.0 // indirect
 	github.com/juju/collections v1.0.2 // indirect
 	github.com/juju/description/v3 v3.0.15 // indirect
 	github.com/juju/featureflag v1.0.0 // indirect
@@ -143,6 +152,8 @@ require (
 	github.com/lestrrat/go-structinfo v0.0.0-20160308131105-f74c056fe41f // indirect
 	github.com/lunixbochs/vtclean v1.0.0 // indirect
 	github.com/lxc/lxd v0.0.0-20220816180258-7e0418163fa9 // indirect
+	github.com/masterzen/simplexml v0.0.0-20190410153822-31eea3082786 // indirect
+	github.com/masterzen/winrm v0.0.0-20211231115050-232efb40349e // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect

@@ -2,6 +2,15 @@ package juju
 
 import (
 	"fmt"
+	"os"
+
+	"github.com/juju/cmd/v3"
+	"github.com/juju/errors"
+	"github.com/juju/juju/environs/manual/sshprovisioner"
+	"strings"
+
+	"github.com/juju/juju/cmd/juju/common"
+	"github.com/juju/juju/environs/config"
 	"time"
 
 	"github.com/juju/juju/rpc/params"
@@ -12,6 +21,7 @@ import (
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/series"
+	"github.com/juju/juju/environs/manual"
 	"github.com/juju/juju/storage"
 )
 
@@ -25,6 +35,16 @@ type CreateMachineInput struct {
 	Disks       string
 	Series      string
 	InstanceId  string
+
+	// SSHAddress is the host address of a machine for manual provisioning
+	// Note that it has the user too, e.g. user@host
+	SSHAddress string
+
+	// PublicKey is the file path to read the public key from
+	PublicKeyFile string
+
+	// PrivateKey is the file path to read the private key from
+	PrivateKeyFile string
 }
 
 type CreateMachineResponse struct {
@@ -61,24 +81,46 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 	machineAPIClient := apimachinemanager.NewClient(conn)
 	defer machineAPIClient.Close()
 
-	modelconfigAPIClient := apimodelconfig.NewClient(conn)
-	defer modelconfigAPIClient.Close()
+	modelConfigAPIClient := apimodelconfig.NewClient(conn)
+	defer modelConfigAPIClient.Close()
 
 	var machineParams params.AddMachineParams
-	var machineConstraints constraints.Value
+
+	if input.SSHAddress != "" {
+		configAttrs, err := modelConfigAPIClient.ModelGet()
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		cfg, err := config.New(config.NoDefaults, configAttrs)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		machineId, err := manualProvision(machineAPIClient, cfg,
+			input.SSHAddress, input.PublicKeyFile, input.PrivateKeyFile)
+		if err != nil {
+			return nil, errors.Trace(err)
+		} else {
+			return &CreateMachineResponse{
+				Machines: []params.AddMachinesResult{{
+					Machine: machineId,
+					Error:   nil,
+				}},
+			}, nil
+		}
+	}
 
 	if input.Constraints == "" {
-		modelConstraints, err := modelconfigAPIClient.GetModelConstraints()
+		modelConstraints, err := modelConfigAPIClient.GetModelConstraints()
 		if err != nil {
 			return nil, err
 		}
-		machineConstraints = modelConstraints
+		machineParams.Constraints = modelConstraints
 	} else {
 		userConstraints, err := constraints.Parse(input.Constraints)
 		if err != nil {
 			return nil, err
 		}
-		machineConstraints = userConstraints
+		machineParams.Constraints = userConstraints
 	}
 
 	if input.Disks != "" {
@@ -92,27 +134,76 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 		machineParams.Disks = nil
 	}
 
-	seriesBase, err := series.GetBaseFromSeries(input.Series)
-	if err != nil {
-		return nil, err
-	}
-
 	jobs := []model.MachineJob{model.JobHostUnits}
-	var paramsBase params.Base
-	paramsBase.Name = seriesBase.Name
-	paramsBase.Channel = series.Channel.String(seriesBase.Channel)
-
 	machineParams.Jobs = jobs
 
+	var paramsBase params.Base
+	if input.Series != "" {
+		seriesBase, err := series.GetBaseFromSeries(input.Series)
+		if err != nil {
+			return nil, err
+		}
+
+		paramsBase.Name = seriesBase.Name
+		paramsBase.Channel = series.Channel.String(seriesBase.Channel)
+	}
 	machineParams.Base = &paramsBase
-	machineParams.Constraints = machineConstraints
 
 	addMachineArgs := []params.AddMachineParams{machineParams}
-
 	machines, err := machineAPIClient.AddMachines(addMachineArgs)
 	return &CreateMachineResponse{
 		Machines: machines,
 	}, err
+}
+
+// manualProvision calls the sshprovisioner.ProvisionMachine on the Juju side to provision an
+// existing machine using ssh_address, public_key and private_key in the CreateMachineInput
+// TODO (cderici): only the ssh scope is supported, include winrm at some point
+func manualProvision(client manual.ProvisioningClientAPI,
+	config *config.Config, sshAddress string, publicKey string,
+	privateKey string) (string,
+	error) {
+	// Read the public keys
+	cmdCtx, err := cmd.DefaultContext()
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	authKeys, err := common.ReadAuthorizedKeys(cmdCtx, publicKey)
+	if err != nil {
+		return "", errors.Annotatef(err, "cannot reading authorized-keys")
+	}
+
+	// Extract the user and host in the SSHAddress
+	var host, user string
+	if at := strings.Index(sshAddress, "@"); at != -1 {
+		user, host = sshAddress[:at], sshAddress[at+1:]
+	} else {
+		return "", errors.Errorf("invalid ssh_address, expected <user@host>, "+
+			"given %v", sshAddress)
+	}
+
+	// Prep args for the ProvisionMachine call
+	provisionArgs := manual.ProvisionMachineArgs{
+		Host:           host,
+		User:           user,
+		Client:         client,
+		Stdin:          os.Stdin,
+		Stdout:         os.Stdout,
+		Stderr:         os.Stderr,
+		AuthorizedKeys: authKeys,
+		PrivateKey:     privateKey,
+		UpdateBehavior: &params.UpdateBehavior{
+			EnableOSRefreshUpdate: config.EnableOSRefreshUpdate(),
+			EnableOSUpgrade:       config.EnableOSUpgrade(),
+		},
+	}
+
+	// Call the ProvisionMachine
+	machineId, err := sshprovisioner.ProvisionMachine(provisionArgs)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return machineId, nil
 }
 
 func (c machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineResponse, error) {

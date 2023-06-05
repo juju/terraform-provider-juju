@@ -38,11 +38,12 @@ func resourceMachine() *schema.Resource {
 				ForceNew:    true,
 			},
 			"constraints": {
-				Description: "Machine constraints that overwrite those available from 'juju get-model-constraints' and provider's defaults.",
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				ForceNew:    true,
+				Description:   "Machine constraints that overwrite those available from 'juju get-model-constraints' and provider's defaults.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				Default:       "",
+				ForceNew:      true,
+				ConflictsWith: []string{"ssh_address"},
 			},
 			"disks": {
 				Description: "Storage constraints for disks to attach to the machine(s).",
@@ -50,12 +51,14 @@ func resourceMachine() *schema.Resource {
 				Optional:    true,
 				Default:     "",
 				ForceNew:    true,
+				ConflictsWith: []string{"ssh_address"},
 			},
 			"series": {
-				Description: "The operating system series to install on the new machine(s).",
-				Type:        schema.TypeString,
-				Required:    true,
-				ForceNew:    true,
+				Description:   "The operating system series to install on the new machine(s).",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				ConflictsWith: []string{"ssh_address"},
 			},
 			"machine_id": {
 				Description: "The id of the machine Juju creates.",
@@ -63,6 +66,30 @@ func resourceMachine() *schema.Resource {
 				Computed:    true,
 				Optional:    false,
 				Required:    false,
+			},
+			"ssh_address": {
+				Description: "The user@host directive for manual provisioning an existing machine via ssh. " +
+					"Requires public_key_file & private_key_file arguments.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				Default:       "",
+				ForceNew:      true,
+				RequiredWith:  []string{"public_key_file", "private_key_file"},
+				ConflictsWith: []string{"series", "constraints"},
+			},
+			"public_key_file": {
+				Description: "The file path to read the public key from.",
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "",
+				ForceNew:    true,
+			},
+			"private_key_file": {
+				Description: "The file path to read the private key from.",
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "",
+				ForceNew:    true,
 			},
 		},
 	}
@@ -80,12 +107,31 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 	constraints := d.Get("constraints").(string)
 	disks := d.Get("disks").(string)
 	series := d.Get("series").(string)
+	sshAddress := d.Get("ssh_address").(string)
+	publicKeyFile := d.Get("public_key_file").(string)
+	privateKeyFile := d.Get("private_key_file").(string)
+
+	if sshAddress == "" {
+		// If not provisioning manually, check the series argument.
+		// If not set, get it from the model default.
+		// TODO (cderici): revisit this part when switched to juju 3.x.
+		if series == "" {
+			modelInfo, err := client.Models.GetModelByName(modelName)
+			if err != nil {
+				return diag.FromErr(err)
+			}
+			series = modelInfo.DefaultSeries
+		}
+	}
 
 	response, err := client.Machines.CreateMachine(&juju.CreateMachineInput{
-		Constraints: constraints,
-		ModelUUID:   modelUUID,
-		Disks:       disks,
-		Series:      series,
+		Constraints:    constraints,
+		ModelUUID:      modelUUID,
+		Disks:          disks,
+		Series:         series,
+		SSHAddress:     sshAddress,
+		PublicKeyFile:  publicKeyFile,
+		PrivateKeyFile: privateKeyFile,
 	})
 
 	if err != nil {
