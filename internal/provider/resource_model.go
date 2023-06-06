@@ -148,7 +148,7 @@ func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta inter
 }
 
 func IsModelNotFound(err error) bool {
-	return strings.Contains(err.Error(), "no model returned")
+	return strings.Contains(err.Error(), "model not found")
 }
 
 func handleModelNotFoundError(err error, d *schema.ResourceData) diag.Diagnostics {
