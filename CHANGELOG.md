@@ -1,3 +1,21 @@
+## 0.8.0 (June 13, 2023)
+
+FEATURES:
+
+* **Add provisioned machines**: `juju_machine` now supports machines already provisioned. This is similar to using `juju add-machine ssh:user@host`. This new feature enables other machines already provisioned using Terraform to be added to a Juju controller.
+
+ENHANCEMENTS:
+
+* The CI has been enhanced by enabling a K8s based Juju controller for GitHub actions.
+* Integration tests now can use environment variables to identify if the testing environment has everything required to run the test. For example, a K8s controller vs an LXD controller.
+
+BUG FIXES:
+
+* Process region value in cloud models and force it to be computed by @juanmanuel-tirado in https://github.com/juju/terraform-provider-juju/pull/214
+* [JUJU-3905] Upgrade charms using channel by @juanmanuel-tirado in https://github.com/juju/terraform-provider-juju/pull/224
+* Fix message for model not found (#222) by @amandahla in https://github.com/juju/terraform-provider-juju/pull/227
+* Support models removed outside the plan. by @juanmanuel-tirado in https://github.com/juju/terraform-provider-juju/pull/229
+
 ## 0.7.0 (May 12, 2023)
 
 Notes:
