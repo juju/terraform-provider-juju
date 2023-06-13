@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -147,12 +148,8 @@ func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta inter
 	return diags
 }
 
-func IsModelNotFound(err error) bool {
-	return strings.Contains(err.Error(), "model not found")
-}
-
 func handleModelNotFoundError(err error, d *schema.ResourceData) diag.Diagnostics {
-	if IsModelNotFound(err) {
+	if errors.As(err, &juju.ModelNotFoundError) {
 		// Model manually removed
 		d.SetId("")
 		return diag.Diagnostics{}
