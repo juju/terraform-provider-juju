@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"errors"
+
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/core/constraints"
-	"github.com/pkg/errors"
 
 	"github.com/juju/juju/api/client/modelconfig"
 
@@ -17,6 +18,21 @@ import (
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v4"
 )
+
+var ModelNotFoundError = &modelNotFoundError{}
+
+type modelNotFoundError struct {
+	uuid string
+	name string
+}
+
+func (me *modelNotFoundError) Error() string {
+	toReturn := "model %s was not found"
+	if me.name != "" {
+		return fmt.Sprintf(toReturn, me.name)
+	}
+	return fmt.Sprintf(toReturn, me.uuid)
+}
 
 type modelsClient struct {
 	ConnectionFactory
@@ -163,7 +179,7 @@ func (c *modelsClient) ResolveModelUUID(name string) (string, error) {
 func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse, error) {
 	modelName := input.Name
 	if !names.IsValidModelName(modelName) {
-		return nil, errors.Errorf("%q is not a valid name: model names may only contain lowercase letters, digits and hyphens", modelName)
+		return nil, fmt.Errorf("%q is not a valid name: model names may only contain lowercase letters, digits and hyphens", modelName)
 	}
 
 	conn, err := c.GetConnection(nil)
@@ -227,7 +243,7 @@ func (c *modelsClient) ReadModel(uuid string) (*ReadModelResponse, error) {
 
 	modelconfigConn, err := c.GetConnection(&uuid)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, &modelNotFoundError{uuid: uuid})
 	}
 
 	modelmanagerClient := modelmanager.NewClient(modelmanagerConn)
@@ -245,7 +261,7 @@ func (c *modelsClient) ReadModel(uuid string) (*ReadModelResponse, error) {
 		return nil, fmt.Errorf("more than one model returned for UUID: %s", uuid)
 	}
 	if len(models) < 1 {
-		return nil, fmt.Errorf("no model returned for UUID: %s", uuid)
+		return nil, &modelNotFoundError{uuid: uuid}
 	}
 
 	modelInfo := *models[0].Result

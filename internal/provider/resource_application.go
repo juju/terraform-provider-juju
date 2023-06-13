@@ -233,7 +233,7 @@ func resourceApplicationCreate(ctx context.Context, d *schema.ResourceData, meta
 
 func handleApplicationNotFoundError(err error, d *schema.ResourceData) diag.Diagnostics {
 	if errors.As(err, &juju.ApplicationNotFoundError) {
-		// Integration manually removed
+		// Application manually removed
 		d.SetId("")
 		return diag.Diagnostics{}
 	}
