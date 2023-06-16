@@ -46,11 +46,11 @@ func resourceMachine() *schema.Resource {
 				ConflictsWith: []string{"ssh_address"},
 			},
 			"disks": {
-				Description: "Storage constraints for disks to attach to the machine(s).",
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				ForceNew:    true,
+				Description:   "Storage constraints for disks to attach to the machine(s).",
+				Type:          schema.TypeString,
+				Optional:      true,
+				Default:       "",
+				ForceNew:      true,
 				ConflictsWith: []string{"ssh_address"},
 			},
 			"series": {
@@ -137,13 +137,14 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	if response.Machines[0].Error != nil {
+	if response.Machine.Error != nil {
 		return diag.FromErr(err)
 	}
-	id := fmt.Sprintf("%s:%s:%s", modelName, response.Machines[0].Machine, name)
-	if err = d.Set("machine_id", response.Machines[0].Machine); err != nil {
+	id := fmt.Sprintf("%s:%s:%s", modelName, response.Machine.Machine, name)
+	if err = d.Set("machine_id", response.Machine.Machine); err != nil {
 		return diag.FromErr(err)
 	}
+	d.Set("series", response.Series)
 	d.SetId(id)
 	return nil
 }
