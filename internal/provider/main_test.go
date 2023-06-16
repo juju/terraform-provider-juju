@@ -5,10 +5,17 @@ package provider
 
 import (
 	"errors"
+	"net"
 	"os"
 	"strings"
 	"testing"
 )
+
+// Env variables to use for various testing purposes
+const TestCloudEnvKey string = "TEST_CLOUD"
+const TestMachineIPEnvKey string = "TEST_ADD_MACHINE_IP"
+const TestSSHPublicKeyFileEnvKey string = "TEST_SSH_PUB_KEY_PATH"
+const TestSSHPrivateKeyFileEnvKey string = "TEST_SSH_PRIV_KEY_PATH"
 
 // CloudTesting is a value indicating the current cloud
 // available for testing
@@ -56,8 +63,23 @@ func TypeTestingCloudFromString(from string) (CloudTesting, error) {
 // for the testing phase.
 var testingCloud CloudTesting
 
+// testAddMachineIP stores the IP address of a manually created machine outside terraform,
+// communicated via the TEST_ADD_MACHINE_IP env variable.
+// That IP will be used in testing the add-machine functionality on terraform via ssh_address.
+var testAddMachineIP = ""
+var testSSHPubKeyPath = ""
+var testSSHPrivKeyPath = ""
+
 func TestMain(m *testing.M) {
-	testCloud := os.Getenv("TEST_CLOUD")
+	testCloud := os.Getenv(TestCloudEnvKey)
+
+	testMachineIP, exist := os.LookupEnv(TestMachineIPEnvKey)
+	// Confirm the validity of the IP address before setting
+	if exist && net.ParseIP(testMachineIP) != nil {
+		testAddMachineIP = testMachineIP
+	}
+	testSSHPubKeyPath = os.Getenv(TestSSHPublicKeyFileEnvKey)
+	testSSHPrivKeyPath = os.Getenv(TestSSHPrivateKeyFileEnvKey)
 
 	var err error
 	testingCloud, err = TypeTestingCloudFromString(testCloud)
