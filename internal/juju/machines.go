@@ -48,7 +48,8 @@ type CreateMachineInput struct {
 }
 
 type CreateMachineResponse struct {
-	Machines []params.AddMachinesResult
+	Machine params.AddMachinesResult
+	Series  string
 }
 
 type ReadMachineInput struct {
@@ -95,16 +96,17 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		machineId, err := manualProvision(machineAPIClient, cfg,
+		machine_series, machineId, err := manualProvision(machineAPIClient, cfg,
 			input.SSHAddress, input.PublicKeyFile, input.PrivateKeyFile)
 		if err != nil {
 			return nil, errors.Trace(err)
 		} else {
 			return &CreateMachineResponse{
-				Machines: []params.AddMachinesResult{{
+				Machine: params.AddMachinesResult{
 					Machine: machineId,
 					Error:   nil,
-				}},
+				},
+				Series: machine_series,
 			}, nil
 		}
 	}
@@ -152,7 +154,7 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 	addMachineArgs := []params.AddMachineParams{machineParams}
 	machines, err := machineAPIClient.AddMachines(addMachineArgs)
 	return &CreateMachineResponse{
-		Machines: machines,
+		Machine: machines[0],
 	}, err
 }
 
@@ -161,16 +163,15 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 // TODO (cderici): only the ssh scope is supported, include winrm at some point
 func manualProvision(client manual.ProvisioningClientAPI,
 	config *config.Config, sshAddress string, publicKey string,
-	privateKey string) (string,
-	error) {
+	privateKey string) (string, string, error) {
 	// Read the public keys
 	cmdCtx, err := cmd.DefaultContext()
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", "", errors.Trace(err)
 	}
 	authKeys, err := common.ReadAuthorizedKeys(cmdCtx, publicKey)
 	if err != nil {
-		return "", errors.Annotatef(err, "cannot reading authorized-keys")
+		return "", "", errors.Annotatef(err, "cannot read authorized-keys from : %v", publicKey)
 	}
 
 	// Extract the user and host in the SSHAddress
@@ -178,7 +179,7 @@ func manualProvision(client manual.ProvisioningClientAPI,
 	if at := strings.Index(sshAddress, "@"); at != -1 {
 		user, host = sshAddress[:at], sshAddress[at+1:]
 	} else {
-		return "", errors.Errorf("invalid ssh_address, expected <user@host>, "+
+		return "", "", errors.Errorf("invalid ssh_address, expected <user@host>, "+
 			"given %v", sshAddress)
 	}
 
@@ -201,9 +202,16 @@ func manualProvision(client manual.ProvisioningClientAPI,
 	// Call the ProvisionMachine
 	machineId, err := sshprovisioner.ProvisionMachine(provisionArgs)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", "", errors.Trace(err)
 	}
-	return machineId, nil
+	// Find out about the series of the machine just provisioned
+	// (because ProvisionMachine only returns machineId)
+	_, series, err := sshprovisioner.DetectSeriesAndHardwareCharacteristics(host)
+	if err != nil {
+		return "", "", errors.Annotatef(err, "error detecting linux hardware characteristics")
+	}
+
+	return series, machineId, nil
 }
 
 func (c machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineResponse, error) {
