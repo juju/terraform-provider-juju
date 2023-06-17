@@ -144,7 +144,9 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 	if err = d.Set("machine_id", response.Machine.Machine); err != nil {
 		return diag.FromErr(err)
 	}
-	d.Set("series", response.Series)
+	if err = d.Set("series", response.Series); err != nil {
+		return diag.FromErr(err)
+	}
 	d.SetId(id)
 	return nil
 }
