@@ -52,11 +52,11 @@ func TestAcc_ResourceMachine_AddMachine(t *testing.T) {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
 	if testAddMachineIP == "" {
-		t.Skip(fmt.Sprintf("environment variable %v not setup or invalid for running test", TestMachineIPEnvKey))
+		t.Skipf("environment variable %v not setup or invalid for running test", TestMachineIPEnvKey)
 	}
 	if testSSHPubKeyPath == "" || testSSHPrivKeyPath == "" {
-		t.Skip(fmt.Sprintf("expected environment variables for ssh keys to be set : %v, %v",
-			TestSSHPublicKeyFileEnvKey, TestSSHPrivateKeyFileEnvKey))
+		t.Skipf("expected environment variables for ssh keys to be set : %v, %v",
+			TestSSHPublicKeyFileEnvKey, TestSSHPrivateKeyFileEnvKey)
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-machine-ssh-address")
 	resource.Test(t, resource.TestCase{
