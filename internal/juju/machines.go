@@ -155,6 +155,7 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 	machines, err := machineAPIClient.AddMachines(addMachineArgs)
 	return &CreateMachineResponse{
 		Machine: machines[0],
+		Series:  input.Series,
 	}, err
 }
 
