@@ -77,12 +77,14 @@ jobs:
       - run: go mod download
       - name: Create a new machine on lxd
         run: lxc launch ubuntu:22.04 mtest
-      - env:
+      - name: Final setup and test
+        env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.cloud }}
         run: |
           # generate a key pair and set the env variables
           ssh-keygen -t rsa -N "" -f ./test-add-machine
+          echo $(lxc list mtest --format=json | jq -r '.[0].state.network.eth0.addresses[]')
           export TEST_ADD_MACHINE_IP=$(lxc list mtest --format=json | jq -r '.[0].state.network.eth0.addresses[] | select(.family == "inet").address')
           export TEST_SSH_PUB_KEY_PATH=$(pwd)/test-add-machine.pub
           export TEST_SSH_PRIV_KEY_PATH=$(pwd)/test-add-machine
