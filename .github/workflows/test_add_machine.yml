@@ -76,7 +76,10 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
       - run: go mod download
       - name: Create a new machine on lxd
-        run: lxc launch ubuntu:22.04 mtest
+        run: |
+          # disable ipv6 on lxdbr0 network (default network for lxc)
+          lxc network set lxdbr0 ipv6.address none
+          lxc launch ubuntu:22.04 mtest
       - env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.cloud }}
