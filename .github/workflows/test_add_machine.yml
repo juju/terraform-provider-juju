@@ -92,15 +92,16 @@ jobs:
           export TEST_ADD_MACHINE_IP=$(/snap/bin/lxc list mtest --format=json | jq -r '.[0].state.network.eth0.addresses[] | select(.family == "inet").address')
           export TEST_SSH_PUB_KEY_PATH=$(pwd)/test-add-machine.pub
           export TEST_SSH_PRIV_KEY_PATH=$(pwd)/test-add-machine
+          echo "Testing with machine at $TEST_ADD_MACHINE_IP with keys $TEST_SSH_PUB_KEY_PATH and $TEST_SSH_PRIV_KEY_PATH"
 
-          # put the ssh public key into the container
+          echo "Pushing the ssh public key at $TEST_SSH_PUB_KEY_PATH into the container"
           /snap/bin/lxc file push $TEST_SSH_PUB_KEY_PATH mtest/home/ubuntu/.ssh/authorized_keys
 
-          # add the host fingerprint to known_hosts to avoid the host key verification prompt
+          # to avoid the host key verification prompt
+          echo "adding the host fingerprint to known_hosts"
           ssh-keyscan $TEST_ADD_MACHINE_IP >> ~/.ssh/known_hosts
 
-          # go run the test
-          echo "Testing with machine at $TEST_ADD_MACHINE_IP with keys $TEST_SSH_PUB_KEY_PATH and $TEST_SSH_PRIV_KEY_PATH"
+          echo "Running the test"
           cd ./internal/provider/
           go test ./... -timeout 30m -v -test.run TestAcc_ResourceMachine_AddMachine
         timeout-minutes: 40
