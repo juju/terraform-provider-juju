@@ -73,9 +73,10 @@ func TestAcc_ResourceMachine_AddMachine(t *testing.T) {
 				),
 			},
 			{
-				ImportStateVerify: true,
-				ImportState:       true,
-				ResourceName:      "juju_machine.this_machine",
+				ImportStateVerify:       true,
+				ImportState:             true,
+				ImportStateVerifyIgnore: []string{"ssh_address", "public_key_file", "private_key_file"},
+				ResourceName:            "juju_machine.this_machine",
 			},
 		},
 	})
