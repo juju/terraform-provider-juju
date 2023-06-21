@@ -90,8 +90,10 @@ jobs:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.cloud }}
         run: |
-          # generate a new key pair
+          # generate a new key pair and add it to the agent
           ssh-keygen -t rsa -N "" -f ./test-add-machine
+          eval "$(ssh-agent -s)"
+          ssh-add ./test-add-machine
 
           # set the env variables
           echo $(/snap/bin/lxc list mtest --format=json | jq -r '.[0].state.network.eth0.addresses[]')
