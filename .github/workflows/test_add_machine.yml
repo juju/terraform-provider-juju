@@ -105,6 +105,7 @@ jobs:
 
           # to avoid the host key verification prompt
           echo "adding the host fingerprint to known_hosts"
+          mkdir -p ~/.ssh
           ssh-keyscan $TEST_ADD_MACHINE_IP >> ~/.ssh/known_hosts
 
           echo "Running the test"
