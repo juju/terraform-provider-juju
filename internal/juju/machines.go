@@ -161,7 +161,6 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 
 // manualProvision calls the sshprovisioner.ProvisionMachine on the Juju side to provision an
 // existing machine using ssh_address, public_key and private_key in the CreateMachineInput
-// TODO (cderici): only the ssh scope is supported, include winrm at some point
 func manualProvision(client manual.ProvisioningClientAPI,
 	config *config.Config, sshAddress string, publicKey string,
 	privateKey string) (string, string, error) {
