@@ -57,6 +57,7 @@ func resourceMachine() *schema.Resource {
 				Description:   "The operating system series to install on the new machine(s).",
 				Type:          schema.TypeString,
 				Optional:      true,
+				Computed:      true,
 				ForceNew:      true,
 				ConflictsWith: []string{"ssh_address"},
 			},
@@ -137,11 +138,14 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	if response.Machines[0].Error != nil {
+	if response.Machine.Error != nil {
 		return diag.FromErr(err)
 	}
-	id := fmt.Sprintf("%s:%s:%s", modelName, response.Machines[0].Machine, name)
-	if err = d.Set("machine_id", response.Machines[0].Machine); err != nil {
+	id := fmt.Sprintf("%s:%s:%s", modelName, response.Machine.Machine, name)
+	if err = d.Set("machine_id", response.Machine.Machine); err != nil {
+		return diag.FromErr(err)
+	}
+	if err = d.Set("series", response.Series); err != nil {
 		return diag.FromErr(err)
 	}
 	d.SetId(id)
