@@ -46,11 +46,11 @@ func resourceMachine() *schema.Resource {
 				ConflictsWith: []string{"ssh_address"},
 			},
 			"disks": {
-				Description: "Storage constraints for disks to attach to the machine(s).",
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				ForceNew:    true,
+				Description:   "Storage constraints for disks to attach to the machine(s).",
+				Type:          schema.TypeString,
+				Optional:      true,
+				Default:       "",
+				ForceNew:      true,
 				ConflictsWith: []string{"ssh_address"},
 			},
 			"series": {
