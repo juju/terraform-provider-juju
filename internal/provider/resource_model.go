@@ -42,12 +42,12 @@ func resourceModel() *schema.Resource {
 				MaxItems:    1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"name": &schema.Schema{
+						"name": {
 							Description: "The name of the cloud",
 							Type:        schema.TypeString,
 							Required:    true,
 						},
-						"region": &schema.Schema{
+						"region": {
 							Description: "The region of the cloud",
 							Type:        schema.TypeString,
 							Optional:    true,

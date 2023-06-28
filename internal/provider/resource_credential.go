@@ -33,7 +33,7 @@ func resourceCredential() *schema.Resource {
 				MaxItems:    1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
-						"name": &schema.Schema{
+						"name": {
 							Description: "The name of the cloud",
 							Type:        schema.TypeString,
 							Required:    true,
@@ -133,7 +133,7 @@ func resourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta in
 	credentialName, cloudName, clientCredentialStr, controllerCredentialStr := id[0], id[1], id[2], id[3]
 
 	cloudList := []map[string]interface{}{{
-		"name":   cloudName,
+		"name": cloudName,
 	}}
 	if err := d.Set("cloud", cloudList); err != nil {
 		return diag.FromErr(err)
