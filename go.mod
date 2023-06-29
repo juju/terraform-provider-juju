@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/bflad/tfproviderlint v0.29.0
-	github.com/hashicorp/terraform-plugin-docs v0.14.1
+	github.com/hashicorp/terraform-plugin-docs v0.15.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.27.0
 	// 2.9.43
 	github.com/juju/juju v0.0.0-20230601044333-3cb3f8beac4a
