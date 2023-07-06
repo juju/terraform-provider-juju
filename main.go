@@ -1,16 +1,23 @@
 package main
 
 import (
+	"context"
 	"flag"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/plugin"
-	"github.com/juju/terraform-provider-juju/internal/provider"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov5"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov5/tf5server"
+	"github.com/hashicorp/terraform-plugin-mux/tf5muxserver"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+
+	"github.com/juju/terraform-provider-juju/internal/provider"
 )
 
 // Run "go generate" to format example terraform files and generate the docs for the registry/website
 
-// If you do not have terraform installed, you can remove the formatting command, but its suggested to
+// If you do not have terraform installed, you can remove the formatting command, but it's suggested to
 // ensure the documentation is formatted properly.
 //go:generate terraform fmt -recursive ./examples/
 
@@ -28,20 +35,37 @@ var (
 )
 
 func main() {
+	ctx := context.Background()
+
 	var debugMode bool
 
 	flag.BoolVar(&debugMode, "debug", false, "set to true to run the provider with support for debuggers like delve")
 	flag.Parse()
 
+	providers := []func() tfprotov5.ProviderServer{
+		providerserver.NewProtocol5(provider.NewJujuProvider(version)),
+		func() tfprotov5.ProviderServer {
+			return schema.NewGRPCProviderServer(provider.New(version)())
+		},
+	}
+
+	muxServer, err := tf5muxserver.NewMuxServer(ctx, providers...)
+	if err != nil {
+		log.Fatal().Msg(err.Error())
+	}
+
+	var serveOpts []tf5server.ServeOpt
+
 	if debugMode {
+		serveOpts = append(serveOpts, tf5server.WithManagedDebug())
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 
-	opts := &plugin.ServeOpts{
-		ProviderFunc: provider.New(version),
-		ProviderAddr: "registry.terraform.io/canonical/juju",
-		Debug:        debugMode,
+	if err = tf5server.Serve(
+		"registry.terraform.io/canonical/juju",
+		muxServer.ProviderServer,
+		serveOpts...,
+	); err != nil {
+		log.Fatal().Msg(err.Error())
 	}
-
-	plugin.Serve(opts)
 }

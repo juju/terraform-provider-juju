@@ -148,26 +148,6 @@ func testAccPreCheck(t *testing.T) {
 	}
 }
 
-//
-//func TestFrameworkProviderConfigure(t *testing.T) {
-//	testAccPreCheck(t)
-//	jujuProvider := NewJujuProvider("dev")
-//	req := frameworkprovider.ConfigureRequest{
-//		Config: tfsdk.Config{
-//			Raw:    tftypes.Value{},
-//			Schema: nil,
-//		},
-//	}
-//
-//	resp := frameworkprovider.ConfigureResponse{}
-//	jujuProvider.Configure(context.Background(), req, &resp)
-//	assert.Equal(t, resp.Diagnostics.HasError(), false)
-//	_, ok := resp.ResourceData.(*juju.Client)
-//	assert.True(t, ok)
-//	_, ok = resp.DataSourceData.(*juju.Client)
-//	assert.True(t, ok)
-//}
-
 func TestFrameworkProviderSchema(t *testing.T) {
 	testAccPreCheck(t)
 	jujuProvider := NewJujuProvider("dev")

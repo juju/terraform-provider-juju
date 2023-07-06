@@ -33,6 +33,7 @@ const (
 	JujuCACert     = "ca_certificate"
 )
 
+// New returns an sdk2 style terraform provider.
 func New(version string) func() *schema.Provider {
 	return func() *schema.Provider {
 		p := &schema.Provider{
@@ -205,6 +206,7 @@ func getField(field string, config map[string]string) string {
 // Ensure jujuProvider satisfies various provider interfaces.
 var _ frameworkprovider.Provider = &jujuProvider{}
 
+// NewJujuProvider returns a framework style terraform provider.
 func NewJujuProvider(version string) frameworkprovider.Provider {
 	return &jujuProvider{version: version}
 }
@@ -227,11 +229,16 @@ func (j jujuProviderModel) valid() bool {
 		j.CACert.ValueString() != ""
 }
 
+// Metadata returns the metadata for the provider, such as
+// a type name and version data.
 func (p *jujuProvider) Metadata(_ context.Context, _ frameworkprovider.MetadataRequest, resp *frameworkprovider.MetadataResponse) {
 	resp.TypeName = "juju"
 	resp.Version = p.version
 }
 
+// Schema returns the schema for this provider, specifically
+// it defines the juju controller config necessary to create
+// a juju client.
 func (p *jujuProvider) Schema(_ context.Context, _ frameworkprovider.SchemaRequest, resp *frameworkprovider.SchemaResponse) {
 	resp.Schema = frameworkschema.Schema{
 		Attributes: map[string]frameworkschema.Attribute{
@@ -256,6 +263,13 @@ func (p *jujuProvider) Schema(_ context.Context, _ frameworkprovider.SchemaReque
 	}
 }
 
+// Configure is called at the beginning of the provider lifecycle, when
+// Terraform sends to the provider the values the user specified in the
+// provider configuration block. These are supplied in the
+// ConfigureProviderRequest argument.
+// Values from provider configuration are often used to initialise an
+// API client, which should be stored on the struct implementing the
+// Provider interface.
 func (p *jujuProvider) Configure(ctx context.Context, req frameworkprovider.ConfigureRequest, resp *frameworkprovider.ConfigureResponse) {
 	// Get data required for configuring the juju client.
 	data, diags := getJujuProviderModel(ctx, req)
@@ -343,12 +357,22 @@ func getJujuProviderModel(ctx context.Context, req frameworkprovider.ConfigureRe
 	return data, diags
 }
 
+// Resources returns a slice of functions to instantiate each Resource
+// implementation.
+//
+// The resource type name is determined by the Resource implementing
+// the Metadata method. All resources must have unique names.
 func (p *jujuProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		//func() resource.Resource {return NewUserResource()},
 	}
 }
 
+// DataSources returns a slice of functions to instantiate each DataSource
+// implementation.
+//
+// The data source type name is determined by the DataSource implementing
+// the Metadata method. All data sources must have unique names.
 func (p *jujuProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		//func() datasource.DataSource { return NewModelDataSource() },
