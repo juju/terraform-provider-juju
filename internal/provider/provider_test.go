@@ -6,8 +6,10 @@ import (
 	"runtime"
 	"testing"
 
+	frameworkprovider "github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/stretchr/testify/assert"
 )
 
 // providerFactories are used to instantiate a provider during acceptance testing.
@@ -37,8 +39,8 @@ func TestProvider(t *testing.T) {
 
 func TestProviderConfigure(t *testing.T) {
 	testAccPreCheck(t)
-	provider := New("dev")()
-	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
+	jujuProvider := New("dev")()
+	diags := jujuProvider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
 	if diags != nil {
 		t.Errorf("%+v", diags)
 	}
@@ -46,10 +48,10 @@ func TestProviderConfigure(t *testing.T) {
 
 func TestProviderConfigureUsernameFromEnv(t *testing.T) {
 	testAccPreCheck(t)
-	provider := New("dev")()
+	jujuProvider := New("dev")()
 	userNameValue := "the-username"
 	t.Setenv(JujuUsernameEnvKey, userNameValue)
-	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
+	diags := jujuProvider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
 	if len(diags) > 0 {
 		t.Errorf("no errors were expected %s", diags[len(diags)-1].Summary)
 	}
@@ -57,10 +59,10 @@ func TestProviderConfigureUsernameFromEnv(t *testing.T) {
 
 func TestProviderConfigurePasswordFromEnv(t *testing.T) {
 	testAccPreCheck(t)
-	provider := New("dev")()
+	jujuProvider := New("dev")()
 	passwordValue := "the-password"
 	t.Setenv(JujuPasswordEnvKey, passwordValue)
-	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
+	diags := jujuProvider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
 	if len(diags) > 0 {
 		t.Errorf("no errors were expected %s", diags[len(diags)-1].Summary)
 	}
@@ -68,10 +70,10 @@ func TestProviderConfigurePasswordFromEnv(t *testing.T) {
 
 func TestProviderConfigureAddresses(t *testing.T) {
 	testAccPreCheck(t)
-	provider := New("dev")()
+	jujuProvider := New("dev")()
 	// This IP is from a test network that should never be routed. https://www.rfc-editor.org/rfc/rfc5737#section-3
 	t.Setenv(JujuControllerEnvKey, "192.0.2.100:17070")
-	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
+	diags := jujuProvider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
 	if len(diags) > 0 {
 		t.Errorf("no errors were expected %s", diags[len(diags)-1].Summary)
 	}
@@ -90,12 +92,12 @@ func TestProviderConfigurex509FromEnv(t *testing.T) {
 		//https://github.com/golang/go/issues/52010
 		t.Skip("This test does not work on MacOS")
 	default:
-		provider := New("dev")()
+		jujuProvider := New("dev")()
 		t.Setenv(JujuCACertEnvKey, invalidCA)
-		diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
+		diags := jujuProvider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
 		if diags == nil {
 			t.Setenv(JujuCACertEnvKey, invalidCA)
-			diags = provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
+			diags = jujuProvider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
 			if len(diags) > 0 {
 				t.Errorf("no errors were expected %s", diags[len(diags)-1].Summary)
 			}
@@ -109,12 +111,12 @@ func TestProviderConfigurex509FromEnv(t *testing.T) {
 }
 
 func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
-	provider := New("dev")()
+	jujuProvider := New("dev")()
 	//Set the CA to the invalid one above
 	//Juju will ignore the system trust store if we set the CA property
 	t.Setenv(JujuCACertEnvKey, invalidCA)
 	t.Setenv("JUJU_CA_CERT_FILE", "")
-	diags := provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
+	diags := jujuProvider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
 	if len(diags) > 0 {
 		t.Errorf("no errors were expected %s", diags[len(diags)-1].Summary)
 	}
@@ -144,4 +146,34 @@ func testAccPreCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+//
+//func TestFrameworkProviderConfigure(t *testing.T) {
+//	testAccPreCheck(t)
+//	jujuProvider := NewJujuProvider("dev")
+//	req := frameworkprovider.ConfigureRequest{
+//		Config: tfsdk.Config{
+//			Raw:    tftypes.Value{},
+//			Schema: nil,
+//		},
+//	}
+//
+//	resp := frameworkprovider.ConfigureResponse{}
+//	jujuProvider.Configure(context.Background(), req, &resp)
+//	assert.Equal(t, resp.Diagnostics.HasError(), false)
+//	_, ok := resp.ResourceData.(*juju.Client)
+//	assert.True(t, ok)
+//	_, ok = resp.DataSourceData.(*juju.Client)
+//	assert.True(t, ok)
+//}
+
+func TestFrameworkProviderSchema(t *testing.T) {
+	testAccPreCheck(t)
+	jujuProvider := NewJujuProvider("dev")
+	req := frameworkprovider.SchemaRequest{}
+	resp := frameworkprovider.SchemaResponse{}
+	jujuProvider.Schema(context.Background(), req, &resp)
+	assert.Equal(t, resp.Diagnostics.HasError(), false)
+	assert.Len(t, resp.Schema.Attributes, 4)
 }
