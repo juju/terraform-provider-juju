@@ -30,5 +30,3 @@ data "juju_machine" "this" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-
-
