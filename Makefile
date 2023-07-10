@@ -7,7 +7,8 @@ help:
 go-install:
 ## go-install: Build and install terraform-provider-juju in $GOPATH/bin
 	@echo "Installing terraform-provider-juju"
-	go install
+	@go mod tidy
+	@go install
 
 GOOS=$(shell go env GOOS)
 GOARCH=$(shell go env GOARCH)
@@ -16,7 +17,7 @@ VERSION=0.8.0
 REGISTRY_DIR=~/.terraform.d/plugins/registry.terraform.io/juju/juju/${VERSION}/${GOOS}_${GOARCH}
 
 .PHONY: install
-install: lint simplify go-install
+install: lint simplify docs go-install
 ## install: Build terraform-provider-juju and copy to ~/.terraform.d using VERSION
 	@echo "Copied to ~/.terraform.d/plugins/registry.terraform.io/juju/juju/${VERSION}/${GOOS}_${GOARCH}"
 	@mkdir -p ${REGISTRY_DIR}
@@ -26,13 +27,26 @@ install: lint simplify go-install
 # Reformat and simplify source files.
 simplify:
 ## simplify: Format and simplify the go source code
-	gofmt -w -l -s .
+	@echo "Formating the go source code."
+	@gofmt -w -l -s .
 
 .PHONY: lint
 lint:
 ## lint: run the go linter
-	golangci-lint run -c .golangci.yml
-  
+	@echo "Running go lint"
+	@golangci-lint run -c .golangci.yml
+
+# require terraform to be installed.... HML
+.PHONY: docs
+docs:
+## docs: update the generated terraform docs.
+ifeq ($(shell which terraform && echo true),true)
+	@echo "Generating docs"
+	@go generate ./...
+else
+	@echo "Unable to generate docs, terraform not installed"
+endif
+
 JUJU=juju
 CONTROLLER=$(shell ${JUJU} whoami | yq .Controller)
 CONTROLLER_ADDRESSES="$(shell ${JUJU} show-controller | yq .${CONTROLLER}.details.\"api-endpoints\" | tr -d "[]' "|tr -d '"'|tr -d '\n')"
