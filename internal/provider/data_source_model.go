@@ -2,48 +2,104 @@ package provider
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-func dataSourceModel() *schema.Resource {
-	return &schema.Resource{
+// Ensure provider defined types fully satisfy framework interfaces.
+var _ datasource.DataSource = &modelDataSource{}
+
+func NewModelDataSource() datasource.DataSourceWithConfigure {
+	return &modelDataSource{}
+}
+
+type modelDataSource struct {
+	client *juju.Client
+}
+
+type modelDataSourceModel struct {
+	Name types.String `tfsdk:"name"`
+	UUID types.String `tfsdk:"uuid"`
+	// ID required by the testing framework
+	ID types.String `tfsdk:"id"`
+}
+
+// Metadata returns the full data source name as used in terraform plans.
+func (d *modelDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_model"
+}
+
+// Schema returns the schema for the model data source.
+func (d *modelDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: "A data source representing a Juju Model.",
-		ReadContext: dataSourceModelRead,
-		Schema: map[string]*schema.Schema{
-			"name": {
+		Attributes: map[string]schema.Attribute{
+			"name": schema.StringAttribute{
 				Description: "The name of the model.",
-				Type:        schema.TypeString,
 				Required:    true,
 			},
-			"uuid": {
+			"uuid": schema.StringAttribute{
 				Description: "The UUID of the model.",
-				Type:        schema.TypeString,
 				Computed:    true,
+			},
+			// ID required by the testing framework
+			"id": schema.StringAttribute{
+				Computed: true,
 			},
 		},
 	}
 }
 
-func dataSourceModelRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
+// Configure enables provider-level data or clients to be set in the
+// provider-defined DataSource type. It is separately executed for each
+// ReadDataSource RPC.
+func (d *modelDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	// Prevent panic if the provider has not been configured.
+	if req.ProviderData == nil {
+		return
+	}
 
-	modelName := d.Get("name").(string)
+	client, ok := req.ProviderData.(*juju.Client)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Data Source Configure Type",
+			fmt.Sprintf("Expected *juju.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
 
-	model, err := client.Models.GetModelByName(modelName)
+	d.client = client
+}
+
+// Read is called when the provider must read data source values in
+// order to update state. Config values should be read from the
+// ReadRequest and new state values set on the ReadResponse.
+func (d *modelDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var data modelDataSourceModel
+
+	// Read Terraform configuration data into the model.
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get current juju machine data source values.
+	model, err := d.client.Models.GetModelByName(data.Name.ValueString())
 	if err != nil {
-		return diag.FromErr(err)
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model, got error: %s", err))
+		return
 	}
+	tflog.Trace(ctx, fmt.Sprintf("read juju model %q data source", data.Name))
 
-	d.SetId(model.UUID)
-	if err = d.Set("uuid", model.UUID); err != nil {
-		return diag.FromErr(err)
-	}
-	if err = d.Set("name", model.Name); err != nil {
-		return diag.FromErr(err)
-	}
-
-	return nil
+	// Save data into Terraform state
+	data.Name = types.StringValue(model.Name)
+	data.UUID = types.StringValue(model.UUID)
+	data.ID = types.StringValue(model.UUID)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
