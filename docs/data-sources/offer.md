@@ -32,5 +32,3 @@ data "juju_offer" "this" {
 - `id` (String) The ID of this resource.
 - `model` (String) The name of the model to operate in.
 - `name` (String) The name of the offer.
-
-

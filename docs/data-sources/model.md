@@ -29,5 +29,3 @@ data "juju_model" "this" {
 
 - `id` (String) The ID of this resource.
 - `uuid` (String) The UUID of the model.
-
-

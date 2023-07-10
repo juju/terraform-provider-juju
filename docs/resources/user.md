@@ -27,5 +27,3 @@ A resource that represent a Juju User.
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-
-
