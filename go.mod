@@ -20,7 +20,6 @@ require (
 	github.com/juju/errors v1.0.0
 	github.com/juju/names/v4 v4.0.0
 	github.com/juju/utils/v3 v3.0.2
-	github.com/kr/pretty v0.3.1
 	github.com/rs/zerolog v1.29.1
 	github.com/stretchr/testify v1.8.4
 )
@@ -142,6 +141,7 @@ require (
 	github.com/juju/worker/v3 v3.1.0 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lestrrat/go-jspointer v0.0.0-20160229021354-f4881e611bdb // indirect
 	github.com/lestrrat/go-jsref v0.0.0-20160601013240-e452c7b5801d // indirect
