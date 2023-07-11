@@ -19,7 +19,7 @@ func TestAcc_DataSourceModel(t *testing.T) {
 			{
 				Config: testAccDataSourceModel(t, modelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.juju_model.model", "name", modelName),
+					resource.TestCheckResourceAttr("data.juju_model.test-model", "name", modelName),
 				),
 				ExternalProviders: map[string]resource.ExternalProvider{
 					"juju": {
@@ -32,8 +32,8 @@ func TestAcc_DataSourceModel(t *testing.T) {
 			{
 				Config: testAccFrameworkDataSourceModel(t, modelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.juju_model.model", "name", modelName),
-					resource.TestCheckResourceAttrSet("data.juju_model.model", "uuid"),
+					resource.TestCheckResourceAttr("data.juju_model.test-model", "name", modelName),
+					resource.TestCheckResourceAttrSet("data.juju_model.test-model", "uuid"),
 				),
 				ProtoV5ProviderFactories: map[string]func() (tfprotov5.ProviderServer, error){
 					"juju": providerserver.NewProtocol5WithError(NewJujuProvider("dev")),
@@ -48,12 +48,12 @@ func TestAcc_DataSourceModel(t *testing.T) {
 
 func testAccDataSourceModel(t *testing.T, modelName string) string {
 	return fmt.Sprintf(`
-resource "juju_model" "model" {
+resource "juju_model" "test-model" {
 	name = %q
 }
 
-data "juju_model" "model" {
-	name = juju_model.model.name
+data "juju_model" "test-model" {
+	name = juju_model.test-model.name
 }`, modelName)
 }
 
@@ -63,13 +63,13 @@ provider "juju" {}
 
 provider "oldjuju" {}
 
-resource "juju_model" "model" {
+resource "juju_model" "test-model" {
 	provider = oldjuju
 	name = %q
 }
 
-data "juju_model" "model" {
+data "juju_model" "test-model" {
 	provider = juju
-	name = juju_model.model.name
+	name = juju_model.test-model.name
 }`, modelName)
 }
