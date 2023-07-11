@@ -61,7 +61,6 @@ func New(version string) func() *schema.Provider {
 				},
 			},
 			DataSourcesMap: map[string]*schema.Resource{
-				"juju_model":   dataSourceModel(),
 				"juju_machine": dataSourceMachine(),
 				"juju_offer":   dataSourceOffer(),
 			},
@@ -375,7 +374,7 @@ func (p *jujuProvider) Resources(ctx context.Context) []func() resource.Resource
 // the Metadata method. All data sources must have unique names.
 func (p *jujuProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
-		//func() datasource.DataSource { return NewModelDataSource() },
+		func() datasource.DataSource { return NewModelDataSource() },
 		//func() datasource.DataSource { return NewMachineDataSource() },
 		//func() datasource.DataSource { return NewOfferDataSource() },
 	}

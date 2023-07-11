@@ -62,7 +62,7 @@ func main() {
 	}
 
 	if err = tf5server.Serve(
-		"registry.terraform.io/canonical/juju",
+		"registry.terraform.io/juju/juju",
 		muxServer.ProviderServer,
 		serveOpts...,
 	); err != nil {

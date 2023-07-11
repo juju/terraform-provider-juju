@@ -14,7 +14,9 @@ require (
 require (
 	github.com/hashicorp/terraform-plugin-framework v1.3.2
 	github.com/hashicorp/terraform-plugin-go v0.17.0
+	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-mux v0.11.1
+	github.com/hashicorp/terraform-plugin-testing v1.3.0
 	github.com/juju/charm/v8 v8.0.6
 	github.com/juju/cmd/v3 v3.0.10
 	github.com/juju/errors v1.0.0
@@ -89,7 +91,6 @@ require (
 	github.com/hashicorp/raft v1.3.2-0.20210825230038-1a621031eb2b // indirect
 	github.com/hashicorp/terraform-exec v0.18.1 // indirect
 	github.com/hashicorp/terraform-json v0.17.1 // indirect
-	github.com/hashicorp/terraform-plugin-log v0.9.0 // indirect
 	github.com/hashicorp/terraform-registry-address v0.2.1 // indirect
 	github.com/hashicorp/terraform-svchost v0.1.1 // indirect
 	github.com/hashicorp/yamux v0.0.0-20181012175058-2f1d1f20f75d // indirect
