@@ -2,15 +2,79 @@ package provider
 
 import (
 	"context"
-	"fmt"
-	"strings"
-
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
+func NewAccessModelResource() resource.Resource {
+	return &accessModelResource{}
+}
+
+type accessModelResource struct {
+	client *juju.Client
+}
+
+func (a accessModelResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (a accessModelResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Description: "A resource that represent a Juju Access Model.",
+		Attributes: map[string]schema.Attribute{
+			"model": schema.StringAttribute{
+				Description: "The name of the model for access management",
+				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"users": schema.ListAttribute{
+				Description: "List of users to grant access to",
+				Required:    true,
+				ElementType: types.StringType,
+			},
+			"access": schema.StringAttribute{
+				Description: "Type of access to the model",
+				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.OneOf("admin", "read", "write"),
+				},
+			},
+		},
+	}
+}
+
+func (a accessModelResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
+	panic("implement me")
+}
+
+func (a accessModelResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (a accessModelResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (a accessModelResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+/*
 func resourceAccessModel() *schema.Resource {
 	return &schema.Resource{
 		// This description is used by the documentation generator and the language server.
@@ -270,3 +334,5 @@ func resourceAccessModelImporter(ctx context.Context, d *schema.ResourceData, me
 
 	return []*schema.ResourceData{d}, nil
 }
+
+*/
