@@ -73,7 +73,6 @@ func New(version string) func() *schema.Provider {
 				"juju_offer":        resourceOffer(),
 				"juju_machine":      resourceMachine(),
 				"juju_ssh_key":      resourceSSHKey(),
-				"juju_user":         resourceUser(),
 			},
 		}
 		p.ConfigureContextFunc = configure()
@@ -363,7 +362,7 @@ func getJujuProviderModel(ctx context.Context, req frameworkprovider.ConfigureRe
 // the Metadata method. All resources must have unique names.
 func (p *jujuProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		//func() resource.Resource {return NewUserResource()},
+		func() resource.Resource { return NewUserResource() },
 	}
 }
 

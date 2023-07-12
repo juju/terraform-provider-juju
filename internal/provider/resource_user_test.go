@@ -20,15 +20,29 @@ func TestAcc_ResourceUser_sdk2_framework_migrate(t *testing.T) {
 			{
 				Config: testAccResourceUser_Migrate(t, userName, userPassword),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "name", userName),
+					resource.TestCheckResourceAttr(resourceName, "name", resourceName),
 				),
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: "0.8.0",
+						Source:            "juju/juju",
+					},
+				},
+				PreConfig: func() { testAccPreCheck(t) },
 			},
 			{
+				Destroy:                 true,
 				ImportStateVerify:       true,
 				ImportState:             true,
 				ImportStateVerifyIgnore: []string{"password"},
-				ImportStateId:           fmt.Sprintf("user:%s", userName),
+				ImportStateId:           fmt.Sprintf("user:%s", resourceName),
 				ResourceName:            resourceName,
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: "0.8.0",
+						Source:            "juju/juju",
+					},
+				},
 			},
 		},
 	})
@@ -79,7 +93,7 @@ func TestAcc_ResourceUser_Stable(t *testing.T) {
 
 func testAccResourceUser_Stable(t *testing.T, userName, userPassword string) string {
 	return fmt.Sprintf(`
-resource "juju_user" "user" {
+resource "juju_user" "test-user" {
   name = %q
   password = %q
 
