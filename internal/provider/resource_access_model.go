@@ -2,6 +2,8 @@ package provider
 
 import (
 	"context"
+	"fmt"
+
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -9,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -18,6 +21,15 @@ func NewAccessModelResource() resource.Resource {
 
 type accessModelResource struct {
 	client *juju.Client
+}
+
+type accessModelResourceModel struct {
+	Model  types.String `tfsdk:"model"`
+	Users  types.List   `tfsdk:"users"`
+	Access types.String `tfsdk:"access"`
+
+	// ID required by the testing framework
+	ID types.String `tfsdk:"id"`
 }
 
 func (a accessModelResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
@@ -55,8 +67,50 @@ func (a accessModelResource) Schema(ctx context.Context, req resource.SchemaRequ
 	}
 }
 
-func (a accessModelResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
-	panic("implement me")
+func (a accessModelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	client := a.client
+
+	var plan accessModelResourceModel
+
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get the users basetypes.ListValue
+	usersList := plan.Users.Elements()
+	users := make([]string, len(usersList))
+	for i, v := range usersList {
+		users[i] = v.String()
+	}
+
+	modelStr := plan.Model.String()
+	// Get the modelUUID to call Models.GrantModel
+	uuid, err := client.Models.ResolveModelUUID(modelStr)
+	if err != nil {
+		resp.Diagnostics.AddError("ClientError", err.Error())
+		return
+	}
+	modelUUIDs := []string{uuid}
+
+	accessStr := plan.Access.String()
+	// Call Models.GrantModel
+	for _, user := range users {
+		err := client.Models.GrantModel(juju.GrantModelInput{
+			User:       user,
+			Access:     accessStr,
+			ModelUUIDs: modelUUIDs,
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("ClientError", err.Error())
+			return
+		}
+	}
+	plan.ID = types.StringValue(fmt.Sprintf("%s:%s", modelStr, accessStr))
+
+	// Set the plan onto the Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (a accessModelResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
@@ -74,7 +128,6 @@ func (a accessModelResource) Delete(ctx context.Context, request resource.Delete
 	panic("implement me")
 }
 
-/*
 func resourceAccessModel() *schema.Resource {
 	return &schema.Resource{
 		// This description is used by the documentation generator and the language server.
@@ -112,42 +165,6 @@ func resourceAccessModel() *schema.Resource {
 			},
 		},
 	}
-}
-
-func resourceAccessModelCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
-	var diags diag.Diagnostics
-
-	model := d.Get("model").(string)
-	access := d.Get("access").(string)
-	usersInterface := d.Get("users").([]interface{})
-	users := make([]string, len(usersInterface))
-	for i, v := range usersInterface {
-		users[i] = v.(string)
-	}
-
-	uuid, err := client.Models.ResolveModelUUID(model)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	modelUUIDs := []string{uuid}
-
-	for _, user := range users {
-		err := client.Models.GrantModel(juju.GrantModelInput{
-			User:       user,
-			Access:     access,
-			ModelUUIDs: modelUUIDs,
-		})
-		if err != nil {
-			return diag.FromErr(err)
-		}
-	}
-
-	d.SetId(fmt.Sprintf("%s:%s", model, access))
-
-	return diags
 }
 
 func resourceAccessModelRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -334,5 +351,3 @@ func resourceAccessModelImporter(ctx context.Context, d *schema.ResourceData, me
 
 	return []*schema.ResourceData{d}, nil
 }
-
-*/
