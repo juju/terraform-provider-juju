@@ -85,9 +85,9 @@ func (a accessModelResource) Create(ctx context.Context, req resource.CreateRequ
 		users[i] = v.String()
 	}
 
-	modelStr := plan.Model.String()
+	modelNameStr := plan.Model.String()
 	// Get the modelUUID to call Models.GrantModel
-	uuid, err := a.client.Models.ResolveModelUUID(modelStr)
+	uuid, err := a.client.Models.ResolveModelUUID(modelNameStr)
 	if err != nil {
 		resp.Diagnostics.AddError("ClientError", err.Error())
 		return
@@ -107,7 +107,7 @@ func (a accessModelResource) Create(ctx context.Context, req resource.CreateRequ
 			return
 		}
 	}
-	plan.ID = types.StringValue(fmt.Sprintf("%s:%s", modelStr, accessStr))
+	plan.ID = types.StringValue(fmt.Sprintf("%s:%s", modelNameStr, accessStr))
 
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -158,9 +158,6 @@ func (a accessModelResource) Read(ctx context.Context, req resource.ReadRequest,
 	uss, errDiag := basetypes.NewListValueFrom(ctx, types.StringType, users)
 	plan.Users = uss
 	resp.Diagnostics.Append(errDiag...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
 }
 
 func (a accessModelResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
@@ -168,9 +165,30 @@ func (a accessModelResource) Update(ctx context.Context, request resource.Update
 	panic("implement me")
 }
 
-func (a accessModelResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
-	//TODO implement me
-	panic("implement me")
+func (a accessModelResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var plan accessModelResourceModel
+
+	// Get the Terraform state from the request into the plan
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get the users basetypes.ListValue
+	usersList := plan.Users.Elements()
+	stateUsers := make([]string, len(usersList))
+	for i, v := range usersList {
+		stateUsers[i] = v.String()
+	}
+
+	err := a.client.Models.DestroyAccessModel(juju.DestroyAccessModelInput{
+		Model:  plan.ID.String(),
+		Revoke: stateUsers,
+		Access: plan.Access.String(),
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("ClientError", err.Error())
+	}
 }
 
 /*
@@ -347,35 +365,6 @@ func getAddedUsers(oldUsers, newUsers []string) []string {
 		}
 	}
 	return added
-}
-
-// resourceAccessModelDelete deletes the access model resource
-// Juju refers to deletions as "destroy" so we call the Destroy function of our client here rather than delete
-// This function remains named Delete for parity across the provider and to stick within terraform naming conventions
-func resourceAccessModelDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
-	var diags diag.Diagnostics
-
-	usersInterface := d.Get("users").([]interface{})
-	users := make([]string, len(usersInterface))
-	for i, v := range usersInterface {
-		users[i] = v.(string)
-	}
-	access := d.Get("access").(string)
-
-	err := client.Models.DestroyAccessModel(juju.DestroyAccessModelInput{
-		Model:  d.Id(),
-		Revoke: users,
-		Access: access,
-	})
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	d.SetId("")
-
-	return diags
 }
 
 func resourceAccessModelImporter(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
