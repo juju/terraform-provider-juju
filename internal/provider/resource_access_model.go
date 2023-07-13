@@ -84,7 +84,7 @@ func (a accessModelResource) Create(ctx context.Context, req resource.CreateRequ
 		users[i] = v.String()
 	}
 
-	modelNameStr := plan.Model.String()
+	modelNameStr := plan.Model.ValueString()
 	// Get the modelUUID to call Models.GrantModel
 	uuid, err := a.client.Models.ResolveModelUUID(modelNameStr)
 	if err != nil {
@@ -93,7 +93,7 @@ func (a accessModelResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 	modelUUIDs := []string{uuid}
 
-	accessStr := plan.Access.String()
+	accessStr := plan.Access.ValueString()
 	// Call Models.GrantModel
 	for _, user := range users {
 		err := a.client.Models.GrantModel(juju.GrantModelInput{
@@ -121,7 +121,7 @@ func (a accessModelResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	resID := strings.Split(plan.ID.String(), ":")
+	resID := strings.Split(plan.ID.ValueString(), ":")
 
 	// Get the users basetypes.ListValue
 	usersList := plan.Users.Elements()
@@ -214,7 +214,7 @@ func (a accessModelResource) Update(ctx context.Context, req resource.UpdateRequ
 	// Check if access has changed
 	if !plan.Access.Equal(state.Access) {
 		anyChange = true
-		newAccess = plan.Access.String()
+		newAccess = plan.Access.ValueString()
 	}
 
 	if !anyChange {
@@ -222,7 +222,7 @@ func (a accessModelResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 
 	err := a.client.Models.UpdateAccessModel(juju.UpdateAccessModelInput{
-		Model:  plan.ID.String(),
+		Model:  plan.ID.ValueString(),
 		Grant:  addedUserList,
 		Revoke: missingUserList,
 		Access: newAccess,
@@ -250,9 +250,9 @@ func (a accessModelResource) Delete(ctx context.Context, req resource.DeleteRequ
 	}
 
 	err := a.client.Models.DestroyAccessModel(juju.DestroyAccessModelInput{
-		Model:  plan.ID.String(),
+		Model:  plan.ID.ValueString(),
 		Revoke: stateUsers,
-		Access: plan.Access.String(),
+		Access: plan.Access.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("ClientError", err.Error())
