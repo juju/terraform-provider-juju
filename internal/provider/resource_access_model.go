@@ -34,9 +34,8 @@ type accessModelResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
-func (a accessModelResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
-	//TODO implement me
-	panic("implement me")
+func (a accessModelResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_access_model"
 }
 
 func (a accessModelResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
