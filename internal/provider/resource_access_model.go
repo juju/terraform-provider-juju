@@ -64,6 +64,10 @@ func (a accessModelResource) Schema(ctx context.Context, req resource.SchemaRequ
 					stringvalidator.OneOf("admin", "read", "write"),
 				},
 			},
+			// ID required by the testing framework
+			"id": schema.StringAttribute{
+				Computed: true,
+			},
 		},
 	}
 }
