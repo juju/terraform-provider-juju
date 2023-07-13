@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -160,9 +159,78 @@ func (a accessModelResource) Read(ctx context.Context, req resource.ReadRequest,
 	resp.Diagnostics.Append(errDiag...)
 }
 
-func (a accessModelResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
-	//TODO implement me
-	panic("implement me")
+// Update on the access model supports three cases
+// access and users both changed:
+// for missing users - revoke access
+// for changed users - apply new access
+// users changed:
+// for missing users - revoke access
+// for new users - apply access
+// access changed - apply new access
+func (a accessModelResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan, state accessModelResourceModel
+
+	// Get the Terraform state from the request into the plan
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	anyChange := false
+
+	// items that could be changed
+	var newAccess string
+	var missingUserList []string
+	var addedUserList []string
+
+	// Check if the users has changed
+	if !plan.Users.Equal(state.Users) {
+		anyChange = true
+
+		// Get the users that are in the current state
+		stateUserList := plan.Users.Elements()
+		stateUsers := make([]string, len(stateUserList))
+		for i, v := range stateUserList {
+			stateUsers[i] = v.String()
+		}
+
+		// Get the users that are in the planned states
+		planUserList := plan.Users.Elements()
+		planUsers := make([]string, len(planUserList))
+		for i, v := range planUserList {
+			planUsers[i] = v.String()
+		}
+
+		missingUserList = getMissingUsers(stateUsers, planUsers)
+		addedUserList = getAddedUsers(stateUsers, planUsers)
+	}
+
+	// Check if access has changed
+	if !plan.Access.Equal(state.Access) {
+		anyChange = true
+		newAccess = plan.Access.String()
+	}
+
+	if !anyChange {
+		return
+	}
+
+	err := a.client.Models.UpdateAccessModel(juju.UpdateAccessModelInput{
+		Model:  plan.ID.String(),
+		Grant:  addedUserList,
+		Revoke: missingUserList,
+		Access: newAccess,
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("ClientError", err.Error())
+	}
+
 }
 
 func (a accessModelResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -189,148 +257,6 @@ func (a accessModelResource) Delete(ctx context.Context, req resource.DeleteRequ
 	if err != nil {
 		resp.Diagnostics.AddError("ClientError", err.Error())
 	}
-}
-
-/*
-func resourceAccessModel() *schema.Resource {
-	return &schema.Resource{
-		// This description is used by the documentation generator and the language server.
-		Description: "A resource that represent a Juju Access Model.",
-
-		CreateContext: resourceAccessModelCreate,
-		ReadContext:   resourceAccessModelRead,
-		UpdateContext: resourceAccessModelUpdate,
-		DeleteContext: resourceAccessModelDelete,
-		Importer: &schema.ResourceImporter{
-			StateContext: resourceAccessModelImporter,
-		},
-
-		Schema: map[string]*schema.Schema{
-			"model": {
-				Description: "The name of the model for access management",
-				Type:        schema.TypeString,
-				Required:    true,
-				ForceNew:    true,
-			},
-			"users": {
-				Description: "List of users to grant access to",
-				Type:        schema.TypeList,
-				Required:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-			},
-			"access": {
-				Description:  "Type of access to the model",
-				ValidateFunc: validation.StringInSlice([]string{"admin", "read", "write"}, false),
-				Type:         schema.TypeString,
-				ForceNew:     true,
-				Required:     true,
-			},
-		},
-	}
-}
-
-func resourceAccessModelRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
-	var diags diag.Diagnostics
-
-	id := strings.Split(d.Id(), ":")
-	usersInterface := d.Get("users").([]interface{})
-	stateUsers := make([]string, len(usersInterface))
-	for i, v := range usersInterface {
-		stateUsers[i] = v.(string)
-	}
-
-	uuid, err := client.Models.ResolveModelUUID(id[0])
-	if err != nil {
-		return diag.FromErr(err)
-	}
-	response, err := client.Users.ModelUserInfo(uuid)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	if err := d.Set("model", id[0]); err != nil {
-		return diag.FromErr(err)
-	}
-	if err := d.Set("access", id[1]); err != nil {
-		return diag.FromErr(err)
-	}
-
-	var users []string
-
-	for _, user := range stateUsers {
-		for _, modelUser := range response.ModelUserInfo {
-			if user == modelUser.UserName && string(modelUser.Access) == id[1] {
-				users = append(users, modelUser.UserName)
-			}
-		}
-	}
-
-	if err = d.Set("users", users); err != nil {
-		return diag.FromErr(err)
-	}
-
-	return diags
-}
-*/
-
-// Updating the access model supports three cases
-// access and users both changed:
-// for missing users - revoke access
-// for changed users - apply new access
-// users changed:
-// for missing users - revoke access
-// for new users - apply access
-// access changed - apply new access
-func resourceAccessModelUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
-	var diags diag.Diagnostics
-	anyChange := false
-
-	// items that could be changed
-	var newAccess string
-	var newUsersList []string
-	var missingUserList []string
-	var addedUserList []string
-
-	var err error
-
-	if d.HasChange("users") {
-		anyChange = true
-		oldUsers, newUsers := d.GetChange("users")
-		oldUsersInterface := oldUsers.([]interface{})
-		oldUsersList := make([]string, len(oldUsersInterface))
-		for i, v := range oldUsersInterface {
-			oldUsersList[i] = v.(string)
-		}
-		newUsersInterface := newUsers.([]interface{})
-		newUsersList = make([]string, len(newUsersInterface))
-		for i, v := range newUsersInterface {
-			newUsersList[i] = v.(string)
-		}
-		missingUserList = getMissingUsers(oldUsersList, newUsersList)
-		addedUserList = getAddedUsers(oldUsersList, newUsersList)
-	}
-
-	if !anyChange {
-		return diags
-	}
-
-	err = client.Models.UpdateAccessModel(juju.UpdateAccessModelInput{
-		Model:  d.Id(),
-		Grant:  addedUserList,
-		Revoke: missingUserList,
-		Access: newAccess,
-	})
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	return diags
 }
 
 func getMissingUsers(oldUsers, newUsers []string) []string {
