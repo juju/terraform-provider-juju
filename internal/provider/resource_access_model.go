@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"strings"
 
@@ -293,6 +294,11 @@ func getAddedUsers(oldUsers, newUsers []string) []string {
 	return added
 }
 
+func (a accessModelResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+/*
 func resourceAccessModelImporter(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 	id := strings.Split(d.Id(), ":")
 	model := id[0]
@@ -313,3 +319,5 @@ func resourceAccessModelImporter(ctx context.Context, d *schema.ResourceData, me
 
 	return []*schema.ResourceData{d}, nil
 }
+
+*/
