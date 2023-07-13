@@ -3,6 +3,8 @@ package provider
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -68,8 +70,6 @@ func (a accessModelResource) Schema(ctx context.Context, req resource.SchemaRequ
 }
 
 func (a accessModelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	client := a.client
-
 	var plan accessModelResourceModel
 
 	// Read Terraform configuration from the request into the model
@@ -87,7 +87,7 @@ func (a accessModelResource) Create(ctx context.Context, req resource.CreateRequ
 
 	modelStr := plan.Model.String()
 	// Get the modelUUID to call Models.GrantModel
-	uuid, err := client.Models.ResolveModelUUID(modelStr)
+	uuid, err := a.client.Models.ResolveModelUUID(modelStr)
 	if err != nil {
 		resp.Diagnostics.AddError("ClientError", err.Error())
 		return
@@ -97,7 +97,7 @@ func (a accessModelResource) Create(ctx context.Context, req resource.CreateRequ
 	accessStr := plan.Access.String()
 	// Call Models.GrantModel
 	for _, user := range users {
-		err := client.Models.GrantModel(juju.GrantModelInput{
+		err := a.client.Models.GrantModel(juju.GrantModelInput{
 			User:       user,
 			Access:     accessStr,
 			ModelUUIDs: modelUUIDs,
@@ -113,9 +113,54 @@ func (a accessModelResource) Create(ctx context.Context, req resource.CreateRequ
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (a accessModelResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
-	//TODO implement me
-	panic("implement me")
+func (a accessModelResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var plan accessModelResourceModel
+
+	// Get the Terraform state from the request into the plan
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resID := strings.Split(plan.ID.String(), ":")
+
+	// Get the users basetypes.ListValue
+	usersList := plan.Users.Elements()
+	stateUsers := make([]string, len(usersList))
+	for i, v := range usersList {
+		stateUsers[i] = v.String()
+	}
+
+	uuid, err := a.client.Models.ResolveModelUUID(resID[0])
+	if err != nil {
+		resp.Diagnostics.AddError("ClientError", err.Error())
+		return
+	}
+	response, err := a.client.Users.ModelUserInfo(uuid)
+	if err != nil {
+		resp.Diagnostics.AddError("ClientError", err.Error())
+		return
+	}
+
+	plan.Model = types.StringValue(resID[0])
+	plan.Access = types.StringValue(resID[1])
+
+	var users []string
+
+	for _, user := range stateUsers {
+		for _, modelUser := range response.ModelUserInfo {
+			if user == modelUser.UserName && string(modelUser.Access) == resID[1] {
+				users = append(users, modelUser.UserName)
+			}
+		}
+	}
+
+	uss, errDiag := basetypes.NewListValueFrom(ctx, types.StringType, users)
+	plan.Users = uss
+	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (a accessModelResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
@@ -128,6 +173,7 @@ func (a accessModelResource) Delete(ctx context.Context, request resource.Delete
 	panic("implement me")
 }
 
+/*
 func resourceAccessModel() *schema.Resource {
 	return &schema.Resource{
 		// This description is used by the documentation generator and the language server.
@@ -211,6 +257,7 @@ func resourceAccessModelRead(ctx context.Context, d *schema.ResourceData, meta i
 
 	return diags
 }
+*/
 
 // Updating the access model supports three cases
 // access and users both changed:
