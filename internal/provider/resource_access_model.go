@@ -17,7 +17,7 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-func NewAccessModelResource() resource.Resource {
+func NewAccessModelResource() resource.ResourceWithConfigure {
 	return &accessModelResource{}
 }
 
@@ -34,11 +34,11 @@ type accessModelResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
-func (a accessModelResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (a *accessModelResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_access_model"
 }
 
-func (a accessModelResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (a *accessModelResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A resource that represent a Juju Access Model.",
 		Attributes: map[string]schema.Attribute{
@@ -75,7 +75,7 @@ func (a accessModelResource) Schema(ctx context.Context, req resource.SchemaRequ
 // Configure enables provider-level data or clients to be set in the
 // provider-defined DataSource type. It is separately executed for each
 // ReadDataSource RPC.
-func (a accessModelResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (a *accessModelResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -92,7 +92,7 @@ func (a accessModelResource) Configure(_ context.Context, req resource.Configure
 	a.client = client
 }
 
-func (a accessModelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (a *accessModelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan accessModelResourceModel
 
 	// Read Terraform configuration from the request into the model
@@ -101,12 +101,9 @@ func (a accessModelResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
-	// Get the users basetypes.ListValue
-	usersList := plan.Users.Elements()
-	users := make([]string, len(usersList))
-	for i, v := range usersList {
-		users[i] = v.String()
-	}
+	// Get the users
+	var users []string
+	plan.Users.ElementsAs(ctx, users, false)
 
 	modelNameStr := plan.Model.ValueString()
 	// Get the modelUUID to call Models.GrantModel
@@ -136,7 +133,7 @@ func (a accessModelResource) Create(ctx context.Context, req resource.CreateRequ
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (a accessModelResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var plan accessModelResourceModel
 
 	// Get the Terraform state from the request into the plan
@@ -147,17 +144,14 @@ func (a accessModelResource) Read(ctx context.Context, req resource.ReadRequest,
 
 	resID := strings.Split(plan.ID.ValueString(), ":")
 
-	// Get the users basetypes.ListValue
-	usersList := plan.Users.Elements()
-	stateUsers := make([]string, len(usersList))
-	for i, v := range usersList {
-		stateUsers[i] = v.String()
-	}
+	// Get the users
+	var stateUsers []string
+	plan.Users.ElementsAs(ctx, stateUsers, false)
 
 	// Prevent a segfault if client is not yet configured
 	if a.client == nil {
 		resp.Diagnostics.AddError(
-			"Client Not Configured",
+			"Access Model Resource - Read : Client Not Configured",
 			"Expected configured Juju Client. Please report this issue to the provider developers.",
 		)
 		return
@@ -200,7 +194,7 @@ func (a accessModelResource) Read(ctx context.Context, req resource.ReadRequest,
 // for missing users - revoke access
 // for new users - apply access
 // access changed - apply new access
-func (a accessModelResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state accessModelResourceModel
 
 	// Get the Terraform state from the request into the plan
@@ -227,18 +221,12 @@ func (a accessModelResource) Update(ctx context.Context, req resource.UpdateRequ
 		anyChange = true
 
 		// Get the users that are in the current state
-		stateUserList := plan.Users.Elements()
-		stateUsers := make([]string, len(stateUserList))
-		for i, v := range stateUserList {
-			stateUsers[i] = v.String()
-		}
+		var stateUsers []string
+		state.Users.ElementsAs(ctx, stateUsers, false)
 
 		// Get the users that are in the planned states
-		planUserList := plan.Users.Elements()
-		planUsers := make([]string, len(planUserList))
-		for i, v := range planUserList {
-			planUsers[i] = v.String()
-		}
+		var planUsers []string
+		plan.Users.ElementsAs(ctx, planUsers, false)
 
 		missingUserList = getMissingUsers(stateUsers, planUsers)
 		addedUserList = getAddedUsers(stateUsers, planUsers)
@@ -254,6 +242,14 @@ func (a accessModelResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
+	// Prevent a segfault if client is not yet configured
+	if a.client == nil {
+		resp.Diagnostics.AddError(
+			"Access Model Resource - Update : Client Not Configured",
+			"Expected configured Juju Client. Please report this issue to the provider developers.",
+		)
+		return
+	}
 	err := a.client.Models.UpdateAccessModel(juju.UpdateAccessModelInput{
 		Model:  plan.ID.ValueString(),
 		Grant:  addedUserList,
@@ -263,10 +259,9 @@ func (a accessModelResource) Update(ctx context.Context, req resource.UpdateRequ
 	if err != nil {
 		resp.Diagnostics.AddError("ClientError", err.Error())
 	}
-
 }
 
-func (a accessModelResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (a *accessModelResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var plan accessModelResourceModel
 
 	// Get the Terraform state from the request into the plan
@@ -275,17 +270,14 @@ func (a accessModelResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	// Get the users basetypes.ListValue
-	usersList := plan.Users.Elements()
-	stateUsers := make([]string, len(usersList))
-	for i, v := range usersList {
-		stateUsers[i] = v.String()
-	}
+	// Get the users
+	var stateUsers []string
+	plan.Users.ElementsAs(ctx, stateUsers, false)
 
 	// Prevent a segfault if client is not yet configured
 	if a.client == nil {
 		resp.Diagnostics.AddError(
-			"Client Not Configured",
+			"Access Model Resource - Delete : Client Not Configured",
 			"Expected configured Juju Client. Please report this issue to the provider developers.",
 		)
 		return
@@ -334,30 +326,6 @@ func getAddedUsers(oldUsers, newUsers []string) []string {
 	return added
 }
 
-func (a accessModelResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (a *accessModelResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
-
-/*
-func resourceAccessModelImporter(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	id := strings.Split(d.Id(), ":")
-	model := id[0]
-	access := id[1]
-	users := strings.Split(id[2], ",")
-
-	if err := d.Set("model", model); err != nil {
-		return nil, err
-	}
-	if err := d.Set("access", access); err != nil {
-		return nil, err
-	}
-	if err := d.Set("users", users); err != nil {
-		return nil, err
-	}
-
-	d.SetId(fmt.Sprintf("%s:%s", model, access))
-
-	return []*schema.ResourceData{d}, nil
-}
-
-*/
