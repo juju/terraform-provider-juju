@@ -3,12 +3,12 @@
 page_title: "juju_user Resource - terraform-provider-juju"
 subcategory: ""
 description: |-
-  A resource that represent a Juju User.
+  A resource that represents a Juju User.
 ---
 
 # juju_user (Resource)
 
-A resource that represent a Juju User.
+A resource that represents a Juju User.
 
 
 
@@ -18,11 +18,11 @@ A resource that represent a Juju User.
 ### Required
 
 - `name` (String) The name to be assigned to the user
-- `password` (String) The password to be assigned to the user
+- `password` (String, Sensitive) The password to be assigned to the user
 
 ### Optional
 
-- `display_name` (String) The display name to be assigned to the user
+- `display_name` (String) The display name to be assigned to the user (optional)
 
 ### Read-Only
 
