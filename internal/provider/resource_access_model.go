@@ -17,7 +17,12 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-func NewAccessModelResource() resource.ResourceWithConfigure {
+// Ensure provider defined types fully satisfy framework interfaces.
+var _ resource.Resource = &accessModelResource{}
+var _ resource.ResourceWithConfigure = &accessModelResource{}
+var _ resource.ResourceWithImportState = &accessModelResource{}
+
+func NewAccessModelResource() resource.Resource {
 	return &accessModelResource{}
 }
 
