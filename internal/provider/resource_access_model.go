@@ -72,6 +72,26 @@ func (a accessModelResource) Schema(ctx context.Context, req resource.SchemaRequ
 	}
 }
 
+// Configure enables provider-level data or clients to be set in the
+// provider-defined DataSource type. It is separately executed for each
+// ReadDataSource RPC.
+func (a accessModelResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	// Prevent panic if the provider has not been configured.
+	if req.ProviderData == nil {
+		return
+	}
+
+	client, ok := req.ProviderData.(*juju.Client)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *juju.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
+	a.client = client
+}
+
 func (a accessModelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan accessModelResourceModel
 
@@ -134,11 +154,20 @@ func (a accessModelResource) Read(ctx context.Context, req resource.ReadRequest,
 		stateUsers[i] = v.String()
 	}
 
+	// Prevent a segfault if client is not yet configured
+	if a.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Not Configured",
+			"Expected configured Juju Client. Please report this issue to the provider developers.",
+		)
+		return
+	}
 	uuid, err := a.client.Models.ResolveModelUUID(resID[0])
 	if err != nil {
 		resp.Diagnostics.AddError("ClientError", err.Error())
 		return
 	}
+
 	response, err := a.client.Users.ModelUserInfo(uuid)
 	if err != nil {
 		resp.Diagnostics.AddError("ClientError", err.Error())
@@ -253,6 +282,14 @@ func (a accessModelResource) Delete(ctx context.Context, req resource.DeleteRequ
 		stateUsers[i] = v.String()
 	}
 
+	// Prevent a segfault if client is not yet configured
+	if a.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Not Configured",
+			"Expected configured Juju Client. Please report this issue to the provider developers.",
+		)
+		return
+	}
 	err := a.client.Models.DestroyAccessModel(juju.DestroyAccessModelInput{
 		Model:  plan.ID.ValueString(),
 		Revoke: stateUsers,
