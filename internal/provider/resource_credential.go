@@ -25,37 +25,36 @@ type credentialResource struct {
 	client *juju.Client
 }
 
-func (c credentialResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
+func (c credentialResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_credential"
+}
+
+func (c credentialResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (c credentialResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+func (c credentialResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (c credentialResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
+func (c credentialResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (c credentialResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
+func (c credentialResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (c credentialResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
+func (c credentialResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (c credentialResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (c credentialResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
+func (c credentialResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	//TODO implement me
 	panic("implement me")
 }
