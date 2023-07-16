@@ -3,6 +3,8 @@ package provider
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"strconv"
 	"strings"
 
@@ -10,6 +12,65 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
+
+// Ensure provider defined types fully satisfy framework interfaces.
+var _ resource.Resource = &credentialResource{}
+var _ resource.ResourceWithConfigure = &credentialResource{}
+
+func NewCredentialResource() resource.Resource {
+	return &credentialResource{}
+}
+
+type credentialResource struct {
+	client *juju.Client
+}
+
+func (c credentialResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c credentialResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c credentialResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c credentialResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c credentialResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c credentialResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c credentialResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+type credentialResourceModel struct {
+	Cloud                types.List   `tfsdk:"cloud"`
+	Attributes           types.Map    `tfsdk:"attributes"`
+	AuthType             types.String `tfsdk:"auth_type"`
+	ClientCredential     types.Bool   `tfsdk:"client_credential"`
+	ControllerCredential types.Bool   `tfsdk:"controller_credential"`
+	Name                 types.String `tfsdk:"name"`
+
+	// ID required by the testing framework
+	ID types.String `tfsdk:"id"`
+}
 
 func resourceCredential() *schema.Resource {
 	return &schema.Resource{

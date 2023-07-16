@@ -66,7 +66,6 @@ func New(version string) func() *schema.Provider {
 			},
 			ResourcesMap: map[string]*schema.Resource{
 				"juju_application": resourceApplication(),
-				"juju_credential":  resourceCredential(),
 				"juju_integration": resourceIntegration(),
 				"juju_model":       resourceModel(),
 				"juju_offer":       resourceOffer(),
@@ -363,6 +362,7 @@ func (p *jujuProvider) Resources(ctx context.Context) []func() resource.Resource
 		func() resource.Resource { return NewAccessModelResource() },
 		func() resource.Resource { return NewMachineResource() },
 		func() resource.Resource { return NewUserResource() },
+		func() resource.Resource { return NewCredentialResource() },
 	}
 }
 
