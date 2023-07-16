@@ -3,19 +3,22 @@ package provider
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"strconv"
-	"strings"
-
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &credentialResource{}
 var _ resource.ResourceWithConfigure = &credentialResource{}
+var _ resource.ResourceWithImportState = &credentialResource{}
 
 func NewCredentialResource() resource.Resource {
 	return &credentialResource{}
@@ -25,13 +28,73 @@ type credentialResource struct {
 	client *juju.Client
 }
 
+type credentialResourceModel struct {
+	Cloud                types.List   `tfsdk:"cloud"`
+	Attributes           types.Map    `tfsdk:"attributes"`
+	AuthType             types.String `tfsdk:"auth_type"`
+	ClientCredential     types.Bool   `tfsdk:"client_credential"`
+	ControllerCredential types.Bool   `tfsdk:"controller_credential"`
+	Name                 types.String `tfsdk:"name"`
+
+	// ID required by the testing framework
+	ID types.String `tfsdk:"id"`
+}
+
 func (c credentialResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_credential"
 }
 
 func (c credentialResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	//TODO implement me
-	panic("implement me")
+	resp.Schema = schema.Schema{
+		Description: "A resource that represent a credential for a cloud.",
+		Attributes: map[string]schema.Attribute{
+			"cloud": schema.ListNestedAttribute{
+				Description: "JuJu Cloud where the credentials will be used to access",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							Description: "The name of the cloud",
+							Required:    true,
+						},
+					},
+				},
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.List{
+					listvalidator.SizeAtMost(1),
+				},
+			},
+			"attributes": schema.MapAttribute{
+				Description: "Credential attributes accordingly to the cloud",
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"auth_type": schema.StringAttribute{
+				Description: "Credential authorization type",
+				Required:    true,
+			},
+			"client_credential": schema.BoolAttribute{
+				Description: "Add credentials to the client",
+				Optional:    true,
+				Default:     booldefault.StaticBool(false),
+			},
+			"controller_credential": schema.BoolAttribute{
+				Description: "Add credentials to the controller",
+				Optional:    true,
+				Default:     booldefault.StaticBool(true),
+			},
+			"name": schema.StringAttribute{
+				Description: "The name to be assigned to the credential",
+				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+		},
+	}
 }
 
 func (c credentialResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -71,18 +134,12 @@ func (c credentialResource) Configure(ctx context.Context, req resource.Configur
 	c.client = client
 }
 
-type credentialResourceModel struct {
-	Cloud                types.List   `tfsdk:"cloud"`
-	Attributes           types.Map    `tfsdk:"attributes"`
-	AuthType             types.String `tfsdk:"auth_type"`
-	ClientCredential     types.Bool   `tfsdk:"client_credential"`
-	ControllerCredential types.Bool   `tfsdk:"controller_credential"`
-	Name                 types.String `tfsdk:"name"`
-
-	// ID required by the testing framework
-	ID types.String `tfsdk:"id"`
+func (c credentialResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	//TODO implement me
+	panic("implement me")
 }
 
+/*
 func resourceCredential() *schema.Resource {
 	return &schema.Resource{
 		Description: "A resource that represent a credential for a cloud.",
@@ -347,3 +404,6 @@ func convertOptionsBool(clientCredentialStr, controllerCredentialStr string) (bo
 func resourceCredentialImporter(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 	return []*schema.ResourceData{d}, nil
 }
+
+
+*/
