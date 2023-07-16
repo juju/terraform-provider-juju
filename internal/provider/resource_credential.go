@@ -55,8 +55,20 @@ func (c credentialResource) Delete(ctx context.Context, req resource.DeleteReque
 }
 
 func (c credentialResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	//TODO implement me
-	panic("implement me")
+	// Prevent panic if the provider has not been configured.
+	if req.ProviderData == nil {
+		return
+	}
+
+	client, ok := req.ProviderData.(*juju.Client)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *juju.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
+	c.client = client
 }
 
 type credentialResourceModel struct {
