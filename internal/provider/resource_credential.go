@@ -3,7 +3,9 @@ package provider
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -169,8 +171,97 @@ func AttributeEntryToString(input interface{}) string {
 }
 
 func (c credentialResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	//TODO implement me
-	panic("implement me")
+	var plan credentialResourceModel
+
+	// Read Terraform configuration from the request into the resource model
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Retrieve and validate the ID
+	resID := strings.Split(plan.ID.ValueString(), ":")
+	if len(resID) != 4 {
+		resp.Diagnostics.AddError("Provider Error - Credential Resource : Read",
+			fmt.Sprintf("Invalid ID - expected {credentialName, cloudName, isClient, isController} - given : %v",
+				resID))
+		return
+	}
+	// Extract fields from the ID
+	credentialName, cloudName, clientCredentialStr, controllerCredentialStr := resID[0], resID[1], resID[2], resID[3]
+
+	cloudList := []map[string]interface{}{{
+		"name": cloudName,
+	}}
+	cloud, errDiag := basetypes.NewListValueFrom(ctx, types.ObjectType{}, cloudList)
+	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.Cloud = cloud
+
+	clientCredential, controllerCredential, err := convertOptionsBool(clientCredentialStr, controllerCredentialStr)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", err.Error())
+		return
+	}
+
+	plan.ClientCredential = types.BoolValue(clientCredential)
+	plan.ControllerCredential = types.BoolValue(controllerCredential)
+
+	// Prevent runtime to freak out if client is not configured
+	if c.client == nil {
+		resp.Diagnostics.AddError(
+			"Credential Resource - Create : Client Not Configured",
+			"Expected configured Juju Client. Please report this issue to the provider developers.",
+		)
+		return
+	}
+	response, err := c.client.Credentials.ReadCredential(juju.ReadCredentialInput{
+		ClientCredential:     clientCredential,
+		CloudName:            cloudName,
+		ControllerCredential: controllerCredential,
+		Name:                 credentialName,
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", err.Error())
+		return
+	}
+
+	plan.Name = types.StringValue(response.CloudCredential.Label)
+	plan.AuthType = types.StringValue(string(response.CloudCredential.AuthType()))
+
+	receivedAttributes := response.CloudCredential.Attributes()
+
+	var configuredAttributes map[string]interface{}
+	plan.Attributes.ElementsAs(ctx, configuredAttributes, false)
+	for configAtr := range configuredAttributes {
+		if receivedValue, exists := receivedAttributes[configAtr]; exists {
+			configuredAttributes[configAtr] = AttributeEntryToString(receivedValue)
+		}
+	}
+
+	plan.Attributes, errDiag = basetypes.NewMapValueFrom(ctx, types.StringType, configuredAttributes)
+	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	// Set the plan onto the Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func convertOptionsBool(clientCredentialStr, controllerCredentialStr string) (bool, bool, error) {
+	clientCredentialBool, err := strconv.ParseBool(clientCredentialStr)
+	if err != nil {
+		return false, false, fmt.Errorf("unable to parse client credential from provided ID")
+	}
+
+	controllerCredentialBool, err := strconv.ParseBool(controllerCredentialStr)
+	if err != nil {
+		return false, false, fmt.Errorf("unable to parse controller credential from provided ID")
+	}
+
+	return clientCredentialBool, controllerCredentialBool, nil
 }
 
 func (c credentialResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -302,7 +393,6 @@ func resourceCredentialCreate(ctx context.Context, d *schema.ResourceData, meta 
 
 	return diags
 }
-
 
 func resourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
@@ -440,19 +530,7 @@ func resourceCredentialDelete(ctx context.Context, d *schema.ResourceData, meta 
 	return diags
 }
 
-func convertOptionsBool(clientCredentialStr, controllerCredentialStr string) (bool, bool, error) {
-	clientCredentialBool, err := strconv.ParseBool(clientCredentialStr)
-	if err != nil {
-		return false, false, fmt.Errorf("unable to parse client credential from provided ID")
-	}
 
-	controllerCredentialBool, err := strconv.ParseBool(controllerCredentialStr)
-	if err != nil {
-		return false, false, fmt.Errorf("unable to parse controller credential from provided ID")
-	}
-
-	return clientCredentialBool, controllerCredentialBool, nil
-}
 
 // TODO
 func resourceCredentialImporter(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
