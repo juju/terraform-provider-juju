@@ -46,11 +46,11 @@ type credentialResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
-func (c credentialResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (c *credentialResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_credential"
 }
 
-func (c credentialResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (c *credentialResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A resource that represent a credential for a cloud.",
 		Attributes: map[string]schema.Attribute{
@@ -85,11 +85,13 @@ func (c credentialResource) Schema(ctx context.Context, req resource.SchemaReque
 			"client_credential": schema.BoolAttribute{
 				Description: "Add credentials to the client",
 				Optional:    true,
+				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 			},
 			"controller_credential": schema.BoolAttribute{
 				Description: "Add credentials to the controller",
 				Optional:    true,
+				Computed:    true,
 				Default:     booldefault.StaticBool(true),
 			},
 			"name": schema.StringAttribute{
@@ -103,7 +105,7 @@ func (c credentialResource) Schema(ctx context.Context, req resource.SchemaReque
 	}
 }
 
-func (c credentialResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan credentialResourceModel
 
 	// Read Terraform configuration from the request into the resource model
@@ -170,7 +172,7 @@ func AttributeEntryToString(input interface{}) string {
 	}
 }
 
-func (c credentialResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var plan credentialResourceModel
 
 	// Read Terraform configuration from the request into the resource model
@@ -193,6 +195,7 @@ func (c credentialResource) Read(ctx context.Context, req resource.ReadRequest, 
 	cloudList := []map[string]interface{}{{
 		"name": cloudName,
 	}}
+
 	cloud, errDiag := basetypes.NewListValueFrom(ctx, types.ObjectType{}, cloudList)
 	resp.Diagnostics.Append(errDiag...)
 	if resp.Diagnostics.HasError() {
@@ -264,7 +267,7 @@ func convertOptionsBool(clientCredentialStr, controllerCredentialStr string) (bo
 	return clientCredentialBool, controllerCredentialBool, nil
 }
 
-func (c credentialResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state credentialResourceModel
 
 	// Read Terraform configuration from the request into the resource model
@@ -335,15 +338,52 @@ func (c credentialResource) Update(ctx context.Context, req resource.UpdateReque
 
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
-
 }
 
-func (c credentialResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	//TODO implement me
-	panic("implement me")
+func (c *credentialResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var plan credentialResourceModel
+
+	// Read Terraform configuration from the request into the resource model
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Retrieve and validate the ID
+	resID := strings.Split(plan.ID.ValueString(), ":")
+	if len(resID) != 4 {
+		resp.Diagnostics.AddError("Provider Error - Credential Resource : Read",
+			fmt.Sprintf("Invalid ID - expected {credentialName, cloudName, isClient, isController} - given : %v",
+				resID))
+		return
+	}
+	// Extract fields from the ID
+	credentialName, cloudName, clientCredentialStr, controllerCredentialStr := resID[0], resID[1], resID[2], resID[3]
+	clientCredential, controllerCredential, err := convertOptionsBool(clientCredentialStr, controllerCredentialStr)
+	if err != nil {
+		resp.Diagnostics.AddError("Provider Error", err.Error())
+		return
+	}
+	// Prevent runtime to freak out if client is not configured
+	if c.client == nil {
+		resp.Diagnostics.AddError(
+			"Credential Resource - Read : Client Not Configured",
+			"Expected configured Juju Client. Please report this issue to the provider developers.",
+		)
+		return
+	}
+	err = c.client.Credentials.DestroyCredential(juju.DestroyCredentialInput{
+		ClientCredential:     clientCredential,
+		CloudName:            cloudName,
+		ControllerCredential: controllerCredential,
+		Name:                 credentialName,
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", err.Error())
+	}
 }
 
-func (c credentialResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (c *credentialResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -363,248 +403,3 @@ func (c credentialResource) Configure(ctx context.Context, req resource.Configur
 func (c credentialResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
-
-/*
-func resourceCredential() *schema.Resource {
-	return &schema.Resource{
-		Description: "A resource that represent a credential for a cloud.",
-
-		CreateContext: resourceCredentialCreate,
-		ReadContext:   resourceCredentialRead,
-		UpdateContext: resourceCredentialUpdate,
-		DeleteContext: resourceCredentialDelete,
-		Importer: &schema.ResourceImporter{
-			StateContext: resourceCredentialImporter,
-		},
-
-		Schema: map[string]*schema.Schema{
-			"cloud": {
-				Description: "JuJu Cloud where the credentials will be used to access",
-				Type:        schema.TypeList,
-				Optional:    true,
-				Computed:    true,
-				ForceNew:    true,
-				MaxItems:    1,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"name": {
-							Description: "The name of the cloud",
-							Type:        schema.TypeString,
-							Required:    true,
-						},
-					},
-				},
-			},
-			"attributes": {
-				Description: "Credential attributes accordingly to the cloud",
-				Type:        schema.TypeMap,
-				Optional:    true,
-				Elem:        &schema.Schema{Type: schema.TypeString, Optional: true},
-			},
-			"auth_type": {
-				Description: "Credential authorization type",
-				Type:        schema.TypeString,
-				Required:    true,
-			},
-			"client_credential": {
-				Description: "Add credentials to the client",
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Default:     false,
-			},
-			"controller_credential": {
-				Description: "Add credentials to the controller",
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Default:     true,
-			},
-			"name": {
-				Description: "The name to be assigned to the credential",
-				Type:        schema.TypeString,
-				Required:    true,
-				ForceNew:    true,
-			},
-		},
-	}
-}
-
-
-func resourceCredentialCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
-	var diags diag.Diagnostics
-
-	attributesRaw := d.Get("attributes").(map[string]interface{})
-	authType := d.Get("auth_type").(string)
-	clientCredential := d.Get("client_credential").(bool)
-	cloud := d.Get("cloud").([]interface{})
-	controllerCredential := d.Get("controller_credential").(bool)
-	credentialName := d.Get("name").(string)
-
-	attributes := make(map[string]string)
-	for key, value := range attributesRaw {
-		attributes[key] = AttributeEntryToString(value)
-	}
-	response, err := client.Credentials.CreateCredential(juju.CreateCredentialInput{
-		Attributes:           attributes,
-		AuthType:             authType,
-		ClientCredential:     clientCredential,
-		CloudList:            cloud,
-		ControllerCredential: controllerCredential,
-		Name:                 credentialName,
-	})
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	id := fmt.Sprintf("%s:%s:%t:%t", credentialName, response.CloudName, clientCredential, controllerCredential)
-	d.SetId(id)
-
-	return diags
-}
-
-func resourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
-	var diags diag.Diagnostics
-
-	id := strings.Split(d.Id(), ":")
-	if len(id) != 4 {
-		return diag.Errorf("unable to parse credential name and cloud name from provided ID")
-	}
-	credentialName, cloudName, clientCredentialStr, controllerCredentialStr := id[0], id[1], id[2], id[3]
-
-	cloudList := []map[string]interface{}{{
-		"name": cloudName,
-	}}
-	if err := d.Set("cloud", cloudList); err != nil {
-		return diag.FromErr(err)
-	}
-
-	clientCredential, controllerCredential, err := convertOptionsBool(clientCredentialStr, controllerCredentialStr)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	if err := d.Set("client_credential", clientCredential); err != nil {
-		return diag.FromErr(err)
-	}
-
-	if err := d.Set("controller_credential", controllerCredential); err != nil {
-		return diag.FromErr(err)
-	}
-
-	response, err := client.Credentials.ReadCredential(juju.ReadCredentialInput{
-		ClientCredential:     clientCredential,
-		CloudName:            cloudName,
-		ControllerCredential: controllerCredential,
-		Name:                 credentialName,
-	})
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	if err := d.Set("name", response.CloudCredential.Label); err != nil {
-		return diag.FromErr(err)
-	}
-
-	if err := d.Set("auth_type", response.CloudCredential.AuthType()); err != nil {
-		return diag.FromErr(err)
-	}
-
-	receivedAttributes := response.CloudCredential.Attributes()
-
-	configuredAttributes := d.Get("attributes").(map[string]interface{})
-	for configAtr := range configuredAttributes {
-		if receivedValue, exists := receivedAttributes[configAtr]; exists {
-			configuredAttributes[configAtr] = AttributeEntryToString(receivedValue)
-		}
-	}
-	if err = d.Set("attributes", configuredAttributes); err != nil {
-		return diag.FromErr(err)
-	}
-	return diags
-}
-
-func resourceCredentialUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-	var diags diag.Diagnostics
-
-	id := strings.Split(d.Id(), ":")
-	if len(id) != 4 {
-		return diag.Errorf("unable to parse credential name and cloud name from provided ID")
-	}
-	credentialName, cloudName := id[0], id[1]
-
-	if !d.HasChange("auth_type") && !d.HasChange("client_credential") && !d.HasChange("controller_credential") && !d.HasChange("attributes") {
-		// no changes
-		return diags
-	}
-
-	newAuthType := d.Get("auth_type").(string)
-	newClientCredential := d.Get("client_credential").(bool)
-	newControllerCredential := d.Get("controller_credential").(bool)
-	newAttributes := make(map[string]string)
-	attributesRaw := d.Get("attributes").(map[string]interface{})
-	for key, value := range attributesRaw {
-		newAttributes[key] = AttributeEntryToString(value)
-	}
-
-	err := client.Credentials.UpdateCredential(juju.UpdateCredentialInput{
-		Attributes:           newAttributes,
-		AuthType:             newAuthType,
-		ClientCredential:     newClientCredential,
-		CloudName:            cloudName,
-		ControllerCredential: newControllerCredential,
-		Name:                 credentialName,
-	})
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	newID := fmt.Sprintf("%s:%s:%t:%t", credentialName, cloudName, newClientCredential, newControllerCredential)
-	d.SetId(newID)
-
-	return diags
-}
-
-func resourceCredentialDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// When removing cloud credential from a controller, Juju performs additional
-	// checks to ensure that there are no models using this credential. The provider will not force the removal
-	client := meta.(*juju.Client)
-	var diags diag.Diagnostics
-
-	id := strings.Split(d.Id(), ":")
-	if len(id) != 4 {
-		return diag.Errorf("unable to parse credential name and cloud name from provided ID")
-	}
-	credentialName, cloudName, clientCredentialStr, controllerCredentialStr := id[0], id[1], id[2], id[3]
-	clientCredential, controllerCredential, err := convertOptionsBool(clientCredentialStr, controllerCredentialStr)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	err = client.Credentials.DestroyCredential(juju.DestroyCredentialInput{
-		ClientCredential:     clientCredential,
-		CloudName:            cloudName,
-		ControllerCredential: controllerCredential,
-		Name:                 credentialName,
-	})
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	d.SetId("")
-
-	return diags
-}
-
-
-
-// TODO
-func resourceCredentialImporter(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	return []*schema.ResourceData{d}, nil
-}
-
-
-*/
