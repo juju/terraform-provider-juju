@@ -15,7 +15,7 @@ require (
 	github.com/hashicorp/terraform-plugin-framework v1.3.2
 	github.com/hashicorp/terraform-plugin-go v0.18.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
-	github.com/hashicorp/terraform-plugin-mux v0.11.1
+	github.com/hashicorp/terraform-plugin-mux v0.11.2
 	github.com/hashicorp/terraform-plugin-testing v1.3.0
 	github.com/juju/charm/v8 v8.0.6
 	github.com/juju/cmd/v3 v3.0.10
