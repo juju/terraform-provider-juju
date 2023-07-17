@@ -3,7 +3,8 @@ package provider
 import (
 	"context"
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"strconv"
+
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -13,6 +14,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -99,8 +102,70 @@ func (c credentialResource) Schema(ctx context.Context, req resource.SchemaReque
 }
 
 func (c credentialResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	//TODO implement me
-	panic("implement me")
+	var plan credentialResourceModel
+
+	// Read Terraform configuration from the request into the resource model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get the resource fields
+	var attributesRaw map[string]interface{}
+	var authType string
+	var clientCredential bool
+	var cloud []interface{}
+	var controllerCredential bool
+	var credentialName string
+
+	plan.Attributes.ElementsAs(ctx, attributesRaw, false)
+	authType = plan.AuthType.ValueString()
+	clientCredential = plan.ClientCredential.ValueBool()
+	plan.Cloud.ElementsAs(ctx, cloud, false)
+	controllerCredential = plan.ControllerCredential.ValueBool()
+	credentialName = plan.Name.ValueString()
+
+	attributes := make(map[string]string)
+	for key, value := range attributesRaw {
+		attributes[key] = AttributeEntryToString(value)
+	}
+	// Prevent a segfault if client is not yet configured
+	if c.client == nil {
+		resp.Diagnostics.AddError(
+			"Credential Resource - Create : Client Not Configured",
+			"Expected configured Juju Client. Please report this issue to the provider developers.",
+		)
+		return
+	}
+	response, err := c.client.Credentials.CreateCredential(juju.CreateCredentialInput{
+		Attributes:           attributes,
+		AuthType:             authType,
+		ClientCredential:     clientCredential,
+		CloudList:            cloud,
+		ControllerCredential: controllerCredential,
+		Name:                 credentialName,
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(fmt.Sprintf("%s:%s:%t:%t", credentialName, response.CloudName, clientCredential, controllerCredential))
+
+	// Set the desired plan onto the Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func AttributeEntryToString(input interface{}) string {
+	switch t := input.(type) {
+	case bool:
+		return strconv.FormatBool(t)
+	case int64:
+		return strconv.FormatInt(t, 10)
+	case float64:
+		return strconv.FormatFloat(t, 'f', 0, 64)
+	default:
+		return input.(string)
+	}
 }
 
 func (c credentialResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -203,18 +268,6 @@ func resourceCredential() *schema.Resource {
 	}
 }
 
-func AttributeEntryToString(input interface{}) string {
-	switch t := input.(type) {
-	case bool:
-		return strconv.FormatBool(t)
-	case int64:
-		return strconv.FormatInt(t, 10)
-	case float64:
-		return strconv.FormatFloat(t, 'f', 0, 64)
-	default:
-		return input.(string)
-	}
-}
 
 func resourceCredentialCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
@@ -249,6 +302,7 @@ func resourceCredentialCreate(ctx context.Context, d *schema.ResourceData, meta 
 
 	return diags
 }
+
 
 func resourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*juju.Client)
