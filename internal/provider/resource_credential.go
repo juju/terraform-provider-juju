@@ -212,7 +212,7 @@ func (c credentialResource) Read(ctx context.Context, req resource.ReadRequest, 
 	// Prevent runtime to freak out if client is not configured
 	if c.client == nil {
 		resp.Diagnostics.AddError(
-			"Credential Resource - Create : Client Not Configured",
+			"Credential Resource - Read : Client Not Configured",
 			"Expected configured Juju Client. Please report this issue to the provider developers.",
 		)
 		return
@@ -265,8 +265,77 @@ func convertOptionsBool(clientCredentialStr, controllerCredentialStr string) (bo
 }
 
 func (c credentialResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	//TODO implement me
-	panic("implement me")
+	var plan, state credentialResourceModel
+
+	// Read Terraform configuration from the request into the resource model
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Return early if no change
+	if plan.AuthType.Equal(state.AuthType) &&
+		plan.ClientCredential.Equal(state.ClientCredential) &&
+		plan.ControllerCredential.Equal(state.ControllerCredential) &&
+		plan.Attributes.Equal(state.Attributes) {
+		return
+	}
+
+	// Retrieve and validate the ID
+	resID := strings.Split(plan.ID.ValueString(), ":")
+	if len(resID) != 4 {
+		resp.Diagnostics.AddError("Provider Error - Credential Resource : Read",
+			fmt.Sprintf("Invalid ID - expected {credentialName, cloudName, isClient, isController} - given : %v",
+				resID))
+		return
+	}
+	// Extract fields from the ID for the UpdateCredentialInput call
+	credentialName, cloudName := resID[0], resID[1]
+
+	newAuthType := plan.AuthType.ValueString()
+	newClientCredential := plan.ClientCredential.ValueBool()
+	newControllerCredential := plan.ControllerCredential.ValueBool()
+	var attributesRaw map[string]interface{}
+	plan.Attributes.ElementsAs(ctx, attributesRaw, false)
+	newAttributes := make(map[string]string)
+	for key, value := range attributesRaw {
+		newAttributes[key] = AttributeEntryToString(value)
+	}
+
+	// Prevent runtime to freak out if client is not configured
+	if c.client == nil {
+		resp.Diagnostics.AddError(
+			"Credential Resource - Update : Client Not Configured",
+			"Expected configured Juju Client. Please report this issue to the provider developers.",
+		)
+		return
+	}
+
+	err := c.client.Credentials.UpdateCredential(juju.UpdateCredentialInput{
+		Attributes:           newAttributes,
+		AuthType:             newAuthType,
+		ClientCredential:     newClientCredential,
+		CloudName:            cloudName,
+		ControllerCredential: newControllerCredential,
+		Name:                 credentialName,
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", err.Error())
+		return
+	}
+
+	newID := fmt.Sprintf("%s:%s:%t:%t", credentialName, cloudName, newClientCredential, newControllerCredential)
+	plan.ID = types.StringValue(newID)
+
+	// Set the plan onto the Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+
 }
 
 func (c credentialResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
