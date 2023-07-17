@@ -19,7 +19,7 @@ func TestAcc_ResourceCredential_sdk2_framework_migrate(t *testing.T) {
 	authTypeInvalid := "invalid"
 	token := "123abc"
 
-	resourceName := "juju_credential.credential"
+	resourceName := "juju_credential.test-credential"
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: muxProviderFactories,
@@ -30,10 +30,23 @@ func TestAcc_ResourceCredential_sdk2_framework_migrate(t *testing.T) {
 				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
 				Config:      testAccResourceCredential_sdk2_framework_migrate(t, credentialName, authTypeInvalid),
 				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: supported auth-types (.*), \"%s\" not supported", authTypeInvalid)),
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: "0.8.0",
+						Source:            "juju/juju",
+					},
+				},
+				PreConfig: func() { testAccPreCheck(t) },
 			},
 			{
 				Config:      testAccResourceCredential_sdk2_framework_migrate(t, credentialInvalidName, authType),
 				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: \"%s\" is not a valid credential name", credentialInvalidName)),
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: "0.8.0",
+						Source:            "juju/juju",
+					},
+				},
 			},
 			{
 				Config: testAccResourceCredential_sdk2_framework_migrate(t, credentialName, authType),
@@ -51,6 +64,7 @@ func TestAcc_ResourceCredential_sdk2_framework_migrate(t *testing.T) {
 				),
 			},
 			{
+				Destroy:           true,
 				ImportStateVerify: true,
 				ImportState:       true,
 				ImportStateVerifyIgnore: []string{
@@ -160,7 +174,7 @@ func TestAcc_ResourceCredential_Stable(t *testing.T) {
 
 func testAccResourceCredential_Stable(t *testing.T, credentialName string, authType string) string {
 	return fmt.Sprintf(`
-resource "juju_credential" "credential" {
+resource "juju_credential" "test-credential" {
   name = %q
 
   cloud {
@@ -173,7 +187,7 @@ resource "juju_credential" "credential" {
 
 func testAccResourceCredentialToken_Stable(t *testing.T, credentialName, authType, token string) string {
 	return fmt.Sprintf(`
-resource "juju_credential" "credential" {
+resource "juju_credential" "test-credential" {
   name = %q
 
   cloud {
