@@ -110,6 +110,12 @@ func (c *credentialResource) Schema(_ context.Context, _ resource.SchemaRequest,
 }
 
 func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	// Check first if the client is configured
+	if c.client == nil {
+		addClientNotConfigured(&resp.Diagnostics, "create")
+		return
+	}
+
 	var data *credentialResourceModel
 
 	// Read Terraform configuration from the request into the resource model
@@ -138,16 +144,6 @@ func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequ
 	// name
 	credentialName := data.Name.ValueString()
 
-	// Prevent a segfault if client is not yet configured
-	if c.client == nil {
-		resp.Diagnostics.AddError(
-			"Provider Error, Client Not Configured",
-			"Unable to create credential resource. Expected configured Juju Client. "+
-				"Please report this issue to the provider developers.",
-		)
-		return
-	}
-
 	// Perform logic or external calls
 	response, err := c.client.Credentials.CreateCredential(juju.CreateCredentialInput{
 		Attributes:           attributes,
@@ -170,6 +166,12 @@ func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequ
 }
 
 func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	// Check first if the client is configured
+	if c.client == nil {
+		addClientNotConfigured(&resp.Diagnostics, "read")
+		return
+	}
+
 	var data *credentialResourceModel
 
 	// Read Terraform configuration from the request into the resource model
@@ -210,15 +212,6 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 	data.ClientCredential = types.BoolValue(clientCredential)
 	data.ControllerCredential = types.BoolValue(controllerCredential)
 
-	// Prevent runtime to freak out if client is not configured
-	if c.client == nil {
-		resp.Diagnostics.AddError(
-			"Provider Error, Client Not Configured",
-			"Unable to read credential resource. Expected configured Juju Client. "+
-				"Please report this issue to the provider developers.",
-		)
-		return
-	}
 	// Retrieve updated resource state from upstream
 	response, err := c.client.Credentials.ReadCredential(juju.ReadCredentialInput{
 		ClientCredential:     clientCredential,
@@ -239,8 +232,7 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 	// retrieve the attributes
 	receivedAttributes := response.CloudCredential.Attributes()
 	configuredAttributes := make(map[string]attr.Value)
-	var attributesRaw map[string]attr.Value
-	attributesRaw = data.Attributes.Elements()
+	attributesRaw := data.Attributes.Elements()
 
 	for k, rawAttr := range attributesRaw {
 		configuredAttributes[k] = rawAttr
@@ -265,6 +257,12 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 }
 
 func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	// Check first if the client is configured
+	if c.client == nil {
+		addClientNotConfigured(&resp.Diagnostics, "update")
+		return
+	}
+
 	var data, state *credentialResourceModel
 
 	// Read current state of resource prior to the update into the 'state' model
@@ -307,16 +305,6 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 	// attributes
 	newAttributes := convertRawAttributes(data.Attributes.Elements())
 
-	// Prevent runtime to freak out if client is not configured
-	if c.client == nil {
-		resp.Diagnostics.AddError(
-			"Provider Error, Client Not Configured",
-			"Unable to update credential resource. Expected configured Juju Client. "+
-				"Please report this issue to the provider developers.",
-		)
-		return
-	}
-
 	// Perform external call to modify resource
 	err := c.client.Credentials.UpdateCredential(juju.UpdateCredentialInput{
 		Attributes:           newAttributes,
@@ -339,6 +327,12 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 }
 
 func (c *credentialResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Check first if the client is configured
+	if c.client == nil {
+		addClientNotConfigured(&resp.Diagnostics, "delete")
+		return
+	}
+
 	var data *credentialResourceModel
 
 	// Read Terraform configuration from the request into the resource model
@@ -358,16 +352,6 @@ func (c *credentialResource) Delete(ctx context.Context, req resource.DeleteRequ
 	clientCredential, controllerCredential, err := convertOptionsBool(clientCredentialStr, controllerCredentialStr)
 	if err != nil {
 		resp.Diagnostics.AddError("Provider Error", err.Error())
-		return
-	}
-
-	// Prevent runtime to freak out if client is not configured
-	if c.client == nil {
-		resp.Diagnostics.AddError(
-			"Provider Error, Client Not Configured",
-			"Unable to delete credential resource. Expected configured Juju Client. "+
-				"Please report this issue to the provider developers.",
-		)
 		return
 	}
 
@@ -457,4 +441,12 @@ func convertOptionsBool(clientCredentialStr, controllerCredentialStr string) (bo
 	}
 
 	return clientCredentialBool, controllerCredentialBool, nil
+}
+
+func addClientNotConfigured(diag *diag.Diagnostics, method string) {
+	diag.AddError(
+		"Provider Error, Client Not Configured",
+		fmt.Sprintf("Unable to %v credential resource. Expected configured Juju Client. "+
+			"Please report this issue to the provider developers.", method),
+	)
 }
