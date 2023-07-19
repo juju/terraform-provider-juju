@@ -50,7 +50,6 @@ func init() {
 	frameworkProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev")),
 	}
-
 }
 
 func TestProvider(t *testing.T) {

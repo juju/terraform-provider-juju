@@ -45,6 +45,9 @@ func main() {
 		context.Background(),
 		provider.New(version)().GRPCProvider,
 	)
+	if err != nil {
+		log.Fatal().Msg(err.Error())
+	}
 
 	providers := []func() tfprotov6.ProviderServer{
 		providerserver.NewProtocol6(provider.NewJujuProvider(version)),
