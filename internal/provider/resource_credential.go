@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -160,35 +161,12 @@ func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequ
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create credential resource, got error: %s", err))
 		return
 	}
-	data.ID = types.StringValue(fmt.Sprintf("%s:%s:%t:%t", credentialName, response.CloudName, clientCredential, controllerCredential))
+	tflog.Trace(ctx, fmt.Sprintf("created credential resource %q", credentialName))
+
+	data.ID = types.StringValue(newIDFrom(credentialName, response.CloudName, clientCredential, controllerCredential))
 
 	// Write the state data into the Response.State
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-}
-
-func convertRawAttributes(attributesRaw map[string]attr.Value) map[string]string {
-	newAttributes := make(map[string]string)
-	for key, value := range attributesRaw {
-		newAttributes[key] = attributeEntryToString(valueAttrToString(value))
-	}
-	return newAttributes
-}
-
-func valueAttrToString(input attr.Value) string {
-	return types.StringValue(input.String()).ValueString()
-}
-
-func attributeEntryToString(input interface{}) string {
-	switch t := input.(type) {
-	case bool:
-		return strconv.FormatBool(t)
-	case int64:
-		return strconv.FormatInt(t, 10)
-	case float64:
-		return strconv.FormatFloat(t, 'f', 0, 64)
-	default:
-		return input.(string)
-	}
 }
 
 func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -252,6 +230,7 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read credential resource, got error: %s", err))
 		return
 	}
+	tflog.Trace(ctx, fmt.Sprintf("read credential resource %q", credentialName))
 
 	// retrieve name & auth_type
 	data.Name = types.StringValue(response.CloudCredential.Label)
@@ -283,31 +262,6 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 
 	// Write the state data into the Response.State
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-}
-
-func convertOptionsBool(clientCredentialStr, controllerCredentialStr string) (bool, bool, error) {
-	clientCredentialBool, err := strconv.ParseBool(clientCredentialStr)
-	if err != nil {
-		return false, false, fmt.Errorf("unable to parse client credential from provided ID")
-	}
-
-	controllerCredentialBool, err := strconv.ParseBool(controllerCredentialStr)
-	if err != nil {
-		return false, false, fmt.Errorf("unable to parse controller credential from provided ID")
-	}
-
-	return clientCredentialBool, controllerCredentialBool, nil
-}
-
-func retrieveValidateID(model *credentialResourceModel, diag *diag.Diagnostics, method string) []string {
-	resID := strings.Split(model.ID.ValueString(), ":")
-	if len(resID) != 4 {
-		diag.AddError("Provider Error",
-			fmt.Sprintf("unable to %v credential resource, invalid ID, expected {credentialName, cloudName, "+
-				"isClient, isController} - given : %v",
-				method, resID))
-	}
-	return resID
 }
 
 func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -376,9 +330,9 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update credential resource, got error: %s", err))
 		return
 	}
+	tflog.Trace(ctx, fmt.Sprintf("updated credential resource %q", credentialName))
 
-	newID := fmt.Sprintf("%s:%s:%t:%t", credentialName, cloudName, newClientCredential, newControllerCredential)
-	data.ID = types.StringValue(newID)
+	data.ID = types.StringValue(newIDFrom(credentialName, cloudName, newClientCredential, newControllerCredential))
 
 	// Write the updated state data into the Response.State
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -427,6 +381,7 @@ func (c *credentialResource) Delete(ctx context.Context, req resource.DeleteRequ
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete credential resource, got error: %s", err))
 	}
+	tflog.Trace(ctx, fmt.Sprintf("deleted credential resource %q", credentialName))
 }
 
 func (c *credentialResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -448,4 +403,58 @@ func (c *credentialResource) Configure(ctx context.Context, req resource.Configu
 
 func (c credentialResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func convertRawAttributes(attributesRaw map[string]attr.Value) map[string]string {
+	newAttributes := make(map[string]string)
+	for key, value := range attributesRaw {
+		newAttributes[key] = attributeEntryToString(valueAttrToString(value))
+	}
+	return newAttributes
+}
+
+func newIDFrom(credentialName string, cloudName string, clientCredential bool, controllerCredential bool) string {
+	return fmt.Sprintf("%s:%s:%t:%t", credentialName, cloudName, clientCredential, controllerCredential)
+}
+
+func retrieveValidateID(model *credentialResourceModel, diag *diag.Diagnostics, method string) []string {
+	resID := strings.Split(model.ID.ValueString(), ":")
+	if len(resID) != 4 {
+		diag.AddError("Provider Error",
+			fmt.Sprintf("unable to %v credential resource, invalid ID, expected {credentialName, cloudName, "+
+				"isClient, isController} - given : %v",
+				method, resID))
+	}
+	return resID
+}
+
+func valueAttrToString(input attr.Value) string {
+	return types.StringValue(input.String()).ValueString()
+}
+
+func attributeEntryToString(input interface{}) string {
+	switch t := input.(type) {
+	case bool:
+		return strconv.FormatBool(t)
+	case int64:
+		return strconv.FormatInt(t, 10)
+	case float64:
+		return strconv.FormatFloat(t, 'f', 0, 64)
+	default:
+		return input.(string)
+	}
+}
+
+func convertOptionsBool(clientCredentialStr, controllerCredentialStr string) (bool, bool, error) {
+	clientCredentialBool, err := strconv.ParseBool(clientCredentialStr)
+	if err != nil {
+		return false, false, fmt.Errorf("unable to parse client credential from provided ID")
+	}
+
+	controllerCredentialBool, err := strconv.ParseBool(controllerCredentialStr)
+	if err != nil {
+		return false, false, fmt.Errorf("unable to parse controller credential from provided ID")
+	}
+
+	return clientCredentialBool, controllerCredentialBool, nil
 }
