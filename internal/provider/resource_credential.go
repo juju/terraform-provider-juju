@@ -16,8 +16,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -112,7 +110,7 @@ func (c *credentialResource) Schema(_ context.Context, _ resource.SchemaRequest,
 func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Check first if the client is configured
 	if c.client == nil {
-		addClientNotConfigured(&resp.Diagnostics, "create")
+		addClientNotConfiguredError(&resp.Diagnostics, "create")
 		return
 	}
 
@@ -133,7 +131,7 @@ func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequ
 
 	// cloud.name
 	cloudAttributes := data.Cloud.Attributes()
-	cloudName := cloudAttributes["name"].(basetypes.StringValue).ValueString()
+	cloudName := cloudAttributes["name"].(types.String).ValueString()
 
 	// client_credential
 	clientCredential := data.ClientCredential.ValueBool()
@@ -159,7 +157,7 @@ func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 	tflog.Trace(ctx, fmt.Sprintf("created credential resource %q", credentialName))
 
-	data.ID = types.StringValue(newIDFrom(credentialName, response.CloudName, clientCredential, controllerCredential))
+	data.ID = types.StringValue(newCredentialIDFrom(credentialName, response.CloudName, clientCredential, controllerCredential))
 
 	// Write the state data into the Response.State
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -168,7 +166,7 @@ func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequ
 func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	// Check first if the client is configured
 	if c.client == nil {
-		addClientNotConfigured(&resp.Diagnostics, "read")
+		addClientNotConfiguredError(&resp.Diagnostics, "read")
 		return
 	}
 
@@ -182,12 +180,25 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 
 	// Access prior state data
 
-	resID := retrieveValidateID(data, &resp.Diagnostics, "read")
+	credentialName, cloudName, clientCredential, controllerCredential := retrieveCredentialDataFromID(data, &resp.Diagnostics,
+		"read")
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	credentialName, cloudName, clientCredentialStr, controllerCredentialStr := resID[0], resID[1], resID[2], resID[3]
+	// Retrieve updated resource state from upstream
+	response, err := c.client.Credentials.ReadCredential(juju.ReadCredentialInput{
+		ClientCredential:     clientCredential,
+		CloudName:            cloudName,
+		ControllerCredential: controllerCredential,
+		Name:                 credentialName,
+	})
+	if err != nil {
+		// TODO (cderici): call resp.State.RemoveResource() if NotFound
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read credential resource, got error: %s", err))
+		return
+	}
+	tflog.Trace(ctx, fmt.Sprintf("read credential resource %q", credentialName))
 
 	// cloud
 	cloudAttributes := map[string]attr.Value{
@@ -204,26 +215,8 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 	data.Cloud = cloud
 
 	// client_credential & controller_credential
-	clientCredential, controllerCredential, err := convertOptionsBool(clientCredentialStr, controllerCredentialStr)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read credential resource, got error: %s", err))
-		return
-	}
 	data.ClientCredential = types.BoolValue(clientCredential)
 	data.ControllerCredential = types.BoolValue(controllerCredential)
-
-	// Retrieve updated resource state from upstream
-	response, err := c.client.Credentials.ReadCredential(juju.ReadCredentialInput{
-		ClientCredential:     clientCredential,
-		CloudName:            cloudName,
-		ControllerCredential: controllerCredential,
-		Name:                 credentialName,
-	})
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read credential resource, got error: %s", err))
-		return
-	}
-	tflog.Trace(ctx, fmt.Sprintf("read credential resource %q", credentialName))
 
 	// retrieve name & auth_type
 	data.Name = types.StringValue(response.CloudCredential.Label)
@@ -231,24 +224,26 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 
 	// retrieve the attributes
 	receivedAttributes := response.CloudCredential.Attributes()
-	configuredAttributes := make(map[string]attr.Value)
-	attributesRaw := data.Attributes.Elements()
+	if len(receivedAttributes) > 0 {
+		configuredAttributes := make(map[string]attr.Value)
+		attributesRaw := data.Attributes.Elements()
 
-	for k, rawAttr := range attributesRaw {
-		configuredAttributes[k] = rawAttr
-	}
-
-	for configAtr := range configuredAttributes {
-		if receivedValue, exists := receivedAttributes[configAtr]; exists {
-			configuredAttributes[configAtr] = types.StringValue(attributeEntryToString(receivedValue))
+		for k, rawAttr := range attributesRaw {
+			configuredAttributes[k] = rawAttr
 		}
-	}
 
-	if len(configuredAttributes) != 0 {
-		data.Attributes, errDiag = types.MapValueFrom(ctx, types.StringType, configuredAttributes)
-		resp.Diagnostics.Append(errDiag...)
-		if resp.Diagnostics.HasError() {
-			return
+		for configAtr := range configuredAttributes {
+			if receivedValue, exists := receivedAttributes[configAtr]; exists {
+				configuredAttributes[configAtr] = types.StringValue(attributeEntryToString(receivedValue))
+			}
+		}
+
+		if len(configuredAttributes) != 0 {
+			data.Attributes, errDiag = types.MapValueFrom(ctx, types.StringType, configuredAttributes)
+			resp.Diagnostics.Append(errDiag...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
 		}
 	}
 
@@ -259,7 +254,7 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	// Check first if the client is configured
 	if c.client == nil {
-		addClientNotConfigured(&resp.Diagnostics, "update")
+		addClientNotConfiguredError(&resp.Diagnostics, "update")
 		return
 	}
 
@@ -278,6 +273,8 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 
 	// Return early if no change
+	// No need to check the name and cloud.name because they can't be updated in-place without recreating the resource
+	// i.e. their change will force recreation of the resource (see the schema)
 	if data.AuthType.Equal(state.AuthType) &&
 		data.ClientCredential.Equal(state.ClientCredential) &&
 		data.ControllerCredential.Equal(state.ControllerCredential) &&
@@ -285,15 +282,12 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
-	// Retrieve and validate the ID
-	resID := retrieveValidateID(state, &resp.Diagnostics, "update")
+	// Extract fields from the ID for the UpdateCredentialInput call
+	// name & cloud.name fields
+	credentialName, cloudName, _, _ := retrieveCredentialDataFromID(data, &resp.Diagnostics, "update")
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	// Extract fields from the ID for the UpdateCredentialInput call
-	// name & cloud.name fields
-	credentialName, cloudName := resID[0], resID[1]
 
 	// auth_type
 	newAuthType := data.AuthType.ValueString()
@@ -320,7 +314,7 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 	tflog.Trace(ctx, fmt.Sprintf("updated credential resource %q", credentialName))
 
-	data.ID = types.StringValue(newIDFrom(credentialName, cloudName, newClientCredential, newControllerCredential))
+	data.ID = types.StringValue(newCredentialIDFrom(credentialName, cloudName, newClientCredential, newControllerCredential))
 
 	// Write the updated state data into the Response.State
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -329,7 +323,7 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 func (c *credentialResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Check first if the client is configured
 	if c.client == nil {
-		addClientNotConfigured(&resp.Diagnostics, "delete")
+		addClientNotConfiguredError(&resp.Diagnostics, "delete")
 		return
 	}
 
@@ -343,20 +337,15 @@ func (c *credentialResource) Delete(ctx context.Context, req resource.DeleteRequ
 
 	// Access prior state data
 
-	resID := retrieveValidateID(data, &resp.Diagnostics, "update")
-	if resp.Diagnostics.HasError() {
-		return
-	}
 	// extract : name & cloud.name, client_credential, controller_credential
-	credentialName, cloudName, clientCredentialStr, controllerCredentialStr := resID[0], resID[1], resID[2], resID[3]
-	clientCredential, controllerCredential, err := convertOptionsBool(clientCredentialStr, controllerCredentialStr)
-	if err != nil {
-		resp.Diagnostics.AddError("Provider Error", err.Error())
+	credentialName, cloudName, clientCredential, controllerCredential := retrieveCredentialDataFromID(data, &resp.Diagnostics,
+		"update")
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// Perform external call to destroy the resource
-	err = c.client.Credentials.DestroyCredential(juju.DestroyCredentialInput{
+	err := c.client.Credentials.DestroyCredential(juju.DestroyCredentialInput{
 		ClientCredential:     clientCredential,
 		CloudName:            cloudName,
 		ControllerCredential: controllerCredential,
@@ -397,19 +386,28 @@ func convertRawAttributes(attributesRaw map[string]attr.Value) map[string]string
 	return newAttributes
 }
 
-func newIDFrom(credentialName string, cloudName string, clientCredential bool, controllerCredential bool) string {
+func newCredentialIDFrom(credentialName string, cloudName string, clientCredential bool, controllerCredential bool) string {
 	return fmt.Sprintf("%s:%s:%t:%t", credentialName, cloudName, clientCredential, controllerCredential)
 }
 
-func retrieveValidateID(model *credentialResourceModel, diag *diag.Diagnostics, method string) []string {
+func retrieveCredentialDataFromID(model *credentialResourceModel, diag *diag.Diagnostics, method string) (string, string,
+	bool, bool) {
 	resID := strings.Split(model.ID.ValueString(), ":")
 	if len(resID) != 4 {
 		diag.AddError("Provider Error",
 			fmt.Sprintf("unable to %v credential resource, invalid ID, expected {credentialName, cloudName, "+
 				"isClient, isController} - given : %v",
 				method, resID))
+		return "", "", false, false
 	}
-	return resID
+	credentialName, cloudName, clientCredentialStr, controllerCredentialStr := resID[0], resID[1], resID[2], resID[3]
+	clientCredential, controllerCredential, err := convertOptionsBool(clientCredentialStr, controllerCredentialStr)
+	if err != nil {
+		diag.AddError("Provider Error",
+			fmt.Sprintf("Unable to %v credential resource, got error: %s", err, method))
+		return "", "", false, false
+	}
+	return credentialName, cloudName, clientCredential, controllerCredential
 }
 
 func valueAttrToString(input attr.Value) string {
@@ -443,7 +441,7 @@ func convertOptionsBool(clientCredentialStr, controllerCredentialStr string) (bo
 	return clientCredentialBool, controllerCredentialBool, nil
 }
 
-func addClientNotConfigured(diag *diag.Diagnostics, method string) {
+func addClientNotConfiguredError(diag *diag.Diagnostics, method string) {
 	diag.AddError(
 		"Provider Error, Client Not Configured",
 		fmt.Sprintf("Unable to %v credential resource. Expected configured Juju Client. "+

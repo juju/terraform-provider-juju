@@ -42,7 +42,7 @@ func main() {
 	flag.Parse()
 
 	upgradedSdkProvider, err := tf5to6server.UpgradeServer(
-		context.Background(),
+		ctx,
 		provider.New(version)().GRPCProvider,
 	)
 	if err != nil {
