@@ -14,6 +14,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/rs/zerolog/log"
 )
 
 // providerFactories are used to instantiate a provider during acceptance testing.
@@ -40,6 +42,9 @@ func init() {
 		context.Background(),
 		Provider.GRPCProvider,
 	)
+	if err != nil {
+		log.Fatal().Msg(err.Error())
+	}
 
 	muxProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev")),
