@@ -6,16 +6,19 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -34,7 +37,7 @@ type credentialResource struct {
 }
 
 type credentialResourceModel struct {
-	Cloud                types.Object `tfsdk:"cloud"`
+	Cloud                types.List   `tfsdk:"cloud"`
 	Attributes           types.Map    `tfsdk:"attributes"`
 	AuthType             types.String `tfsdk:"auth_type"`
 	ClientCredential     types.Bool   `tfsdk:"client_credential"`
@@ -53,16 +56,21 @@ func (c *credentialResource) Schema(_ context.Context, _ resource.SchemaRequest,
 	resp.Schema = schema.Schema{
 		Description: "A resource that represent a credential for a cloud.",
 		Blocks: map[string]schema.Block{
-			"cloud": schema.SingleNestedBlock{
-				Description: "JuJu Cloud where the credentials will be used to access",
-				Attributes: map[string]schema.Attribute{
-					"name": schema.StringAttribute{
-						Description: "The name of the cloud",
-						Required:    true,
+			"cloud": schema.ListNestedBlock{
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							Description: "The name of the cloud",
+							Required:    true,
+						},
 					},
 				},
-				PlanModifiers: []planmodifier.Object{
-					objectplanmodifier.RequiresReplace(),
+				Description: "JuJu Cloud where the credentials will be used to access",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.List{
+					listvalidator.SizeAtMost(1),
 				},
 			},
 		},
@@ -130,8 +138,11 @@ func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequ
 	authType := data.AuthType.ValueString()
 
 	// cloud.name
-	cloudAttributes := data.Cloud.Attributes()
-	cloudName := cloudAttributes["name"].(types.String).ValueString()
+	cloudName, errDiag := cloudNameFromCredentialCloud(ctx, data.Cloud.Elements()[0], resp.Diagnostics)
+	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	// client_credential
 	clientCredential := data.ClientCredential.ValueBool()
@@ -201,13 +212,7 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 	tflog.Trace(ctx, fmt.Sprintf("read credential resource %q", credentialName))
 
 	// cloud
-	cloudAttributes := map[string]attr.Value{
-		"name": types.StringValue(cloudName),
-	}
-	attrTypes := map[string]attr.Type{
-		"name": types.StringType,
-	}
-	cloud, errDiag := types.ObjectValue(attrTypes, cloudAttributes)
+	cloud, errDiag := newCredentialCloudFromCloudName(ctx, cloudName, resp.Diagnostics)
 	resp.Diagnostics.Append(errDiag...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -384,6 +389,42 @@ func convertRawAttributes(attributesRaw map[string]attr.Value) map[string]string
 		newAttributes[key] = attributeEntryToString(valueAttrToString(value))
 	}
 	return newAttributes
+}
+
+func cloudNameFromCredentialCloud(ctx context.Context, element attr.Value, diag diag.Diagnostics) (string,
+	diag.Diagnostics) {
+	blockAttributeType := map[string]attr.Type{
+		"name": types.StringType,
+	}
+	cloudObj, errDiag := types.ObjectValueFrom(ctx, blockAttributeType, element)
+	diag.Append(errDiag...)
+	if diag.HasError() {
+		return "", diag
+	}
+	return cloudObj.Attributes()["name"].(types.String).ValueString(), diag
+}
+
+func newCredentialCloudFromCloudName(ctx context.Context, cloudName string, diag diag.Diagnostics) (types.List, diag.Diagnostics) {
+	cloudAttributes := map[string]attr.Value{
+		"name": types.StringValue(cloudName),
+	}
+	blockAttributeType := map[string]attr.Type{
+		"name": types.StringType,
+	}
+
+	cloudBlock, errDiag := types.ObjectValue(blockAttributeType, cloudAttributes)
+	diag.Append(errDiag...)
+	if diag.HasError() {
+		return types.ListNull(types.StringType), diag
+	}
+
+	attrType := types.ObjectType{AttrTypes: blockAttributeType}
+	cloud, errDiag := types.ListValueFrom(ctx, attrType, []attr.Value{cloudBlock})
+	diag.Append(errDiag...)
+	if diag.HasError() {
+		return types.ListNull(types.StringType), diag
+	}
+	return cloud, diag
 }
 
 func newCredentialIDFrom(credentialName string, cloudName string, clientCredential bool, controllerCredential bool) string {
