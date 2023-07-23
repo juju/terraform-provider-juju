@@ -17,6 +17,7 @@ Fixes:
 - Bug fix (non-breaking change which fixes an issue)
 - Breaking change (fix or feature that would cause existing functionality to not work as expected)
 - Requires a documentation update
+- Maintenance work (repository related, like Github actions, or revving the Go version, etc.)
 - Other (please describe)
 
 ## Environment
