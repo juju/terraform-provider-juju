@@ -1,0 +1,80 @@
+name: Bug Report
+description: Something's not working right in Terraform Juju Provider? Use this 
+  template.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for pointing out this issue. Please provide info below so we could diagnose and fix it fast.
+  - type: textarea
+    id: Description
+    attributes:
+      label: Description
+      description: "Please describe the bug for us: "
+      placeholder: ex. "juju_model resource is breaking with this field set to value."
+
+  - type: dropdown
+    id: Urgency
+    attributes:
+      label: Urgency
+      description: How urgent is this issue for you?
+      options:
+        - Casually reporting
+        - Annoying bug in our test suite
+        - Blocker for our release
+        - Client presentation, help now please!
+    validations:
+      required: true
+
+  - type: input
+    id: Provider-Version
+    attributes:
+      label: Terraform Juju Provider version
+      description: What version of terraform-provider-juju exhibits this issue?
+      placeholder: ex. edge, 0.7.0, 0.8.0
+    validations:
+      required: true
+
+  - type: input
+    id: Terraform-Version
+    attributes:
+      label: Terraform version
+      description: What version of Terraform are we running against? `terraform -v`
+      placeholder: ex. v1.5.2
+    validations:
+      required: true
+
+  - type: textarea
+    id: info
+    attributes:
+      label: "Terraform Configuration(s)"
+      description: "Please add/copy-paste your Terraform plans (.tf) to 
+      reproduce the bug."
+      render: terraform
+
+  - type: textarea
+    id: info
+    attributes:
+      label: "Reproduce / Test"
+      description: "Please add the commands to run to reproduce this problem."
+      placeholder: ex. terraform init && terraform apply
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: info
+    attributes:
+      label: "Debug/Panic Output"
+      description: "Please add the debug output you see when running the 
+      commands above (https://www.terraform.io/docs/internals/debugging.html). 
+      Consider also making a gist containing output of the `crash.log` too."
+      render: shell
+
+  - type: textarea
+    id: info
+    attributes:
+      label: "Notes & References"
+      description: "Please add relevant notes, links to mattermost chats, 
+      other related issues/PRs, anything to help diagnose and solve the issue."

@@ -1,0 +1,64 @@
+name: Feature Request
+description: You want something to be added to Terraform Juju Provider? Proceed with this one.
+labels: [wishlisted]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting this. Please provide info below so we can 
+        quickly add it to the terraform juju provider.
+
+  - type: textarea
+    id: Description
+    attributes:
+      label: Description
+      description: "Please describe what you want to see: "
+      placeholder: ex. "It would be cool to be able to bootstrap a Juju controller from the provider"
+
+  - type: dropdown
+    id: Urgency
+    attributes:
+      label: Urgency
+      description: How soon do you need to see this in the provider?
+      options:
+        - Casually wishlisting
+        - It would save from a weird workaround
+        - Need this really badly for test suite
+        - Client presentation, add it now, please!
+    validations:
+      required: true
+
+  - type: input
+    id: Terraform-Version
+    attributes:
+      label: Terraform version
+      description: What version of Terraform are we running against? `terraform -v`
+      placeholder: ex. v1.5.2
+    validations:
+      required: true
+
+  - type: textarea
+    id: info
+    attributes:
+      label: "Code I'd Like to Run"
+      description: "Please add/copy-paste your Terraform plans (.tf) to
+      demonstrate the new feature you'd like to use."
+      render: terraform
+    validations:
+      required: true
+
+  - type: textarea
+    id: info
+    attributes:
+      label: "Reproduce / Test"
+      description: "Please add the commands to run to use the feature."
+      placeholder: ex. terraform init && terraform apply
+      render: shell
+
+  - type: textarea
+    id: info
+    attributes:
+      label: "Notes & References"
+      description: "Please add relevant notes, links to mattermost chats, 
+      other related issues/PRs, anything to help diagnose understand and 
+      develop the feature you want."
