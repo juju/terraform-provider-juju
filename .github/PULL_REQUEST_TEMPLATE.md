@@ -2,25 +2,28 @@
 
 ## Description
 
-Provide a description of this PR. What, why, when, how, where, who?
+*\<Please provide a description of this PR. What, why, when, how, where, who?\>*
+
+Fixes: 
 
 ## Type of change
 
-Please mark if proceeds.
+*\<What type of a change is this? Please keep one or more relevant lines from below and delete the others.\>*
 
-- [ ] New resource (a new resource in the schema)
-- [ ] Changed resource (changes in an existing resource)
-- [ ] Logic changes in resources (the API interaction with Juju has been changed)
-- [ ] Test changes (one or several tests have been changed)
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] This change requires a documentation update
-- [ ] Other (describe)
+- Add new resource
+- Change existing resource
+- Logic changes in resources (the API interaction with Juju has been changed)
+- Change in tests (one or several tests have been changed)
+- Bug fix (non-breaking change which fixes an issue)
+- Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- Requires a documentation update
+- Other (please describe)
 
 ## Environment
 
-- Juju controller version: XXX
-- Terraform version: XXX
+- Juju controller version: 
+
+- Terraform version: 
 
 ## QA steps
 
@@ -31,6 +34,6 @@ provider juju {}
 ...
 ```
 
-# Additional notes
+## Additional notes
 
-Relevant information for further discussion. Changes require additional PRs, potential issues, etc. Remove if none.
+*\<Please add relevant notes & information, links to mattermost chats, other related issues/PRs, anything to help understand and QA the PR.\>*
