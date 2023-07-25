@@ -13,7 +13,9 @@ body:
     attributes:
       label: Description
       description: "Please describe what you want to see: "
-      placeholder: ex. "It would be cool to be able to bootstrap a Juju controller from the provider"
+      placeholder: ex. "I want the resource X to be added to the provider."
+    validations:
+      required: true
 
   - type: dropdown
     id: Urgency
@@ -24,36 +26,20 @@ body:
         - Casually wishlisting
         - It would save from a weird workaround
         - Need this really badly for test suite
-        - Client presentation, add it now, please!
-    validations:
-      required: true
-
-  - type: input
-    id: Terraform-Version
-    attributes:
-      label: Terraform version
-      description: What version of Terraform are we running against? `terraform -v`
-      placeholder: ex. v1.5.2
+        - Required by a customer, please add it now!
     validations:
       required: true
 
   - type: textarea
     id: info
     attributes:
-      label: "Code I'd Like to Run"
-      description: "Please add/copy-paste your Terraform plans (.tf) to
-      demonstrate the new feature you'd like to use."
+      label: "Requirements"
+      description: "Please add some details of what is needed,
+      including use cases. You may add some Terraform plans (.tf) to
+      demonstrate how you'd like to use the new feature."
       render: terraform
     validations:
       required: true
-
-  - type: textarea
-    id: info
-    attributes:
-      label: "Reproduce / Test"
-      description: "Please add the commands to run to use the feature."
-      placeholder: ex. terraform init && terraform apply
-      render: shell
 
   - type: textarea
     id: info

@@ -23,7 +23,7 @@ body:
         - Casually reporting
         - Annoying bug in our test suite
         - Blocker for our release
-        - Client presentation, help now please!
+        - Impacting a customer, please help now!
     validations:
       required: true
 
