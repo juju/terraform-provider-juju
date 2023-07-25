@@ -79,6 +79,7 @@ func (c *credentialResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Description: "Credential attributes accordingly to the cloud",
 				ElementType: types.StringType,
 				Optional:    true,
+				Sensitive:   true,
 			},
 			"auth_type": schema.StringAttribute{
 				Description: "Credential authorization type",

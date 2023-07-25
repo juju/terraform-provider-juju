@@ -40,7 +40,7 @@ resource "juju_credential" "this" {
 
 ### Optional
 
-- `attributes` (Map of String) Credential attributes accordingly to the cloud
+- `attributes` (Map of String, Sensitive) Credential attributes accordingly to the cloud
 - `client_credential` (Boolean) Add credentials to the client
 - `cloud` (Block List) JuJu Cloud where the credentials will be used to access (see [below for nested schema](#nestedblock--cloud))
 - `controller_credential` (Boolean) Add credentials to the controller
