@@ -8,17 +8,17 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_DataSourceOffer(t *testing.T) {
+func TestAcc_DataSourceOffer_sdk2_framework_migrate(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-datasource-offer-test-model")
 	// ...-test-[0-9]+ is not a valid offer name, need to remove the dash before numbers
 	offerName := fmt.Sprintf("tf-datasource-offer-test%d", acctest.RandInt())
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:          func() { testAccPreCheck(t) },
-		ProviderFactories: providerFactories,
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: muxProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccDataSourceOffer(t, modelName, offerName),
+				Config: testAccDataSourceOffer_sdk2_framework_migrate(t, modelName, offerName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("data.juju_offer.this", "name", offerName),
@@ -28,7 +28,67 @@ func TestAcc_DataSourceOffer(t *testing.T) {
 	})
 }
 
-func testAccDataSourceOffer(t *testing.T, modelName string, offerName string) string {
+func testAccDataSourceOffer_sdk2_framework_migrate(t *testing.T, modelName string, offerName string) string {
+	return fmt.Sprintf(`
+provider oldjuju {}
+
+resource "juju_model" "this" {
+    provider = oldjuju
+	name = %q
+}
+
+resource "juju_application" "this" {
+    provider = oldjuju
+	model = juju_model.this.name
+	name  = "this"
+
+	charm {
+		name = "postgresql"
+		series = "focal"
+	}
+}
+
+resource "juju_offer" "this" {
+    provider = oldjuju
+	model            = juju_model.this.name
+	application_name = juju_application.this.name
+	endpoint         = "db"
+	name             = %q
+}
+
+data "juju_offer" "this" {
+    provider = oldjuju
+	url = juju_offer.this.url
+}
+`, modelName, offerName)
+}
+
+func TestAcc_DataSourceOffer_Stable(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-datasource-offer-test-model")
+	// ...-test-[0-9]+ is not a valid offer name, need to remove the dash before numbers
+	offerName := fmt.Sprintf("tf-datasource-offer-test%d", acctest.RandInt())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
+		ExternalProviders: map[string]resource.ExternalProvider{
+			"juju": {
+				VersionConstraint: "0.8.0",
+				Source:            "juju/juju",
+			},
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: testAccDataSourceOffer_Stable(t, modelName, offerName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("data.juju_offer.this", "model", modelName),
+					resource.TestCheckResourceAttr("data.juju_offer.this", "name", offerName),
+				),
+			},
+		},
+	})
+}
+
+func testAccDataSourceOffer_Stable(t *testing.T, modelName string, offerName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
