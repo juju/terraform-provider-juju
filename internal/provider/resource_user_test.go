@@ -8,17 +8,18 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_ResourceUser_Basic(t *testing.T) {
+func TestAcc_ResourceUser_sdk2_framework_migrate(t *testing.T) {
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 
 	resourceName := "juju_user.user"
 	resource.Test(t, resource.TestCase{
-		PreCheck:          func() { testAccPreCheck(t) },
-		ProviderFactories: providerFactories,
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProviderFactories:        providerFactories,
+		ProtoV6ProviderFactories: muxProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceUser(t, userName, userPassword),
+				Config: testAccResourceUser_Migrate(t, userName, userPassword),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", userName),
 				),
@@ -34,7 +35,51 @@ func TestAcc_ResourceUser_Basic(t *testing.T) {
 	})
 }
 
-func testAccResourceUser(t *testing.T, userName, userPassword string) string {
+func testAccResourceUser_Migrate(t *testing.T, userName, userPassword string) string {
+	return fmt.Sprintf(`
+provider oldjuju {}
+
+resource "juju_user" "user" {
+  provider = oldjuju
+  name = %q
+  password = %q
+
+}`, userName, userPassword)
+}
+
+func TestAcc_ResourceUser_Stable(t *testing.T) {
+	userName := acctest.RandomWithPrefix("tfuser")
+	userPassword := acctest.RandomWithPrefix("tf-test-user")
+
+	resourceName := "juju_user.user"
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: providerFactories,
+		ExternalProviders: map[string]resource.ExternalProvider{
+			"juju": {
+				VersionConstraint: "0.8.0",
+				Source:            "juju/juju",
+			},
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceUser_Stable(t, userName, userPassword),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", userName),
+				),
+			},
+			{
+				ImportStateVerify:       true,
+				ImportState:             true,
+				ImportStateVerifyIgnore: []string{"password"},
+				ImportStateId:           fmt.Sprintf("user:%s", userName),
+				ResourceName:            resourceName,
+			},
+		},
+	})
+}
+
+func testAccResourceUser_Stable(t *testing.T, userName, userPassword string) string {
 	return fmt.Sprintf(`
 resource "juju_user" "user" {
   name = %q
