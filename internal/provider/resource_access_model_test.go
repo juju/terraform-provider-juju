@@ -125,16 +125,20 @@ func TestAcc_ResourceAccessModel_Stable(t *testing.T) {
 
 func testAccResourceAccessModel_Stable(t *testing.T, userName, userPassword, modelName, access string) string {
 	return fmt.Sprintf(`
+provider oldjuju {}
+
 resource "juju_user" "this" {
   name = %q
   password = %q
 }
 
 resource "juju_model" "this" {
+  provider = oldjuju
   name = %q
 }
 
 resource "juju_access_model" "test" {
+  provider = oldjuju
   access = %q
   model = juju_model.this.name
   users = [juju_user.this.name]
