@@ -13,9 +13,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/rs/zerolog/log"
+	"github.com/stretchr/testify/assert"
 )
 
 // providerFactories are used to instantiate a provider during acceptance testing.
