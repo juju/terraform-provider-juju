@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -13,8 +15,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -115,7 +115,7 @@ func (a *accessModelResource) Create(ctx context.Context, req resource.CreateReq
 	// Get the modelUUID to call Models.GrantModel
 	uuid, err := a.client.Models.ResolveModelUUID(modelNameStr)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access model resource, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model uuid, got error: %s", err))
 		return
 	}
 	modelUUIDs := []string{uuid}
@@ -140,6 +140,11 @@ func (a *accessModelResource) Create(ctx context.Context, req resource.CreateReq
 }
 
 func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	// Check first if the client is configured
+	if a.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "read")
+		return
+	}
 	var plan accessModelResourceModel
 
 	// Get the Terraform state from the request into the plan
@@ -153,18 +158,9 @@ func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest
 	// Get the users
 	stateUsers := strings.Split(resID[2], ",")
 
-	// Prevent a segfault if client is not yet configured
-	if a.client == nil {
-		resp.Diagnostics.AddError(
-			"Provider Error, Client Not Configured",
-			"Unable to read access model resource. Expected configured Juju Client. "+
-				"Please report this issue to the provider developers.",
-		)
-		return
-	}
 	uuid, err := a.client.Models.ResolveModelUUID(resID[0])
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read access model resource, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model uuid, got error: %s", err))
 		return
 	}
 
@@ -203,6 +199,12 @@ func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest
 // for new users - apply access
 // access changed - apply new access
 func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	// Check first if the client is configured
+	if a.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "update")
+		return
+	}
+
 	var plan, state accessModelResourceModel
 
 	// Get the Terraform state from the request into the plan
@@ -250,15 +252,6 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	// Prevent a segfault if client is not yet configured
-	if a.client == nil {
-		resp.Diagnostics.AddError(
-			"Provider Error, Client Not Configured",
-			"Unable to update access model resource. Expected configured Juju Client. "+
-				"Please report this issue to the provider developers.",
-		)
-		return
-	}
 	err := a.client.Models.UpdateAccessModel(juju.UpdateAccessModelInput{
 		Model:  plan.ID.ValueString(),
 		Grant:  addedUserList,
@@ -273,6 +266,12 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 }
 
 func (a *accessModelResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Check first if the client is configured
+	if a.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "delete")
+		return
+	}
+
 	var plan accessModelResourceModel
 
 	// Get the Terraform state from the request into the plan
@@ -285,15 +284,6 @@ func (a *accessModelResource) Delete(ctx context.Context, req resource.DeleteReq
 	var stateUsers []string
 	plan.Users.ElementsAs(ctx, stateUsers, false)
 
-	// Prevent a segfault if client is not yet configured
-	if a.client == nil {
-		resp.Diagnostics.AddError(
-			"Provider Error, Client Not Configured",
-			"Unable to delete access model resource. Expected configured Juju Client. "+
-				"Please report this issue to the provider developers.",
-		)
-		return
-	}
 	err := a.client.Models.DestroyAccessModel(juju.DestroyAccessModelInput{
 		Model:  plan.ID.ValueString(),
 		Revoke: stateUsers,
@@ -340,4 +330,12 @@ func getAddedUsers(oldUsers, newUsers []string) []string {
 
 func (a *accessModelResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func addClientNotConfiguredError(diag *diag.Diagnostics, method string) {
+	diag.AddError(
+		"Provider Error, Client Not Configured",
+		fmt.Sprintf("Unable to %v access model resource. Expected configured Juju Client. "+
+			"Please report this issue to the provider developers.", method),
+	)
 }
