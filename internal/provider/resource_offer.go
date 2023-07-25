@@ -4,11 +4,65 @@ import (
 	"context"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
+
+// Ensure provider defined types fully satisfy framework interfaces.
+var _ resource.Resource = &offerResource{}
+var _ resource.ResourceWithConfigure = &offerResource{}
+var _ resource.ResourceWithImportState = &offerResource{}
+
+func NewOfferResource() resource.Resource {
+	return &offerResource{}
+}
+
+type offerResource struct {
+	client *juju.Client
+}
+
+func (o offerResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (o offerResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (o offerResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (o offerResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (o offerResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (o offerResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c offerResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c offerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
 
 func resourceOffer() *schema.Resource {
 	return &schema.Resource{
