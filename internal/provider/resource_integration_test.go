@@ -111,7 +111,7 @@ func TestAcc_ResourceIntegrationWithViaCIDRs_sdk2_framework_migrate(t *testing.T
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: muxProviderFactories,
-		CheckDestroy:             testAccCheckIntegrationDestroy_Stable,
+		CheckDestroy:             testAccCheckIntegrationDestroy_sdk2_framework_migrate,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccResourceIntegrationWithVia_sdk2_framework_migrate(srcModelName, dstModelName, via),
