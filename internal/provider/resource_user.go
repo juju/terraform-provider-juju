@@ -52,6 +52,10 @@ func (r *userResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 		// This description is used by the documentation generator and the language server.
 		Description: "A resource that represents a Juju User.",
 		Attributes: map[string]schema.Attribute{
+			// TODO hml 25-Jul-2023
+			// Name and Display Name should be ForceNew, the
+			// terraform method to say the items are immutable.
+			// Juju has no way to update a username today.
 			"name": schema.StringAttribute{
 				Description: "The name to be assigned to the user",
 				Required:    true,
@@ -103,6 +107,16 @@ func (r *userResource) Configure(_ context.Context, req resource.ConfigureReques
 // and planned state values should be read from the
 // CreateRequest and new state values set on the CreateResponse.
 func (r *userResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	// Prevent panic if the provider has not been configured.
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Unconfigured HTTP Client",
+			"Expected configured HTTP client. Please report this issue to the provider developers.",
+		)
+
+		return
+	}
+
 	var data userResourceModel
 
 	// Read Terraform plan data into the model
@@ -117,7 +131,7 @@ func (r *userResource) Create(ctx context.Context, req resource.CreateRequest, r
 		Password:    data.Password.ValueString(),
 	})
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create user, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create user resource, got error: %s", err))
 		return
 	}
 	tflog.Trace(ctx, fmt.Sprintf("created user resource %q", data.Name))
@@ -133,6 +147,15 @@ func (r *userResource) Create(ctx context.Context, req resource.CreateRequest, r
 // Take the juju api input from the ID, it may not exist in the plan.
 // Only set optional values if they exist.
 func (r *userResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	// Prevent panic if the provider has not been configured.
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Unconfigured HTTP Client",
+			"Expected configured HTTP client. Please report this issue to the provider developers.",
+		)
+		return
+	}
+
 	var data userResourceModel
 
 	// Read Terraform prior state data into the model
@@ -149,7 +172,7 @@ func (r *userResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		// Add a user NotFound error type to the client.
 		// On read, if NotFound, remove the resource:
 		// resp.State.RemoveResource()
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read user, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read user resource, got error: %s", err))
 		return
 	}
 	tflog.Trace(ctx, fmt.Sprintf("read user resource %q", data.Name.ValueString()))
@@ -158,12 +181,12 @@ func (r *userResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	plan := userResourceModel{
 		Name:     types.StringValue(response.UserInfo.Username),
 		Password: data.Password,
-		ID:       types.StringValue(fmt.Sprintf("user:%s", response.UserInfo.Username)),
+		ID:       types.StringValue(newIDFromUserName(response.UserInfo.Username)),
 	}
-	// Display name is optional, therefore if it doesn't exist in the plan
-	// if not set, do not add an empty string as they are not the same thing.
-	// Conversely, if the returned user info does not contain an empty string,
-	// make it of type ValueStateNull to indicate not set.
+	// Display name is optional, therefore if it doesn't exist in the plan,
+	// do not add an empty string as they are not the same thing.
+	// Conversely, if the returned user info contains an empty string for
+	// display name, make it of type ValueStateNull to indicate not set.
 	if !data.DisplayName.IsNull() && !data.DisplayName.IsUnknown() && response.UserInfo.DisplayName != "" {
 		plan.DisplayName = types.StringValue(response.UserInfo.DisplayName)
 	} else if response.UserInfo.DisplayName == "" {
@@ -176,28 +199,47 @@ func (r *userResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 // state, and prior state values should be read from the
 // UpdateRequest and new state values set on the UpdateResponse.
 func (r *userResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data userResourceModel
+	// Prevent panic if the provider has not been configured.
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Unconfigured HTTP Client",
+			"Expected configured HTTP client. Please report this issue to the provider developers.",
+		)
+		return
+	}
+
+	var data, state userResourceModel
 
 	// Read Terraform plan data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Update user can only change the password.
+	if data.Name.Equal(state.Name) || data.DisplayName.Equal(state.DisplayName) {
+		// This does violates terraform's declarative model. There is a
+		// todo to make both values ForceNew in the future.
+		resp.Diagnostics.AddWarning("Not Supported", "Unable to update name %q or display name %q")
+	}
+	if data.Password.Equal(state.Password) {
+		tflog.Info(ctx, fmt.Sprintf("Password not different, no updates for user %q made", data.Name.ValueString()))
+		return
+	}
+	// Update user can only change the user's password. It is not currently
+	// possible to change the display name via terraform after the user is
+	// created. Nor is it possible to change an existing username.
 	if err := r.client.Users.UpdateUser(juju.UpdateUserInput{
 		Name:     data.Name.ValueString(),
 		Password: data.Password.ValueString(),
 	}); err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update user, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update user resource, got error: %s", err))
 		return
 	}
 	tflog.Trace(ctx, fmt.Sprintf("updated user resource %q", data.Name))
 
 	// Save updated data into Terraform state, save a new copy for
 	// update functionality.
-	// The juju api as written here cannot update the Display Name,
-	// take care with the optional value.
 	plan := userResourceModel{
 		Name:        types.StringValue(data.Name.ValueString()),
 		DisplayName: data.DisplayName,
@@ -214,6 +256,15 @@ func (r *userResource) Update(ctx context.Context, req resource.UpdateRequest, r
 // call DeleteResponse.State.RemoveResource(), so it can be omitted
 // from provider logic.
 func (r *userResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Prevent panic if the provider has not been configured.
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Unconfigured HTTP Client",
+			"Expected configured HTTP client. Please report this issue to the provider developers.",
+		)
+		return
+	}
+
 	var data userResourceModel
 
 	// Read Terraform prior state data into the model
@@ -226,7 +277,7 @@ func (r *userResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		Name: userNameFromID(data.ID.ValueString()),
 	})
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete user, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete user resource, got error: %s", err))
 		return
 	}
 	tflog.Trace(ctx, fmt.Sprintf("deleted user resource %q", data.Name.ValueString()))
