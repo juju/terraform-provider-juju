@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -15,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -108,8 +110,7 @@ func (a *accessModelResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	// Get the users
-	var users []string
-	plan.Users.ElementsAs(ctx, users, false)
+	users := convertRawUsers(plan.Users.Elements())
 
 	modelNameStr := plan.Model.ValueString()
 	// Get the modelUUID to call Models.GrantModel
@@ -133,7 +134,7 @@ func (a *accessModelResource) Create(ctx context.Context, req resource.CreateReq
 			return
 		}
 	}
-	plan.ID = types.StringValue(fmt.Sprintf("%s:%s:%s", modelNameStr, accessStr, strings.Join(users, ",")))
+	plan.ID = types.StringValue(newAccessModelIDFrom(modelNameStr, accessStr, users))
 
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -153,12 +154,9 @@ func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	resID := strings.Split(plan.ID.ValueString(), ":")
+	modelUUID, access, stateUsers := retrieveAccessModelDataFromID(&plan)
 
-	// Get the users
-	stateUsers := strings.Split(resID[2], ",")
-
-	uuid, err := a.client.Models.ResolveModelUUID(resID[0])
+	uuid, err := a.client.Models.ResolveModelUUID(modelUUID)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model uuid, got error: %s", err))
 		return
@@ -170,14 +168,14 @@ func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	plan.Model = types.StringValue(resID[0])
-	plan.Access = types.StringValue(resID[1])
+	plan.Model = types.StringValue(modelUUID)
+	plan.Access = types.StringValue(access)
 
 	var users []string
 
 	for _, user := range stateUsers {
 		for _, modelUser := range response.ModelUserInfo {
-			if user == modelUser.UserName && string(modelUser.Access) == resID[1] {
+			if user == modelUser.UserName && string(modelUser.Access) == access {
 				users = append(users, modelUser.UserName)
 			}
 		}
@@ -186,6 +184,10 @@ func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest
 	uss, errDiag := basetypes.NewListValueFrom(ctx, types.StringType, users)
 	plan.Users = uss
 	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -231,12 +233,10 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 		anyChange = true
 
 		// Get the users that are in the current state
-		var stateUsers []string
-		state.Users.ElementsAs(ctx, stateUsers, false)
+		stateUsers := convertRawUsers(state.Users.Elements())
 
 		// Get the users that are in the planned states
-		var planUsers []string
-		plan.Users.ElementsAs(ctx, planUsers, false)
+		planUsers := convertRawUsers(plan.Users.Elements())
 
 		missingUserList = getMissingUsers(stateUsers, planUsers)
 		addedUserList = getAddedUsers(stateUsers, planUsers)
@@ -249,9 +249,12 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	if !anyChange {
+		tflog.Trace(ctx, "Update is returning without any changes.")
 		return
 	}
 
+	// TODO (cderici): The Terraform ID of this resource is leaking into the Juju package as the model identifier
+	// (despite that it's neither a uuid nor a model name). This needs to be decoupled.
 	err := a.client.Models.UpdateAccessModel(juju.UpdateAccessModelInput{
 		Model:  plan.ID.ValueString(),
 		Grant:  addedUserList,
@@ -281,8 +284,7 @@ func (a *accessModelResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	// Get the users
-	var stateUsers []string
-	plan.Users.ElementsAs(ctx, stateUsers, false)
+	stateUsers := convertRawUsers(plan.Users.Elements())
 
 	err := a.client.Models.DestroyAccessModel(juju.DestroyAccessModelInput{
 		Model:  plan.ID.ValueString(),
@@ -338,4 +340,23 @@ func addClientNotConfiguredError(diag *diag.Diagnostics, method string) {
 		fmt.Sprintf("Unable to %v access model resource. Expected configured Juju Client. "+
 			"Please report this issue to the provider developers.", method),
 	)
+}
+
+func newAccessModelIDFrom(modelNameStr string, accessStr string, users []string) string {
+	return fmt.Sprintf("%s:%s:%s", modelNameStr, accessStr, strings.Join(users, ","))
+}
+
+func retrieveAccessModelDataFromID(model *accessModelResourceModel) (string, string, []string) {
+	resID := strings.Split(model.ID.ValueString(), ":")
+	stateUsers := strings.Split(resID[2], ",")
+
+	return resID[0], resID[1], stateUsers
+}
+
+func convertRawUsers(attributesRaw []attr.Value) []string {
+	newUsers := make([]string, len(attributesRaw))
+	for i, value := range attributesRaw {
+		newUsers[i] = value.(types.String).ValueString()
+	}
+	return newUsers
 }
