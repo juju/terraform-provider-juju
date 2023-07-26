@@ -20,7 +20,7 @@ func TestAcc_ResourceUser_sdk2_framework_migrate(t *testing.T) {
 			{
 				Config: testAccResourceUser(userName, userPassword),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "name", resourceName),
+					resource.TestCheckResourceAttr(resourceName, "name", userName),
 				),
 				PreConfig: func() { testAccPreCheck(t) },
 			},
@@ -29,7 +29,7 @@ func TestAcc_ResourceUser_sdk2_framework_migrate(t *testing.T) {
 				ImportStateVerify:       true,
 				ImportState:             true,
 				ImportStateVerifyIgnore: []string{"password"},
-				ImportStateId:           fmt.Sprintf("user:%s", resourceName),
+				ImportStateId:           fmt.Sprintf("user:%s", userName),
 				ResourceName:            resourceName,
 			},
 		},
