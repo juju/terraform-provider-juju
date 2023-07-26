@@ -17,11 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// providerFactories are used to instantiate a provider during acceptance testing.
-// The factory function will be invoked for every Terraform CLI command executed
-// to create a provider server to which the CLI can reattach.
-var providerFactories map[string]func() (*schema.Provider, error)
-
 // muxProviderFactories are used to instantiate the SDK provider and Framework provider
 // during acceptance testing.
 var muxProviderFactories map[string]func() (tfprotov6.ProviderServer, error)
@@ -42,7 +37,7 @@ func init() {
 		Provider.GRPCProvider,
 	)
 	if err != nil {
-		log.Fatal().Msg(err.Error())
+		log.Fatal().Msgf("Provider test init() failed with : %v", err.Error())
 	}
 
 	muxProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){

@@ -15,7 +15,6 @@ func TestAcc_ResourceUser_sdk2_framework_migrate(t *testing.T) {
 	resourceName := "juju_user.user"
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProviderFactories:        providerFactories,
 		ProtoV6ProviderFactories: muxProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -53,8 +52,7 @@ func TestAcc_ResourceUser_Stable(t *testing.T) {
 
 	resourceName := "juju_user.user"
 	resource.Test(t, resource.TestCase{
-		PreCheck:          func() { testAccPreCheck(t) },
-		ProviderFactories: providerFactories,
+		PreCheck: func() { testAccPreCheck(t) },
 		ExternalProviders: map[string]resource.ExternalProvider{
 			"juju": {
 				VersionConstraint: "0.8.0",
