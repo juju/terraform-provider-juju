@@ -17,6 +17,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const TestProviderStableVersion = "0.8.0"
+
 // muxProviderFactories are used to instantiate the SDK provider and Framework provider
 // during acceptance testing.
 var muxProviderFactories map[string]func() (tfprotov6.ProviderServer, error)
