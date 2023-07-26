@@ -101,6 +101,11 @@ func (a *accessModelResource) Configure(_ context.Context, req resource.Configur
 }
 
 func (a *accessModelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	// Check first if the client is configured
+	if a.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "create")
+		return
+	}
 	var plan accessModelResourceModel
 
 	// Read Terraform configuration from the request into the model

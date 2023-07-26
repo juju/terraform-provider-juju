@@ -12,8 +12,10 @@ import (
 func TestAcc_ResourceAccessModel_sdk2_framework_migrate(t *testing.T) {
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
+	userName2 := acctest.RandomWithPrefix("tfuser")
+	userPassword2 := acctest.RandomWithPrefix("tf-test-user")
 	modelName1 := "testing1"
-	// modelName2 := "testing2"
+	modelName2 := "testing2"
 	accessSuccess := "write"
 	accessFail := "bogus"
 
@@ -33,12 +35,6 @@ func TestAcc_ResourceAccessModel_sdk2_framework_migrate(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", userName),
 				),
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						VersionConstraint: "0.8.0",
-						Source:            "juju/juju",
-					},
-				},
 			},
 			{
 				Destroy:           true,
@@ -46,47 +42,23 @@ func TestAcc_ResourceAccessModel_sdk2_framework_migrate(t *testing.T) {
 				ImportState:       true,
 				ImportStateId:     fmt.Sprintf("%s:%s:%s", modelName1, accessSuccess, userName),
 				ResourceName:      resourceName,
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						VersionConstraint: "0.8.0",
-						Source:            "juju/juju",
-					},
-				},
 			},
-
-			/*
-				// TODO(cderici): Can't use the tests below until juju_user and juju_model is migrated,
-				// because we can't use oldjuju along with juju, because they're using
-				// different IDs for the accessModelResource
-				{
-					Config: testAccFrameworkResourceAccessModel(t, userName, userPassword, modelName2, accessSuccess),
-					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
-						resource.TestCheckResourceAttr(resourceName, "model", modelName2),
-						resource.TestCheckTypeSetElemAttr(resourceName, "users.*", userName),
-					),
-					ProtoV5ProviderFactories: map[string]func() (tfprotov5.ProviderServer, error){
-						"juju": providerserver.NewProtocol5WithError(NewJujuProvider("dev")),
-						"oldjuju": func() (tfprotov5.ProviderServer, error) {
-							return schema.NewGRPCProviderServer(New("dev")()), nil
-						},
-					},
-				},
-				{
-					Destroy:           true,
-					ImportStateVerify: true,
-					ImportState:       true,
-					ImportStateId:     fmt.Sprintf("%s:%s:%s", modelName2, accessSuccess, userName),
-					ResourceName:      resourceName,
-					ProtoV5ProviderFactories: map[string]func() (tfprotov5.ProviderServer, error){
-						"juju": providerserver.NewProtocol5WithError(NewJujuProvider("dev")),
-						"oldjuju": func() (tfprotov5.ProviderServer, error) {
-							return schema.NewGRPCProviderServer(New("dev")()), nil
-						},
-					},
-				},
-
-			*/
+			{
+				Config: testAccFrameworkResourceAccessModel_sdk2_framework_migrate(t, userName2, userPassword2,
+					modelName2, accessSuccess),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
+					resource.TestCheckResourceAttr(resourceName, "model", modelName2),
+					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", userName2),
+				),
+			},
+			{
+				Destroy:           true,
+				ImportStateVerify: true,
+				ImportState:       true,
+				ImportStateId:     fmt.Sprintf("%s:%s:%s", modelName2, accessSuccess, userName2),
+				ResourceName:      resourceName,
+			},
 		},
 	})
 }
@@ -106,10 +78,32 @@ resource "juju_model" "this" {
 }
 
 resource "juju_access_model" "test" {
-  provider = oldjuju
   access = %q
   model = juju_model.this.name
   users = [juju_user.this.name]
+}`, userName, userPassword, modelName, access)
+}
+
+func testAccFrameworkResourceAccessModel_sdk2_framework_migrate(t *testing.T, userName, userPassword, modelName, access string) string {
+	return fmt.Sprintf(`
+provider "juju" {}
+provider "oldjuju" {}
+
+resource "juju_user" "test-user" {
+  name = %q
+  password = %q
+}
+
+resource "juju_model" "test-model" {
+  provider = oldjuju
+  name = %q
+}
+
+resource "juju_access_model" "test" {
+  provider = juju
+  access = %q
+  model = juju_model.test-model.name
+  users = [juju_user.test-user.name]
 }`, userName, userPassword, modelName, access)
 }
 
@@ -178,30 +172,3 @@ resource "juju_access_model" "test" {
   users = [juju_user.test-user.name]
 }`, userName, userPassword, modelName, access)
 }
-
-/*
-// Commenting out to save the linter
-func testAccFrameworkResourceAccessModel(t *testing.T, userName, userPassword, modelName, access string) string {
-	return fmt.Sprintf(`
-provider "juju" {}
-provider "oldjuju" {}
-
-resource "juju_user" "test-user" {
-  provider = oldjuju
-  name = %q
-  password = %q
-}
-
-resource "juju_model" "test-model" {
-  provider = oldjuju
-  name = %q
-}
-
-resource "juju_access_model" "test" {
-  provider = juju
-  access = %q
-  model = juju_model.test-model.name
-  users = [juju_user.test-user.name]
-}`, userName, userPassword, modelName, access)
-}
-*/
