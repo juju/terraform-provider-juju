@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_ResourceCredential_Basic(t *testing.T) {
+func TestAcc_ResourceCredential_sdk2_framework_migrate(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -21,29 +21,29 @@ func TestAcc_ResourceCredential_Basic(t *testing.T) {
 
 	resourceName := "juju_credential.credential"
 	resource.Test(t, resource.TestCase{
-		PreCheck:          func() { testAccPreCheck(t) },
-		ProviderFactories: providerFactories,
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: muxProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				// Mind that ExpectError should be the first step
 				// "When tests have an ExpectError[...]; this results in any previous state being cleared. "
 				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
-				Config:      testAccResourceCredential(t, credentialName, authTypeInvalid),
+				Config:      testAccResourceCredential_sdk2_framework_migrate(t, credentialName, authTypeInvalid),
 				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: supported auth-types (.*), \"%s\" not supported", authTypeInvalid)),
 			},
 			{
-				Config:      testAccResourceCredential(t, credentialInvalidName, authType),
+				Config:      testAccResourceCredential_sdk2_framework_migrate(t, credentialInvalidName, authType),
 				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: \"%s\" is not a valid credential name", credentialInvalidName)),
 			},
 			{
-				Config: testAccResourceCredential(t, credentialName, authType),
+				Config: testAccResourceCredential_sdk2_framework_migrate(t, credentialName, authType),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", credentialName),
 					resource.TestCheckResourceAttr(resourceName, "auth_type", authType),
 				),
 			},
 			{
-				Config: testAccResourceCredentialToken(t, credentialName, authType, token),
+				Config: testAccResourceCredentialToken_sdk2_framework_migrate(t, credentialName, authType, token),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", credentialName),
 					resource.TestCheckResourceAttr(resourceName, "auth_type", authType),
@@ -63,7 +63,102 @@ func TestAcc_ResourceCredential_Basic(t *testing.T) {
 	})
 }
 
-func testAccResourceCredential(t *testing.T, credentialName string, authType string) string {
+func testAccResourceCredential_sdk2_framework_migrate(t *testing.T, credentialName string, authType string) string {
+	return fmt.Sprintf(`
+provider oldjuju {}
+
+resource "juju_credential" "credential" {
+  provider = oldjuju
+  name = %q
+
+  cloud {
+   name   = "localhost"
+  }
+
+  auth_type = "%s"
+}`, credentialName, authType)
+}
+
+func testAccResourceCredentialToken_sdk2_framework_migrate(t *testing.T, credentialName, authType, token string) string {
+	return fmt.Sprintf(`
+provider oldjuju {}
+
+resource "juju_credential" "credential" {
+  provider = oldjuju
+  name = %q
+
+  cloud {
+   name   = "localhost"
+  }
+
+  auth_type = "%s"
+
+  attributes = {
+	token = "%s"
+  }
+}`, credentialName, authType, token)
+}
+
+func TestAcc_ResourceCredential_Stable(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	credentialName := acctest.RandomWithPrefix("tf-test-credential")
+	credentialInvalidName := "tf%test_credential"
+	authType := "certificate"
+	authTypeInvalid := "invalid"
+	token := "123abc"
+
+	resourceName := "juju_credential.credential"
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
+		ExternalProviders: map[string]resource.ExternalProvider{
+			"juju": {
+				VersionConstraint: TestProviderStableVersion,
+				Source:            "juju/juju",
+			},
+		},
+		Steps: []resource.TestStep{
+			{
+				// Mind that ExpectError should be the first step
+				// "When tests have an ExpectError[...]; this results in any previous state being cleared. "
+				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
+				Config:      testAccResourceCredential_Stable(t, credentialName, authTypeInvalid),
+				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: supported auth-types (.*), \"%s\" not supported", authTypeInvalid)),
+			},
+			{
+				Config:      testAccResourceCredential_Stable(t, credentialInvalidName, authType),
+				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: \"%s\" is not a valid credential name", credentialInvalidName)),
+			},
+			{
+				Config: testAccResourceCredential_Stable(t, credentialName, authType),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", credentialName),
+					resource.TestCheckResourceAttr(resourceName, "auth_type", authType),
+				),
+			},
+			{
+				Config: testAccResourceCredentialToken_Stable(t, credentialName, authType, token),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", credentialName),
+					resource.TestCheckResourceAttr(resourceName, "auth_type", authType),
+					resource.TestCheckResourceAttr(resourceName, "attributes.token", token),
+				),
+			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ImportStateVerifyIgnore: []string{
+					"attributes.%",
+					"attributes.token"},
+				ImportStateId: fmt.Sprintf("%s:localhost:false:true", credentialName),
+				ResourceName:  resourceName,
+			},
+		},
+	})
+}
+
+func testAccResourceCredential_Stable(t *testing.T, credentialName string, authType string) string {
 	return fmt.Sprintf(`
 resource "juju_credential" "credential" {
   name = %q
@@ -76,7 +171,7 @@ resource "juju_credential" "credential" {
 }`, credentialName, authType)
 }
 
-func testAccResourceCredentialToken(t *testing.T, credentialName, authType, token string) string {
+func testAccResourceCredentialToken_Stable(t *testing.T, credentialName, authType, token string) string {
 	return fmt.Sprintf(`
 resource "juju_credential" "credential" {
   name = %q

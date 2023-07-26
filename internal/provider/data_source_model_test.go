@@ -4,60 +4,29 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov5"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_DataSourceModel(t *testing.T) {
+func TestAcc_DataSourceModel_sdk2_framework_migrate(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-datasource-model-test")
 
 	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: muxProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccDataSourceModel(t, modelName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.juju_model.test-model", "name", modelName),
-				),
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						VersionConstraint: "0.8.0",
-						Source:            "juju/juju",
-					},
-				},
-				PreConfig: func() { testAccPreCheck(t) },
-			},
-			{
-				Config: testAccFrameworkDataSourceModel(t, modelName),
+				Config: testAccFrameworkDataSourceModel_sdk2_framework_migrate(t, modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_model.test-model", "name", modelName),
 					resource.TestCheckResourceAttrSet("data.juju_model.test-model", "uuid"),
 				),
-				ProtoV5ProviderFactories: map[string]func() (tfprotov5.ProviderServer, error){
-					"juju": providerserver.NewProtocol5WithError(NewJujuProvider("dev")),
-					"oldjuju": func() (tfprotov5.ProviderServer, error) {
-						return schema.NewGRPCProviderServer(New("dev")()), nil
-					},
-				},
 			},
 		},
 	})
 }
 
-func testAccDataSourceModel(t *testing.T, modelName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "test-model" {
-	name = %q
-}
-
-data "juju_model" "test-model" {
-	name = juju_model.test-model.name
-}`, modelName)
-}
-
-func testAccFrameworkDataSourceModel(t *testing.T, modelName string) string {
+func testAccFrameworkDataSourceModel_sdk2_framework_migrate(t *testing.T, modelName string) string {
 	return fmt.Sprintf(`
 provider "juju" {}
 
@@ -70,6 +39,40 @@ resource "juju_model" "test-model" {
 
 data "juju_model" "test-model" {
 	provider = juju
+	name = juju_model.test-model.name
+}`, modelName)
+}
+
+func TestAcc_DataSourceModel_Stable(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-datasource-model-test")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
+		ExternalProviders: map[string]resource.ExternalProvider{
+			"juju": {
+				VersionConstraint: TestProviderStableVersion,
+				Source:            "juju/juju",
+			},
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: testAccFrameworkDataSourceModel_Stable(t, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("data.juju_model.test-model", "name", modelName),
+					resource.TestCheckResourceAttrSet("data.juju_model.test-model", "uuid"),
+				),
+			},
+		},
+	})
+}
+
+func testAccFrameworkDataSourceModel_Stable(t *testing.T, modelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "test-model" {
+	name = %q
+}
+
+data "juju_model" "test-model" {
 	name = juju_model.test-model.name
 }`, modelName)
 }
