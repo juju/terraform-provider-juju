@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -166,7 +167,12 @@ func (r *userResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	// If applicable, this is a great opportunity to initialize any necessary
 	// provider client data and make a call using it.
-	response, err := r.client.Users.ReadUser(userNameFromID(data.ID.ValueString()))
+	userName, diagErr := userNameFromID(data.ID.ValueString())
+	resp.Diagnostics.Append(diagErr...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	response, err := r.client.Users.ReadUser(userName)
 	if err != nil {
 		// TODO (hmlanigan) 2023-06-14
 		// Add a user NotFound error type to the client.
@@ -273,8 +279,13 @@ func (r *userResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		return
 	}
 
+	userName, diagErr := userNameFromID(data.ID.ValueString())
+	resp.Diagnostics.Append(diagErr...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	err := r.client.Users.DestroyUser(juju.DestroyUserInput{
-		Name: userNameFromID(data.ID.ValueString()),
+		Name: userName,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete user resource, got error: %s", err))
@@ -287,11 +298,17 @@ func (r *userResource) ImportState(ctx context.Context, req resource.ImportState
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-// ID is 'user:<username'
+// ID is 'user:<username>'
 func newIDFromUserName(value string) string {
 	return fmt.Sprintf("user:%s", value)
 }
 
-func userNameFromID(value string) string {
-	return strings.Split(value, ":")[1]
+func userNameFromID(value string) (string, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	values := strings.Split(value, ":")
+	if len(values) != 2 || values[0] != "user" {
+		diags.AddError("Malformed ID", fmt.Sprintf("User ID %q is malformed, please use the format 'user:<username>'", value))
+		return "", diags
+	}
+	return values[1], diags
 }
