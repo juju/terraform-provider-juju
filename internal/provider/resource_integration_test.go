@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/juju/terraform-provider-juju/version"
 )
 
 func TestAcc_ResourceIntegration_sdk2_framework_migrate(t *testing.T) {
@@ -200,7 +201,7 @@ func TestAcc_ResourceIntegration_Stable(t *testing.T) {
 		PreCheck: func() { testAccPreCheck(t) },
 		ExternalProviders: map[string]resource.ExternalProvider{
 			"juju": {
-				VersionConstraint: "0.8.0",
+				VersionConstraint: version.TerraformProviderJujuVersion,
 				Source:            "juju/juju",
 			},
 		},
@@ -292,7 +293,7 @@ func TestAcc_ResourceIntegrationWithViaCIDRs_Stable(t *testing.T) {
 		PreCheck: func() { testAccPreCheck(t) },
 		ExternalProviders: map[string]resource.ExternalProvider{
 			"juju": {
-				VersionConstraint: "0.8.0",
+				VersionConstraint: version.TerraformProviderJujuVersion,
 				Source:            "juju/juju",
 			},
 		},

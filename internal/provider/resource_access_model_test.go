@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/juju/terraform-provider-juju/version"
 )
 
 func TestAcc_ResourceAccessModel_sdk2_framework_migrate(t *testing.T) {
@@ -87,7 +88,7 @@ func TestAcc_ResourceAccessModel_Stable(t *testing.T) {
 		PreCheck: func() { testAccPreCheck(t) },
 		ExternalProviders: map[string]resource.ExternalProvider{
 			"juju": {
-				VersionConstraint: "0.8.0",
+				VersionConstraint: version.TerraformProviderJujuVersion,
 				Source:            "juju/juju",
 			},
 		},
