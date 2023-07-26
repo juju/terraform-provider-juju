@@ -15,19 +15,13 @@ func TestAcc_ResourceUser_sdk2_framework_migrate(t *testing.T) {
 	resourceName := "juju_user.user"
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceUser_Migrate(t, userName, userPassword),
+				Config: testAccResourceUser(userName, userPassword),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", resourceName),
 				),
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						VersionConstraint: "0.8.0",
-						Source:            "juju/juju",
-					},
-				},
 				PreConfig: func() { testAccPreCheck(t) },
 			},
 			{
@@ -37,23 +31,14 @@ func TestAcc_ResourceUser_sdk2_framework_migrate(t *testing.T) {
 				ImportStateVerifyIgnore: []string{"password"},
 				ImportStateId:           fmt.Sprintf("user:%s", resourceName),
 				ResourceName:            resourceName,
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						VersionConstraint: "0.8.0",
-						Source:            "juju/juju",
-					},
-				},
 			},
 		},
 	})
 }
 
-func testAccResourceUser_Migrate(t *testing.T, userName, userPassword string) string {
+func testAccResourceUser(userName, userPassword string) string {
 	return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_user" "user" {
-  provider = oldjuju
   name = %q
   password = %q
 
@@ -75,7 +60,7 @@ func TestAcc_ResourceUser_Stable(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceUser_Stable(t, userName, userPassword),
+				Config: testAccResourceUser(userName, userPassword),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", userName),
 				),
@@ -89,13 +74,4 @@ func TestAcc_ResourceUser_Stable(t *testing.T) {
 			},
 		},
 	})
-}
-
-func testAccResourceUser_Stable(t *testing.T, userName, userPassword string) string {
-	return fmt.Sprintf(`
-resource "juju_user" "test-user" {
-  name = %q
-  password = %q
-
-}`, userName, userPassword)
 }
