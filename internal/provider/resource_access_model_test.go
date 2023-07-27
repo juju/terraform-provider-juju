@@ -22,7 +22,7 @@ func TestAcc_ResourceAccessModel_sdk2_framework_migrate(t *testing.T) {
 		ProtoV6ProviderFactories: muxProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccResourceAccessModel_sdk2_framework_migrate(t, userName, userPassword, modelName, accessFail),
+				Config:      testAccResourceAccessModel_sdk2_framework_migrate(userName, userPassword, modelName, accessFail),
 				ExpectError: regexp.MustCompile("Error running pre-apply refresh.*"),
 			},
 			{
@@ -32,7 +32,7 @@ func TestAcc_ResourceAccessModel_sdk2_framework_migrate(t *testing.T) {
 				SkipFunc: func() (bool, error) {
 					return testingCloud != LXDCloudTesting, nil
 				},
-				Config: testAccResourceAccessModel_sdk2_framework_migrate(t, userName, userPassword, modelName, access),
+				Config: testAccResourceAccessModel_sdk2_framework_migrate(userName, userPassword, modelName, access),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "access", access),
 					resource.TestCheckResourceAttr(resourceName, "model", modelName),
@@ -52,12 +52,11 @@ func TestAcc_ResourceAccessModel_sdk2_framework_migrate(t *testing.T) {
 	})
 }
 
-func testAccResourceAccessModel_sdk2_framework_migrate(t *testing.T, userName, userPassword, modelName, access string) string {
+func testAccResourceAccessModel_sdk2_framework_migrate(userName, userPassword, modelName, access string) string {
 	return fmt.Sprintf(`
 provider oldjuju {}
 
 resource "juju_user" "this" {
-  provider = oldjuju
   name = %q
   password = %q
 }
@@ -93,7 +92,7 @@ func TestAcc_ResourceAccessModel_Stable(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccResourceAccessModel_Stable(t, userName, userPassword, modelName, accessFail),
+				Config:      testAccResourceAccessModel_Stable(userName, userPassword, modelName, accessFail),
 				ExpectError: regexp.MustCompile("Error running pre-apply refresh.*"),
 			},
 			{
@@ -103,7 +102,7 @@ func TestAcc_ResourceAccessModel_Stable(t *testing.T) {
 				SkipFunc: func() (bool, error) {
 					return testingCloud != LXDCloudTesting, nil
 				},
-				Config: testAccResourceAccessModel_Stable(t, userName, userPassword, modelName, access),
+				Config: testAccResourceAccessModel_Stable(userName, userPassword, modelName, access),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "access", access),
 					resource.TestCheckResourceAttr(resourceName, "model", modelName),
@@ -123,7 +122,7 @@ func TestAcc_ResourceAccessModel_Stable(t *testing.T) {
 	})
 }
 
-func testAccResourceAccessModel_Stable(t *testing.T, userName, userPassword, modelName, access string) string {
+func testAccResourceAccessModel_Stable(userName, userPassword, modelName, access string) string {
 	return fmt.Sprintf(`
 resource "juju_user" "this" {
   name = %q

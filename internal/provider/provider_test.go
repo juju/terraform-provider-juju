@@ -48,6 +48,7 @@ func init() {
 			return upgradedSdkProvider, err
 		},
 	}
+
 	frameworkProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev")),
 	}

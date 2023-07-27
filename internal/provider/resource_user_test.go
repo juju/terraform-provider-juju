@@ -15,15 +15,17 @@ func TestAcc_ResourceUser_sdk2_framework_migrate(t *testing.T) {
 	resourceName := "juju_user.user"
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceUser_Migrate(t, userName, userPassword),
+				Config: testAccResourceUser(userName, userPassword),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", userName),
 				),
+				PreConfig: func() { testAccPreCheck(t) },
 			},
 			{
+				Destroy:                 true,
 				ImportStateVerify:       true,
 				ImportState:             true,
 				ImportStateVerifyIgnore: []string{"password"},
@@ -34,12 +36,9 @@ func TestAcc_ResourceUser_sdk2_framework_migrate(t *testing.T) {
 	})
 }
 
-func testAccResourceUser_Migrate(t *testing.T, userName, userPassword string) string {
+func testAccResourceUser(userName, userPassword string) string {
 	return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_user" "user" {
-  provider = oldjuju
   name = %q
   password = %q
 
@@ -61,7 +60,7 @@ func TestAcc_ResourceUser_Stable(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceUser_Stable(t, userName, userPassword),
+				Config: testAccResourceUser(userName, userPassword),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", userName),
 				),
@@ -75,13 +74,4 @@ func TestAcc_ResourceUser_Stable(t *testing.T) {
 			},
 		},
 	})
-}
-
-func testAccResourceUser_Stable(t *testing.T, userName, userPassword string) string {
-	return fmt.Sprintf(`
-resource "juju_user" "user" {
-  name = %q
-  password = %q
-
-}`, userName, userPassword)
 }
