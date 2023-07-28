@@ -65,13 +65,13 @@ func New(version string) func() *schema.Provider {
 				"juju_offer":   dataSourceOffer(),
 			},
 			ResourcesMap: map[string]*schema.Resource{
-				"juju_application":  resourceApplication(),
-				"juju_credential":   resourceCredential(),
-				"juju_integration":  resourceIntegration(),
-				"juju_model":        resourceModel(),
-				"juju_offer":        resourceOffer(),
-				"juju_machine":      resourceMachine(),
-				"juju_ssh_key":      resourceSSHKey(),
+				"juju_application": resourceApplication(),
+				"juju_credential":  resourceCredential(),
+				"juju_integration": resourceIntegration(),
+				"juju_model":       resourceModel(),
+				"juju_offer":       resourceOffer(),
+				"juju_machine":     resourceMachine(),
+				"juju_ssh_key":     resourceSSHKey(),
 			},
 		}
 		p.ConfigureContextFunc = configure()

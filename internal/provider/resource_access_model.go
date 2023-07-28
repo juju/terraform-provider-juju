@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -159,21 +160,24 @@ func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	modelUUID, access, stateUsers := retrieveAccessModelDataFromID(&plan)
+	modelName, access, stateUsers := retrieveAccessModelDataFromID(&plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	uuid, err := a.client.Models.ResolveModelUUID(modelUUID)
+	modelUUID, err := a.client.Models.ResolveModelUUID(modelName)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model uuid, got error: %s", err))
 		return
 	}
 
-	response, err := a.client.Users.ModelUserInfo(uuid)
+	response, err := a.client.Users.ModelUserInfo(modelUUID)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read access model resource, got error: %s", err))
 		return
 	}
 
-	plan.Model = types.StringValue(modelUUID)
+	plan.Model = types.StringValue(modelName)
 	plan.Access = types.StringValue(access)
 
 	var users []string
@@ -351,9 +355,17 @@ func newAccessModelIDFrom(modelNameStr string, accessStr string, users []string)
 	return fmt.Sprintf("%s:%s:%s", modelNameStr, accessStr, strings.Join(users, ","))
 }
 
-func retrieveAccessModelDataFromID(model *accessModelResourceModel) (string, string, []string) {
+func retrieveAccessModelDataFromID(model *accessModelResourceModel, diag *diag.Diagnostics) (string, string, []string) {
 	resID := strings.Split(model.ID.ValueString(), ":")
-	stateUsers := strings.Split(resID[2], ",")
+	if len(resID) < 2 {
+		diag.AddError("Malformed ID", fmt.Sprintf("AccessModel ID %q is malformed, "+
+			"please use the format '<modelname>:<access>:<user1,user1>'", resID))
+		return "", "", nil
+	}
+	stateUsers := []string{}
+	if len(resID) == 3 {
+		stateUsers = strings.Split(resID[2], ",")
+	}
 
 	return resID[0], resID[1], stateUsers
 }
