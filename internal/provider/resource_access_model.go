@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -116,7 +115,11 @@ func (a *accessModelResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	// Get the users
-	users := convertRawUsers(plan.Users.Elements())
+	var users []string
+	resp.Diagnostics.Append(plan.Users.ElementsAs(ctx, &users, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	modelNameStr := plan.Model.ValueString()
 	// Get the modelUUID to call Models.GrantModel
@@ -160,7 +163,7 @@ func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	modelName, access, stateUsers := retrieveAccessModelDataFromID(&plan, &resp.Diagnostics)
+	modelName, access, stateUsers := retrieveAccessModelDataFromID(plan.ID, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -233,19 +236,27 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 	anyChange := false
 
 	// items that could be changed
-	var newAccess string
+	access := state.Access.ValueString()
 	var missingUserList []string
 	var addedUserList []string
+
+	// Get the users that are in the planned state
+	var planUsers []string
+	resp.Diagnostics.Append(plan.Users.ElementsAs(ctx, &planUsers, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	// Check if the users has changed
 	if !plan.Users.Equal(state.Users) {
 		anyChange = true
 
 		// Get the users that are in the current state
-		stateUsers := convertRawUsers(state.Users.Elements())
-
-		// Get the users that are in the planned states
-		planUsers := convertRawUsers(plan.Users.Elements())
+		var stateUsers []string
+		resp.Diagnostics.Append(plan.Users.ElementsAs(ctx, &stateUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 
 		missingUserList = getMissingUsers(stateUsers, planUsers)
 		addedUserList = getAddedUsers(stateUsers, planUsers)
@@ -254,7 +265,7 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 	// Check if access has changed
 	if !plan.Access.Equal(state.Access) {
 		anyChange = true
-		newAccess = plan.Access.ValueString()
+		access = plan.Access.ValueString()
 	}
 
 	if !anyChange {
@@ -262,17 +273,25 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	// TODO (cderici): The Terraform ID of this resource is leaking into the Juju package as the model identifier
-	// (despite that it's neither a uuid nor a model name). This needs to be decoupled.
+	modelName, oldAccess, _ := retrieveAccessModelDataFromID(state.ID, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	err := a.client.Models.UpdateAccessModel(juju.UpdateAccessModelInput{
-		Model:  plan.ID.ValueString(),
-		Grant:  addedUserList,
-		Revoke: missingUserList,
-		Access: newAccess,
+		ModelName: modelName,
+		OldAccess: oldAccess,
+		Grant:     addedUserList,
+		Revoke:    missingUserList,
+		Access:    access,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access model resource, got error: %s", err))
 	}
+	tflog.Trace(ctx, fmt.Sprintf("updated access model resource for model %q", modelName))
+
+	plan.ID = types.StringValue(newAccessModelIDFrom(modelName, access, planUsers))
+
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -293,7 +312,11 @@ func (a *accessModelResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	// Get the users
-	stateUsers := convertRawUsers(plan.Users.Elements())
+	var stateUsers []string
+	resp.Diagnostics.Append(plan.Users.ElementsAs(ctx, &stateUsers, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	err := a.client.Models.DestroyAccessModel(juju.DestroyAccessModelInput{
 		Model:  plan.ID.ValueString(),
@@ -346,7 +369,7 @@ func (a *accessModelResource) ImportState(ctx context.Context, req resource.Impo
 func addClientNotConfiguredError(diag *diag.Diagnostics, method string) {
 	diag.AddError(
 		"Provider Error, Client Not Configured",
-		fmt.Sprintf("Unable to %v access model resource. Expected configured Juju Client. "+
+		fmt.Sprintf("Unable to %s access model resource. Expected configured Juju Client. "+
 			"Please report this issue to the provider developers.", method),
 	)
 }
@@ -355,8 +378,8 @@ func newAccessModelIDFrom(modelNameStr string, accessStr string, users []string)
 	return fmt.Sprintf("%s:%s:%s", modelNameStr, accessStr, strings.Join(users, ","))
 }
 
-func retrieveAccessModelDataFromID(model *accessModelResourceModel, diag *diag.Diagnostics) (string, string, []string) {
-	resID := strings.Split(model.ID.ValueString(), ":")
+func retrieveAccessModelDataFromID(ID types.String, diag *diag.Diagnostics) (string, string, []string) {
+	resID := strings.Split(ID.ValueString(), ":")
 	if len(resID) < 2 {
 		diag.AddError("Malformed ID", fmt.Sprintf("AccessModel ID %q is malformed, "+
 			"please use the format '<modelname>:<access>:<user1,user1>'", resID))
@@ -368,12 +391,4 @@ func retrieveAccessModelDataFromID(model *accessModelResourceModel, diag *diag.D
 	}
 
 	return resID[0], resID[1], stateUsers
-}
-
-func convertRawUsers(attributesRaw []attr.Value) []string {
-	newUsers := make([]string, len(attributesRaw))
-	for i, value := range attributesRaw {
-		newUsers[i] = value.(types.String).ValueString()
-	}
-	return newUsers
 }

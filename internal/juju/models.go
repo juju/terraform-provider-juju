@@ -76,10 +76,11 @@ type UpdateModelInput struct {
 }
 
 type UpdateAccessModelInput struct {
-	Model  string
-	Grant  []string
-	Revoke []string
-	Access string
+	ModelName string
+	OldAccess string
+	Grant     []string
+	Revoke    []string
+	Access    string
 }
 
 type DestroyModelInput struct {
@@ -386,9 +387,8 @@ func (c *modelsClient) GrantModel(input GrantModelInput) error {
 // If a user has had `write`, then removing that access would decrease their
 // access to `read` and the user will remain part of the model access.
 func (c *modelsClient) UpdateAccessModel(input UpdateAccessModelInput) error {
-	id := strings.Split(input.Model, ":")
-	model := id[0]
-	access := id[1]
+	model := input.ModelName
+	access := input.OldAccess
 
 	uuid, err := c.ResolveModelUUID(model)
 	if err != nil {
