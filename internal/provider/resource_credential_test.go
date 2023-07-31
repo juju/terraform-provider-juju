@@ -68,10 +68,7 @@ func TestAcc_ResourceCredential_sdk2_framework_migrate(t *testing.T) {
 
 func testAccResourceCredential_sdk2_framework_migrate(t *testing.T, credentialName string, authType string) string {
 	return fmt.Sprintf(`
-provider juju {}
-
 resource "juju_credential" "test-credential" {
-  provider = juju
   name = %q
 
   cloud {
@@ -84,10 +81,7 @@ resource "juju_credential" "test-credential" {
 
 func testAccResourceCredentialToken_sdk2_framework_migrate(t *testing.T, credentialName, authType, token string) string {
 	return fmt.Sprintf(`
-provider juju {}
-
 resource "juju_credential" "test-credential" {
-  provider = juju
   name = %q
 
   cloud {
