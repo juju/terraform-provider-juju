@@ -31,20 +31,22 @@ body:
       required: true
 
   - type: textarea
-    id: info
+    id: Requirements
     attributes:
-      label: "Requirements"
-      description: "Please add some details of what is needed,
-      including use cases. You may add some Terraform plans (.tf) to
-      demonstrate how you'd like to use the new feature."
+      label: Requirements
+      description: |
+        Please add some details of what is needed, including use cases.
+        You may add some Terraform plans (.tf) to demonstrate how you'd like to
+        use the new feature.
       render: terraform
     validations:
       required: true
 
   - type: textarea
-    id: info
+    id: Info
     attributes:
       label: "Notes & References"
-      description: "Please add relevant notes, links to mattermost chats, 
-      other related issues/PRs, anything to help diagnose understand and 
-      develop the feature you want."
+      description: |
+        Please add relevant notes, links to mattermost chats, other related
+        issues/PRs, anything to help diagnose understand and develop the
+        feature you want.
