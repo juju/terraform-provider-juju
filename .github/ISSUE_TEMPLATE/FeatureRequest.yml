@@ -9,11 +9,15 @@ body:
         quickly add it to the terraform juju provider.
 
   - type: textarea
-    id: Description
+    id: Requirements
     attributes:
-      label: Description
-      description: "Please describe what you want to see: "
+      label: Requirements
+      description: |
+        Please add some details of what is needed, including use cases.
+        You may add some Terraform plans (.tf) to demonstrate how you'd like to
+        use the new feature.
       placeholder: ex. "I want the resource X to be added to the provider."
+      render: terraform
     validations:
       required: true
 
@@ -27,18 +31,6 @@ body:
         - It would save from a weird workaround
         - Need this really badly for test suite
         - Required by a customer, please add it now!
-    validations:
-      required: true
-
-  - type: textarea
-    id: Requirements
-    attributes:
-      label: Requirements
-      description: |
-        Please add some details of what is needed, including use cases.
-        You may add some Terraform plans (.tf) to demonstrate how you'd like to
-        use the new feature.
-      render: terraform
     validations:
       required: true
 
