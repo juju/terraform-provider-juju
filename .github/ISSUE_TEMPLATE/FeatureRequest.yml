@@ -1,0 +1,44 @@
+name: Feature Request
+description: You want something to be added to Terraform Juju Provider? Proceed with this one.
+labels: [wishlisted]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting this. Please provide info below so we can 
+        quickly add it to the terraform juju provider.
+
+  - type: textarea
+    id: Requirements
+    attributes:
+      label: Requirements
+      description: |
+        Please add some details of what is needed, including use cases.
+        You may add some Terraform plans (.tf) to demonstrate how you'd like to
+        use the new feature.
+      placeholder: ex. "I want the resource X to be added to the provider."
+      render: terraform
+    validations:
+      required: true
+
+  - type: dropdown
+    id: Urgency
+    attributes:
+      label: Urgency
+      description: How soon do you need to see this in the provider?
+      options:
+        - Casually wishlisting
+        - It would save from a weird workaround
+        - Need this really badly for test suite
+        - Required by a customer, please add it now!
+    validations:
+      required: true
+
+  - type: textarea
+    id: Info
+    attributes:
+      label: "Notes & References"
+      description: |
+        Please add relevant notes, links to mattermost chats, other related
+        issues/PRs, anything to help diagnose understand and develop the
+        feature you want.
