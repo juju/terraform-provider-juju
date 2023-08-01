@@ -163,7 +163,7 @@ func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	modelName, access, stateUsers := retrieveAccessModelDataFromID(plan.ID, &resp.Diagnostics)
+	modelName, access, stateUsers := retrieveAccessModelDataFromID(ctx, plan.ID, plan.Users, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -273,7 +273,7 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	modelName, oldAccess, _ := retrieveAccessModelDataFromID(state.ID, &resp.Diagnostics)
+	modelName, oldAccess, _ := retrieveAccessModelDataFromID(ctx, state.ID, state.Users, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -363,6 +363,15 @@ func getAddedUsers(oldUsers, newUsers []string) []string {
 }
 
 func (a *accessModelResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	IDstr := req.ID
+	if len(strings.Split(IDstr, ":")) != 3 {
+		resp.Diagnostics.AddError(
+			"ImportState Failure",
+			fmt.Sprintf("Malformed AccessModel ID %q, "+
+				"please use format '<modelname>:<access>:<user1,user1>'", IDstr),
+		)
+		return
+	}
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
@@ -378,7 +387,8 @@ func newAccessModelIDFrom(modelNameStr string, accessStr string, users []string)
 	return fmt.Sprintf("%s:%s:%s", modelNameStr, accessStr, strings.Join(users, ","))
 }
 
-func retrieveAccessModelDataFromID(ID types.String, diag *diag.Diagnostics) (string, string, []string) {
+func retrieveAccessModelDataFromID(ctx context.Context, ID types.String, users types.List, diag *diag.Diagnostics) (string, string,
+	[]string) {
 	resID := strings.Split(ID.ValueString(), ":")
 	if len(resID) < 2 {
 		diag.AddError("Malformed ID", fmt.Sprintf("AccessModel ID %q is malformed, "+
@@ -388,6 +398,16 @@ func retrieveAccessModelDataFromID(ID types.String, diag *diag.Diagnostics) (str
 	stateUsers := []string{}
 	if len(resID) == 3 {
 		stateUsers = strings.Split(resID[2], ",")
+	} else {
+		// In 0.8.0 sdk2 version of the provider, the implementation of the access model
+		// resource had a bug where it didn't contain the users. So we accommodate upgrades
+		// from that by attempting to get the users from the state if the ID doesn't contain
+		// any users (which happens only when coming from the previous version because the
+		// ID is a computed field).
+		diag.Append(users.ElementsAs(ctx, &stateUsers, false)...)
+		if diag.HasError() {
+			return "", "", nil
+		}
 	}
 
 	return resID[0], resID[1], stateUsers
