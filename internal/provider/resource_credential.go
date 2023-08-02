@@ -18,7 +18,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -120,7 +119,7 @@ func (c *credentialResource) Schema(_ context.Context, _ resource.SchemaRequest,
 func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Check first if the client is configured
 	if c.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "create")
+		addClientNotConfiguredError(&resp.Diagnostics, "credential", "create")
 		return
 	}
 
@@ -183,7 +182,7 @@ func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequ
 func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	// Check first if the client is configured
 	if c.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "read")
+		addClientNotConfiguredError(&resp.Diagnostics, "credential", "read")
 		return
 	}
 
@@ -264,7 +263,7 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	// Check first if the client is configured
 	if c.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "update")
+		addClientNotConfiguredError(&resp.Diagnostics, "credential", "update")
 		return
 	}
 
@@ -337,7 +336,7 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 func (c *credentialResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Check first if the client is configured
 	if c.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "delete")
+		addClientNotConfiguredError(&resp.Diagnostics, "credential", "delete")
 		return
 	}
 
@@ -437,7 +436,7 @@ func retrieveCredentialDataFromID(idStr string, diag *diag.Diagnostics, method s
 	if len(resID) != 4 {
 		diag.AddError("Provider Error",
 			fmt.Sprintf("unable to %s credential resource, invalid ID, expected {credentialName, cloudName, "+
-				"isClient, isController} - given : %s",
+				"isClient, isController} - given : %q",
 				method, resID))
 		return "", "", false, false
 	}
@@ -445,7 +444,7 @@ func retrieveCredentialDataFromID(idStr string, diag *diag.Diagnostics, method s
 	clientCredential, controllerCredential, err := convertOptionsBool(clientCredentialStr, controllerCredentialStr)
 	if err != nil {
 		diag.AddError("Provider Error",
-			fmt.Sprintf("Unable to %s credential resource, got error: %s", err, method))
+			fmt.Sprintf("Unable to %s credential resource, got error: %s", method, err))
 		return "", "", false, false
 	}
 	return credentialName, cloudName, clientCredential, controllerCredential
@@ -476,12 +475,4 @@ func convertOptionsBool(clientCredentialStr, controllerCredentialStr string) (bo
 	}
 
 	return clientCredentialBool, controllerCredentialBool, nil
-}
-
-func addClientNotConfiguredError(diag *diag.Diagnostics, method string) {
-	diag.AddError(
-		"Provider Error, Client Not Configured",
-		fmt.Sprintf("Unable to %s credential resource. Expected configured Juju Client. "+
-			"Please report this issue to the provider developers.", method),
-	)
 }

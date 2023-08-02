@@ -403,3 +403,11 @@ func checkClientErr(err error, config juju.Configuration) frameworkdiag.Diagnost
 	diags.AddError("Client Error", err.Error())
 	return diags
 }
+
+func addClientNotConfiguredError(diag *frameworkdiag.Diagnostics, resource, method string) {
+	diag.AddError(
+		"Provider Error, Client Not Configured",
+		fmt.Sprintf("Unable to %s %s resource. Expected configured Juju Client. "+
+			"Please report this issue to the provider developers.", method, resource),
+	)
+}

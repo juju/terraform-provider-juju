@@ -103,7 +103,7 @@ func (a *accessModelResource) Configure(_ context.Context, req resource.Configur
 func (a *accessModelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Check first if the client is configured
 	if a.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "create")
+		addClientNotConfiguredError(&resp.Diagnostics, "access model", "create")
 		return
 	}
 	var plan accessModelResourceModel
@@ -152,7 +152,7 @@ func (a *accessModelResource) Create(ctx context.Context, req resource.CreateReq
 func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	// Check first if the client is configured
 	if a.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "read")
+		addClientNotConfiguredError(&resp.Diagnostics, "access model", "read")
 		return
 	}
 	var plan accessModelResourceModel
@@ -215,7 +215,7 @@ func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest
 func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	// Check first if the client is configured
 	if a.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "update")
+		addClientNotConfiguredError(&resp.Diagnostics, "access model", "update")
 		return
 	}
 
@@ -299,7 +299,7 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 func (a *accessModelResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Check first if the client is configured
 	if a.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "delete")
+		addClientNotConfiguredError(&resp.Diagnostics, "access model", "delete")
 		return
 	}
 
@@ -373,14 +373,6 @@ func (a *accessModelResource) ImportState(ctx context.Context, req resource.Impo
 		return
 	}
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
-}
-
-func addClientNotConfiguredError(diag *diag.Diagnostics, method string) {
-	diag.AddError(
-		"Provider Error, Client Not Configured",
-		fmt.Sprintf("Unable to %s access model resource. Expected configured Juju Client. "+
-			"Please report this issue to the provider developers.", method),
-	)
 }
 
 func newAccessModelIDFrom(modelNameStr string, accessStr string, users []string) string {
