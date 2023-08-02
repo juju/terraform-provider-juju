@@ -5,133 +5,206 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-func resourceAccessModel() *schema.Resource {
-	return &schema.Resource{
-		// This description is used by the documentation generator and the language server.
+// Ensure provider defined types fully satisfy framework interfaces.
+var _ resource.Resource = &accessModelResource{}
+var _ resource.ResourceWithConfigure = &accessModelResource{}
+var _ resource.ResourceWithImportState = &accessModelResource{}
+
+func NewAccessModelResource() resource.Resource {
+	return &accessModelResource{}
+}
+
+type accessModelResource struct {
+	client *juju.Client
+}
+
+type accessModelResourceModel struct {
+	Model  types.String `tfsdk:"model"`
+	Users  types.List   `tfsdk:"users"`
+	Access types.String `tfsdk:"access"`
+
+	// ID required by the testing framework
+	ID types.String `tfsdk:"id"`
+}
+
+func (a *accessModelResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_access_model"
+}
+
+func (a *accessModelResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: "A resource that represent a Juju Access Model.",
-
-		CreateContext: resourceAccessModelCreate,
-		ReadContext:   resourceAccessModelRead,
-		UpdateContext: resourceAccessModelUpdate,
-		DeleteContext: resourceAccessModelDelete,
-		Importer: &schema.ResourceImporter{
-			StateContext: resourceAccessModelImporter,
-		},
-
-		Schema: map[string]*schema.Schema{
-			"model": {
+		Attributes: map[string]schema.Attribute{
+			"model": schema.StringAttribute{
 				Description: "The name of the model for access management",
-				Type:        schema.TypeString,
 				Required:    true,
-				ForceNew:    true,
-			},
-			"users": {
-				Description: "List of users to grant access to",
-				Type:        schema.TypeList,
-				Required:    true,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"access": {
-				Description:  "Type of access to the model",
-				ValidateFunc: validation.StringInSlice([]string{"admin", "read", "write"}, false),
-				Type:         schema.TypeString,
-				ForceNew:     true,
-				Required:     true,
+			"users": schema.ListAttribute{
+				Description: "List of users to grant access to",
+				Required:    true,
+				ElementType: types.StringType,
+			},
+			"access": schema.StringAttribute{
+				Description: "Type of access to the model",
+				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.OneOf("admin", "read", "write"),
+				},
+			},
+			// ID required by the testing framework
+			"id": schema.StringAttribute{
+				Computed: true,
 			},
 		},
 	}
 }
 
-func resourceAccessModelCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
-	var diags diag.Diagnostics
-
-	model := d.Get("model").(string)
-	access := d.Get("access").(string)
-	usersInterface := d.Get("users").([]interface{})
-	users := make([]string, len(usersInterface))
-	for i, v := range usersInterface {
-		users[i] = v.(string)
+// Configure enables provider-level data or clients to be set in the
+// provider-defined DataSource type. It is separately executed for each
+// ReadDataSource RPC.
+func (a *accessModelResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	// Prevent panic if the provider has not been configured.
+	if req.ProviderData == nil {
+		return
 	}
 
-	uuid, err := client.Models.ResolveModelUUID(model)
+	client, ok := req.ProviderData.(*juju.Client)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *juju.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
+	a.client = client
+}
+
+func (a *accessModelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	// Check first if the client is configured
+	if a.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "create")
+		return
+	}
+	var plan accessModelResourceModel
+
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get the users
+	var users []string
+	resp.Diagnostics.Append(plan.Users.ElementsAs(ctx, &users, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	modelNameStr := plan.Model.ValueString()
+	// Get the modelUUID to call Models.GrantModel
+	uuid, err := a.client.Models.ResolveModelUUID(modelNameStr)
 	if err != nil {
-		return diag.FromErr(err)
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model uuid, got error: %s", err))
+		return
 	}
-
 	modelUUIDs := []string{uuid}
 
+	accessStr := plan.Access.ValueString()
+	// Call Models.GrantModel
 	for _, user := range users {
-		err := client.Models.GrantModel(juju.GrantModelInput{
+		err := a.client.Models.GrantModel(juju.GrantModelInput{
 			User:       user,
-			Access:     access,
+			Access:     accessStr,
 			ModelUUIDs: modelUUIDs,
 		})
 		if err != nil {
-			return diag.FromErr(err)
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access model resource, got error: %s", err))
+			return
 		}
 	}
+	plan.ID = types.StringValue(newAccessModelIDFrom(modelNameStr, accessStr, users))
 
-	d.SetId(fmt.Sprintf("%s:%s", model, access))
-
-	return diags
+	// Set the plan onto the Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func resourceAccessModelRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
+func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	// Check first if the client is configured
+	if a.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "read")
+		return
+	}
+	var plan accessModelResourceModel
 
-	var diags diag.Diagnostics
-
-	id := strings.Split(d.Id(), ":")
-	usersInterface := d.Get("users").([]interface{})
-	stateUsers := make([]string, len(usersInterface))
-	for i, v := range usersInterface {
-		stateUsers[i] = v.(string)
+	// Get the Terraform state from the request into the plan
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	uuid, err := client.Models.ResolveModelUUID(id[0])
+	modelName, access, stateUsers := retrieveAccessModelDataFromID(ctx, plan.ID, plan.Users, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	modelUUID, err := a.client.Models.ResolveModelUUID(modelName)
 	if err != nil {
-		return diag.FromErr(err)
-	}
-	response, err := client.Users.ModelUserInfo(uuid)
-	if err != nil {
-		return diag.FromErr(err)
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model uuid, got error: %s", err))
+		return
 	}
 
-	if err := d.Set("model", id[0]); err != nil {
-		return diag.FromErr(err)
+	response, err := a.client.Users.ModelUserInfo(modelUUID)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read access model resource, got error: %s", err))
+		return
 	}
-	if err := d.Set("access", id[1]); err != nil {
-		return diag.FromErr(err)
-	}
+
+	plan.Model = types.StringValue(modelName)
+	plan.Access = types.StringValue(access)
 
 	var users []string
 
 	for _, user := range stateUsers {
 		for _, modelUser := range response.ModelUserInfo {
-			if user == modelUser.UserName && string(modelUser.Access) == id[1] {
+			if user == modelUser.UserName && string(modelUser.Access) == access {
 				users = append(users, modelUser.UserName)
 			}
 		}
 	}
 
-	if err = d.Set("users", users); err != nil {
-		return diag.FromErr(err)
+	uss, errDiag := basetypes.NewListValueFrom(ctx, types.StringType, users)
+	plan.Users = uss
+	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	return diags
+	// Set the plan onto the Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// Updating the access model supports three cases
+// Update on the access model supports three cases
 // access and users both changed:
 // for missing users - revoke access
 // for changed users - apply new access
@@ -139,52 +212,120 @@ func resourceAccessModelRead(ctx context.Context, d *schema.ResourceData, meta i
 // for missing users - revoke access
 // for new users - apply access
 // access changed - apply new access
-func resourceAccessModelUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
+func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	// Check first if the client is configured
+	if a.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "update")
+		return
+	}
 
-	var diags diag.Diagnostics
+	var plan, state accessModelResourceModel
+
+	// Get the Terraform state from the request into the plan
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	anyChange := false
 
 	// items that could be changed
-	var newAccess string
-	var newUsersList []string
+	access := state.Access.ValueString()
 	var missingUserList []string
 	var addedUserList []string
 
-	var err error
+	// Get the users that are in the planned state
+	var planUsers []string
+	resp.Diagnostics.Append(plan.Users.ElementsAs(ctx, &planUsers, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	if d.HasChange("users") {
+	// Check if the users has changed
+	if !plan.Users.Equal(state.Users) {
 		anyChange = true
-		oldUsers, newUsers := d.GetChange("users")
-		oldUsersInterface := oldUsers.([]interface{})
-		oldUsersList := make([]string, len(oldUsersInterface))
-		for i, v := range oldUsersInterface {
-			oldUsersList[i] = v.(string)
+
+		// Get the users that are in the current state
+		var stateUsers []string
+		resp.Diagnostics.Append(plan.Users.ElementsAs(ctx, &stateUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
 		}
-		newUsersInterface := newUsers.([]interface{})
-		newUsersList = make([]string, len(newUsersInterface))
-		for i, v := range newUsersInterface {
-			newUsersList[i] = v.(string)
-		}
-		missingUserList = getMissingUsers(oldUsersList, newUsersList)
-		addedUserList = getAddedUsers(oldUsersList, newUsersList)
+
+		missingUserList = getMissingUsers(stateUsers, planUsers)
+		addedUserList = getAddedUsers(stateUsers, planUsers)
+	}
+
+	// Check if access has changed
+	if !plan.Access.Equal(state.Access) {
+		anyChange = true
+		access = plan.Access.ValueString()
 	}
 
 	if !anyChange {
-		return diags
+		tflog.Trace(ctx, "Update is returning without any changes.")
+		return
 	}
 
-	err = client.Models.UpdateAccessModel(juju.UpdateAccessModelInput{
-		Model:  d.Id(),
-		Grant:  addedUserList,
-		Revoke: missingUserList,
-		Access: newAccess,
+	modelName, oldAccess, _ := retrieveAccessModelDataFromID(ctx, state.ID, state.Users, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	err := a.client.Models.UpdateAccessModel(juju.UpdateAccessModelInput{
+		ModelName: modelName,
+		OldAccess: oldAccess,
+		Grant:     addedUserList,
+		Revoke:    missingUserList,
+		Access:    access,
 	})
 	if err != nil {
-		return diag.FromErr(err)
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access model resource, got error: %s", err))
+	}
+	tflog.Trace(ctx, fmt.Sprintf("updated access model resource for model %q", modelName))
+
+	plan.ID = types.StringValue(newAccessModelIDFrom(modelName, access, planUsers))
+
+	// Set the plan onto the Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func (a *accessModelResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Check first if the client is configured
+	if a.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "delete")
+		return
 	}
 
-	return diags
+	var plan accessModelResourceModel
+
+	// Get the Terraform state from the request into the plan
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get the users
+	var stateUsers []string
+	resp.Diagnostics.Append(plan.Users.ElementsAs(ctx, &stateUsers, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	err := a.client.Models.DestroyAccessModel(juju.DestroyAccessModelInput{
+		Model:  plan.ID.ValueString(),
+		Revoke: stateUsers,
+		Access: plan.Access.ValueString(),
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete access model resource, got error: %s", err))
+	}
 }
 
 func getMissingUsers(oldUsers, newUsers []string) []string {
@@ -221,52 +362,53 @@ func getAddedUsers(oldUsers, newUsers []string) []string {
 	return added
 }
 
-// resourceAccessModelDelete deletes the access model resource
-// Juju refers to deletions as "destroy" so we call the Destroy function of our client here rather than delete
-// This function remains named Delete for parity across the provider and to stick within terraform naming conventions
-func resourceAccessModelDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
-	var diags diag.Diagnostics
-
-	usersInterface := d.Get("users").([]interface{})
-	users := make([]string, len(usersInterface))
-	for i, v := range usersInterface {
-		users[i] = v.(string)
+func (a *accessModelResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	IDstr := req.ID
+	if len(strings.Split(IDstr, ":")) != 3 {
+		resp.Diagnostics.AddError(
+			"ImportState Failure",
+			fmt.Sprintf("Malformed AccessModel ID %q, "+
+				"please use format '<modelname>:<access>:<user1,user1>'", IDstr),
+		)
+		return
 	}
-	access := d.Get("access").(string)
-
-	err := client.Models.DestroyAccessModel(juju.DestroyAccessModelInput{
-		Model:  d.Id(),
-		Revoke: users,
-		Access: access,
-	})
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	d.SetId("")
-
-	return diags
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func resourceAccessModelImporter(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	id := strings.Split(d.Id(), ":")
-	model := id[0]
-	access := id[1]
-	users := strings.Split(id[2], ",")
+func addClientNotConfiguredError(diag *diag.Diagnostics, method string) {
+	diag.AddError(
+		"Provider Error, Client Not Configured",
+		fmt.Sprintf("Unable to %s access model resource. Expected configured Juju Client. "+
+			"Please report this issue to the provider developers.", method),
+	)
+}
 
-	if err := d.Set("model", model); err != nil {
-		return nil, err
+func newAccessModelIDFrom(modelNameStr string, accessStr string, users []string) string {
+	return fmt.Sprintf("%s:%s:%s", modelNameStr, accessStr, strings.Join(users, ","))
+}
+
+func retrieveAccessModelDataFromID(ctx context.Context, ID types.String, users types.List, diag *diag.Diagnostics) (string, string,
+	[]string) {
+	resID := strings.Split(ID.ValueString(), ":")
+	if len(resID) < 2 {
+		diag.AddError("Malformed ID", fmt.Sprintf("AccessModel ID %q is malformed, "+
+			"please use the format '<modelname>:<access>:<user1,user1>'", resID))
+		return "", "", nil
 	}
-	if err := d.Set("access", access); err != nil {
-		return nil, err
-	}
-	if err := d.Set("users", users); err != nil {
-		return nil, err
+	stateUsers := []string{}
+	if len(resID) == 3 {
+		stateUsers = strings.Split(resID[2], ",")
+	} else {
+		// In 0.8.0 sdk2 version of the provider, the implementation of the access model
+		// resource had a bug where it didn't contain the users. So we accommodate upgrades
+		// from that by attempting to get the users from the state if the ID doesn't contain
+		// any users (which happens only when coming from the previous version because the
+		// ID is a computed field).
+		diag.Append(users.ElementsAs(ctx, &stateUsers, false)...)
+		if diag.HasError() {
+			return "", "", nil
+		}
 	}
 
-	d.SetId(fmt.Sprintf("%s:%s", model, access))
-
-	return []*schema.ResourceData{d}, nil
+	return resID[0], resID[1], stateUsers
 }
