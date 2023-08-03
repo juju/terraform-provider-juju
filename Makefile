@@ -36,6 +36,11 @@ lint:
 	@echo "Running go lint"
 	@golangci-lint run -c .golangci.yml
 
+.PHONY: static-analysis
+static-analysis:
+## static-analysis: Check the go code using static-analysis
+	@./static-analysis.sh
+
 HAS_TERRAFORM := $(shell command -v terraform 2> /dev/null)
 .PHONY: docs
 docs:
