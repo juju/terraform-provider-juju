@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/names/v4"
+
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 

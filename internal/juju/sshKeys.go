@@ -4,9 +4,10 @@ import (
 	"fmt"
 
 	"github.com/juju/juju/api/client/keymanager"
-	"github.com/juju/terraform-provider-juju/internal/utils"
 	"github.com/juju/utils/v3/ssh"
 	"github.com/rs/zerolog/log"
+
+	"github.com/juju/terraform-provider-juju/internal/utils"
 )
 
 type sshKeysClient struct {

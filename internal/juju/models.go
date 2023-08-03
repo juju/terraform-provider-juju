@@ -1,20 +1,17 @@
 package juju
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
 	"time"
 
-	"errors"
-
 	"github.com/juju/juju/api"
-	"github.com/juju/juju/core/constraints"
-
-	"github.com/juju/juju/api/client/modelconfig"
-
 	"github.com/juju/juju/api/base"
+	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/client/modelmanager"
+	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v4"
 )
@@ -358,7 +355,7 @@ func (c *modelsClient) DestroyModel(input DestroyModelInput) error {
 	destroyStorage := true
 	forceDestroy := false
 
-	err = client.DestroyModel(tag, &destroyStorage, &forceDestroy, &maxWait, timeout)
+	err = client.DestroyModel(tag, &destroyStorage, &forceDestroy, &maxWait, &timeout)
 	if err != nil {
 		return err
 	}
