@@ -226,9 +226,6 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve model UUID, got error: %s", err))
 		return
 	}
-	if resp.Diagnostics.HasError() {
-		return
-	}
 
 	series := data.Series.ValueString()
 	sshAddress := data.SSHAddress.ValueString()
@@ -311,7 +308,7 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	modelName, machineID, machineName := modeMachineIDAndName(data.ID.ValueString(), &resp.Diagnostics)
+	modelName, machineID, machineName := modelMachineIDAndName(data.ID.ValueString(), &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -400,7 +397,7 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	modelName, machineID, _ := modeMachineIDAndName(data.ID.ValueString(), &resp.Diagnostics)
+	modelName, machineID, _ := modelMachineIDAndName(data.ID.ValueString(), &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -436,7 +433,7 @@ func newMachineID(model, machine_id, machine_name string) string {
 }
 
 // Machines can be imported using the format: `model_name:machine_id:machine_name`.
-func modeMachineIDAndName(value string, diags *diag.Diagnostics) (string, string, string) {
+func modelMachineIDAndName(value string, diags *diag.Diagnostics) (string, string, string) {
 	id := strings.Split(value, ":")
 	//If importing with an incorrect ID we need to catch and provide a user-friendly error
 	if len(id) != 3 {
