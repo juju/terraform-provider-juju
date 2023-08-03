@@ -38,7 +38,6 @@ resource "juju_model" "model" {
 }
 
 resource "juju_machine" "machine" {
-  provider = oldjuju
   model = juju_model.model.name
   name = "machine"
   series = "jammy"

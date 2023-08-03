@@ -44,7 +44,51 @@ resource "juju_model" "this" {
 }
 
 resource "juju_machine" "this" {
-    provider = oldjuju
+	name = "this_machine"
+	model = juju_model.this.name
+	series = "focal"
+}
+`, modelName)
+}
+
+func TestAcc_ResourceMachine_Stable(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-machine")
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
+		ExternalProviders: map[string]resource.ExternalProvider{
+			"juju": {
+				VersionConstraint: TestProviderStableVersion,
+				Source:            "juju/juju",
+			},
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceMachineStable(modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
+					resource.TestCheckResourceAttr("juju_machine.this", "series", "focal"),
+				),
+			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      "juju_machine.this",
+			},
+		},
+	})
+}
+
+func testAccResourceMachineStable(modelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_machine" "this" {
 	name = "this_machine"
 	model = juju_model.this.name
 	series = "focal"
@@ -97,7 +141,6 @@ resource "juju_model" "this_model" {
 }
 
 resource "juju_machine" "this_machine" {
-    provider = oldjuju
 	name = "manually_provisioned_machine"
 	model = juju_model.this_model.name
 
