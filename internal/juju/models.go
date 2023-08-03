@@ -355,7 +355,7 @@ func (c *modelsClient) DestroyModel(input DestroyModelInput) error {
 	destroyStorage := true
 	forceDestroy := false
 
-	err = client.DestroyModel(tag, &destroyStorage, &forceDestroy, &maxWait, &timeout)
+	err = client.DestroyModel(tag, &destroyStorage, &forceDestroy, &maxWait, timeout)
 	if err != nil {
 		return err
 	}
