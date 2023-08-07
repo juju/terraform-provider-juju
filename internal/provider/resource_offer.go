@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"strings"
 
+	frameworkdiags "github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	frameworkResSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
@@ -135,6 +138,8 @@ func (o offerResource) Create(ctx context.Context, req resource.CreateRequest, r
 		}
 		return
 	}
+	tflog.Trace(ctx, fmt.Sprintf("create offer %q at %q", response.Name, response.OfferURL))
+
 	data.OfferName = types.StringValue(response.Name)
 	data.URL = types.StringValue(response.OfferURL)
 	data.ID = types.StringValue(response.OfferURL)
@@ -144,8 +149,36 @@ func (o offerResource) Create(ctx context.Context, req resource.CreateRequest, r
 }
 
 func (o offerResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	//TODO implement me
-	panic("implement me")
+	// Prevent panic if the provider has not been configured.
+	if o.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "offer", "read")
+		return
+	}
+	var plan offerResourceModel
+
+	// Get the Terraform state from the request into the plan
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	response, err := o.client.Offers.ReadOffer(&juju.ReadOfferInput{
+		OfferURL: plan.ID.ValueString(),
+	})
+	if err != nil {
+		resp.Diagnostics.Append(handleOfferNotFoundError(ctx, err, &resp.State)...)
+		return
+	}
+
+	tflog.Trace(ctx, fmt.Sprintf("read offer %q at %q", response.Name, response.OfferURL))
+
+	plan.ModelName = types.StringValue(response.ModelName)
+	plan.OfferName = types.StringValue(response.Name)
+	plan.ApplicationName = types.StringValue(response.ApplicationName)
+	plan.EndpointName = types.StringValue(response.Endpoint)
+	plan.URL = types.StringValue(response.OfferURL)
+	plan.ID = types.StringValue(response.OfferURL)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (o offerResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -179,49 +212,19 @@ func (c offerResource) ImportState(ctx context.Context, req resource.ImportState
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func IsOfferNotFound(err error) bool {
+func isOfferNotFound(err error) bool {
 	return strings.Contains(err.Error(), "expected to find one result for url")
 }
 
-func handleOfferNotFoundError(err error, d *schema.ResourceData) diag.Diagnostics {
-	if IsOfferNotFound(err) {
+func handleOfferNotFoundError(ctx context.Context, err error, st *tfsdk.State) frameworkdiags.Diagnostics {
+	if isOfferNotFound(err) {
 		// Offer manually removed
-		d.SetId("")
-		return diag.Diagnostics{}
+		st.RemoveResource(ctx)
+		return frameworkdiags.Diagnostics{}
 	}
 
-	return diag.FromErr(err)
-}
-
-func resourceOfferRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
-	var diags diag.Diagnostics
-
-	result, err := client.Offers.ReadOffer(&juju.ReadOfferInput{
-		OfferURL: d.Id(),
-	})
-	if err != nil {
-		return handleOfferNotFoundError(err, d)
-	}
-
-	if err = d.Set("model", result.ModelName); err != nil {
-		return diag.FromErr(err)
-	}
-	if err = d.Set("name", result.Name); err != nil {
-		return diag.FromErr(err)
-	}
-	if err = d.Set("application_name", result.ApplicationName); err != nil {
-		return diag.FromErr(err)
-	}
-	if err = d.Set("endpoint", result.Endpoint); err != nil {
-		return diag.FromErr(err)
-	}
-	if err = d.Set("url", result.OfferURL); err != nil {
-		return diag.FromErr(err)
-	}
-	d.SetId(result.OfferURL)
-
+	var diags frameworkdiags.Diagnostics
+	diags.AddError("Not Found", err.Error())
 	return diags
 }
 
