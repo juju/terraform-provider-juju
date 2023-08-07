@@ -39,7 +39,7 @@ lint:
 .PHONY: static-analysis
 static-analysis:
 ## static-analysis: Check the go code using static-analysis
-	@./static-analysis.sh
+	@./tools/static-analysis.sh
 
 HAS_TERRAFORM := $(shell command -v terraform 2> /dev/null)
 .PHONY: docs
