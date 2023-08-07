@@ -19,7 +19,7 @@ type CreateCredentialInput struct {
 	Attributes           map[string]string
 	AuthType             string
 	ClientCredential     bool
-	CloudList            []interface{}
+	CloudName            string
 	ControllerCredential bool
 	Name                 string
 }
@@ -115,11 +115,7 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 		return nil, errors.Errorf("%q is not a valid credential name", credentialName)
 	}
 
-	var cloudName string
-	for _, cloud := range input.CloudList {
-		cloudMap := cloud.(map[string]interface{})
-		cloudName = cloudMap["name"].(string)
-	}
+	cloudName := input.CloudName
 
 	if err := c.ValidateCredentialForCloud(cloudName, input.AuthType); err != nil {
 		return nil, err
