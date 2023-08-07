@@ -34,18 +34,18 @@ type offerResource struct {
 type offerResourceModel struct {
 	ModelName       types.String `tfsdk:"model"`
 	OfferName       types.String `tfsdk:"name"`
-	ApplicationName types.String `tfsdk:"application"`
-	EndpointName    types.String `tfsdk:"endpooint"`
+	ApplicationName types.String `tfsdk:"application_name"`
+	EndpointName    types.String `tfsdk:"endpoint"`
 	URL             types.String `tfsdk:"url"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
 
-func (o offerResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (o *offerResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_offer"
 }
 
-func (o offerResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (o *offerResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = frameworkResSchema.Schema{
 		Description: "A resource that represent a Juju Offer.",
 		Attributes: map[string]frameworkResSchema.Attribute{
@@ -92,7 +92,7 @@ func (o offerResource) Schema(_ context.Context, req resource.SchemaRequest, res
 	}
 }
 
-func (o offerResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Prevent panic if the provider has not been configured.
 	if o.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "offer", "create")
@@ -146,7 +146,7 @@ func (o offerResource) Create(ctx context.Context, req resource.CreateRequest, r
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (o offerResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (o *offerResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	// Prevent panic if the provider has not been configured.
 	if o.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "offer", "read")
@@ -179,7 +179,7 @@ func (o offerResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (o offerResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
+func (o *offerResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
 	// There's no non-Computed attribute that's not RequiresReplace
 	// So no in-place update can happen on any field on this resource
 }
@@ -193,7 +193,7 @@ func (o offerResource) Update(_ context.Context, _ resource.UpdateRequest, _ *re
 //
 // Juju refers to deletion as "destroy" so we call the Destroy function of our client here rather than delete
 // This function remains named Delete for parity across the provider and to stick within terraform naming conventions
-func (o offerResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (o *offerResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Prevent panic if the provider has not been configured.
 	if o.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "offer", "delete")
@@ -217,7 +217,7 @@ func (o offerResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	tflog.Trace(ctx, fmt.Sprintf("delete offer resource %q", plan.OfferName))
 }
 
-func (o offerResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (o *offerResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -235,7 +235,7 @@ func (o offerResource) Configure(ctx context.Context, req resource.ConfigureRequ
 	o.client = client
 }
 
-func (o offerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (o *offerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
