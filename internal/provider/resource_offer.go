@@ -10,6 +10,7 @@ import (
 	frameworkResSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
@@ -27,6 +28,16 @@ func NewOfferResource() resource.Resource {
 
 type offerResource struct {
 	client *juju.Client
+}
+
+type offerResourceModel struct {
+	ModelName       types.String `tfsdk:"model"`
+	OfferName       types.String `tfsdk:"name"`
+	ApplicationName types.String `tfsdk:"application"`
+	EndpointName    types.String `tfsdk:"endpooint"`
+	URL             types.String `tfsdk:"url"`
+	// ID required by the testing framework
+	ID types.String `tfsdk:"id"`
 }
 
 func (o offerResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -70,13 +81,66 @@ func (o offerResource) Schema(_ context.Context, req resource.SchemaRequest, res
 				Description: "The offer URL.",
 				Computed:    true,
 			},
+			"id": frameworkResSchema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
 		},
 	}
 }
 
 func (o offerResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	//TODO implement me
-	panic("implement me")
+	// Prevent panic if the provider has not been configured.
+	if o.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "offer", "create")
+		return
+	}
+
+	var data offerResourceModel
+
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	modelName := data.ModelName.ValueString()
+	modelInfo, err := o.client.Models.GetModelByName(data.ModelName.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve model UUID, got error: %s", err))
+		return
+	}
+	modelUUID := modelInfo.UUID
+	modelOwner := strings.TrimPrefix(modelInfo.OwnerTag, juju.PrefixUser)
+
+	//here we verify if the name property is set, if not, set it to the application name
+	offerName := data.OfferName.ValueString()
+	if offerName == "" {
+		offerName = data.ApplicationName.ValueString()
+	}
+
+	response, errs := o.client.Offers.CreateOffer(&juju.CreateOfferInput{
+		ModelName:       modelName,
+		ModelUUID:       modelUUID,
+		ModelOwner:      modelOwner,
+		Name:            offerName,
+		ApplicationName: data.ApplicationName.ValueString(),
+		Endpoint:        data.EndpointName.ValueString(),
+	})
+	if errs != nil {
+		for _, err := range errs {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create offer, got error: %s", err))
+		}
+		return
+	}
+	data.OfferName = types.StringValue(response.Name)
+	data.URL = types.StringValue(response.OfferURL)
+	data.ID = types.StringValue(response.OfferURL)
+
+	// Set the plan onto the Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (o offerResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -113,61 +177,6 @@ func (c offerResource) Configure(ctx context.Context, req resource.ConfigureRequ
 
 func (c offerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
-}
-
-func resourceOfferCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
-	var diags diag.Diagnostics
-	modelName := d.Get("model").(string)
-	modelInfo, err := client.Models.GetModelByName(modelName)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	modelUUID := modelInfo.UUID
-	modelOwner := strings.TrimPrefix(modelInfo.OwnerTag, juju.PrefixUser)
-
-	//here we verify if the name property is set, if not set to the application name
-	var offerName string
-	name, ok := d.GetOk("name")
-	if ok {
-		offerName = name.(string)
-	} else {
-		offerName = d.Get("application_name").(string)
-	}
-
-	result, errs := client.Offers.CreateOffer(&juju.CreateOfferInput{
-		ModelName:       modelName,
-		ModelUUID:       modelUUID,
-		ModelOwner:      modelOwner,
-		Name:            offerName,
-		ApplicationName: d.Get("application_name").(string),
-		Endpoint:        d.Get("endpoint").(string),
-	})
-	if errs != nil {
-		if len(errs) == 1 {
-			return diag.FromErr(errs[0])
-		} else {
-			for _, v := range errs {
-				diags = append(diags, diag.FromErr(v)...)
-			}
-			return diags
-		}
-	}
-
-	//in case the name was unset by user we make sure it's set here
-	if err = d.Set("name", result.Name); err != nil {
-		return diag.FromErr(err)
-	}
-	if err = d.Set("url", result.OfferURL); err != nil {
-		return diag.FromErr(err)
-	}
-
-	//TODO: check that a URL is unique
-	d.SetId(result.OfferURL)
-
-	return diags
 }
 
 func IsOfferNotFound(err error) bool {
