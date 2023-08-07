@@ -14,8 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -181,17 +179,45 @@ func (o offerResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (o offerResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	//TODO implement me
-	panic("implement me")
+func (o offerResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
+	// There's no non-Computed attribute that's not RequiresReplace
+	// So no in-place update can happen on any field on this resource
 }
 
+// Delete is called when the provider must delete the resource. Config
+// values may be read from the DeleteRequest.
+//
+// If execution completes without error, the framework will automatically
+// call DeleteResponse.State.RemoveResource(), so it can be omitted
+// from provider logic.
+//
+// Juju refers to deletion as "destroy" so we call the Destroy function of our client here rather than delete
+// This function remains named Delete for parity across the provider and to stick within terraform naming conventions
 func (o offerResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	//TODO implement me
-	panic("implement me")
+	// Prevent panic if the provider has not been configured.
+	if o.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "offer", "delete")
+		return
+	}
+	var plan offerResourceModel
+
+	// Get the Terraform state from the request into the plan
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	err := o.client.Offers.DestroyOffer(&juju.DestroyOfferInput{
+		OfferURL: plan.URL.ValueString(),
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete offer, got error: %s", err))
+		return
+	}
+	tflog.Trace(ctx, fmt.Sprintf("delete offer resource %q", plan.OfferName))
 }
 
-func (c offerResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (o offerResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -205,10 +231,11 @@ func (c offerResource) Configure(ctx context.Context, req resource.ConfigureRequ
 		)
 		return
 	}
-	c.client = client
+
+	o.client = client
 }
 
-func (c offerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (o offerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
@@ -225,22 +252,5 @@ func handleOfferNotFoundError(ctx context.Context, err error, st *tfsdk.State) f
 
 	var diags frameworkdiags.Diagnostics
 	diags.AddError("Not Found", err.Error())
-	return diags
-}
-
-func resourceOfferDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
-	var diags diag.Diagnostics
-
-	err := client.Offers.DestroyOffer(&juju.DestroyOfferInput{
-		OfferURL: d.Get("url").(string),
-	})
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	d.SetId("")
-
 	return diags
 }
