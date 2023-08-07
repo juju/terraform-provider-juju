@@ -7,6 +7,9 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	frameworkResSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
@@ -26,13 +29,49 @@ type offerResource struct {
 	client *juju.Client
 }
 
-func (o offerResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (o offerResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_offer"
 }
 
-func (o offerResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	//TODO implement me
-	panic("implement me")
+func (o offerResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = frameworkResSchema.Schema{
+		Description: "A resource that represent a Juju Offer.",
+		Attributes: map[string]frameworkResSchema.Attribute{
+			"model": frameworkResSchema.StringAttribute{
+				Description: "The name of the model to operate in.",
+				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"name": frameworkResSchema.StringAttribute{
+				Description: "The name of the offer.",
+				Optional:    true,
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"application_name": frameworkResSchema.StringAttribute{
+				Description: "The name of the application.",
+				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"endpoint": frameworkResSchema.StringAttribute{
+				Description: "The endpoint name.",
+				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"url": frameworkResSchema.StringAttribute{
+				Description: "The offer URL.",
+				Computed:    true,
+			},
+		},
+	}
 }
 
 func (o offerResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -74,52 +113,6 @@ func (c offerResource) Configure(ctx context.Context, req resource.ConfigureRequ
 
 func (c offerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
-}
-
-func resourceOffer() *schema.Resource {
-	return &schema.Resource{
-		// This description is used by the documentation generator and the language server.
-		Description: "A resource that represent a Juju Offer.",
-
-		CreateContext: resourceOfferCreate,
-		ReadContext:   resourceOfferRead,
-		DeleteContext: resourceOfferDelete,
-		Importer: &schema.ResourceImporter{
-			StateContext: schema.ImportStatePassthroughContext,
-		},
-		Schema: map[string]*schema.Schema{
-			"model": {
-				Description: "The name of the model to operate in.",
-				Type:        schema.TypeString,
-				Required:    true,
-				ForceNew:    true,
-			},
-			"name": {
-				Description: "The name of the offer.",
-				Type:        schema.TypeString,
-				Optional:    true,
-				Computed:    true,
-				ForceNew:    true,
-			},
-			"application_name": {
-				Description: "The name of the application.",
-				Type:        schema.TypeString,
-				Required:    true,
-				ForceNew:    true,
-			},
-			"endpoint": {
-				Description: "The endpoint name.",
-				Type:        schema.TypeString,
-				Required:    true,
-				ForceNew:    true,
-			},
-			"url": {
-				Description: "The offer URL.",
-				Type:        schema.TypeString,
-				Computed:    true,
-			},
-		},
-	}
 }
 
 func resourceOfferCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
