@@ -68,7 +68,6 @@ func New(version string) func() *schema.Provider {
 				"juju_application": resourceApplication(),
 				"juju_integration": resourceIntegration(),
 				"juju_model":       resourceModel(),
-				"juju_ssh_key":     resourceSSHKey(),
 			},
 		}
 		p.ConfigureContextFunc = configure()
@@ -359,10 +358,11 @@ func getJujuProviderModel(ctx context.Context, req frameworkprovider.ConfigureRe
 func (p *jujuProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		func() resource.Resource { return NewAccessModelResource() },
-		func() resource.Resource { return NewMachineResource() },
-		func() resource.Resource { return NewUserResource() },
 		func() resource.Resource { return NewCredentialResource() },
+		func() resource.Resource { return NewMachineResource() },
 		func() resource.Resource { return NewOfferResource() },
+		func() resource.Resource { return NewSSHKeyResource() },
+		func() resource.Resource { return NewUserResource() },
 	}
 }
 
