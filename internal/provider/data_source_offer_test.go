@@ -49,7 +49,6 @@ resource "juju_application" "this" {
 }
 
 resource "juju_offer" "this" {
-    provider = oldjuju
 	model            = juju_model.this.name
 	application_name = juju_application.this.name
 	endpoint         = "db"
