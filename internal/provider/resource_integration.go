@@ -5,201 +5,289 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	frameworkdiag "github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	frameworkResSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-// Currently offers are handled as a part of the integration resource in order to have parity with the CLI. An alternative considered was to create a resource specifically for managing cross model integrations.
-func resourceIntegration() *schema.Resource {
-	return &schema.Resource{
+// Ensure provider defined types fully satisfy framework interfaces.
+var _ resource.Resource = &integrationResource{}
+var _ resource.ResourceWithConfigure = &integrationResource{}
+var _ resource.ResourceWithImportState = &integrationResource{}
+
+func NewIntegrationResource() resource.Resource {
+	return &integrationResource{}
+}
+
+type integrationResource struct {
+	client *juju.Client
+}
+
+func (i integrationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func (i integrationResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	// Prevent panic if the provider has not been configured.
+	if req.ProviderData == nil {
+		return
+	}
+
+	client, ok := req.ProviderData.(*juju.Client)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *juju.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
+	i.client = client
+}
+
+func (i integrationResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_integration"
+}
+
+func (i integrationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = frameworkResSchema.Schema{
 		Description: "A resource that represents a Juju Integration.",
-
-		CreateContext: resourceIntegrationCreate,
-		ReadContext:   resourceIntegrationRead,
-		UpdateContext: resourceIntegrationUpdate,
-		DeleteContext: resourceIntegrationDelete,
-
-		Importer: &schema.ResourceImporter{
-			StateContext: schema.ImportStatePassthroughContext,
-		},
-
-		Schema: map[string]*schema.Schema{
-			"model": {
+		Attributes: map[string]frameworkResSchema.Attribute{
+			"model": frameworkResSchema.StringAttribute{
 				Description: "The name of the model to operate in.",
-				Type:        schema.TypeString,
 				Required:    true,
 			},
-			"via": {
+			"via": frameworkResSchema.StringAttribute{
 				Description: "A comma separated list of CIDRs for outbound traffic.",
-				Type:        schema.TypeString,
 				Optional:    true,
 			},
-			"application": {
+			"application": frameworkResSchema.SetNestedAttribute{
 				Description: "The two applications to integrate.",
-				Type:        schema.TypeSet,
-				Required:    true,
-				MaxItems:    2,
-				MinItems:    2,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"name": {
+				NestedObject: frameworkResSchema.NestedAttributeObject{
+					Attributes: map[string]frameworkResSchema.Attribute{
+						"name": frameworkResSchema.StringAttribute{
 							Description: "The name of the application.",
-							Type:        schema.TypeString,
 							Optional:    true,
 						},
-						"endpoint": {
+						"endpoint": frameworkResSchema.StringAttribute{
 							Description: "The endpoint name.",
-							Type:        schema.TypeString,
 							Optional:    true,
 							Computed:    true,
 						},
-						//TODO: find an alternative to setting Computed: true in `offer_url`
-						//`offer_url` has the property `Computed` set to true even though it will never be computed.
-						//This is due to an issue with the plugin-sdk/v2 and `schema.TypeSet` meaning that a plan will always show needed changes despite the read op storing the correct state
-						"offer_url": {
+						"offer_url": frameworkResSchema.StringAttribute{
 							Description: "The URL of a remote application.",
-							Type:        schema.TypeString,
 							Optional:    true,
-							Computed:    true,
+							// Computed:    true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
 						},
 					},
+				},
+			},
+			"id": frameworkResSchema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 		},
 	}
 }
 
-func resourceIntegrationCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
-	modelName := d.Get("model").(string)
-	modelUUID, err := client.Models.ResolveModelUUID(modelName)
-	if err != nil {
-		return diag.FromErr(err)
+func (i integrationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	// Prevent panic if the provider has not been configured.
+	if i.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "ssh_key", "create")
+		return
 	}
 
-	apps := d.Get("application").(*schema.Set).List()
+	var data integrationResourceModel
+
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	modelName := data.ModelName.ValueString()
+	modelUUID, err := i.client.Models.ResolveModelUUID(modelName)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve model UUID, got error: %s", err))
+		return
+	}
+
+	var apps []map[string]string
+	resp.Diagnostics.Append(data.Application.ElementsAs(ctx, &apps, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	endpoints, offerURL, appNames, err := parseEndpoints(apps)
 	if err != nil {
-		return diag.FromErr(err)
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse endpoints, got error: %s", err))
+		return
 	}
 	if len(endpoints) == 0 {
-		return diag.Errorf("you must provide at least one local application")
+		resp.Diagnostics.AddError("Client Error", "please provide at least one local application")
+		return
 	}
 	var offerResponse = &juju.ConsumeRemoteOfferResponse{}
 	if offerURL != nil {
-		offerResponse, err = client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
+		offerResponse, err = i.client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
 			ModelUUID: modelUUID,
 			OfferURL:  *offerURL,
 		})
 		if err != nil {
-			return diag.FromErr(err)
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to consume remote offer, got error: %s", err))
+			return
 		}
 	}
 
 	if offerResponse.SAASName != "" {
 		endpoints = append(endpoints, offerResponse.SAASName)
 	}
-	viaCIDRs := d.Get("via").(string)
-	response, err := client.Integrations.CreateIntegration(&juju.IntegrationInput{
+
+	viaCIDRs := data.Via.ValueString()
+	response, err := i.client.Integrations.CreateIntegration(&juju.IntegrationInput{
 		ModelUUID: modelUUID,
 		Apps:      appNames,
 		Endpoints: endpoints,
 		ViaCIDRs:  viaCIDRs,
 	})
 	if err != nil {
-		return diag.FromErr(err)
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create integration, got error: %s", err))
+		return
+	}
+	tflog.Trace(ctx, fmt.Sprintf("created integration resource between apps: %q", appNames))
+
+	parsedApplications := parseApplications(response.Applications)
+
+	blockAttributeType := map[string]attr.Type{
+		"name":      types.StringType,
+		"endpoint":  types.StringType,
+		"offer_url": types.StringType,
 	}
 
-	applications := parseApplications(response.Applications)
+	appsType := types.ObjectType{AttrTypes: blockAttributeType}
 
-	id := generateID(modelName, response.Applications)
-	if err := d.Set("application", applications); err != nil {
-		return diag.FromErr(err)
+	parsedApps, errDiag := types.SetValueFrom(ctx, appsType, parsedApplications)
+	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	data.Application = parsedApps
+
+	id := newIDForIntegrationResource(modelName, response.Applications)
+	data.ID = types.StringValue(id)
+
+	// Write the state data into the Response.State
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+func (i integrationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	// Prevent panic if the provider has not been configured.
+	if i.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "integration", "read")
+		return
 	}
 
-	d.SetId(id)
+	var plan integrationResourceModel
 
-	return diag.Diagnostics{}
-}
-
-func IsIntegrationNotFound(err error) bool {
-	return strings.Contains(err.Error(), "no integrations exist")
-}
-
-func handleIntegrationNotFoundError(err error, d *schema.ResourceData) diag.Diagnostics {
-	if IsIntegrationNotFound(err) {
-		// Integration manually removed
-		d.SetId("")
-		return diag.Diagnostics{}
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	return diag.FromErr(err)
-}
+	modelName, provApp, provEndP, reqApp, reqEndP, idErr := modelIntegrationNameAndEndpointsFromID(plan.ID.ValueString())
+	if idErr.HasError() {
+		resp.Diagnostics.Append(idErr...)
+		return
+	}
 
-func resourceIntegrationRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
-	id := strings.Split(d.Id(), ":")
-
-	modelName := id[0]
-
-	modelID, err := client.Models.ResolveModelUUID(modelName)
+	modelUUID, err := i.client.Models.ResolveModelUUID(modelName)
 	if err != nil {
-		return diag.FromErr(err)
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model uuid, got error: %s", err))
+		return
 	}
 
-	int := &juju.IntegrationInput{
-		ModelUUID: modelID,
+	integration := &juju.IntegrationInput{
+		ModelUUID: modelUUID,
 		Endpoints: []string{
-			fmt.Sprintf("%v:%v", id[1], id[2]),
-			fmt.Sprintf("%v:%v", id[3], id[4]),
+			fmt.Sprintf("%v:%v", provApp, provEndP),
+			fmt.Sprintf("%v:%v", reqApp, reqEndP),
 		},
 	}
 
-	response, err := client.Integrations.ReadIntegration(int)
+	response, err := i.client.Integrations.ReadIntegration(integration)
 	if err != nil {
-		return handleIntegrationNotFoundError(err, d)
+		resp.Diagnostics.Append(handleIntegrationNotFoundError(ctx, err, &resp.State)...)
+		return
 	}
+	tflog.Trace(ctx, fmt.Sprintf("read integration resource %q", plan.ID.ValueString()))
+
+	plan.ModelName = types.StringValue(modelName)
 
 	applications := parseApplications(response.Applications)
-
-	if err := d.Set("model", modelName); err != nil {
-		return diag.FromErr(err)
+	appType := req.State.Schema.GetAttributes()["application"].(frameworkResSchema.SetNestedAttribute).NestedObject.Type()
+	apps, aErr := types.SetValueFrom(ctx, appType, applications)
+	if aErr.HasError() {
+		resp.Diagnostics.Append(aErr...)
+		return
 	}
+	plan.Application = apps
 
-	if err := d.Set("application", applications); err != nil {
-		return diag.FromErr(err)
-	}
-
-	return diag.Diagnostics{}
+	// Set the plan onto the Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func resourceIntegrationUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	var diags diag.Diagnostics
-	client := meta.(*juju.Client)
+func (i integrationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	// Prevent panic if the provider has not been configured.
+	if i.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "integration", "update")
+		return
+	}
+	var plan, state integrationResourceModel
 
-	modelName := d.Get("model").(string)
-	modelUUID, err := client.Models.ResolveModelUUID(modelName)
-	if err != nil {
-		return diag.FromErr(err)
+	// Read Terraform prior state data into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	var old, new interface{}
+	modelName := plan.ModelName.ValueString()
+	modelUUID, err := i.client.Models.ResolveModelUUID(modelName)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model uuid, got error: %s", err))
+		return
+	}
+
 	var oldEndpoints, endpoints []string
 	var oldOfferURL, offerURL *string
 
-	if d.HasChange("application") {
-		old, new = d.GetChange("application")
-		oldEndpoints, oldOfferURL, _, err = parseEndpoints(old.(*schema.Set).List())
+	if !plan.Application.Equal(state.Application) {
+		var oldApps []map[string]string
+		state.Application.ElementsAs(ctx, &oldApps, false)
+		oldEndpoints, oldOfferURL, _, err = parseEndpoints(oldApps)
 		if err != nil {
-			return diag.FromErr(err)
+			resp.Diagnostics.AddError("Provider Error", err.Error())
+			return
 		}
-		endpoints, offerURL, _, err = parseEndpoints(new.(*schema.Set).List())
+
+		var newApps []map[string]string
+		plan.Application.ElementsAs(ctx, &newApps, false)
+		endpoints, offerURL, _, err = parseEndpoints(newApps)
 		if err != nil {
-			return diag.FromErr(err)
+			resp.Diagnostics.AddError("Provider Error", err.Error())
+			return
 		}
 	}
 
@@ -208,99 +296,143 @@ func resourceIntegrationUpdate(ctx context.Context, d *schema.ResourceData, meta
 	if oldOfferURL != offerURL && !(oldOfferURL == nil && offerURL == nil) {
 		if oldOfferURL != nil {
 			//destroy old offer
-			errs := client.Offers.RemoveRemoteOffer(&juju.RemoveRemoteOfferInput{
+			errs := i.client.Offers.RemoveRemoteOffer(&juju.RemoveRemoteOfferInput{
 				ModelUUID: modelUUID,
 				OfferURL:  *oldOfferURL,
 			})
 			if len(errs) > 0 {
 				for _, v := range errs {
-					diags = append(diags, diag.FromErr(v)...)
+					resp.Diagnostics.AddError("Client Error", v.Error())
 				}
-				return diags
+				return
 			}
 		}
 		if offerURL != nil {
-			offerResponse, err = client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
+			offerResponse, err = i.client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
 				ModelUUID: modelUUID,
 				OfferURL:  *offerURL,
 			})
 			if err != nil {
-				return diag.FromErr(err)
+				resp.Diagnostics.AddError("Client Error", err.Error())
+				return
 			}
 			endpoints = append(endpoints, offerResponse.SAASName)
 		}
 	}
 
-	viaCIDRs := d.Get("via").(string)
+	viaCIDRs := plan.Via.ValueString()
 	input := &juju.UpdateIntegrationInput{
 		ModelUUID:    modelUUID,
-		ID:           d.Id(),
+		ID:           plan.ID.ValueString(),
 		Endpoints:    endpoints,
 		OldEndpoints: oldEndpoints,
 		ViaCIDRs:     viaCIDRs,
 	}
-
-	response, err := client.Integrations.UpdateIntegration(input)
+	response, err := i.client.Integrations.UpdateIntegration(input)
 	if err != nil {
-		return diag.FromErr(err)
+		resp.Diagnostics.AddError("Client Error", err.Error())
+		return
 	}
 
 	applications := parseApplications(response.Applications)
-
-	id := generateID(modelName, response.Applications)
-	if err := d.Set("application", applications); err != nil {
-		return diag.FromErr(err)
+	appType := req.State.Schema.GetAttributes()["application"].(frameworkResSchema.SetNestedAttribute).NestedObject.Type()
+	apps, aErr := types.SetValueFrom(ctx, appType, applications)
+	if aErr.HasError() {
+		resp.Diagnostics.Append(aErr...)
+		return
 	}
+	plan.Application = apps
+	plan.ID = types.StringValue(newIDForIntegrationResource(modelName, response.Applications))
 
-	d.SetId(id)
-
-	return diags
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func resourceIntegrationDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	var diags diag.Diagnostics
-	client := meta.(*juju.Client)
-
-	modelName := d.Get("model").(string)
-	modelUUID, err := client.Models.ResolveModelUUID(modelName)
-	if err != nil {
-		return diag.FromErr(err)
+func (i integrationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Prevent panic if the provider has not been configured.
+	if i.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "integration", "delete")
+		return
 	}
 
-	apps := d.Get("application").(*schema.Set).List()
+	var state integrationResourceModel
+
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	modelName := state.ModelName.ValueString()
+	modelUUID, err := i.client.Models.ResolveModelUUID(modelName)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model uuid, got error: %s", err))
+		return
+	}
+
+	var apps []map[string]string
+	state.Application.ElementsAs(ctx, &apps, false)
 	endpoints, offer, _, err := parseEndpoints(apps)
 	if err != nil {
-		return diag.FromErr(err)
+		resp.Diagnostics.AddError("Provider Error", err.Error())
+		return
 	}
 
 	//If one of the endpoints is an offer then we need to remove the remote offer rather than destroying the integration
 	if offer != nil {
-		errs := client.Offers.RemoveRemoteOffer(&juju.RemoveRemoteOfferInput{
+		errs := i.client.Offers.RemoveRemoteOffer(&juju.RemoveRemoteOfferInput{
 			ModelUUID: modelUUID,
 			OfferURL:  *offer,
 		})
 		if len(errs) > 0 {
 			for _, v := range errs {
-				diags = append(diags, diag.FromErr(v)...)
+				resp.Diagnostics.AddError("Client Error", v.Error())
 			}
-			return diags
+			return
 		}
 	} else {
-		err = client.Integrations.DestroyIntegration(&juju.IntegrationInput{
+		err = i.client.Integrations.DestroyIntegration(&juju.IntegrationInput{
 			ModelUUID: modelUUID,
 			Endpoints: endpoints,
 		})
 		if err != nil {
-			return diag.FromErr(err)
+			resp.Diagnostics.AddError("Client Error", err.Error())
+			return
 		}
 	}
+}
 
-	d.SetId("")
+type integrationResourceModel struct {
+	ModelName   types.String `tfsdk:"model"`
+	Via         types.String `tfsdk:"via"`
+	Application types.Set    `tfsdk:"application"`
+	// ID required by the testing framework
+	ID types.String `tfsdk:"id"`
+}
 
+// nestedApplication represents an element in an Application set of an
+// integration resource
+type nestedApplication struct {
+	Name     types.String `tfsdk:"name"`
+	Endpoint types.String `tfsdk:"endpoint"`
+	OfferURL types.String `tfsdk:"offer_url"`
+}
+
+func IsIntegrationNotFound(err error) bool {
+	return strings.Contains(err.Error(), "no integrations exist")
+}
+
+func handleIntegrationNotFoundError(ctx context.Context, err error, st *tfsdk.State) frameworkdiag.Diagnostics {
+	if IsIntegrationNotFound(err) {
+		// Integration manually removed
+		st.RemoveResource(ctx)
+		return frameworkdiag.Diagnostics{}
+	}
+	var diags frameworkdiag.Diagnostics
+	diags.AddError("Client Error", err.Error())
 	return diags
 }
 
-func generateID(modelName string, apps []juju.Application) string {
+func newIDForIntegrationResource(modelName string, apps []juju.Application) string {
 	//In order to generate a stable iterable order we sort the endpoints keys by the role value (provider is always first to match `juju status` output)
 	//TODO: verify we always get only 2 endpoints and that the role value is consistent
 	keys := make([]int, len(apps))
@@ -321,17 +453,27 @@ func generateID(modelName string, apps []juju.Application) string {
 	return id
 }
 
+func modelIntegrationNameAndEndpointsFromID(ID string) (string, string, string, string, string, frameworkdiag.Diagnostics) {
+	var diags frameworkdiag.Diagnostics
+	id := strings.Split(ID, ":")
+	if len(id) != 5 {
+		diags.AddError("Malformed ID",
+			fmt.Sprintf("unable to parse model and application name from provided ID: %q", ID))
+		return "", "", "", "", "", diags
+	}
+	return id[0], id[1], id[2], id[3], id[4], diags
+}
+
 // This function can be used to parse the terraform data into usable juju endpoints
 // it also does some sanity checks on inputs and returns user friendly errors
-func parseEndpoints(apps []interface{}) (endpoints []string, offer *string, appNames []string, err error) {
+func parseEndpoints(apps []map[string]string) (endpoints []string, offer *string, appNames []string, err error) {
 	for _, app := range apps {
 		if app == nil {
 			return nil, nil, nil, fmt.Errorf("you must provide a non-empty name for each application in an integration")
 		}
-		a := app.(map[string]interface{})
-		name := a["name"].(string)
-		offerURL := a["offer_url"].(string)
-		endpoint := a["endpoint"].(string)
+		name := app["name"]
+		offerURL := app["offer_url"]
+		endpoint := app["endpoint"]
 
 		if name == "" && offerURL == "" {
 			return nil, nil, nil, fmt.Errorf("you must provide one of \"name\" or \"offer_url\"")
@@ -366,14 +508,14 @@ func parseEndpoints(apps []interface{}) (endpoints []string, offer *string, appN
 	return endpoints, offer, appNames, nil
 }
 
-func parseApplications(apps []juju.Application) []map[string]interface{} {
-	applications := make([]map[string]interface{}, 0, 2)
+func parseApplications(apps []juju.Application) []map[string]string {
+	applications := make([]map[string]string, 0, 2)
 
 	for _, app := range apps {
-		a := make(map[string]interface{})
+		a := make(map[string]string)
 
 		if app.OfferURL != nil {
-			a["offer_url"] = app.OfferURL
+			a["offer_url"] = *app.OfferURL
 			a["endpoint"] = ""
 			a["name"] = ""
 		} else {
