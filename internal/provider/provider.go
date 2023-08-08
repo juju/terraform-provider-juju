@@ -355,7 +355,7 @@ func getJujuProviderModel(ctx context.Context, req frameworkprovider.ConfigureRe
 //
 // The resource type name is determined by the Resource implementing
 // the Metadata method. All resources must have unique names.
-func (p *jujuProvider) Resources(ctx context.Context) []func() resource.Resource {
+func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		func() resource.Resource { return NewAccessModelResource() },
 		func() resource.Resource { return NewCredentialResource() },
@@ -371,7 +371,7 @@ func (p *jujuProvider) Resources(ctx context.Context) []func() resource.Resource
 //
 // The data source type name is determined by the DataSource implementing
 // the Metadata method. All data sources must have unique names.
-func (p *jujuProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+func (p *jujuProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		func() datasource.DataSource { return NewModelDataSource() },
 		//func() datasource.DataSource { return NewMachineDataSource() },

@@ -68,7 +68,6 @@ resource "juju_model" "this" {
 }
 
 resource "juju_ssh_key" "this" {
-    provider = oldjuju
 	model = juju_model.this.name
 	payload= %q
 }
