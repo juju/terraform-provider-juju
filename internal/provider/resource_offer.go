@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	frameworkdiags "github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	frameworkResSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -46,43 +46,45 @@ func (o *offerResource) Metadata(_ context.Context, req resource.MetadataRequest
 }
 
 func (o *offerResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = frameworkResSchema.Schema{
+	resp.Schema = schema.Schema{
 		Description: "A resource that represent a Juju Offer.",
-		Attributes: map[string]frameworkResSchema.Attribute{
-			"model": frameworkResSchema.StringAttribute{
+		Attributes: map[string]schema.Attribute{
+			"model": schema.StringAttribute{
 				Description: "The name of the model to operate in.",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"name": frameworkResSchema.StringAttribute{
+			"name": schema.StringAttribute{
 				Description: "The name of the offer.",
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.RequiresReplaceIfConfigured(),
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"application_name": frameworkResSchema.StringAttribute{
+			"application_name": schema.StringAttribute{
 				Description: "The name of the application.",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"endpoint": frameworkResSchema.StringAttribute{
+			"endpoint": schema.StringAttribute{
 				Description: "The endpoint name.",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"url": frameworkResSchema.StringAttribute{
+			"url": schema.StringAttribute{
 				Description: "The offer URL.",
 				Computed:    true,
 			},
-			"id": frameworkResSchema.StringAttribute{
+			"id": schema.StringAttribute{
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -99,27 +101,31 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	var data offerResourceModel
+	var plan offerResourceModel
 
 	// Read Terraform configuration from the request into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	modelName := data.ModelName.ValueString()
-	modelInfo, err := o.client.Models.GetModelByName(data.ModelName.ValueString())
+	modelName := plan.ModelName.ValueString()
+	modelInfo, err := o.client.Models.GetModelByName(modelName)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve model UUID, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model %q, got error: %s", modelName, err))
 		return
 	}
 	modelUUID := modelInfo.UUID
+	// TODO (cderici): Leaking Juju info here:
+	// 1 - GetModelByName above returns *params.ModelInfo
+	// 2 - we don't return tag trimmed so provider has to know juju.PrefixUser etc. Make a Tag type and have a Tag.
+	// Id() method.
 	modelOwner := strings.TrimPrefix(modelInfo.OwnerTag, juju.PrefixUser)
 
 	//here we verify if the name property is set, if not, set it to the application name
-	offerName := data.OfferName.ValueString()
+	offerName := plan.OfferName.ValueString()
 	if offerName == "" {
-		offerName = data.ApplicationName.ValueString()
+		offerName = plan.ApplicationName.ValueString()
 	}
 
 	response, errs := o.client.Offers.CreateOffer(&juju.CreateOfferInput{
@@ -127,10 +133,16 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 		ModelUUID:       modelUUID,
 		ModelOwner:      modelOwner,
 		Name:            offerName,
-		ApplicationName: data.ApplicationName.ValueString(),
-		Endpoint:        data.EndpointName.ValueString(),
+		ApplicationName: plan.ApplicationName.ValueString(),
+		Endpoint:        plan.EndpointName.ValueString(),
 	})
 	if errs != nil {
+		// TODO 10-Aug-2023
+		// Fix client.Offers.CreateOffer to only return a single error. The juju api method
+		// accepts multiple input, thus returns multiple errors, one per input. The internal/juju
+		// code should handle this without leaking to the provider code.
+		//
+		// Why do we pass the CreateOfferInput as a pointer?
 		for _, err := range errs {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create offer, got error: %s", err))
 		}
@@ -138,12 +150,12 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	tflog.Trace(ctx, fmt.Sprintf("create offer %q at %q", response.Name, response.OfferURL))
 
-	data.OfferName = types.StringValue(response.Name)
-	data.URL = types.StringValue(response.OfferURL)
-	data.ID = types.StringValue(response.OfferURL)
+	plan.OfferName = types.StringValue(response.Name)
+	plan.URL = types.StringValue(response.OfferURL)
+	plan.ID = types.StringValue(response.OfferURL)
 
 	// Set the plan onto the Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (o *offerResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -152,15 +164,15 @@ func (o *offerResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		addClientNotConfiguredError(&resp.Diagnostics, "offer", "read")
 		return
 	}
-	var plan offerResourceModel
+	var state offerResourceModel
 
 	// Get the Terraform state from the request into the plan
-	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	response, err := o.client.Offers.ReadOffer(&juju.ReadOfferInput{
-		OfferURL: plan.ID.ValueString(),
+		OfferURL: state.ID.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.Append(handleOfferNotFoundError(ctx, err, &resp.State)...)
@@ -169,17 +181,17 @@ func (o *offerResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	tflog.Trace(ctx, fmt.Sprintf("read offer %q at %q", response.Name, response.OfferURL))
 
-	plan.ModelName = types.StringValue(response.ModelName)
-	plan.OfferName = types.StringValue(response.Name)
-	plan.ApplicationName = types.StringValue(response.ApplicationName)
-	plan.EndpointName = types.StringValue(response.Endpoint)
-	plan.URL = types.StringValue(response.OfferURL)
-	plan.ID = types.StringValue(response.OfferURL)
+	state.ModelName = types.StringValue(response.ModelName)
+	state.OfferName = types.StringValue(response.Name)
+	state.ApplicationName = types.StringValue(response.ApplicationName)
+	state.EndpointName = types.StringValue(response.Endpoint)
+	state.URL = types.StringValue(response.OfferURL)
+	state.ID = types.StringValue(response.OfferURL)
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func (o *offerResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
+func (o *offerResource) Update(context.Context, resource.UpdateRequest, *resource.UpdateResponse) {
 	// There's no non-Computed attribute that's not RequiresReplace
 	// So no in-place update can happen on any field on this resource
 }
@@ -214,7 +226,7 @@ func (o *offerResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete offer, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("delete offer resource %q", plan.OfferName))
+	tflog.Trace(ctx, fmt.Sprintf("delete offer resource %q", plan.URL))
 }
 
 func (o *offerResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -243,14 +255,14 @@ func isOfferNotFound(err error) bool {
 	return strings.Contains(err.Error(), "expected to find one result for url")
 }
 
-func handleOfferNotFoundError(ctx context.Context, err error, st *tfsdk.State) frameworkdiags.Diagnostics {
+func handleOfferNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
 	if isOfferNotFound(err) {
 		// Offer manually removed
 		st.RemoveResource(ctx)
-		return frameworkdiags.Diagnostics{}
+		return diag.Diagnostics{}
 	}
 
-	var diags frameworkdiags.Diagnostics
-	diags.AddError("Not Found", err.Error())
+	var diags diag.Diagnostics
+	diags.AddError("Client Error", err.Error())
 	return diags
 }
