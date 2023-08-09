@@ -1,11 +1,12 @@
 package juju
 
 import (
+	"context"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/connector"
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -38,6 +39,8 @@ type Client struct {
 
 type ConnectionFactory struct {
 	config Configuration
+	// subCtx is the context created with the new tflog subsystem for applications.
+	subCtx context.Context
 }
 
 func NewClient(config Configuration) (*Client, error) {
@@ -83,8 +86,51 @@ func (cf *ConnectionFactory) GetConnection(model *string) (api.Connection, error
 
 	conn, err := connr.Connect()
 	if err != nil {
-		log.Error().Err(err).Msg("connection not established")
+		cf.Errorf(err, "connection not established")
 		return nil, err
 	}
 	return conn, nil
+}
+
+// module names for logging
+// @module=juju.<subsystem>
+// e.g.:
+//
+//	@module=juju.client
+const LogJujuClient = "client"
+
+// TODO hml 04-Aug-2023
+// Investigate if the context from terraform can be passed in
+// and used with tflog here, for now, use context.Background.
+
+func (cf *ConnectionFactory) Debugf(msg string, additionalFields ...map[string]interface{}) {
+	if cf.subCtx == nil {
+		cf.subCtx = tflog.NewSubsystem(context.Background(), LogJujuClient)
+	}
+
+	//SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
+	// Output:
+	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
+	tflog.SubsystemDebug(cf.subCtx, LogJujuClient, msg, additionalFields...)
+}
+
+func (cf *ConnectionFactory) Errorf(err error, msg string) {
+	if cf.subCtx == nil {
+		cf.subCtx = tflog.NewSubsystem(context.Background(), LogJujuClient)
+	}
+	tflog.SubsystemError(cf.subCtx, LogJujuClient, msg, map[string]interface{}{"error": err})
+}
+
+func (cf *ConnectionFactory) Tracef(msg string, additionalFields ...map[string]interface{}) {
+	if cf.subCtx == nil {
+		cf.subCtx = tflog.NewSubsystem(context.Background(), LogJujuClient)
+	}
+	tflog.SubsystemTrace(cf.subCtx, LogJujuClient, msg, additionalFields...)
+}
+
+func (cf *ConnectionFactory) Warnf(msg string, additionalFields ...map[string]interface{}) {
+	if cf.subCtx == nil {
+		cf.subCtx = tflog.NewSubsystem(context.Background(), LogJujuClient)
+	}
+	tflog.SubsystemWarn(cf.subCtx, LogJujuClient, msg, additionalFields...)
 }

@@ -3,7 +3,6 @@ package juju
 import (
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -150,8 +149,7 @@ func (c *modelsClient) GetModelByName(name string) (*params.ModelInfo, error) {
 
 	modelInfo := results[0].Result
 
-	log.Printf("[DEBUG] Reading model: %s, %+v", name, modelInfo)
-
+	c.Tracef(fmt.Sprintf("Reading model: %s, %+v", name, modelInfo))
 	return modelInfo, nil
 }
 

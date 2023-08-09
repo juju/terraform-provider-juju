@@ -5,7 +5,6 @@ import (
 
 	"github.com/juju/juju/api/client/keymanager"
 	"github.com/juju/utils/v3/ssh"
-	"github.com/rs/zerolog/log"
 
 	"github.com/juju/terraform-provider-juju/internal/utils"
 )
@@ -128,7 +127,7 @@ func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 		k := returnedKeys[0].Result[0]
 		if input.User == utils.GetUserFromSSHKey(k) {
 			// This is the latest key, do not remove it
-			log.Warn().Msgf("ssh key from user %s is the last one and will not be removed", input.User)
+			c.Warnf(fmt.Sprintf("ssh key from user %s is the last one and will not be removed", input.User))
 			return nil
 		}
 	}

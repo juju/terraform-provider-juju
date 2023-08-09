@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	apiapplication "github.com/juju/juju/api/client/application"
 	"github.com/juju/names/v4"
-	"github.com/rs/zerolog/log"
 )
 
 // controllerConfig is a representation of the output
@@ -72,7 +72,7 @@ func populateControllerConfig() {
 
 	cmdData, err := cmd.Output()
 	if err != nil {
-		log.Error().Err(err).Msg("error invoking juju CLI")
+		tflog.Error(context.TODO(), "error invoking juju CLI", map[string]interface{}{"error": err})
 		return
 	}
 
@@ -82,7 +82,7 @@ func populateControllerConfig() {
 	var cliOutput interface{}
 	err = json.Unmarshal(cmdData, &cliOutput)
 	if err != nil {
-		log.Error().Err(err).Msg("error unmarshalling Juju CLI output")
+		tflog.Error(context.TODO(), "error unmarshalling Juju CLI output", map[string]interface{}{"error": err})
 		return
 	}
 
@@ -92,13 +92,13 @@ func populateControllerConfig() {
 		// now v is a map[string]interface{} type
 		marshalled, err := json.Marshal(v)
 		if err != nil {
-			log.Error().Err(err).Msg("error marshalling provider config")
+			tflog.Error(context.TODO(), "error marshalling provider config", map[string]interface{}{"error": err})
 			return
 		}
 		// now we have a controllerConfig type
 		err = json.Unmarshal(marshalled, &controllerConfig)
 		if err != nil {
-			log.Error().Err(err).Msg("error unmarshalling provider configuration from Juju CLI")
+			tflog.Error(context.TODO(), "error unmarshalling provider configuration from Juju CLI", map[string]interface{}{"error": err})
 			return
 		}
 		break
@@ -110,7 +110,7 @@ func populateControllerConfig() {
 	localProviderConfig["JUJU_USERNAME"] = controllerConfig.Account.User
 	localProviderConfig["JUJU_PASSWORD"] = controllerConfig.Account.Password
 
-	log.Debug().Str("localProviderConfig", fmt.Sprintf("%#v", localProviderConfig)).Msg("local provider config was set")
+	tflog.Debug(context.TODO(), "local provider config was set", map[string]interface{}{"localProviderConfig": fmt.Sprintf("%#v", localProviderConfig)})
 }
 
 // WaitForAppAvailable blocks the execution flow and waits until all the
