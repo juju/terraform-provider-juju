@@ -95,7 +95,7 @@ type CreateApplicationInput struct {
 	Units           int
 	Trust           bool
 	Expose          map[string]interface{}
-	Config          map[string]interface{}
+	Config          map[string]string
 	Placement       string
 	Constraints     constraints.Value
 }
@@ -140,7 +140,7 @@ type UpdateApplicationInput struct {
 	Expose   map[string]interface{}
 	// Unexpose indicates what endpoints to unexpose
 	Unexpose []string
-	Config   map[string]interface{}
+	Config   map[string]string
 	//Series    string // TODO: Unsupported for now
 	Placement   map[string]interface{}
 	Constraints *constraints.Value
@@ -320,16 +320,9 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		return nil, err
 	}
 
-	// The deploy API endpoint expects string values for the
-	// constraints.
-	var appConfig map[string]string
-	if input.Config == nil {
+	appConfig := input.Config
+	if appConfig == nil {
 		appConfig = make(map[string]string)
-	} else {
-		appConfig = make(map[string]string, len(input.Config))
-		for k, v := range input.Config {
-			appConfig[k] = ConfigEntryToString(v)
-		}
 	}
 	appConfig["trust"] = fmt.Sprintf("%v", input.Trust)
 
