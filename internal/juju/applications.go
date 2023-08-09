@@ -318,7 +318,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		Origin: resultOrigin,
 	}
 
-	resources, err := c.processResources(charmsAPIClient, resourcesAPIClient, charmID, input.ApplicationName)
+	resources, err := c.processResources(charmsAPIClient, resourcesAPIClient, charmID, appName)
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +378,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 
 	// If we have managed to deploy something, now we have
 	// to check if we have to expose something
-	err = c.processExpose(applicationAPIClient, input.ApplicationName, input.Expose)
+	err = c.processExpose(applicationAPIClient, appName, input.Expose)
 	return &CreateApplicationResponse{
 		AppName:  appName,
 		Revision: *origin.Revision,
