@@ -19,9 +19,11 @@ require (
 	github.com/hashicorp/terraform-plugin-mux v0.11.2
 	github.com/hashicorp/terraform-plugin-testing v1.4.0
 	github.com/juju/charm/v8 v8.0.6
+	github.com/juju/clock v1.0.2
 	github.com/juju/cmd/v3 v3.0.13
 	github.com/juju/errors v1.0.0
 	github.com/juju/names/v4 v4.0.0
+	github.com/juju/retry v1.0.0
 	github.com/juju/utils/v3 v3.0.2
 	github.com/rs/zerolog v1.30.0
 	github.com/stretchr/testify v1.8.4
@@ -108,7 +110,6 @@ require (
 	github.com/juju/ansiterm v1.0.0 // indirect
 	github.com/juju/blobstore/v2 v2.0.0 // indirect
 	github.com/juju/charmrepo/v6 v6.0.3 // indirect
-	github.com/juju/clock v1.0.2 // indirect
 	github.com/juju/collections v1.0.2 // indirect
 	github.com/juju/description/v3 v3.0.15 // indirect
 	github.com/juju/featureflag v1.0.0 // indirect
@@ -131,7 +132,6 @@ require (
 	github.com/juju/proxy v1.0.0 // indirect
 	github.com/juju/pubsub/v2 v2.0.0 // indirect
 	github.com/juju/replicaset/v2 v2.0.2 // indirect
-	github.com/juju/retry v1.0.0 // indirect
 	github.com/juju/rfc/v2 v2.0.0 // indirect
 	github.com/juju/romulus v1.0.0 // indirect
 	github.com/juju/rpcreflect v1.0.0 // indirect

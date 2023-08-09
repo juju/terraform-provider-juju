@@ -23,7 +23,7 @@ func TestAcc_ResourceApplication_sdk2_framework_migrate(t *testing.T) {
 				// "When tests have an ExpectError[...]; this results in any previous state being cleared. "
 				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
 				Config:      testAccResourceApplicationBasic_sdk2_framework_migrate(modelName, appInvalidName),
-				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: invalid application name \"%s\", unexpected character _", appInvalidName)),
+				ExpectError: regexp.MustCompile(fmt.Sprintf("Unable to create application, got error: invalid application name %q,\nunexpected character _", appInvalidName)),
 			},
 			{
 				Config: testAccResourceApplicationBasic_sdk2_framework_migrate(modelName, appName),
@@ -34,6 +34,8 @@ func TestAcc_ResourceApplication_sdk2_framework_migrate(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "jameinel-ubuntu-lite"),
 					resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
+					// We do not have access to this data during creation, only during read.
+					// Therefor it's set to the bool default
 					resource.TestCheckResourceAttr("juju_application.this", "principal", "true"),
 				),
 			},
@@ -42,7 +44,7 @@ func TestAcc_ResourceApplication_sdk2_framework_migrate(t *testing.T) {
 					// cores constraint is not valid in K8s
 					return testingCloud != LXDCloudTesting, nil
 				},
-				Config: testAccResourceApplicationConstraints_sdk2_framework_migrate(t, modelName, "arch=amd64 cores=1 mem=4096M"),
+				Config: testAccResourceApplicationConstraints_sdk2_framework_migrate(modelName, "arch=amd64 cores=1 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 cores=1 mem=4096M"),
@@ -53,7 +55,7 @@ func TestAcc_ResourceApplication_sdk2_framework_migrate(t *testing.T) {
 				SkipFunc: func() (bool, error) {
 					return testingCloud != MicroK8sTesting, nil
 				},
-				Config: testAccResourceApplicationConstraints_sdk2_framework_migrate(t, modelName, "arch=amd64 mem=4096M"),
+				Config: testAccResourceApplicationConstraints_sdk2_framework_migrate(modelName, "arch=amd64 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 mem=4096M"),
@@ -64,7 +66,7 @@ func TestAcc_ResourceApplication_sdk2_framework_migrate(t *testing.T) {
 					// skip if we are not in lxd environment
 					return testingCloud != LXDCloudTesting, nil
 				},
-				Config: testAccResourceApplicationConstraintsSubordinate_sdk2_framework_migrate(t, modelName, "arch=amd64 cores=1 mem=4096M"),
+				Config: testAccResourceApplicationConstraintsSubordinate_sdk2_framework_migrate(modelName, "arch=amd64 cores=1 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 cores=1 mem=4096M"),
@@ -184,7 +186,6 @@ func testAccResourceApplicationBasic_sdk2_framework_migrate(modelName, appInvali
 		}
 		
 		resource "juju_application" "this" {
-          provider = oldjuju
 		  model = juju_model.this.name
 		  name = %q
 		  charm {
@@ -205,7 +206,6 @@ func testAccResourceApplicationBasic_sdk2_framework_migrate(modelName, appInvali
 		}
 		
 		resource "juju_application" "this" {
-          provider = oldjuju
 		  model = juju_model.this.name
 		  name = %q
 		  charm {
@@ -237,7 +237,6 @@ func testAccResourceApplicationUpdates_sdk2_framework_migrate(modelName string, 
 		}
 		
 		resource "juju_application" "this" {
-          provider = oldjuju
 		  model = juju_model.this.name
 		  units = %d
 		  charm {
@@ -260,7 +259,6 @@ func testAccResourceApplicationUpdates_sdk2_framework_migrate(modelName string, 
 		}
 		
 		resource "juju_application" "this" {
-          provider = oldjuju
 		  model = juju_model.this.name
 		  units = %d
 		  charm {
@@ -288,7 +286,6 @@ func testAccResourceApplicationUpdatesCharm_sdk2_framework_migrate(modelName str
 		}
 		
 		resource "juju_application" "this" {
-          provider = oldjuju
 		  model = juju_model.this.name
 		  name = "test-app"
 		  charm {
@@ -307,7 +304,6 @@ func testAccResourceApplicationUpdatesCharm_sdk2_framework_migrate(modelName str
 		}
 		
 		resource "juju_application" "this" {
-          provider = oldjuju
 		  model = juju_model.this.name
 		  name = "test-app"
 		  charm {
@@ -322,7 +318,7 @@ func testAccResourceApplicationUpdatesCharm_sdk2_framework_migrate(modelName str
 // testAccResourceApplicationConstraints will return two set for constraint
 // applications. The version to be used in K8s sets the juju-external-hostname
 // because we set the expose parameter.
-func testAccResourceApplicationConstraints_sdk2_framework_migrate(t *testing.T, modelName string, constraints string) string {
+func testAccResourceApplicationConstraints_sdk2_framework_migrate(modelName string, constraints string) string {
 	if testingCloud == LXDCloudTesting {
 		return fmt.Sprintf(`
 provider oldjuju {}
@@ -333,7 +329,6 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-  provider = oldjuju
   model = juju_model.this.name
   units = 0
   name = "test-app"
@@ -357,7 +352,6 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-  provider = oldjuju
   model = juju_model.this.name
   name = "test-app"
   charm {
@@ -375,7 +369,7 @@ resource "juju_application" "this" {
 	}
 }
 
-func testAccResourceApplicationConstraintsSubordinate_sdk2_framework_migrate(t *testing.T, modelName string, constraints string) string {
+func testAccResourceApplicationConstraintsSubordinate_sdk2_framework_migrate(modelName string, constraints string) string {
 	return fmt.Sprintf(`
 provider oldjuju {}
 
@@ -385,7 +379,6 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-  provider = oldjuju
   model = juju_model.this.name
   units = 0
   name = "test-app"
@@ -399,7 +392,6 @@ resource "juju_application" "this" {
 }
 
 resource "juju_application" "subordinate" {
-  provider = oldjuju
   model = juju_model.this.name
   units = 0
   name = "test-subordinate"
@@ -449,7 +441,7 @@ func TestAcc_ResourceApplication_Stable(t *testing.T) {
 					// cores constraint is not valid in K8s
 					return testingCloud != LXDCloudTesting, nil
 				},
-				Config: testAccResourceApplicationConstraints_Stable(t, modelName, "arch=amd64 cores=1 mem=4096M"),
+				Config: testAccResourceApplicationConstraints_Stable(modelName, "arch=amd64 cores=1 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 cores=1 mem=4096M"),
@@ -460,7 +452,7 @@ func TestAcc_ResourceApplication_Stable(t *testing.T) {
 				SkipFunc: func() (bool, error) {
 					return testingCloud != MicroK8sTesting, nil
 				},
-				Config: testAccResourceApplicationConstraints_Stable(t, modelName, "arch=amd64 mem=4096M"),
+				Config: testAccResourceApplicationConstraints_Stable(modelName, "arch=amd64 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 mem=4096M"),
@@ -471,7 +463,7 @@ func TestAcc_ResourceApplication_Stable(t *testing.T) {
 					// skip if we are not in lxd environment
 					return testingCloud != LXDCloudTesting, nil
 				},
-				Config: testAccResourceApplicationConstraintsSubordinate_Stable(t, modelName, "arch=amd64 cores=1 mem=4096M"),
+				Config: testAccResourceApplicationConstraintsSubordinate_Stable(modelName, "arch=amd64 cores=1 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 cores=1 mem=4096M"),
@@ -717,7 +709,7 @@ func testAccResourceApplicationUpdatesCharm_Stable(modelName string, channel str
 // testAccResourceApplicationConstraints will return two set for constraint
 // applications. The version to be used in K8s sets the juju-external-hostname
 // because we set the expose parameter.
-func testAccResourceApplicationConstraints_Stable(t *testing.T, modelName string, constraints string) string {
+func testAccResourceApplicationConstraints_Stable(modelName string, constraints string) string {
 	if testingCloud == LXDCloudTesting {
 		return fmt.Sprintf(`
 resource "juju_model" "this" {
@@ -762,7 +754,7 @@ resource "juju_application" "this" {
 	}
 }
 
-func testAccResourceApplicationConstraintsSubordinate_Stable(t *testing.T, modelName string, constraints string) string {
+func testAccResourceApplicationConstraintsSubordinate_Stable(modelName string, constraints string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
   name = %q

@@ -56,8 +56,7 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-    provider = oldjuju
-	model = juju_model.this.name
+ 	model = juju_model.this.name
 	name  = "this"
 
 	charm {
@@ -84,7 +83,6 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-    provider = oldjuju
 	model = juju_model.this.name
 	name  = "this"
 
@@ -106,7 +104,6 @@ resource "juju_model" "that" {
 }
 
 resource "juju_application" "that" {
-    provider = oldjuju
 	model = juju_model.that.name
 	name = "that"
 

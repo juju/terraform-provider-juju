@@ -6,6 +6,7 @@
 package juju
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -13,9 +14,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/juju/charm/v8"
 	charmresources "github.com/juju/charm/v8/resource"
+	"github.com/juju/clock"
 	jujuerrors "github.com/juju/errors"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apicharms "github.com/juju/juju/api/client/charms"
@@ -30,6 +33,7 @@ import (
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/juju/version"
 	"github.com/juju/names/v4"
+	"github.com/juju/retry"
 )
 
 var ApplicationNotFoundError = &applicationNotFoundError{}
@@ -488,6 +492,38 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 	}
 
 	return toReturn, nil
+}
+
+// ReadApplicationWithRetryOnNotFound calls ReadApplication until
+// successful, or the count is exceeded when the error is of type
+// not found. Delay indicates how long to wait between attempts.
+func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Context, input *ReadApplicationInput) (*ReadApplicationResponse, error) {
+	var output *ReadApplicationResponse
+	err := retry.Call(retry.CallArgs{
+		Func: func() error {
+			var err error
+			output, err = c.ReadApplication(input)
+			if errors.As(err, &ApplicationNotFoundError) {
+				return nil
+			}
+			return err
+		},
+		NotifyFunc: func(err error, attempt int) {
+			if attempt%4 == 0 {
+				message := fmt.Sprintf("waiting for application %q", input.AppName)
+				if attempt != 4 {
+					message = "still " + message
+				}
+				c.Debugf(message)
+			}
+		},
+		BackoffFunc: retry.DoubleDelay,
+		Attempts:    30,
+		Delay:       time.Second,
+		Clock:       clock.WallClock,
+		Stop:        ctx.Done(),
+	})
+	return output, err
 }
 
 func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadApplicationResponse, error) {
