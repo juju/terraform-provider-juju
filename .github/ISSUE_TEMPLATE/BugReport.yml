@@ -7,6 +7,7 @@ body:
     attributes:
       value: |
         Thanks for pointing out this issue. Please provide info below so we could diagnose and fix it fast.
+
   - type: textarea
     id: Description
     attributes:
@@ -46,7 +47,7 @@ body:
       required: true
 
   - type: textarea
-    id: info
+    id: Terraform-Config
     attributes:
       label: "Terraform Configuration(s)"
       description: "Please add/copy-paste your Terraform plans (.tf) to 
@@ -54,7 +55,7 @@ body:
       render: terraform
 
   - type: textarea
-    id: info
+    id: Info-Commands
     attributes:
       label: "Reproduce / Test"
       description: "Please add the commands to run to reproduce this problem."
@@ -64,7 +65,7 @@ body:
       required: true
 
   - type: textarea
-    id: info
+    id: Info-Output
     attributes:
       label: "Debug/Panic Output"
       description: "Please add the debug output you see when running the 
@@ -73,7 +74,7 @@ body:
       render: shell
 
   - type: textarea
-    id: info
+    id: Info-Notes
     attributes:
       label: "Notes & References"
       description: "Please add relevant notes, links to mattermost chats, 
