@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/juju/juju/core/constraints"
+
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 

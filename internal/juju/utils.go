@@ -2,14 +2,13 @@ package juju
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
-
-	"encoding/json"
 
 	apiapplication "github.com/juju/juju/api/client/application"
 	"github.com/juju/names/v4"

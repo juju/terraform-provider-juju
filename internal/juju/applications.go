@@ -14,10 +14,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/juju/juju/core/model"
-	"github.com/juju/juju/rpc/params"
-	"github.com/rs/zerolog/log"
-
 	"github.com/juju/charm/v8"
 	charmresources "github.com/juju/charm/v8/resource"
 	jujuerrors "github.com/juju/errors"
@@ -29,9 +25,12 @@ import (
 	"github.com/juju/juju/cmd/juju/application/utils"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
+	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/environs/config"
+	"github.com/juju/juju/rpc/params"
 	"github.com/juju/juju/version"
 	"github.com/juju/names/v4"
+	"github.com/rs/zerolog/log"
 )
 
 var ApplicationNotFoundError = &applicationNotFoundError{}

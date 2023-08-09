@@ -1,0 +1,50 @@
+linters-settings:
+  gci:
+    sections:
+      - standard
+      - default
+      - Prefix(github.com/juju/terraform-provider-juju)
+    skip-generated: true
+  gofmt:
+    simplify: true
+  govet:
+    disable-all: true
+    enable:
+      - asmdecl
+      - assign
+      - atomic
+      - bools
+      - buildtag
+      - copylocks
+      - httpresponse
+      - loopclosure
+      - lostcancel
+      - nilfunc
+      - printf
+      - shift
+      - stdmethods
+      - structtag
+      - tests
+      - unmarshal
+      - unreachable
+      - unsafeptr
+      - unusedresult
+linters:
+  disable-all: true
+  enable:
+    - gci
+    - govet
+    - gofmt
+    - goimports
+    - ineffassign
+    - misspell
+    - unconvert
+    - exportloopref
+    - unused
+run:
+  timeout: 30m
+skip-dirs:
+  - acceptancetests
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

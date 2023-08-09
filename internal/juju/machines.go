@@ -3,25 +3,22 @@ package juju
 import (
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/juju/cmd/v3"
 	"github.com/juju/errors"
-	"github.com/juju/juju/environs/manual/sshprovisioner"
-	"strings"
-
-	"github.com/juju/juju/cmd/juju/common"
-	"github.com/juju/juju/environs/config"
-	"time"
-
-	"github.com/juju/juju/rpc/params"
-
 	apiclient "github.com/juju/juju/api/client/client"
 	apimachinemanager "github.com/juju/juju/api/client/machinemanager"
 	apimodelconfig "github.com/juju/juju/api/client/modelconfig"
+	"github.com/juju/juju/cmd/juju/common"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/series"
+	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/environs/manual"
+	"github.com/juju/juju/environs/manual/sshprovisioner"
+	"github.com/juju/juju/rpc/params"
 	"github.com/juju/juju/storage"
 )
 
