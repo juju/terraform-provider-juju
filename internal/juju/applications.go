@@ -30,7 +30,6 @@ import (
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/juju/version"
 	"github.com/juju/names/v4"
-	"github.com/rs/zerolog/log"
 )
 
 var ApplicationNotFoundError = &applicationNotFoundError{}
