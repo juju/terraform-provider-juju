@@ -2,8 +2,9 @@ package utils
 
 import "strings"
 
-// GetUserFromSSHKey returns the user of the key
-func GetUserFromSSHKey(key string) string {
+// GetKeyIdentifierFromSSHKey returns the identifier of the key,
+// which is currently based on the comment field (TODO issue #267)
+func GetKeyIdentifierFromSSHKey(key string) string {
 	// The key is broken down into component values.
 	// components[0] is the type of key (e.g. ssh-rsa)
 	// components[1] is the key string itself

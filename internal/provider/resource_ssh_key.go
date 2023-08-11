@@ -105,8 +105,8 @@ func (s *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	payload := plan.Payload.ValueString()
-	user := utils.GetUserFromSSHKey(payload)
-	if user == "" {
+	keyIdentifier := utils.GetKeyIdentifierFromSSHKey(payload)
+	if keyIdentifier == "" {
 		resp.Diagnostics.AddError("Provider Error", fmt.Sprintf("malformed SSH key : %q", payload))
 		return
 	}
@@ -127,19 +127,21 @@ func (s *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create ssh_key, got error %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("created ssh_key for: %q", user))
+	tflog.Trace(ctx, fmt.Sprintf("created ssh_key for: %q", keyIdentifier))
 
-	plan.ID = types.StringValue(newSSHKeyID(modelName, user))
+	plan.ID = types.StringValue(newSSHKeyID(modelName, keyIdentifier))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func newSSHKeyID(modelName string, user string) string {
-	return fmt.Sprintf("sshkey:%s:%s", modelName, user)
+func newSSHKeyID(modelName string, keyIdentifier string) string {
+	return fmt.Sprintf("sshkey:%s:%s", modelName, keyIdentifier)
 }
 
-// Keys can be imported with the name of the model and the username of the key
-// ssh_key:<modelName>:<user>
-func retrieveModelUserNameFromID(id string, d *diag.Diagnostics) (string, string) {
+// Keys can be imported with the name of the model and the identifier of the key
+// ssh_key:<modelName>:<ssh-key-identifier>
+// the key identifier is currently based on the comment section of the ssh key
+// (e.g. user@hostname) (TODO: issue #267)
+func retrieveModelKeyNameFromID(id string, d *diag.Diagnostics) (string, string) {
 	tokens := strings.Split(id, ":")
 	//If importing with an incorrect ID we need to catch and provide a user-friendly error
 	if len(tokens) != 3 {
@@ -164,7 +166,7 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	modelName, user := retrieveModelUserNameFromID(plan.ID.ValueString(), &resp.Diagnostics)
+	modelName, keyIdentifier := retrieveModelKeyNameFromID(plan.ID.ValueString(), &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -176,9 +178,9 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 	}
 
 	result, err := s.client.SSHKeys.ReadSSHKey(&juju.ReadSSHKeyInput{
-		ModelName: modelName,
-		ModelUUID: modelUUID,
-		User:      user,
+		ModelName:     modelName,
+		ModelUUID:     modelUUID,
+		KeyIdentifier: keyIdentifier,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read ssh key, got error: %s", err))
@@ -218,7 +220,7 @@ func (s *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	modelName, user := retrieveModelUserNameFromID(plan.ID.ValueString(), &resp.Diagnostics)
+	modelName, keyIdentifier := retrieveModelKeyNameFromID(plan.ID.ValueString(), &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -230,9 +232,9 @@ func (s *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	// Delete the key
 	err = s.client.SSHKeys.DeleteSSHKey(&juju.DeleteSSHKeyInput{
-		ModelName: modelName,
-		ModelUUID: modelUUID,
-		User:      user,
+		ModelName:     modelName,
+		ModelUUID:     modelUUID,
+		KeyIdentifier: keyIdentifier,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete ssh key for updating, got error: %s", err))
@@ -288,7 +290,7 @@ func (s *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	modelName, user := retrieveModelUserNameFromID(plan.ID.ValueString(), &resp.Diagnostics)
+	modelName, keyIdentifier := retrieveModelKeyNameFromID(plan.ID.ValueString(), &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -300,9 +302,9 @@ func (s *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 
 	// Delete the key
 	err = s.client.SSHKeys.DeleteSSHKey(&juju.DeleteSSHKeyInput{
-		ModelName: modelName,
-		ModelUUID: modelUUID,
-		User:      user,
+		ModelName:     modelName,
+		ModelUUID:     modelUUID,
+		KeyIdentifier: keyIdentifier,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete ssh key during delete, got error: %s", err))
