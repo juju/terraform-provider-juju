@@ -149,7 +149,7 @@ func (c *modelsClient) GetModelByName(name string) (*params.ModelInfo, error) {
 
 	modelInfo := results[0].Result
 
-	c.Tracef(fmt.Sprintf("Reading model: %s, %+v", name, modelInfo))
+	c.Tracef(fmt.Sprintf("Retrieved model info: %s, %+v", name, modelInfo))
 	return modelInfo, nil
 }
 
