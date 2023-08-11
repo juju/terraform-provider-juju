@@ -167,7 +167,6 @@ resource "juju_application" "b" {
 }
 
 resource "juju_offer" "b" {
-    provider = oldjuju
 	model            = juju_model.b.name
 	application_name = juju_application.b.name
 	endpoint         = "backend-db-admin"

@@ -2,174 +2,267 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-func resourceOffer() *schema.Resource {
-	return &schema.Resource{
-		// This description is used by the documentation generator and the language server.
-		Description: "A resource that represent a Juju Offer.",
+// Ensure provider defined types fully satisfy framework interfaces.
+var _ resource.Resource = &offerResource{}
+var _ resource.ResourceWithConfigure = &offerResource{}
+var _ resource.ResourceWithImportState = &offerResource{}
 
-		CreateContext: resourceOfferCreate,
-		ReadContext:   resourceOfferRead,
-		DeleteContext: resourceOfferDelete,
-		Importer: &schema.ResourceImporter{
-			StateContext: schema.ImportStatePassthroughContext,
-		},
-		Schema: map[string]*schema.Schema{
-			"model": {
+func NewOfferResource() resource.Resource {
+	return &offerResource{}
+}
+
+type offerResource struct {
+	client *juju.Client
+}
+
+type offerResourceModel struct {
+	ModelName       types.String `tfsdk:"model"`
+	OfferName       types.String `tfsdk:"name"`
+	ApplicationName types.String `tfsdk:"application_name"`
+	EndpointName    types.String `tfsdk:"endpoint"`
+	URL             types.String `tfsdk:"url"`
+	// ID required by the testing framework
+	ID types.String `tfsdk:"id"`
+}
+
+func (o *offerResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_offer"
+}
+
+func (o *offerResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Description: "A resource that represent a Juju Offer.",
+		Attributes: map[string]schema.Attribute{
+			"model": schema.StringAttribute{
 				Description: "The name of the model to operate in.",
-				Type:        schema.TypeString,
 				Required:    true,
-				ForceNew:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
-			"name": {
+			"name": schema.StringAttribute{
 				Description: "The name of the offer.",
-				Type:        schema.TypeString,
 				Optional:    true,
 				Computed:    true,
-				ForceNew:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.RequiresReplaceIfConfigured(),
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
-			"application_name": {
+			"application_name": schema.StringAttribute{
 				Description: "The name of the application.",
-				Type:        schema.TypeString,
 				Required:    true,
-				ForceNew:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
-			"endpoint": {
+			"endpoint": schema.StringAttribute{
 				Description: "The endpoint name.",
-				Type:        schema.TypeString,
 				Required:    true,
-				ForceNew:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
-			"url": {
+			"url": schema.StringAttribute{
 				Description: "The offer URL.",
-				Type:        schema.TypeString,
 				Computed:    true,
+			},
+			"id": schema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
 }
 
-func resourceOfferCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
-	var diags diag.Diagnostics
-	modelName := d.Get("model").(string)
-	modelInfo, err := client.Models.GetModelByName(modelName)
-	if err != nil {
-		return diag.FromErr(err)
+func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	// Prevent panic if the provider has not been configured.
+	if o.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "offer", "create")
+		return
 	}
 
+	var plan offerResourceModel
+
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	modelName := plan.ModelName.ValueString()
+	modelInfo, err := o.client.Models.GetModelByName(modelName)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model %q, got error: %s", modelName, err))
+		return
+	}
 	modelUUID := modelInfo.UUID
+	// TODO (cderici): Leaking Juju info here:
+	// 1 - GetModelByName above returns *params.ModelInfo
+	// 2 - we don't return tag trimmed so provider has to know juju.PrefixUser etc. Make a Tag type and have a Tag.
+	// Id() method.
 	modelOwner := strings.TrimPrefix(modelInfo.OwnerTag, juju.PrefixUser)
 
-	//here we verify if the name property is set, if not set to the application name
-	var offerName string
-	name, ok := d.GetOk("name")
-	if ok {
-		offerName = name.(string)
-	} else {
-		offerName = d.Get("application_name").(string)
+	//here we verify if the name property is set, if not, set it to the application name
+	offerName := plan.OfferName.ValueString()
+	if offerName == "" {
+		offerName = plan.ApplicationName.ValueString()
 	}
 
-	result, errs := client.Offers.CreateOffer(&juju.CreateOfferInput{
+	response, errs := o.client.Offers.CreateOffer(&juju.CreateOfferInput{
 		ModelName:       modelName,
 		ModelUUID:       modelUUID,
 		ModelOwner:      modelOwner,
 		Name:            offerName,
-		ApplicationName: d.Get("application_name").(string),
-		Endpoint:        d.Get("endpoint").(string),
+		ApplicationName: plan.ApplicationName.ValueString(),
+		Endpoint:        plan.EndpointName.ValueString(),
 	})
 	if errs != nil {
-		if len(errs) == 1 {
-			return diag.FromErr(errs[0])
-		} else {
-			for _, v := range errs {
-				diags = append(diags, diag.FromErr(v)...)
-			}
-			return diags
+		// TODO 10-Aug-2023
+		// Fix client.Offers.CreateOffer to only return a single error. The juju api method
+		// accepts multiple input, thus returns multiple errors, one per input. The internal/juju
+		// code should handle this without leaking to the provider code.
+		//
+		// Why do we pass the CreateOfferInput as a pointer?
+		for _, err := range errs {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create offer, got error: %s", err))
 		}
+		return
 	}
+	tflog.Trace(ctx, fmt.Sprintf("create offer %q at %q", response.Name, response.OfferURL))
 
-	//in case the name was unset by user we make sure it's set here
-	if err = d.Set("name", result.Name); err != nil {
-		return diag.FromErr(err)
-	}
-	if err = d.Set("url", result.OfferURL); err != nil {
-		return diag.FromErr(err)
-	}
+	plan.OfferName = types.StringValue(response.Name)
+	plan.URL = types.StringValue(response.OfferURL)
+	plan.ID = types.StringValue(response.OfferURL)
 
-	//TODO: check that a URL is unique
-	d.SetId(result.OfferURL)
-
-	return diags
+	// Set the plan onto the Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func IsOfferNotFound(err error) bool {
+func (o *offerResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	// Prevent panic if the provider has not been configured.
+	if o.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "offer", "read")
+		return
+	}
+	var state offerResourceModel
+
+	// Get the Terraform state from the request into the plan
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	response, err := o.client.Offers.ReadOffer(&juju.ReadOfferInput{
+		OfferURL: state.ID.ValueString(),
+	})
+	if err != nil {
+		resp.Diagnostics.Append(handleOfferNotFoundError(ctx, err, &resp.State)...)
+		return
+	}
+
+	tflog.Trace(ctx, fmt.Sprintf("read offer %q at %q", response.Name, response.OfferURL))
+
+	state.ModelName = types.StringValue(response.ModelName)
+	state.OfferName = types.StringValue(response.Name)
+	state.ApplicationName = types.StringValue(response.ApplicationName)
+	state.EndpointName = types.StringValue(response.Endpoint)
+	state.URL = types.StringValue(response.OfferURL)
+	state.ID = types.StringValue(response.OfferURL)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+func (o *offerResource) Update(context.Context, resource.UpdateRequest, *resource.UpdateResponse) {
+	// There's no non-Computed attribute that's not RequiresReplace
+	// So no in-place update can happen on any field on this resource
+}
+
+// Delete is called when the provider must delete the resource. Config
+// values may be read from the DeleteRequest.
+//
+// If execution completes without error, the framework will automatically
+// call DeleteResponse.State.RemoveResource(), so it can be omitted
+// from provider logic.
+//
+// Juju refers to deletion as "destroy" so we call the Destroy function of our client here rather than delete
+// This function remains named Delete for parity across the provider and to stick within terraform naming conventions
+func (o *offerResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Prevent panic if the provider has not been configured.
+	if o.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "offer", "delete")
+		return
+	}
+	var plan offerResourceModel
+
+	// Get the Terraform state from the request into the plan
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	err := o.client.Offers.DestroyOffer(&juju.DestroyOfferInput{
+		OfferURL: plan.URL.ValueString(),
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete offer, got error: %s", err))
+		return
+	}
+	tflog.Trace(ctx, fmt.Sprintf("delete offer resource %q", plan.URL))
+}
+
+func (o *offerResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	// Prevent panic if the provider has not been configured.
+	if req.ProviderData == nil {
+		return
+	}
+
+	client, ok := req.ProviderData.(*juju.Client)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *juju.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
+
+	o.client = client
+}
+
+func (o *offerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func isOfferNotFound(err error) bool {
 	return strings.Contains(err.Error(), "expected to find one result for url")
 }
 
-func handleOfferNotFoundError(err error, d *schema.ResourceData) diag.Diagnostics {
-	if IsOfferNotFound(err) {
+func handleOfferNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
+	if isOfferNotFound(err) {
 		// Offer manually removed
-		d.SetId("")
+		st.RemoveResource(ctx)
 		return diag.Diagnostics{}
 	}
 
-	return diag.FromErr(err)
-}
-
-func resourceOfferRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
 	var diags diag.Diagnostics
-
-	result, err := client.Offers.ReadOffer(&juju.ReadOfferInput{
-		OfferURL: d.Id(),
-	})
-	if err != nil {
-		return handleOfferNotFoundError(err, d)
-	}
-
-	if err = d.Set("model", result.ModelName); err != nil {
-		return diag.FromErr(err)
-	}
-	if err = d.Set("name", result.Name); err != nil {
-		return diag.FromErr(err)
-	}
-	if err = d.Set("application_name", result.ApplicationName); err != nil {
-		return diag.FromErr(err)
-	}
-	if err = d.Set("endpoint", result.Endpoint); err != nil {
-		return diag.FromErr(err)
-	}
-	if err = d.Set("url", result.OfferURL); err != nil {
-		return diag.FromErr(err)
-	}
-	d.SetId(result.OfferURL)
-
-	return diags
-}
-
-func resourceOfferDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
-
-	var diags diag.Diagnostics
-
-	err := client.Offers.DestroyOffer(&juju.DestroyOfferInput{
-		OfferURL: d.Get("url").(string),
-	})
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	d.SetId("")
-
+	diags.AddError("Client Error", err.Error())
 	return diags
 }

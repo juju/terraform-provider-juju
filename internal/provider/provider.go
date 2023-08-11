@@ -68,7 +68,6 @@ func New(version string) func() *schema.Provider {
 				"juju_application": resourceApplication(),
 				"juju_integration": resourceIntegration(),
 				"juju_model":       resourceModel(),
-				"juju_offer":       resourceOffer(),
 				"juju_ssh_key":     resourceSSHKey(),
 			},
 		}
@@ -363,6 +362,7 @@ func (p *jujuProvider) Resources(ctx context.Context) []func() resource.Resource
 		func() resource.Resource { return NewMachineResource() },
 		func() resource.Resource { return NewUserResource() },
 		func() resource.Resource { return NewCredentialResource() },
+		func() resource.Resource { return NewOfferResource() },
 	}
 }
 
