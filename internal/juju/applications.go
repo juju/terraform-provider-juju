@@ -517,7 +517,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	apps, err := applicationAPIClient.ApplicationsInfo([]names.ApplicationTag{names.NewApplicationTag(input.AppName)})
 	if err != nil {
-		c.Errorf(err, fmt.Sprintf("found when querying the applications info"))
+		c.Errorf(err, "found when querying the applications info")
 		return nil, err
 	}
 	if len(apps) > 1 {
@@ -537,7 +537,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	if appInfo.Principal {
 		queryConstraints, err := applicationAPIClient.GetConstraints(input.AppName)
 		if err != nil {
-			c.Errorf(err, fmt.Sprintf("found when querying the application constraints"))
+			c.Errorf(err, "found when querying the application constraints")
 			return nil, err
 		}
 		if len(queryConstraints) != 1 {
@@ -736,7 +736,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	if auxConfig != nil {
 		err := applicationAPIClient.SetConfig("master", input.AppName, "", auxConfig)
 		if err != nil {
-			c.Errorf(err, fmt.Sprintf("setting configuration params"))
+			c.Errorf(err, "setting configuration params")
 			return err
 		}
 	}
@@ -745,7 +745,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	if len(input.Unexpose) != 0 {
 		c.Tracef("Unexposing endpoints", map[string]interface{}{"endpoints": input.Unexpose})
 		if err := applicationAPIClient.Unexpose(input.AppName, input.Unexpose); err != nil {
-			c.Errorf(err, fmt.Sprintf("when trying to unexpose"))
+			c.Errorf(err, "when trying to unexpose")
 			return err
 		}
 	}
@@ -754,7 +754,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		c.Tracef("Expose endpoints", map[string]interface{}{"endpoints": input.Unexpose})
 		err := c.processExpose(applicationAPIClient, input.AppName, input.Expose)
 		if err != nil {
-			c.Errorf(err, fmt.Sprintf("when trying to expose"))
+			c.Errorf(err, "when trying to expose")
 			return err
 		}
 	}
@@ -823,7 +823,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	if input.Constraints != nil {
 		err := applicationAPIClient.SetConstraints(input.AppName, *input.Constraints)
 		if err != nil {
-			c.Errorf(err, fmt.Sprintf("setting application constraints"))
+			c.Errorf(err, "setting application constraints")
 			return err
 		}
 	}
