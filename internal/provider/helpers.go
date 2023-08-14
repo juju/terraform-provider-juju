@@ -23,3 +23,11 @@ func addClientNotConfiguredError(diag *diag.Diagnostics, resource, method string
 			"Please report this issue to the provider developers.", method, resource),
 	)
 }
+
+func addDSClientNotConfiguredError(diag *diag.Diagnostics, dataSource string) {
+	diag.AddError(
+		"Provider Error, Client Not Configured",
+		fmt.Sprintf("Unable to read data source %s. Expected configured Juju Client. "+
+			"Please report this issue to the provider developers.", dataSource),
+	)
+}
