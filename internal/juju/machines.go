@@ -211,28 +211,29 @@ func manualProvision(client manual.ProvisioningClientAPI,
 	return series, machineId, nil
 }
 
-func (c machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineResponse, error) {
+func (c machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse, error) {
+	var response ReadMachineResponse
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
-		return nil, err
+		return response, err
 	}
 
 	clientAPIClient := apiclient.NewClient(conn)
-	defer clientAPIClient.Close()
+	defer func() { _ = clientAPIClient.Close() }()
 
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
-		return nil, err
+		return response, err
 	}
+	// TODO: hml 14-Aug-2023
+	// Do not leak juju api structures into the provider code.
 	var machineStatus params.MachineStatus
 	var exists bool
 	if machineStatus, exists = status.Machines[input.MachineId]; !exists {
-		return nil, fmt.Errorf("no status returned for machine: %s", input.MachineId)
+		return response, fmt.Errorf("no status returned for machine: %s", input.MachineId)
 	}
-	response := &ReadMachineResponse{
-		MachineId:     machineStatus.Id,
-		MachineStatus: machineStatus,
-	}
+	response.MachineId = machineStatus.Id
+	response.MachineStatus = machineStatus
 
 	return response, nil
 }

@@ -318,15 +318,12 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	response, err := r.client.Machines.ReadMachine(&juju.ReadMachineInput{
+	response, err := r.client.Machines.ReadMachine(juju.ReadMachineInput{
 		ModelUUID: modelUUID,
 		MachineId: machineID,
 	})
 	if err != nil {
 		resp.Diagnostics.Append(handleMachineNotFoundError(ctx, err, &resp.State)...)
-		return
-	}
-	if response == nil {
 		return
 	}
 	tflog.Trace(ctx, fmt.Sprintf("read machine resource %q", machineID))
