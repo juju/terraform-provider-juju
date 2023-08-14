@@ -240,7 +240,6 @@ func testAccResourceApplicationUpdates_sdk2_framework_migrate(modelName string, 
           provider = oldjuju
 		  model = juju_model.this.name
 		  units = %d
-		  name = "test-app"
 		  charm {
 			name     = "jameinel-ubuntu-lite"
 		  }
@@ -264,7 +263,6 @@ func testAccResourceApplicationUpdates_sdk2_framework_migrate(modelName string, 
           provider = oldjuju
 		  model = juju_model.this.name
 		  units = %d
-		  name = "test-app"
 		  charm {
 			name     = "hello-kubecon"
 		  }
