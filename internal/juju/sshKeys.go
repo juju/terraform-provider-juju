@@ -20,9 +20,9 @@ type CreateSSHKeyInput struct {
 }
 
 type ReadSSHKeyInput struct {
-	ModelName string
-	ModelUUID string
-	User      string
+	ModelName     string
+	ModelUUID     string
+	KeyIdentifier string
 }
 
 type ReadSSHKeyOutput struct {
@@ -31,9 +31,9 @@ type ReadSSHKeyOutput struct {
 }
 
 type DeleteSSHKeyInput struct {
-	ModelName string
-	ModelUUID string
-	User      string
+	ModelName     string
+	ModelUUID     string
+	KeyIdentifier string
 }
 
 func newSSHKeysClient(cf ConnectionFactory) *sshKeysClient {
@@ -92,7 +92,7 @@ func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, e
 
 	for _, res := range returnedKeys {
 		for _, k := range res.Result {
-			if input.User == utils.GetUserFromSSHKey(k) {
+			if input.KeyIdentifier == utils.GetKeyIdentifierFromSSHKey(k) {
 				return &ReadSSHKeyOutput{
 					ModelName: input.ModelName,
 					Payload:   k,
@@ -101,7 +101,7 @@ func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, e
 		}
 	}
 
-	return nil, fmt.Errorf("no ssh key found for %s", input.User)
+	return nil, fmt.Errorf("no ssh key found for %s", input.KeyIdentifier)
 }
 
 func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
@@ -125,15 +125,15 @@ func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	// only check if there is one key
 	if len(returnedKeys) == 1 {
 		k := returnedKeys[0].Result[0]
-		if input.User == utils.GetUserFromSSHKey(k) {
+		if input.KeyIdentifier == utils.GetKeyIdentifierFromSSHKey(k) {
 			// This is the latest key, do not remove it
-			c.Warnf(fmt.Sprintf("ssh key from user %s is the last one and will not be removed", input.User))
+			c.Warnf(fmt.Sprintf("ssh key from user %s is the last one and will not be removed", input.KeyIdentifier))
 			return nil
 		}
 	}
 
 	// NOTE: Right now Juju uses global users for keys
-	params, err := client.DeleteKeys("admin", input.User)
+	params, err := client.DeleteKeys("admin", input.KeyIdentifier)
 	if len(params) != 0 {
 		messages := make([]string, 0)
 		for _, e := range params {
