@@ -250,9 +250,6 @@ func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error 
 		return err
 	}
 
-	client := cloudapi.NewClient(conn)
-	defer client.Close()
-
 	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
 
 	cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
@@ -274,6 +271,9 @@ func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error 
 	}
 
 	if input.ControllerCredential {
+		client := cloudapi.NewClient(conn)
+		defer client.Close()
+
 		if _, err := client.UpdateCredentialsCheckModels(*cloudCredTag, cloudCredential); err != nil {
 			return err
 		}
