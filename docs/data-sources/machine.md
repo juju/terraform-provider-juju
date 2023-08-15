@@ -26,7 +26,3 @@ data "juju_machine" "this" {
 
 - `machine_id` (String) The Juju id of the machine.
 - `model` (String) The name of the model.
-
-### Read-Only
-
-- `id` (String) The ID of this resource.
