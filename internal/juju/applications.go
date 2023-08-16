@@ -187,9 +187,6 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	charmsAPIClient := apicharms.NewClient(conn)
 	defer charmsAPIClient.Close()
 
-	clientAPIClient := apiclient.NewClient(conn)
-	defer clientAPIClient.Close()
-
 	applicationAPIClient := apiapplication.NewClient(conn)
 	defer applicationAPIClient.Close()
 
@@ -508,9 +505,6 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	applicationAPIClient := apiapplication.NewClient(conn)
 	defer applicationAPIClient.Close()
-
-	charmsAPIClient := apicharms.NewClient(conn)
-	defer charmsAPIClient.Close()
 
 	clientAPIClient := apiclient.NewClient(conn)
 	defer clientAPIClient.Close()

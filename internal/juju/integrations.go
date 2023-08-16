@@ -118,9 +118,6 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 		return nil, err
 	}
 
-	client := apiapplication.NewClient(conn)
-	defer client.Close()
-
 	status, err := getStatus(conn)
 	if err != nil {
 		return nil, err
