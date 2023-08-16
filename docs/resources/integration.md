@@ -33,11 +33,11 @@ resource "juju_integration" "this" {
 
 ### Required
 
-- `application` (Block Set, Min: 2, Max: 2) The two applications to integrate. (see [below for nested schema](#nestedblock--application))
 - `model` (String) The name of the model to operate in.
 
 ### Optional
 
+- `application` (Block Set) The two applications to integrate. (see [below for nested schema](#nestedblock--application))
 - `via` (String) A comma separated list of CIDRs for outbound traffic.
 
 ### Read-Only

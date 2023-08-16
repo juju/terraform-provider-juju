@@ -24,6 +24,17 @@ const (
 	IntegrationAppAvailableTimeout = time.Second * 60
 )
 
+var NoIntegrationFoundError = &noIntegrationFoundError{}
+
+// NoIntegrationFoundError
+type noIntegrationFoundError struct {
+	ModelUUID string
+}
+
+func (ie *noIntegrationFoundError) Error() string {
+	return fmt.Sprintf("no integrations exist in model %v", ie.ModelUUID)
+}
+
 type integrationsClient struct {
 	ConnectionFactory
 }
@@ -60,7 +71,6 @@ type UpdateIntegrationResponse struct {
 
 type UpdateIntegrationInput struct {
 	ModelUUID    string
-	ID           string
 	Endpoints    []string
 	OldEndpoints []string
 	ViaCIDRs     string
@@ -126,7 +136,7 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 	integrations := status.Relations
 	var integration params.RelationStatus
 	if len(integrations) == 0 {
-		return nil, fmt.Errorf("no integrations exist in specified model")
+		return nil, &noIntegrationFoundError{ModelUUID: input.ModelUUID}
 	}
 
 	apps := make([][]string, 0, len(input.Endpoints))

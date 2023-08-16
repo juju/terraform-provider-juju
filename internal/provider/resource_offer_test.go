@@ -13,13 +13,13 @@ func TestAcc_ResourceOffer_sdk2_framework_migrate(t *testing.T) {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-offer")
+	modelName2 := acctest.RandomWithPrefix("tf-test-offer")
 	destModelName := acctest.RandomWithPrefix("tf-test-offer-dest")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: muxProviderFactories,
 		Steps: []resource.TestStep{
-
 			{
 				Config: testAccResourceOfferMigrate(modelName),
 				Check: resource.ComposeTestCheckFunc(
@@ -29,18 +29,23 @@ func TestAcc_ResourceOffer_sdk2_framework_migrate(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceOfferXIntegrationMigrate(modelName, destModelName),
+				Config: testAccResourceOfferXIntegrationMigrate(modelName2, destModelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.that", "model", destModelName),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.that", "application.*", map[string]string{"name": "this", "endpoint": "db", "offer_url": ""}),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.that", "application.*", map[string]string{"name": "", "endpoint": "", "offer_url": fmt.Sprintf("%v/%v.%v", "admin", modelName, "this")}),
+					resource.TestCheckResourceAttr("juju_integration.int", "model", destModelName),
+
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.int", "application.*",
+						map[string]string{"name": "apptwo", "endpoint": "db", "offer_url": ""}),
+
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.int", "application.*",
+						map[string]string{"name": "", "endpoint": "", "offer_url": fmt.Sprintf("%v/%v.%v", "admin",
+							modelName2, "appone")}),
 				),
 			},
 			{
 				Destroy:           true,
 				ImportStateVerify: true,
 				ImportState:       true,
-				ResourceName:      "juju_offer.this",
+				ResourceName:      "juju_offer.offerone",
 			},
 		},
 	})
@@ -77,14 +82,14 @@ func testAccResourceOfferXIntegrationMigrate(srcModelName string, destModelName 
 	return fmt.Sprintf(`
 provider oldjuju {}
 
-resource "juju_model" "this" {
+resource "juju_model" "modelone" {
     provider = oldjuju
 	name = %q
 }
 
-resource "juju_application" "this" {
-	model = juju_model.this.name
-	name  = "this"
+resource "juju_application" "appone" {
+	model = juju_model.modelone.name
+	name  = "appone"
 
 	charm {
 		name = "postgresql"
@@ -92,20 +97,20 @@ resource "juju_application" "this" {
 	}
 }
 
-resource "juju_offer" "this" {
-	model            = juju_model.this.name
-	application_name = juju_application.this.name
+resource "juju_offer" "offerone" {
+	model            = juju_model.modelone.name
+	application_name = juju_application.appone.name
 	endpoint         = "db"
 }
 
-resource "juju_model" "that" {
+resource "juju_model" "modeldest" {
     provider = oldjuju
 	name = %q
 }
 
-resource "juju_application" "that" {
-	model = juju_model.that.name
-	name = "that"
+resource "juju_application" "apptwo" {
+	model = juju_model.modeldest.name
+	name = "apptwo"
 
 	charm {
 		name = "hello-juju"
@@ -113,16 +118,15 @@ resource "juju_application" "that" {
 	}
 }
 
-resource "juju_integration" "that" {
-    provider = oldjuju
-	model = juju_model.that.name
+resource "juju_integration" "int" {
+	model = juju_model.modeldest.name
 
 	application {
-		name = juju_application.that.name
+		name = juju_application.apptwo.name
 	}
 
 	application {
-		offer_url = juju_offer.this.url
+		offer_url = juju_offer.offerone.url
 	}
 }
 `, srcModelName, destModelName)
