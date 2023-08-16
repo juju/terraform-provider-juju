@@ -61,8 +61,7 @@ func New(version string) func() *schema.Provider {
 				},
 			},
 			DataSourcesMap: map[string]*schema.Resource{
-				"juju_machine": dataSourceMachine(),
-				"juju_offer":   dataSourceOffer(),
+				"juju_offer": dataSourceOffer(),
 			},
 			ResourcesMap: map[string]*schema.Resource{
 				"juju_application": resourceApplication(),
@@ -373,8 +372,8 @@ func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
 // the Metadata method. All data sources must have unique names.
 func (p *jujuProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
+		func() datasource.DataSource { return NewMachineDataSource() },
 		func() datasource.DataSource { return NewModelDataSource() },
-		//func() datasource.DataSource { return NewMachineDataSource() },
 		//func() datasource.DataSource { return NewOfferDataSource() },
 	}
 }
@@ -402,12 +401,4 @@ func checkClientErr(err error, config juju.Configuration) frameworkdiag.Diagnost
 	}
 	diags.AddError("Client Error", err.Error())
 	return diags
-}
-
-func addClientNotConfiguredError(diag *frameworkdiag.Diagnostics, resource, method string) {
-	diag.AddError(
-		"Provider Error, Client Not Configured",
-		fmt.Sprintf("Unable to %s %s resource. Expected configured Juju Client. "+
-			"Please report this issue to the provider developers.", method, resource),
-	)
 }

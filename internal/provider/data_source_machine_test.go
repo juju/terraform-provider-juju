@@ -19,7 +19,7 @@ func TestAcc_DataSourceMachine_sdk2_framework_migrate(t *testing.T) {
 		ProtoV6ProviderFactories: muxProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccDataSourceMachine_sdk2_framework_migrate(t, modelName),
+				Config: testAccDataSourceMachine_sdk2_framework_migrate(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_machine.machine", "model", modelName),
 				),
@@ -28,7 +28,7 @@ func TestAcc_DataSourceMachine_sdk2_framework_migrate(t *testing.T) {
 	})
 }
 
-func testAccDataSourceMachine_sdk2_framework_migrate(t *testing.T, modelName string) string {
+func testAccDataSourceMachine_sdk2_framework_migrate(modelName string) string {
 	return fmt.Sprintf(`
 provider oldjuju {}
 
@@ -44,7 +44,6 @@ resource "juju_machine" "machine" {
 }
 
 data "juju_machine" "machine" {
-  provider = oldjuju
   model = juju_model.model.name
   machine_id = juju_machine.machine.machine_id
 }`, modelName)
@@ -66,7 +65,7 @@ func TestAcc_DataSourceMachine_Stable(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccDataSourceMachine_Stable(t, modelName),
+				Config: testAccDataSourceMachine_Stable(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_machine.machine", "model", modelName),
 				),
@@ -75,7 +74,7 @@ func TestAcc_DataSourceMachine_Stable(t *testing.T) {
 	})
 }
 
-func testAccDataSourceMachine_Stable(t *testing.T, modelName string) string {
+func testAccDataSourceMachine_Stable(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "model" {
   name = %q
