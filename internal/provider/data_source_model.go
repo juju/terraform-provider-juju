@@ -85,6 +85,12 @@ func (d *modelDataSource) Configure(ctx context.Context, req datasource.Configur
 // order to update state. Config values should be read from the
 // ReadRequest and new state values set on the ReadResponse.
 func (d *modelDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	// Prevent panic if the provider has not been configured.
+	if d.client == nil {
+		addDSClientNotConfiguredError(&resp.Diagnostics, "model")
+		return
+	}
+
 	var data modelDataSourceModel
 
 	// Read Terraform configuration data into the model.
@@ -93,7 +99,7 @@ func (d *modelDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
-	// Get current juju machine data source values.
+	// Get current juju model data source values.
 	model, err := d.client.Models.GetModelByName(data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model, got error: %s", err))
@@ -113,8 +119,8 @@ func (d *modelDataSource) trace(msg string, additionalFields ...map[string]inter
 		return
 	}
 
-	//SubsystemTrace(subCtx, "datasource-machine", "hello, world", map[string]interface{}{"foo": 123})
+	//SubsystemTrace(subCtx, "datasource-model", "hello, world", map[string]interface{}{"foo": 123})
 	// Output:
-	// {"@level":"trace","@message":"hello, world","@module":"juju.datasource-machine","foo":123}
+	// {"@level":"trace","@message":"hello, world","@module":"juju.datasource-model","foo":123}
 	tflog.SubsystemTrace(d.subCtx, LogDataSourceModel, msg, additionalFields...)
 }
