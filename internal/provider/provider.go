@@ -60,9 +60,6 @@ func New(version string) func() *schema.Provider {
 					Optional:    true,
 				},
 			},
-			DataSourcesMap: map[string]*schema.Resource{
-				"juju_offer": dataSourceOffer(),
-			},
 			ResourcesMap: map[string]*schema.Resource{
 				"juju_integration": resourceIntegration(),
 				"juju_model":       resourceModel(),
@@ -374,7 +371,7 @@ func (p *jujuProvider) DataSources(_ context.Context) []func() datasource.DataSo
 	return []func() datasource.DataSource{
 		func() datasource.DataSource { return NewMachineDataSource() },
 		func() datasource.DataSource { return NewModelDataSource() },
-		//func() datasource.DataSource { return NewOfferDataSource() },
+		func() datasource.DataSource { return NewOfferDataSource() },
 	}
 }
 
