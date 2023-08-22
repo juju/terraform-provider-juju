@@ -16,8 +16,14 @@ const (
 	LogDataSourceMachine = "datasource-machine"
 	LogDataSourceModel   = "datasource-model"
 	LogDataSourceOffer   = "datasource-offer"
-  
-  LogResourceApplication = "resource-application"
+
+	LogResourceApplication = "resource-application"
+	LogResourceAccessModel = "resource-assess-model"
+	LogResourceCredential  = "resource-credential"
+	LogResourceMachine     = "resource-machine"
+	LogResourceOffer       = "resource-offer"
+	LogResourceSSHKey      = "resource-sshkey"
+	LogResourceUser        = "resource-user"
 )
 
 func addClientNotConfiguredError(diag *diag.Diagnostics, resource, method string) {

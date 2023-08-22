@@ -29,6 +29,9 @@ func NewUserResource() resource.Resource {
 // userResource defines the resource implementation.
 type userResource struct {
 	client *juju.Client
+
+	// subCtx is the context created with the new tflog subsystem for applications.
+	subCtx context.Context
 }
 
 // userResourceModel describes the user resource data model.
@@ -86,7 +89,7 @@ func (r *userResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 // Configure enables provider-level data or clients to be set in the
 // provider-defined DataSource type. It is separately executed for each
 // ReadDataSource RPC.
-func (r *userResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *userResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -102,6 +105,8 @@ func (r *userResource) Configure(_ context.Context, req resource.ConfigureReques
 	}
 
 	r.client = client
+	// Create the local logging subsystem here, using the TF context when creating it.
+	r.subCtx = tflog.NewSubsystem(ctx, LogResourceUser)
 }
 
 // Create is called when the provider must create a new resource. Config
@@ -135,7 +140,7 @@ func (r *userResource) Create(ctx context.Context, req resource.CreateRequest, r
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create user resource, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("created user resource %q", data.Name))
+	r.trace(fmt.Sprintf("created user resource %q", data.Name))
 
 	// Save data into Terraform state
 	data.ID = types.StringValue(newIDFromUserName(data.Name.ValueString()))
@@ -181,7 +186,7 @@ func (r *userResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read user resource, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("read user resource %q", data.Name.ValueString()))
+	r.trace(fmt.Sprintf("read user resource %q", data.Name.ValueString()))
 
 	// Save updated data into Terraform state
 	plan := userResourceModel{
@@ -229,7 +234,7 @@ func (r *userResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		resp.Diagnostics.AddWarning("Not Supported", "Unable to update name %q or display name %q")
 	}
 	if data.Password.Equal(state.Password) {
-		tflog.Info(ctx, fmt.Sprintf("Password not different, no updates for user %q made", data.Name.ValueString()))
+		r.info(fmt.Sprintf("Password not different, no updates for user %q made", data.Name.ValueString()))
 		return
 	}
 	// Update user can only change the user's password. It is not currently
@@ -242,7 +247,7 @@ func (r *userResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update user resource, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("updated user resource %q", data.Name))
+	r.trace(fmt.Sprintf("updated user resource %q", data.Name))
 
 	// Save updated data into Terraform state, save a new copy for
 	// update functionality.
@@ -291,11 +296,33 @@ func (r *userResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete user resource, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("deleted user resource %q", data.Name.ValueString()))
+	r.trace(fmt.Sprintf("deleted user resource %q", data.Name.ValueString()))
 }
 
 func (r *userResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func (r *userResource) info(msg string, additionalFields ...map[string]interface{}) {
+	if r.subCtx == nil {
+		return
+	}
+
+	//SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
+	// Output:
+	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
+	tflog.SubsystemInfo(r.subCtx, LogResourceUser, msg, additionalFields...)
+}
+
+func (r *userResource) trace(msg string, additionalFields ...map[string]interface{}) {
+	if r.subCtx == nil {
+		return
+	}
+
+	//SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
+	// Output:
+	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
+	tflog.SubsystemTrace(r.subCtx, LogResourceUser, msg, additionalFields...)
 }
 
 // ID is 'user:<username>'

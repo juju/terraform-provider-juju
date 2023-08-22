@@ -31,6 +31,9 @@ func NewMachineResource() resource.Resource {
 
 type machineResource struct {
 	client *juju.Client
+
+	// subCtx is the context created with the new tflog subsystem for applications.
+	subCtx context.Context
 }
 
 type machineResourceModel struct {
@@ -54,7 +57,7 @@ func (r *machineResource) Metadata(_ context.Context, req resource.MetadataReque
 // Configure enables provider-level data or clients to be set in the
 // provider-defined DataSource type. It is separately executed for each
 // ReadDataSource RPC.
-func (r *machineResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *machineResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -70,6 +73,8 @@ func (r *machineResource) Configure(_ context.Context, req resource.ConfigureReq
 	}
 
 	r.client = client
+	// Create the local logging subsystem here, using the TF context when creating it.
+	r.subCtx = tflog.NewSubsystem(ctx, LogResourceMachine)
 }
 
 const (
@@ -256,7 +261,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		resp.Diagnostics.AddError("Juju Error", fmt.Sprintf("Failed to create machine, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("create machine resource %q", response.Machine.Machine))
+	r.trace(fmt.Sprintf("create machine resource %q", response.Machine.Machine))
 
 	machineName := data.Name.ValueString()
 	if machineName == "" {
@@ -326,7 +331,7 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 		resp.Diagnostics.Append(handleMachineNotFoundError(ctx, err, &resp.State)...)
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("read machine resource %q", machineID))
+	r.trace(fmt.Sprintf("read machine resource %q", machineID))
 
 	data.Name = types.StringValue(machineName)
 	data.ModelName = types.StringValue(modelName)
@@ -362,7 +367,7 @@ func (r *machineResource) Update(ctx context.Context, req resource.UpdateRequest
 	id := newMachineID(plan.ModelName.ValueString(), plan.MachineID.ValueString(), plan.Name.ValueString())
 	state.ID = types.StringValue(id)
 
-	tflog.Trace(ctx, fmt.Sprintf("update machine resource %q", plan.MachineID.ValueString()))
+	r.trace(fmt.Sprintf("update machine resource %q", plan.MachineID.ValueString()))
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -412,7 +417,7 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete machine, got error: %s", err))
 	}
-	tflog.Trace(ctx, fmt.Sprintf("delete machine resource %q", machineID))
+	r.trace(fmt.Sprintf("delete machine resource %q", machineID))
 }
 
 // ImportState is called when the provider must import the state of a
@@ -423,6 +428,17 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 // to use the ImportStatePassthroughID() call in this method.
 func (r *machineResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func (r *machineResource) trace(msg string, additionalFields ...map[string]interface{}) {
+	if r.subCtx == nil {
+		return
+	}
+
+	//SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
+	// Output:
+	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
+	tflog.SubsystemTrace(r.subCtx, LogResourceMachine, msg, additionalFields...)
 }
 
 func newMachineID(model, machine_id, machine_name string) string {

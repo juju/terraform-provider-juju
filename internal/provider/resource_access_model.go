@@ -31,6 +31,9 @@ func NewAccessModelResource() resource.Resource {
 
 type accessModelResource struct {
 	client *juju.Client
+
+	// subCtx is the context created with the new tflog subsystem for applications.
+	subCtx context.Context
 }
 
 type accessModelResourceModel struct {
@@ -83,7 +86,7 @@ func (a *accessModelResource) Schema(_ context.Context, req resource.SchemaReque
 // Configure enables provider-level data or clients to be set in the
 // provider-defined DataSource type. It is separately executed for each
 // ReadDataSource RPC.
-func (a *accessModelResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (a *accessModelResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -98,6 +101,8 @@ func (a *accessModelResource) Configure(_ context.Context, req resource.Configur
 		return
 	}
 	a.client = client
+	// Create the local logging subsystem here, using the TF context when creating it.
+	a.subCtx = tflog.NewSubsystem(ctx, LogResourceAccessModel)
 }
 
 func (a *accessModelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -269,7 +274,7 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	if !anyChange {
-		tflog.Trace(ctx, "Update is returning without any changes.")
+		a.trace("Update is returning without any changes.")
 		return
 	}
 
@@ -288,7 +293,7 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access model resource, got error: %s", err))
 	}
-	tflog.Trace(ctx, fmt.Sprintf("updated access model resource for model %q", modelName))
+	a.trace(fmt.Sprintf("updated access model resource for model %q", modelName))
 
 	plan.ID = types.StringValue(newAccessModelIDFrom(modelName, access, planUsers))
 
@@ -373,6 +378,17 @@ func (a *accessModelResource) ImportState(ctx context.Context, req resource.Impo
 		return
 	}
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func (a *accessModelResource) trace(msg string, additionalFields ...map[string]interface{}) {
+	if a.subCtx == nil {
+		return
+	}
+
+	//SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
+	// Output:
+	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
+	tflog.SubsystemTrace(a.subCtx, LogResourceAccessModel, msg, additionalFields...)
 }
 
 func newAccessModelIDFrom(modelNameStr string, accessStr string, users []string) string {
