@@ -15,6 +15,7 @@ import (
 //
 //	@module=juju.resource-application
 const LogDataSourceMachine = "datasource-machine"
+const LogDataSourceModel = "datasource-model"
 
 func addClientNotConfiguredError(diag *diag.Diagnostics, resource, method string) {
 	diag.AddError(

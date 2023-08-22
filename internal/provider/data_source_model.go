@@ -21,6 +21,9 @@ func NewModelDataSource() datasource.DataSourceWithConfigure {
 
 type modelDataSource struct {
 	client *juju.Client
+
+	// context for the logging subsystem.
+	subCtx context.Context
 }
 
 type modelDataSourceModel struct {
@@ -59,7 +62,7 @@ func (d *modelDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 // Configure enables provider-level data or clients to be set in the
 // provider-defined DataSource type. It is separately executed for each
 // ReadDataSource RPC.
-func (d *modelDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+func (d *modelDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -75,6 +78,7 @@ func (d *modelDataSource) Configure(_ context.Context, req datasource.ConfigureR
 	}
 
 	d.client = client
+	d.subCtx = tflog.NewSubsystem(ctx, LogDataSourceModel)
 }
 
 // Read is called when the provider must read data source values in
@@ -102,4 +106,15 @@ func (d *modelDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	data.UUID = types.StringValue(model.UUID)
 	data.ID = types.StringValue(model.UUID)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+func (d *modelDataSource) trace(msg string, additionalFields ...map[string]interface{}) {
+	if d.subCtx == nil {
+		return
+	}
+
+	//SubsystemTrace(subCtx, "datasource-machine", "hello, world", map[string]interface{}{"foo": 123})
+	// Output:
+	// {"@level":"trace","@message":"hello, world","@module":"juju.datasource-machine","foo":123}
+	tflog.SubsystemTrace(d.subCtx, LogDataSourceModel, msg, additionalFields...)
 }
