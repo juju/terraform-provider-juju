@@ -1,3 +1,6 @@
+// Copyright 2023 Canonical Ltd.
+// Licensed under the Apache License, Version 2.0, see LICENCE file for details.
+
 // In comments and in code we refer to integrations which are known in juju 2.x as relations.
 // calls to the upstream juju client currently reference relations
 package juju
