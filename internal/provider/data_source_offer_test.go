@@ -18,7 +18,7 @@ func TestAcc_DataSourceOffer_sdk2_framework_migrate(t *testing.T) {
 		ProtoV6ProviderFactories: muxProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccDataSourceOffer_sdk2_framework_migrate(t, modelName, offerName),
+				Config: testAccDataSourceOffer_sdk2_framework_migrate(modelName, offerName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("data.juju_offer.this", "name", offerName),
@@ -28,7 +28,7 @@ func TestAcc_DataSourceOffer_sdk2_framework_migrate(t *testing.T) {
 	})
 }
 
-func testAccDataSourceOffer_sdk2_framework_migrate(t *testing.T, modelName string, offerName string) string {
+func testAccDataSourceOffer_sdk2_framework_migrate(modelName string, offerName string) string {
 	return fmt.Sprintf(`
 provider oldjuju {}
 
@@ -56,7 +56,6 @@ resource "juju_offer" "this" {
 }
 
 data "juju_offer" "this" {
-    provider = oldjuju
 	url = juju_offer.this.url
 }
 `, modelName, offerName)
@@ -77,7 +76,7 @@ func TestAcc_DataSourceOffer_Stable(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccDataSourceOffer_Stable(t, modelName, offerName),
+				Config: testAccDataSourceOffer_Stable(modelName, offerName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("data.juju_offer.this", "name", offerName),
@@ -87,7 +86,7 @@ func TestAcc_DataSourceOffer_Stable(t *testing.T) {
 	})
 }
 
-func testAccDataSourceOffer_Stable(t *testing.T, modelName string, offerName string) string {
+func testAccDataSourceOffer_Stable(modelName string, offerName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
