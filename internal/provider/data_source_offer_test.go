@@ -38,7 +38,6 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-    provider = oldjuju
 	model = juju_model.this.name
 	name  = "this"
 

@@ -60,7 +60,6 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "one" {
-    provider = oldjuju
 	model = juju_model.this.name
 	name  = "one" 
 	
@@ -71,8 +70,7 @@ resource "juju_application" "one" {
 }
 
 resource "juju_application" "two" {
-    provider = oldjuju
-	model = juju_model.this.name
+ 	model = juju_model.this.name
 	name  = "two"
 
 	charm {
@@ -140,8 +138,7 @@ resource "juju_model" "a" {
 }
 
 resource "juju_application" "a" {
-    provider = oldjuju
-	model = juju_model.a.name
+ 	model = juju_model.a.name
 	name  = "a" 
 	
 	charm {
@@ -156,8 +153,7 @@ resource "juju_model" "b" {
 }
 
 resource "juju_application" "b" {
-    provider = oldjuju
-	model = juju_model.b.name
+ 	model = juju_model.b.name
 	name  = "b"
 	
 	charm {

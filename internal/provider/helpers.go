@@ -1,12 +1,10 @@
-// Copyright 2023 Canonical Ltd.
-// Licensed under the AGPLv3, see LICENCE file for details.
-
 package provider
 
 import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 // model names for logging
@@ -18,6 +16,8 @@ const (
 	LogDataSourceMachine = "datasource-machine"
 	LogDataSourceModel   = "datasource-model"
 	LogDataSourceOffer   = "datasource-offer"
+  
+  LogResourceApplication = "resource-application"
 )
 
 func addClientNotConfiguredError(diag *diag.Diagnostics, resource, method string) {
@@ -34,4 +34,9 @@ func addDSClientNotConfiguredError(diag *diag.Diagnostics, dataSource string) {
 		fmt.Sprintf("Unable to read data source %s. Expected configured Juju Client. "+
 			"Please report this issue to the provider developers.", dataSource),
 	)
+}
+
+func intPtr(value types.Int64) *int {
+	count := int(value.ValueInt64())
+	return &count
 }
