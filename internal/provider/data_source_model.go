@@ -105,7 +105,7 @@ func (d *modelDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("read juju model %q data source", data.Name))
+	d.trace(fmt.Sprintf("read juju model %q data source", data.Name))
 
 	// Save data into Terraform state
 	data.Name = types.StringValue(model.Name)
