@@ -13,7 +13,7 @@ import (
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ datasource.DataSource = &modelDataSource{}
+var _ datasource.DataSourceWithConfigure = &modelDataSource{}
 
 func NewModelDataSource() datasource.DataSourceWithConfigure {
 	return &modelDataSource{}
@@ -21,6 +21,9 @@ func NewModelDataSource() datasource.DataSourceWithConfigure {
 
 type modelDataSource struct {
 	client *juju.Client
+
+	// context for the logging subsystem.
+	subCtx context.Context
 }
 
 type modelDataSourceModel struct {
@@ -59,7 +62,7 @@ func (d *modelDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 // Configure enables provider-level data or clients to be set in the
 // provider-defined DataSource type. It is separately executed for each
 // ReadDataSource RPC.
-func (d *modelDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+func (d *modelDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -75,12 +78,19 @@ func (d *modelDataSource) Configure(_ context.Context, req datasource.ConfigureR
 	}
 
 	d.client = client
+	d.subCtx = tflog.NewSubsystem(ctx, LogDataSourceModel)
 }
 
 // Read is called when the provider must read data source values in
 // order to update state. Config values should be read from the
 // ReadRequest and new state values set on the ReadResponse.
 func (d *modelDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	// Prevent panic if the provider has not been configured.
+	if d.client == nil {
+		addDSClientNotConfiguredError(&resp.Diagnostics, "model")
+		return
+	}
+
 	var data modelDataSourceModel
 
 	// Read Terraform configuration data into the model.
@@ -89,17 +99,28 @@ func (d *modelDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
-	// Get current juju machine data source values.
+	// Get current juju model data source values.
 	model, err := d.client.Models.GetModelByName(data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("read juju model %q data source", data.Name))
+	d.trace(fmt.Sprintf("read juju model %q data source", data.Name))
 
 	// Save data into Terraform state
 	data.Name = types.StringValue(model.Name)
 	data.UUID = types.StringValue(model.UUID)
 	data.ID = types.StringValue(model.UUID)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+func (d *modelDataSource) trace(msg string, additionalFields ...map[string]interface{}) {
+	if d.subCtx == nil {
+		return
+	}
+
+	//SubsystemTrace(subCtx, "datasource-model", "hello, world", map[string]interface{}{"foo": 123})
+	// Output:
+	// {"@level":"trace","@message":"hello, world","@module":"juju.datasource-model","foo":123}
+	tflog.SubsystemTrace(d.subCtx, LogDataSourceModel, msg, additionalFields...)
 }
