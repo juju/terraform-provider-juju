@@ -29,6 +29,9 @@ func NewSSHKeyResource() resource.Resource {
 
 type sshKeyResource struct {
 	client *juju.Client
+
+	// subCtx is the context created with the new tflog subsystem for applications.
+	subCtx context.Context
 }
 
 type sshKeyResourceModel struct {
@@ -42,7 +45,7 @@ func (s *sshKeyResource) ImportState(ctx context.Context, req resource.ImportSta
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (s *sshKeyResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (s *sshKeyResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -57,6 +60,8 @@ func (s *sshKeyResource) Configure(_ context.Context, req resource.ConfigureRequ
 		return
 	}
 	s.client = client
+	// Create the local logging subsystem here, using the TF context when creating it.
+	s.subCtx = tflog.NewSubsystem(ctx, LogResourceSSHKey)
 }
 
 func (s *sshKeyResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -127,7 +132,7 @@ func (s *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create ssh_key, got error %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("created ssh_key for: %q", keyIdentifier))
+	s.trace(fmt.Sprintf("created ssh_key for: %q", keyIdentifier))
 
 	plan.ID = types.StringValue(newSSHKeyID(modelName, keyIdentifier))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -186,7 +191,7 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read ssh key, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("read ssh key resource %q", plan.ID.ValueString()))
+	s.trace(fmt.Sprintf("read ssh key resource %q", plan.ID.ValueString()))
 
 	plan.ModelName = types.StringValue(result.ModelName)
 	plan.Payload = types.StringValue(result.Payload)
@@ -240,7 +245,7 @@ func (s *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete ssh key for updating, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("ssh key deleted : %q", state.ID.ValueString()))
+	s.trace(fmt.Sprintf("ssh key deleted : %q", state.ID.ValueString()))
 
 	// Get the model name from the plan because it might have changed
 	newModelName := plan.ModelName.ValueString()
@@ -260,7 +265,7 @@ func (s *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create ssh key for updating, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("ssh key created : %q", plan.ID.ValueString()))
+	s.trace(fmt.Sprintf("ssh key created : %q", plan.ID.ValueString()))
 
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -310,5 +315,16 @@ func (s *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete ssh key during delete, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("delete ssh_key resource : %q", plan.ID.ValueString()))
+	s.trace(fmt.Sprintf("delete ssh_key resource : %q", plan.ID.ValueString()))
+}
+
+func (s *sshKeyResource) trace(msg string, additionalFields ...map[string]interface{}) {
+	if s.subCtx == nil {
+		return
+	}
+
+	//SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
+	// Output:
+	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
+	tflog.SubsystemTrace(s.subCtx, LogResourceSSHKey, msg, additionalFields...)
 }

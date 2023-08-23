@@ -29,6 +29,9 @@ func NewOfferResource() resource.Resource {
 
 type offerResource struct {
 	client *juju.Client
+
+	// subCtx is the context created with the new tflog subsystem for applications.
+	subCtx context.Context
 }
 
 type offerResourceModel struct {
@@ -148,7 +151,7 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 		}
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("create offer %q at %q", response.Name, response.OfferURL))
+	o.trace(fmt.Sprintf("create offer %q at %q", response.Name, response.OfferURL))
 
 	plan.OfferName = types.StringValue(response.Name)
 	plan.URL = types.StringValue(response.OfferURL)
@@ -179,7 +182,7 @@ func (o *offerResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	tflog.Trace(ctx, fmt.Sprintf("read offer %q at %q", response.Name, response.OfferURL))
+	o.trace(fmt.Sprintf("read offer %q at %q", response.Name, response.OfferURL))
 
 	state.ModelName = types.StringValue(response.ModelName)
 	state.OfferName = types.StringValue(response.Name)
@@ -226,10 +229,10 @@ func (o *offerResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete offer, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("delete offer resource %q", plan.URL))
+	o.trace(fmt.Sprintf("delete offer resource %q", plan.URL))
 }
 
-func (o *offerResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (o *offerResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -245,10 +248,23 @@ func (o *offerResource) Configure(_ context.Context, req resource.ConfigureReque
 	}
 
 	o.client = client
+	// Create the local logging subsystem here, using the TF context when creating it.
+	o.subCtx = tflog.NewSubsystem(ctx, LogResourceOffer)
 }
 
 func (o *offerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func (o *offerResource) trace(msg string, additionalFields ...map[string]interface{}) {
+	if o.subCtx == nil {
+		return
+	}
+
+	//SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
+	// Output:
+	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
+	tflog.SubsystemTrace(o.subCtx, LogResourceOffer, msg, additionalFields...)
 }
 
 func isOfferNotFound(err error) bool {

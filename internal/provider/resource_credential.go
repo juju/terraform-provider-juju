@@ -34,6 +34,9 @@ func NewCredentialResource() resource.Resource {
 
 type credentialResource struct {
 	client *juju.Client
+
+	// subCtx is the context created with the new tflog subsystem for applications.
+	subCtx context.Context
 }
 
 type credentialResourceModel struct {
@@ -171,7 +174,7 @@ func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequ
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create credential resource, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("created credential resource %q", credentialName))
+	c.trace(fmt.Sprintf("created credential resource %q", credentialName))
 
 	data.ID = types.StringValue(newCredentialIDFrom(credentialName, response.CloudName, clientCredential, controllerCredential))
 
@@ -214,7 +217,7 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read credential resource, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("read credential resource %q", credentialName))
+	c.trace(fmt.Sprintf("read credential resource %q", credentialName))
 
 	// cloud
 	cloud, errDiag := newCredentialCloudFromCloudName(ctx, cloudName, resp.Diagnostics)
@@ -325,7 +328,7 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update credential resource, got error: %s", err))
 		return
 	}
-	tflog.Trace(ctx, fmt.Sprintf("updated credential resource %q", credentialName))
+	c.trace(fmt.Sprintf("updated credential resource %q", credentialName))
 
 	data.ID = types.StringValue(newCredentialIDFrom(credentialName, cloudName, newClientCredential, newControllerCredential))
 
@@ -367,7 +370,7 @@ func (c *credentialResource) Delete(ctx context.Context, req resource.DeleteRequ
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete credential resource, got error: %s", err))
 	}
-	tflog.Trace(ctx, fmt.Sprintf("deleted credential resource %q", credentialName))
+	c.trace(fmt.Sprintf("deleted credential resource %q", credentialName))
 }
 
 func (c *credentialResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -385,10 +388,23 @@ func (c *credentialResource) Configure(ctx context.Context, req resource.Configu
 		return
 	}
 	c.client = client
+	// Create the local logging subsystem here, using the TF context when creating it.
+	c.subCtx = tflog.NewSubsystem(ctx, LogResourceCredential)
 }
 
 func (c credentialResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func (c *credentialResource) trace(msg string, additionalFields ...map[string]interface{}) {
+	if c.subCtx == nil {
+		return
+	}
+
+	//SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
+	// Output:
+	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
+	tflog.SubsystemTrace(c.subCtx, LogResourceCredential, msg, additionalFields...)
 }
 
 func cloudNameFromCredentialCloud(ctx context.Context, element attr.Value, diag diag.Diagnostics) (string,
