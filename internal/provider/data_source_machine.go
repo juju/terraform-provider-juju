@@ -105,18 +105,13 @@ func (d *machineDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	// "id" matches previous provider values however is not
 	// unique and is only used for tests. Data sources cannot
 	// be imported by terraform.
-	model, err := d.client.Models.GetModelByName(data.Model.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model, got error: %s", err))
-		return
-	}
 	machine_id := data.MachineID.ValueString()
 	d.trace(fmt.Sprintf("reading juju machine %q data source", machine_id))
 
 	// Verify the machine exists in the model provided
-	if _, err = d.client.Machines.ReadMachine(
+	if _, err := d.client.Machines.ReadMachine(
 		juju.ReadMachineInput{
-			ModelUUID: model.UUID,
+			ModelName: data.Model.ValueString(),
 			MachineId: machine_id,
 		},
 	); err != nil {

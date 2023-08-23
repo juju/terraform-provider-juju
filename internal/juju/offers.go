@@ -36,7 +36,6 @@ type CreateOfferInput struct {
 	ApplicationName string
 	Endpoint        string
 	ModelName       string
-	ModelUUID       string
 	ModelOwner      string
 	Name            string
 }
@@ -63,7 +62,7 @@ type DestroyOfferInput struct {
 }
 
 type ConsumeRemoteOfferInput struct {
-	ModelUUID string
+	ModelName string
 	OfferURL  string
 }
 
@@ -72,7 +71,7 @@ type ConsumeRemoteOfferResponse struct {
 }
 
 type RemoveRemoteOfferInput struct {
-	ModelUUID string
+	ModelName string
 	OfferURL  string
 }
 
@@ -99,7 +98,7 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 	}
 
 	// connect to the corresponding model
-	modelConn, err := c.GetConnection(&input.ModelUUID)
+	modelConn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return nil, append(errs, err)
 	}
@@ -116,7 +115,11 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 		return nil, append(errs, errors.New("the application was not available to be offered"))
 	}
 
-	result, err := client.Offer(input.ModelUUID, input.ApplicationName, []string{input.Endpoint}, "admin", offerName, "")
+	modelUUID, err := c.ModelUUID(input.ModelName)
+	if err != nil {
+		return nil, append(errs, err)
+	}
+	result, err := client.Offer(modelUUID, input.ApplicationName, []string{input.Endpoint}, "admin", offerName, "")
 	if err != nil {
 		return nil, append(errs, err)
 	}
@@ -252,7 +255,7 @@ func parseModelFromURL(url string) (result string, success bool) {
 
 // This function allows the integration resource to consume the offers managed by the offer resource
 func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*ConsumeRemoteOfferResponse, error) {
-	modelConn, err := c.GetConnection(&input.ModelUUID)
+	modelConn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return nil, err
 	}
@@ -320,7 +323,7 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 // This function allows the integration resource to destroy the offers managed by the offer resource
 func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 	var errors []error
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		errors = append(errors, err)
 		return errors

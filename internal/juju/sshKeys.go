@@ -18,13 +18,11 @@ type sshKeysClient struct {
 
 type CreateSSHKeyInput struct {
 	ModelName string
-	ModelUUID string
 	Payload   string
 }
 
 type ReadSSHKeyInput struct {
 	ModelName     string
-	ModelUUID     string
 	KeyIdentifier string
 }
 
@@ -35,7 +33,6 @@ type ReadSSHKeyOutput struct {
 
 type DeleteSSHKeyInput struct {
 	ModelName     string
-	ModelUUID     string
 	KeyIdentifier string
 }
 
@@ -46,7 +43,7 @@ func newSSHKeysClient(sc SharedClient) *sshKeysClient {
 }
 
 func (c *sshKeysClient) CreateSSHKey(input *CreateSSHKeyInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return err
 	}
@@ -78,7 +75,7 @@ func (c *sshKeysClient) CreateSSHKey(input *CreateSSHKeyInput) error {
 }
 
 func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +105,7 @@ func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, e
 }
 
 func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return err
 	}

@@ -121,7 +121,6 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model %q, got error: %s", modelName, err))
 		return
 	}
-	modelUUID := modelInfo.UUID
 	// TODO (cderici): Leaking Juju info here:
 	// 1 - GetModelByName above returns *params.ModelInfo
 	// 2 - we don't return tag trimmed so provider has to know juju.PrefixUser etc. Make a Tag type and have a Tag.
@@ -136,7 +135,6 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	response, errs := o.client.Offers.CreateOffer(&juju.CreateOfferInput{
 		ModelName:       modelName,
-		ModelUUID:       modelUUID,
 		ModelOwner:      modelOwner,
 		Name:            offerName,
 		ApplicationName: plan.ApplicationName.ValueString(),

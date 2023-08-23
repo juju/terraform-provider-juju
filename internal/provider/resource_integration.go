@@ -175,11 +175,6 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	modelName := plan.ModelName.ValueString()
-	modelUUID, err := r.client.Models.ResolveModelUUID(modelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve model UUID, got error: %s", err))
-		return
-	}
 
 	var apps []nestedApplication
 	resp.Diagnostics.Append(plan.Application.ElementsAs(ctx, &apps, false)...)
@@ -196,7 +191,7 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	var offerResponse = &juju.ConsumeRemoteOfferResponse{}
 	if offerURL != nil {
 		offerResponse, err = r.client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
-			ModelUUID: modelUUID,
+			ModelName: modelName,
 			OfferURL:  *offerURL,
 		})
 		if err != nil {
@@ -212,7 +207,7 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 
 	viaCIDRs := plan.Via.ValueString()
 	response, err := r.client.Integrations.CreateIntegration(&juju.IntegrationInput{
-		ModelUUID: modelUUID,
+		ModelName: modelName,
 		Apps:      appNames,
 		Endpoints: endpoints,
 		ViaCIDRs:  viaCIDRs,
@@ -262,14 +257,8 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	modelUUID, err := r.client.Models.ResolveModelUUID(modelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model uuid, got error: %s", err))
-		return
-	}
-
 	integration := &juju.IntegrationInput{
-		ModelUUID: modelUUID,
+		ModelName: modelName,
 		Endpoints: []string{
 			endpointA,
 			endpointB,
@@ -315,14 +304,10 @@ func (r *integrationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	modelName := plan.ModelName.ValueString()
-	modelUUID, err := r.client.Models.ResolveModelUUID(modelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model uuid, got error: %s", err))
-		return
-	}
 
 	var oldEndpoints, endpoints []string
 	var oldOfferURL, offerURL *string
+	var err error
 
 	if !plan.Application.Equal(state.Application) {
 		var oldApps []nestedApplication
@@ -348,7 +333,7 @@ func (r *integrationResource) Update(ctx context.Context, req resource.UpdateReq
 		if oldOfferURL != nil {
 			//destroy old offer
 			errs := r.client.Offers.RemoveRemoteOffer(&juju.RemoveRemoteOfferInput{
-				ModelUUID: modelUUID,
+				ModelName: modelName,
 				OfferURL:  *oldOfferURL,
 			})
 			if len(errs) > 0 {
@@ -361,7 +346,7 @@ func (r *integrationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 		if offerURL != nil {
 			offerResponse, err = r.client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
-				ModelUUID: modelUUID,
+				ModelName: modelName,
 				OfferURL:  *offerURL,
 			})
 			if err != nil {
@@ -375,7 +360,7 @@ func (r *integrationResource) Update(ctx context.Context, req resource.UpdateReq
 
 	viaCIDRs := plan.Via.ValueString()
 	input := &juju.UpdateIntegrationInput{
-		ModelUUID:    modelUUID,
+		ModelName:    modelName,
 		Endpoints:    endpoints,
 		OldEndpoints: oldEndpoints,
 		ViaCIDRs:     viaCIDRs,
@@ -417,11 +402,6 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	modelName := state.ModelName.ValueString()
-	modelUUID, err := r.client.Models.ResolveModelUUID(modelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model uuid, got error: %s", err))
-		return
-	}
 
 	var apps []nestedApplication
 	state.Application.ElementsAs(ctx, &apps, false)
@@ -434,7 +414,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 	//If one of the endpoints is an offer then we need to remove the remote offer rather than destroying the integration
 	if offer != nil {
 		errs := r.client.Offers.RemoveRemoteOffer(&juju.RemoveRemoteOfferInput{
-			ModelUUID: modelUUID,
+			ModelName: modelName,
 			OfferURL:  *offer,
 		})
 		if len(errs) > 0 {
@@ -445,7 +425,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 		}
 	} else {
 		err = r.client.Integrations.DestroyIntegration(&juju.IntegrationInput{
-			ModelUUID: modelUUID,
+			ModelName: modelName,
 			Endpoints: endpoints,
 		})
 		if err != nil {
