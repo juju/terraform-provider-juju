@@ -24,6 +24,7 @@ const (
 	LogResourceAccessModel = "resource-assess-model"
 	LogResourceCredential  = "resource-credential"
 	LogResourceMachine     = "resource-machine"
+	LogResourceModel       = "resource-model"
 	LogResourceOffer       = "resource-offer"
 	LogResourceSSHKey      = "resource-sshkey"
 	LogResourceUser        = "resource-user"
