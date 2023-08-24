@@ -68,15 +68,12 @@ func TestAcc_ResourceAccessModel_sdk2_framework_migrate(t *testing.T) {
 
 func testAccResourceAccessModel_sdk2_framework_migrate(userName, userPassword, modelName, access string) string {
 	return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_user" "this" {
   name = %q
   password = %q
 }
 
 resource "juju_model" "this" {
-  provider = oldjuju
   name = %q
 }
 
@@ -89,21 +86,16 @@ resource "juju_access_model" "test" {
 
 func testAccFrameworkResourceAccessModel_sdk2_framework_migrate(t *testing.T, userName, userPassword, modelName, access string) string {
 	return fmt.Sprintf(`
-provider "juju" {}
-provider "oldjuju" {}
-
 resource "juju_user" "test-user" {
   name = %q
   password = %q
 }
 
 resource "juju_model" "test-model" {
-  provider = oldjuju
   name = %q
 }
 
 resource "juju_access_model" "test" {
-  provider = juju
   access = %q
   model = juju_model.test-model.name
   users = [juju_user.test-user.name]

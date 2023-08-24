@@ -33,10 +33,7 @@ func TestAcc_DataSourceMachine_sdk2_framework_migrate(t *testing.T) {
 
 func testAccDataSourceMachine_sdk2_framework_migrate(modelName string) string {
 	return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_model" "model" {
-  provider = oldjuju
   name = %q
 }
 

@@ -55,10 +55,7 @@ func testAccCheckIntegrationDestroy_sdk2_framework_migrate(s *terraform.State) e
 
 func testAccResourceIntegration_sdk2_framework_migrate(modelName string, integrationName string) string {
 	return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_model" "this" {
-    provider = oldjuju
 	name = %q
 }
 
@@ -132,10 +129,7 @@ func TestAcc_ResourceIntegrationWithViaCIDRs_sdk2_framework_migrate(t *testing.T
 // and offer of pgbouncer.
 func testAccResourceIntegrationWithVia_sdk2_framework_migrate(srcModelName string, dstModelName string, viaCIDRs string) string {
 	return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_model" "a" {
-    provider = oldjuju
 	name = %q
 }
 
@@ -150,7 +144,6 @@ resource "juju_application" "a" {
 }
 
 resource "juju_model" "b" {
-    provider = oldjuju
 	name = %q
 }
 

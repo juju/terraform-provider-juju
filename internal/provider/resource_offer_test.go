@@ -56,10 +56,7 @@ func TestAcc_ResourceOffer_sdk2_framework_migrate(t *testing.T) {
 
 func testAccResourceOfferMigrate(modelName string) string {
 	return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_model" "this" {
-    provider = oldjuju
 	name = %q
 }
 
@@ -83,10 +80,7 @@ resource "juju_offer" "this" {
 
 func testAccResourceOfferXIntegrationMigrate(srcModelName string, destModelName string) string {
 	return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_model" "modelone" {
-    provider = oldjuju
 	name = %q
 }
 
@@ -107,7 +101,6 @@ resource "juju_offer" "offerone" {
 }
 
 resource "juju_model" "modeldest" {
-    provider = oldjuju
 	name = %q
 }
 

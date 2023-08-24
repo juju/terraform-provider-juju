@@ -32,24 +32,26 @@ func TestAcc_ResourceModel_sdk2_framework_migrate(t *testing.T) {
 				// Mind that ExpectError should be the first step
 				// "When tests have an ExpectError[...]; this results in any previous state being cleared. "
 				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
-				Config:      testAccResourceModelMigrate(t, modelInvalidName, testingCloud.CloudName(), logLevelInfo),
-				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: \"%s\" is not a valid name: model names may only contain lowercase letters, digits and hyphens", modelInvalidName)),
+				Config: testAccResourceModelMigrate(modelInvalidName, testingCloud.CloudName(), logLevelInfo),
+				ExpectError: regexp.MustCompile(fmt.Sprintf(
+					"Unable to create model, got error: \"%s\" is not *\na valid name: model names may only contain lowercase letters, digits and *\nhyphens", modelInvalidName)),
 			},
+
 			{
-				Config: testAccResourceModelMigrate(t, modelName, testingCloud.CloudName(), logLevelInfo),
+				Config: testAccResourceModelMigrate(modelName, testingCloud.CloudName(), logLevelInfo),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckResourceAttr(resourceName, "config.logging-config", fmt.Sprintf("<root>=%s", logLevelInfo)),
 				),
 			},
 			{
-				Config: testAccResourceModelMigrate(t, modelName, testingCloud.CloudName(), logLevelDebug),
+				Config: testAccResourceModelMigrate(modelName, testingCloud.CloudName(), logLevelDebug),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "config.logging-config", fmt.Sprintf("<root>=%s", logLevelDebug)),
 				),
 			},
 			{
-				Config: testAccConstraintsModelMigrate(t, modelName, testingCloud.CloudName(), "cores=1 mem=1024M"),
+				Config: testAccConstraintsModelMigrate(modelName, testingCloud.CloudName(), "cores=1 mem=1024M"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "constraints", "cores=1 mem=1024M"),
 				),
@@ -77,10 +79,7 @@ func TestAcc_ResourceModel_UnsetConfig_sdk2_framework_migrate(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_model" "this" {
-  provider = oldjuju
   name = %q
 
   config = {
@@ -94,9 +93,7 @@ resource "juju_model" "this" {
 			},
 			{
 				Config: fmt.Sprintf(`
-provider oldjuju {}
 resource "juju_model" "this" {
-  provider = oldjuju
   name = %q
 }`, modelName),
 				Check: resource.ComposeTestCheckFunc(
@@ -117,10 +114,7 @@ func TestAcc_ResourceModel_Minimal(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_model" "testmodel" {
-  provider = oldjuju
   name = %q
 }`, modelName),
 				Check: resource.ComposeTestCheckFunc(
@@ -171,12 +165,9 @@ func testAccCheckDevelopmentConfigIsUnsetMigrate(modelName string) resource.Test
 	}
 }
 
-func testAccResourceModelMigrate(t *testing.T, modelName string, cloudName string, logLevel string) string {
+func testAccResourceModelMigrate(modelName string, cloudName string, logLevel string) string {
 	return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_model" "model" {
-  provider = oldjuju
   name = %q
 
   cloud {
@@ -190,12 +181,9 @@ resource "juju_model" "model" {
 }`, modelName, cloudName, logLevel)
 }
 
-func testAccConstraintsModelMigrate(t *testing.T, modelName string, cloudName string, constraints string) string {
+func testAccConstraintsModelMigrate(modelName string, cloudName string, constraints string) string {
 	return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_model" "model" {
-  provider = oldjuju
   name = %q
 
   cloud {
@@ -227,24 +215,24 @@ func TestAcc_ResourceModel_Stable(t *testing.T) {
 				// Mind that ExpectError should be the first step
 				// "When tests have an ExpectError[...]; this results in any previous state being cleared. "
 				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
-				Config:      testAccResourceModelStable(t, modelInvalidName, testingCloud.CloudName(), logLevelInfo),
+				Config:      testAccResourceModelStable(modelInvalidName, testingCloud.CloudName(), logLevelInfo),
 				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: \"%s\" is not a valid name: model names may only contain lowercase letters, digits and hyphens", modelInvalidName)),
 			},
 			{
-				Config: testAccResourceModelStable(t, modelName, testingCloud.CloudName(), logLevelInfo),
+				Config: testAccResourceModelStable(modelName, testingCloud.CloudName(), logLevelInfo),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckResourceAttr(resourceName, "config.logging-config", fmt.Sprintf("<root>=%s", logLevelInfo)),
 				),
 			},
 			{
-				Config: testAccResourceModelStable(t, modelName, testingCloud.CloudName(), logLevelDebug),
+				Config: testAccResourceModelStable(modelName, testingCloud.CloudName(), logLevelDebug),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "config.logging-config", fmt.Sprintf("<root>=%s", logLevelDebug)),
 				),
 			},
 			{
-				Config: testAccConstraintsModelStable(t, modelName, testingCloud.CloudName(), "cores=1 mem=1024M"),
+				Config: testAccConstraintsModelStable(modelName, testingCloud.CloudName(), "cores=1 mem=1024M"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "constraints", "cores=1 mem=1024M"),
 				),
@@ -344,7 +332,7 @@ func testAccCheckDevelopmentConfigIsUnsetStable(modelName string) resource.TestC
 	}
 }
 
-func testAccResourceModelStable(t *testing.T, modelName string, cloudName string, logLevel string) string {
+func testAccResourceModelStable(modelName string, cloudName string, logLevel string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "model" {
   name = %q
@@ -360,7 +348,7 @@ resource "juju_model" "model" {
 }`, modelName, cloudName, logLevel)
 }
 
-func testAccConstraintsModelStable(t *testing.T, modelName string, cloudName string, constraints string) string {
+func testAccConstraintsModelStable(modelName string, cloudName string, constraints string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "model" {
   name = %q
