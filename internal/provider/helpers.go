@@ -26,6 +26,8 @@ const (
 	LogResourceUser        = "resource-user"
 )
 
+const LogResourceIntegration = "resource-integration"
+
 func addClientNotConfiguredError(diag *diag.Diagnostics, resource, method string) {
 	diag.AddError(
 		"Provider Error, Client Not Configured",

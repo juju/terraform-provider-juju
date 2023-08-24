@@ -80,7 +80,6 @@ resource "juju_application" "two" {
 }
 
 resource "juju_integration" "this" {
-    provider = oldjuju
 	model = juju_model.this.name
 
 	application {
@@ -169,7 +168,6 @@ resource "juju_offer" "b" {
 }
 
 resource "juju_integration" "a" {
-    provider = oldjuju
 	model = juju_model.a.name
 	via = %q
 
