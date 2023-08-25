@@ -33,9 +33,7 @@ jobs:
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
     name: Integration
-    needs:
-      - generate
-      - lint
+    needs: build
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
