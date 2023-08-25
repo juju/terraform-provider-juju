@@ -1,3 +1,6 @@
+// Copyright 2023 Canonical Ltd.
+// Licensed under the Apache License, Version 2.0, see LICENCE file for details.
+
 // Package juju is a facade to make interacting with Juju clients simpler. It also acts as an insulating layer
 // protecting the provider package from upstream changes.
 // The long-term intention is for this package to be removed. Eventually, it would be nice for this package to

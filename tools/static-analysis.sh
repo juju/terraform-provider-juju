@@ -145,7 +145,20 @@ run_go_tidy() {
 	fi
 }
 
+run_copyright() {
+	OUT=$(find . -name '*.go' | sort | xargs grep -L -E '// (Copyright|Code generated)' || true)
+	LINES=$(echo "${OUT}" | wc -w)
+	if [ "$LINES" != 0 ]; then
+		echo ""
+		echo "$(red 'Found some issues:')"
+		echo -e '\nThe following files are missing copyright headers'
+		echo "${OUT}"
+		exit 1
+	fi
+}
+
 (
 	run_linter "run_go"
 	run_linter "run_go_tidy"
+	run_linter "run_copyright"
 )
