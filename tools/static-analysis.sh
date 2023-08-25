@@ -160,5 +160,5 @@ run_copyright() {
 (
 	run_linter "run_go"
 	run_linter "run_go_tidy"
-  run_linter "run_copyright"
+	run_linter "run_copyright"
 )
