@@ -1,0 +1,107 @@
+# Terraform Provider testing workflow using different terraform versions
+# and clouds.
+
+name: Build
+
+# This GitHub action runs your tests for each pull request.
+on:
+  pull_request:
+    paths-ignore:
+      - "README.md"
+      - "Makefile"
+      - "project-docs/**"
+  push:
+    branches:
+      - "main"
+    paths-ignore:
+      - "README.md"
+      - "Makefile"
+      - "project-docs/**"
+
+
+# Testing only needs permissions to read the repository contents.
+permissions:
+  contents: read
+
+jobs:
+  # Ensure project builds before running testing matrix
+  build:
+    name: Build
+    needs:
+      - generate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+      - run: go mod tidy
+      - run: go install
+
+  # Ensure the generated docs are up todate
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - run: go generate ./...
+      - name: git diff
+        run: |
+          git diff --compact-summary --exit-code || \
+            (echo; echo "Unexpected difference in directories after code generation. Run 'go generate ./...' command and commit."; exit 1)
+
+  # Ensure the generated docs are up todate
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - run: gofmt -w -l -s .
+      - name: git diff
+        run: |
+          git diff --compact-summary --exit-code || \
+            (echo; echo "Unexpected difference in directories after go fmt. Run 'gofmt -w -l -s .' command and commit."; exit 1)
+
+
+  # This runs golangci-lint against the codebase
+  lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: "go.mod"
+          cache: false
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.53.3
+          args: --print-issued-lines=true
+
+  # This runs golangci-lint against the codebase
+  copyright-check:
+    name: copyright-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: "go.mod"
+          cache: false
+      - run: |
+          OUT=$(find . -name '*.go' | sort | xargs grep -L -E '// (Copyright|Code generated)' || true)
+          LINES=$(echo "${OUT}" | wc -w)
+          if [ "$LINES" != 0 ]; then
+            echo ""
+            echo "$(red 'Found some issues:')"
+            echo -e '\nThe following files are missing copyright headers'
+            echo "${OUT}"
+            exit 1
+          fi
+
