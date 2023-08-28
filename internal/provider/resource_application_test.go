@@ -435,6 +435,38 @@ resource "juju_application" "subordinate" {
 `, modelName, constraints)
 }
 
+func TestAcc_ResourceApplication_Minimal(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+	var charmName string
+	if testingCloud == LXDCloudTesting {
+		charmName = "juju-qa-test"
+	} else {
+		charmName = "hello-juju"
+	}
+	resourceName := "juju_application.testapp"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: muxProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationBasic_Minimal(modelName, charmName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "model", modelName),
+					resource.TestCheckResourceAttr(resourceName, "name", charmName),
+					resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
+					resource.TestCheckResourceAttr(resourceName, "principal", "true"),
+				),
+			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      resourceName,
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceApplication_Stable(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
@@ -627,6 +659,24 @@ func TestAcc_CharmUpdates_Stable(t *testing.T) {
 			},
 		},
 	})
+}
+
+func testAccResourceApplicationBasic_Minimal(modelName, charmName string) string {
+	return fmt.Sprintf(`
+        provider oldjuju {}
+
+		resource "juju_model" "testmodel" {
+          provider = oldjuju
+		  name = %q
+		}
+		
+		resource "juju_application" "testapp" {
+		  model = juju_model.testmodel.name
+		  charm {
+			name = %q
+		  }
+		}
+		`, modelName, charmName)
 }
 
 func testAccResourceApplicationBasic_Stable(modelName, appInvalidName string) string {

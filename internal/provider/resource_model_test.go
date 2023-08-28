@@ -109,6 +109,28 @@ resource "juju_model" "this" {
 	})
 }
 
+func TestAcc_ResourceModel_Minimal(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: muxProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider oldjuju {}
+
+resource "juju_model" "testmodel" {
+  provider = oldjuju
+  name = %q
+}`, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_model.testmodel", "name", modelName),
+				),
+			},
+		},
+	})
+}
+
 func testAccCheckDevelopmentConfigIsUnsetMigrate(modelName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		client := Provider.Meta().(*juju.Client)
