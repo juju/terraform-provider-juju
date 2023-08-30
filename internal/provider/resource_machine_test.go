@@ -54,6 +54,47 @@ resource "juju_machine" "this" {
 `, modelName)
 }
 
+func TestAcc_ResourceMachine_Minimal(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-machine")
+	resourceName := "juju_machine.testmachine"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: muxProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceMachineBasicMinimal(modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "model", modelName),
+					resource.TestCheckResourceAttr(resourceName, "machine_id", "0"),
+				),
+			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      resourceName,
+			},
+		},
+	})
+}
+
+func testAccResourceMachineBasicMinimal(modelName string) string {
+	return fmt.Sprintf(`
+provider oldjuju {}
+
+resource "juju_model" "this" {
+    provider = oldjuju
+	name = %q
+}
+
+resource "juju_machine" "testmachine" {
+	model = juju_model.this.name
+}
+`, modelName)
+}
+
 func TestAcc_ResourceMachine_Stable(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
