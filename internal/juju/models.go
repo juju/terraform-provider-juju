@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/client/modelmanager"
@@ -99,10 +98,6 @@ func newModelsClient(cf ConnectionFactory) *modelsClient {
 	}
 }
 
-func (c *modelsClient) getCurrentUser(conn api.Connection) string {
-	return strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
-}
-
 func (c *modelsClient) resolveModelUUIDWithClient(client modelmanager.Client, name string, user string) (string, error) {
 	modelUUID := ""
 	modelSummaries, err := client.ListModelSummaries(user, false)
@@ -130,7 +125,7 @@ func (c *modelsClient) GetModelByName(name string) (*params.ModelInfo, error) {
 		return nil, err
 	}
 
-	currentUser := c.getCurrentUser(conn)
+	currentUser := getCurrentJujuUser(conn)
 	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
@@ -164,7 +159,7 @@ func (c *modelsClient) ResolveModelUUID(name string) (string, error) {
 		return "", err
 	}
 
-	currentUser := c.getCurrentUser(conn)
+	currentUser := getCurrentJujuUser(conn)
 	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
@@ -187,7 +182,7 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 		return nil, err
 	}
 
-	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
+	currentUser := getCurrentJujuUser(conn)
 
 	client := modelmanager.NewClient(conn)
 	defer client.Close()
@@ -321,7 +316,7 @@ func (c *modelsClient) UpdateModel(input UpdateModelInput) error {
 	if input.Credential != "" {
 		cloudName := input.CloudName
 		tag := names.NewModelTag(input.UUID)
-		currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
+		currentUser := getCurrentJujuUser(conn)
 		cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, input.Credential)
 		if err != nil {
 			return err

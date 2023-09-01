@@ -125,3 +125,7 @@ func (cf *ConnectionFactory) Tracef(msg string, additionalFields ...map[string]i
 func (cf *ConnectionFactory) Warnf(msg string, additionalFields ...map[string]interface{}) {
 	tflog.SubsystemWarn(cf.subCtx, LogJujuClient, msg, additionalFields...)
 }
+
+func getCurrentJujuUser(conn api.Connection) string {
+	return conn.AuthTag().Id()
+}
