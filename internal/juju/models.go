@@ -223,6 +223,7 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 	}
 
 	modelClient := modelconfig.NewClient(connModel)
+	defer func() { _ = modelClient.Close() }()
 	err = modelClient.SetModelConstraints(input.Constraints)
 	if err != nil {
 		return nil, err
