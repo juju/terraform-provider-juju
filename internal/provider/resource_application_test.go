@@ -210,11 +210,8 @@ func TestAcc_CharmUpdates_sdk2_framework_migrate(t *testing.T) {
 func testAccResourceApplicationBasic_sdk2_framework_migrate(modelName, appInvalidName string) string {
 	if testingCloud == LXDCloudTesting {
 		return fmt.Sprintf(`
-        provider oldjuju {}
-
-		resource "juju_model" "this" {
-          provider = oldjuju
-		  name = %q
+        resource "juju_model" "this" {
+          name = %q
 		}
 		
 		resource "juju_application" "this" {
@@ -230,11 +227,8 @@ func testAccResourceApplicationBasic_sdk2_framework_migrate(modelName, appInvali
 	} else {
 		// if we have a K8s deployment we need the machine hostname
 		return fmt.Sprintf(`
-        provider oldjuju {}
-
-		resource "juju_model" "this" {
-          provider = oldjuju
-		  name = %q
+        resource "juju_model" "this" {
+          name = %q
 		}
 		
 		resource "juju_application" "this" {
@@ -261,11 +255,8 @@ func testAccResourceApplicationUpdates_sdk2_framework_migrate(modelName string, 
 
 	if testingCloud == LXDCloudTesting {
 		return fmt.Sprintf(`
-        provider oldjuju {}
-
-		resource "juju_model" "this" {
-          provider = oldjuju
-		  name = %q
+        resource "juju_model" "this" {
+          name = %q
 		}
 		
 		resource "juju_application" "this" {
@@ -283,11 +274,8 @@ func testAccResourceApplicationUpdates_sdk2_framework_migrate(modelName string, 
 		`, modelName, units, exposeStr, hostname)
 	} else {
 		return fmt.Sprintf(`
-        provider oldjuju {}
-
-		resource "juju_model" "this" {
-          provider = oldjuju
-		  name = %q
+        resource "juju_model" "this" {
+          name = %q
 		}
 		
 		resource "juju_application" "this" {
@@ -310,11 +298,8 @@ func testAccResourceApplicationUpdates_sdk2_framework_migrate(modelName string, 
 func testAccResourceApplicationUpdatesCharm_sdk2_framework_migrate(modelName string, channel string) string {
 	if testingCloud == LXDCloudTesting {
 		return fmt.Sprintf(`
-        provider oldjuju {}
-
-		resource "juju_model" "this" {
-          provider = oldjuju
-		  name = %q
+        resource "juju_model" "this" {
+          name = %q
 		}
 		
 		resource "juju_application" "this" {
@@ -328,11 +313,8 @@ func testAccResourceApplicationUpdatesCharm_sdk2_framework_migrate(modelName str
 		`, modelName, channel)
 	} else {
 		return fmt.Sprintf(`
-        provider oldjuju {}
-
-		resource "juju_model" "this" {
-          provider = oldjuju
-		  name = %q
+        resource "juju_model" "this" {
+          name = %q
 		}
 		
 		resource "juju_application" "this" {
@@ -353,11 +335,8 @@ func testAccResourceApplicationUpdatesCharm_sdk2_framework_migrate(modelName str
 func testAccResourceApplicationConstraints_sdk2_framework_migrate(modelName string, constraints string) string {
 	if testingCloud == LXDCloudTesting {
 		return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_model" "this" {
-  provider = oldjuju
-  name = %q
+   name = %q
 }
 
 resource "juju_application" "this" {
@@ -376,10 +355,7 @@ resource "juju_application" "this" {
 `, modelName, constraints)
 	} else {
 		return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_model" "this" {
-  provider = oldjuju
   name = %q
 }
 
@@ -403,10 +379,7 @@ resource "juju_application" "this" {
 
 func testAccResourceApplicationConstraintsSubordinate_sdk2_framework_migrate(modelName string, constraints string) string {
 	return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_model" "this" {
-  provider = oldjuju
   name = %q
 }
 
@@ -663,10 +636,7 @@ func TestAcc_CharmUpdates_Stable(t *testing.T) {
 
 func testAccResourceApplicationBasic_Minimal(modelName, charmName string) string {
 	return fmt.Sprintf(`
-        provider oldjuju {}
-
 		resource "juju_model" "testmodel" {
-          provider = oldjuju
 		  name = %q
 		}
 		

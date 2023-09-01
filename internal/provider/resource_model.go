@@ -7,326 +7,548 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/names/v4"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-func resourceModel() *schema.Resource {
-	return &schema.Resource{
-		// This description is used by the documentation generator and the language server.
+var _ resource.Resource = &modelResource{}
+var _ resource.ResourceWithConfigure = &modelResource{}
+var _ resource.ResourceWithImportState = &modelResource{}
+
+const (
+	PrivateDataImportKey = "import"
+)
+
+func NewModelResource() resource.Resource {
+	return &modelResource{}
+}
+
+type modelResource struct {
+	client *juju.Client
+
+	// context for the logging subsystem.
+	subCtx context.Context
+}
+
+type modelResourceModel struct {
+	Name        types.String `tfsdk:"name"`
+	Cloud       types.List   `tfsdk:"cloud"`
+	Config      types.Map    `tfsdk:"config"`
+	Constraints types.String `tfsdk:"constraints"`
+	Credential  types.String `tfsdk:"credential"`
+	Type        types.String `tfsdk:"type"`
+	// ID required by the testing framework
+	ID types.String `tfsdk:"id"`
+}
+
+// nestedCloud represents an element in a Cloud list of a model resource
+type nestedCloud struct {
+	Name   types.String `tfsdk:"name"`
+	Region types.String `tfsdk:"region"`
+}
+
+func (r *modelResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description: "A resource that represent a Juju Model.",
-
-		CreateContext: resourceModelCreate,
-		ReadContext:   resourceModelRead,
-		UpdateContext: resourceModelUpdate,
-		DeleteContext: resourceModelDelete,
-		Importer: &schema.ResourceImporter{
-			StateContext: resourceModelImporter,
-		},
-
-		Schema: map[string]*schema.Schema{
-			"name": {
+		Attributes: map[string]schema.Attribute{
+			"name": schema.StringAttribute{
 				Description: "The name to be assigned to the model",
-				Type:        schema.TypeString,
 				Required:    true,
-				ForceNew:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
-			"cloud": {
-				Description: "JuJu Cloud where the model will operate",
-				Type:        schema.TypeList,
+			"config": schema.MapAttribute{
+				Description: "Override default model configuration",
+				Optional:    true,
+				ElementType: types.StringType,
+				PlanModifiers: []planmodifier.Map{
+					mapplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"constraints": schema.StringAttribute{
+				Description: "Constraints imposed to this model",
+				Optional:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"credential": schema.StringAttribute{
+				Description: "Credential used to add the model",
 				Optional:    true,
 				Computed:    true,
-				ForceNew:    true,
-				MaxItems:    1,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"name": {
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"type": schema.StringAttribute{
+				Description: "Type of the model. Set by the Juju's API server",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"id": schema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+		},
+		Blocks: map[string]schema.Block{
+			"cloud": schema.ListNestedBlock{
+				Description: "JuJu Cloud where the model will operate",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.List{
+					listvalidator.SizeAtMost(1),
+				},
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
 							Description: "The name of the cloud",
-							Type:        schema.TypeString,
 							Required:    true,
 						},
-						"region": {
+						"region": schema.StringAttribute{
 							Description: "The region of the cloud",
-							Type:        schema.TypeString,
 							Optional:    true,
 							Computed:    true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
 						},
 					},
 				},
-			},
-			"config": {
-				Description: "Override default model configuration",
-				Type:        schema.TypeMap,
-				Optional:    true,
-			},
-			"constraints": {
-				Description: "Constraints imposed to this model",
-				Type:        schema.TypeString,
-				Optional:    true,
-			},
-			"credential": {
-				Description: "Credential used to add the model",
-				Type:        schema.TypeString,
-				Optional:    true,
-				Computed:    true,
-			},
-			"type": {
-				Description: "Type of the model. Set by the Juju's API server",
-				Type:        schema.TypeString,
-				Computed:    true,
 			},
 		},
 	}
 }
 
-func resourceModelCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
+func (r *modelResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	// Prevent panic if the provider has not been configured.
+	if req.ProviderData == nil {
+		return
+	}
 
-	var diags diag.Diagnostics
+	client, ok := req.ProviderData.(*juju.Client)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *juju.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
+	r.client = client
+	r.subCtx = tflog.NewSubsystem(ctx, LogResourceModel)
+}
 
-	name := d.Get("name").(string)
-	cloud := d.Get("cloud").([]interface{})
-	config := d.Get("config").(map[string]interface{})
-	credential := d.Get("credential").(string)
-	readConstraints := d.Get("constraints").(string)
+func (r *modelResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_model"
+}
 
-	var parsedConstraints constraints.Value = constraints.Value{}
+func isImported(ctx context.Context, req resource.ReadRequest) (bool, diag.Diagnostics) {
+	if req.Private == nil {
+		return false, diag.Diagnostics{}
+	}
+	value, diags := req.Private.GetKey(ctx, PrivateDataImportKey)
+	if diags.HasError() {
+		return false, diags
+	}
+	if value != nil && string(value) == "true" {
+		return true, diags
+	}
+	return false, diags
+}
+
+func (r *modelResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Prevent panic if the provider has not been configured.
+	if r.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "model", "import")
+		return
+	}
+
+	// Import command takes the model name as an argument
+	// `terraform import juju_model.RESOURCE_NAME MODEL_NAME`
+	modelName := req.ID
+
+	// We set the ID to the modelUUID here
+	modelInfo, err := r.client.Models.GetModelByName(modelName)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to find model, got error: %s", err))
+		return
+	}
+	req.ID = modelInfo.UUID
+	r.trace(fmt.Sprintf("Imported model resource: %v", modelInfo.Name))
+	resp.Private.SetKey(ctx, PrivateDataImportKey, []byte("true"))
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	// Prevent panic if the provider has not been configured.
+	if r.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "model", "create")
+		return
+	}
+
+	var plan modelResourceModel
+
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Acquire modelName, clouds, config, credential & constraints from the model plan
+	modelName := plan.Name.ValueString()
+	var clouds []nestedCloud
+	resp.Diagnostics.Append(plan.Cloud.ElementsAs(ctx, &clouds, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	var config map[string]string
+	resp.Diagnostics.Append(plan.Config.ElementsAs(ctx, &config, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	credential := plan.Credential.ValueString()
+	readConstraints := plan.Constraints.ValueString()
+
+	parsedConstraints := constraints.Value{}
 	var err error
 	if readConstraints != "" {
+		// TODO (cderici): this may be moved into internal/model so
+		// resource_model can avoid importing juju/core/constraints
 		parsedConstraints, err = constraints.Parse(readConstraints)
 		if err != nil {
-			return diag.FromErr(err)
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse constraints, got error: %s", err))
+			return
 		}
 	}
 
-	response, err := client.Models.CreateModel(juju.CreateModelInput{
-		Name:        name,
-		CloudList:   cloud,
+	cloudNameInput, cloudRegionInput := "", ""
+
+	if len(clouds) > 0 {
+		cloudNameInput = clouds[0].Name.ValueString()
+		cloudRegionInput = clouds[0].Region.ValueString()
+	}
+
+	response, err := r.client.Models.CreateModel(juju.CreateModelInput{
+		Name:        modelName,
+		CloudName:   cloudNameInput,
+		CloudRegion: cloudRegionInput,
 		Config:      config,
 		Constraints: parsedConstraints,
 		Credential:  credential,
 	})
 	if err != nil {
-		return diag.FromErr(err)
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create model, got error: %s", err))
+		return
 	}
+	r.trace(fmt.Sprintf("model created : %q", modelName))
 
-	// compute the cloud information required
-	var cloudNameInput, cloudRegionInput string = "", ""
-	for _, c := range cloud {
-		cloudEntry := c.(map[string]interface{})
-		cloudNameInput = cloudEntry["name"].(string)
-		cloudRegionInput = cloudEntry["region"].(string)
-	}
-
-	// build an object
-	cloudSectionOutput := make(map[string]interface{})
-	cloudChanged := false
-	// no cloud value was defined, use the response
-	if cloudNameInput == "" {
-		cloudSectionOutput["name"] = response.ModelInfo.Cloud
-		cloudChanged = true
-	}
-	if cloudRegionInput == "" {
-		cloudSectionOutput["region"] = response.ModelInfo.CloudRegion
-		cloudChanged = true
-	}
-
-	// TODO: Should config track all key=value or just those explicitly set?
-
-	// Set the cloud value if required
-	if cloudChanged {
-		err = d.Set("cloud", []any{cloudSectionOutput})
-		if err != nil {
-			return diag.FromErr(err)
+	if !plan.Cloud.IsNull() {
+		// Set the cloud value if required
+		newCloud := []nestedCloud{{
+			Name:   types.StringValue(response.ModelInfo.Cloud),
+			Region: types.StringValue(response.ModelInfo.CloudRegion),
+		}}
+		cloudType := req.Plan.Schema.GetBlocks()["cloud"].(schema.ListNestedBlock).NestedObject.Type()
+		newPlanCloud, errDiag := types.ListValueFrom(ctx, cloudType, newCloud)
+		resp.Diagnostics.Append(errDiag...)
+		if resp.Diagnostics.HasError() {
+			return
 		}
+		plan.Cloud = newPlanCloud
 	}
 
-	d.SetId(response.ModelInfo.UUID)
+	plan.Credential = types.StringValue(response.ModelInfo.CloudCredential)
+	plan.Type = types.StringValue(response.ModelInfo.Type.String())
+	plan.ID = types.StringValue(response.ModelInfo.UUID)
 
-	return diags
+	r.trace(fmt.Sprintf("model resource created: %q", modelName))
+
+	// Write the state plan into the Response.State
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func handleModelNotFoundError(err error, d *schema.ResourceData) diag.Diagnostics {
-	if errors.As(err, &juju.ModelNotFoundError) {
-		// Model manually removed
-		d.SetId("")
-		return diag.Diagnostics{}
+func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	// Prevent panic if the provider has not been configured.
+	if r.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "model", "read")
+		return
 	}
 
-	return diag.FromErr(err)
-}
+	var state modelResourceModel
 
-func resourceModelRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	var diags diag.Diagnostics
-
-	uuid := d.Id()
-	response, err := client.Models.ReadModel(uuid)
+	uuid := state.ID.ValueString()
+	response, err := r.client.Models.ReadModel(uuid)
 	if err != nil {
-		return handleModelNotFoundError(err, d)
+		resp.Diagnostics.Append(handleModelNotFoundError(ctx, err, &resp.State)...)
+		return
 	}
+	modelName := response.ModelInfo.Name
+	r.trace(fmt.Sprintf("found model: %v", modelName))
 
-	cloudList := []map[string]interface{}{{
-		"name":   strings.TrimPrefix(response.ModelInfo.CloudTag, juju.PrefixCloud),
-		"region": response.ModelInfo.CloudRegion},
-	}
-
-	if err := d.Set("name", response.ModelInfo.Name); err != nil {
-		return diag.FromErr(err)
-	}
-
-	if err := d.Set("cloud", cloudList); err != nil {
-		return diag.FromErr(err)
-	}
-	if err := d.Set("constraints", response.ModelConstraints.String()); err != nil {
-		return diag.FromErr(err)
-	}
+	// Acquire cloud, credential, and config
 	tag, err := names.ParseCloudCredentialTag(response.ModelInfo.CloudCredentialTag)
 	if err != nil {
-		return diag.FromErr(err)
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse cloud credential tag for model, got error: %s", err))
+		return
 	}
 	credential := tag.Name()
-	if err := d.Set("credential", credential); err != nil {
-		return diag.FromErr(err)
-	}
-	if err := d.Set("type", response.ModelInfo.Type); err != nil {
-		return diag.FromErr(err)
-	}
 
-	// Only read model config that is tracked in Terraform
-	config := d.Get("config").(map[string]interface{})
-	for k := range config {
-		if value, exists := response.ModelConfig[k]; exists {
-			var serialised string
-			switch value.(type) {
-			// TODO: review for other possible types
-			case bool:
-				b, err := json.Marshal(value)
-				if err != nil {
-					return diag.FromErr(err)
-				}
-				serialised = string(b)
-			default:
-				serialised = value.(string)
-			}
-
-			config[k] = serialised
+	// Set the read values into the new state model
+	// Cloud
+	imported, dErrs := isImported(ctx, req)
+	if dErrs.HasError() {
+		resp.Diagnostics.Append(dErrs...)
+		return
+	}
+	if imported {
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, PrivateDataImportKey, []byte("false"))...)
+		if resp.Diagnostics.HasError() {
+			return
 		}
 	}
-	if err = d.Set("config", config); err != nil {
-		return diag.FromErr(err)
+	if (imported && response.ModelInfo.CloudTag != "" && response.ModelInfo.CloudRegion != "") ||
+		!state.Cloud.IsNull() {
+		cloudList := []nestedCloud{{
+			Name:   types.StringValue(strings.TrimPrefix(response.ModelInfo.CloudTag, juju.PrefixCloud)),
+			Region: types.StringValue(response.ModelInfo.CloudRegion),
+		}}
+		cloudType := req.State.Schema.GetBlocks()["cloud"].(schema.ListNestedBlock).NestedObject.Type()
+		newStateCloud, errDiag := types.ListValueFrom(ctx, cloudType, cloudList)
+		resp.Diagnostics.Append(errDiag...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		state.Cloud = newStateCloud
 	}
 
-	return diags
+	// Constraints
+	if (imported && response.ModelConstraints.String() != "") || !state.Constraints.IsNull() {
+		state.Constraints = types.StringValue(response.ModelConstraints.String())
+	}
+
+	// Config
+	if len(response.ModelConfig) > 0 {
+		// we make the stateConfig (instead of only declaring), because
+		// if state.Config is null, then stateConfig will be null as well,
+		// and we want to store the newStateConfig below as {} instead of
+		// null in the state
+		stateConfig := make(map[string]string, len(response.ModelConfig))
+		resp.Diagnostics.Append(state.Config.ElementsAs(ctx, &stateConfig, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		for k := range stateConfig {
+			if value, exists := response.ModelConfig[k]; exists {
+				var serialised string
+				switch value.(type) {
+				// TODO: review for other possible types
+				case bool:
+					b, err := json.Marshal(value)
+					if err != nil {
+						resp.Diagnostics.AddError("Provider Error", fmt.Sprintf("Unable to cast config value, got error: %s", err))
+						return
+					}
+					serialised = string(b)
+				default:
+					serialised = value.(string)
+				}
+
+				stateConfig[k] = serialised
+			}
+		}
+
+		configType := req.State.Schema.GetAttributes()["config"].(schema.MapAttribute).ElementType
+		newStateConfig, errDiag := types.MapValueFrom(ctx, configType, stateConfig)
+		resp.Diagnostics.Append(errDiag...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		state.Config = newStateConfig
+	}
+
+	// Name, Type and Credential
+	state.Name = types.StringValue(modelName)
+	state.Type = types.StringValue(response.ModelInfo.Type)
+	state.Credential = types.StringValue(credential)
+
+	r.trace(fmt.Sprintf("Read model resource for: %v", modelName))
+	// Set the state onto the Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func resourceModelUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
+func (r *modelResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	// Prevent panic if the provider has not been configured.
+	if r.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "model", "update")
+		return
+	}
+	var plan, state modelResourceModel
 
-	var diags diag.Diagnostics
-	anyChange := false
+	// Read Terraform prior state data into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	// items that could be changed
-	var newConfigMap map[string]interface{}
-	var newConstraints *constraints.Value = nil
-	var unsetConfigKeys []string
-	var newCredential string
 	var err error
+	noChange := true
 
-	if d.HasChange("config") {
-		anyChange = true
-		oldConfig, newConfig := d.GetChange("config")
-		oldConfigMap := oldConfig.(map[string]interface{})
-		newConfigMap = newConfig.(map[string]interface{})
+	// Check config update
+	var configMap map[string]string
+	var unsetConfigKeys []string
+
+	if !plan.Config.Equal(state.Config) {
+		noChange = false
+		oldConfigMap := map[string]string{}
+		resp.Diagnostics.Append(state.Config.ElementsAs(ctx, &oldConfigMap, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		newConfigMap := map[string]string{}
+		resp.Diagnostics.Append(plan.Config.ElementsAs(ctx, &newConfigMap, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 
 		for k := range oldConfigMap {
 			if _, ok := newConfigMap[k]; !ok {
 				unsetConfigKeys = append(unsetConfigKeys, k)
 			}
 		}
+		configMap = newConfigMap
 	}
 
-	if d.HasChange("constraints") {
-		anyChange = true
-		_, constr := d.GetChange("constraints")
-		aux, err := constraints.Parse(constr.(string))
+	// Check the constraints
+	newConstraints, err := constraints.Parse(state.Constraints.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse constraints for model, got error: %s", err))
+		return
+	}
+	if !plan.Constraints.Equal(state.Constraints) {
+		noChange = false
+		newConstraints, err = constraints.Parse(plan.Constraints.ValueString())
 		if err != nil {
-			return diag.FromErr(err)
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse constraints for model, got error: %s", err))
+			return
 		}
-		newConstraints = &aux
 	}
 
-	if d.HasChange("credential") {
-		anyChange = true
-		_, cred := d.GetChange("credential")
-		newCredential = cred.(string)
+	// Check the credential
+	credentialUpdate := ""
+	if !plan.Credential.Equal(state.Credential) {
+		noChange = false
+		credentialUpdate = plan.Credential.ValueString()
 	}
 
-	if !anyChange {
-		return diags
+	if noChange {
+		return
 	}
 
-	cloud := d.Get("cloud").([]interface{})
+	var clouds []nestedCloud
+	resp.Diagnostics.Append(plan.Cloud.ElementsAs(ctx, &clouds, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	err = client.Models.UpdateModel(juju.UpdateModelInput{
-		UUID:        d.Id(),
-		CloudList:   cloud,
-		Config:      newConfigMap,
+	var cloudNameInput string
+
+	if len(clouds) > 0 {
+		cloudNameInput = clouds[0].Name.ValueString()
+	}
+
+	err = r.client.Models.UpdateModel(juju.UpdateModelInput{
+		UUID:        plan.ID.ValueString(),
+		CloudName:   cloudNameInput,
+		Config:      configMap,
 		Unset:       unsetConfigKeys,
-		Constraints: newConstraints,
-		Credential:  newCredential,
+		Constraints: &newConstraints,
+		Credential:  credentialUpdate,
 	})
 	if err != nil {
-		return diag.FromErr(err)
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update model, got error: %s", err))
+		return
 	}
 
-	return diags
+	r.trace(fmt.Sprintf("Updated model resource: %q", plan.Name.ValueString()))
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// Juju refers to model deletion as "destroy" so we call the Destroy function of our client here rather than delete
-// This function remains named Delete for parity across the provider and to stick within terraform naming conventions
-func resourceModelDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	client := meta.(*juju.Client)
+func (r *modelResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Prevent panic if the provider has not been configured.
+	if r.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "model", "delete")
+		return
+	}
+
+	var state modelResourceModel
+
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	err := r.client.Models.DestroyModel(juju.DestroyModelInput{
+		UUID: state.ID.ValueString(),
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete model, got error: %s", err))
+		return
+	}
+	r.trace(fmt.Sprintf("model deleted : %q", state.Name.ValueString()))
+}
+
+func handleModelNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
+	if errors.As(err, &juju.ModelNotFoundError) {
+		// Model manually removed
+		st.RemoveResource(ctx)
+		return diag.Diagnostics{}
+	}
 
 	var diags diag.Diagnostics
-
-	modelUUID := d.Id()
-
-	err := client.Models.DestroyModel(juju.DestroyModelInput{
-		UUID: modelUUID,
-	})
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	d.SetId("")
-
+	diags.AddError("Client Error", err.Error())
 	return diags
 }
 
-func resourceModelImporter(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	client := meta.(*juju.Client)
-
-	//d.Id() here is the last argument passed to the `terraform import juju_model.RESOURCE_NAME MODEL_NAME` command
-	//because we import based on model name we load it into `modelName` here for clarity
-	modelName := d.Id()
-
-	model, err := client.Models.GetModelByName(modelName)
-	if err != nil {
-		return nil, err
+func (r *modelResource) trace(msg string, additionalFields ...map[string]interface{}) {
+	if r.subCtx == nil {
+		return
 	}
 
-	if err = d.Set("name", model.Name); err != nil {
-		return nil, err
-	}
-	d.SetId(model.UUID)
-
-	return []*schema.ResourceData{d}, nil
+	//SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
+	// Output:
+	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
+	tflog.SubsystemTrace(r.subCtx, LogResourceModel, msg, additionalFields...)
 }

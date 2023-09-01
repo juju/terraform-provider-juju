@@ -45,8 +45,9 @@ type GrantModelInput struct {
 
 type CreateModelInput struct {
 	Name        string
-	CloudList   []interface{}
-	Config      map[string]interface{}
+	CloudName   string
+	CloudRegion string
+	Config      map[string]string
 	Credential  string
 	Constraints constraints.Value
 }
@@ -67,8 +68,8 @@ type ReadModelResponse struct {
 
 type UpdateModelInput struct {
 	UUID        string
-	CloudList   []interface{}
-	Config      map[string]interface{}
+	CloudName   string
+	Config      map[string]string
 	Unset       []string
 	Constraints *constraints.Value
 	Credential  string
@@ -191,14 +192,8 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 	client := modelmanager.NewClient(conn)
 	defer client.Close()
 
-	var cloudName string
-	var cloudRegion string
-
-	for _, cloud := range input.CloudList {
-		cloudMap := cloud.(map[string]interface{})
-		cloudName = cloudMap["name"].(string)
-		cloudRegion = cloudMap["region"].(string)
-	}
+	cloudName := input.CloudName
+	cloudRegion := input.CloudRegion
 
 	cloudCredTag := &names.CloudCredentialTag{}
 	if input.Credential != "" {
@@ -208,7 +203,14 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 		}
 	}
 
-	modelInfo, err := client.CreateModel(modelName, currentUser, cloudName, cloudRegion, *cloudCredTag, input.Config)
+	// Casting to map[string]interface{} because of client.CreateModel
+	configValues := make(map[string]interface{})
+
+	for key, configVal := range input.Config {
+		configValues[key] = configVal
+	}
+
+	modelInfo, err := client.CreateModel(modelName, currentUser, cloudName, cloudRegion, *cloudCredTag, configValues)
 	if err != nil {
 		return nil, err
 	}
@@ -291,8 +293,12 @@ func (c *modelsClient) UpdateModel(input UpdateModelInput) error {
 	client := modelconfig.NewClient(conn)
 	defer client.Close()
 
+	configMap := make(map[string]interface{})
+	for key, value := range input.Config {
+		configMap[key] = value
+	}
 	if input.Config != nil {
-		err = client.ModelSet(input.Config)
+		err = client.ModelSet(configMap)
 		if err != nil {
 			return err
 		}
@@ -313,11 +319,7 @@ func (c *modelsClient) UpdateModel(input UpdateModelInput) error {
 	}
 
 	if input.Credential != "" {
-		var cloudName string
-		for _, cloud := range input.CloudList {
-			cloudMap := cloud.(map[string]interface{})
-			cloudName = cloudMap["name"].(string)
-		}
+		cloudName := input.CloudName
 		tag := names.NewModelTag(input.UUID)
 		currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
 		cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, input.Credential)

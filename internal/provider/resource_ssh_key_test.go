@@ -64,9 +64,7 @@ func TestAcc_ResourceSSHKey_ED25519_sdk2_framework_migrate(t *testing.T) {
 
 func testAccResourceSSHKeyMigrate(modelName string, sshKey string) string {
 	return fmt.Sprintf(`
-provider oldjuju {}
 resource "juju_model" "this" {
-    provider = oldjuju
 	name = %q
 }
 

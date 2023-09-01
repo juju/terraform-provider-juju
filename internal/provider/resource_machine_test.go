@@ -39,10 +39,7 @@ func TestAcc_ResourceMachine_sdk2_framework_migrate(t *testing.T) {
 
 func testAccResourceMachineBasicMigrate(modelName string) string {
 	return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_model" "this" {
-    provider = oldjuju
 	name = %q
 }
 
@@ -82,10 +79,7 @@ func TestAcc_ResourceMachine_Minimal(t *testing.T) {
 
 func testAccResourceMachineBasicMinimal(modelName string) string {
 	return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_model" "this" {
-    provider = oldjuju
 	name = %q
 }
 
@@ -177,10 +171,7 @@ func TestAcc_ResourceMachine_AddMachine_sdk2_framework_migrate(t *testing.T) {
 
 func testAccResourceMachineAddMachineMigrate(modelName string, IP string, pubKeyPath string, privKeyPath string) string {
 	return fmt.Sprintf(`
-provider oldjuju {}
-
 resource "juju_model" "this_model" {
-    provider = oldjuju
 	name = %q
 }
 

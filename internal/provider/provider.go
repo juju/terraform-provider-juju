@@ -63,9 +63,7 @@ func New(version string) func() *schema.Provider {
 					Optional:    true,
 				},
 			},
-			ResourcesMap: map[string]*schema.Resource{
-				"juju_model": resourceModel(),
-			},
+			ResourcesMap: map[string]*schema.Resource{},
 		}
 		p.ConfigureContextFunc = configure()
 
@@ -359,6 +357,7 @@ func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
 		func() resource.Resource { return NewCredentialResource() },
 		func() resource.Resource { return NewIntegrationResource() },
 		func() resource.Resource { return NewMachineResource() },
+		func() resource.Resource { return NewModelResource() },
 		func() resource.Resource { return NewOfferResource() },
 		func() resource.Resource { return NewSSHKeyResource() },
 		func() resource.Resource { return NewUserResource() },
