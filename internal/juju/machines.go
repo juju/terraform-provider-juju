@@ -26,7 +26,7 @@ import (
 )
 
 type machinesClient struct {
-	ConnectionFactory
+	SharedClient
 }
 
 type CreateMachineInput struct {
@@ -67,9 +67,9 @@ type DestroyMachineInput struct {
 	MachineId string
 }
 
-func newMachinesClient(cf ConnectionFactory) *machinesClient {
+func newMachinesClient(sc SharedClient) *machinesClient {
 	return &machinesClient{
-		ConnectionFactory: cf,
+		SharedClient: sc,
 	}
 }
 

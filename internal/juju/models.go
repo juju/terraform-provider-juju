@@ -33,7 +33,7 @@ func (me *modelNotFoundError) Error() string {
 }
 
 type modelsClient struct {
-	ConnectionFactory
+	SharedClient
 }
 
 type GrantModelInput struct {
@@ -92,9 +92,9 @@ type DestroyAccessModelInput struct {
 	Access string
 }
 
-func newModelsClient(cf ConnectionFactory) *modelsClient {
+func newModelsClient(sc SharedClient) *modelsClient {
 	return &modelsClient{
-		ConnectionFactory: cf,
+		SharedClient: sc,
 	}
 }
 

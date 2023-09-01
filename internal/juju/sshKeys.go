@@ -13,7 +13,7 @@ import (
 )
 
 type sshKeysClient struct {
-	ConnectionFactory
+	SharedClient
 }
 
 type CreateSSHKeyInput struct {
@@ -39,9 +39,9 @@ type DeleteSSHKeyInput struct {
 	KeyIdentifier string
 }
 
-func newSSHKeysClient(cf ConnectionFactory) *sshKeysClient {
+func newSSHKeysClient(sc SharedClient) *sshKeysClient {
 	return &sshKeysClient{
-		ConnectionFactory: cf,
+		SharedClient: sc,
 	}
 }
 

@@ -51,7 +51,7 @@ func (ae *applicationNotFoundError) Error() string {
 }
 
 type applicationsClient struct {
-	ConnectionFactory
+	SharedClient
 }
 
 // ConfigEntry is an auxiliar struct to
@@ -158,9 +158,9 @@ type DestroyApplicationInput struct {
 	ModelUUID       string
 }
 
-func newApplicationClient(cf ConnectionFactory) *applicationsClient {
+func newApplicationClient(sc SharedClient) *applicationsClient {
 	return &applicationsClient{
-		ConnectionFactory: cf,
+		SharedClient: sc,
 	}
 }
 

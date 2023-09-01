@@ -39,7 +39,7 @@ func (ie *noIntegrationFoundError) Error() string {
 }
 
 type integrationsClient struct {
-	ConnectionFactory
+	SharedClient
 }
 
 type Application struct {
@@ -79,9 +79,9 @@ type UpdateIntegrationInput struct {
 	ViaCIDRs     string
 }
 
-func newIntegrationsClient(cf ConnectionFactory) *integrationsClient {
+func newIntegrationsClient(sc SharedClient) *integrationsClient {
 	return &integrationsClient{
-		ConnectionFactory: cf,
+		SharedClient: sc,
 	}
 }
 

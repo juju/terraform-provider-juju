@@ -14,7 +14,7 @@ import (
 )
 
 type credentialsClient struct {
-	ConnectionFactory
+	SharedClient
 }
 
 type CreateCredentialInput struct {
@@ -58,9 +58,9 @@ type DestroyCredentialInput struct {
 	Name                 string
 }
 
-func newCredentialsClient(cf ConnectionFactory) *credentialsClient {
+func newCredentialsClient(sc SharedClient) *credentialsClient {
 	return &credentialsClient{
-		ConnectionFactory: cf,
+		SharedClient: sc,
 	}
 }
 

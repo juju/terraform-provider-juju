@@ -12,7 +12,7 @@ import (
 )
 
 type usersClient struct {
-	ConnectionFactory
+	SharedClient
 }
 
 type CreateUserInput struct {
@@ -50,9 +50,9 @@ type DestroyUserInput struct {
 	Name string
 }
 
-func newUsersClient(cf ConnectionFactory) *usersClient {
+func newUsersClient(sc SharedClient) *usersClient {
 	return &usersClient{
-		ConnectionFactory: cf,
+		SharedClient: sc,
 	}
 }
 

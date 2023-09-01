@@ -22,7 +22,7 @@ const (
 	connectionTimeout   = 30 * time.Second
 )
 
-type Configuration struct {
+type ControllerConfiguration struct {
 	ControllerAddresses []string
 	Username            string
 	Password            string
@@ -40,31 +40,41 @@ type Client struct {
 	Users        usersClient
 }
 
-type ConnectionFactory struct {
-	config Configuration
+type SharedClient interface {
+	GetConnection(modelName *string) (api.Connection, error)
+
+	Debugf(msg string, additionalFields ...map[string]interface{})
+	Errorf(err error, msg string)
+	Tracef(msg string, additionalFields ...map[string]interface{})
+	Warnf(msg string, additionalFields ...map[string]interface{})
+}
+
+type sharedClient struct {
+	controllerConfig ControllerConfiguration
+
 	// subCtx is the context created with the new tflog subsystem for applications.
 	subCtx context.Context
 }
 
-func NewClient(ctx context.Context, config Configuration) (*Client, error) {
-	cf := ConnectionFactory{
-		config: config,
-		subCtx: tflog.NewSubsystem(ctx, LogJujuClient),
+func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, error) {
+	sc := &sharedClient{
+		controllerConfig: config,
+		subCtx:           tflog.NewSubsystem(ctx, LogJujuClient),
 	}
 
 	return &Client{
-		Applications: *newApplicationClient(cf),
-		Credentials:  *newCredentialsClient(cf),
-		Integrations: *newIntegrationsClient(cf),
-		Machines:     *newMachinesClient(cf),
-		Models:       *newModelsClient(cf),
-		Offers:       *newOffersClient(cf),
-		SSHKeys:      *newSSHKeysClient(cf),
-		Users:        *newUsersClient(cf),
+		Applications: *newApplicationClient(sc),
+		Credentials:  *newCredentialsClient(sc),
+		Integrations: *newIntegrationsClient(sc),
+		Machines:     *newMachinesClient(sc),
+		Models:       *newModelsClient(sc),
+		Offers:       *newOffersClient(sc),
+		SSHKeys:      *newSSHKeysClient(sc),
+		Users:        *newUsersClient(sc),
 	}, nil
 }
 
-func (cf *ConnectionFactory) GetConnection(model *string) (api.Connection, error) {
+func (sc *sharedClient) GetConnection(model *string) (api.Connection, error) {
 	modelUUID := ""
 	if model != nil {
 		modelUUID = *model
@@ -78,10 +88,10 @@ func (cf *ConnectionFactory) GetConnection(model *string) (api.Connection, error
 	}
 
 	connr, err := connector.NewSimple(connector.SimpleConfig{
-		ControllerAddresses: cf.config.ControllerAddresses,
-		Username:            cf.config.Username,
-		Password:            cf.config.Password,
-		CACert:              cf.config.CACert,
+		ControllerAddresses: sc.controllerConfig.ControllerAddresses,
+		Username:            sc.controllerConfig.Username,
+		Password:            sc.controllerConfig.Password,
+		CACert:              sc.controllerConfig.CACert,
 		ModelUUID:           modelUUID,
 	}, dialOptions)
 	if err != nil {
@@ -90,7 +100,7 @@ func (cf *ConnectionFactory) GetConnection(model *string) (api.Connection, error
 
 	conn, err := connr.Connect()
 	if err != nil {
-		cf.Errorf(err, "connection not established")
+		sc.Errorf(err, "connection not established")
 		return nil, err
 	}
 	return conn, nil
@@ -107,23 +117,23 @@ const LogJujuClient = "client"
 // Investigate if the context from terraform can be passed in
 // and used with tflog here, for now, use context.Background.
 
-func (cf *ConnectionFactory) Debugf(msg string, additionalFields ...map[string]interface{}) {
+func (sc *sharedClient) Debugf(msg string, additionalFields ...map[string]interface{}) {
 	//SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
 	// Output:
 	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
-	tflog.SubsystemDebug(cf.subCtx, LogJujuClient, msg, additionalFields...)
+	tflog.SubsystemDebug(sc.subCtx, LogJujuClient, msg, additionalFields...)
 }
 
-func (cf *ConnectionFactory) Errorf(err error, msg string) {
-	tflog.SubsystemError(cf.subCtx, LogJujuClient, msg, map[string]interface{}{"error": err})
+func (sc *sharedClient) Errorf(err error, msg string) {
+	tflog.SubsystemError(sc.subCtx, LogJujuClient, msg, map[string]interface{}{"error": err})
 }
 
-func (cf *ConnectionFactory) Tracef(msg string, additionalFields ...map[string]interface{}) {
-	tflog.SubsystemTrace(cf.subCtx, LogJujuClient, msg, additionalFields...)
+func (sc *sharedClient) Tracef(msg string, additionalFields ...map[string]interface{}) {
+	tflog.SubsystemTrace(sc.subCtx, LogJujuClient, msg, additionalFields...)
 }
 
-func (cf *ConnectionFactory) Warnf(msg string, additionalFields ...map[string]interface{}) {
-	tflog.SubsystemWarn(cf.subCtx, LogJujuClient, msg, additionalFields...)
+func (sc *sharedClient) Warnf(msg string, additionalFields ...map[string]interface{}) {
+	tflog.SubsystemWarn(sc.subCtx, LogJujuClient, msg, additionalFields...)
 }
 
 func getCurrentJujuUser(conn api.Connection) string {

@@ -29,7 +29,7 @@ const (
 )
 
 type offersClient struct {
-	ConnectionFactory
+	SharedClient
 }
 
 type CreateOfferInput struct {
@@ -76,9 +76,9 @@ type RemoveRemoteOfferInput struct {
 	OfferURL  string
 }
 
-func newOffersClient(cf ConnectionFactory) *offersClient {
+func newOffersClient(sc SharedClient) *offersClient {
 	return &offersClient{
-		ConnectionFactory: cf,
+		SharedClient: sc,
 	}
 }
 
