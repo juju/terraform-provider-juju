@@ -72,7 +72,7 @@ func New(version string) func() *schema.Provider {
 }
 
 func configure() func(context.Context, *schema.ResourceData) (interface{}, diag.Diagnostics) {
-	return func(_ context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
+	return func(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
 		var diags diag.Diagnostics
 
 		controllerAddresses := strings.Split(d.Get(JujuController).(string), ",")
@@ -140,7 +140,7 @@ func configure() func(context.Context, *schema.ResourceData) (interface{}, diag.
 			Password:            password,
 			CACert:              caCert,
 		}
-		client, err := juju.NewClient(config)
+		client, err := juju.NewClient(ctx, config)
 		if err != nil {
 			return nil, diag.FromErr(err)
 		}
@@ -272,7 +272,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req frameworkprovider.Conf
 		Password:            data.Password.ValueString(),
 		CACert:              data.CACert.ValueString(),
 	}
-	client, err := juju.NewClient(config)
+	client, err := juju.NewClient(ctx, config)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create juju client, got error: %s", err))
 		return

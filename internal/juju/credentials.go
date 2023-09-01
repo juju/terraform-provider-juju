@@ -5,7 +5,6 @@ package juju
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/juju/errors"
 	cloudapi "github.com/juju/juju/api/client/cloud"
@@ -132,7 +131,7 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 	client := cloudapi.NewClient(conn)
 	defer client.Close()
 
-	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
+	currentUser := getCurrentJujuUser(conn)
 
 	cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
 	if err != nil {
@@ -253,7 +252,7 @@ func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error 
 		return err
 	}
 
-	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
+	currentUser := getCurrentJujuUser(conn)
 
 	cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
 	if err != nil {
@@ -323,7 +322,7 @@ func (c *credentialsClient) DestroyCredential(input DestroyCredentialInput) erro
 	client := cloudapi.NewClient(conn)
 	defer client.Close()
 
-	currentUser := strings.TrimPrefix(conn.AuthTag().String(), PrefixUser)
+	currentUser := getCurrentJujuUser(conn)
 
 	cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
 	if err != nil {

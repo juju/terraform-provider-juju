@@ -46,9 +46,10 @@ type ConnectionFactory struct {
 	subCtx context.Context
 }
 
-func NewClient(config Configuration) (*Client, error) {
+func NewClient(ctx context.Context, config Configuration) (*Client, error) {
 	cf := ConnectionFactory{
 		config: config,
+		subCtx: tflog.NewSubsystem(ctx, LogJujuClient),
 	}
 
 	return &Client{
@@ -107,10 +108,6 @@ const LogJujuClient = "client"
 // and used with tflog here, for now, use context.Background.
 
 func (cf *ConnectionFactory) Debugf(msg string, additionalFields ...map[string]interface{}) {
-	if cf.subCtx == nil {
-		cf.subCtx = tflog.NewSubsystem(context.Background(), LogJujuClient)
-	}
-
 	//SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
 	// Output:
 	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
@@ -118,22 +115,17 @@ func (cf *ConnectionFactory) Debugf(msg string, additionalFields ...map[string]i
 }
 
 func (cf *ConnectionFactory) Errorf(err error, msg string) {
-	if cf.subCtx == nil {
-		cf.subCtx = tflog.NewSubsystem(context.Background(), LogJujuClient)
-	}
 	tflog.SubsystemError(cf.subCtx, LogJujuClient, msg, map[string]interface{}{"error": err})
 }
 
 func (cf *ConnectionFactory) Tracef(msg string, additionalFields ...map[string]interface{}) {
-	if cf.subCtx == nil {
-		cf.subCtx = tflog.NewSubsystem(context.Background(), LogJujuClient)
-	}
 	tflog.SubsystemTrace(cf.subCtx, LogJujuClient, msg, additionalFields...)
 }
 
 func (cf *ConnectionFactory) Warnf(msg string, additionalFields ...map[string]interface{}) {
-	if cf.subCtx == nil {
-		cf.subCtx = tflog.NewSubsystem(context.Background(), LogJujuClient)
-	}
 	tflog.SubsystemWarn(cf.subCtx, LogJujuClient, msg, additionalFields...)
+}
+
+func getCurrentJujuUser(conn api.Connection) string {
+	return conn.AuthTag().Id()
 }
