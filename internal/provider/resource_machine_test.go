@@ -18,7 +18,7 @@ func TestAcc_ResourceMachine_sdk2_framework_migrate(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-machine")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccResourceMachineBasicMigrate(modelName),
@@ -59,7 +59,7 @@ func TestAcc_ResourceMachine_Minimal(t *testing.T) {
 	resourceName := "juju_machine.testmachine"
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccResourceMachineBasicMinimal(modelName),
@@ -148,7 +148,7 @@ func TestAcc_ResourceMachine_AddMachine_sdk2_framework_migrate(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-machine-ssh-address")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccResourceMachineAddMachineMigrate(modelName, testAddMachineIP, testSSHPubKeyPath,

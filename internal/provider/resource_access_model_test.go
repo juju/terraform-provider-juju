@@ -25,7 +25,7 @@ func TestAcc_ResourceAccessModel_sdk2_framework_migrate(t *testing.T) {
 	resourceName := "juju_access_model.test"
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccResourceAccessModel_sdk2_framework_migrate(userName, userPassword, modelName1, accessFail),

@@ -4,14 +4,10 @@
 package main
 
 import (
-	"context"
 	"flag"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6/tf6server"
-	"github.com/hashicorp/terraform-plugin-mux/tf5to6server"
-	"github.com/hashicorp/terraform-plugin-mux/tf6muxserver"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -38,32 +34,11 @@ var (
 )
 
 func main() {
-	ctx := context.Background()
 
 	var debugMode bool
 
 	flag.BoolVar(&debugMode, "debug", false, "set to true to run the provider with support for debuggers like delve")
 	flag.Parse()
-
-	upgradedSdkProvider, err := tf5to6server.UpgradeServer(
-		ctx,
-		provider.New(version)().GRPCProvider,
-	)
-	if err != nil {
-		log.Fatal().Msg(err.Error())
-	}
-
-	providers := []func() tfprotov6.ProviderServer{
-		providerserver.NewProtocol6(provider.NewJujuProvider(version)),
-		func() tfprotov6.ProviderServer {
-			return upgradedSdkProvider
-		},
-	}
-
-	muxServer, err := tf6muxserver.NewMuxServer(ctx, providers...)
-	if err != nil {
-		log.Fatal().Msg(err.Error())
-	}
 
 	var serveOpts []tf6server.ServeOpt
 
@@ -72,9 +47,9 @@ func main() {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 
-	if err = tf6server.Serve(
+	if err := tf6server.Serve(
 		"registry.terraform.io/juju/juju",
-		muxServer.ProviderServer,
+		providerserver.NewProtocol6(provider.NewJujuProvider(version)),
 		serveOpts...,
 	); err != nil {
 		log.Fatal().Msg(err.Error())

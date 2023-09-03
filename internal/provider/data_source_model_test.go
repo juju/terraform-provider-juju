@@ -16,7 +16,7 @@ func TestAcc_DataSourceModel_sdk2_framework_migrate(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccFrameworkDataSourceModel_sdk2_framework_migrate(t, modelName),

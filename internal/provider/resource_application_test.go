@@ -19,7 +19,7 @@ func TestAcc_ResourceApplication_sdk2_framework_migrate(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				// Mind that ExpectError should be the first step
@@ -123,7 +123,7 @@ func TestAcc_ResourceApplication_Updates_sdk2_framework_migrate(t *testing.T) {
 	}
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccResourceApplicationUpdates_sdk2_framework_migrate(modelName, 1, true, "machinename"),
@@ -181,7 +181,7 @@ func TestAcc_CharmUpdates_sdk2_framework_migrate(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccResourceApplicationUpdatesCharm_sdk2_framework_migrate(modelName, "latest/stable"),
@@ -419,7 +419,7 @@ func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 	resourceName := "juju_application.testapp"
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccResourceApplicationBasic_Minimal(modelName, charmName),

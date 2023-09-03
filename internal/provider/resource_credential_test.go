@@ -25,7 +25,7 @@ func TestAcc_ResourceCredential_sdk2_framework_migrate(t *testing.T) {
 	resourceName := "juju_credential.test-credential"
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				// Mind that ExpectError should be the first step

@@ -20,7 +20,7 @@ func TestAcc_ResourceIntegration_sdk2_framework_migrate(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy:             testAccCheckIntegrationDestroy_Stable,
 		Steps: []resource.TestStep{
 			{
@@ -107,7 +107,7 @@ func TestAcc_ResourceIntegrationWithViaCIDRs_sdk2_framework_migrate(t *testing.T
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy:             testAccCheckIntegrationDestroy_sdk2_framework_migrate,
 		Steps: []resource.TestStep{
 			{

@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_DataSourceMachine_sdk2_framework_migrate(t *testing.T) {
+func TestAcc_DataSourceMachine_Edge(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -19,34 +19,16 @@ func TestAcc_DataSourceMachine_sdk2_framework_migrate(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccDataSourceMachine_sdk2_framework_migrate(modelName),
+				Config: testAccDataSourceMachine(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_machine.machine", "model", modelName),
 				),
 			},
 		},
 	})
-}
-
-func testAccDataSourceMachine_sdk2_framework_migrate(modelName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "model" {
-  name = %q
-}
-
-resource "juju_machine" "machine" {
-  model = juju_model.model.name
-  name = "machine"
-  series = "jammy"
-}
-
-data "juju_machine" "machine" {
-  model = juju_model.model.name
-  machine_id = juju_machine.machine.machine_id
-}`, modelName)
 }
 
 func TestAcc_DataSourceMachine_Stable(t *testing.T) {
@@ -65,7 +47,7 @@ func TestAcc_DataSourceMachine_Stable(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccDataSourceMachine_Stable(modelName),
+				Config: testAccDataSourceMachine(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_machine.machine", "model", modelName),
 				),
@@ -74,7 +56,7 @@ func TestAcc_DataSourceMachine_Stable(t *testing.T) {
 	})
 }
 
-func testAccDataSourceMachine_Stable(modelName string) string {
+func testAccDataSourceMachine(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "model" {
   name = %q

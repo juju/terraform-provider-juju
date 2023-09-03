@@ -26,7 +26,7 @@ func TestAcc_ResourceModel_sdk2_framework_migrate(t *testing.T) {
 	resourceName := "juju_model.model"
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				// Mind that ExpectError should be the first step
@@ -75,7 +75,7 @@ func TestAcc_ResourceModel_UnsetConfig_sdk2_framework_migrate(t *testing.T) {
 	resourceName := "juju_model.this"
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(`
@@ -110,7 +110,7 @@ func TestAcc_ResourceModel_Minimal(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(`
