@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_DataSourceModel_sdk2_framework_migrate(t *testing.T) {
+func TestAcc_DataSourceModel_Edge(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-datasource-model-test")
 
 	resource.Test(t, resource.TestCase{
@@ -19,7 +19,7 @@ func TestAcc_DataSourceModel_sdk2_framework_migrate(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccFrameworkDataSourceModel_sdk2_framework_migrate(t, modelName),
+				Config: testAccFrameworkDataSourceModel(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_model.test-model", "name", modelName),
 					resource.TestCheckResourceAttrSet("data.juju_model.test-model", "uuid"),
@@ -27,17 +27,6 @@ func TestAcc_DataSourceModel_sdk2_framework_migrate(t *testing.T) {
 			},
 		},
 	})
-}
-
-func testAccFrameworkDataSourceModel_sdk2_framework_migrate(t *testing.T, modelName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "test-model" {
-	name = %q
-}
-
-data "juju_model" "test-model" {
-	name = juju_model.test-model.name
-}`, modelName)
 }
 
 func TestAcc_DataSourceModel_Stable(t *testing.T) {
@@ -53,7 +42,7 @@ func TestAcc_DataSourceModel_Stable(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccFrameworkDataSourceModel_Stable(t, modelName),
+				Config: testAccFrameworkDataSourceModel(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_model.test-model", "name", modelName),
 					resource.TestCheckResourceAttrSet("data.juju_model.test-model", "uuid"),
@@ -63,7 +52,7 @@ func TestAcc_DataSourceModel_Stable(t *testing.T) {
 	})
 }
 
-func testAccFrameworkDataSourceModel_Stable(t *testing.T, modelName string) string {
+func testAccFrameworkDataSourceModel(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "test-model" {
 	name = %q

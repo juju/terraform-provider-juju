@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_ResourceOffer_sdk2_framework_migrate(t *testing.T) {
+func TestAcc_ResourceOffer_Edge(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -24,7 +24,7 @@ func TestAcc_ResourceOffer_sdk2_framework_migrate(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceOfferMigrate(modelName),
+				Config: testAccResourceOffer(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", "admin", modelName, "this")),
@@ -32,7 +32,7 @@ func TestAcc_ResourceOffer_sdk2_framework_migrate(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceOfferXIntegrationMigrate(modelName2, destModelName),
+				Config: testAccResourceOfferXIntegration(modelName2, destModelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.int", "model", destModelName),
 
@@ -54,31 +54,7 @@ func TestAcc_ResourceOffer_sdk2_framework_migrate(t *testing.T) {
 	})
 }
 
-func testAccResourceOfferMigrate(modelName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "this" {
-	name = %q
-}
-
-resource "juju_application" "this" {
- 	model = juju_model.this.name
-	name  = "this"
-
-	charm {
-		name = "postgresql"
-		series = "focal"
-	}
-}
-
-resource "juju_offer" "this" {
-	model            = juju_model.this.name
-	application_name = juju_application.this.name
-	endpoint         = "db"
-}
-`, modelName)
-}
-
-func testAccResourceOfferXIntegrationMigrate(srcModelName string, destModelName string) string {
+func testAccResourceOfferXIntegration(srcModelName string, destModelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "modelone" {
 	name = %q
@@ -144,7 +120,7 @@ func TestAcc_ResourceOffer_Stable(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceOfferStable(modelName),
+				Config: testAccResourceOffer(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", "admin", modelName, "this")),
@@ -160,7 +136,7 @@ func TestAcc_ResourceOffer_Stable(t *testing.T) {
 	})
 }
 
-func testAccResourceOfferStable(modelName string) string {
+func testAccResourceOffer(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
