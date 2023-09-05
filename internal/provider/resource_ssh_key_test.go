@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_ResourceSSHKey_sdk2_framework_migrate(t *testing.T) {
+func TestAcc_ResourceSSHKey_Edge(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -22,17 +22,17 @@ func TestAcc_ResourceSSHKey_sdk2_framework_migrate(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceSSHKeyMigrate(modelName, sshKey1),
+				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
 			},
 			// we update the key
 			{
-				Config: testAccResourceSSHKeyMigrate(modelName, sshKey2),
+				Config: testAccResourceSSHKey(modelName, sshKey2),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey2)),
@@ -41,7 +41,7 @@ func TestAcc_ResourceSSHKey_sdk2_framework_migrate(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceSSHKey_ED25519_sdk2_framework_migrate(t *testing.T) {
+func TestAcc_ResourceSSHKey_ED25519_Edge(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -50,29 +50,16 @@ func TestAcc_ResourceSSHKey_ED25519_sdk2_framework_migrate(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceSSHKeyMigrate(modelName, sshKey1),
+				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
 			},
 		},
 	})
-}
-
-func testAccResourceSSHKeyMigrate(modelName string, sshKey string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "this" {
-	name = %q
-}
-
-resource "juju_ssh_key" "this" {
-	model = juju_model.this.name
-	payload= %q
-}
-`, modelName, sshKey)
 }
 
 func TestAcc_ResourceSSHKey_Stable(t *testing.T) {
@@ -94,14 +81,14 @@ func TestAcc_ResourceSSHKey_Stable(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceSSHKeyStable(modelName, sshKey1),
+				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
 			},
 			// we update the key
 			{
-				Config: testAccResourceSSHKeyStable(modelName, sshKey2),
+				Config: testAccResourceSSHKey(modelName, sshKey2),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey2)),
@@ -127,7 +114,7 @@ func TestAcc_ResourceSSHKey_ED25519_Stable(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceSSHKeyStable(modelName, sshKey1),
+				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
@@ -136,7 +123,7 @@ func TestAcc_ResourceSSHKey_ED25519_Stable(t *testing.T) {
 	})
 }
 
-func testAccResourceSSHKeyStable(modelName string, sshKey string) string {
+func testAccResourceSSHKey(modelName string, sshKey string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q

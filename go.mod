@@ -16,7 +16,6 @@ require (
 	github.com/hashicorp/terraform-plugin-framework-validators v0.12.0
 	github.com/hashicorp/terraform-plugin-go v0.18.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
-	github.com/hashicorp/terraform-plugin-mux v0.11.2
 	github.com/hashicorp/terraform-plugin-testing v1.5.1
 	github.com/juju/charm/v8 v8.0.6
 	github.com/juju/clock v1.0.3

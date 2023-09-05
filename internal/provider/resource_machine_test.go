@@ -11,17 +11,17 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_ResourceMachine_sdk2_framework_migrate(t *testing.T) {
+func TestAcc_ResourceMachine_Edge(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-machine")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceMachineBasicMigrate(modelName),
+				Config: testAccResourceMachine(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
@@ -37,20 +37,6 @@ func TestAcc_ResourceMachine_sdk2_framework_migrate(t *testing.T) {
 	})
 }
 
-func testAccResourceMachineBasicMigrate(modelName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "this" {
-	name = %q
-}
-
-resource "juju_machine" "this" {
-	name = "this_machine"
-	model = juju_model.this.name
-	series = "focal"
-}
-`, modelName)
-}
-
 func TestAcc_ResourceMachine_Minimal(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
@@ -59,7 +45,7 @@ func TestAcc_ResourceMachine_Minimal(t *testing.T) {
 	resourceName := "juju_machine.testmachine"
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccResourceMachineBasicMinimal(modelName),
@@ -104,7 +90,7 @@ func TestAcc_ResourceMachine_Stable(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceMachineStable(modelName),
+				Config: testAccResourceMachine(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
@@ -120,7 +106,7 @@ func TestAcc_ResourceMachine_Stable(t *testing.T) {
 	})
 }
 
-func testAccResourceMachineStable(modelName string) string {
+func testAccResourceMachine(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
@@ -134,7 +120,7 @@ resource "juju_machine" "this" {
 `, modelName)
 }
 
-func TestAcc_ResourceMachine_AddMachine_sdk2_framework_migrate(t *testing.T) {
+func TestAcc_ResourceMachine_AddMachine_Edge(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -148,10 +134,10 @@ func TestAcc_ResourceMachine_AddMachine_sdk2_framework_migrate(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-machine-ssh-address")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceMachineAddMachineMigrate(modelName, testAddMachineIP, testSSHPubKeyPath,
+				Config: testAccResourceMachineAddMachine(modelName, testAddMachineIP, testSSHPubKeyPath,
 					testSSHPrivKeyPath),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_machine.this_machine", "model", modelName),
@@ -169,7 +155,7 @@ func TestAcc_ResourceMachine_AddMachine_sdk2_framework_migrate(t *testing.T) {
 	})
 }
 
-func testAccResourceMachineAddMachineMigrate(modelName string, IP string, pubKeyPath string, privKeyPath string) string {
+func testAccResourceMachineAddMachine(modelName string, IP string, pubKeyPath string, privKeyPath string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this_model" {
 	name = %q

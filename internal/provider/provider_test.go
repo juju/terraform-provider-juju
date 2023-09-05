@@ -12,19 +12,13 @@ import (
 	frameworkprovider "github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
-	"github.com/hashicorp/terraform-plugin-mux/tf5to6server"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
 const TestProviderStableVersion = "0.8.0"
-
-// muxProviderFactories are used to instantiate the SDK provider and Framework provider
-// during acceptance testing.
-var muxProviderFactories map[string]func() (tfprotov6.ProviderServer, error)
 
 // frameworkProviderFactories are used to instantiate the Framework provider during
 // acceptance testing.
@@ -36,21 +30,6 @@ var Provider *schema.Provider
 
 func init() {
 	Provider = New("dev")()
-
-	upgradedSdkProvider, err := tf5to6server.UpgradeServer(
-		context.Background(),
-		Provider.GRPCProvider,
-	)
-	if err != nil {
-		log.Fatal().Msgf("Provider test init() failed with : %v", err.Error())
-	}
-
-	muxProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
-		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev")),
-		"oldjuju": func() (tfprotov6.ProviderServer, error) {
-			return upgradedSdkProvider, err
-		},
-	}
 
 	frameworkProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev")),

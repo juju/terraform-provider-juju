@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_ResourceAccessModel_sdk2_framework_migrate(t *testing.T) {
+func TestAcc_ResourceAccessModel_Edge(t *testing.T) {
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 	userName2 := acctest.RandomWithPrefix("tfuser")
@@ -25,14 +25,14 @@ func TestAcc_ResourceAccessModel_sdk2_framework_migrate(t *testing.T) {
 	resourceName := "juju_access_model.test"
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: muxProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccResourceAccessModel_sdk2_framework_migrate(userName, userPassword, modelName1, accessFail),
+				Config:      testAccResourceAccessModel(userName, userPassword, modelName1, accessFail),
 				ExpectError: regexp.MustCompile("Error running pre-apply refresh.*"),
 			},
 			{
-				Config: testAccResourceAccessModel_sdk2_framework_migrate(userName, userPassword, modelName1, accessSuccess),
+				Config: testAccResourceAccessModel(userName, userPassword, modelName1, accessSuccess),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "model", modelName1),
 					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
@@ -47,7 +47,7 @@ func TestAcc_ResourceAccessModel_sdk2_framework_migrate(t *testing.T) {
 				ResourceName:      resourceName,
 			},
 			{
-				Config: testAccFrameworkResourceAccessModel_sdk2_framework_migrate(t, userName2, userPassword2,
+				Config: testAccResourceAccessModel(userName2, userPassword2,
 					modelName2, accessSuccess),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
@@ -64,42 +64,6 @@ func TestAcc_ResourceAccessModel_sdk2_framework_migrate(t *testing.T) {
 			},
 		},
 	})
-}
-
-func testAccResourceAccessModel_sdk2_framework_migrate(userName, userPassword, modelName, access string) string {
-	return fmt.Sprintf(`
-resource "juju_user" "this" {
-  name = %q
-  password = %q
-}
-
-resource "juju_model" "this" {
-  name = %q
-}
-
-resource "juju_access_model" "test" {
-  access = %q
-  model = juju_model.this.name
-  users = [juju_user.this.name]
-}`, userName, userPassword, modelName, access)
-}
-
-func testAccFrameworkResourceAccessModel_sdk2_framework_migrate(t *testing.T, userName, userPassword, modelName, access string) string {
-	return fmt.Sprintf(`
-resource "juju_user" "test-user" {
-  name = %q
-  password = %q
-}
-
-resource "juju_model" "test-model" {
-  name = %q
-}
-
-resource "juju_access_model" "test" {
-  access = %q
-  model = juju_model.test-model.name
-  users = [juju_user.test-user.name]
-}`, userName, userPassword, modelName, access)
 }
 
 func TestAcc_ResourceAccessModel_Stable(t *testing.T) {
@@ -120,7 +84,7 @@ func TestAcc_ResourceAccessModel_Stable(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccResourceAccessModel_Stable(userName, userPassword, modelName, accessFail),
+				Config:      testAccResourceAccessModel(userName, userPassword, modelName, accessFail),
 				ExpectError: regexp.MustCompile("Error running pre-apply refresh.*"),
 			},
 			{
@@ -130,7 +94,7 @@ func TestAcc_ResourceAccessModel_Stable(t *testing.T) {
 				SkipFunc: func() (bool, error) {
 					return testingCloud != LXDCloudTesting, nil
 				},
-				Config: testAccResourceAccessModel_Stable(userName, userPassword, modelName, access),
+				Config: testAccResourceAccessModel(userName, userPassword, modelName, access),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "access", access),
 					resource.TestCheckResourceAttr(resourceName, "model", modelName),
@@ -150,7 +114,7 @@ func TestAcc_ResourceAccessModel_Stable(t *testing.T) {
 	})
 }
 
-func testAccResourceAccessModel_Stable(userName, userPassword, modelName, access string) string {
+func testAccResourceAccessModel(userName, userPassword, modelName, access string) string {
 	return fmt.Sprintf(`
 resource "juju_user" "test-user" {
   name = %q
