@@ -37,7 +37,7 @@ jobs:
           echo "Target id is $id"
           echo "id=$id" >> $GITHUB_ENV
       - name: Checkout branch
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ env.juju_track }}
       - name: Download artifact
