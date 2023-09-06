@@ -5,7 +5,6 @@ go 1.20
 require (
 	github.com/bflad/tfproviderlint v0.29.0
 	github.com/hashicorp/terraform-plugin-docs v0.16.0
-	github.com/hashicorp/terraform-plugin-sdk/v2 v2.28.0
 	// 2.9.43
 	github.com/juju/juju v0.0.0-20230601044333-3cb3f8beac4a
 
@@ -93,6 +92,7 @@ require (
 	github.com/hashicorp/raft v1.3.2-0.20210825230038-1a621031eb2b // indirect
 	github.com/hashicorp/terraform-exec v0.18.1 // indirect
 	github.com/hashicorp/terraform-json v0.17.1 // indirect
+	github.com/hashicorp/terraform-plugin-sdk/v2 v2.28.0 // indirect
 	github.com/hashicorp/terraform-registry-address v0.2.1 // indirect
 	github.com/hashicorp/terraform-svchost v0.1.1 // indirect
 	github.com/hashicorp/yamux v0.0.0-20181012175058-2f1d1f20f75d // indirect
