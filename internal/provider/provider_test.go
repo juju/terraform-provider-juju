@@ -31,6 +31,8 @@ var frameworkProviderFactories map[string]func() (tfprotov6.ProviderServer, erro
 // Note that testAccPreCheck needs to invoked before use.
 var Provider provider.Provider
 
+// TestClient is needed for any resource to be able to use Juju client in
+// custom checkers for their tests (e.g. resource_model_test)
 var TestClient *juju.Client
 
 func init() {
@@ -44,7 +46,8 @@ func init() {
 func TestProviderConfigure(t *testing.T) {
 	testAccPreCheck(t)
 	jujuProvider := NewJujuProvider("dev")
-	configureProvider(t, jujuProvider, false)
+	confResp := configureProvider(t, jujuProvider)
+	assert.Equal(t, confResp.Diagnostics.HasError(), false)
 }
 
 func TestProviderConfigureUsernameFromEnv(t *testing.T) {
@@ -53,8 +56,9 @@ func TestProviderConfigureUsernameFromEnv(t *testing.T) {
 	userNameValue := "the-username"
 	t.Setenv(JujuUsernameEnvKey, userNameValue)
 
-	confResp := configureProvider(t, jujuProvider, true)
+	confResp := configureProvider(t, jujuProvider)
 	// This is a live test, expect that the client connection will fail.
+	assert.Equal(t, confResp.Diagnostics.HasError(), true)
 	err := confResp.Diagnostics.Errors()[0]
 	assert.Equal(t, diag.SeverityError, err.Severity())
 	assert.Equal(t, "invalid entity name or password (unauthorized access)", err.Detail())
@@ -65,8 +69,9 @@ func TestProviderConfigurePasswordFromEnv(t *testing.T) {
 	jujuProvider := NewJujuProvider("dev")
 	passwordValue := "the-password"
 	t.Setenv(JujuPasswordEnvKey, passwordValue)
-	confResp := configureProvider(t, jujuProvider, true)
+	confResp := configureProvider(t, jujuProvider)
 	// This is a live test, expect that the client connection will fail.
+	assert.Equal(t, confResp.Diagnostics.HasError(), true)
 	err := confResp.Diagnostics.Errors()[0]
 	assert.Equal(t, diag.SeverityError, err.Severity())
 	assert.Equal(t, "invalid entity name or password (unauthorized access)", err.Detail())
@@ -77,8 +82,9 @@ func TestProviderConfigureAddresses(t *testing.T) {
 	jujuProvider := NewJujuProvider("dev")
 	// This IP is from a test network that should never be routed. https://www.rfc-editor.org/rfc/rfc5737#section-3
 	t.Setenv(JujuControllerEnvKey, "192.0.2.100:17070")
-	confResp := configureProvider(t, jujuProvider, true)
+	confResp := configureProvider(t, jujuProvider)
 	// This is a live test, expect that the client connection will fail.
+	assert.Equal(t, confResp.Diagnostics.HasError(), true)
 	err := confResp.Diagnostics.Errors()[0]
 	assert.Equal(t, diag.SeverityError, err.Severity())
 	assert.Equal(t, "dial tcp 192.0.2.100:17070: i/o timeout", err.Summary())
@@ -99,8 +105,9 @@ func TestProviderConfigurex509FromEnv(t *testing.T) {
 	}
 	jujuProvider := NewJujuProvider("dev")
 	t.Setenv(JujuCACertEnvKey, invalidCA)
-	confResp := configureProvider(t, jujuProvider, true)
+	confResp := configureProvider(t, jujuProvider)
 	// This is a live test, expect that the client connection will fail.
+	assert.Equal(t, confResp.Diagnostics.HasError(), true)
 	err := confResp.Diagnostics.Errors()[0]
 	assert.Equal(t, diag.SeverityError, err.Severity())
 	assert.Equal(t, "Verify the ca_certificate property set on the provider", err.Detail())
@@ -113,8 +120,9 @@ func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
 	//Juju will ignore the system trust store if we set the CA property
 	t.Setenv(JujuCACertEnvKey, invalidCA)
 	t.Setenv("JUJU_CA_CERT_FILE", "")
-	confResp := configureProvider(t, jujuProvider, true)
+	confResp := configureProvider(t, jujuProvider)
 	// This is a live test, expect that the client connection will fail.
+	assert.Equal(t, confResp.Diagnostics.HasError(), true)
 	err := confResp.Diagnostics.Errors()[0]
 	assert.Equal(t, diag.SeverityError, err.Severity())
 	assert.Equal(t, "Verify the ca_certificate property set on the provider", err.Detail())
@@ -140,21 +148,17 @@ func testAccPreCheck(t *testing.T) {
 			t.Fatalf("%s must be set for acceptance tests", JujuCACertEnvKey)
 		}
 	}
-	confResp := configureProvider(t, Provider, false)
+	confResp := configureProvider(t, Provider)
+	assert.Equal(t, confResp.Diagnostics.HasError(), false)
 	TestClient = confResp.ResourceData.(*juju.Client)
 }
 
-func configureProvider(t *testing.T, p provider.Provider, expectFail bool) provider.ConfigureResponse {
+func configureProvider(t *testing.T, p provider.Provider) provider.ConfigureResponse {
 	schemaResp := provider.SchemaResponse{}
 	Provider.Schema(context.Background(), provider.SchemaRequest{}, &schemaResp)
 	assert.Equal(t, schemaResp.Diagnostics.HasError(), false)
 
-	conf := jujuProviderModel{
-		ControllerAddrs: types.String{},
-		UserName:        types.String{},
-		Password:        types.String{},
-		CACert:          types.String{},
-	}
+	conf := jujuProviderModel{}
 
 	mapTypes := map[string]attr.Type{
 		JujuController: types.StringType,
@@ -174,9 +178,6 @@ func configureProvider(t *testing.T, p provider.Provider, expectFail bool) provi
 	confResp := provider.ConfigureResponse{Diagnostics: diag.Diagnostics{}}
 
 	p.Configure(context.Background(), confReq, &confResp)
-	if !expectFail {
-		assert.Equal(t, confResp.Diagnostics.HasError(), false)
-	}
 
 	return confResp
 }
