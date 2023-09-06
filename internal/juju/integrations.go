@@ -39,7 +39,7 @@ func (ie *noIntegrationFoundError) Error() string {
 }
 
 type integrationsClient struct {
-	ConnectionFactory
+	SharedClient
 }
 
 type Application struct {
@@ -54,7 +54,7 @@ type Offer struct {
 }
 
 type IntegrationInput struct {
-	ModelUUID string
+	ModelName string
 	Apps      []string
 	Endpoints []string
 	ViaCIDRs  string
@@ -73,20 +73,20 @@ type UpdateIntegrationResponse struct {
 }
 
 type UpdateIntegrationInput struct {
-	ModelUUID    string
+	ModelName    string
 	Endpoints    []string
 	OldEndpoints []string
 	ViaCIDRs     string
 }
 
-func newIntegrationsClient(cf ConnectionFactory) *integrationsClient {
+func newIntegrationsClient(sc SharedClient) *integrationsClient {
 	return &integrationsClient{
-		ConnectionFactory: cf,
+		SharedClient: sc,
 	}
 }
 
 func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateIntegrationResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 }
 
 func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadIntegrationResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,11 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 	integrations := status.Relations
 	var integration params.RelationStatus
 	if len(integrations) == 0 {
-		return nil, &noIntegrationFoundError{ModelUUID: input.ModelUUID}
+		modelUUID, thisModel := conn.ModelTag()
+		if !thisModel {
+			return nil, errors.Errorf("Unable to get model uuid for %q", input.ModelName)
+		}
+		return nil, &noIntegrationFoundError{ModelUUID: modelUUID.Id()}
 	}
 
 	apps := make([][]string, 0, len(input.Endpoints))
@@ -182,7 +186,7 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 }
 
 func (c integrationsClient) UpdateIntegration(input *UpdateIntegrationInput) (*UpdateIntegrationResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +236,7 @@ func (c integrationsClient) UpdateIntegration(input *UpdateIntegrationInput) (*U
 }
 
 func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return err
 	}

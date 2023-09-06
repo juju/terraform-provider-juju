@@ -26,11 +26,11 @@ import (
 )
 
 type machinesClient struct {
-	ConnectionFactory
+	SharedClient
 }
 
 type CreateMachineInput struct {
-	ModelUUID   string
+	ModelName   string
 	Constraints string
 	Disks       string
 	Series      string
@@ -53,7 +53,7 @@ type CreateMachineResponse struct {
 }
 
 type ReadMachineInput struct {
-	ModelUUID string
+	ModelName string
 	MachineId string
 }
 
@@ -63,18 +63,18 @@ type ReadMachineResponse struct {
 }
 
 type DestroyMachineInput struct {
-	ModelUUID string
+	ModelName string
 	MachineId string
 }
 
-func newMachinesClient(cf ConnectionFactory) *machinesClient {
+func newMachinesClient(sc SharedClient) *machinesClient {
 	return &machinesClient{
-		ConnectionFactory: cf,
+		SharedClient: sc,
 	}
 }
 
 func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachineResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +216,7 @@ func manualProvision(client manual.ProvisioningClientAPI,
 
 func (c machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse, error) {
 	var response ReadMachineResponse
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return response, err
 	}
@@ -242,7 +242,7 @@ func (c machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse
 }
 
 func (c machinesClient) DestroyMachine(input *DestroyMachineInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return err
 	}

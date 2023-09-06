@@ -307,12 +307,6 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 
 	r.trace("Create", applicationResourceModelForLogging(ctx, &plan))
 
-	modelInfo, err := r.client.Models.GetModelByName(plan.ModelName.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve model uuid, got error: %s", err))
-		return
-	}
-
 	charms := []nestedCharm{}
 	resp.Diagnostics.Append(plan.Charm.ElementsAs(ctx, &charms, false)...)
 	if resp.Diagnostics.HasError() {
@@ -357,14 +351,17 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 
 	var parsedConstraints = constraints.Value{}
 	if plan.Constraints.ValueString() != "" {
+		var err error
 		parsedConstraints, err = constraints.Parse(plan.Constraints.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Input Error", fmt.Sprintf("Unable to parse constraints, go error: %s", err))
 		}
 	}
+
+	modelName := plan.ModelName.ValueString()
 	createResp, err := r.client.Applications.CreateApplication(&juju.CreateApplicationInput{
 		ApplicationName: plan.ApplicationName.ValueString(),
-		ModelUUID:       modelInfo.UUID,
+		ModelName:       modelName,
 		CharmName:       charmName,
 		CharmChannel:    channel,
 		CharmRevision:   revision,
@@ -383,8 +380,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	r.trace(fmt.Sprintf("create application resource %q", createResp.AppName))
 
 	readResp, err := r.client.Applications.ReadApplicationWithRetryOnNotFound(ctx, &juju.ReadApplicationInput{
-		ModelUUID: modelInfo.UUID,
-		ModelType: modelInfo.Type,
+		ModelName: modelName,
 		AppName:   createResp.AppName,
 	})
 	if err != nil {
@@ -454,15 +450,8 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	modelInfo, err := r.client.Models.GetModelByName(modelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model info, got error: %s", err))
-		return
-	}
-
 	response, err := r.client.Applications.ReadApplication(&juju.ReadApplicationInput{
-		ModelUUID: modelInfo.UUID,
-		ModelType: modelInfo.Type,
+		ModelName: modelName,
 		AppName:   appName,
 	})
 	if err != nil {
@@ -583,15 +572,8 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	r.trace("Proposed update", applicationResourceModelForLogging(ctx, &plan))
 	r.trace("Current state", applicationResourceModelForLogging(ctx, &state))
 
-	modelInfo, err := r.client.Models.GetModelByName(state.ModelName.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model info, got error: %s", err))
-		return
-	}
-
 	updateApplicationInput := juju.UpdateApplicationInput{
-		ModelUUID: modelInfo.UUID,
-		ModelType: modelInfo.Type,
+		ModelName: state.ModelName.ValueString(),
 		AppName:   state.ApplicationName.ValueString(),
 	}
 
@@ -668,7 +650,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		updateApplicationInput.Constraints = &appConstraints
 	}
 
-	if err = r.client.Applications.UpdateApplication(&updateApplicationInput); err != nil {
+	if err := r.client.Applications.UpdateApplication(&updateApplicationInput); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update application resource, got error: %s", err))
 		return
 	}
@@ -768,17 +750,10 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 		resp.Diagnostics.Append(dErr...)
 	}
 
-	modelUUID, err := r.client.Models.ResolveModelUUID(modelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model uuid, got error: %s", err))
-		return
-	}
-
-	err = r.client.Applications.DestroyApplication(&juju.DestroyApplicationInput{
+	if err := r.client.Applications.DestroyApplication(&juju.DestroyApplicationInput{
 		ApplicationName: appName,
-		ModelUUID:       modelUUID,
-	})
-	if err != nil {
+		ModelName:       modelName,
+	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete application, got error: %s", err))
 	}
 	r.trace(fmt.Sprintf("deleted application resource %q", state.ID.ValueString()))

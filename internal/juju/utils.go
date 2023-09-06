@@ -56,7 +56,7 @@ var singleQuery sync.Once
 // GetLocalControllerConfig runs the locally installed juju command,
 // if available, to get the current controller configuration.
 func GetLocalControllerConfig() (map[string]string, error) {
-	// populate the controller config information only once
+	// populate the controller controllerConfig information only once
 	singleQuery.Do(populateControllerConfig)
 
 	// if empty something went wrong
@@ -95,7 +95,7 @@ func populateControllerConfig() {
 		// now v is a map[string]interface{} type
 		marshalled, err := json.Marshal(v)
 		if err != nil {
-			tflog.Error(context.TODO(), "error marshalling provider config", map[string]interface{}{"error": err})
+			tflog.Error(context.TODO(), "error marshalling provider controllerConfig", map[string]interface{}{"error": err})
 			return
 		}
 		// now we have a controllerConfig type
@@ -113,7 +113,7 @@ func populateControllerConfig() {
 	localProviderConfig["JUJU_USERNAME"] = controllerConfig.Account.User
 	localProviderConfig["JUJU_PASSWORD"] = controllerConfig.Account.Password
 
-	tflog.Debug(context.TODO(), "local provider config was set", map[string]interface{}{"localProviderConfig": fmt.Sprintf("%#v", localProviderConfig)})
+	tflog.Debug(context.TODO(), "local provider controllerConfig was set", map[string]interface{}{"localProviderConfig": fmt.Sprintf("%#v", localProviderConfig)})
 }
 
 // WaitForAppAvailable blocks the execution flow and waits until all the

@@ -120,18 +120,11 @@ func (s *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	modelName := plan.ModelName.ValueString()
-	modelUUID, err := s.client.Models.ResolveModelUUID(modelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve model UUID, got error: %s", err))
-		return
-	}
 
-	err = s.client.SSHKeys.CreateSSHKey(&juju.CreateSSHKeyInput{
+	if err := s.client.SSHKeys.CreateSSHKey(&juju.CreateSSHKeyInput{
 		ModelName: modelName,
-		ModelUUID: modelUUID,
 		Payload:   payload,
-	})
-	if err != nil {
+	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create ssh_key, got error %s", err))
 		return
 	}
@@ -179,15 +172,8 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	modelUUID, err := s.client.Models.ResolveModelUUID(modelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve model UUID, got error: %s", err))
-		return
-	}
-
 	result, err := s.client.SSHKeys.ReadSSHKey(&juju.ReadSSHKeyInput{
 		ModelName:     modelName,
-		ModelUUID:     modelUUID,
 		KeyIdentifier: keyIdentifier,
 	})
 	if err != nil {
@@ -232,39 +218,22 @@ func (s *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	modelUUID, err := s.client.Models.ResolveModelUUID(modelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve model UUID, got error: %s", err))
-		return
-	}
 
 	// Delete the key
-	err = s.client.SSHKeys.DeleteSSHKey(&juju.DeleteSSHKeyInput{
+	if err := s.client.SSHKeys.DeleteSSHKey(&juju.DeleteSSHKeyInput{
 		ModelName:     modelName,
-		ModelUUID:     modelUUID,
 		KeyIdentifier: keyIdentifier,
-	})
-	if err != nil {
+	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete ssh key for updating, got error: %s", err))
 		return
 	}
 	s.trace(fmt.Sprintf("ssh key deleted : %q", state.ID.ValueString()))
 
-	// Get the model name from the plan because it might have changed
-	newModelName := plan.ModelName.ValueString()
-	newModelUUID, err := s.client.Models.ResolveModelUUID(newModelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve model UUID, got error: %s", err))
-		return
-	}
-
 	// Create a new key
-	err = s.client.SSHKeys.CreateSSHKey(&juju.CreateSSHKeyInput{
-		ModelName: newModelName,
-		ModelUUID: newModelUUID,
+	if err := s.client.SSHKeys.CreateSSHKey(&juju.CreateSSHKeyInput{
+		ModelName: plan.ModelName.ValueString(),
 		Payload:   plan.Payload.ValueString(),
-	})
-	if err != nil {
+	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create ssh key for updating, got error: %s", err))
 		return
 	}
@@ -302,19 +271,12 @@ func (s *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	modelUUID, err := s.client.Models.ResolveModelUUID(modelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve model UUID, got error: %s", err))
-		return
-	}
 
 	// Delete the key
-	err = s.client.SSHKeys.DeleteSSHKey(&juju.DeleteSSHKeyInput{
+	if err := s.client.SSHKeys.DeleteSSHKey(&juju.DeleteSSHKeyInput{
 		ModelName:     modelName,
-		ModelUUID:     modelUUID,
 		KeyIdentifier: keyIdentifier,
-	})
-	if err != nil {
+	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete ssh key during delete, got error: %s", err))
 		return
 	}

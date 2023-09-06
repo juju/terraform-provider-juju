@@ -51,13 +51,12 @@ func (ae *applicationNotFoundError) Error() string {
 }
 
 type applicationsClient struct {
-	ConnectionFactory
+	SharedClient
 }
 
-// ConfigEntry is an auxiliar struct to
-// keep information about juju config entries.
-// Specially, we want to know if they have the
-// default value.
+// ConfigEntry is an auxiliar struct to keep information about
+// juju application config entries. Specially, we want to know
+// if they have the default value.
 type ConfigEntry struct {
 	Value     interface{}
 	IsDefault bool
@@ -94,7 +93,7 @@ func ConfigEntryToString(input interface{}) string {
 
 type CreateApplicationInput struct {
 	ApplicationName string
-	ModelUUID       string
+	ModelName       string
 	CharmName       string
 	CharmChannel    string
 	CharmSeries     string
@@ -114,8 +113,7 @@ type CreateApplicationResponse struct {
 }
 
 type ReadApplicationInput struct {
-	ModelUUID string
-	ModelType string
+	ModelName string
 	AppName   string
 }
 
@@ -134,8 +132,7 @@ type ReadApplicationResponse struct {
 }
 
 type UpdateApplicationInput struct {
-	ModelUUID string
-	ModelType string
+	ModelName string
 	ModelInfo *params.ModelInfo
 	AppName   string
 	//Channel   string // TODO: Unsupported for now
@@ -155,12 +152,12 @@ type UpdateApplicationInput struct {
 
 type DestroyApplicationInput struct {
 	ApplicationName string
-	ModelUUID       string
+	ModelName       string
 }
 
-func newApplicationClient(cf ConnectionFactory) *applicationsClient {
+func newApplicationClient(sc SharedClient) *applicationsClient {
 	return &applicationsClient{
-		ConnectionFactory: cf,
+		SharedClient: sc,
 	}
 }
 
@@ -186,7 +183,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		return nil, err
 	}
 
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return nil, err
 	}
@@ -530,7 +527,7 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 }
 
 func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadApplicationResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return nil, err
 	}
@@ -595,7 +592,11 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	unitCount := len(appStatus.Units)
 	// if we have a CAAS we use scale instead of units length
-	if input.ModelType == model.CAAS.String() {
+	modelType, err := c.ModelType(input.ModelName)
+	if err != nil {
+		return nil, err
+	}
+	if modelType == model.CAAS {
 		unitCount = appStatus.Scale
 	}
 
@@ -715,7 +716,7 @@ func removeDefaultCidrs(cidrs []string) []string {
 }
 
 func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return err
 	}
@@ -787,7 +788,11 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 
 	if input.Units != nil {
 		// TODO: Refactor this to a separate function
-		if input.ModelType == model.CAAS.String() {
+		modelType, err := c.ModelType(input.ModelName)
+		if err != nil {
+			return err
+		}
+		if modelType == model.CAAS {
 			_, err := applicationAPIClient.ScaleApplication(apiapplication.ScaleApplicationParams{
 				ApplicationName: input.AppName,
 				Scale:           *input.Units,
@@ -858,7 +863,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 }
 
 func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return err
 	}

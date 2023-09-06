@@ -130,21 +130,13 @@ func (a *accessModelResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	modelNameStr := plan.Model.ValueString()
-	// Get the modelUUID to call Models.GrantModel
-	uuid, err := a.client.Models.ResolveModelUUID(modelNameStr)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model uuid, got error: %s", err))
-		return
-	}
-	modelUUIDs := []string{uuid}
-
 	accessStr := plan.Access.ValueString()
 	// Call Models.GrantModel
 	for _, user := range users {
 		err := a.client.Models.GrantModel(juju.GrantModelInput{
-			User:       user,
-			Access:     accessStr,
-			ModelUUIDs: modelUUIDs,
+			User:      user,
+			Access:    accessStr,
+			ModelName: modelNameStr,
 		})
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access model resource, got error: %s", err))
@@ -176,13 +168,7 @@ func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	modelUUID, err := a.client.Models.ResolveModelUUID(modelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model uuid, got error: %s", err))
-		return
-	}
-
-	response, err := a.client.Users.ModelUserInfo(modelUUID)
+	response, err := a.client.Users.ModelUserInfo(modelName)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read access model resource, got error: %s", err))
 		return

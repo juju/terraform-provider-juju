@@ -231,7 +231,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 
 	modelInfo, err := r.client.Models.GetModelByName(data.ModelName.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve model UUID, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model info on %q, got error: %s", data.ModelName.ValueString(), err))
 		return
 	}
 
@@ -249,7 +249,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 
 	response, err := r.client.Machines.CreateMachine(&juju.CreateMachineInput{
 		Constraints:    data.Constraints.ValueString(),
-		ModelUUID:      modelInfo.UUID,
+		ModelName:      modelInfo.Name,
 		Disks:          data.Disks.ValueString(),
 		Series:         series,
 		SSHAddress:     sshAddress,
@@ -320,14 +320,9 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	modelUUID, err := r.client.Models.ResolveModelUUID(modelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve model UUID, got error: %s", err))
-		return
-	}
 
 	response, err := r.client.Machines.ReadMachine(juju.ReadMachineInput{
-		ModelUUID: modelUUID,
+		ModelName: modelName,
 		MachineId: machineID,
 	})
 	if err != nil {
@@ -407,17 +402,10 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	modelUUID, err := r.client.Models.ResolveModelUUID(modelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve model UUID, got error: %s", err))
-		return
-	}
-
-	err = r.client.Machines.DestroyMachine(&juju.DestroyMachineInput{
-		ModelUUID: modelUUID,
+	if err := r.client.Machines.DestroyMachine(&juju.DestroyMachineInput{
+		ModelName: modelName,
 		MachineId: machineID,
-	})
-	if err != nil {
+	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete machine, got error: %s", err))
 	}
 	r.trace(fmt.Sprintf("delete machine resource %q", machineID))

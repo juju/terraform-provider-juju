@@ -134,7 +134,7 @@ func configure() func(context.Context, *schema.ResourceData) (interface{}, diag.
 			return nil, diags
 		}
 
-		config := juju.Configuration{
+		config := juju.ControllerConfiguration{
 			ControllerAddresses: controllerAddresses,
 			Username:            username,
 			Password:            password,
@@ -266,7 +266,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req frameworkprovider.Conf
 		return
 	}
 
-	config := juju.Configuration{
+	config := juju.ControllerConfiguration{
 		ControllerAddresses: strings.Split(data.ControllerAddrs.ValueString(), ","),
 		Username:            data.UserName.ValueString(),
 		Password:            data.Password.ValueString(),
@@ -377,7 +377,7 @@ func (p *jujuProvider) DataSources(_ context.Context) []func() datasource.DataSo
 	}
 }
 
-func checkClientErr(err error, config juju.Configuration) frameworkdiag.Diagnostics {
+func checkClientErr(err error, config juju.ControllerConfiguration) frameworkdiag.Diagnostics {
 	var errDetail string
 	var diags frameworkdiag.Diagnostics
 

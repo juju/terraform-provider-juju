@@ -12,7 +12,7 @@ import (
 )
 
 type usersClient struct {
-	ConnectionFactory
+	SharedClient
 }
 
 type CreateUserInput struct {
@@ -50,9 +50,9 @@ type DestroyUserInput struct {
 	Name string
 }
 
-func newUsersClient(cf ConnectionFactory) *usersClient {
+func newUsersClient(sc SharedClient) *usersClient {
 	return &usersClient{
-		ConnectionFactory: cf,
+		SharedClient: sc,
 	}
 }
 
@@ -101,7 +101,7 @@ func (c *usersClient) ReadUser(name string) (*ReadUserResponse, error) {
 	}, nil
 }
 
-func (c *usersClient) ModelUserInfo(uuid string) (*ReadModelUserResponse, error) {
+func (c *usersClient) ModelUserInfo(modelName string) (*ReadModelUserResponse, error) {
 	usermanagerConn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -109,6 +109,11 @@ func (c *usersClient) ModelUserInfo(uuid string) (*ReadModelUserResponse, error)
 
 	usermanagerClient := usermanager.NewClient(usermanagerConn)
 	defer usermanagerClient.Close()
+
+	uuid, err := c.ModelUUID(modelName)
+	if err != nil {
+		return nil, err
+	}
 
 	users, err := usermanagerClient.ModelUserInfo(uuid)
 	if err != nil {

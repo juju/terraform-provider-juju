@@ -226,12 +226,7 @@ func testAccCheckDevelopmentConfigIsUnset(modelName string) resource.TestCheckFu
 	return func(s *terraform.State) error {
 		client := Provider.Meta().(*juju.Client)
 
-		uuid, err := client.Models.ResolveModelUUID(modelName)
-		if err != nil {
-			return err
-		}
-
-		conn, err := client.Models.GetConnection(&uuid)
+		conn, err := client.Models.GetConnection(&modelName)
 		if err != nil {
 			return err
 		}
@@ -253,8 +248,8 @@ func testAccCheckDevelopmentConfigIsUnset(modelName string) resource.TestCheckFu
 				}
 
 				if actual.Value != expected.Value || actual.Source != expected.Source {
-					return fmt.Errorf("expecting 'development' config for model: %s (%s), to be %#v but was: %#v",
-						modelName, uuid, expected, actual)
+					return fmt.Errorf("expecting 'development' config for model: %s, to be %#v but was: %#v",
+						modelName, expected, actual)
 				}
 			}
 		}

@@ -25,6 +25,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/names/v4"
+	"github.com/juju/utils/v3"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -32,10 +33,6 @@ import (
 var _ resource.Resource = &modelResource{}
 var _ resource.ResourceWithConfigure = &modelResource{}
 var _ resource.ResourceWithImportState = &modelResource{}
-
-const (
-	PrivateDataImportKey = "import"
-)
 
 func NewModelResource() resource.Resource {
 	return &modelResource{}
@@ -165,40 +162,7 @@ func (r *modelResource) Metadata(_ context.Context, req resource.MetadataRequest
 	resp.TypeName = req.ProviderTypeName + "_model"
 }
 
-func isImported(ctx context.Context, req resource.ReadRequest) (bool, diag.Diagnostics) {
-	if req.Private == nil {
-		return false, diag.Diagnostics{}
-	}
-	value, diags := req.Private.GetKey(ctx, PrivateDataImportKey)
-	if diags.HasError() {
-		return false, diags
-	}
-	if value != nil && string(value) == "true" {
-		return true, diags
-	}
-	return false, diags
-}
-
 func (r *modelResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Prevent panic if the provider has not been configured.
-	if r.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "model", "import")
-		return
-	}
-
-	// Import command takes the model name as an argument
-	// `terraform import juju_model.RESOURCE_NAME MODEL_NAME`
-	modelName := req.ID
-
-	// We set the ID to the modelUUID here
-	modelInfo, err := r.client.Models.GetModelByName(modelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to find model, got error: %s", err))
-		return
-	}
-	req.ID = modelInfo.UUID
-	r.trace(fmt.Sprintf("Imported model resource: %v", modelInfo.Name))
-	resp.Private.SetKey(ctx, PrivateDataImportKey, []byte("true"))
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
@@ -305,13 +269,25 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	uuid := state.ID.ValueString()
-	response, err := r.client.Models.ReadModel(uuid)
+	// Find the model name. If the Id is a UUID, this is
+	// not an Import followed by a Read. If the Id string
+	// is not a UUID, find the model name in the Id, rather
+	// than Name as we're doing a Read after Import. Either
+	// way, we need the model name.
+	var modelName string
+	var imported bool
+	if utils.IsValidUUIDString(state.ID.ValueString()) {
+		modelName = state.Name.ValueString()
+	} else {
+		imported = true
+		modelName = state.ID.ValueString()
+	}
+
+	response, err := r.client.Models.ReadModel(modelName)
 	if err != nil {
 		resp.Diagnostics.Append(handleModelNotFoundError(ctx, err, &resp.State)...)
 		return
 	}
-	modelName := response.ModelInfo.Name
 	r.trace(fmt.Sprintf("found model: %v", modelName))
 
 	// Acquire cloud, credential, and config
@@ -324,17 +300,6 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	// Set the read values into the new state model
 	// Cloud
-	imported, dErrs := isImported(ctx, req)
-	if dErrs.HasError() {
-		resp.Diagnostics.Append(dErrs...)
-		return
-	}
-	if imported {
-		resp.Diagnostics.Append(resp.Private.SetKey(ctx, PrivateDataImportKey, []byte("false"))...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-	}
 	if (imported && response.ModelInfo.CloudTag != "" && response.ModelInfo.CloudRegion != "") ||
 		!state.Cloud.IsNull() {
 		cloudList := []nestedCloud{{
@@ -397,10 +362,11 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		state.Config = newStateConfig
 	}
 
-	// Name, Type and Credential
+	// Name, Type, Credential, and Id.
 	state.Name = types.StringValue(modelName)
 	state.Type = types.StringValue(response.ModelInfo.Type)
 	state.Credential = types.StringValue(credential)
+	state.ID = types.StringValue(response.ModelInfo.UUID)
 
 	r.trace(fmt.Sprintf("Read model resource for: %v", modelName))
 	// Set the state onto the Terraform state
@@ -489,7 +455,7 @@ func (r *modelResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 
 	err = r.client.Models.UpdateModel(juju.UpdateModelInput{
-		UUID:        plan.ID.ValueString(),
+		Name:        plan.Name.ValueString(),
 		CloudName:   cloudNameInput,
 		Config:      configMap,
 		Unset:       unsetConfigKeys,
