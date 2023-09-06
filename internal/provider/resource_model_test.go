@@ -13,8 +13,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/rpc/params"
-
-	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
 func TestAcc_ResourceModel_Edge(t *testing.T) {
@@ -224,9 +222,7 @@ resource "juju_model" "this" {
 
 func testAccCheckDevelopmentConfigIsUnset(modelName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		client := Provider.Meta().(*juju.Client)
-
-		conn, err := client.Models.GetConnection(&modelName)
+		conn, err := TestClient.Models.GetConnection(&modelName)
 		if err != nil {
 			return err
 		}
