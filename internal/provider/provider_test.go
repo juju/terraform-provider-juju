@@ -9,83 +9,80 @@ import (
 	"runtime"
 	"testing"
 
-	frameworkprovider "github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
 const TestProviderStableVersion = "0.8.0"
 
-// frameworkProviderFactories are used to instantiate the Framework provider during
+// providerFactories are used to instantiate the Framework provider during
 // acceptance testing.
 var frameworkProviderFactories map[string]func() (tfprotov6.ProviderServer, error)
 
 // Provider makes a separate provider available for tests.
 // Note that testAccPreCheck needs to invoked before use.
-var Provider *schema.Provider
+var Provider provider.Provider
+
+var TestClient *juju.Client
 
 func init() {
-	Provider = New("dev")()
+	Provider = NewJujuProvider("dev")
 
 	frameworkProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev")),
 	}
 }
 
-func TestProvider(t *testing.T) {
-	if err := New("dev")().InternalValidate(); err != nil {
-		t.Fatalf("err: %s", err)
-	}
-}
-
 func TestProviderConfigure(t *testing.T) {
 	testAccPreCheck(t)
-	jujuProvider := New("dev")()
-	diags := jujuProvider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
-	if diags != nil {
-		t.Errorf("%+v", diags)
-	}
+	jujuProvider := NewJujuProvider("dev")
+	configureProvider(t, jujuProvider, false)
 }
 
 func TestProviderConfigureUsernameFromEnv(t *testing.T) {
 	testAccPreCheck(t)
-	jujuProvider := New("dev")()
+	jujuProvider := NewJujuProvider("dev")
 	userNameValue := "the-username"
 	t.Setenv(JujuUsernameEnvKey, userNameValue)
-	diags := jujuProvider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
-	assert.Len(t, diags, 1)
+
+	confResp := configureProvider(t, jujuProvider, true)
 	// This is a live test, expect that the client connection will fail.
-	assert.Equal(t, diag.Error, diags[0].Severity)
-	assert.Equal(t, "invalid entity name or password (unauthorized access)", diags[0].Detail)
+	err := confResp.Diagnostics.Errors()[0]
+	assert.Equal(t, diag.SeverityError, err.Severity())
+	assert.Equal(t, "invalid entity name or password (unauthorized access)", err.Detail())
 }
 
 func TestProviderConfigurePasswordFromEnv(t *testing.T) {
 	testAccPreCheck(t)
-	jujuProvider := New("dev")()
+	jujuProvider := NewJujuProvider("dev")
 	passwordValue := "the-password"
 	t.Setenv(JujuPasswordEnvKey, passwordValue)
-	diags := jujuProvider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
-	assert.Len(t, diags, 1)
+	confResp := configureProvider(t, jujuProvider, true)
 	// This is a live test, expect that the client connection will fail.
-	assert.Equal(t, diag.Error, diags[0].Severity)
-	assert.Equal(t, "invalid entity name or password (unauthorized access)", diags[0].Detail)
+	err := confResp.Diagnostics.Errors()[0]
+	assert.Equal(t, diag.SeverityError, err.Severity())
+	assert.Equal(t, "invalid entity name or password (unauthorized access)", err.Detail())
 }
 
 func TestProviderConfigureAddresses(t *testing.T) {
 	testAccPreCheck(t)
-	jujuProvider := New("dev")()
+	jujuProvider := NewJujuProvider("dev")
 	// This IP is from a test network that should never be routed. https://www.rfc-editor.org/rfc/rfc5737#section-3
 	t.Setenv(JujuControllerEnvKey, "192.0.2.100:17070")
-	diags := jujuProvider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
-	assert.Len(t, diags, 1)
+	confResp := configureProvider(t, jujuProvider, true)
 	// This is a live test, expect that the client connection will fail.
-	assert.Equal(t, diag.Error, diags[0].Severity)
-	assert.Equal(t, "dial tcp 192.0.2.100:17070: i/o timeout", diags[0].Summary)
-	assert.Equal(t, "Connection error, please check the controller_addresses property set on the provider", diags[0].Detail)
+	err := confResp.Diagnostics.Errors()[0]
+	assert.Equal(t, diag.SeverityError, err.Severity())
+	assert.Equal(t, "dial tcp 192.0.2.100:17070: i/o timeout", err.Summary())
+	assert.Equal(t, "Connection error, please check the controller_addresses property set on the provider", err.Detail())
 }
 
 // This is a valid certificate allowing the client to attempt a connection but failing certificate validation
@@ -100,28 +97,28 @@ func TestProviderConfigurex509FromEnv(t *testing.T) {
 		//https://github.com/golang/go/issues/52010
 		t.Skip("This test does not work on MacOS")
 	}
-	jujuProvider := New("dev")()
+	jujuProvider := NewJujuProvider("dev")
 	t.Setenv(JujuCACertEnvKey, invalidCA)
-	diags := jujuProvider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
-	assert.Len(t, diags, 1)
+	confResp := configureProvider(t, jujuProvider, true)
 	// This is a live test, expect that the client connection will fail.
-	assert.Equal(t, diag.Error, diags[0].Severity)
-	assert.Equal(t, "Verify the ca_certificate property set on the provider", diags[0].Detail)
-	assert.Equal(t, "x509: certificate signed by unknown authority", diags[0].Summary)
+	err := confResp.Diagnostics.Errors()[0]
+	assert.Equal(t, diag.SeverityError, err.Severity())
+	assert.Equal(t, "Verify the ca_certificate property set on the provider", err.Detail())
+	assert.Equal(t, "x509: certificate signed by unknown authority", err.Summary())
 }
 
 func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
-	jujuProvider := New("dev")()
+	jujuProvider := NewJujuProvider("dev")
 	//Set the CA to the invalid one above
 	//Juju will ignore the system trust store if we set the CA property
 	t.Setenv(JujuCACertEnvKey, invalidCA)
 	t.Setenv("JUJU_CA_CERT_FILE", "")
-	diags := jujuProvider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
-	assert.Len(t, diags, 1)
+	confResp := configureProvider(t, jujuProvider, true)
 	// This is a live test, expect that the client connection will fail.
-	assert.Equal(t, diag.Error, diags[0].Severity)
-	assert.Equal(t, "Verify the ca_certificate property set on the provider", diags[0].Detail)
-	assert.Equal(t, "x509: certificate signed by unknown authority", diags[0].Summary)
+	err := confResp.Diagnostics.Errors()[0]
+	assert.Equal(t, diag.SeverityError, err.Severity())
+	assert.Equal(t, "Verify the ca_certificate property set on the provider", err.Detail())
+	assert.Equal(t, "x509: certificate signed by unknown authority", err.Summary())
 }
 
 func testAccPreCheck(t *testing.T) {
@@ -143,18 +140,52 @@ func testAccPreCheck(t *testing.T) {
 			t.Fatalf("%s must be set for acceptance tests", JujuCACertEnvKey)
 		}
 	}
+	confResp := configureProvider(t, Provider, false)
+	TestClient = confResp.ResourceData.(*juju.Client)
+}
 
-	err := Provider.Configure(context.Background(), terraform.NewResourceConfigRaw(nil))
-	if err != nil {
-		t.Fatal(err)
+func configureProvider(t *testing.T, p provider.Provider, expectFail bool) provider.ConfigureResponse {
+	schemaResp := provider.SchemaResponse{}
+	Provider.Schema(context.Background(), provider.SchemaRequest{}, &schemaResp)
+	assert.Equal(t, schemaResp.Diagnostics.HasError(), false)
+
+	conf := jujuProviderModel{
+		ControllerAddrs: types.String{},
+		UserName:        types.String{},
+		Password:        types.String{},
+		CACert:          types.String{},
 	}
+
+	mapTypes := map[string]attr.Type{
+		JujuController: types.StringType,
+		JujuUsername:   types.StringType,
+		JujuPassword:   types.StringType,
+		JujuCACert:     types.StringType,
+	}
+
+	val, confObjErr := types.ObjectValueFrom(context.Background(), mapTypes, conf)
+	assert.Equal(t, confObjErr.HasError(), false)
+
+	tfval, tfValErr := val.ToTerraformValue(context.Background())
+	assert.Equal(t, tfValErr, nil)
+
+	c := tfsdk.Config{Schema: schemaResp.Schema, Raw: tfval}
+	confReq := provider.ConfigureRequest{Config: c}
+	confResp := provider.ConfigureResponse{Diagnostics: diag.Diagnostics{}}
+
+	p.Configure(context.Background(), confReq, &confResp)
+	if !expectFail {
+		assert.Equal(t, confResp.Diagnostics.HasError(), false)
+	}
+
+	return confResp
 }
 
 func TestFrameworkProviderSchema(t *testing.T) {
 	testAccPreCheck(t)
 	jujuProvider := NewJujuProvider("dev")
-	req := frameworkprovider.SchemaRequest{}
-	resp := frameworkprovider.SchemaResponse{}
+	req := provider.SchemaRequest{}
+	resp := provider.SchemaResponse{}
 	jujuProvider.Schema(context.Background(), req, &resp)
 	assert.Equal(t, resp.Diagnostics.HasError(), false)
 	assert.Len(t, resp.Schema.Attributes, 4)
