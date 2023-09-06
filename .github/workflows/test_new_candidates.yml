@@ -21,10 +21,9 @@ jobs:
         juju_track:
           - "2.9"
         juju_risk:
-          - "candidate"
-          # - "edge"
+          # - "candidate"
+           - "edge"
         terraform:
-          - "1.3.*"
           - "1.4.*"
           - "1.5.*"
     steps:
@@ -33,7 +32,8 @@ jobs:
           channel=$(echo ${{ matrix.juju_track }}/${{ matrix.juju_risk }})
           echo "Target channel is $channel"
           echo "channel=$channel" >> $GITHUB_ENV
-          id=$(echo ${{ github.sha }}-${{ matrix.juju_track }}-${{ matrix.juju_risk }}-${{ matrix.terraform }})
+          terraform_version=$(echo ${{ matrix.terraform }} |  awk -F'\.' '{print $1$2}')
+          id=$(echo ${{ github.sha }}-${{ matrix.juju_track }}-${{ matrix.juju_risk }}-$terraform_version)
           echo "Target id is $id"
           echo "id=$id" >> $GITHUB_ENV
       - name: Checkout branch
