@@ -13,15 +13,15 @@ go-install:
 GOOS=$(shell go env GOOS)
 GOARCH=$(shell go env GOARCH)
 GOPATH=$(shell go env GOPATH)
-VERSION=0.9.0
-REGISTRY_DIR=~/.terraform.d/plugins/registry.terraform.io/juju/juju/${VERSION}/${GOOS}_${GOARCH}
+EDGEVERSION=0.10.0
+REGISTRY_DIR=~/.terraform.d/plugins/registry.terraform.io/juju/juju/${EDGEVERSION}/${GOOS}_${GOARCH}
 
 .PHONY: install
 install: simplify docs go-install
-## install: Build terraform-provider-juju and copy to ~/.terraform.d using VERSION
-	@echo "Copied to ~/.terraform.d/plugins/registry.terraform.io/juju/juju/${VERSION}/${GOOS}_${GOARCH}"
+## install: Build terraform-provider-juju and copy to ~/.terraform.d using EDGEVERSION
+	@echo "Copied to ~/.terraform.d/plugins/registry.terraform.io/juju/juju/${EDGEVERSION}/${GOOS}_${GOARCH}"
 	@mkdir -p ${REGISTRY_DIR}
-	@cp ${GOPATH}/bin/terraform-provider-juju ${REGISTRY_DIR}/terraform-provider-juju_v${VERSION}
+	@cp ${GOPATH}/bin/terraform-provider-juju ${REGISTRY_DIR}/terraform-provider-juju_v${EDGEVERSION}
 
 .PHONY: simplify
 # Reformat and simplify source files.

@@ -1,3 +1,13 @@
+## 0.9.0 (September 7, 2023)
+
+ENHANCEMENTS:
+
+* Migration from the Terraform SDK to the Terraform Framework for plugins
+
+BUG FIXES:
+
+* Provider panics when generating plan by @hmlanigan as part of https://github.com/juju/terraform-provider-juju/pull/265
+
 ## 0.8.0 (June 13, 2023)
 
 FEATURES:
