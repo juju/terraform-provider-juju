@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/juju/juju/api/base"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/core/constraints"
@@ -52,7 +51,11 @@ type CreateModelInput struct {
 }
 
 type CreateModelResponse struct {
-	ModelInfo base.ModelInfo
+	Cloud               string
+	CloudRegion         string
+	CloudCredentialName string
+	Type                string
+	UUID                string
 }
 
 type ReadModelResponse struct {
@@ -126,15 +129,17 @@ func (c *modelsClient) GetModelByName(name string) (*params.ModelInfo, error) {
 	return modelInfo, nil
 }
 
-func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse, error) {
+func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse, error) {
+	resp := CreateModelResponse{}
+
 	modelName := input.Name
 	if !names.IsValidModelName(modelName) {
-		return nil, fmt.Errorf("%q is not a valid name: model names may only contain lowercase letters, digits and hyphens", modelName)
+		return resp, fmt.Errorf("%q is not a valid name: model names may only contain lowercase letters, digits and hyphens", modelName)
 	}
 
 	conn, err := c.GetConnection(nil)
 	if err != nil {
-		return nil, err
+		return resp, err
 	}
 
 	currentUser := getCurrentJujuUser(conn)
@@ -149,7 +154,7 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 	if input.Credential != "" {
 		cloudCredTag, err = GetCloudCredentialTag(cloudName, currentUser, input.Credential)
 		if err != nil {
-			return nil, err
+			return resp, err
 		}
 	}
 
@@ -162,32 +167,38 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (*CreateModelResponse
 
 	modelInfo, err := client.CreateModel(modelName, currentUser, cloudName, cloudRegion, *cloudCredTag, configValues)
 	if err != nil {
-		return nil, err
+		return resp, err
 	}
+
+	resp.Cloud = modelInfo.Cloud
+	resp.CloudRegion = modelInfo.CloudRegion
+	resp.CloudCredentialName = names.NewCloudCredentialTag(modelInfo.CloudCredential).Name()
+	resp.Type = modelInfo.Type.String()
+	resp.UUID = modelInfo.UUID
 
 	// set constraints when required
 	if input.Constraints.String() == "" {
-		return &CreateModelResponse{ModelInfo: modelInfo}, nil
+		return resp, nil
 	}
 
 	// we have to set constraints ...
 	// establish a new connection with the created model through the modelconfig api to set constraints
 	connModel, err := c.GetConnection(&modelName)
 	if err != nil {
-		return nil, err
+		return resp, err
 	}
 
 	modelClient := modelconfig.NewClient(connModel)
 	defer func() { _ = modelClient.Close() }()
 	err = modelClient.SetModelConstraints(input.Constraints)
 	if err != nil {
-		return nil, err
+		return resp, err
 	}
 
 	// Add the model to the client cache of jujuModel
 	c.AddModel(modelInfo.Name, modelInfo.UUID, modelInfo.Type)
 
-	return &CreateModelResponse{ModelInfo: modelInfo}, nil
+	return resp, nil
 }
 
 func (c *modelsClient) ReadModel(name string) (*ReadModelResponse, error) {
