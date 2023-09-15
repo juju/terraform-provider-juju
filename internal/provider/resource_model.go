@@ -244,7 +244,9 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 		plan.Cloud = newPlanCloud
 	}
 
-	plan.Credential = types.StringValue(response.ModelInfo.CloudCredential)
+	credTag := names.NewCloudCredentialTag(response.ModelInfo.CloudCredential)
+	plan.Credential = types.StringValue(credTag.Name())
+
 	plan.Type = types.StringValue(response.ModelInfo.Type.String())
 	plan.ID = types.StringValue(response.ModelInfo.UUID)
 
