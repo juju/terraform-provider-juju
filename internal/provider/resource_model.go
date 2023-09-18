@@ -232,8 +232,8 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if !plan.Cloud.IsNull() {
 		// Set the cloud value if required
 		newCloud := []nestedCloud{{
-			Name:   types.StringValue(response.ModelInfo.Cloud),
-			Region: types.StringValue(response.ModelInfo.CloudRegion),
+			Name:   types.StringValue(response.Cloud),
+			Region: types.StringValue(response.CloudRegion),
 		}}
 		cloudType := req.Plan.Schema.GetBlocks()["cloud"].(schema.ListNestedBlock).NestedObject.Type()
 		newPlanCloud, errDiag := types.ListValueFrom(ctx, cloudType, newCloud)
@@ -244,9 +244,9 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 		plan.Cloud = newPlanCloud
 	}
 
-	plan.Credential = types.StringValue(response.ModelInfo.CloudCredential)
-	plan.Type = types.StringValue(response.ModelInfo.Type.String())
-	plan.ID = types.StringValue(response.ModelInfo.UUID)
+	plan.Credential = types.StringValue(response.CloudCredentialName)
+	plan.Type = types.StringValue(response.Type)
+	plan.ID = types.StringValue(response.UUID)
 
 	r.trace(fmt.Sprintf("model resource created: %q", modelName))
 
