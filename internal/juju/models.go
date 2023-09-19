@@ -175,6 +175,9 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 	resp.Type = modelInfo.Type.String()
 	resp.UUID = modelInfo.UUID
 
+	// Add the model to the client cache of jujuModel
+	c.AddModel(modelInfo.Name, modelInfo.UUID, modelInfo.Type)
+
 	// set constraints when required
 	if input.Constraints.String() == "" {
 		return resp, nil
@@ -193,9 +196,6 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 	if err != nil {
 		return resp, err
 	}
-
-	// Add the model to the client cache of jujuModel
-	c.AddModel(modelInfo.Name, modelInfo.UUID, modelInfo.Type)
 
 	return resp, nil
 }
