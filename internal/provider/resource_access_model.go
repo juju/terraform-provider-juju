@@ -313,9 +313,9 @@ func (a *accessModelResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	err := a.client.Models.DestroyAccessModel(juju.DestroyAccessModelInput{
-		Model:  plan.ID.ValueString(),
-		Revoke: stateUsers,
-		Access: plan.Access.ValueString(),
+		ModelName: plan.Model.ValueString(),
+		Revoke:    stateUsers,
+		Access:    plan.Access.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete access model resource, got error: %s", err))

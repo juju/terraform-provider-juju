@@ -5,7 +5,6 @@ package juju
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/juju/errors"
@@ -86,9 +85,9 @@ type DestroyModelInput struct {
 }
 
 type DestroyAccessModelInput struct {
-	Model  string
-	Revoke []string
-	Access string
+	ModelName string
+	Revoke    []string
+	Access    string
 }
 
 func newModelsClient(sc SharedClient) *modelsClient {
@@ -176,6 +175,9 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 	resp.Type = modelInfo.Type.String()
 	resp.UUID = modelInfo.UUID
 
+	// Add the model to the client cache of jujuModel
+	c.AddModel(modelInfo.Name, modelInfo.UUID, modelInfo.Type)
+
 	// set constraints when required
 	if input.Constraints.String() == "" {
 		return resp, nil
@@ -194,9 +196,6 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 	if err != nil {
 		return resp, err
 	}
-
-	// Add the model to the client cache of jujuModel
-	c.AddModel(modelInfo.Name, modelInfo.UUID, modelInfo.Type)
 
 	return resp, nil
 }
@@ -402,21 +401,18 @@ func (c *modelsClient) UpdateAccessModel(input UpdateAccessModelInput) error {
 // If a user has had `write`, then removing that access would decrease their
 // access to `read` and the user will remain part of the model access.
 func (c *modelsClient) DestroyAccessModel(input DestroyAccessModelInput) error {
-	id := strings.Split(input.Model, ":")
-	model := id[0]
-
-	uuid, err := c.ModelUUID(model)
-	if err != nil {
-		return err
-	}
-
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return err
 	}
 
 	client := modelmanager.NewClient(conn)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
+
+	uuid, err := c.ModelUUID(input.ModelName)
+	if err != nil {
+		return err
+	}
 
 	for _, user := range input.Revoke {
 		err := client.RevokeModel(user, "read", uuid)
