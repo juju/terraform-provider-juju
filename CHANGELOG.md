@@ -1,3 +1,9 @@
+## 0.9.1 (September 22, 2023)
+
+BUG FIXES:
+
+* Credential name doesn't work since 0.9.0 by @hmlanigan in https://github.com/juju/terraform-provider-juju/pull/312
+
 ## 0.9.0 (September 7, 2023)
 
 ENHANCEMENTS:
