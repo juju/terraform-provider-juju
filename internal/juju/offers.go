@@ -310,7 +310,21 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 
 	localName, err := client.Consume(consumeArgs)
 	if err != nil {
-		return nil, err
+		// Check if SAAS is already created. If so return offer response instead of error
+		// TODO: Understand why jujuerrors.AlreadyExists is not working and use
+		// the same for below condition
+		if strings.Contains(err.Error(), "saas application already exists") {
+			/* The logic to populate localName is picked from on how the juju controller
+			   derives localName in Consume request.
+			   https://github.com/juju/juju/blob/3e561add5940a510f785c83076b2bcc6994db103/api/client/application/client.go#L803
+			*/
+			localName = consumeArgs.Offer.OfferName
+			if consumeArgs.ApplicationAlias != "" {
+				localName = consumeArgs.ApplicationAlias
+			}
+		} else {
+			return nil, err
+		}
 	}
 
 	response := ConsumeRemoteOfferResponse{
