@@ -260,20 +260,16 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create machine, got error: %s", err))
 		return
 	}
-	if response.Machine.Error != nil {
-		resp.Diagnostics.AddError("Juju Error", fmt.Sprintf("Failed to create machine, got error: %s", err))
-		return
-	}
-	r.trace(fmt.Sprintf("create machine resource %q", response.Machine.Machine))
+	r.trace(fmt.Sprintf("create machine resource %q", response.ID))
 
 	machineName := data.Name.ValueString()
 	if machineName == "" {
-		machineName = fmt.Sprintf("machine-%s", response.Machine.Machine)
+		machineName = fmt.Sprintf("machine-%s", response.ID)
 	}
 
-	id := newMachineID(data.ModelName.ValueString(), response.Machine.Machine, machineName)
+	id := newMachineID(data.ModelName.ValueString(), response.ID, machineName)
 	data.ID = types.StringValue(id)
-	data.MachineID = types.StringValue(response.Machine.Machine)
+	data.MachineID = types.StringValue(response.ID)
 	data.Series = types.StringValue(response.Series)
 	data.Name = types.StringValue(machineName)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -323,7 +319,7 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	response, err := r.client.Machines.ReadMachine(juju.ReadMachineInput{
 		ModelName: modelName,
-		MachineId: machineID,
+		ID:        machineID,
 	})
 	if err != nil {
 		resp.Diagnostics.Append(handleMachineNotFoundError(ctx, err, &resp.State)...)
@@ -334,9 +330,9 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 	data.Name = types.StringValue(machineName)
 	data.ModelName = types.StringValue(modelName)
 	data.MachineID = types.StringValue(machineID)
-	data.Series = types.StringValue(response.MachineStatus.Series)
-	if response.MachineStatus.Constraints != "" {
-		data.Constraints = types.StringValue(response.MachineStatus.Constraints)
+	data.Series = types.StringValue(response.Series)
+	if response.Constraints != "" {
+		data.Constraints = types.StringValue(response.Constraints)
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -404,7 +400,7 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 
 	if err := r.client.Machines.DestroyMachine(&juju.DestroyMachineInput{
 		ModelName: modelName,
-		MachineId: machineID,
+		ID:        machineID,
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete machine, got error: %s", err))
 	}

@@ -33,6 +33,7 @@ type CreateMachineInput struct {
 	ModelName   string
 	Constraints string
 	Disks       string
+	Base        string
 	Series      string
 	InstanceId  string
 
@@ -48,23 +49,26 @@ type CreateMachineInput struct {
 }
 
 type CreateMachineResponse struct {
-	Machine params.AddMachinesResult
-	Series  string
+	ID     string
+	Base   string
+	Series string
 }
 
 type ReadMachineInput struct {
 	ModelName string
-	MachineId string
+	ID        string
 }
 
 type ReadMachineResponse struct {
-	MachineId     string
-	MachineStatus params.MachineStatus
+	ID          string
+	Base        string
+	Constraints string
+	Series      string
 }
 
 type DestroyMachineInput struct {
 	ModelName string
-	MachineId string
+	ID        string
 }
 
 func newMachinesClient(sc SharedClient) *machinesClient {
@@ -80,12 +84,10 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 	}
 
 	machineAPIClient := apimachinemanager.NewClient(conn)
-	defer machineAPIClient.Close()
+	defer func() { _ = machineAPIClient.Close() }()
 
 	modelConfigAPIClient := apimodelconfig.NewClient(conn)
-	defer modelConfigAPIClient.Close()
-
-	var machineParams params.AddMachineParams
+	defer func() { _ = modelConfigAPIClient.Close() }()
 
 	if input.SSHAddress != "" {
 		configAttrs, err := modelConfigAPIClient.ModelGet()
@@ -96,20 +98,11 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		machine_series, machineId, err := manualProvision(machineAPIClient, cfg,
+		return manualProvision(machineAPIClient, cfg,
 			input.SSHAddress, input.PublicKeyFile, input.PrivateKeyFile)
-		if err != nil {
-			return nil, errors.Trace(err)
-		} else {
-			return &CreateMachineResponse{
-				Machine: params.AddMachinesResult{
-					Machine: machineId,
-					Error:   nil,
-				},
-				Series: machine_series,
-			}, nil
-		}
 	}
+
+	var machineParams params.AddMachineParams
 
 	if input.Constraints == "" {
 		modelConstraints, err := modelConfigAPIClient.GetModelConstraints()
@@ -139,39 +132,63 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 	jobs := []model.MachineJob{model.JobHostUnits}
 	machineParams.Jobs = jobs
 
-	var paramsBase params.Base
-	if input.Series != "" {
-		seriesBase, err := series.GetBaseFromSeries(input.Series)
-		if err != nil {
-			return nil, err
-		}
-
-		paramsBase.Name = seriesBase.Name
-		paramsBase.Channel = series.Channel.String(seriesBase.Channel)
+	opSys := input.Base
+	if opSys == "" {
+		opSys = input.Series
 	}
-	machineParams.Base = &paramsBase
-
+	machineParams.Base, err = baseFromOperatingSystem(opSys)
+	if err != nil {
+		return nil, err
+	}
 	addMachineArgs := []params.AddMachineParams{machineParams}
 	machines, err := machineAPIClient.AddMachines(addMachineArgs)
+	if err != nil {
+		return nil, err
+	}
+	if machines[0].Error != nil {
+		return nil, machines[0].Error
+	}
 	return &CreateMachineResponse{
-		Machine: machines[0],
-		Series:  input.Series,
+		ID:     machines[0].Machine,
+		Base:   input.Base,
+		Series: input.Series,
 	}, err
 }
 
-// manualProvision calls the sshprovisioner.ProvisionMachine on the Juju side to provision an
-// existing machine using ssh_address, public_key and private_key in the CreateMachineInput
+func baseFromOperatingSystem(opSys string) (*params.Base, error) {
+	if opSys == "" {
+		return nil, nil
+	}
+	// opSys is a base or a series, check base first.
+	info, err := series.ParseBaseFromString(opSys)
+	if err != nil {
+		info, err = series.GetBaseFromSeries(opSys)
+		if err != nil {
+			return nil, errors.NotValidf("Base or Series %q", opSys)
+		}
+	}
+	base := &params.Base{
+		Name:    info.Name,
+		Channel: info.Channel.String(),
+	}
+	base.Channel = series.FromLegacyCentosChannel(base.Channel)
+	return base, nil
+}
+
+// manualProvision calls the sshprovisioner.ProvisionMachine on the Juju side
+// to provision an existing machine using ssh_address, public_key and
+// private_key in the CreateMachineInput.
 func manualProvision(client manual.ProvisioningClientAPI,
 	config *config.Config, sshAddress string, publicKey string,
-	privateKey string) (string, string, error) {
+	privateKey string) (*CreateMachineResponse, error) {
 	// Read the public keys
 	cmdCtx, err := cmd.DefaultContext()
 	if err != nil {
-		return "", "", errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 	authKeys, err := common.ReadAuthorizedKeys(cmdCtx, publicKey)
 	if err != nil {
-		return "", "", errors.Annotatef(err, "cannot read authorized-keys from : %v", publicKey)
+		return nil, errors.Annotatef(err, "cannot read authorized-keys from : %v", publicKey)
 	}
 
 	// Extract the user and host in the SSHAddress
@@ -179,7 +196,7 @@ func manualProvision(client manual.ProvisioningClientAPI,
 	if at := strings.Index(sshAddress, "@"); at != -1 {
 		user, host = sshAddress[:at], sshAddress[at+1:]
 	} else {
-		return "", "", errors.Errorf("invalid ssh_address, expected <user@host>, "+
+		return nil, errors.Errorf("invalid ssh_address, expected <user@host>, "+
 			"given %v", sshAddress)
 	}
 
@@ -199,19 +216,22 @@ func manualProvision(client manual.ProvisioningClientAPI,
 		},
 	}
 
-	// Call the ProvisionMachine
+	// Call ProvisionMachine
 	machineId, err := sshprovisioner.ProvisionMachine(provisionArgs)
 	if err != nil {
-		return "", "", errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 	// Find out about the series of the machine just provisioned
 	// (because ProvisionMachine only returns machineId)
-	_, series, err := sshprovisioner.DetectSeriesAndHardwareCharacteristics(host)
+	_, machineSeries, err := sshprovisioner.DetectSeriesAndHardwareCharacteristics(host)
 	if err != nil {
-		return "", "", errors.Annotatef(err, "error detecting linux hardware characteristics")
+		return nil, errors.Annotatef(err, "error detecting hardware characteristics")
 	}
 
-	return series, machineId, nil
+	return &CreateMachineResponse{
+		ID:     machineId,
+		Series: machineSeries,
+	}, nil
 }
 
 func (c machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse, error) {
@@ -228,15 +248,15 @@ func (c machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse
 	if err != nil {
 		return response, err
 	}
-	// TODO: hml 14-Aug-2023
-	// Do not leak juju api structures into the provider code.
-	var machineStatus params.MachineStatus
-	var exists bool
-	if machineStatus, exists = status.Machines[input.MachineId]; !exists {
-		return response, fmt.Errorf("no status returned for machine: %s", input.MachineId)
+
+	machineStatus, exists := status.Machines[input.ID]
+	if !exists {
+		return response, fmt.Errorf("no status returned for machine: %s", input.ID)
 	}
-	response.MachineId = machineStatus.Id
-	response.MachineStatus = machineStatus
+	response.ID = machineStatus.Id
+	response.Base = fmt.Sprintf("%s@%s", machineStatus.Base.Name, machineStatus.Base.Channel)
+	response.Series = machineStatus.Series
+	response.Constraints = machineStatus.Constraints
 
 	return response, nil
 }
@@ -248,9 +268,9 @@ func (c machinesClient) DestroyMachine(input *DestroyMachineInput) error {
 	}
 
 	machineAPIClient := apimachinemanager.NewClient(conn)
-	defer machineAPIClient.Close()
+	defer func() { _ = machineAPIClient.Close() }()
 
-	_, err = machineAPIClient.DestroyMachinesWithParams(false, false, (*time.Duration)(nil), input.MachineId)
+	_, err = machineAPIClient.DestroyMachinesWithParams(false, false, (*time.Duration)(nil), input.ID)
 
 	if err != nil {
 		return err
