@@ -254,7 +254,14 @@ func (c machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse
 		return response, fmt.Errorf("no status returned for machine: %s", input.ID)
 	}
 	response.ID = machineStatus.Id
-	response.Base = fmt.Sprintf("%s@%s", machineStatus.Base.Name, machineStatus.Base.Channel)
+	channel, err := series.ParseChannel(machineStatus.Base.Channel)
+	if err != nil {
+		return response, err
+	}
+	// This might cause problems later, but today, no one except for juju internals
+	// uses the channel risk. Using the risk makes the base appear to have changed
+	// with terraform.
+	response.Base = fmt.Sprintf("%s@%s", machineStatus.Base.Name, channel.Track)
 	response.Series = machineStatus.Series
 	response.Constraints = machineStatus.Constraints
 
