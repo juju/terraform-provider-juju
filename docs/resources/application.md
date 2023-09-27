@@ -3,12 +3,12 @@
 page_title: "juju_application Resource - terraform-provider-juju"
 subcategory: ""
 description: |-
-  A resource that represents a Juju application deployment.
+  A resource that represents a single Juju application deployment from a charm. Deployment of bundles is not supported.
 ---
 
 # juju_application (Resource)
 
-A resource that represents a Juju application deployment.
+A resource that represents a single Juju application deployment from a charm. Deployment of bundles is not supported.
 
 ## Example Usage
 

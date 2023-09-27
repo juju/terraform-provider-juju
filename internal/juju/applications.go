@@ -215,7 +215,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	}
 
 	if charmURL.Revision != UnspecifiedRevision {
-		return nil, fmt.Errorf("cannot specify revision in a charm or bundle name")
+		return nil, fmt.Errorf("cannot specify revision in a charm name")
 	}
 	if input.CharmRevision != UnspecifiedRevision && channel.Empty() {
 		return nil, fmt.Errorf("specifying a revision requires a channel for future upgrades")
@@ -248,9 +248,11 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		return nil, fmt.Errorf("expected only one resolution, received %d", len(resolved))
 	}
 	resolvedCharm := resolved[0]
-
 	if resolvedCharm.Error != nil {
 		return nil, resolvedCharm.Error
+	}
+	if resolvedCharm.Origin.Type == "bundle" {
+		return nil, jujuerrors.NotSupportedf("deploying bundles")
 	}
 
 	// Figure out the actual series of the charm
