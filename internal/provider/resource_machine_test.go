@@ -21,11 +21,11 @@ func TestAcc_ResourceMachine_Edge(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceMachine(modelName),
+				Config: testAccResourceMachine(modelName, "base = \"ubuntu@22.04\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
-					resource.TestCheckResourceAttr("juju_machine.this", "series", "focal"),
+					resource.TestCheckResourceAttr("juju_machine.this", "base", "ubuntu@22.04"),
 				),
 			},
 			{
@@ -90,7 +90,7 @@ func TestAcc_ResourceMachine_Stable(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceMachine(modelName),
+				Config: testAccResourceMachine(modelName, "series = \"focal\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
@@ -106,7 +106,7 @@ func TestAcc_ResourceMachine_Stable(t *testing.T) {
 	})
 }
 
-func testAccResourceMachine(modelName string) string {
+func testAccResourceMachine(modelName, operatingSystem string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
@@ -115,9 +115,9 @@ resource "juju_model" "this" {
 resource "juju_machine" "this" {
 	name = "this_machine"
 	model = juju_model.this.name
-	series = "focal"
+	%s
 }
-`, modelName)
+`, modelName, operatingSystem)
 }
 
 func TestAcc_ResourceMachine_AddMachine_Edge(t *testing.T) {

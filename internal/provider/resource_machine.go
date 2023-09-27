@@ -44,6 +44,7 @@ type machineResourceModel struct {
 	ModelName      types.String `tfsdk:"model"`
 	Constraints    types.String `tfsdk:"constraints"`
 	Disks          types.String `tfsdk:"disks"`
+	Base           types.String `tfsdk:"base"`
 	Series         types.String `tfsdk:"series"`
 	MachineID      types.String `tfsdk:"machine_id"`
 	SSHAddress     types.String `tfsdk:"ssh_address"`
@@ -86,6 +87,7 @@ const (
 	ConstraintsKey    = "constraints"
 	DisksKey          = "disks"
 	SeriesKey         = "series"
+	BaseKey           = "base"
 	MachineIDKey      = "machine_id"
 	SSHAddressKey     = "ssh_address"
 	PrivateKeyFileKey = "private_key_file"
@@ -135,6 +137,22 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 					}...),
 				},
 			},
+			BaseKey: schema.StringAttribute{
+				Description: "The operating system series to install on the new machine(s).",
+				Optional:    true,
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplaceIfConfigured(),
+					stringplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.Expressions{
+						path.MatchRoot(SSHAddressKey),
+						path.MatchRoot(SeriesKey),
+					}...),
+					stringIsBaseValidator{},
+				},
+			},
 			SeriesKey: schema.StringAttribute{
 				Description: "The operating system series to install on the new machine(s).",
 				Optional:    true,
@@ -146,8 +164,10 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(path.Expressions{
 						path.MatchRoot(SSHAddressKey),
+						path.MatchRoot(BaseKey),
 					}...),
 				},
+				DeprecationMessage: "Configure base instead. This attribute will be removed in the next major version of the provider.",
 			},
 			MachineIDKey: schema.StringAttribute{
 				Description: "The id of the machine Juju creates.",
@@ -165,6 +185,7 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(path.Expressions{
 						path.MatchRoot(SeriesKey),
+						path.MatchRoot(BaseKey),
 						path.MatchRoot(ConstraintsKey),
 					}...),
 					stringvalidator.AlsoRequires(path.Expressions{
@@ -229,30 +250,13 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	modelInfo, err := r.client.Models.GetModelByName(data.ModelName.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model info on %q, got error: %s", data.ModelName.ValueString(), err))
-		return
-	}
-
-	series := data.Series.ValueString()
-	sshAddress := data.SSHAddress.ValueString()
-
-	if sshAddress == "" {
-		// If not provisioning manually, check the series argument.
-		// If not set, get it from the model default.
-		// TODO (cderici): revisit this part when switched to juju 3.x.
-		if series == "" {
-			series = modelInfo.DefaultSeries
-		}
-	}
-
 	response, err := r.client.Machines.CreateMachine(&juju.CreateMachineInput{
 		Constraints:    data.Constraints.ValueString(),
-		ModelName:      modelInfo.Name,
+		ModelName:      data.ModelName.ValueString(),
 		Disks:          data.Disks.ValueString(),
-		Series:         series,
-		SSHAddress:     sshAddress,
+		Base:           data.Base.ValueString(),
+		Series:         data.Series.ValueString(),
+		SSHAddress:     data.SSHAddress.ValueString(),
 		PublicKeyFile:  data.PublicKeyFile.ValueString(),
 		PrivateKeyFile: data.PrivateKeyFile.ValueString(),
 	})
@@ -270,6 +274,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	id := newMachineID(data.ModelName.ValueString(), response.ID, machineName)
 	data.ID = types.StringValue(id)
 	data.MachineID = types.StringValue(response.ID)
+	data.Base = types.StringValue(response.Base)
 	data.Series = types.StringValue(response.Series)
 	data.Name = types.StringValue(machineName)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -331,6 +336,7 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 	data.ModelName = types.StringValue(modelName)
 	data.MachineID = types.StringValue(machineID)
 	data.Series = types.StringValue(response.Series)
+	data.Base = types.StringValue(response.Base)
 	if response.Constraints != "" {
 		data.Constraints = types.StringValue(response.Constraints)
 	}
