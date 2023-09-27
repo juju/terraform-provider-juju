@@ -15,7 +15,7 @@ A resource that represents a Juju machine deployment. Refer to the juju add-mach
 ```terraform
 resource "juju_machine" "this_machine" {
   model       = juju_model.development.name
-  series      = "focal"
+  base        = "ubuntu@22.04"
   name        = "this_machine"
   constraints = "tags=my-machine-tag"
 }
