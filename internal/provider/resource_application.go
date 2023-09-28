@@ -101,7 +101,8 @@ func (r *applicationResource) Configure(ctx context.Context, req resource.Config
 
 func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A resource that represents a Juju application deployment.",
+		Description: "A resource that represents a single Juju application deployment from a charm. Deployment of bundles" +
+			" is not supported.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Description: "A custom name for the application deployment. If empty, uses the charm's name.",
