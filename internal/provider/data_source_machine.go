@@ -112,7 +112,7 @@ func (d *machineDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	if _, err := d.client.Machines.ReadMachine(
 		juju.ReadMachineInput{
 			ModelName: data.Model.ValueString(),
-			MachineId: machine_id,
+			ID:        machine_id,
 		},
 	); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read machine %q, got error: %s", machine_id, err))
