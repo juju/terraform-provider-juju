@@ -405,33 +405,20 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 
 	var apps []nestedApplication
 	state.Application.ElementsAs(ctx, &apps, false)
-	endpoints, offer, _, err := parseEndpoints(apps)
+	endpoints, _, _, err := parseEndpoints(apps)
 	if err != nil {
 		resp.Diagnostics.AddError("Provider Error", err.Error())
 		return
 	}
 
-	//If one of the endpoints is an offer then we need to remove the remote offer rather than destroying the integration
-	if offer != nil {
-		errs := r.client.Offers.RemoveRemoteOffer(&juju.RemoveRemoteOfferInput{
-			ModelName: modelName,
-			OfferURL:  *offer,
-		})
-		if len(errs) > 0 {
-			for _, v := range errs {
-				resp.Diagnostics.AddError("Client Error", v.Error())
-			}
-			return
-		}
-	} else {
-		err = r.client.Integrations.DestroyIntegration(&juju.IntegrationInput{
-			ModelName: modelName,
-			Endpoints: endpoints,
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Client Error", err.Error())
-			return
-		}
+	// Remove the integration
+	err = r.client.Integrations.DestroyIntegration(&juju.IntegrationInput{
+		ModelName: modelName,
+		Endpoints: endpoints,
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", err.Error())
+		return
 	}
 	r.trace(fmt.Sprintf("Deleted integration resource: %q", state.ID.ValueString()))
 }
