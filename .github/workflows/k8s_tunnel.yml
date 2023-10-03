@@ -1,0 +1,194 @@
+name: Tunnel to Juju controller via load balancer on k8s
+
+on:
+  pull_request:
+    paths-ignore:
+      - "README.md"
+      - "project-docs/**"
+  push:
+    branches:
+      - "main"
+    paths-ignore:
+      - "README.md"
+      - "project-docs/**"
+
+# Testing only needs permissions to read the repository contents.
+permissions:
+  contents: read
+
+jobs:
+  # Ensure project builds before running testing matrix
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+      - run: go build -v .
+
+  # Run acceptance tests in a matrix with Terraform CLI versions
+  add-machine-test:
+    name: Add Machine
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_IPV6: false
+    strategy:
+      fail-fast: false
+      matrix:
+        # Only on lxd
+        cloud:
+          - "microk8s"
+        terraform:
+          - "1.5.*"
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      # set up terraform
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ matrix.terraform }}
+          terraform_wrapper: false
+      # set up snap, lxd, tox, Juju, bootstrap a controller, etc.
+      - name: Setup operator environment
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: ${{ matrix.cloud }}
+          juju-channel: 2.9/stable
+      - run: go mod download
+      - name: "Bring up loadbalancer & access via terraform plan"
+        run: |
+          echo "Determine Juju details"
+          CONTROLLER=$(juju whoami --format yaml | yq .controller)
+          JUJU_USERNAME=$(juju show-controller | yq .$CONTROLLER.account.user)
+          JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password)
+          JUJU_CA_CERT=$(juju show-controller | yq .$CONTROLLER.details.ca-cert | sed ':a;N;$!ba;s/\n/\\n/g')
+
+          # Ensure Juju controller name
+          echo "Controller name: $CONTROLLER"
+          echo "Juju Username: $JUJU_USERNAME"
+
+          # Enable Ingress in MicroK8s
+          sudo microk8s enable ingress
+
+          # Determine a subnet for MetalLB
+          subnet="$(ip route get 1 | head -n 1 | awk '{print $7}' | awk -F. '{print $1 "." $2 "." $3 ".240/24"}')"
+          echo "MetalLB subnet: $subnet"
+          
+          # Add the current user to the microk8s group
+          echo "Adding current user to the microk8s group"
+          sudo usermod -a -G microk8s $(whoami)
+          chown -R $(whoami) ~/.kube
+
+          # Apply changes to group membership
+          newgrp microk8s
+          /snap/microk8s/current/usr/bin/env
+
+          # Enable MetalLB on MicroK8s
+          sudo microk8s enable metallb:$subnet
+
+          namespace="controller-$CONTROLLER"
+          service_name="controller-service-lb"
+
+          # Display services layout
+          echo "Services layout:"
+          sudo microk8s.kubectl get services -n $namespace
+
+          # Create a LoadBalancer service
+          sudo microk8s.kubectl apply -f - <<EOF
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: $service_name
+            namespace: $namespace
+          spec:
+            ipFamilies:
+            - IPv4
+            ipFamilyPolicy: SingleStack
+            ports:
+            - name: api-server
+              port: 17070
+              protocol: TCP
+              targetPort: 17070
+            selector:
+              app.kubernetes.io/name: controller
+            sessionAffinity: None
+            type: LoadBalancer
+          EOF
+          echo "Load Balancer service created."
+
+          # Display services layout with the Load Balancer
+          echo "Services layout with the Load Balancer:"
+          sudo microk8s.kubectl get services -n $namespace
+
+          echo "Waiting for external IP for $service_name in $namespace..."
+          external_ip=""
+          attempts=0
+          max_attempts=3
+
+          while [ -z "$external_ip" ] && [ "$attempts" -lt "$max_attempts" ]; do
+            external_ip="$(sudo microk8s.kubectl get service -n "$namespace" "$service_name" -o=jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+            if [ -z "$external_ip" ]; then
+              echo "External IP not yet assigned. Waiting..."
+              attempts=$((attempts + 1))
+              sleep 5
+            fi
+          done
+
+          if [ -z "$external_ip" ]; then
+            echo "External IP not assigned after $max_attempts attempts. Exiting..."
+            exit 1
+          else
+            echo "LoadBalancer service ready at IP: $external_ip"
+          fi
+          
+          # Write the Terraform configuration file
+          echo "
+          terraform {
+            required_providers {
+              juju = {
+                source = \"juju/juju\"
+                version = \">= 0.9.1\"
+              }
+            }
+          }
+          provider \"juju\" {
+            controller_addresses = \"$external_ip:17070\"
+            username = \"$JUJU_USERNAME\"
+            password = \"$JUJU_PASSWORD\"
+            ca_certificate = \"$JUJU_CA_CERT\"
+          }
+
+          resource \"juju_model\" \"testmodel\" {
+            name = \"test-model\"
+          }
+
+          resource \"juju_application\" \"testapp\" {
+            name = \"juju-qa-test\"
+            model = juju_model.testmodel.name
+
+            charm {
+              name = \"juju-qa-test\"
+            }
+          }
+          " > ./terraform_config.tf
+
+          echo "====== Using Terraform Config: ==========="
+          cat ./terraform_config.tf
+          echo "=========================================="
+
+          # Initialize and apply Terraform
+          echo "Initializing Terraform..."
+          terraform init
+          echo "Planning Terraform changes..."
+          terraform plan
+          echo "Applying Terraform changes..."
+          terraform apply --auto-approve
+
+          # Cleanup: Remove Terraform configuration file
+          rm ./terraform_config.tf
