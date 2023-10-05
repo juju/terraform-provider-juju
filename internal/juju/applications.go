@@ -139,17 +139,15 @@ type UpdateApplicationInput struct {
 	ModelName string
 	ModelInfo *params.ModelInfo
 	AppName   string
-	//Channel   string // TODO: Unsupported for now
-	Units    *int
-	Revision *int
-	Channel  string
-	Series   string
-	Trust    *bool
-	Expose   map[string]interface{}
+	Units     *int
+	Revision  *int
+	Channel   string
+	Trust     *bool
+	Expose    map[string]interface{}
 	// Unexpose indicates what endpoints to unexpose
 	Unexpose []string
 	Config   map[string]string
-	//Series    string // TODO: Unsupported for now
+	//Series    string // Unsupported today
 	Placement   map[string]interface{}
 	Constraints *constraints.Value
 }
@@ -845,6 +843,14 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		}
 	}
 
+	if input.Constraints != nil {
+		err := applicationAPIClient.SetConstraints(input.AppName, *input.Constraints)
+		if err != nil {
+			c.Errorf(err, "setting application constraints")
+			return err
+		}
+	}
+
 	if input.Units != nil {
 		// TODO: Refactor this to a separate function
 		modelType, err := c.ModelType(input.ModelName)
@@ -897,23 +903,15 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 
 	// use the revision, channel, and series info to create the
 	// corresponding SetCharm info
-
-	if input.Revision != nil || input.Channel != "" || input.Series != "" {
-		setCharmConfig, err := c.computeSetCharmConfig(input, appStatus.Series, appStatus.CharmChannel, applicationAPIClient, modelconfigAPIClient, charmsAPIClient)
+	if input.Revision != nil || input.Channel != "" {
+		setCharmConfig, err := c.computeSetCharmConfig(input, applicationAPIClient, charmsAPIClient)
 		if err != nil {
 			return err
 		}
 
+		// TODO, empty branch name could further break generations.
 		err = applicationAPIClient.SetCharm("", *setCharmConfig)
 		if err != nil {
-			return err
-		}
-	}
-
-	if input.Constraints != nil {
-		err := applicationAPIClient.SetConstraints(input.AppName, *input.Constraints)
-		if err != nil {
-			c.Errorf(err, "setting application constraints")
 			return err
 		}
 	}
@@ -948,8 +946,12 @@ func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) e
 
 // computeSetCharmConfig populates the corresponding configuration object
 // to indicate juju what charm to be deployed.
-func (c applicationsClient) computeSetCharmConfig(input *UpdateApplicationInput, currentSeries string, currentChannel string, applicationAPIClient *apiapplication.Client, modelconfigAPIClient *apimodelconfig.Client, charmsAPIClient *apicharms.Client) (*apiapplication.SetCharmConfig, error) {
-	oldURL, _, err := applicationAPIClient.GetCharmURLOrigin("", input.AppName)
+func (c applicationsClient) computeSetCharmConfig(
+	input *UpdateApplicationInput,
+	applicationAPIClient *apiapplication.Client,
+	charmsAPIClient *apicharms.Client,
+) (*apiapplication.SetCharmConfig, error) {
+	oldURL, oldOrigin, err := applicationAPIClient.GetCharmURLOrigin("", input.AppName)
 	if err != nil {
 		return nil, err
 	}
@@ -959,39 +961,27 @@ func (c applicationsClient) computeSetCharmConfig(input *UpdateApplicationInput,
 		newURL = oldURL.WithRevision(*input.Revision)
 	}
 
-	modelConstraints, err := modelconfigAPIClient.GetModelConstraints()
+	newOrigin := oldOrigin
+	if input.Channel != "" {
+		parsedChannel, err := charm.ParseChannel(input.Channel)
+		if err != nil {
+			return nil, err
+		}
+		if parsedChannel.Track != "" {
+			newOrigin.Track = strPtr(parsedChannel.Track)
+		}
+		newOrigin.Risk = string(parsedChannel.Risk)
+		if parsedChannel.Branch != "" {
+			newOrigin.Branch = strPtr(parsedChannel.Branch)
+		}
+	}
+
+	resolvedURL, resolvedOrigin, _, err := resolveCharm(charmsAPIClient, newURL, newOrigin)
 	if err != nil {
 		return nil, err
 	}
 
-	// if no series were set, we will use the current one or the default
-	series := input.Series
-	if series == "" {
-		series = currentSeries
-	}
-
-	platform, err := utils.DeducePlatform(constraints.Value{}, series, modelConstraints)
-	if err != nil {
-		return nil, err
-	}
-
-	// if no channel, use the current channel
-	channel := input.Channel
-	if channel == "" {
-		channel = currentChannel
-	}
-
-	parsedChannel, err := charm.ParseChannel(channel)
-	if err != nil {
-		return nil, err
-	}
-
-	origin, err := utils.DeduceOrigin(newURL, parsedChannel, platform)
-	if err != nil {
-		return nil, err
-	}
-
-	resultOrigin, err := charmsAPIClient.AddCharm(newURL, origin, false)
+	resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, resolvedOrigin, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1020,4 +1010,8 @@ func resolveCharm(charmsAPIClient *apicharms.Client, curl *charm.URL, origin api
 	}
 	resolvedCharm := resolved[0]
 	return resolvedCharm.URL, resolvedCharm.Origin, resolvedCharm.SupportedSeries, resolvedCharm.Error
+}
+
+func strPtr(in string) *string {
+	return &in
 }
