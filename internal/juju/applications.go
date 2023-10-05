@@ -22,16 +22,20 @@ import (
 	"github.com/juju/charm/v8"
 	charmresources "github.com/juju/charm/v8/resource"
 	"github.com/juju/clock"
+	"github.com/juju/collections/set"
 	jujuerrors "github.com/juju/errors"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apicharms "github.com/juju/juju/api/client/charms"
 	apiclient "github.com/juju/juju/api/client/client"
 	apimodelconfig "github.com/juju/juju/api/client/modelconfig"
+	"github.com/juju/juju/api/client/modelmanager"
 	apiresources "github.com/juju/juju/api/client/resources"
+	apicommoncharm "github.com/juju/juju/api/common/charm"
 	"github.com/juju/juju/cmd/juju/application/utils"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/core/model"
+	"github.com/juju/juju/core/series"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/juju/version"
@@ -221,11 +225,19 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		return nil, fmt.Errorf("specifying a revision requires a channel for future upgrades")
 	}
 
-	modelConstraints, err := modelconfigAPIClient.GetModelConstraints()
-	if err != nil {
-		return nil, err
+	// The architecture constraint is required to find the proper
+	// platform to deploy. First look at constraints provided by
+	// the user, fall back to any model constraints.
+	var platformCons constraints.Value
+	if input.Constraints.HasArch() {
+		platformCons = input.Constraints
+	} else {
+		platformCons, err = modelconfigAPIClient.GetModelConstraints()
+		if err != nil {
+			return nil, err
+		}
 	}
-	platform, err := utils.DeducePlatform(constraints.Value{}, input.CharmSeries, modelConstraints)
+	platform, err := utils.DeducePlatform(constraints.Value{}, input.CharmSeries, platformCons)
 	if err != nil {
 		return nil, err
 	}
@@ -240,77 +252,21 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	// Charm or bundle has been supplied as a URL so we resolve and
 	// deploy using the store but pass in the origin command line
 	// argument so users can target a specific origin.
-	resolved, err := charmsAPIClient.ResolveCharms([]apicharms.CharmToResolve{{URL: charmURL, Origin: origin}})
+	resolvedURL, resolvedOrigin, supportedSeries, err := resolveCharm(charmsAPIClient, charmURL, origin)
 	if err != nil {
 		return nil, err
 	}
-	if len(resolved) != 1 {
-		return nil, fmt.Errorf("expected only one resolution, received %d", len(resolved))
-	}
-	resolvedCharm := resolved[0]
-	if resolvedCharm.Error != nil {
-		return nil, resolvedCharm.Error
-	}
-	if resolvedCharm.Origin.Type == "bundle" {
+	if resolvedOrigin.Type == "bundle" {
 		return nil, jujuerrors.NotSupportedf("deploying bundles")
 	}
 
-	// Figure out the actual series of the charm
-	var series string
-	switch {
-	case input.CharmSeries != "":
-		// Explicitly request series.
-		series = input.CharmSeries
-	case charmURL.Series != "":
-		// Series specified in charm URL.
-		series = charmURL.Series
-	default:
-		// First try using the default model series if explicitly set, provided
-		// it is supported by the charm.
-		// Get the model config
-		attrs, err := modelconfigAPIClient.ModelGet()
-		if err != nil {
-			return nil, jujuerrors.Wrap(err, errors.New("cannot fetch model settings"))
-		}
-		modelConfig, err := config.New(config.NoDefaults, attrs)
-		if err != nil {
-			return nil, err
-		}
-
-		var explicit bool
-		series, explicit = modelConfig.DefaultSeries()
-		if explicit {
-			_, err := charm.SeriesForCharm(series, resolvedCharm.SupportedSeries)
-			if err == nil {
-				break
-			}
-		}
-
-		// Finally, because we are forced we choose LTS
-		series = version.DefaultSupportedLTS()
-	}
-
-	// Select an actually supported series
-	series, err = charm.SeriesForCharm(series, resolvedCharm.SupportedSeries)
+	seriesToUse, err := c.seriesToUse(modelconfigAPIClient, input.CharmSeries, resolvedOrigin.Series, set.NewStrings(supportedSeries...))
 	if err != nil {
 		return nil, err
 	}
-
 	// Add the charm to the model
-	origin = resolvedCharm.Origin.WithSeries(series)
-
-	var deployRevision int
-	if input.CharmRevision > -1 {
-		deployRevision = input.CharmRevision
-	} else {
-		if origin.Revision != nil {
-			deployRevision = *origin.Revision
-		} else {
-			return nil, errors.New("no origin revision")
-		}
-	}
-
-	charmURL = resolvedCharm.URL.WithRevision(deployRevision).WithArchitecture(origin.Architecture).WithSeries(series)
+	origin = resolvedOrigin.WithSeries(seriesToUse)
+	charmURL = resolvedURL.WithSeries(seriesToUse)
 	resultOrigin, err := charmsAPIClient.AddCharm(charmURL, origin, false)
 	if err != nil {
 		return nil, err
@@ -368,7 +324,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		return &CreateApplicationResponse{
 			AppName:  appName,
 			Revision: *origin.Revision,
-			Series:   series,
+			Series:   seriesToUse,
 		}, err
 	}
 
@@ -378,8 +334,109 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	return &CreateApplicationResponse{
 		AppName:  appName,
 		Revision: *origin.Revision,
-		Series:   series,
+		Series:   seriesToUse,
 	}, err
+}
+
+// supportedWorkloadSeries returns a slice of supported workload series
+// depending on the controller agent version. This provider currently
+// uses juju 2.9.45 code. However the supported workload series list is
+// different between juju 2 and juju 3. Handle that here.
+func (c applicationsClient) supportedWorkloadSeries(imageStream string) (set.Strings, error) {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	modelManagerAPIClient := modelmanager.NewClient(conn)
+	defer modelManagerAPIClient.Close()
+
+	uuid, err := c.ModelUUID("controller")
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := modelManagerAPIClient.ModelInfo([]names.ModelTag{names.NewModelTag(uuid)})
+	if err != nil {
+		return nil, err
+	}
+	if info[0].Error != nil {
+		return nil, info[0].Error
+	}
+
+	supportedSeries, err := series.WorkloadSeries(time.Now(), "", imageStream)
+	if err != nil {
+		return nil, err
+	}
+	if info[0].Result.AgentVersion.Major > 2 {
+		unsupported := set.NewStrings("bionic", "trusty", "windows", "xenial", "centos7", "precise")
+		supportedSeries = supportedSeries.Difference(unsupported)
+	}
+	return supportedSeries, nil
+}
+
+// seriesToUse selects a series to deploy a charm with based on the following
+// criteria
+//   - A user specified series must be supported by the charm and a valid juju
+//     supported workload series. If so, use that, otherwise if an input series
+//     is provided, return an error.
+//   - Next check DefaultSeries from model config. If explicitly defined by the
+//     user, check against charm and juju supported workloads. Use that if in
+//     both lists.
+//   - Third check the suggested series against just supported workload series.
+//     It has already been checked against charm series.
+//
+// Note, we are re-implementing the logic of series_selector in juju code as it's
+// a private object.
+func (c applicationsClient) seriesToUse(modelconfigAPIClient *apimodelconfig.Client, inputSeries, suggestedSeries string, charmSeries set.Strings) (string, error) {
+	attrs, err := modelconfigAPIClient.ModelGet()
+	if err != nil {
+		return "", jujuerrors.Wrap(err, errors.New("cannot fetch model settings"))
+	}
+	modelConfig, err := config.New(config.NoDefaults, attrs)
+	if err != nil {
+		return "", err
+	}
+
+	supportedWorkloadSeries, err := c.supportedWorkloadSeries(modelConfig.ImageStream())
+	if err != nil {
+		return "", err
+	}
+
+	// If the inputSeries is supported by the charm and is a supported
+	// workload series, use that.
+	if charmSeries.Contains(inputSeries) && supportedWorkloadSeries.Contains(inputSeries) {
+		return suggestedSeries, nil
+	} else if inputSeries != "" {
+		return "", jujuerrors.NewNotSupported(nil,
+			fmt.Sprintf("series %q either not supported by the charm, or an unsupported juju workload series with the current version of juju.", inputSeries))
+	}
+
+	// We can choose from a list of series, supported both as a
+	// workload series and the by charm.
+	supportedSeries := charmSeries.Intersection(supportedWorkloadSeries)
+
+	// If a default series is explicitly defined for the model,
+	// use that if a supportedSeries.
+	defaultSeries, explicit := modelConfig.DefaultSeries()
+	if explicit {
+		useSeries, err := charm.SeriesForCharm(defaultSeries, supportedSeries.Values())
+		if err == nil {
+			return useSeries, nil
+		}
+	}
+
+	// If a suggested series is in the supportedSeries list, use it.
+	useSeries, err := charm.SeriesForCharm(suggestedSeries, supportedSeries.Values())
+	if err == nil {
+		return useSeries, nil
+	}
+
+	// Note: This DefaultSupportedLTS is specific to juju 2.9.45
+	lts := version.DefaultSupportedLTS()
+
+	// Select an actually supported series
+	return charm.SeriesForCharm(lts, supportedSeries.Values())
 }
 
 // processExpose is a local function that executes an expose request.
@@ -948,4 +1005,19 @@ func (c applicationsClient) computeSetCharmConfig(input *UpdateApplicationInput,
 	}
 
 	return &toReturn, nil
+}
+
+func resolveCharm(charmsAPIClient *apicharms.Client, curl *charm.URL, origin apicommoncharm.Origin) (*charm.URL, apicommoncharm.Origin, []string, error) {
+	// Charm or bundle has been supplied as a URL so we resolve and
+	// deploy using the store but pass in the origin command line
+	// argument so users can target a specific origin.
+	resolved, err := charmsAPIClient.ResolveCharms([]apicharms.CharmToResolve{{URL: curl, Origin: origin}})
+	if err != nil {
+		return nil, apicommoncharm.Origin{}, []string{}, err
+	}
+	if len(resolved) != 1 {
+		return nil, apicommoncharm.Origin{}, []string{}, fmt.Errorf("expected only one resolution, received %d", len(resolved))
+	}
+	resolvedCharm := resolved[0]
+	return resolvedCharm.URL, resolvedCharm.Origin, resolvedCharm.SupportedSeries, resolvedCharm.Error
 }
