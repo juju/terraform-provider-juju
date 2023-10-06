@@ -88,9 +88,9 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 	if err != nil {
 		return nil, append(errs, err)
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := applicationoffers.NewClient(conn)
-	defer client.Close()
 
 	offerName := input.Name
 	if offerName == "" {
@@ -102,9 +102,8 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 	if err != nil {
 		return nil, append(errs, err)
 	}
-	defer modelConn.Close()
+	defer func() { _ = modelConn.Close() }()
 	applicationClient := application.NewClient(modelConn)
-	defer applicationClient.Close()
 
 	// wait for the app to be available
 	ctx, cancel := context.WithTimeout(context.Background(), OfferAppAvailableTimeout)
@@ -159,10 +158,9 @@ func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, erro
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := applicationoffers.NewClient(conn)
-	defer client.Close()
-
 	result, err := client.ApplicationOffer(input.OfferURL)
 	if err != nil {
 		return nil, err
@@ -190,10 +188,9 @@ func (c offersClient) DestroyOffer(input *DestroyOfferInput) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := applicationoffers.NewClient(conn)
-	defer client.Close()
-
 	offer, err := client.ApplicationOffer(input.OfferURL)
 	if err != nil {
 		return err
@@ -259,15 +256,15 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = modelConn.Close() }()
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	offersClient := applicationoffers.NewClient(conn)
-	defer offersClient.Close()
 	client := apiapplication.NewClient(modelConn)
-	defer client.Close()
 
 	url, err := crossmodel.ParseOfferURL(input.OfferURL)
 	if err != nil {
@@ -342,11 +339,10 @@ func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 		errors = append(errors, err)
 		return errors
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := apiapplication.NewClient(conn)
-	defer client.Close()
 	clientAPIClient := apiclient.NewClient(conn)
-	defer clientAPIClient.Close()
 
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {

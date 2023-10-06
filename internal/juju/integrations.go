@@ -90,9 +90,9 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := apiapplication.NewClient(conn)
-	defer client.Close()
 
 	// wait for the apps to be available
 	ctx, cancel := context.WithTimeout(context.Background(), IntegrationAppAvailableTimeout)
@@ -130,6 +130,7 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	status, err := getStatus(conn)
 	if err != nil {
@@ -190,9 +191,9 @@ func (c integrationsClient) UpdateIntegration(input *UpdateIntegrationInput) (*U
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := apiapplication.NewClient(conn)
-	defer client.Close()
 
 	listViaCIDRs := splitCommaDelimitedList(input.ViaCIDRs)
 	response, err := client.AddRelation(
@@ -240,9 +241,9 @@ func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := apiapplication.NewClient(conn)
-	defer client.Close()
 
 	var force bool = false
 	var timeout time.Duration = 30 * time.Second
@@ -261,7 +262,6 @@ func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
 
 func getStatus(conn api.Connection) (*params.FullStatus, error) {
 	client := apiclient.NewClient(conn)
-	defer client.Close()
 
 	status, err := client.Status(nil)
 	if err != nil {

@@ -82,12 +82,11 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	machineAPIClient := apimachinemanager.NewClient(conn)
-	defer func() { _ = machineAPIClient.Close() }()
 
 	modelConfigAPIClient := apimodelconfig.NewClient(conn)
-	defer func() { _ = modelConfigAPIClient.Close() }()
 
 	if input.SSHAddress != "" {
 		configAttrs, err := modelConfigAPIClient.ModelGet()
@@ -240,9 +239,9 @@ func (c machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse
 	if err != nil {
 		return response, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	clientAPIClient := apiclient.NewClient(conn)
-	defer func() { _ = clientAPIClient.Close() }()
 
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
@@ -273,9 +272,9 @@ func (c machinesClient) DestroyMachine(input *DestroyMachineInput) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	machineAPIClient := apimachinemanager.NewClient(conn)
-	defer func() { _ = machineAPIClient.Close() }()
 
 	_, err = machineAPIClient.DestroyMachinesWithParams(false, false, (*time.Duration)(nil), input.ID)
 

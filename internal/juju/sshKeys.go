@@ -47,9 +47,9 @@ func (c *sshKeysClient) CreateSSHKey(input *CreateSSHKeyInput) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := keymanager.NewClient(conn)
-	defer client.Close()
 
 	// NOTE
 	// Juju only stores ssh keys at a global level.
@@ -79,9 +79,9 @@ func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, e
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := keymanager.NewClient(conn)
-	defer client.Close()
 
 	// NOTE: At this moment Juju only uses global ssh keys.
 	// We hardcode the user to be admin.
@@ -109,9 +109,9 @@ func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := keymanager.NewClient(conn)
-	defer client.Close()
 
 	// NOTE: Unfortunately Juju will return an error if we try to
 	// remove the last ssh key from the controller. This is something

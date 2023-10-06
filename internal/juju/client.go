@@ -171,9 +171,9 @@ func (sc *sharedClient) fillModelCache() error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := modelmanager.NewClient(conn)
-	defer func() { _ = client.Close() }()
 
 	// Calling ListModelSummaries because other Model endpoints require
 	// the UUID, here we're trying to get the model UUID for other calls.

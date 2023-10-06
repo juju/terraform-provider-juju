@@ -190,15 +190,11 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	charmsAPIClient := apicharms.NewClient(conn)
-	defer charmsAPIClient.Close()
-
 	applicationAPIClient := apiapplication.NewClient(conn)
-	defer applicationAPIClient.Close()
-
 	modelconfigAPIClient := apimodelconfig.NewClient(conn)
-	defer modelconfigAPIClient.Close()
 
 	channel, err := charm.ParseChannel(input.CharmChannel)
 	if err != nil {
@@ -241,6 +237,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	if err != nil {
 		return nil, err
 	}
+
 	// Charm or bundle has been supplied as a URL so we resolve and
 	// deploy using the store but pass in the origin command line
 	// argument so users can target a specific origin.
@@ -259,6 +256,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	// Add the charm to the model
 	origin = resolvedOrigin.WithSeries(seriesToUse)
 	charmURL = resolvedURL.WithSeries(seriesToUse)
+
 	resultOrigin, err := charmsAPIClient.AddCharm(charmURL, origin, false)
 	if err != nil {
 		return nil, err
@@ -297,7 +295,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		}
 	}
 
-	err = applicationAPIClient.Deploy(apiapplication.DeployArgs{
+	args := apiapplication.DeployArgs{
 		CharmID:         charmID,
 		ApplicationName: appName,
 		NumUnits:        input.Units,
@@ -307,7 +305,9 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		Cons:            input.Constraints,
 		Resources:       resources,
 		Placement:       placements,
-	})
+	}
+	c.Tracef("Calling Deploy", map[string]interface{}{"args": args})
+	err = applicationAPIClient.Deploy(args)
 
 	if err != nil {
 		// unfortunate error during deployment
@@ -339,9 +339,9 @@ func (c applicationsClient) supportedWorkloadSeries(imageStream string) (set.Str
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	modelManagerAPIClient := modelmanager.NewClient(conn)
-	defer modelManagerAPIClient.Close()
 
 	uuid, err := c.ModelUUID("controller")
 	if err != nil {
@@ -509,7 +509,6 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 	if err != nil {
 		return nil, err
 	}
-	defer resourcesAPIClient.Close()
 
 	pendingResources := []charmresources.Resource{}
 	for _, v := range charmInfo.Meta.Resources {
@@ -588,12 +587,10 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	applicationAPIClient := apiapplication.NewClient(conn)
-	defer applicationAPIClient.Close()
-
 	clientAPIClient := apiclient.NewClient(conn)
-	defer clientAPIClient.Close()
 
 	apps, err := applicationAPIClient.ApplicationsInfo([]names.ApplicationTag{names.NewApplicationTag(input.AppName)})
 	if err != nil {
@@ -777,15 +774,11 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	applicationAPIClient := apiapplication.NewClient(conn)
-	defer applicationAPIClient.Close()
-
 	charmsAPIClient := apicharms.NewClient(conn)
-	defer charmsAPIClient.Close()
-
 	clientAPIClient := apiclient.NewClient(conn)
-	defer clientAPIClient.Close()
 
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
@@ -920,9 +913,9 @@ func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) e
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	applicationAPIClient := apiapplication.NewClient(conn)
-	defer applicationAPIClient.Close()
 
 	var destroyParams = apiapplication.DestroyApplicationsParams{
 		Applications: []string{
