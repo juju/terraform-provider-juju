@@ -24,6 +24,7 @@ import (
 	"github.com/juju/clock"
 	"github.com/juju/collections/set"
 	jujuerrors "github.com/juju/errors"
+	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apicharms "github.com/juju/juju/api/client/charms"
 	apiclient "github.com/juju/juju/api/client/client"
@@ -199,13 +200,6 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	modelconfigAPIClient := apimodelconfig.NewClient(conn)
 	defer modelconfigAPIClient.Close()
 
-	resourcesAPIClient, err := apiresources.NewClient(conn)
-	if err != nil {
-		return nil, err
-	}
-
-	defer resourcesAPIClient.Close()
-
 	channel, err := charm.ParseChannel(input.CharmChannel)
 	if err != nil {
 		return nil, err
@@ -275,7 +269,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		Origin: resultOrigin,
 	}
 
-	resources, err := c.processResources(charmsAPIClient, resourcesAPIClient, charmID, appName)
+	resources, err := c.processResources(charmsAPIClient, conn, charmID, appName)
 	if err != nil {
 		return nil, err
 	}
@@ -500,7 +494,7 @@ func splitCommaDelimitedList(list string) []string {
 
 // processResources is a helper function to process the charm
 // metadata and request the download of any additional resource.
-func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, resourcesAPIClient *apiresources.Client, charmID apiapplication.CharmID, appName string) (map[string]string, error) {
+func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string) (map[string]string, error) {
 	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL.String())
 	if err != nil {
 		return nil, err
@@ -510,6 +504,12 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 	if len(charmInfo.Meta.Resources) == 0 {
 		return nil, nil
 	}
+
+	resourcesAPIClient, err := apiresources.NewClient(conn)
+	if err != nil {
+		return nil, err
+	}
+	defer resourcesAPIClient.Close()
 
 	pendingResources := []charmresources.Resource{}
 	for _, v := range charmInfo.Meta.Resources {
@@ -663,7 +663,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("failed to parse charm: %v", err)
 	}
 
-	returnedConf, err := applicationAPIClient.Get("master", input.AppName)
+	returnedConf, err := applicationAPIClient.Get(model.GenerationMaster, input.AppName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get app configuration %v", err)
 	}
@@ -787,9 +787,6 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	clientAPIClient := apiclient.NewClient(conn)
 	defer clientAPIClient.Close()
 
-	modelconfigAPIClient := apimodelconfig.NewClient(conn)
-	defer modelconfigAPIClient.Close()
-
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
 		return err
@@ -909,8 +906,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 			return err
 		}
 
-		// TODO, empty branch name could further break generations.
-		err = applicationAPIClient.SetCharm("", *setCharmConfig)
+		err = applicationAPIClient.SetCharm(model.GenerationMaster, *setCharmConfig)
 		if err != nil {
 			return err
 		}
