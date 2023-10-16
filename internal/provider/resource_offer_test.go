@@ -66,7 +66,7 @@ resource "juju_application" "appone" {
 
 	charm {
 		name = "postgresql"
-		series = "focal"
+		series = "jammy"
 	}
 }
 
@@ -148,7 +148,7 @@ resource "juju_application" "this" {
 
 	charm {
 		name = "postgresql"
-		series = "focal"
+		series = "jammy"
 	}
 }
 

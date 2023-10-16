@@ -248,11 +248,16 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	if resolvedOrigin.Type == "bundle" {
 		return nil, jujuerrors.NotSupportedf("deploying bundles")
 	}
+	c.Tracef("heather", map[string]interface{}{"resolved origin": resolvedOrigin, "supported series": supportedSeries})
 
 	seriesToUse, err := c.seriesToUse(modelconfigAPIClient, input.CharmSeries, resolvedOrigin.Series, set.NewStrings(supportedSeries...))
 	if err != nil {
 		return nil, err
 	}
+	if input.CharmSeries != "" && seriesToUse != input.CharmSeries {
+		return nil, jujuerrors.Errorf("juju controller bug (LP 2039179), deploy will have operating system different from request. ")
+	}
+
 	// Add the charm to the model
 	origin = resolvedOrigin.WithSeries(seriesToUse)
 	charmURL = resolvedURL.WithSeries(seriesToUse)
