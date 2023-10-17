@@ -22,7 +22,7 @@ func TestAcc_DataSourceMachine_Edge(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccDataSourceMachine(modelName),
+				Config: testAccDataSourceMachine(modelName, "base = \"ubuntu@22.04\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_machine.machine", "model", modelName),
 				),
@@ -47,7 +47,7 @@ func TestAcc_DataSourceMachine_Stable(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccDataSourceMachine(modelName),
+				Config: testAccDataSourceMachine(modelName, "series = \"jammy\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_machine.machine", "model", modelName),
 				),
@@ -56,7 +56,7 @@ func TestAcc_DataSourceMachine_Stable(t *testing.T) {
 	})
 }
 
-func testAccDataSourceMachine(modelName string) string {
+func testAccDataSourceMachine(modelName, os string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "model" {
   name = %q
@@ -65,11 +65,11 @@ resource "juju_model" "model" {
 resource "juju_machine" "machine" {
   model = juju_model.model.name
   name = "machine"
-  series = "jammy"
+  %s
 }
 
 data "juju_machine" "machine" {
   model = juju_model.model.name
   machine_id = juju_machine.machine.machine_id
-}`, modelName)
+}`, modelName, os)
 }
