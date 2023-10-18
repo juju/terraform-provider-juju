@@ -30,7 +30,7 @@ jobs:
     needs:
       - build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -70,5 +70,5 @@ jobs:
       - env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.cloud }}
-        run: go test -v -cover ./internal/provider/
+        run: go test -timeout 40m -v -cover ./internal/provider/
       

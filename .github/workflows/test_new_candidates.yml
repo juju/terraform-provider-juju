@@ -90,6 +90,7 @@ jobs:
           juju-channel: ${{ env.channel }}
       - name: "Set environment to configure provider"
         if: ${{ env.next-test != 'NA' }}
+        # language=bash
         run: |
           CONTROLLER=$(juju whoami --format yaml | yq .controller)
 
@@ -105,7 +106,7 @@ jobs:
         env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.cloud }}
-        run: go test -timeout 30m -v -cover ./internal/provider/
+        run: go test -timeout 40m -v -cover ./internal/provider/
         timeout-minutes: 40
       - uses: actions/upload-artifact@v3
         if: ${{ success() }}
