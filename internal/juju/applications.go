@@ -248,7 +248,6 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	if resolvedOrigin.Type == "bundle" {
 		return nil, jujuerrors.NotSupportedf("deploying bundles")
 	}
-	c.Tracef("heather", map[string]interface{}{"resolved origin": resolvedOrigin, "supported series": supportedSeries})
 
 	seriesToUse, err := c.seriesToUse(modelconfigAPIClient, input.CharmSeries, resolvedOrigin.Series, set.NewStrings(supportedSeries...))
 	if err != nil {
@@ -896,8 +895,8 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		}
 	}
 
-	// use the revision, channel, and series info to create the
-	// corresponding SetCharm info
+	// Use the revision and channel info to create the
+	// corresponding SetCharm info.
 	if input.Revision != nil || input.Channel != "" {
 		setCharmConfig, err := c.computeSetCharmConfig(input, applicationAPIClient, charmsAPIClient)
 		if err != nil {
