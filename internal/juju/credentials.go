@@ -89,9 +89,9 @@ func (c *credentialsClient) ValidateCredentialForCloud(cloudName, authTypeReceiv
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := cloudapi.NewClient(conn)
-	defer client.Close()
 
 	cloudTag := names.NewCloudTag(cloudName)
 
@@ -127,9 +127,9 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := cloudapi.NewClient(conn)
-	defer client.Close()
 
 	currentUser := getCurrentJujuUser(conn)
 
@@ -170,9 +170,9 @@ func (c *credentialsClient) ReadCredential(input ReadCredentialInput) (*ReadCred
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := cloudapi.NewClient(conn)
-	defer client.Close()
 
 	var clientCredentialFound jujucloud.Credential
 	if clientCredential {
@@ -251,6 +251,7 @@ func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error 
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	currentUser := getCurrentJujuUser(conn)
 
@@ -274,7 +275,6 @@ func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error 
 
 	if input.ControllerCredential {
 		client := cloudapi.NewClient(conn)
-		defer client.Close()
 
 		if _, err := client.UpdateCredentialsCheckModels(*cloudCredTag, cloudCredential); err != nil {
 			return err
@@ -318,9 +318,9 @@ func (c *credentialsClient) DestroyCredential(input DestroyCredentialInput) erro
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := cloudapi.NewClient(conn)
-	defer client.Close()
 
 	currentUser := getCurrentJujuUser(conn)
 

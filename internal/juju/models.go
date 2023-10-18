@@ -102,9 +102,9 @@ func (c *modelsClient) GetModelByName(name string) (*params.ModelInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := modelmanager.NewClient(conn)
-	defer client.Close()
 
 	modelUUID, err := c.ModelUUID(name)
 	if err != nil {
@@ -140,11 +140,11 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 	if err != nil {
 		return resp, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	currentUser := getCurrentJujuUser(conn)
 
 	client := modelmanager.NewClient(conn)
-	defer func() { _ = client.Close() }()
 
 	cloudName := input.CloudName
 	cloudRegion := input.CloudRegion
@@ -189,9 +189,9 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 	if err != nil {
 		return resp, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	modelClient := modelconfig.NewClient(connModel)
-	defer func() { _ = modelClient.Close() }()
 	err = modelClient.SetModelConstraints(input.Constraints)
 	if err != nil {
 		return resp, err
@@ -205,17 +205,16 @@ func (c *modelsClient) ReadModel(name string) (*ReadModelResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = modelmanagerConn.Close() }()
 
 	modelconfigConn, err := c.GetConnection(&name)
 	if err != nil {
 		return nil, errors.Wrap(err, &modelNotFoundError{uuid: name})
 	}
+	defer func() { _ = modelconfigConn.Close() }()
 
 	modelmanagerClient := modelmanager.NewClient(modelmanagerConn)
-	defer modelmanagerClient.Close()
-
 	modelconfigClient := modelconfig.NewClient(modelconfigConn)
-	defer modelconfigClient.Close()
 
 	modelUUIDTag, modelOk := modelconfigConn.ModelTag()
 	if !modelOk {
@@ -257,9 +256,9 @@ func (c *modelsClient) UpdateModel(input UpdateModelInput) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := modelconfig.NewClient(conn)
-	defer client.Close()
 
 	configMap := make(map[string]interface{})
 	for key, value := range input.Config {
@@ -298,12 +297,12 @@ func (c *modelsClient) UpdateModel(input UpdateModelInput) error {
 		if err != nil {
 			return err
 		}
+		defer func() { _ = conn.Close() }()
 		modelUUIDTag, modelOk := conn.ModelTag()
 		if !modelOk {
 			return errors.Errorf("Not connected to model %q", input.Name)
 		}
 		clientModelManager := modelmanager.NewClient(connModelManager)
-		defer clientModelManager.Close()
 		if err := clientModelManager.ChangeModelCredential(modelUUIDTag, *cloudCredTag); err != nil {
 			return err
 		}
@@ -317,9 +316,9 @@ func (c *modelsClient) DestroyModel(input DestroyModelInput) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := modelmanager.NewClient(conn)
-	defer client.Close()
 
 	maxWait := 10 * time.Minute
 	timeout := 30 * time.Minute
@@ -343,9 +342,9 @@ func (c *modelsClient) GrantModel(input GrantModelInput) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := modelmanager.NewClient(conn)
-	defer client.Close()
 
 	modelUUID, err := c.ModelUUID(input.ModelName)
 	if err != nil {
@@ -376,9 +375,9 @@ func (c *modelsClient) UpdateAccessModel(input UpdateAccessModelInput) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := modelmanager.NewClient(conn)
-	defer client.Close()
 
 	for _, user := range input.Revoke {
 		err := client.RevokeModel(user, "read", uuid)
@@ -405,9 +404,9 @@ func (c *modelsClient) DestroyAccessModel(input DestroyAccessModelInput) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := modelmanager.NewClient(conn)
-	defer func() { _ = client.Close() }()
 
 	uuid, err := c.ModelUUID(input.ModelName)
 	if err != nil {

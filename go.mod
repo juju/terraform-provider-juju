@@ -19,6 +19,7 @@ require (
 	github.com/juju/charm/v8 v8.0.6
 	github.com/juju/clock v1.0.3
 	github.com/juju/cmd/v3 v3.0.13
+	github.com/juju/collections v1.0.2
 	github.com/juju/errors v1.0.0
 	github.com/juju/names/v4 v4.0.0
 	github.com/juju/retry v1.0.0
@@ -109,7 +110,6 @@ require (
 	github.com/juju/ansiterm v1.0.0 // indirect
 	github.com/juju/blobstore/v2 v2.0.0 // indirect
 	github.com/juju/charmrepo/v6 v6.0.3 // indirect
-	github.com/juju/collections v1.0.2 // indirect
 	github.com/juju/description/v3 v3.0.15 // indirect
 	github.com/juju/featureflag v1.0.0 // indirect
 	github.com/juju/gnuflag v1.0.0 // indirect

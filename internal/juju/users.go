@@ -61,9 +61,9 @@ func (c *usersClient) CreateUser(input CreateUserInput) (*CreateUserResponse, er
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := usermanager.NewClient(conn)
-	defer client.Close()
 
 	userTag, userSecret, err := client.AddUser(input.Name, input.DisplayName, input.Password)
 	if err != nil {
@@ -78,9 +78,9 @@ func (c *usersClient) ReadUser(name string) (*ReadUserResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = usermanagerConn.Close() }()
 
 	usermanagerClient := usermanager.NewClient(usermanagerConn)
-	defer usermanagerClient.Close()
 
 	users, err := usermanagerClient.UserInfo([]string{name}, false) //don't list disabled users
 	if err != nil {
@@ -106,9 +106,8 @@ func (c *usersClient) ModelUserInfo(modelName string) (*ReadModelUserResponse, e
 	if err != nil {
 		return nil, err
 	}
-
+	defer func() { _ = usermanagerConn.Close() }()
 	usermanagerClient := usermanager.NewClient(usermanagerConn)
-	defer usermanagerClient.Close()
 
 	uuid, err := c.ModelUUID(modelName)
 	if err != nil {
@@ -134,9 +133,9 @@ func (c *usersClient) UpdateUser(input UpdateUserInput) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := usermanager.NewClient(conn)
-	defer client.Close()
 
 	if input.Password != "" {
 		err = client.SetPassword(input.Name, input.Password)
@@ -153,9 +152,9 @@ func (c *usersClient) DestroyUser(input DestroyUserInput) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	client := usermanager.NewClient(conn)
-	defer client.Close()
 
 	err = client.RemoveUser(input.Name)
 	if err != nil {

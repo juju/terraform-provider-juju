@@ -603,7 +603,14 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 			updateApplicationInput.Channel = planCharm.Channel.ValueString()
 		}
 		if !planCharm.Series.Equal(stateCharm.Series) {
-			updateApplicationInput.Series = planCharm.Series.ValueString()
+			// This violates terraform's declarative model. We could implement
+			// `juju set-application-base`, usually used after `upgrade-machine`,
+			// which would change the operating system used for future units of
+			// the application provided the charm supported it, but not change
+			// the current. This provider does not implement an equivalent to
+			// `upgrade-machine`. There is also a question of how to handle a
+			// change to series, revision and channel at the same time.
+			resp.Diagnostics.AddWarning("Not Supported", "Changing an application's operating system after deploy.")
 		}
 		if !planCharm.Revision.Equal(stateCharm.Revision) {
 			updateApplicationInput.Revision = intPtr(planCharm.Revision)

@@ -226,10 +226,10 @@ func testAccCheckDevelopmentConfigIsUnset(modelName string) resource.TestCheckFu
 		if err != nil {
 			return err
 		}
+		defer func() { _ = conn.Close() }()
 
 		// TODO: consider adding to client so we don't expose this layer (even in tests)
 		modelconfigClient := modelconfig.NewClient(conn)
-		defer modelconfigClient.Close()
 
 		metadata, err := modelconfigClient.ModelGetWithMetadata()
 		if err != nil {

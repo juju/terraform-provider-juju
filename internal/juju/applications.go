@@ -22,16 +22,21 @@ import (
 	"github.com/juju/charm/v8"
 	charmresources "github.com/juju/charm/v8/resource"
 	"github.com/juju/clock"
+	"github.com/juju/collections/set"
 	jujuerrors "github.com/juju/errors"
+	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apicharms "github.com/juju/juju/api/client/charms"
 	apiclient "github.com/juju/juju/api/client/client"
 	apimodelconfig "github.com/juju/juju/api/client/modelconfig"
+	"github.com/juju/juju/api/client/modelmanager"
 	apiresources "github.com/juju/juju/api/client/resources"
+	apicommoncharm "github.com/juju/juju/api/common/charm"
 	"github.com/juju/juju/cmd/juju/application/utils"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/core/model"
+	"github.com/juju/juju/core/series"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/juju/version"
@@ -135,17 +140,15 @@ type UpdateApplicationInput struct {
 	ModelName string
 	ModelInfo *params.ModelInfo
 	AppName   string
-	//Channel   string // TODO: Unsupported for now
-	Units    *int
-	Revision *int
-	Channel  string
-	Series   string
-	Trust    *bool
-	Expose   map[string]interface{}
+	Units     *int
+	Revision  *int
+	Channel   string
+	Trust     *bool
+	Expose    map[string]interface{}
 	// Unexpose indicates what endpoints to unexpose
 	Unexpose []string
 	Config   map[string]string
-	//Series    string // TODO: Unsupported for now
+	//Series    string // Unsupported today
 	Placement   map[string]interface{}
 	Constraints *constraints.Value
 }
@@ -187,22 +190,11 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	charmsAPIClient := apicharms.NewClient(conn)
-	defer charmsAPIClient.Close()
-
 	applicationAPIClient := apiapplication.NewClient(conn)
-	defer applicationAPIClient.Close()
-
 	modelconfigAPIClient := apimodelconfig.NewClient(conn)
-	defer modelconfigAPIClient.Close()
-
-	resourcesAPIClient, err := apiresources.NewClient(conn)
-	if err != nil {
-		return nil, err
-	}
-
-	defer resourcesAPIClient.Close()
 
 	channel, err := charm.ParseChannel(input.CharmChannel)
 	if err != nil {
@@ -221,11 +213,19 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		return nil, fmt.Errorf("specifying a revision requires a channel for future upgrades")
 	}
 
-	modelConstraints, err := modelconfigAPIClient.GetModelConstraints()
-	if err != nil {
-		return nil, err
+	// The architecture constraint is required to find the proper
+	// platform to deploy. First look at constraints provided by
+	// the user, fall back to any model constraints.
+	var platformCons constraints.Value
+	if input.Constraints.HasArch() {
+		platformCons = input.Constraints
+	} else {
+		platformCons, err = modelconfigAPIClient.GetModelConstraints()
+		if err != nil {
+			return nil, err
+		}
 	}
-	platform, err := utils.DeducePlatform(constraints.Value{}, input.CharmSeries, modelConstraints)
+	platform, err := utils.DeducePlatform(constraints.Value{}, input.CharmSeries, platformCons)
 	if err != nil {
 		return nil, err
 	}
@@ -237,80 +237,30 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	if err != nil {
 		return nil, err
 	}
+
 	// Charm or bundle has been supplied as a URL so we resolve and
 	// deploy using the store but pass in the origin command line
 	// argument so users can target a specific origin.
-	resolved, err := charmsAPIClient.ResolveCharms([]apicharms.CharmToResolve{{URL: charmURL, Origin: origin}})
+	resolvedURL, resolvedOrigin, supportedSeries, err := resolveCharm(charmsAPIClient, charmURL, origin)
 	if err != nil {
 		return nil, err
 	}
-	if len(resolved) != 1 {
-		return nil, fmt.Errorf("expected only one resolution, received %d", len(resolved))
-	}
-	resolvedCharm := resolved[0]
-	if resolvedCharm.Error != nil {
-		return nil, resolvedCharm.Error
-	}
-	if resolvedCharm.Origin.Type == "bundle" {
+	if resolvedOrigin.Type == "bundle" {
 		return nil, jujuerrors.NotSupportedf("deploying bundles")
 	}
 
-	// Figure out the actual series of the charm
-	var series string
-	switch {
-	case input.CharmSeries != "":
-		// Explicitly request series.
-		series = input.CharmSeries
-	case charmURL.Series != "":
-		// Series specified in charm URL.
-		series = charmURL.Series
-	default:
-		// First try using the default model series if explicitly set, provided
-		// it is supported by the charm.
-		// Get the model config
-		attrs, err := modelconfigAPIClient.ModelGet()
-		if err != nil {
-			return nil, jujuerrors.Wrap(err, errors.New("cannot fetch model settings"))
-		}
-		modelConfig, err := config.New(config.NoDefaults, attrs)
-		if err != nil {
-			return nil, err
-		}
-
-		var explicit bool
-		series, explicit = modelConfig.DefaultSeries()
-		if explicit {
-			_, err := charm.SeriesForCharm(series, resolvedCharm.SupportedSeries)
-			if err == nil {
-				break
-			}
-		}
-
-		// Finally, because we are forced we choose LTS
-		series = version.DefaultSupportedLTS()
-	}
-
-	// Select an actually supported series
-	series, err = charm.SeriesForCharm(series, resolvedCharm.SupportedSeries)
+	seriesToUse, err := c.seriesToUse(modelconfigAPIClient, input.CharmSeries, resolvedOrigin.Series, set.NewStrings(supportedSeries...))
 	if err != nil {
 		return nil, err
 	}
-
-	// Add the charm to the model
-	origin = resolvedCharm.Origin.WithSeries(series)
-
-	var deployRevision int
-	if input.CharmRevision > -1 {
-		deployRevision = input.CharmRevision
-	} else {
-		if origin.Revision != nil {
-			deployRevision = *origin.Revision
-		} else {
-			return nil, errors.New("no origin revision")
-		}
+	if input.CharmSeries != "" && seriesToUse != input.CharmSeries {
+		return nil, jujuerrors.Errorf("juju controller bug (LP 2039179), deploy will have operating system different from request. ")
 	}
 
-	charmURL = resolvedCharm.URL.WithRevision(deployRevision).WithArchitecture(origin.Architecture).WithSeries(series)
+	// Add the charm to the model
+	origin = resolvedOrigin.WithSeries(seriesToUse)
+	charmURL = resolvedURL.WithSeries(seriesToUse)
+
 	resultOrigin, err := charmsAPIClient.AddCharm(charmURL, origin, false)
 	if err != nil {
 		return nil, err
@@ -321,7 +271,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		Origin: resultOrigin,
 	}
 
-	resources, err := c.processResources(charmsAPIClient, resourcesAPIClient, charmID, appName)
+	resources, err := c.processResources(charmsAPIClient, conn, charmID, appName)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +299,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		}
 	}
 
-	err = applicationAPIClient.Deploy(apiapplication.DeployArgs{
+	args := apiapplication.DeployArgs{
 		CharmID:         charmID,
 		ApplicationName: appName,
 		NumUnits:        input.Units,
@@ -359,7 +309,9 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		Cons:            input.Constraints,
 		Resources:       resources,
 		Placement:       placements,
-	})
+	}
+	c.Tracef("Calling Deploy", map[string]interface{}{"args": args})
+	err = applicationAPIClient.Deploy(args)
 
 	if err != nil {
 		// unfortunate error during deployment
@@ -368,7 +320,7 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		return &CreateApplicationResponse{
 			AppName:  appName,
 			Revision: *origin.Revision,
-			Series:   series,
+			Series:   seriesToUse,
 		}, err
 	}
 
@@ -378,8 +330,109 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 	return &CreateApplicationResponse{
 		AppName:  appName,
 		Revision: *origin.Revision,
-		Series:   series,
+		Series:   seriesToUse,
 	}, err
+}
+
+// supportedWorkloadSeries returns a slice of supported workload series
+// depending on the controller agent version. This provider currently
+// uses juju 2.9.45 code. However the supported workload series list is
+// different between juju 2 and juju 3. Handle that here.
+func (c applicationsClient) supportedWorkloadSeries(imageStream string) (set.Strings, error) {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	modelManagerAPIClient := modelmanager.NewClient(conn)
+
+	uuid, err := c.ModelUUID("controller")
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := modelManagerAPIClient.ModelInfo([]names.ModelTag{names.NewModelTag(uuid)})
+	if err != nil {
+		return nil, err
+	}
+	if info[0].Error != nil {
+		return nil, info[0].Error
+	}
+
+	supportedSeries, err := series.WorkloadSeries(time.Now(), "", imageStream)
+	if err != nil {
+		return nil, err
+	}
+	if info[0].Result.AgentVersion.Major > 2 {
+		unsupported := set.NewStrings("bionic", "trusty", "windows", "xenial", "centos7", "precise")
+		supportedSeries = supportedSeries.Difference(unsupported)
+	}
+	return supportedSeries, nil
+}
+
+// seriesToUse selects a series to deploy a charm with based on the following
+// criteria
+//   - A user specified series must be supported by the charm and a valid juju
+//     supported workload series. If so, use that, otherwise if an input series
+//     is provided, return an error.
+//   - Next check DefaultSeries from model config. If explicitly defined by the
+//     user, check against charm and juju supported workloads. Use that if in
+//     both lists.
+//   - Third check the suggested series against just supported workload series.
+//     It has already been checked against charm series.
+//
+// Note, we are re-implementing the logic of series_selector in juju code as it's
+// a private object.
+func (c applicationsClient) seriesToUse(modelconfigAPIClient *apimodelconfig.Client, inputSeries, suggestedSeries string, charmSeries set.Strings) (string, error) {
+	attrs, err := modelconfigAPIClient.ModelGet()
+	if err != nil {
+		return "", jujuerrors.Wrap(err, errors.New("cannot fetch model settings"))
+	}
+	modelConfig, err := config.New(config.NoDefaults, attrs)
+	if err != nil {
+		return "", err
+	}
+
+	supportedWorkloadSeries, err := c.supportedWorkloadSeries(modelConfig.ImageStream())
+	if err != nil {
+		return "", err
+	}
+
+	// If the inputSeries is supported by the charm and is a supported
+	// workload series, use that.
+	if charmSeries.Contains(inputSeries) && supportedWorkloadSeries.Contains(inputSeries) {
+		return suggestedSeries, nil
+	} else if inputSeries != "" {
+		return "", jujuerrors.NewNotSupported(nil,
+			fmt.Sprintf("series %q either not supported by the charm, or an unsupported juju workload series with the current version of juju.", inputSeries))
+	}
+
+	// We can choose from a list of series, supported both as a
+	// workload series and the by charm.
+	supportedSeries := charmSeries.Intersection(supportedWorkloadSeries)
+
+	// If a default series is explicitly defined for the model,
+	// use that if a supportedSeries.
+	defaultSeries, explicit := modelConfig.DefaultSeries()
+	if explicit {
+		useSeries, err := charm.SeriesForCharm(defaultSeries, supportedSeries.Values())
+		if err == nil {
+			return useSeries, nil
+		}
+	}
+
+	// If a suggested series is in the supportedSeries list, use it.
+	useSeries, err := charm.SeriesForCharm(suggestedSeries, supportedSeries.Values())
+	if err == nil {
+		return useSeries, nil
+	}
+
+	// Note: This DefaultSupportedLTS is specific to juju 2.9.45
+	lts := version.DefaultSupportedLTS()
+
+	// Select an actually supported series
+	return charm.SeriesForCharm(lts, supportedSeries.Values())
 }
 
 // processExpose is a local function that executes an expose request.
@@ -445,7 +498,7 @@ func splitCommaDelimitedList(list string) []string {
 
 // processResources is a helper function to process the charm
 // metadata and request the download of any additional resource.
-func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, resourcesAPIClient *apiresources.Client, charmID apiapplication.CharmID, appName string) (map[string]string, error) {
+func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string) (map[string]string, error) {
 	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL.String())
 	if err != nil {
 		return nil, err
@@ -454,6 +507,11 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 	// check if we have resources to request
 	if len(charmInfo.Meta.Resources) == 0 {
 		return nil, nil
+	}
+
+	resourcesAPIClient, err := apiresources.NewClient(conn)
+	if err != nil {
+		return nil, err
 	}
 
 	pendingResources := []charmresources.Resource{}
@@ -533,12 +591,10 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = conn.Close() }()
 
 	applicationAPIClient := apiapplication.NewClient(conn)
-	defer applicationAPIClient.Close()
-
 	clientAPIClient := apiclient.NewClient(conn)
-	defer clientAPIClient.Close()
 
 	apps, err := applicationAPIClient.ApplicationsInfo([]names.ApplicationTag{names.NewApplicationTag(input.AppName)})
 	if err != nil {
@@ -608,7 +664,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("failed to parse charm: %v", err)
 	}
 
-	returnedConf, err := applicationAPIClient.Get("master", input.AppName)
+	returnedConf, err := applicationAPIClient.Get(model.GenerationMaster, input.AppName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get app configuration %v", err)
 	}
@@ -722,18 +778,11 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	applicationAPIClient := apiapplication.NewClient(conn)
-	defer applicationAPIClient.Close()
-
 	charmsAPIClient := apicharms.NewClient(conn)
-	defer charmsAPIClient.Close()
-
 	clientAPIClient := apiclient.NewClient(conn)
-	defer clientAPIClient.Close()
-
-	modelconfigAPIClient := apimodelconfig.NewClient(conn)
-	defer modelconfigAPIClient.Close()
 
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
@@ -788,6 +837,14 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		}
 	}
 
+	if input.Constraints != nil {
+		err := applicationAPIClient.SetConstraints(input.AppName, *input.Constraints)
+		if err != nil {
+			c.Errorf(err, "setting application constraints")
+			return err
+		}
+	}
+
 	if input.Units != nil {
 		// TODO: Refactor this to a separate function
 		modelType, err := c.ModelType(input.ModelName)
@@ -838,25 +895,16 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		}
 	}
 
-	// use the revision, channel, and series info to create the
-	// corresponding SetCharm info
-
-	if input.Revision != nil || input.Channel != "" || input.Series != "" {
-		setCharmConfig, err := c.computeSetCharmConfig(input, appStatus.Series, appStatus.CharmChannel, applicationAPIClient, modelconfigAPIClient, charmsAPIClient)
+	// Use the revision and channel info to create the
+	// corresponding SetCharm info.
+	if input.Revision != nil || input.Channel != "" {
+		setCharmConfig, err := c.computeSetCharmConfig(input, applicationAPIClient, charmsAPIClient)
 		if err != nil {
 			return err
 		}
 
-		err = applicationAPIClient.SetCharm("", *setCharmConfig)
+		err = applicationAPIClient.SetCharm(model.GenerationMaster, *setCharmConfig)
 		if err != nil {
-			return err
-		}
-	}
-
-	if input.Constraints != nil {
-		err := applicationAPIClient.SetConstraints(input.AppName, *input.Constraints)
-		if err != nil {
-			c.Errorf(err, "setting application constraints")
 			return err
 		}
 	}
@@ -869,9 +917,9 @@ func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) e
 	if err != nil {
 		return err
 	}
+	defer func() { _ = conn.Close() }()
 
 	applicationAPIClient := apiapplication.NewClient(conn)
-	defer applicationAPIClient.Close()
 
 	var destroyParams = apiapplication.DestroyApplicationsParams{
 		Applications: []string{
@@ -891,8 +939,12 @@ func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) e
 
 // computeSetCharmConfig populates the corresponding configuration object
 // to indicate juju what charm to be deployed.
-func (c applicationsClient) computeSetCharmConfig(input *UpdateApplicationInput, currentSeries string, currentChannel string, applicationAPIClient *apiapplication.Client, modelconfigAPIClient *apimodelconfig.Client, charmsAPIClient *apicharms.Client) (*apiapplication.SetCharmConfig, error) {
-	oldURL, _, err := applicationAPIClient.GetCharmURLOrigin("", input.AppName)
+func (c applicationsClient) computeSetCharmConfig(
+	input *UpdateApplicationInput,
+	applicationAPIClient *apiapplication.Client,
+	charmsAPIClient *apicharms.Client,
+) (*apiapplication.SetCharmConfig, error) {
+	oldURL, oldOrigin, err := applicationAPIClient.GetCharmURLOrigin("", input.AppName)
 	if err != nil {
 		return nil, err
 	}
@@ -902,39 +954,27 @@ func (c applicationsClient) computeSetCharmConfig(input *UpdateApplicationInput,
 		newURL = oldURL.WithRevision(*input.Revision)
 	}
 
-	modelConstraints, err := modelconfigAPIClient.GetModelConstraints()
+	newOrigin := oldOrigin
+	if input.Channel != "" {
+		parsedChannel, err := charm.ParseChannel(input.Channel)
+		if err != nil {
+			return nil, err
+		}
+		if parsedChannel.Track != "" {
+			newOrigin.Track = strPtr(parsedChannel.Track)
+		}
+		newOrigin.Risk = string(parsedChannel.Risk)
+		if parsedChannel.Branch != "" {
+			newOrigin.Branch = strPtr(parsedChannel.Branch)
+		}
+	}
+
+	resolvedURL, resolvedOrigin, _, err := resolveCharm(charmsAPIClient, newURL, newOrigin)
 	if err != nil {
 		return nil, err
 	}
 
-	// if no series were set, we will use the current one or the default
-	series := input.Series
-	if series == "" {
-		series = currentSeries
-	}
-
-	platform, err := utils.DeducePlatform(constraints.Value{}, series, modelConstraints)
-	if err != nil {
-		return nil, err
-	}
-
-	// if no channel, use the current channel
-	channel := input.Channel
-	if channel == "" {
-		channel = currentChannel
-	}
-
-	parsedChannel, err := charm.ParseChannel(channel)
-	if err != nil {
-		return nil, err
-	}
-
-	origin, err := utils.DeduceOrigin(newURL, parsedChannel, platform)
-	if err != nil {
-		return nil, err
-	}
-
-	resultOrigin, err := charmsAPIClient.AddCharm(newURL, origin, false)
+	resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, resolvedOrigin, false)
 	if err != nil {
 		return nil, err
 	}
@@ -948,4 +988,23 @@ func (c applicationsClient) computeSetCharmConfig(input *UpdateApplicationInput,
 	}
 
 	return &toReturn, nil
+}
+
+func resolveCharm(charmsAPIClient *apicharms.Client, curl *charm.URL, origin apicommoncharm.Origin) (*charm.URL, apicommoncharm.Origin, []string, error) {
+	// Charm or bundle has been supplied as a URL so we resolve and
+	// deploy using the store but pass in the origin command line
+	// argument so users can target a specific origin.
+	resolved, err := charmsAPIClient.ResolveCharms([]apicharms.CharmToResolve{{URL: curl, Origin: origin}})
+	if err != nil {
+		return nil, apicommoncharm.Origin{}, []string{}, err
+	}
+	if len(resolved) != 1 {
+		return nil, apicommoncharm.Origin{}, []string{}, fmt.Errorf("expected only one resolution, received %d", len(resolved))
+	}
+	resolvedCharm := resolved[0]
+	return resolvedCharm.URL, resolvedCharm.Origin, resolvedCharm.SupportedSeries, resolvedCharm.Error
+}
+
+func strPtr(in string) *string {
+	return &in
 }

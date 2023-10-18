@@ -68,7 +68,7 @@ resource "juju_application" "this" {
 
 	charm {
 		name = "postgresql"
-		series = "focal"
+		series = "jammy"
 	}
 }
 
