@@ -514,44 +514,7 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 		return nil, err
 	}
 
-	pendingResources := []charmresources.Resource{}
-	for _, v := range charmInfo.Meta.Resources {
-		aux := charmresources.Resource{
-			Meta: charmresources.Meta{
-				Name:        v.Name,
-				Type:        v.Type,
-				Path:        v.Path,
-				Description: v.Description,
-			},
-			Origin: charmresources.OriginStore,
-			// TODO: prepare for resources with different versions
-			Revision: -1,
-		}
-		pendingResources = append(pendingResources, aux)
-	}
-
-	resourcesReq := apiresources.AddPendingResourcesArgs{
-		ApplicationID: appName,
-		CharmID: apiresources.CharmID{
-			URL:    charmID.URL,
-			Origin: charmID.Origin,
-		},
-		CharmStoreMacaroon: nil,
-		Resources:          pendingResources,
-	}
-
-	toRequest, err := resourcesAPIClient.AddPendingResources(resourcesReq)
-	if err != nil {
-		return nil, err
-	}
-
-	// now build a map with the resource name and the corresponding UUID
-	toReturn := map[string]string{}
-	for i, argsResource := range pendingResources {
-		toReturn[argsResource.Meta.Name] = toRequest[i]
-	}
-
-	return toReturn, nil
+	return addPendingResources(appName, charmInfo.Meta.Resources, charmID, resourcesAPIClient)
 }
 
 // ReadApplicationWithRetryOnNotFound calls ReadApplication until
@@ -784,6 +747,12 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	charmsAPIClient := apicharms.NewClient(conn)
 	clientAPIClient := apiclient.NewClient(conn)
 
+	resourcesAPIClient, err := apiresources.NewClient(conn)
+	if err != nil {
+		return err
+	}
+	defer resourcesAPIClient.Close()
+
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
 		return err
@@ -898,7 +867,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	// Use the revision and channel info to create the
 	// corresponding SetCharm info.
 	if input.Revision != nil || input.Channel != "" {
-		setCharmConfig, err := c.computeSetCharmConfig(input, applicationAPIClient, charmsAPIClient)
+		setCharmConfig, err := c.computeSetCharmConfig(input, applicationAPIClient, charmsAPIClient, resourcesAPIClient)
 		if err != nil {
 			return err
 		}
@@ -943,6 +912,7 @@ func (c applicationsClient) computeSetCharmConfig(
 	input *UpdateApplicationInput,
 	applicationAPIClient *apiapplication.Client,
 	charmsAPIClient *apicharms.Client,
+	resourcesAPIClient *apiresources.Client,
 ) (*apiapplication.SetCharmConfig, error) {
 	oldURL, oldOrigin, err := applicationAPIClient.GetCharmURLOrigin("", input.AppName)
 	if err != nil {
@@ -975,16 +945,25 @@ func (c applicationsClient) computeSetCharmConfig(
 	}
 
 	resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, resolvedOrigin, false)
+
+	if err != nil {
+		return nil, err
+	}
+
+	apiCharmID := apiapplication.CharmID{
+		URL:    newURL,
+		Origin: resultOrigin,
+	}
+
+	resourceIDs, err := c.updateResources(input.AppName, charmsAPIClient, apiCharmID, resourcesAPIClient)
 	if err != nil {
 		return nil, err
 	}
 
 	toReturn := apiapplication.SetCharmConfig{
 		ApplicationName: input.AppName,
-		CharmID: apiapplication.CharmID{
-			URL:    newURL,
-			Origin: resultOrigin,
-		},
+		CharmID:         apiCharmID,
+		ResourceIDs:     resourceIDs,
 	}
 
 	return &toReturn, nil
@@ -1007,4 +986,67 @@ func resolveCharm(charmsAPIClient *apicharms.Client, curl *charm.URL, origin api
 
 func strPtr(in string) *string {
 	return &in
+}
+
+func (c applicationsClient) updateResources(appName string, charmsAPIClient *apicharms.Client,
+	charmID apiapplication.CharmID, resourcesAPIClient *apiresources.Client) (map[string]string, error) {
+	meta, err := utils.GetMetaResources(charmID.URL, charmsAPIClient)
+	if err != nil {
+		return nil, err
+	}
+	// TODO (cderici): Provided resources for GetUpgradeResources are user inputs.
+	// It's a map[string]string that should come from the plan itself. We currently
+	// don't have a resources block in the charm.
+	filtered, err := utils.GetUpgradeResources(
+		charmID,
+		charmsAPIClient,
+		resourcesAPIClient,
+		appName,
+		nil,
+		meta,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if len(filtered) == 0 {
+		return nil, nil
+	}
+
+	return addPendingResources(appName, filtered, charmID, resourcesAPIClient)
+}
+
+func addPendingResources(appName string, resourcesToBeAdded map[string]charmresources.Meta,
+	charmID apiapplication.CharmID, resourcesAPIClient *apiresources.Client) (map[string]string, error) {
+	pendingResources := []charmresources.Resource{}
+	for _, v := range resourcesToBeAdded {
+		aux := charmresources.Resource{
+			Meta:     v,
+			Origin:   charmresources.OriginStore,
+			Revision: -1,
+		}
+		pendingResources = append(pendingResources, aux)
+	}
+
+	resourcesReq := apiresources.AddPendingResourcesArgs{
+		ApplicationID: appName,
+		CharmID: apiresources.CharmID{
+			URL:    charmID.URL,
+			Origin: charmID.Origin,
+		},
+		CharmStoreMacaroon: nil,
+		Resources:          pendingResources,
+	}
+
+	toRequest, err := resourcesAPIClient.AddPendingResources(resourcesReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// now build a map with the resource name and the corresponding UUID
+	toReturn := map[string]string{}
+	for i, argsResource := range pendingResources {
+		toReturn[argsResource.Meta.Name] = toRequest[i]
+	}
+
+	return toReturn, nil
 }
