@@ -751,7 +751,6 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	if err != nil {
 		return err
 	}
-	defer resourcesAPIClient.Close()
 
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
@@ -945,7 +944,6 @@ func (c applicationsClient) computeSetCharmConfig(
 	}
 
 	resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, resolvedOrigin, false)
-
 	if err != nil {
 		return nil, err
 	}
