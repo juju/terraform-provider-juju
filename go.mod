@@ -19,7 +19,7 @@ require (
 	github.com/juju/charm/v8 v8.0.6
 	github.com/juju/clock v1.0.3
 	github.com/juju/cmd/v3 v3.0.13
-	github.com/juju/collections v1.0.2
+	github.com/juju/collections v1.0.4
 	github.com/juju/errors v1.0.0
 	github.com/juju/names/v4 v4.0.0
 	github.com/juju/retry v1.0.0
