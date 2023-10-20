@@ -24,7 +24,7 @@ func TestAcc_ResourceOffer_Edge(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceOffer(modelName),
+				Config: testAccResourceOffer(modelName, "base = \"ubuntu@22.04\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", "admin", modelName, "this")),
@@ -66,7 +66,7 @@ resource "juju_application" "appone" {
 
 	charm {
 		name = "postgresql"
-		series = "jammy"
+		base = "ubuntu@22.04"
 	}
 }
 
@@ -86,7 +86,7 @@ resource "juju_application" "apptwo" {
 
 	charm {
 		name = "hello-juju"
-		series = "focal"
+		base = "ubuntu@20.04"
 	}
 }
 
@@ -120,7 +120,7 @@ func TestAcc_ResourceOffer_Stable(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceOffer(modelName),
+				Config: testAccResourceOffer(modelName, "series = \"focal\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", "admin", modelName, "this")),
@@ -136,7 +136,7 @@ func TestAcc_ResourceOffer_Stable(t *testing.T) {
 	})
 }
 
-func testAccResourceOffer(modelName string) string {
+func testAccResourceOffer(modelName, os string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
@@ -148,7 +148,7 @@ resource "juju_application" "this" {
 
 	charm {
 		name = "postgresql"
-		series = "jammy"
+		%s
 	}
 }
 
@@ -157,5 +157,5 @@ resource "juju_offer" "this" {
 	application_name = juju_application.this.name
 	endpoint         = "db"
 }
-`, modelName)
+`, modelName, os)
 }

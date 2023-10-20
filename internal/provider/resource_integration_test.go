@@ -25,7 +25,7 @@ func TestAcc_ResourceIntegration_Edge(t *testing.T) {
 		CheckDestroy:             testAccCheckIntegrationDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceIntegration(modelName),
+				Config: testAccResourceIntegration(modelName, "base = \"ubuntu@22.04\"", "base = \"ubuntu@22.04\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
@@ -39,7 +39,7 @@ func TestAcc_ResourceIntegration_Edge(t *testing.T) {
 				ResourceName:      "juju_integration.this",
 			},
 			{
-				Config: testAccResourceIntegration(modelName),
+				Config: testAccResourceIntegration(modelName, "base = \"ubuntu@22.04\"", "base = \"ubuntu@22.04\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
@@ -64,7 +64,7 @@ func TestAcc_ResourceIntegrationWithViaCIDRs_Edge(t *testing.T) {
 		CheckDestroy:             testAccCheckIntegrationDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceIntegrationWithVia(srcModelName, dstModelName, via),
+				Config: testAccResourceIntegrationWithVia(srcModelName, "base = \"ubuntu@22.04\"", dstModelName, "base = \"ubuntu@22.04\"", via),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.a", "model", srcModelName),
 					resource.TestCheckResourceAttr("juju_integration.a", "id", fmt.Sprintf("%v:%v:%v", srcModelName, "a:source", "b:sink")),
@@ -94,7 +94,7 @@ func TestAcc_ResourceIntegration_Stable(t *testing.T) {
 		CheckDestroy: testAccCheckIntegrationDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceIntegration(modelName),
+				Config: testAccResourceIntegration(modelName, "series = \"jammy\"", "series = \"jammy\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
@@ -108,7 +108,7 @@ func TestAcc_ResourceIntegration_Stable(t *testing.T) {
 				ResourceName:      "juju_integration.this",
 			},
 			{
-				Config: testAccResourceIntegration(modelName),
+				Config: testAccResourceIntegration(modelName, "series = \"jammy\"", "series = \"jammy\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
@@ -123,7 +123,7 @@ func testAccCheckIntegrationDestroy(s *terraform.State) error {
 	return nil
 }
 
-func testAccResourceIntegration(modelName string) string {
+func testAccResourceIntegration(modelName, osOne, osTwo string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
@@ -135,7 +135,7 @@ resource "juju_application" "one" {
 	
 	charm {
 		name = "juju-qa-dummy-sink"
-		series = "jammy"
+		%s
 	}
 }
 
@@ -145,7 +145,7 @@ resource "juju_application" "two" {
 
 	charm {
 		name = "juju-qa-dummy-source"
-		series = "jammy"
+		%s
 	}
 }
 
@@ -162,7 +162,7 @@ resource "juju_integration" "this" {
 		endpoint = "sink"
 	}
 }
-`, modelName)
+`, modelName, osOne, osTwo)
 }
 
 func TestAcc_ResourceIntegrationWithViaCIDRs_Stable(t *testing.T) {
@@ -184,7 +184,7 @@ func TestAcc_ResourceIntegrationWithViaCIDRs_Stable(t *testing.T) {
 		CheckDestroy: testAccCheckIntegrationDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceIntegrationWithVia(srcModelName, dstModelName, via),
+				Config: testAccResourceIntegrationWithVia(srcModelName, "series = \"jammy\"", dstModelName, "series = \"jammy\"", via),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.a", "model", srcModelName),
 					resource.TestCheckResourceAttr("juju_integration.a", "id", fmt.Sprintf("%v:%v:%v", srcModelName, "a:source", "b:sink")),
@@ -200,7 +200,7 @@ func TestAcc_ResourceIntegrationWithViaCIDRs_Stable(t *testing.T) {
 // testAccResourceIntegrationWithVia generates a plan where a
 // postgresql:source relates to a pgbouncer:backend-source using
 // and offer of pgbouncer.
-func testAccResourceIntegrationWithVia(srcModelName string, dstModelName string, viaCIDRs string) string {
+func testAccResourceIntegrationWithVia(srcModelName, aOS, dstModelName, bOS, viaCIDRs string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "a" {
 	name = %q
@@ -212,7 +212,7 @@ resource "juju_application" "a" {
 	
 	charm {
 		name = "juju-qa-dummy-sink"
-		series = "jammy"
+		%s
 	}
 }
 
@@ -226,7 +226,7 @@ resource "juju_application" "b" {
 	
 	charm {
 		name = "juju-qa-dummy-source"
-		series = "jammy"
+		%s
 	}
 }
 
@@ -249,7 +249,7 @@ resource "juju_integration" "a" {
 		offer_url = juju_offer.b.url
 	}
 }
-`, srcModelName, dstModelName, viaCIDRs)
+`, srcModelName, aOS, dstModelName, bOS, viaCIDRs)
 }
 
 func TestAcc_ResourceIntegrationWithMultipleConsumers_Edge(t *testing.T) {
@@ -319,7 +319,7 @@ resource "juju_application" "a" {
 
         charm {
                 name    = "postgresql"
-                series  = "jammy"
+                base    = "ubuntu@22.04"
         }
 }
 
@@ -339,7 +339,7 @@ resource "juju_application" "b1" {
 
         charm {
                 name   = "pgbouncer"
-                series = "focal"
+                base = "ubuntu@20.04"
         }
 }
 
@@ -363,7 +363,7 @@ resource "juju_application" "b2" {
 
         charm {
                 name   = "pgbouncer"
-                series = "focal"
+                base = "ubuntu@20.04"
         }
 }
 

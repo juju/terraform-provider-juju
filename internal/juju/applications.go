@@ -101,6 +101,7 @@ type CreateApplicationInput struct {
 	ModelName       string
 	CharmName       string
 	CharmChannel    string
+	CharmBase       string
 	CharmSeries     string
 	CharmRevision   int
 	Units           int
@@ -112,9 +113,7 @@ type CreateApplicationInput struct {
 }
 
 type CreateApplicationResponse struct {
-	AppName  string
-	Revision int
-	Series   string
+	AppName string
 }
 
 type ReadApplicationInput struct {
@@ -126,6 +125,7 @@ type ReadApplicationResponse struct {
 	Name        string
 	Channel     string
 	Revision    int
+	Base        string
 	Series      string
 	Units       int
 	Trust       bool
@@ -213,26 +213,40 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		return nil, fmt.Errorf("specifying a revision requires a channel for future upgrades")
 	}
 
-	// The architecture constraint is required to find the proper
-	// platform to deploy. First look at constraints provided by
-	// the user, fall back to any model constraints.
-	var platformCons constraints.Value
-	if input.Constraints.HasArch() {
-		platformCons = input.Constraints
-	} else {
-		platformCons, err = modelconfigAPIClient.GetModelConstraints()
+	// Look at input.CharmBase and input.CharmSeries for an operating
+	// system to deploy with. Only one is allowed and Charm Base is
+	// preferred. Keep the data as a Series for now as, the
+	// DeducePlatform method expects a series to be provided, not a
+	// base. Luckily, the DeduceOrigin method returns an origin which
+	// does contain the base and a series.
+	var userSuppliedSeries string
+	if input.CharmBase != "" {
+		b, err := series.ParseBaseFromString(input.CharmBase)
 		if err != nil {
 			return nil, err
 		}
+		userSuppliedSeries, err = series.GetSeriesFromBase(b)
+		if err != nil {
+			return nil, err
+		}
+	} else if input.CharmSeries != "" {
+		userSuppliedSeries = input.CharmSeries
 	}
-	platform, err := utils.DeducePlatform(constraints.Value{}, input.CharmSeries, platformCons)
+	platformCons, err := modelconfigAPIClient.GetModelConstraints()
 	if err != nil {
 		return nil, err
 	}
+	platform, err := utils.DeducePlatform(input.Constraints, userSuppliedSeries, platformCons)
+	if err != nil {
+		return nil, err
+	}
+
 	urlForOrigin := charmURL
 	if input.CharmRevision != UnspecifiedRevision {
 		urlForOrigin = urlForOrigin.WithRevision(input.CharmRevision)
 	}
+	urlForOrigin = urlForOrigin.WithSeries(userSuppliedSeries)
+
 	origin, err := utils.DeduceOrigin(urlForOrigin, channel, platform)
 	if err != nil {
 		return nil, err
@@ -249,12 +263,17 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		return nil, jujuerrors.NotSupportedf("deploying bundles")
 	}
 
-	seriesToUse, err := c.seriesToUse(modelconfigAPIClient, input.CharmSeries, resolvedOrigin.Series, set.NewStrings(supportedSeries...))
+	seriesToUse, err := c.seriesToUse(modelconfigAPIClient, userSuppliedSeries, resolvedOrigin.Series, set.NewStrings(supportedSeries...))
 	if err != nil {
 		return nil, err
 	}
-	if input.CharmSeries != "" && seriesToUse != input.CharmSeries {
-		return nil, jujuerrors.Errorf("juju controller bug (LP 2039179), deploy will have operating system different from request. ")
+	if userSuppliedSeries != "" && seriesToUse != userSuppliedSeries {
+		// Ignore errors, the series have already been vetted above.
+		userBase, _ := series.GetBaseFromSeries(userSuppliedSeries)
+		suggestedBase, _ := series.GetBaseFromSeries(seriesToUse)
+		return nil, jujuerrors.Errorf(
+			"juju bug (LP 2039179), requested base %q does not match base %q found for charm.",
+			userBase, suggestedBase)
 	}
 
 	// Add the charm to the model
@@ -303,34 +322,28 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		CharmID:         charmID,
 		ApplicationName: appName,
 		NumUnits:        input.Units,
-		Series:          resultOrigin.Series,
-		CharmOrigin:     resultOrigin,
-		Config:          appConfig,
-		Cons:            input.Constraints,
-		Resources:       resources,
-		Placement:       placements,
+		// Still supply series, to be compatible with juju 2.9 controllers.
+		// 3.x controllers will only use the CharmOrigin and its base.
+		Series:      resultOrigin.Series,
+		CharmOrigin: resultOrigin,
+		Config:      appConfig,
+		Cons:        input.Constraints,
+		Resources:   resources,
+		Placement:   placements,
 	}
 	c.Tracef("Calling Deploy", map[string]interface{}{"args": args})
 	err = applicationAPIClient.Deploy(args)
 
 	if err != nil {
 		// unfortunate error during deployment
-		// TODO: 01-Aug-2023
-		// Why are we returning data on a failure to deploy?
-		return &CreateApplicationResponse{
-			AppName:  appName,
-			Revision: *origin.Revision,
-			Series:   seriesToUse,
-		}, err
+		return nil, err
 	}
 
 	// If we have managed to deploy something, now we have
 	// to check if we have to expose something
 	err = c.processExpose(applicationAPIClient, appName, input.Expose)
 	return &CreateApplicationResponse{
-		AppName:  appName,
-		Revision: *origin.Revision,
-		Series:   seriesToUse,
+		AppName: appName,
 	}, err
 }
 
@@ -385,6 +398,8 @@ func (c applicationsClient) supportedWorkloadSeries(imageStream string) (set.Str
 // Note, we are re-implementing the logic of series_selector in juju code as it's
 // a private object.
 func (c applicationsClient) seriesToUse(modelconfigAPIClient *apimodelconfig.Client, inputSeries, suggestedSeries string, charmSeries set.Strings) (string, error) {
+	c.Tracef("seriesToUse", map[string]interface{}{"inputSeries": inputSeries, "suggestedSeries": suggestedSeries, "charmSeries": charmSeries.Values()})
+
 	attrs, err := modelconfigAPIClient.ModelGet()
 	if err != nil {
 		return "", jujuerrors.Wrap(err, errors.New("cannot fetch model settings"))
@@ -705,11 +720,19 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		exposed["spaces"] = spaces
 		exposed["cidrs"] = cidrs
 	}
+	// ParseChannel to send back a base without the risk.
+	// Having the risk will cause issues with the provider
+	// saving a different value than the user did.
+	baseChannel, err := series.ParseChannel(appInfo.Base.Channel)
+	if err != nil {
+		return nil, jujuerrors.Annotate(err, "failed parse channel for base")
+	}
 
 	response := &ReadApplicationResponse{
 		Name:        charmURL.Name,
 		Channel:     appInfo.Channel,
 		Revision:    charmURL.Revision,
+		Base:        fmt.Sprintf("%s@%s", appInfo.Base.Name, baseChannel.Track),
 		Series:      appInfo.Series,
 		Units:       unitCount,
 		Trust:       trustValue,

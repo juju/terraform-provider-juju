@@ -83,9 +83,10 @@ Required:
 
 Optional:
 
+- `base` (String) The operating system on which to deploy. E.g. ubuntu@22.04.
 - `channel` (String) The channel to use when deploying a charm. Specified as \<track>/\<risk>/\<branch>.
 - `revision` (Number) The revision of the charm to deploy.
-- `series` (String) The series on which to deploy.
+- `series` (String, Deprecated) The series on which to deploy.
 
 
 <a id="nestedblock--expose"></a>

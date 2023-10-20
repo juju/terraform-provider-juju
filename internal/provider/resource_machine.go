@@ -138,7 +138,7 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 				},
 			},
 			BaseKey: schema.StringAttribute{
-				Description: "The operating system series to install on the new machine(s).",
+				Description: "The operating system to install on the new machine(s). E.g. ubuntu@22.04.",
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{

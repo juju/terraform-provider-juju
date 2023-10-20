@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -198,12 +199,32 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 								int64planmodifier.UseStateForUnknown(),
 							},
 						},
-						"series": schema.StringAttribute{
+						SeriesKey: schema.StringAttribute{
 							Description: "The series on which to deploy.",
 							Optional:    true,
 							Computed:    true,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
+							},
+							Validators: []validator.String{
+								stringvalidator.ConflictsWith(path.Expressions{
+									path.MatchRelative().AtParent().AtName(BaseKey),
+								}...),
+							},
+							DeprecationMessage: "Configure base instead. This attribute will be removed in the next major version of the provider.",
+						},
+						BaseKey: schema.StringAttribute{
+							Description: "The operating system on which to deploy. E.g. ubuntu@22.04.",
+							Optional:    true,
+							Computed:    true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
+							Validators: []validator.String{
+								stringvalidator.ConflictsWith(path.Expressions{
+									path.MatchRelative().AtParent().AtName(SeriesKey),
+								}...),
+								stringIsBaseValidator{},
 							},
 						},
 					},
@@ -245,6 +266,7 @@ type nestedCharm struct {
 	Name     types.String `tfsdk:"name"`
 	Channel  types.String `tfsdk:"channel"`
 	Revision types.Int64  `tfsdk:"revision"`
+	Base     types.String `tfsdk:"base"`
 	Series   types.String `tfsdk:"series"`
 }
 
@@ -323,7 +345,6 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	if !planCharm.Revision.IsUnknown() {
 		revision = int(planCharm.Revision.ValueInt64())
 	}
-	series := planCharm.Series.ValueString()
 
 	// TODO: investigate using map[string]string here and let
 	// terraform do the conversion, will help in CreateApplication.
@@ -366,7 +387,8 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		CharmName:       charmName,
 		CharmChannel:    channel,
 		CharmRevision:   revision,
-		CharmSeries:     series,
+		CharmBase:       planCharm.Base.ValueString(),
+		CharmSeries:     planCharm.Series.ValueString(),
 		Units:           int(plan.UnitCount.ValueInt64()),
 		Config:          configField,
 		Constraints:     parsedConstraints,
@@ -396,6 +418,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	plan.Placement = types.StringValue(readResp.Placement)
 	plan.ApplicationName = types.StringValue(createResp.AppName)
 	planCharm.Revision = types.Int64Value(int64(readResp.Revision))
+	planCharm.Base = types.StringValue(readResp.Base)
 	planCharm.Series = types.StringValue(readResp.Series)
 	planCharm.Channel = types.StringValue(readResp.Channel)
 	charmType := req.Config.Schema.GetBlocks()[CharmKey].(schema.ListNestedBlock).NestedObject.Type()
@@ -478,6 +501,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		Name:     types.StringValue(response.Name),
 		Channel:  types.StringValue(response.Channel),
 		Revision: types.Int64Value(int64(response.Revision)),
+		Base:     types.StringValue(response.Base),
 		Series:   types.StringValue(response.Series),
 	}
 	charmType := req.State.Schema.GetBlocks()[CharmKey].(schema.ListNestedBlock).NestedObject.Type()
@@ -602,7 +626,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		if !planCharm.Channel.Equal(stateCharm.Channel) {
 			updateApplicationInput.Channel = planCharm.Channel.ValueString()
 		}
-		if !planCharm.Series.Equal(stateCharm.Series) {
+		if !planCharm.Series.Equal(stateCharm.Series) || !planCharm.Base.Equal(stateCharm.Base) {
 			// This violates terraform's declarative model. We could implement
 			// `juju set-application-base`, usually used after `upgrade-machine`,
 			// which would change the operating system used for future units of
@@ -743,7 +767,7 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 	var state applicationResourceModel
-	// Read Terraform prior state state into the model
+	// Read Terraform prior state into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return

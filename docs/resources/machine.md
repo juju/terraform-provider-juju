@@ -30,7 +30,7 @@ resource "juju_machine" "this_machine" {
 
 ### Optional
 
-- `base` (String) The operating system series to install on the new machine(s).
+- `base` (String) The operating system to install on the new machine(s). E.g. ubuntu@22.04.
 - `constraints` (String) Machine constraints that overwrite those available from 'juju get-model-constraints' and provider's defaults.
 - `disks` (String) Storage constraints for disks to attach to the machine(s).
 - `name` (String) A name for the machine resource in Terraform.
