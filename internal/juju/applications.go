@@ -615,16 +615,17 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("no status returned for application: %s", input.AppName)
 	}
 
-	allocatedMachines := make([]string, 0)
-	placementCount := 0
+	allocatedMachines := set.NewStrings()
 	for _, v := range appStatus.Units {
-		allocatedMachines = append(allocatedMachines, v.Machine)
-		placementCount += 1
+		if v.Machine != "" {
+			allocatedMachines.Add(v.Machine)
+		}
 	}
-	// sort the list
-	sort.Strings(allocatedMachines)
 
-	placement := strings.Join(allocatedMachines, ",")
+	var placement string
+	if !allocatedMachines.IsEmpty() {
+		placement = strings.Join(allocatedMachines.SortedValues(), ",")
+	}
 
 	unitCount := len(appStatus.Units)
 	// if we have a CAAS we use scale instead of units length
