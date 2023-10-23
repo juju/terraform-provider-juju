@@ -37,9 +37,6 @@ func TestAcc_ResourceApplication_Edge(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "jameinel-ubuntu-lite"),
 					resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
-					// We do not have access to this data during creation, only during read.
-					// Therefor it's set to the bool default
-					resource.TestCheckResourceAttr("juju_application.this", "principal", "true"),
 				),
 			},
 			{
@@ -102,8 +99,6 @@ func TestAcc_ResourceApplication_Edge(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 cores=1 mem=4096M"),
-					resource.TestCheckResourceAttr("juju_application.this", "principal", "true"),
-					resource.TestCheckResourceAttr("juju_application.subordinate", "principal", "false"),
 				),
 			},
 			{
@@ -227,7 +222,6 @@ func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "name", charmName),
 					resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
 					resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
-					resource.TestCheckResourceAttr(resourceName, "principal", "true"),
 				),
 			},
 			{
@@ -269,7 +263,6 @@ func TestAcc_ResourceApplication_Stable(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "jameinel-ubuntu-lite"),
 					resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
-					resource.TestCheckResourceAttr("juju_application.this", "principal", "true"),
 				),
 			},
 			{
@@ -303,8 +296,6 @@ func TestAcc_ResourceApplication_Stable(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 cores=1 mem=4096M"),
-					resource.TestCheckResourceAttr("juju_application.this", "principal", "true"),
-					resource.TestCheckResourceAttr("juju_application.subordinate", "principal", "false"),
 				),
 			},
 			{

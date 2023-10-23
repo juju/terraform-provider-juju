@@ -72,7 +72,7 @@ resource "juju_application" "placement_example" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-- `principal` (Boolean) Whether this is a Principal application
+- `principal` (Boolean, Deprecated) Whether this is a Principal application
 
 <a id="nestedblock--charm"></a>
 ### Nested Schema for `charm`

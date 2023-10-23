@@ -66,9 +66,12 @@ type applicationResourceModel struct {
 	Expose          types.List   `tfsdk:"expose"`
 	ModelName       types.String `tfsdk:"model"`
 	Placement       types.String `tfsdk:"placement"`
-	Principal       types.Bool   `tfsdk:"principal"`
-	Trust           types.Bool   `tfsdk:"trust"`
-	UnitCount       types.Int64  `tfsdk:"units"`
+	// TODO - remove Principal when we version the schema
+	// and remove deprecated elements. Once we create upgrade
+	// functionality it can be removed from the structure.
+	Principal types.Bool  `tfsdk:"principal"`
+	Trust     types.Bool  `tfsdk:"trust"`
+	UnitCount types.Int64 `tfsdk:"units"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -163,6 +166,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
 				},
+				DeprecationMessage: "Principal is computed only and not needed. This attribute will be removed in the next major version of the provider.",
 			},
 			"id": schema.StringAttribute{
 				Computed: true,
@@ -414,8 +418,8 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 
 	// Save plan into Terraform state
 	plan.Constraints = types.StringValue(readResp.Constraints.String())
-	plan.Principal = types.BoolValue(readResp.Principal)
 	plan.Placement = types.StringValue(readResp.Placement)
+	plan.Principal = types.BoolNull()
 	plan.ApplicationName = types.StringValue(createResp.AppName)
 	planCharm.Revision = types.Int64Value(int64(readResp.Revision))
 	planCharm.Base = types.StringValue(readResp.Base)
@@ -492,7 +496,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 
 	// Use the response to fill in state
 	state.Placement = types.StringValue(response.Placement)
-	state.Principal = types.BoolValue(response.Principal)
+	state.Principal = types.BoolNull()
 	state.UnitCount = types.Int64Value(int64(response.Units))
 	state.Trust = types.BoolValue(response.Trust)
 
@@ -688,6 +692,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	plan.ID = types.StringValue(newAppID(plan.ModelName.ValueString(), plan.ApplicationName.ValueString()))
+	plan.Principal = types.BoolNull()
 	r.trace("Updated", applicationResourceModelForLogging(ctx, &plan))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -835,7 +840,6 @@ func applicationResourceModelForLogging(_ context.Context, app *applicationResou
 		"constraints":      app.Constraints.ValueString(),
 		"model":            app.ModelName.ValueString(),
 		"placement":        app.Placement.ValueString(),
-		"principal":        app.Principal.ValueBoolPointer(),
 		"expose":           app.Expose.String(),
 		"trust":            app.Trust.ValueBoolPointer(),
 		"units":            app.UnitCount.ValueInt64(),
