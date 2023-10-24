@@ -177,7 +177,7 @@ func resolveCharmURL(charmName string) (*charm.URL, error) {
 	return charmURL, nil
 }
 
-func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*CreateApplicationResponse, error) {
+func (c applicationsClient) CreateApplication(ctx context.Context, input *CreateApplicationInput) (*CreateApplicationResponse, error) {
 	appName := input.ApplicationName
 	if appName == "" {
 		appName = input.CharmName
@@ -276,25 +276,6 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 			userBase, suggestedBase)
 	}
 
-	// Add the charm to the model
-	origin = resolvedOrigin.WithSeries(seriesToUse)
-	charmURL = resolvedURL.WithSeries(seriesToUse)
-
-	resultOrigin, err := charmsAPIClient.AddCharm(charmURL, origin, false)
-	if err != nil {
-		return nil, err
-	}
-
-	charmID := apiapplication.CharmID{
-		URL:    charmURL,
-		Origin: resultOrigin,
-	}
-
-	resources, err := c.processResources(charmsAPIClient, conn, charmID, appName)
-	if err != nil {
-		return nil, err
-	}
-
 	appConfig := input.Config
 	if appConfig == nil {
 		appConfig = make(map[string]string)
@@ -318,24 +299,76 @@ func (c applicationsClient) CreateApplication(input *CreateApplicationInput) (*C
 		}
 	}
 
-	args := apiapplication.DeployArgs{
-		CharmID:         charmID,
-		ApplicationName: appName,
-		NumUnits:        input.Units,
-		// Still supply series, to be compatible with juju 2.9 controllers.
-		// 3.x controllers will only use the CharmOrigin and its base.
-		Series:      resultOrigin.Series,
-		CharmOrigin: resultOrigin,
-		Config:      appConfig,
-		Cons:        input.Constraints,
-		Resources:   resources,
-		Placement:   placements,
-	}
-	c.Tracef("Calling Deploy", map[string]interface{}{"args": args})
-	err = applicationAPIClient.Deploy(args)
+	// Add the charm to the model
+	origin = resolvedOrigin.WithSeries(seriesToUse)
+	charmURL = resolvedURL.WithSeries(seriesToUse)
 
+	// If a plan element, with RequiresReplace in the schema, is
+	// changed. Terraform calls the Destroy method then the Create
+	// method for resource. This provider does not wait for Destroy
+	// to be complete before returning. Therefore, a race may occur
+	// of tearing down and reading the same charm.
+	//
+	// Do the actual work to create an application within Retry.
+	// Errors seen so far include:
+	// * cannot add application "replace": charm "ch:amd64/jammy/mysql-196" not found
+	// * cannot add application "replace": application already exists
+	// * cannot add application "replace": charm: not found or not alive
+	err = retry.Call(retry.CallArgs{
+		Func: func() error {
+			resultOrigin, err := charmsAPIClient.AddCharm(charmURL, origin, false)
+			if err != nil {
+				err2 := typedError(err)
+				// If the charm is AlreadyExists, keep going, we
+				// may still be able to create the application. It's
+				// also possible we have multiple applications using
+				// the same charm.
+				if !jujuerrors.Is(err2, jujuerrors.AlreadyExists) {
+					return err2
+				}
+			}
+
+			charmID := apiapplication.CharmID{
+				URL:    charmURL,
+				Origin: resultOrigin,
+			}
+
+			resources, err := c.processResources(charmsAPIClient, conn, charmID, appName)
+			if err != nil && !jujuerrors.Is(err, jujuerrors.AlreadyExists) {
+				return err
+			}
+
+			args := apiapplication.DeployArgs{
+				CharmID:         charmID,
+				ApplicationName: appName,
+				NumUnits:        input.Units,
+				// Still supply series, to be compatible with juju 2.9 controllers.
+				// 3.x controllers will only use the CharmOrigin and its base.
+				Series:      resultOrigin.Series,
+				CharmOrigin: resultOrigin,
+				Config:      appConfig,
+				Cons:        input.Constraints,
+				Resources:   resources,
+				Placement:   placements,
+			}
+			c.Tracef("Calling Deploy", map[string]interface{}{"args": args})
+			if err = applicationAPIClient.Deploy(args); err != nil {
+				return typedError(err)
+			}
+			return nil
+		},
+		NotifyFunc: func(err error, attempt int) {
+			c.Errorf(err, fmt.Sprintf("deploy application %q retry", appName))
+			message := fmt.Sprintf("waiting for application %q deploy, attempt %d", appName, attempt)
+			c.Debugf(message)
+		},
+		BackoffFunc: retry.DoubleDelay,
+		Attempts:    30,
+		Delay:       time.Second,
+		Clock:       clock.WallClock,
+		Stop:        ctx.Done(),
+	})
 	if err != nil {
-		// unfortunate error during deployment
 		return nil, err
 	}
 
@@ -516,7 +549,7 @@ func splitCommaDelimitedList(list string) []string {
 func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string) (map[string]string, error) {
 	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL.String())
 	if err != nil {
-		return nil, err
+		return nil, typedError(err)
 	}
 
 	// check if we have resources to request
@@ -1061,7 +1094,7 @@ func addPendingResources(appName string, resourcesToBeAdded map[string]charmreso
 
 	toRequest, err := resourcesAPIClient.AddPendingResources(resourcesReq)
 	if err != nil {
-		return nil, err
+		return nil, typedError(err)
 	}
 
 	// now build a map with the resource name and the corresponding UUID

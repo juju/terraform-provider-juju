@@ -26,7 +26,7 @@ func TestAcc_ResourceApplication(t *testing.T) {
 				// "When tests have an ExpectError[...]; this results in any previous state being cleared. "
 				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
 				Config:      testAccResourceApplicationBasic(modelName, appInvalidName),
-				ExpectError: regexp.MustCompile(fmt.Sprintf("Unable to create application, got error: invalid application name %q,\nunexpected character _", appInvalidName)),
+				ExpectError: regexp.MustCompile(fmt.Sprintf("Unable to create application, got error: invalid application name %q,unexpected character _", appInvalidName)),
 			},
 			{
 				Config: testAccResourceApplicationBasic(modelName, appName),
@@ -51,8 +51,8 @@ func TestAcc_ResourceApplication(t *testing.T) {
 					// There is a timing window with destroying an application
 					// before a new one is created when RequiresReplace is used in the
 					// resource schema.
-					return true, nil
-					//return testingCloud != LXDCloudTesting, nil
+					//return true, nil
+					return testingCloud != LXDCloudTesting, nil
 				},
 				Config: testAccResourceApplicationConstraints(modelName, "arch=amd64 cores=1 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
@@ -72,8 +72,8 @@ func TestAcc_ResourceApplication(t *testing.T) {
 					// There is a timing window with destroying an application
 					// before a new one is created when RequiresReplace is used in the
 					// resource schema.
-					return true, nil
-					//return testingCloud != MicroK8sTesting, nil
+					//return true, nil
+					return testingCloud != MicroK8sTesting, nil
 				},
 				Config: testAccResourceApplicationConstraints(modelName, "arch=amd64 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
@@ -92,8 +92,8 @@ func TestAcc_ResourceApplication(t *testing.T) {
 					// There is a timing window with destroying an application
 					// before a new one is created when RequiresReplace is used in the
 					// resource schema.
-					return true, nil
-					//return testingCloud != LXDCloudTesting, nil
+					//return true, nil
+					return testingCloud != LXDCloudTesting, nil
 				},
 				Config: testAccResourceApplicationConstraintsSubordinate(modelName, "arch=amd64 cores=1 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(

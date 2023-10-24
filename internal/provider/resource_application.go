@@ -385,21 +385,23 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	modelName := plan.ModelName.ValueString()
-	createResp, err := r.client.Applications.CreateApplication(&juju.CreateApplicationInput{
-		ApplicationName: plan.ApplicationName.ValueString(),
-		ModelName:       modelName,
-		CharmName:       charmName,
-		CharmChannel:    channel,
-		CharmRevision:   revision,
-		CharmBase:       planCharm.Base.ValueString(),
-		CharmSeries:     planCharm.Series.ValueString(),
-		Units:           int(plan.UnitCount.ValueInt64()),
-		Config:          configField,
-		Constraints:     parsedConstraints,
-		Trust:           plan.Trust.ValueBool(),
-		Expose:          expose,
-		Placement:       plan.Placement.ValueString(),
-	})
+	createResp, err := r.client.Applications.CreateApplication(ctx,
+		&juju.CreateApplicationInput{
+			ApplicationName: plan.ApplicationName.ValueString(),
+			ModelName:       modelName,
+			CharmName:       charmName,
+			CharmChannel:    channel,
+			CharmRevision:   revision,
+			CharmBase:       planCharm.Base.ValueString(),
+			CharmSeries:     planCharm.Series.ValueString(),
+			Units:           int(plan.UnitCount.ValueInt64()),
+			Config:          configField,
+			Constraints:     parsedConstraints,
+			Trust:           plan.Trust.ValueBool(),
+			Expose:          expose,
+			Placement:       plan.Placement.ValueString(),
+		},
+	)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create application, got error: %s", err))
 		return
