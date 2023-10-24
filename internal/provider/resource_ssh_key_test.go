@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_ResourceSSHKey_Edge(t *testing.T) {
+func TestAcc_ResourceSSHKey(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -41,7 +41,7 @@ func TestAcc_ResourceSSHKey_Edge(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceSSHKey_ED25519_Edge(t *testing.T) {
+func TestAcc_ResourceSSHKey_ED25519(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -62,7 +62,7 @@ func TestAcc_ResourceSSHKey_ED25519_Edge(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceSSHKey_Stable(t *testing.T) {
+func TestAcc_ResourceSSHKey_UpgradeProvider(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -73,51 +73,24 @@ func TestAcc_ResourceSSHKey_Stable(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
-		ExternalProviders: map[string]resource.ExternalProvider{
-			"juju": {
-				VersionConstraint: TestProviderStableVersion,
-				Source:            "juju/juju",
-			},
-		},
+
 		Steps: []resource.TestStep{
 			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderStableVersion,
+						Source:            "juju/juju",
+					},
+				},
 				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
 			},
-			// we update the key
 			{
-				Config: testAccResourceSSHKey(modelName, sshKey2),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey2)),
-			},
-		},
-	})
-}
-
-func TestAcc_ResourceSSHKey_ED25519_Stable(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-	modelName := acctest.RandomWithPrefix("tf-test-sshkey")
-	sshKey1 := `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID3gjJTJtYZU55HTUr+hu0JF9p152yiC9czJi9nKojuW jimmy@somewhere`
-
-	resource.Test(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-		ExternalProviders: map[string]resource.ExternalProvider{
-			"juju": {
-				VersionConstraint: TestProviderStableVersion,
-				Source:            "juju/juju",
-			},
-		},
-		Steps: []resource.TestStep{
-			{
-				Config: testAccResourceSSHKey(modelName, sshKey1),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceSSHKey(modelName, sshKey2),
+				PlanOnly:                 true,
 			},
 		},
 	})

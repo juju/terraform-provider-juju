@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_ResourceApplication_Edge(t *testing.T) {
+func TestAcc_ResourceApplication(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 	appInvalidName := "test_app"
@@ -110,7 +110,7 @@ func TestAcc_ResourceApplication_Edge(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceApplication_Updates_Edge(t *testing.T) {
+func TestAcc_ResourceApplication_Updates(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "jameinel-ubuntu-lite"
 	if testingCloud != LXDCloudTesting {
@@ -171,7 +171,7 @@ func TestAcc_ResourceApplication_Updates_Edge(t *testing.T) {
 	})
 }
 
-func TestAcc_CharmUpdates_Edge(t *testing.T) {
+func TestAcc_CharmUpdates(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-charmupdates")
 
 	resource.Test(t, resource.TestCase{
@@ -233,28 +233,21 @@ func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceApplication_Stable(t *testing.T) {
+func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
-	appInvalidName := "test_app"
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
-		ExternalProviders: map[string]resource.ExternalProvider{
-			"juju": {
-				VersionConstraint: TestProviderStableVersion,
-				Source:            "juju/juju",
-			},
-		},
+
 		Steps: []resource.TestStep{
 			{
-				// Mind that ExpectError should be the first step
-				// "When tests have an ExpectError[...]; this results in any previous state being cleared. "
-				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
-				Config:      testAccResourceApplicationBasic(modelName, appInvalidName),
-				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: invalid application name \"%s\", unexpected character _", appInvalidName)),
-			},
-			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderStableVersion,
+						Source:            "juju/juju",
+					},
+				},
 				Config: testAccResourceApplicationBasic(modelName, appName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
@@ -266,159 +259,9 @@ func TestAcc_ResourceApplication_Stable(t *testing.T) {
 				),
 			},
 			{
-				SkipFunc: func() (bool, error) {
-					// cores constraint is not valid in K8s
-					return testingCloud != LXDCloudTesting, nil
-				},
-				Config: testAccResourceApplicationConstraints(modelName, "arch=amd64 cores=1 mem=4096M"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 cores=1 mem=4096M"),
-				),
-			},
-			{
-				// specific constraints for k8s
-				SkipFunc: func() (bool, error) {
-					return testingCloud != MicroK8sTesting, nil
-				},
-				Config: testAccResourceApplicationConstraints(modelName, "arch=amd64 mem=4096M"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 mem=4096M"),
-				),
-			},
-			{
-				SkipFunc: func() (bool, error) {
-					// skip if we are not in lxd environment
-					return testingCloud != LXDCloudTesting, nil
-				},
-				Config: testAccResourceApplicationConstraintsSubordinate(modelName, "arch=amd64 cores=1 mem=4096M"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 cores=1 mem=4096M"),
-				),
-			},
-			{
-				ImportStateVerify: true,
-				ImportState:       true,
-				ResourceName:      "juju_application.this",
-			},
-		},
-	})
-}
-
-func TestAcc_ResourceApplication_Updates_Stable(t *testing.T) {
-	modelName := acctest.RandomWithPrefix("tf-test-application")
-	appName := "jameinel-ubuntu-lite"
-	if testingCloud != LXDCloudTesting {
-		appName = "hello-kubecon"
-	}
-	resource.Test(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-		ExternalProviders: map[string]resource.ExternalProvider{
-			"juju": {
-				VersionConstraint: TestProviderStableVersion,
-				Source:            "juju/juju",
-			},
-		},
-		Steps: []resource.TestStep{
-			{
-				Config: testAccResourceApplicationUpdates(modelName, 1, true, "machinename"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", appName),
-					resource.TestCheckResourceAttr("juju_application.this", "units", "1"),
-					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
-					// (juanmanuel-tirado) Uncomment and test when running
-					// a different charm with other config
-					//resource.TestCheckResourceAttr("juju_application.this", "config.hostname", "machinename"),
-				),
-			},
-			{
-				SkipFunc: func() (bool, error) {
-					return testingCloud != LXDCloudTesting, nil
-				},
-				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
-				Check:  resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
-			},
-			{
-				SkipFunc: func() (bool, error) {
-					return testingCloud != LXDCloudTesting, nil
-				},
-				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
-				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "10"),
-			},
-			{
-				SkipFunc: func() (bool, error) {
-					return testingCloud != MicroK8sTesting, nil
-				},
-				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
-				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "19"),
-			},
-			{
-				Config: testAccResourceApplicationUpdates(modelName, 2, false, "machinename"),
-				Check:  resource.TestCheckResourceAttr("juju_application.this", "expose.#", "0"),
-			},
-			{
-				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
-				Check:  resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
-			},
-			{
-				SkipFunc: func() (bool, error) {
-					// This test is broken in a released version of the juju
-					// provider, 0.8.0, but not in the version under development
-					// === RUN   TestAcc_ResourceApplication_Updates_Stable
-					//    resource_application_test.go:485: Skipping step 2/7 due to SkipFunc
-					//    resource_application_test.go:485: Skipping step 3/7 due to SkipFunc
-					//    resource_application_test.go:485: Step 7/7 error running import: ImportStateVerify attributes not equivalent. Difference is shown below. The - symbol indicates attributes missing after import.
-					//
-					//        map[string]string{
-					//        	"placement": "",
-					//        	"placement": ",",
-					//        }
-					//--- FAIL: TestAcc_ResourceApplication_Updates_Stable (25.87s)
-					return testingCloud != MicroK8sTesting && TestProviderStableVersion == "0.8.0", nil
-				},
-				ImportStateVerify: true,
-				ImportState:       true,
-				ResourceName:      "juju_application.this",
-			},
-		},
-	})
-}
-
-func TestAcc_CharmUpdates_Stable(t *testing.T) {
-	modelName := acctest.RandomWithPrefix("tf-test-charmupdates")
-
-	resource.Test(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-		ExternalProviders: map[string]resource.ExternalProvider{
-			"juju": {
-				VersionConstraint: TestProviderStableVersion,
-				Source:            "juju/juju",
-			},
-		},
-		Steps: []resource.TestStep{
-			{
-				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/stable"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
-				),
-			},
-			{
-				// move to latest/edge
-				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/edge"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/edge"),
-				),
-			},
-			{
-				// move back to latest/stable
-				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/stable"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
-				),
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceApplicationBasic(modelName, appName),
+				PlanOnly:                 true,
 			},
 		},
 	})
