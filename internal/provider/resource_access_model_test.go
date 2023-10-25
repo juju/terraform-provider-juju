@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_ResourceAccessModel_Edge(t *testing.T) {
+func TestAcc_ResourceAccessModel(t *testing.T) {
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 	userName2 := acctest.RandomWithPrefix("tfuser")
@@ -66,33 +66,27 @@ func TestAcc_ResourceAccessModel_Edge(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceAccessModel_Stable(t *testing.T) {
+func TestAcc_ResourceAccessModel_UpgradeProvider(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 	modelName := "testing"
 	access := "write"
-	accessFail := "bogus"
 
 	resourceName := "juju_access_model.test"
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
-		ExternalProviders: map[string]resource.ExternalProvider{
-			"juju": {
-				VersionConstraint: TestProviderStableVersion,
-				Source:            "juju/juju",
-			},
-		},
+
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccResourceAccessModel(userName, userPassword, modelName, accessFail),
-				ExpectError: regexp.MustCompile("Error running pre-apply refresh.*"),
-			},
-			{
-				// (juanmanuel-tirado) For some reason beyond my understanding,
-				// this test fails no microk8s on GitHub. If passes in local
-				// environments with no additional configurations...
-				SkipFunc: func() (bool, error) {
-					return testingCloud != LXDCloudTesting, nil
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderStableVersion,
+						Source:            "juju/juju",
+					},
 				},
 				Config: testAccResourceAccessModel(userName, userPassword, modelName, access),
 				Check: resource.ComposeTestCheckFunc(
@@ -102,13 +96,9 @@ func TestAcc_ResourceAccessModel_Stable(t *testing.T) {
 				),
 			},
 			{
-				SkipFunc: func() (bool, error) {
-					return testingCloud != LXDCloudTesting, nil
-				},
-				ImportStateVerify: true,
-				ImportState:       true,
-				ImportStateId:     fmt.Sprintf("%s:%s:%s", modelName, access, userName),
-				ResourceName:      resourceName,
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceAccessModel(userName, userPassword, modelName, access),
+				PlanOnly:                 true,
 			},
 		},
 	})

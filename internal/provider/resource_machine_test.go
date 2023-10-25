@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_ResourceMachine_Edge(t *testing.T) {
+func TestAcc_ResourceMachine(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -75,21 +75,22 @@ resource "juju_machine" "testmachine" {
 `, modelName)
 }
 
-func TestAcc_ResourceMachine_Stable(t *testing.T) {
+func TestAcc_ResourceMachine_UpgradeProvider(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-machine")
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
-		ExternalProviders: map[string]resource.ExternalProvider{
-			"juju": {
-				VersionConstraint: TestProviderStableVersion,
-				Source:            "juju/juju",
-			},
-		},
+
 		Steps: []resource.TestStep{
 			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderStableVersion,
+						Source:            "juju/juju",
+					},
+				},
 				Config: testAccResourceMachine(modelName, "series = \"focal\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
@@ -98,9 +99,9 @@ func TestAcc_ResourceMachine_Stable(t *testing.T) {
 				),
 			},
 			{
-				ImportStateVerify: true,
-				ImportState:       true,
-				ResourceName:      "juju_machine.this",
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceMachine(modelName, "series = \"focal\""),
+				PlanOnly:                 true,
 			},
 		},
 	})

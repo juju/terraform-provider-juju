@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_DataSourceOffer_Edge(t *testing.T) {
+func TestAcc_DataSourceOffer(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-datasource-offer-test-model")
 	// ...-test-[0-9]+ is not a valid offer name, need to remove the dash before numbers
 	offerName := fmt.Sprintf("tf-datasource-offer-test%d", acctest.RandInt())
@@ -31,26 +31,32 @@ func TestAcc_DataSourceOffer_Edge(t *testing.T) {
 	})
 }
 
-func TestAcc_DataSourceOffer_Stable(t *testing.T) {
+func TestAcc_DataSourceOffer_UpgradeProvider(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-datasource-offer-test-model")
 	// ...-test-[0-9]+ is not a valid offer name, need to remove the dash before numbers
 	offerName := fmt.Sprintf("tf-datasource-offer-test%d", acctest.RandInt())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
-		ExternalProviders: map[string]resource.ExternalProvider{
-			"juju": {
-				VersionConstraint: TestProviderStableVersion,
-				Source:            "juju/juju",
-			},
-		},
+
 		Steps: []resource.TestStep{
 			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderStableVersion,
+						Source:            "juju/juju",
+					},
+				},
 				Config: testAccDataSourceOffer(modelName, "series = \"jammy\"", offerName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("data.juju_offer.this", "name", offerName),
 				),
+			},
+			{
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccDataSourceOffer(modelName, "series = \"jammy\"", offerName),
+				PlanOnly:                 true,
 			},
 		},
 	})

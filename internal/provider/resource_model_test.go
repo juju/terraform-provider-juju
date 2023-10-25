@@ -15,7 +15,7 @@ import (
 	"github.com/juju/juju/rpc/params"
 )
 
-func TestAcc_ResourceModel_Edge(t *testing.T) {
+func TestAcc_ResourceModel(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	modelInvalidName := acctest.RandomWithPrefix("tf_test_model")
 	logLevelInfo := "INFO"
@@ -67,7 +67,7 @@ func TestAcc_ResourceModel_Edge(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceModel_UnsetConfig_Edge(t *testing.T) {
+func TestAcc_ResourceModel_UnsetConfig(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 
 	resourceName := "juju_model.this"
@@ -123,98 +123,31 @@ resource "juju_model" "testmodel" {
 	})
 }
 
-func TestAcc_ResourceModel_Stable(t *testing.T) {
+func TestAcc_ResourceModel_UpgradeProvider(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
-	modelInvalidName := acctest.RandomWithPrefix("tf_test_model")
-	logLevelInfo := "INFO"
 	logLevelDebug := "DEBUG"
 
 	resourceName := "juju_model.model"
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
-		ExternalProviders: map[string]resource.ExternalProvider{
-			"juju": {
-				VersionConstraint: TestProviderStableVersion,
-				Source:            "juju/juju",
-			},
-		},
 		Steps: []resource.TestStep{
 			{
-				// Mind that ExpectError should be the first step
-				// "When tests have an ExpectError[...]; this results in any previous state being cleared. "
-				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
-				Config:      testAccResourceModel(modelInvalidName, testingCloud.CloudName(), logLevelInfo),
-				ExpectError: regexp.MustCompile(fmt.Sprintf("Error: \"%s\" is not a valid name: model names may only contain lowercase letters, digits and hyphens", modelInvalidName)),
-			},
-			{
-				Config: testAccResourceModel(modelName, testingCloud.CloudName(), logLevelInfo),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "name", modelName),
-					resource.TestCheckResourceAttr(resourceName, "config.logging-config", fmt.Sprintf("<root>=%s", logLevelInfo)),
-				),
-			},
-			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderStableVersion,
+						Source:            "juju/juju",
+					},
+				},
 				Config: testAccResourceModel(modelName, testingCloud.CloudName(), logLevelDebug),
 				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckResourceAttr(resourceName, "config.logging-config", fmt.Sprintf("<root>=%s", logLevelDebug)),
 				),
 			},
 			{
-				Config: testAccConstraintsModel(modelName, testingCloud.CloudName(), "cores=1 mem=1024M"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "constraints", "cores=1 mem=1024M"),
-				),
-			},
-			{
-				ImportStateVerify: true,
-				ImportState:       true,
-				ImportStateVerifyIgnore: []string{
-					"config.%",
-					"config.logging-config"},
-				ImportStateId: modelName,
-				ResourceName:  resourceName,
-			},
-		},
-	})
-}
-
-func TestAcc_ResourceModel_UnsetConfigStable(t *testing.T) {
-	modelName := acctest.RandomWithPrefix("tf-test-model")
-
-	resourceName := "juju_model.this"
-	resource.Test(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-		ExternalProviders: map[string]resource.ExternalProvider{
-			"juju": {
-				VersionConstraint: TestProviderStableVersion,
-				Source:            "juju/juju",
-			},
-		},
-		Steps: []resource.TestStep{
-			{
-				Config: fmt.Sprintf(`
-resource "juju_model" "this" {
-  name = %q
-
-  config = {
-	development = true
-  }
-}`, modelName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "name", modelName),
-					resource.TestCheckResourceAttr(resourceName, "config.development", "true"),
-				),
-			},
-			{
-				Config: fmt.Sprintf(`
-resource "juju_model" "this" {
-  name = %q
-}`, modelName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "name", modelName),
-					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
-					testAccCheckDevelopmentConfigIsUnset(modelName),
-				),
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceModel(modelName, testingCloud.CloudName(), logLevelDebug),
+				PlanOnly:                 true,
 			},
 		},
 	})

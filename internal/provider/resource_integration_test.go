@@ -13,7 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
-func TestAcc_ResourceIntegration_Edge(t *testing.T) {
+func TestAcc_ResourceIntegration(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -50,7 +50,7 @@ func TestAcc_ResourceIntegration_Edge(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceIntegrationWithViaCIDRs_Edge(t *testing.T) {
+func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -77,23 +77,23 @@ func TestAcc_ResourceIntegrationWithViaCIDRs_Edge(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceIntegration_Stable(t *testing.T) {
+func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-integration")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-		ExternalProviders: map[string]resource.ExternalProvider{
-			"juju": {
-				VersionConstraint: TestProviderStableVersion,
-				Source:            "juju/juju",
-			},
-		},
+		PreCheck:     func() { testAccPreCheck(t) },
 		CheckDestroy: testAccCheckIntegrationDestroy,
 		Steps: []resource.TestStep{
 			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderStableVersion,
+						Source:            "juju/juju",
+					},
+				},
 				Config: testAccResourceIntegration(modelName, "series = \"jammy\"", "series = \"jammy\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
@@ -103,17 +103,9 @@ func TestAcc_ResourceIntegration_Stable(t *testing.T) {
 				),
 			},
 			{
-				ImportStateVerify: true,
-				ImportState:       true,
-				ResourceName:      "juju_integration.this",
-			},
-			{
-				Config: testAccResourceIntegration(modelName, "series = \"jammy\"", "series = \"jammy\""),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
-					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
-				),
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceIntegration(modelName, "series = \"jammy\"", "series = \"jammy\""),
+				PlanOnly:                 true,
 			},
 		},
 	})
@@ -163,38 +155,6 @@ resource "juju_integration" "this" {
 	}
 }
 `, modelName, osOne, osTwo)
-}
-
-func TestAcc_ResourceIntegrationWithViaCIDRs_Stable(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-	srcModelName := acctest.RandomWithPrefix("tf-test-integration")
-	dstModelName := acctest.RandomWithPrefix("tf-test-integration-dst")
-	via := "127.0.0.1/32,127.0.0.3/32"
-
-	resource.Test(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-		ExternalProviders: map[string]resource.ExternalProvider{
-			"juju": {
-				VersionConstraint: TestProviderStableVersion,
-				Source:            "juju/juju",
-			},
-		},
-		CheckDestroy: testAccCheckIntegrationDestroy,
-		Steps: []resource.TestStep{
-			{
-				Config: testAccResourceIntegrationWithVia(srcModelName, "series = \"jammy\"", dstModelName, "series = \"jammy\"", via),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.a", "model", srcModelName),
-					resource.TestCheckResourceAttr("juju_integration.a", "id", fmt.Sprintf("%v:%v:%v", srcModelName, "a:source", "b:sink")),
-					resource.TestCheckResourceAttr("juju_integration.a", "application.#", "2"),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.a", "application.*", map[string]string{"name": "a", "endpoint": "source"}),
-					resource.TestCheckResourceAttr("juju_integration.a", "via", via),
-				),
-			},
-		},
-	})
 }
 
 // testAccResourceIntegrationWithVia generates a plan where a
@@ -252,7 +212,7 @@ resource "juju_integration" "a" {
 `, srcModelName, aOS, dstModelName, bOS, viaCIDRs)
 }
 
-func TestAcc_ResourceIntegrationWithMultipleConsumers_Edge(t *testing.T) {
+func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}

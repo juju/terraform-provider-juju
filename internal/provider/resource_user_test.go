@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_ResourceUser_Edge(t *testing.T) {
+func TestAcc_ResourceUser(t *testing.T) {
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 
@@ -48,32 +48,30 @@ resource "juju_user" "user" {
 }`, userName, userPassword)
 }
 
-func TestAcc_ResourceUser_Stable(t *testing.T) {
+func TestAcc_ResourceUser_UpgradeProvider(t *testing.T) {
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 
 	resourceName := "juju_user.user"
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
-		ExternalProviders: map[string]resource.ExternalProvider{
-			"juju": {
-				VersionConstraint: TestProviderStableVersion,
-				Source:            "juju/juju",
-			},
-		},
 		Steps: []resource.TestStep{
 			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderStableVersion,
+						Source:            "juju/juju",
+					},
+				},
 				Config: testAccResourceUser(userName, userPassword),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", userName),
 				),
 			},
 			{
-				ImportStateVerify:       true,
-				ImportState:             true,
-				ImportStateVerifyIgnore: []string{"password"},
-				ImportStateId:           fmt.Sprintf("user:%s", userName),
-				ResourceName:            resourceName,
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceUser(userName, userPassword),
+				PlanOnly:                 true,
 			},
 		},
 	})
