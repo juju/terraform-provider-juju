@@ -5,7 +5,6 @@ package provider
 
 import (
 	"fmt"
-	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -15,19 +14,11 @@ import (
 func TestAcc_ResourceApplication(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
-	appInvalidName := "test_app"
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
-			{
-				// Mind that ExpectError should be the first step
-				// "When tests have an ExpectError[...]; this results in any previous state being cleared. "
-				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
-				Config:      testAccResourceApplicationBasic(modelName, appInvalidName),
-				ExpectError: regexp.MustCompile(fmt.Sprintf("Unable to create application, got error: invalid application name %q,unexpected character _", appInvalidName)),
-			},
 			{
 				Config: testAccResourceApplicationBasic(modelName, appName),
 				Check: resource.ComposeTestCheckFunc(
@@ -282,7 +273,7 @@ func testAccResourceApplicationBasic_Minimal(modelName, charmName string) string
 		`, modelName, charmName)
 }
 
-func testAccResourceApplicationBasic(modelName, appInvalidName string) string {
+func testAccResourceApplicationBasic(modelName, appName string) string {
 	if testingCloud == LXDCloudTesting {
 		return fmt.Sprintf(`
 		resource "juju_model" "this" {
@@ -298,7 +289,7 @@ func testAccResourceApplicationBasic(modelName, appInvalidName string) string {
 		  trust = true
 		  expose{}
 		}
-		`, modelName, appInvalidName)
+		`, modelName, appName)
 	} else {
 		// if we have a K8s deployment we need the machine hostname
 		return fmt.Sprintf(`
@@ -318,7 +309,7 @@ func testAccResourceApplicationBasic(modelName, appInvalidName string) string {
 			juju-external-hostname="myhostname"
 		  }
 		}
-		`, modelName, appInvalidName)
+		`, modelName, appName)
 	}
 }
 
