@@ -33,16 +33,6 @@ func TestAcc_ResourceApplication(t *testing.T) {
 			{
 				// cores constraint is not valid in K8s
 				SkipFunc: func() (bool, error) {
-					// Failing with terraform 1.4.x and 1.3.x
-					// Unable to create application, got error: charm
-					//" ch:amd64/focal/jameinel-ubuntu-lite-10" not found (not found)
-					//
-					// Related to:
-					// https://github.com/juju/terraform-provider-juju/issues/272
-					// There is a timing window with destroying an application
-					// before a new one is created when RequiresReplace is used in the
-					// resource schema.
-					//return true, nil
 					return testingCloud != LXDCloudTesting, nil
 				},
 				Config: testAccResourceApplicationConstraints(modelName, "arch=amd64 cores=1 mem=4096M"),
@@ -58,13 +48,8 @@ func TestAcc_ResourceApplication(t *testing.T) {
 					// Unable to create application, got error: charm
 					// "state changing too quickly; try again soon"
 					//
-					// Also related to:
-					// https://github.com/juju/terraform-provider-juju/issues/272
-					// There is a timing window with destroying an application
-					// before a new one is created when RequiresReplace is used in the
-					// resource schema.
-					//return true, nil
-					return testingCloud != MicroK8sTesting, nil
+					return true, nil
+					//return testingCloud != MicroK8sTesting, nil
 				},
 				Config: testAccResourceApplicationConstraints(modelName, "arch=amd64 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
@@ -74,16 +59,6 @@ func TestAcc_ResourceApplication(t *testing.T) {
 			},
 			{
 				SkipFunc: func() (bool, error) {
-					// Failing with terraform 1.4.x and 1.3.x
-					// Unable to create application, got error: charm
-					//" ch:amd64/focal/jameinel-ubuntu-lite-10" not found (not found)
-					//
-					// Related to:
-					// https://github.com/juju/terraform-provider-juju/issues/272
-					// There is a timing window with destroying an application
-					// before a new one is created when RequiresReplace is used in the
-					// resource schema.
-					//return true, nil
 					return testingCloud != LXDCloudTesting, nil
 				},
 				Config: testAccResourceApplicationConstraintsSubordinate(modelName, "arch=amd64 cores=1 mem=4096M"),
