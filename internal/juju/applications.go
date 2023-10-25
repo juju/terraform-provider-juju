@@ -357,6 +357,14 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 			}
 			return nil
 		},
+		IsFatalError: func(err error) bool {
+			// If we hit AlreadyExists, it is from Deploy only under 2
+			// scenarios:
+			//   1. User error, the application has already been created?
+			//   2. We're replacing the application and tear down hasn't
+			//      finished yet, we should try again.
+			return !errors.Is(err, jujuerrors.NotFound) && !errors.Is(err, jujuerrors.AlreadyExists)
+		},
 		NotifyFunc: func(err error, attempt int) {
 			c.Errorf(err, fmt.Sprintf("deploy application %q retry", appName))
 			message := fmt.Sprintf("waiting for application %q deploy, attempt %d", appName, attempt)
