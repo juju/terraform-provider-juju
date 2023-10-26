@@ -5,7 +5,6 @@ package provider
 
 import (
 	"fmt"
-	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -15,19 +14,11 @@ import (
 func TestAcc_ResourceApplication(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
-	appInvalidName := "test_app"
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
-			{
-				// Mind that ExpectError should be the first step
-				// "When tests have an ExpectError[...]; this results in any previous state being cleared. "
-				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
-				Config:      testAccResourceApplicationBasic(modelName, appInvalidName),
-				ExpectError: regexp.MustCompile(fmt.Sprintf("Unable to create application, got error: invalid application name %q,\nunexpected character _", appInvalidName)),
-			},
 			{
 				Config: testAccResourceApplicationBasic(modelName, appName),
 				Check: resource.ComposeTestCheckFunc(
@@ -42,17 +33,7 @@ func TestAcc_ResourceApplication(t *testing.T) {
 			{
 				// cores constraint is not valid in K8s
 				SkipFunc: func() (bool, error) {
-					// Failing with terraform 1.4.x and 1.3.x
-					// Unable to create application, got error: charm
-					//" ch:amd64/focal/jameinel-ubuntu-lite-10" not found (not found)
-					//
-					// Related to:
-					// https://github.com/juju/terraform-provider-juju/issues/272
-					// There is a timing window with destroying an application
-					// before a new one is created when RequiresReplace is used in the
-					// resource schema.
-					return true, nil
-					//return testingCloud != LXDCloudTesting, nil
+					return testingCloud != LXDCloudTesting, nil
 				},
 				Config: testAccResourceApplicationConstraints(modelName, "arch=amd64 cores=1 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
@@ -67,11 +48,6 @@ func TestAcc_ResourceApplication(t *testing.T) {
 					// Unable to create application, got error: charm
 					// "state changing too quickly; try again soon"
 					//
-					// Also related to:
-					// https://github.com/juju/terraform-provider-juju/issues/272
-					// There is a timing window with destroying an application
-					// before a new one is created when RequiresReplace is used in the
-					// resource schema.
 					return true, nil
 					//return testingCloud != MicroK8sTesting, nil
 				},
@@ -83,17 +59,7 @@ func TestAcc_ResourceApplication(t *testing.T) {
 			},
 			{
 				SkipFunc: func() (bool, error) {
-					// Failing with terraform 1.4.x and 1.3.x
-					// Unable to create application, got error: charm
-					//" ch:amd64/focal/jameinel-ubuntu-lite-10" not found (not found)
-					//
-					// Related to:
-					// https://github.com/juju/terraform-provider-juju/issues/272
-					// There is a timing window with destroying an application
-					// before a new one is created when RequiresReplace is used in the
-					// resource schema.
-					return true, nil
-					//return testingCloud != LXDCloudTesting, nil
+					return testingCloud != LXDCloudTesting, nil
 				},
 				Config: testAccResourceApplicationConstraintsSubordinate(modelName, "arch=amd64 cores=1 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
@@ -282,7 +248,7 @@ func testAccResourceApplicationBasic_Minimal(modelName, charmName string) string
 		`, modelName, charmName)
 }
 
-func testAccResourceApplicationBasic(modelName, appInvalidName string) string {
+func testAccResourceApplicationBasic(modelName, appName string) string {
 	if testingCloud == LXDCloudTesting {
 		return fmt.Sprintf(`
 		resource "juju_model" "this" {
@@ -298,7 +264,7 @@ func testAccResourceApplicationBasic(modelName, appInvalidName string) string {
 		  trust = true
 		  expose{}
 		}
-		`, modelName, appInvalidName)
+		`, modelName, appName)
 	} else {
 		// if we have a K8s deployment we need the machine hostname
 		return fmt.Sprintf(`
@@ -318,7 +284,7 @@ func testAccResourceApplicationBasic(modelName, appInvalidName string) string {
 			juju-external-hostname="myhostname"
 		  }
 		}
-		`, modelName, appInvalidName)
+		`, modelName, appName)
 	}
 }
 

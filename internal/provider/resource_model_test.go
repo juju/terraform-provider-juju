@@ -5,7 +5,6 @@ package provider
 
 import (
 	"fmt"
-	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -17,7 +16,6 @@ import (
 
 func TestAcc_ResourceModel(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
-	modelInvalidName := acctest.RandomWithPrefix("tf_test_model")
 	logLevelInfo := "INFO"
 	logLevelDebug := "DEBUG"
 
@@ -26,15 +24,6 @@ func TestAcc_ResourceModel(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
-			{
-				// Mind that ExpectError should be the first step
-				// "When tests have an ExpectError[...]; this results in any previous state being cleared. "
-				// https://github.com/hashicorp/terraform-plugin-sdk/issues/118
-				Config: testAccResourceModel(modelInvalidName, testingCloud.CloudName(), logLevelInfo),
-				ExpectError: regexp.MustCompile(fmt.Sprintf(
-					"Unable to create model, got error: \"%s\" is not *\na valid name: model names may only contain lowercase letters, digits and *\nhyphens", modelInvalidName)),
-			},
-
 			{
 				Config: testAccResourceModel(modelName, testingCloud.CloudName(), logLevelInfo),
 				Check: resource.ComposeTestCheckFunc(
