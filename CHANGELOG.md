@@ -1,3 +1,33 @@
+## 0.10.0 (October 26, 2023)
+
+NOTES:
+
+* **Use of Series for machine and application resources is now deprecated.** Use Base instead.
+* Principal in the `juju_application` resource schema has been deprecated. It was computed only data, is not needed, and has no replacement.
+
+FEATURES:
+
+* **Add base support for machines and applications**: `juju_application` and `juju_machine` now support bases. 
+A base is an alternative way to specify which operating system and version a charm or machine should be deployed 
+with. For example `ubuntu@22.04`.
+* Use of the 2.9.45 code base for juju API calls.
+* Stable integration tests have been replaced with testing of upgrading from the last release to the current code.
+* There is now a github action to use a loadbalancer as a tunnel to juju controller on k8s.
+
+BUG FIXES:
+
+* Gracefully fail to deploy a bundle @hmlanigan in https://github.com/juju/terraform-provider-juju/pull/318
+* Fix remove (cmr) integration with multiple consumers by @hemanthnakkina in https://github.com/juju/terraform-provider-juju/issues/308
+* Update charm resources if necessary when updating a charm by @cderici in https://github.com/juju/terraform-provider-juju/pull/326
+* Application resource plans hitting RequiresReplace can fail with "application already exists AND
+
+  Application resource plans can fail with "Charm Already Exists", if another application has loaded that charm to the controller before
+
+  by @hmlanigan in https://github.com/juju/terraform-provider-juju/pull/329
+
+
+
+
 ## 0.9.1 (September 22, 2023)
 
 BUG FIXES:
