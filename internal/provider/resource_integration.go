@@ -372,7 +372,7 @@ func (r *integrationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	applications := parseApplications(response.Applications)
-	appType := req.State.Schema.GetAttributes()["application"].(schema.SetNestedAttribute).NestedObject.Type()
+	appType := req.State.Schema.GetBlocks()["application"].(schema.SetNestedBlock).NestedObject.Type()
 	apps, aErr := types.SetValueFrom(ctx, appType, applications)
 	if aErr.HasError() {
 		resp.Diagnostics.Append(aErr...)
