@@ -78,7 +78,7 @@ jobs:
           cache: true
       - name: Install terraform
         if: ${{ env.next-test != 'NA' }}
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
