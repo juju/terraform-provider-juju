@@ -40,7 +40,7 @@ Terraform 0.13 and later:
 terraform {
   required_providers {
     juju = {
-      version = "~> 0.3.1"
+      version = "~> 0.10.0"
       source  = "juju/juju"
     }
   }
@@ -135,7 +135,7 @@ resource "juju_integration" "wp_to_percona" {
 Terraform 0.12 and earlier:
 ```terraform
 provider "juju" {
-  version = "~> 0.3.1"
+  version = "~> 0.10.0"
 
   controller_addresses = "10.225.205.241:17070,10.225.205.242:17070"
 
