@@ -4,21 +4,31 @@
 
 The provider can be used to interact with Juju - a model-driven Operator Lifecycle Manager (OLM).
 
-## Initial Scope
+##  Scope
 
-Once complete, the initial released version of the provider will allow you to:
+Currently, you can manage the following:
 
-- Manage models,
-- Deploy charms from CharmHub,
-- Manage integrations (previously named "relationships").
-- Manage users
-- Manage credentials
-- Manage SSH keys
+- Applications (from Charmhub only)
+- Cloud Credentials
+- Integrations ("relations")
+- Offers
+- SSH keys
+- Machines
+- Models and model permissions
+- Users
+
+Data Sources are avialable for:
+
+- Machines
+- Models
+- Offers
+
+_Note:_ These features may not have functional parity with the juju cli at this time.
 
 ## Requirements
 
-- [Terraform](https://www.terraform.io/downloads.html) >= 0.12.0
-- [Go](https://golang.org/doc/install) >= 1.19
+- [Terraform](https://www.terraform.io/downloads.html) >= 1.5
+- [Go](https://golang.org/doc/install) >= 1.20
 
 ## Building The Provider
 
@@ -36,19 +46,8 @@ Once complete, the initial released version of the provider will allow you to:
     make install
     ```
 
-## Adding Dependencies
+Please run `make` to see other targets available, including formatting, linting and static analysis.
 
-This provider uses [Go modules](https://github.com/golang/go/wiki/Modules).
-Please see the Go documentation for the most up to date information about using Go modules.
-
-To add a new dependency `github.com/author/dependency` to your Terraform provider:
-
-```shell
-go get github.com/author/dependency
-go mod tidy
-```
-
-Then commit the changes to `go.mod` and `go.sum`.
 
 ## Using the Provider
 
@@ -56,15 +55,20 @@ Please, refer to the [Terraform docs for the Juju provider](https://registry.ter
 
 ## Developing the Provider
 
+### Planning & Design
+
+When creating a new resource, datasource or changing a current schema please document the 
+changes and create an github issue for review and approval before coding.
+
+Consider writing documents for the project-docs/decisions folder.
+
+New resources and datasources will require import and use example documents.
+
+### Coding
+
 If you wish to work on the provider, you'll first need [Go](http://www.golang.org) installed on your machine (see [Requirements](#requirements) above).
 
-To compile the provider, run `go install`. This will build the provider and put the provider binary in the `$GOPATH/bin` directory.
-
-To generate or update documentation, run `go generate`.
-
-In order to run the full suite of Acceptance tests, run `make testacc`.
-
-_Note:_ Acceptance tests create real resources.
+See also [Building The Provider](#building-the-provider)
 
 Prior to running the tests locally, ensure you have the following environmental variables set:
 
@@ -83,18 +87,27 @@ export JUJU_PASSWORD="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.
 export JUJU_CA_CERT="$(juju show-controller $(echo $CONTROLLER|tr -d '"') | yq '.[$CONTROLLER]'.details.\"ca-cert\"|tr -d '"'|sed 's/\\n/\n/g')"
 ```
 
-Then, finally, run the tests:
+Then, finally, run the Acceptance tests:
 
 ```shell
 make testlxd
 ```
+And
+```shell
+make testmicrok8s
+```
+_Note:_ Acceptance tests create real resources.
 
-#### Linting
+### Adding Dependencies
 
-This repository uses [golangci-lint](https://golangci-lint.run/) as a linting tool as it can run multiple linters. The configuration for this tool is all handled in the file `.golangci.yaml` in the root of the repository allowing all runs of the tool to run with the same settings. When installed you can run the analysis with:
+This provider uses [Go modules](https://github.com/golang/go/wiki/Modules).
+Please see the Go documentation for the most up to date information about using Go modules.
+
+To add a new dependency `github.com/author/dependency` to your Terraform provider:
 
 ```shell
-make lint
+go get github.com/author/dependency
+go mod tidy
 ```
 
-You can also integrate `golangci-lint` with some IDEs following instructions available here: [Editor integration](https://golangci-lint.run/usage/integrations)
+Then commit the changes to `go.mod` and `go.sum`.
