@@ -6,6 +6,7 @@ package juju
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -60,6 +61,8 @@ type SharedClient interface {
 	ModelType(modelName string) (model.ModelType, error)
 	ModelUUID(modelName string) (string, error)
 	RemoveModel(modelUUID string)
+
+	JujuLogger() *jujuLoggerShim
 
 	Debugf(msg string, additionalFields ...map[string]interface{})
 	Errorf(err error, msg string)
@@ -253,4 +256,23 @@ func (sc *sharedClient) Warnf(msg string, additionalFields ...map[string]interfa
 
 func getCurrentJujuUser(conn api.Connection) string {
 	return conn.AuthTag().Id()
+}
+
+func (sc *sharedClient) JujuLogger() *jujuLoggerShim {
+	return &jujuLoggerShim{sc: sc}
+}
+
+// A shim to translate the juju/loggo package Errorf into
+// the tflog SubsystemError. Used by apiclient.NewClient.
+type jujuLoggerShim struct {
+	sc *sharedClient
+}
+
+func (j jujuLoggerShim) Errorf(msg string, in ...interface{}) {
+	stringInt := make(map[string]interface{}, len(in)+1)
+	stringInt["error"] = msg
+	for i, v := range in {
+		stringInt[strconv.Itoa(i)] = v
+	}
+	tflog.SubsystemError(j.sc.subCtx, LogJujuClient, "juju api logging", map[string]interface{}{"error": msg})
 }
