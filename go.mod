@@ -1,6 +1,6 @@
 module github.com/juju/terraform-provider-juju
 
-go 1.20
+go 1.21
 
 require (
 	github.com/bflad/tfproviderlint v0.29.0
