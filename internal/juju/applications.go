@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juju/charm/v8"
-	charmresources "github.com/juju/charm/v8/resource"
+	"github.com/juju/charm/v11"
+	charmresources "github.com/juju/charm/v11/resource"
 	"github.com/juju/clock"
 	"github.com/juju/collections/set"
 	jujuerrors "github.com/juju/errors"
@@ -32,10 +32,10 @@ import (
 	apiresources "github.com/juju/juju/api/client/resources"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
 	"github.com/juju/juju/cmd/juju/application/utils"
+	"github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/core/model"
-	"github.com/juju/juju/core/series"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
 	jujuversion "github.com/juju/juju/version"
@@ -219,37 +219,40 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 
 	// Look at input.CharmBase and input.CharmSeries for an operating
 	// system to deploy with. Only one is allowed and Charm Base is
-	// preferred. Keep the data as a Series for now as, the
-	// DeducePlatform method expects a series to be provided, not a
-	// base. Luckily, the DeduceOrigin method returns an origin which
+	// preferred. Luckily, the DeduceOrigin method returns an origin which
 	// does contain the base and a series.
-	var userSuppliedSeries string
+	var userSuppliedBase base.Base
 	if input.CharmBase != "" {
-		b, err := series.ParseBaseFromString(input.CharmBase)
-		if err != nil {
-			return nil, err
-		}
-		userSuppliedSeries, err = series.GetSeriesFromBase(b)
+		userSuppliedBase, err = base.ParseBaseFromString(input.CharmBase)
 		if err != nil {
 			return nil, err
 		}
 	} else if input.CharmSeries != "" {
-		userSuppliedSeries = input.CharmSeries
+		userSuppliedBase, err = base.GetBaseFromSeries(input.CharmSeries)
+		if err != nil {
+			return nil, err
+		}
 	}
 	platformCons, err := modelconfigAPIClient.GetModelConstraints()
 	if err != nil {
 		return nil, err
 	}
-	platform, err := utils.DeducePlatform(input.Constraints, userSuppliedSeries, platformCons)
-	if err != nil {
-		return nil, err
-	}
+	platform := utils.MakePlatform(input.Constraints, userSuppliedBase, platformCons)
 
 	urlForOrigin := charmURL
 	if input.CharmRevision != UnspecifiedRevision {
 		urlForOrigin = urlForOrigin.WithRevision(input.CharmRevision)
 	}
-	urlForOrigin = urlForOrigin.WithSeries(userSuppliedSeries)
+
+	// Juju 2.9 cares that the series is in the origin. Juju 3.3 does not.
+	// We are supporting both now.
+	if !userSuppliedBase.Empty() {
+		userSuppliedSeries, err := base.GetSeriesFromBase(userSuppliedBase)
+		if err != nil {
+			return nil, err
+		}
+		urlForOrigin = urlForOrigin.WithSeries(userSuppliedSeries)
+	}
 
 	origin, err := utils.DeduceOrigin(urlForOrigin, channel, platform)
 	if err != nil {
@@ -259,7 +262,7 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	// Charm or bundle has been supplied as a URL so we resolve and
 	// deploy using the store but pass in the origin command line
 	// argument so users can target a specific origin.
-	resolvedURL, resolvedOrigin, supportedSeries, err := resolveCharm(charmsAPIClient, charmURL, origin)
+	resolvedURL, resolvedOrigin, supportedBases, err := resolveCharm(charmsAPIClient, charmURL, origin)
 	if err != nil {
 		return nil, err
 	}
@@ -267,27 +270,17 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 		return nil, jujuerrors.NotSupportedf("deploying bundles")
 	}
 
-	// Of the resolvedURL.Series, resolvedOrigin.Series and resolvedOrigin.Base,
-	// the latter is the only trustworthy across all juju controllers supported.
-	// If we resolve a charm with a revision and no user specified operating
-	// system, none of the above will have values.
-	suggestedSeries, err := series.GetSeriesFromBase(resolvedOrigin.Base)
+	baseToUse, err := c.baseToUse(modelconfigAPIClient, userSuppliedBase, resolvedOrigin.Base, supportedBases)
 	if err != nil {
 		c.Warnf("failed to get a suggested operating system from resolved charm response", map[string]interface{}{"err": err})
 	}
-
-	seriesToUse, err := c.seriesToUse(modelconfigAPIClient, userSuppliedSeries, suggestedSeries, set.NewStrings(supportedSeries...))
-	if err != nil {
-		return nil, err
-	}
-	if userSuppliedSeries != "" && seriesToUse != userSuppliedSeries {
-		// Ignore errors, the series have already been vetted above.
-		userBase, _ := series.GetBaseFromSeries(userSuppliedSeries)
-		suggestedBase, _ := series.GetBaseFromSeries(seriesToUse)
+	// Double check we got what was requested.
+	if !userSuppliedBase.Empty() && !userSuppliedBase.IsCompatible(baseToUse) {
 		return nil, jujuerrors.Errorf(
 			"juju bug (LP 2039179), requested base %q does not match base %q found for charm.",
-			userBase, suggestedBase)
+			userSuppliedBase, baseToUse)
 	}
+	resolvedOrigin.Base = baseToUse
 
 	appConfig := input.Config
 	if appConfig == nil {
@@ -312,10 +305,6 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 		}
 	}
 
-	// Add the charm to the model
-	origin = resolvedOrigin.WithSeries(seriesToUse)
-	charmURL = resolvedURL.WithSeries(seriesToUse)
-
 	// If a plan element, with RequiresReplace in the schema, is
 	// changed. Terraform calls the Destroy method then the Create
 	// method for resource. This provider does not wait for Destroy
@@ -329,7 +318,7 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	// * cannot add application "replace": charm: not found or not alive
 	err = retry.Call(retry.CallArgs{
 		Func: func() error {
-			resultOrigin, err := charmsAPIClient.AddCharm(charmURL, origin, false)
+			resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, resolvedOrigin, false)
 			if err != nil {
 				err2 := typedError(err)
 				// If the charm is AlreadyExists, keep going, we
@@ -342,7 +331,7 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 			}
 
 			charmID := apiapplication.CharmID{
-				URL:    charmURL,
+				URL:    resolvedURL,
 				Origin: resultOrigin,
 			}
 
@@ -355,14 +344,11 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 				CharmID:         charmID,
 				ApplicationName: appName,
 				NumUnits:        input.Units,
-				// Still supply series, to be compatible with juju 2.9 controllers.
-				// 3.x controllers will only use the CharmOrigin and its base.
-				Series:      resultOrigin.Series,
-				CharmOrigin: resultOrigin,
-				Config:      appConfig,
-				Cons:        input.Constraints,
-				Resources:   resources,
-				Placement:   placements,
+				CharmOrigin:     resultOrigin,
+				Config:          appConfig,
+				Cons:            input.Constraints,
+				Resources:       resources,
+				Placement:       placements,
 			}
 			c.Tracef("Calling Deploy", map[string]interface{}{"args": args})
 			if err = applicationAPIClient.Deploy(args); err != nil {
@@ -401,86 +387,109 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	}, err
 }
 
-// supportedWorkloadSeries returns a slice of supported workload series
+// supportedWorkloadBase returns a slice of supported workload basees
 // depending on the controller agent version. This provider currently
-// uses juju 2.9.45 code. However the supported workload series list is
+// uses juju 3.3.0 code. However, the supported workload base list is
 // different between juju 2 and juju 3. Handle that here.
-func (c applicationsClient) supportedWorkloadSeries(imageStream string) (set.Strings, error) {
-	supportedSeries, err := series.WorkloadSeries(time.Now(), "", imageStream)
+func (c applicationsClient) supportedWorkloadBase(imageStream string) ([]base.Base, error) {
+	supportedBases, err := base.WorkloadBases(time.Now(), base.Base{}, imageStream)
 	if err != nil {
 		return nil, err
 	}
 	if c.controllerVersion.Major > 2 {
-		unsupported := set.NewStrings("bionic", "trusty", "windows", "xenial", "centos7", "precise")
-		supportedSeries = supportedSeries.Difference(unsupported)
+		// SupportedBases include those supported with juju 3.x; juju 2.9.x
+		// supports more. If we have a juju 2.9.x controller add them back.
+		additionallySupported := []base.Base{
+			{OS: "ubuntu", Channel: base.Channel{Track: "18.04"}}, // bionic
+			{OS: "ubuntu", Channel: base.Channel{Track: "16.04"}}, // xenial
+			{OS: "ubuntu", Channel: base.Channel{Track: "14.04"}}, // trusty
+			{OS: "ubuntu", Channel: base.Channel{Track: "12.04"}}, // precise
+			{OS: "windows"},
+			{OS: "centos", Channel: base.Channel{Track: "7"}}, // centos7
+		}
+		supportedBases = append(supportedBases, additionallySupported...)
 	}
-	return supportedSeries, nil
+	return supportedBases, nil
 }
 
-// seriesToUse selects a series to deploy a charm with based on the following
+// baseToUse selects a base to deploy a charm with based on the following
 // criteria
-//   - A user specified series must be supported by the charm and a valid juju
-//     supported workload series. If so, use that, otherwise if an input series
+//   - A user specified base must be supported by the charm and a valid juju
+//     supported workload base. If so, use that, otherwise if an input base
 //     is provided, return an error.
-//   - Next check DefaultSeries from model config. If explicitly defined by the
+//   - Next check DefaultBase from model config. If explicitly defined by the
 //     user, check against charm and juju supported workloads. Use that if in
 //     both lists.
-//   - Third check the suggested series against just supported workload series.
-//     It has already been checked against charm series.
+//   - Third check the suggested base.
+//   - Fourth, use the DefaultLTS if a supported base.
+//   - Lastly, pop the first element of the supported bases off the list and use
+//     that.
 //
-// Note, we are re-implementing the logic of series_selector in juju code as it's
+// If the intersection of the charm and supported workload bases is empty, exit
+// with an error.
+//
+// Note, we are re-implementing the logic of base_selector in juju code as it's
 // a private object.
-func (c applicationsClient) seriesToUse(modelconfigAPIClient *apimodelconfig.Client, inputSeries, suggestedSeries string, charmSeries set.Strings) (string, error) {
-	c.Tracef("seriesToUse", map[string]interface{}{"inputSeries": inputSeries, "suggestedSeries": suggestedSeries, "charmSeries": charmSeries.Values()})
+func (c applicationsClient) baseToUse(modelconfigAPIClient *apimodelconfig.Client, inputBase, suggestedBase base.Base, charmBases []base.Base) (base.Base, error) {
+	c.Tracef("baseToUse", map[string]interface{}{"inputBase": inputBase, "suggestedBase": suggestedBase, "charmBases": charmBases})
 
 	attrs, err := modelconfigAPIClient.ModelGet()
 	if err != nil {
-		return "", jujuerrors.Wrap(err, errors.New("cannot fetch model settings"))
+		return base.Base{}, jujuerrors.Wrap(err, errors.New("cannot fetch model settings"))
 	}
 	modelConfig, err := config.New(config.NoDefaults, attrs)
 	if err != nil {
-		return "", err
+		return base.Base{}, err
 	}
 
-	supportedWorkloadSeries, err := c.supportedWorkloadSeries(modelConfig.ImageStream())
+	supportedWorkloadBases, err := c.supportedWorkloadBase(modelConfig.ImageStream())
 	if err != nil {
-		return "", err
+		return base.Base{}, err
 	}
 
-	// If the inputSeries is supported by the charm and is a supported
-	// workload series, use that.
-	if charmSeries.Contains(inputSeries) && supportedWorkloadSeries.Contains(inputSeries) {
-		return inputSeries, nil
-	} else if inputSeries != "" {
-		return "", jujuerrors.NewNotSupported(nil,
-			fmt.Sprintf("series %q either not supported by the charm, or an unsupported juju workload series with the current version of juju.", inputSeries))
+	// We can choose from a list of bases, supported both as
+	// workload bases and by the charm.
+	supportedBases := intersectionOfBases(charmBases, supportedWorkloadBases)
+	if len(supportedBases) == 0 {
+		return base.Base{}, jujuerrors.NewNotSupported(nil,
+			fmt.Sprintf("This charm has no bases supported by the charm and in the list of juju workload bases for the current version of juju."))
 	}
 
-	// We can choose from a list of series, supported both as a
-	// workload series and the by charm.
-	supportedSeries := charmSeries.Intersection(supportedWorkloadSeries)
+	// If the inputBase is supported by the charm and is a supported
+	// workload base, use that.
+	if basesContain(inputBase, supportedBases) {
+		return inputBase, nil
+	} else if !inputBase.Empty() {
+		return base.Base{}, jujuerrors.NewNotSupported(nil,
+			fmt.Sprintf("base %q either not supported by the charm, or an unsupported juju workload base with the current version of juju.", inputBase))
+	}
 
-	// If a default series is explicitly defined for the model,
-	// use that if a supportedSeries.
-	defaultSeries, explicit := modelConfig.DefaultSeries()
+	// If a default base is explicitly defined for the model,
+	// use that if a supportedBase.
+	defaultBaseString, explicit := modelConfig.DefaultBase()
 	if explicit {
-		useSeries, err := charm.SeriesForCharm(defaultSeries, supportedSeries.Values())
-		if err == nil {
-			return useSeries, nil
+		defaultBase, err := base.ParseBaseFromString(defaultBaseString)
+		if err != nil {
+			return base.Base{}, err
+		}
+		if basesContain(defaultBase, supportedBases) {
+			return defaultBase, nil
 		}
 	}
 
-	// If a suggested series is in the supportedSeries list, use it.
-	useSeries, err := charm.SeriesForCharm(suggestedSeries, supportedSeries.Values())
-	if err == nil {
-		return useSeries, nil
+	// If a suggested base is in the supportedBases list, use it.
+	if basesContain(suggestedBase, supportedBases) {
+		return suggestedBase, nil
 	}
 
-	// Note: This DefaultSupportedLTS is specific to juju 2.9.45
-	lts := jujuversion.DefaultSupportedLTS()
+	// Note: This DefaultSupportedLTSBase is specific to juju 3.3.0
+	lts := jujuversion.DefaultSupportedLTSBase()
+	if basesContain(lts, supportedBases) {
+		return lts, nil
+	}
 
-	// Select an actually supported series
-	return charm.SeriesForCharm(lts, supportedSeries.Values())
+	// Last attempt, the first base in supported Bases.
+	return supportedBases[0], nil
 }
 
 // processExpose is a local function that executes an expose request.
@@ -605,7 +614,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	defer func() { _ = conn.Close() }()
 
 	applicationAPIClient := apiapplication.NewClient(conn)
-	clientAPIClient := apiclient.NewClient(conn)
+	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
 
 	apps, err := applicationAPIClient.ApplicationsInfo([]names.ApplicationTag{names.NewApplicationTag(input.AppName)})
 	if err != nil {
@@ -757,17 +766,20 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	// ParseChannel to send back a base without the risk.
 	// Having the risk will cause issues with the provider
 	// saving a different value than the user did.
-	baseChannel, err := series.ParseChannel(appInfo.Base.Channel)
+	baseChannel, err := base.ParseChannel(appInfo.Base.Channel)
 	if err != nil {
 		return nil, jujuerrors.Annotate(err, "failed parse channel for base")
 	}
-
+	seriesString, err := base.GetSeriesFromChannel(appInfo.Base.Name, baseChannel.Track)
+	if err != nil {
+		return nil, jujuerrors.Annotate(err, "failed to get series from base")
+	}
 	response := &ReadApplicationResponse{
 		Name:        charmURL.Name,
 		Channel:     appInfo.Channel,
 		Revision:    charmURL.Revision,
 		Base:        fmt.Sprintf("%s@%s", appInfo.Base.Name, baseChannel.Track),
-		Series:      appInfo.Series,
+		Series:      seriesString,
 		Units:       unitCount,
 		Trust:       trustValue,
 		Expose:      exposed,
@@ -802,7 +814,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 
 	applicationAPIClient := apiapplication.NewClient(conn)
 	charmsAPIClient := apicharms.NewClient(conn)
-	clientAPIClient := apiclient.NewClient(conn)
+	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
 
 	resourcesAPIClient, err := apiresources.NewClient(conn)
 	if err != nil {
@@ -1024,19 +1036,19 @@ func (c applicationsClient) computeSetCharmConfig(
 	return &toReturn, nil
 }
 
-func resolveCharm(charmsAPIClient *apicharms.Client, curl *charm.URL, origin apicommoncharm.Origin) (*charm.URL, apicommoncharm.Origin, []string, error) {
+func resolveCharm(charmsAPIClient *apicharms.Client, curl *charm.URL, origin apicommoncharm.Origin) (*charm.URL, apicommoncharm.Origin, []base.Base, error) {
 	// Charm or bundle has been supplied as a URL so we resolve and
 	// deploy using the store but pass in the origin command line
 	// argument so users can target a specific origin.
 	resolved, err := charmsAPIClient.ResolveCharms([]apicharms.CharmToResolve{{URL: curl, Origin: origin}})
 	if err != nil {
-		return nil, apicommoncharm.Origin{}, []string{}, err
+		return nil, apicommoncharm.Origin{}, []base.Base{}, err
 	}
 	if len(resolved) != 1 {
-		return nil, apicommoncharm.Origin{}, []string{}, fmt.Errorf("expected only one resolution, received %d", len(resolved))
+		return nil, apicommoncharm.Origin{}, []base.Base{}, fmt.Errorf("expected only one resolution, received %d", len(resolved))
 	}
 	resolvedCharm := resolved[0]
-	return resolvedCharm.URL, resolvedCharm.Origin, resolvedCharm.SupportedSeries, resolvedCharm.Error
+	return resolvedCharm.URL, resolvedCharm.Origin, resolvedCharm.SupportedBases, resolvedCharm.Error
 }
 
 func strPtr(in string) *string {
@@ -1088,8 +1100,7 @@ func addPendingResources(appName string, resourcesToBeAdded map[string]charmreso
 			URL:    charmID.URL,
 			Origin: charmID.Origin,
 		},
-		CharmStoreMacaroon: nil,
-		Resources:          pendingResources,
+		Resources: pendingResources,
 	}
 
 	toRequest, err := resourcesAPIClient.AddPendingResources(resourcesReq)

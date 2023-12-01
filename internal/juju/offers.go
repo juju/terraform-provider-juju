@@ -342,7 +342,7 @@ func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 	defer func() { _ = conn.Close() }()
 
 	client := apiapplication.NewClient(conn)
-	clientAPIClient := apiclient.NewClient(conn)
+	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
 
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {

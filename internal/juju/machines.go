@@ -17,9 +17,9 @@ import (
 	apimachinemanager "github.com/juju/juju/api/client/machinemanager"
 	apimodelconfig "github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/cmd/juju/common"
+	"github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/model"
-	"github.com/juju/juju/core/series"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/environs/manual"
 	"github.com/juju/juju/environs/manual/sshprovisioner"
@@ -168,9 +168,9 @@ func (c machinesClient) CreateMachine(ctx context.Context, input *CreateMachineI
 
 func baseAndSeriesFromParams(machineBase *params.Base) (baseStr, seriesStr string, err error) {
 	if machineBase == nil {
-		panic("heather")
+		return "", "", errors.NotValidf("no base from machine status")
 	}
-	channel, err := series.ParseChannel(machineBase.Channel)
+	channel, err := base.ParseChannel(machineBase.Channel)
 	if err != nil {
 		return "", "", err
 	}
@@ -179,9 +179,9 @@ func baseAndSeriesFromParams(machineBase *params.Base) (baseStr, seriesStr strin
 	// with terraform.
 	baseStr = fmt.Sprintf("%s@%s", machineBase.Name, channel.Track)
 
-	seriesStr, err = series.GetSeriesFromBase(series.Base{
-		Name:    machineBase.Name,
-		Channel: series.Channel{Track: channel.Track, Risk: channel.Risk},
+	seriesStr, err = base.GetSeriesFromBase(base.Base{
+		OS:      machineBase.Name,
+		Channel: base.Channel{Track: channel.Track, Risk: channel.Risk},
 	})
 	if err != nil {
 		return "", "", errors.NotValidf("Base or Series %q", machineBase)
@@ -194,19 +194,26 @@ func baseFromOperatingSystem(opSys string) (*params.Base, error) {
 		return nil, nil
 	}
 	// opSys is a base or a series, check base first.
-	info, err := series.ParseBaseFromString(opSys)
+	info, err := base.ParseBaseFromString(opSys)
 	if err != nil {
-		info, err = series.GetBaseFromSeries(opSys)
+		info, err = base.GetBaseFromSeries(opSys)
 		if err != nil {
 			return nil, errors.NotValidf("Base or Series %q", opSys)
 		}
 	}
 	base := &params.Base{
-		Name:    info.Name,
+		Name:    info.OS,
 		Channel: info.Channel.String(),
 	}
-	base.Channel = series.FromLegacyCentosChannel(base.Channel)
+	base.Channel = fromLegacyCentosChannel(base.Channel)
 	return base, nil
+}
+
+func fromLegacyCentosChannel(series string) string {
+	if strings.HasPrefix(series, "centos") {
+		return strings.TrimLeft(series, "centos")
+	}
+	return series
 }
 
 // manualProvision calls the sshprovisioner.ProvisionMachine on the Juju side
@@ -262,14 +269,14 @@ func manualProvision(client manual.ProvisioningClientAPI,
 		return nil, errors.Annotatef(err, "error detecting hardware characteristics")
 	}
 
-	machineBase, err := series.GetBaseFromSeries(machineSeries)
+	machineBase, err := base.GetBaseFromSeries(machineSeries)
 	if err != nil {
 		return nil, err
 	}
 	// This might cause problems later, but today, no one except for juju internals
 	// uses the channel risk. Using the risk makes the base appear to have changed
 	// with terraform.
-	baseStr := fmt.Sprintf("%s@%s", machineBase.Name, machineBase.Channel.Track)
+	baseStr := fmt.Sprintf("%s@%s", machineBase.OS, machineBase.Channel.Track)
 
 	return &CreateMachineResponse{
 		ID:     machineId,
@@ -286,7 +293,7 @@ func (c machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse
 	}
 	defer func() { _ = conn.Close() }()
 
-	clientAPIClient := apiclient.NewClient(conn)
+	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
 
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
@@ -349,7 +356,7 @@ func (c machinesClient) DestroyMachine(input *DestroyMachineInput) error {
 
 	machineAPIClient := apimachinemanager.NewClient(conn)
 
-	_, err = machineAPIClient.DestroyMachinesWithParams(false, false, (*time.Duration)(nil), input.ID)
+	_, err = machineAPIClient.DestroyMachinesWithParams(false, false, false, (*time.Duration)(nil), input.ID)
 
 	if err != nil {
 		return err
