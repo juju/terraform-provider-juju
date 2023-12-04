@@ -27,7 +27,7 @@ install: simplify docs go-install
 # Reformat and simplify source files.
 simplify:
 ## simplify: Format and simplify the go source code
-	@echo "Formating the go source code"
+	@echo "Formatting the go source code"
 	@gofmt -w -l -s .
 
 .PHONY: lint
@@ -75,3 +75,23 @@ testlxd:
 testmicrok8s:
 ## testmicrok8s: Run unit tests against microk8s
 	TF_ACC=1 TEST_CLOUD=microk8s go test ./... -v $(TESTARGS) -timeout 120m
+
+.PHONY: install-snap-dependencies
+install-snap-dependencies:
+## install-snap-dependencies: Install snap dependencies for terraform-provider-juju
+	@echo "Installing snap dependencies"
+ifneq ($(HAS_TERRAFORM),)
+	@echo "Refreshing terraform snap"
+	@sudo snap refresh terraform --classic
+else
+	@echo "Installing terraform snap"
+	@sudo snap install terraform --classic
+endif
+
+.PHONY: install-dependencies
+install-dependencies: install-snap-dependencies
+## install-dependencies: Install all the dependencies
+	@echo "Installing dependencies"
+
+
+
