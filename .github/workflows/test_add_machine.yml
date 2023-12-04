@@ -45,7 +45,7 @@ jobs:
         cloud:
           - "lxd"
         terraform:
-          - "1.5.*"
+          - "1.6.*"
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
