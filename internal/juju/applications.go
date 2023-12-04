@@ -29,7 +29,6 @@ import (
 	apicharms "github.com/juju/juju/api/client/charms"
 	apiclient "github.com/juju/juju/api/client/client"
 	apimodelconfig "github.com/juju/juju/api/client/modelconfig"
-	"github.com/juju/juju/api/client/modelmanager"
 	apiresources "github.com/juju/juju/api/client/resources"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
 	"github.com/juju/juju/cmd/juju/application/utils"
@@ -39,9 +38,10 @@ import (
 	"github.com/juju/juju/core/series"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/juju/version"
+	jujuversion "github.com/juju/juju/version"
 	"github.com/juju/names/v4"
 	"github.com/juju/retry"
+	"github.com/juju/version/v2"
 )
 
 var ApplicationNotFoundError = &applicationNotFoundError{}
@@ -57,6 +57,7 @@ func (ae *applicationNotFoundError) Error() string {
 
 type applicationsClient struct {
 	SharedClient
+	controllerVersion version.Number
 }
 
 // ConfigEntry is an auxiliar struct to keep information about
@@ -191,6 +192,9 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 		return nil, err
 	}
 	defer func() { _ = conn.Close() }()
+
+	// Version needed for operating system selection.
+	c.controllerVersion, _ = conn.ServerVersion()
 
 	charmsAPIClient := apicharms.NewClient(conn)
 	applicationAPIClient := apiapplication.NewClient(conn)
@@ -393,32 +397,11 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 // uses juju 2.9.45 code. However the supported workload series list is
 // different between juju 2 and juju 3. Handle that here.
 func (c applicationsClient) supportedWorkloadSeries(imageStream string) (set.Strings, error) {
-	conn, err := c.GetConnection(nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	modelManagerAPIClient := modelmanager.NewClient(conn)
-
-	uuid, err := c.ModelUUID("controller")
-	if err != nil {
-		return nil, err
-	}
-
-	info, err := modelManagerAPIClient.ModelInfo([]names.ModelTag{names.NewModelTag(uuid)})
-	if err != nil {
-		return nil, err
-	}
-	if info[0].Error != nil {
-		return nil, info[0].Error
-	}
-
 	supportedSeries, err := series.WorkloadSeries(time.Now(), "", imageStream)
 	if err != nil {
 		return nil, err
 	}
-	if info[0].Result.AgentVersion.Major > 2 {
+	if c.controllerVersion.Major > 2 {
 		unsupported := set.NewStrings("bionic", "trusty", "windows", "xenial", "centos7", "precise")
 		supportedSeries = supportedSeries.Difference(unsupported)
 	}
@@ -485,7 +468,7 @@ func (c applicationsClient) seriesToUse(modelconfigAPIClient *apimodelconfig.Cli
 	}
 
 	// Note: This DefaultSupportedLTS is specific to juju 2.9.45
-	lts := version.DefaultSupportedLTS()
+	lts := jujuversion.DefaultSupportedLTS()
 
 	// Select an actually supported series
 	return charm.SeriesForCharm(lts, supportedSeries.Values())
