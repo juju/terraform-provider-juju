@@ -24,8 +24,8 @@ jobs:
           # - "candidate"
            - "edge"
         terraform:
-          - "1.4.*"
           - "1.5.*"
+          - "1.6.*"
     steps:
       - name: Set channel and artifact id
         run: |
