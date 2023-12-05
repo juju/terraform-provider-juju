@@ -50,8 +50,8 @@ body:
     id: Terraform-Config
     attributes:
       label: "Terraform Configuration(s)"
-      description: "Please add/copy-paste your Terraform plans (.tf) to 
-      reproduce the bug."
+      description: "Please add/copy-paste a simple Terraform plan (.tf) to 
+      reproduce the bug. Plans included by link will not be accepted."
       render: terraform
 
   - type: textarea
