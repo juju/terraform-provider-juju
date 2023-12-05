@@ -8,12 +8,16 @@ on:
     paths-ignore:
       - "README.md"
       - "project-docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
   push:
     branches:
       - "main"
     paths-ignore:
       - "README.md"
       - "project-docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
 
 # Testing only needs permissions to read the repository contents.
 permissions:
@@ -31,7 +35,10 @@ jobs:
       - run: go build -v .
 
   # Run acceptance tests in a matrix with Terraform CLI versions
-  test:
+  # Using juju 2.9/stable which requires a classic version
+  # of the microk8s snap. This happens to be the default snap
+  # today.
+  test-29:
     name: Integration
     needs: build
     runs-on: ubuntu-latest
@@ -46,6 +53,8 @@ jobs:
           - "1.4.*"
           - "1.5.*"
           - "1.6.*"
+        juju:
+          - "2.9/stable"
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +70,119 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: ${{ matrix.cloud }}
-          juju-channel: 2.9/stable
+          juju-channel: ${{ matrix.juju }}
+      - name: "Set environment to configure provider"
+        # language=bash
+        run: |
+          CONTROLLER=$(juju whoami --format yaml | yq .controller)
+
+          echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq .$CONTROLLER.details.api-endpoints | yq -r '. | join(",")')" >> $GITHUB_ENV
+          echo "JUJU_USERNAME=$(juju show-controller | yq .$CONTROLLER.account.user)"  >> $GITHUB_ENV
+          echo "JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password)"  >> $GITHUB_ENV
+          echo "JUJU_CA_CERT<<EOF" >> $GITHUB_ENV
+          juju show-controller | yq .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+      - run: go mod download
+      - env:
+          TF_ACC: "1"
+          TEST_CLOUD: ${{ matrix.cloud }}
+        run: go test -timeout 40m -v -cover ./internal/provider/
+        timeout-minutes: 40
+
+  # Run acceptance tests in a matrix with Terraform CLI versions
+  # Using juju 3.1/stable which requires a strictly confined version
+  # of the microk8s snap.
+  #
+  # test-31-microk8s is different from test-31-lxd as the
+  # charmed-kubernetes/actions-operator does not have the ability
+  # to specify a microk8s specific channel. Channel is generic
+  # and the operator tried to use for lxd, which fails. Bug filed.
+  test-31-microk8s:
+    name: Integration
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Different clouds
+        cloud:
+          - "microk8s"
+        terraform:
+          - "1.4.*"
+          - "1.5.*"
+          - "1.6.*"
+        juju:
+          - "3.1/stable"
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ matrix.terraform }}
+          terraform_wrapper: false
+      - name: Setup operator environment
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: ${{ matrix.cloud }}
+          juju-channel: ${{ matrix.juju }}
+          channel: "1.28-strict/stable"
+      - name: "Set environment to configure provider"
+        # language=bash
+        run: |
+          CONTROLLER=$(juju whoami --format yaml | yq .controller)
+
+          echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq .$CONTROLLER.details.api-endpoints | yq -r '. | join(",")')" >> $GITHUB_ENV
+          echo "JUJU_USERNAME=$(juju show-controller | yq .$CONTROLLER.account.user)"  >> $GITHUB_ENV
+          echo "JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password)"  >> $GITHUB_ENV
+          echo "JUJU_CA_CERT<<EOF" >> $GITHUB_ENV
+          juju show-controller | yq .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+      - run: go mod download
+      - env:
+          TF_ACC: "1"
+          TEST_CLOUD: ${{ matrix.cloud }}
+        run: go test -timeout 40m -v -cover ./internal/provider/
+        timeout-minutes: 40
+
+  # Run acceptance tests in a matrix with Terraform CLI versions
+  # Using juju 3.1/stable which requires a strictly confined version
+  # of the microk8s snap.
+  test-31-lxd:
+    name: Integration
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Different clouds
+        cloud:
+          - "lxd"
+        terraform:
+          - "1.4.*"
+          - "1.5.*"
+          - "1.6.*"
+        juju:
+          - "3.1/stable"
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ matrix.terraform }}
+          terraform_wrapper: false
+      - name: Setup operator environment
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: ${{ matrix.cloud }}
+          juju-channel: ${{ matrix.juju }}
       - name: "Set environment to configure provider"
         # language=bash
         run: |

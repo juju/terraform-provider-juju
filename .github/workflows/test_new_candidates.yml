@@ -20,8 +20,8 @@ jobs:
       matrix:
         juju_track:
           - "2.9"
+          - "3.1"
         juju_risk:
-          # - "candidate"
            - "edge"
         terraform:
           - "1.5.*"
