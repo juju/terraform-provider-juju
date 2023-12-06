@@ -18,28 +18,37 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        juju_track:
-          - "2.9"
-          - "3.1"
-        juju_risk:
+        juju-risk:
            - "edge"
         terraform:
-          - "1.5.*"
           - "1.6.*"
+        include:
+          - cloud: "lxd"
+            cloud-channel: "5.19/stable"
+            juju-track: "2.9"
+          - cloud: "microk8s"
+            cloud-channel: "1.28/stable"
+            juju-track: "2.9"
+          - cloud: "lxd"
+            cloud-channel: "5.19/stable"
+            juju-track: "3.1"
+          - cloud: "microk8s"
+            cloud-channel: "1.28-strict/stable"
+            juju-track: "3.1"
     steps:
       - name: Set channel and artifact id
         run: |
-          channel=$(echo ${{ matrix.juju_track }}/${{ matrix.juju_risk }})
+          channel=$(echo ${{ matrix.juju-track }}/${{ matrix.juju-risk }})
           echo "Target channel is $channel"
           echo "channel=$channel" >> $GITHUB_ENV
           terraform_version=$(echo ${{ matrix.terraform }} |  awk -F'\.' '{print $1$2}')
-          id=$(echo ${{ github.sha }}-${{ matrix.juju_track }}-${{ matrix.juju_risk }}-$terraform_version)
+          id=$(echo ${{ github.sha }}-${{ matrix.juju-track }}-${{ matrix.juju-risk }}-$terraform_version)
           echo "Target id is $id"
           echo "id=$id" >> $GITHUB_ENV
       - name: Checkout branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.juju_track }}
+          ref: ${{ env.juju-track }}
       - name: Download artifact
         uses: dawidd6/action-download-artifact@v2
         id: download_artifact
@@ -87,6 +96,7 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: ${{ matrix.cloud }}
+          channel: ${{ matrix.cloud-channel }}
           juju-channel: ${{ env.channel }}
       - name: "Set environment to configure provider"
         if: ${{ env.next-test != 'NA' }}
