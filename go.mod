@@ -24,6 +24,7 @@ require (
 	github.com/juju/names/v4 v4.0.0
 	github.com/juju/retry v1.0.0
 	github.com/juju/utils/v3 v3.0.2
+	github.com/juju/version/v2 v2.0.0
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.8.4
 )
@@ -137,7 +138,6 @@ require (
 	github.com/juju/schema v1.0.1 // indirect
 	github.com/juju/txn/v2 v2.1.1 // indirect
 	github.com/juju/usso v1.0.1 // indirect
-	github.com/juju/version/v2 v2.0.0 // indirect
 	github.com/juju/webbrowser v1.0.0 // indirect
 	github.com/juju/worker/v3 v3.4.0 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect

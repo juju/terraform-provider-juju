@@ -149,6 +149,7 @@ resource "juju_application" "this" {
 
 	charm {
 		name = "postgresql"
+		channel = "latest/stable"
 		%s
 	}
 }
