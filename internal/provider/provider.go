@@ -39,15 +39,16 @@ const (
 // controller as a fallback.
 func populateJujuProviderModelLive() (jujuProviderModel, error) {
 	data := jujuProviderModel{}
-	controllerConfig, err := juju.GetLocalControllerConfig()
-	if err != nil {
-		return data, err
-	}
-
+	controllerConfig, cliNotExist := juju.GetLocalControllerConfig()
 	data.ControllerAddrs = types.StringValue(getField(JujuControllerEnvKey, controllerConfig))
 	data.UserName = types.StringValue(getField(JujuUsernameEnvKey, controllerConfig))
 	data.Password = types.StringValue(getField(JujuPasswordEnvKey, controllerConfig))
 	data.CACert = types.StringValue(getField(JujuCACertEnvKey, controllerConfig))
+	// Only error if a valid controller config could not be fetched
+	// from the environment variables.
+	if cliNotExist != nil && !data.valid() {
+		return data, errors.New("unable to acquire Juju controller config: no working Juju client, and environment variables are not fully set")
+	}
 
 	return data, nil
 }
