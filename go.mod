@@ -24,7 +24,7 @@ require (
 	github.com/juju/names/v4 v4.0.0
 	github.com/juju/retry v1.0.0
 	github.com/juju/utils/v3 v3.0.2
-	github.com/juju/version/v2 v2.0.0
+	github.com/juju/version/v2 v2.0.1
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.8.4
 )
@@ -125,6 +125,7 @@ require (
 	github.com/juju/lru v0.0.0-20190314140547-92a0afabdc41 // indirect
 	github.com/juju/lumberjack/v2 v2.0.2 // indirect
 	github.com/juju/mgo/v2 v2.0.2 // indirect
+	github.com/juju/mgo/v3 v3.0.2 // indirect
 	github.com/juju/mutex/v2 v2.0.0 // indirect
 	github.com/juju/os/v2 v2.2.3 // indirect
 	github.com/juju/packaging/v2 v2.0.1 // indirect
