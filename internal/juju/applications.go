@@ -267,7 +267,14 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 		return nil, jujuerrors.NotSupportedf("deploying bundles")
 	}
 
-	seriesToUse, err := c.seriesToUse(modelconfigAPIClient, userSuppliedSeries, resolvedOrigin.Series, set.NewStrings(supportedSeries...))
+	// Of the resolvedURL.Series, resolvedOrigin.Series and resolvedOrigin.Base,
+	// the latter is the only trustworthy across all juju controllers supported.
+	suggestedSeries, err := series.GetSeriesFromBase(resolvedOrigin.Base)
+	if err != nil {
+		return nil, err
+	}
+
+	seriesToUse, err := c.seriesToUse(modelconfigAPIClient, userSuppliedSeries, suggestedSeries, set.NewStrings(supportedSeries...))
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +448,7 @@ func (c applicationsClient) seriesToUse(modelconfigAPIClient *apimodelconfig.Cli
 	// If the inputSeries is supported by the charm and is a supported
 	// workload series, use that.
 	if charmSeries.Contains(inputSeries) && supportedWorkloadSeries.Contains(inputSeries) {
-		return suggestedSeries, nil
+		return inputSeries, nil
 	} else if inputSeries != "" {
 		return "", jujuerrors.NewNotSupported(nil,
 			fmt.Sprintf("series %q either not supported by the charm, or an unsupported juju workload series with the current version of juju.", inputSeries))

@@ -8,12 +8,16 @@ on:
     paths-ignore:
       - "README.md"
       - "project-docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
   push:
     branches:
       - "main"
     paths-ignore:
       - "README.md"
       - "project-docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
 
 # Testing only needs permissions to read the repository contents.
 permissions:
@@ -31,6 +35,9 @@ jobs:
       - run: go build -v .
 
   # Run acceptance tests in a matrix with Terraform CLI versions
+  # Using juju 2.9/stable which requires a classic version
+  # of the microk8s snap. This happens to be the default snap
+  # today.
   test:
     name: Integration
     needs: build
@@ -38,14 +45,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Different clouds
-        cloud:
-          - "lxd"
-          - "microk8s"
         terraform:
           - "1.4.*"
           - "1.5.*"
           - "1.6.*"
+        include:
+          - cloud: "lxd"
+            cloud-channel: "5.19/stable"
+            juju-channel: "2.9/stable"
+          - cloud: "microk8s"
+            cloud-channel: "1.28/stable"
+            juju-channel: "2.9/stable"
+          - cloud: "lxd"
+            cloud-channel: "5.19/stable"
+            juju-channel: "3.1/stable"
+          - cloud: "microk8s"
+            cloud-channel: "1.28-strict/stable"
+            juju-channel: "3.1/stable"
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +77,8 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: ${{ matrix.cloud }}
-          juju-channel: 2.9/stable
+          channel: ${{ matrix.cloud-channel }}
+          juju-channel: ${{ matrix.juju-channel }}
       - name: "Set environment to configure provider"
         # language=bash
         run: |

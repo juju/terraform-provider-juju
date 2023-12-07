@@ -34,13 +34,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cloud:
-          - "lxd"
-          - "microk8s"
         terraform:
-          - "1.4.*"
-          - "1.5.*"
           - "1.6.*"
+        include:
+          - cloud: "lxd"
+            cloud-channel: "5.19/stable"
+            juju-channel: "2.9/stable"
+          - cloud: "microk8s"
+            cloud-channel: "1.28/stable"
+            juju-channel: "2.9/stable"
+          - cloud: "lxd"
+            cloud-channel: "5.19/stable"
+            juju-channel: "3.1/stable"
+          - cloud: "microk8s"
+            cloud-channel: "1.28-strict/stable"
+            juju-channel: "3.1/stable"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v4
@@ -55,7 +63,8 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: ${{ matrix.cloud }}
-          juju-channel: 2.9/stable
+          channel: ${{ matrix.cloud-channel }}
+          juju-channel: ${{ matrix.juju-channel }}
       - name: "Set environment to configure provider"
         # language=bash
         run: |
@@ -71,4 +80,3 @@ jobs:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.cloud }}
         run: go test -timeout 40m -v -cover ./internal/provider/
-      
