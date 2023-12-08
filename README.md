@@ -34,6 +34,12 @@ _Note:_ These features may not have functional parity with the juju cli at this 
 
 1. Clone the repository
 1. Enter the repository directory
+1. Build the provider dependencies using the make `install-dependencies` target:
+
+    ```shell
+    make install-dependencies
+    ```
+
 1. Build the provider using the make `go-install` target:
 
     ```shell
