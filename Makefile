@@ -27,7 +27,7 @@ install: simplify docs go-install
 # Reformat and simplify source files.
 simplify:
 ## simplify: Format and simplify the go source code
-	@echo "Formating the go source code"
+	@echo "Formatting the go source code"
 	@gofmt -w -l -s .
 
 .PHONY: lint
@@ -75,3 +75,26 @@ testlxd:
 testmicrok8s:
 ## testmicrok8s: Run unit tests against microk8s
 	TF_ACC=1 TEST_CLOUD=microk8s go test ./... -v $(TESTARGS) -timeout 120m
+
+PACKAGES=terraform golangci-lint go
+# Function to check if Snap packages are installed
+check-snap-package:
+	@for package in $(PACKAGES); do \
+		if snap list $$package >/dev/null 2>&1; then \
+			echo "Package $$package is already installed."; \
+		else \
+			echo "Package $$package is not installed."; \
+			sudo snap install $$package --classic; \
+		fi; \
+	done
+
+.PHONY: install-snap-dependencies
+install-snap-dependencies: check-snap-package
+## install-snap-dependencies: Install all the snap dependencies
+
+.PHONY: install-dependencies
+install-dependencies: install-snap-dependencies
+## install-dependencies: Install all the dependencies
+
+
+
