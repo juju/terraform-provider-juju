@@ -61,6 +61,8 @@ Please, refer to the [Terraform docs for the Juju provider](https://registry.ter
 
 ## Developing the Provider
 
+__Note:__ Commits provided as part of a PR must be [signed via git](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits) for the PR to merge.
+
 ### Planning & Design
 
 When creating a new resource, datasource or changing a current schema please document the 
