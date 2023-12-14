@@ -50,7 +50,7 @@ jobs:
         with:
           ref: ${{ env.juju-track }}
       - name: Download artifact
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@v3
         id: download_artifact
         with:
           name: ${{ env.id }}
