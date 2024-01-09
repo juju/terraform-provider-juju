@@ -269,9 +269,11 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 
 	// Of the resolvedURL.Series, resolvedOrigin.Series and resolvedOrigin.Base,
 	// the latter is the only trustworthy across all juju controllers supported.
+	// If we resolve a charm with a revision and no user specified operating
+	// system, none of the above will have values.
 	suggestedSeries, err := series.GetSeriesFromBase(resolvedOrigin.Base)
 	if err != nil {
-		return nil, err
+		c.Warnf("failed to get a suggested operating system from resolved charm response", map[string]interface{}{"err": err})
 	}
 
 	seriesToUse, err := c.seriesToUse(modelconfigAPIClient, userSuppliedSeries, suggestedSeries, set.NewStrings(supportedSeries...))
