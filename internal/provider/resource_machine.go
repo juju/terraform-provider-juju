@@ -46,6 +46,7 @@ type machineResourceModel struct {
 	Disks          types.String `tfsdk:"disks"`
 	Base           types.String `tfsdk:"base"`
 	Series         types.String `tfsdk:"series"`
+	Placement      types.String `tfsdk:"placement"`
 	MachineID      types.String `tfsdk:"machine_id"`
 	SSHAddress     types.String `tfsdk:"ssh_address"`
 	PublicKeyFile  types.String `tfsdk:"public_key_file"`
@@ -87,6 +88,7 @@ const (
 	ConstraintsKey    = "constraints"
 	DisksKey          = "disks"
 	SeriesKey         = "series"
+	PlacementKey      = "placement"
 	BaseKey           = "base"
 	MachineIDKey      = "machine_id"
 	SSHAddressKey     = "ssh_address"
@@ -168,6 +170,20 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 					}...),
 				},
 				DeprecationMessage: "Configure base instead. This attribute will be removed in the next major version of the provider.",
+			},
+			PlacementKey: schema.StringAttribute{
+				Description: "Additional information about how to allocate the machine in the cloud.",
+				Optional:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplaceIfConfigured(),
+					stringplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.Expressions{
+						path.MatchRoot(SSHAddressKey),
+						path.MatchRoot(ConstraintsKey),
+					}...),
+				},
 			},
 			MachineIDKey: schema.StringAttribute{
 				Description: "The id of the machine Juju creates.",
@@ -257,6 +273,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		Base:           data.Base.ValueString(),
 		Series:         data.Series.ValueString(),
 		SSHAddress:     data.SSHAddress.ValueString(),
+		Placement:      data.Placement.ValueString(),
 		PublicKeyFile:  data.PublicKeyFile.ValueString(),
 		PrivateKeyFile: data.PrivateKeyFile.ValueString(),
 	})
