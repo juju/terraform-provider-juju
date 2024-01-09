@@ -46,11 +46,11 @@ func resourceMachine() *schema.Resource {
 				ConflictsWith: []string{"ssh_address"},
 			},
 			"disks": {
-				Description: "Storage constraints for disks to attach to the machine(s).",
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				ForceNew:    true,
+				Description:   "Storage constraints for disks to attach to the machine(s).",
+				Type:          schema.TypeString,
+				Optional:      true,
+				Default:       "",
+				ForceNew:      true,
 				ConflictsWith: []string{"ssh_address"},
 			},
 			"series": {
@@ -106,6 +106,7 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 	name := d.Get("name").(string)
 	constraints := d.Get("constraints").(string)
 	disks := d.Get("disks").(string)
+	placement := d.Get("placement").(string)
 	series := d.Get("series").(string)
 	sshAddress := d.Get("ssh_address").(string)
 	publicKeyFile := d.Get("public_key_file").(string)
@@ -128,6 +129,7 @@ func resourceMachineCreate(ctx context.Context, d *schema.ResourceData, meta int
 		Constraints:    constraints,
 		ModelUUID:      modelUUID,
 		Disks:          disks,
+		Placement:      placement,
 		Series:         series,
 		SSHAddress:     sshAddress,
 		PublicKeyFile:  publicKeyFile,

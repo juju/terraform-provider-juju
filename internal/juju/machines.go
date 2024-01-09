@@ -4,14 +4,16 @@ import (
 	"fmt"
 	"os"
 
+	"strings"
+
 	"github.com/juju/cmd/v3"
 	"github.com/juju/errors"
 	"github.com/juju/juju/environs/manual/sshprovisioner"
-	"strings"
+
+	"time"
 
 	"github.com/juju/juju/cmd/juju/common"
 	"github.com/juju/juju/environs/config"
-	"time"
 
 	"github.com/juju/juju/rpc/params"
 
@@ -19,6 +21,7 @@ import (
 	apimachinemanager "github.com/juju/juju/api/client/machinemanager"
 	apimodelconfig "github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/core/constraints"
+	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/series"
 	"github.com/juju/juju/environs/manual"
@@ -35,6 +38,7 @@ type CreateMachineInput struct {
 	Disks       string
 	Series      string
 	InstanceId  string
+	Placement   string
 
 	// SSHAddress is the host address of a machine for manual provisioning
 	// Note that it has the user too, e.g. user@host
@@ -85,6 +89,18 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 	defer modelConfigAPIClient.Close()
 
 	var machineParams params.AddMachineParams
+
+	placement := input.Placement
+	if placement != "" {
+		machineParams.Placement, err = instance.ParsePlacement(placement)
+		if err == instance.ErrPlacementScopeMissing {
+			placement = "model-uuid" + ":" + placement
+			machineParams.Placement, err = instance.ParsePlacement(placement)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if input.SSHAddress != "" {
 		configAttrs, err := modelConfigAPIClient.ModelGet()
