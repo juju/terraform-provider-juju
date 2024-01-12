@@ -1,3 +1,12 @@
+## 0.10.1 (January 12, 2024)
+
+BUG FIXES:
+
+* Do not require permissions on the controller model to deploy an application by @hmlanigan in https://github.com/juju/terraform-provider-juju/pull/353
+* Handle resolved charm origins without base by @hmlanigan in https://github.com/juju/terraform-provider-juju/pull/375
+* Find operating system for deploy regardless of juju controller version by @hmlanigan in https://github.com/juju/terraform-provider-juju/pull/358
+* Populating Juju controller config no longer immediately fails if Juju cli does not exist by @Osama-Kassem
+
 ## 0.10.0 (October 26, 2023)
 
 NOTES:
