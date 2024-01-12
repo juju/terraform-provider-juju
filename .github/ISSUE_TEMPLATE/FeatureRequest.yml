@@ -40,5 +40,5 @@ body:
       label: "Notes & References"
       description: |
         Please add relevant notes, links to mattermost chats, other related
-        issues/PRs, anything to help diagnose understand and develop the
+        issues/PRs, anything to help diagnose, understand and develop the
         feature you want.
