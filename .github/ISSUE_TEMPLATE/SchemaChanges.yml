@@ -1,0 +1,60 @@
+name: Schema Change
+description: |
+  You want to contribute functionality to Terraform Juju Provider,
+  requiring a schema change? Proceed with this one.
+labels: [schema changes]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Contributions are happily accepted. This will help us understand the change
+        coming and resolve issues before the changes are made.
+
+  - type: dropdown
+    id: Type
+    attributes:
+      label: Type of change
+      description: Are you updating or adding a schema?
+      options:
+        - Changing existing schema
+        - Adding new schema
+    validations:
+      required: true
+
+  - type: textarea
+    id: Description
+    attributes:
+      label: Description
+      description: |
+        Please provide a description of the schema addition or change including why
+        it is needed.
+      placeholder: ex. "I plan to implement data source resource X in the provider."
+      render: terraform
+    validations:
+      required: true
+
+  - type: textarea
+    id: Details
+    attributes:
+      label: Details
+      description: |
+        Details about each schema attribute to be added or modified including
+        structure contents. Include also why choices were made, especially
+        about fields being Optional, Computed, etc.
+      placeholder: |
+        ex.
+        "machine_id": schema.StringAttribute{
+        	Description: "The Juju id of the machine.",
+        	Required:    true,
+        },
+    validations:
+      required: true
+
+  - type: textarea
+    id: Info
+    attributes:
+      label: "Notes & References"
+      description: |
+        Please add relevant notes, links to matrix chats, other related
+        issues/PRs, anything to help diagnose understand and develop the
+        feature you want.
