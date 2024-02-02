@@ -8,30 +8,67 @@ description: |-
 
 # Juju Provider
 
-The provider can be used to interact with [Juju][0] - a model-driven Operator Lifecycle Manager (OLM) by Canonical.
+The provider can be used to interact with [Juju][0] - an open source orchestration engine by Canonical.
 
-Initially this provider allows you to:
+The provider only interacts with a single controller at a time.
 
-* Manage models,
-* Manage applications and deploy charms from CharmHub,
-* Manage integrations.
+Today this provider allows you to manage the following via resources:
 
-In future the provider will be extended to support more of Juju's capabilities.
+* Applications and deploy charms
+* Credentials for existing clouds
+* Integrations
+* Machines
+* Models
+* Model ssh keys
+* Offers
+* Users
+
+and refer to the following via data sources:
+
+* Machines
+* Models
+* Offers
+
+Work is ongoing to include support for more of the juju CLIs capabilities within this provider.
 
 ## Prerequisites
 
 * [Juju][0] `2.9.33+`
 
-### Juju CLI configuration store
+## Authentication
 
-The provider has a dependency on Juju CLI configuration store.
+There are 3 ways to define credentials for authentication with the Juju controller you wish to target.
+They are displayed in the order in which the provider looks for credentials.
 
-In order to operate, the provider expects configuration to be found in one of the following locations:
+### Static credentials
 
-* `$XDG_DATA_HOME/juju`
-* `~/.local/share/juju`
+Define the Juju controller credentials in the provider definition in your terraform plan.
 
-The intention is to remove this dependency in future.
+``` terraform
+provider "juju" {
+  controller_addresses = "10.225.205.241:17070,10.225.205.242:17070"
+  username = "jujuuser"
+  password = "password1"
+  ca_certificate = file("~/ca-cert.pem")
+}
+```
+
+### Environment variables
+
+Define the Juju controller credentials in the provider definition via environment variables. These can be set up as follows:
+
+```shell
+export CONTROLLER=$(juju whoami | yq .Controller)
+export JUJU_CONTROLLER_ADDRESSES="$(juju show-controller | yq '.[$CONTROLLER]'.details.\"api-endpoints\" | tr -d "[]' "|tr -d '"'|tr -d '\n')"
+export JUJU_USERNAME="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.user|tr -d '"')"
+export JUJU_PASSWORD="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password|tr -d '"')"
+export JUJU_CA_CERT="$(juju show-controller $(echo $CONTROLLER|tr -d '"') | yq '.[$CONTROLLER]'.details.\"ca-cert\"|tr -d '"'|sed 's/\\n/\n/g')"
+```
+
+### Populated by the provider via the juju CLI client.
+
+This is the most straightforward solution. Remember that it will use the configuration used by the Juju CLI client at that moment. The fields are populated using the
+ output from running the command `juju show-controller` with the `--show-password` flag.
 
 ## Example Usage
 
@@ -45,42 +82,6 @@ terraform {
     }
   }
 }
-
-# This is a fully configured provider containing all the 
-# relevant information to connect to a Juju controller.
-# This information can be collected by checking the local
-# juju folder (~/.local/share/juju/), or by querying the
-# controller using `juju show-controller --show-password`.
-# If you have already installed and configured a local
-# Juju CLI or prefer to use a configuration using environment
-# variables, you can use an empty provider. See the next
-# example for more details.
-
-#provider "juju" {
-#  controller_addresses = "10.225.205.241:17070,10.225.205.242:17070"
-#
-#  username = "jujuuser"
-#  password = "password1"
-#
-#  ca_certificate = file("~/ca-cert.pem")
-#}
-
-
-# When an empty provider is indicated, the Juju
-# provider automatically sets the corresponding values
-# by checking:
-# **First**: the following environment variables that correspond
-# to the configuration fields indicated above.
-# JUJU_CONTROLLER_ADDRESSES
-# JUJU_USERNAME
-# JUJU_PASSWORD
-# JUJU_CA_CERT
-# **Second**: by using a locally installed Juju CLI client.
-# This is the most straight-forward solution. Remember, that
-# it will use the configuration used by the CLI at that 
-# moment. The fields are populated using the output
-# from running the command:
-# `juju show-controller --show-password`
 
 provider "juju" {}
 
@@ -204,4 +205,4 @@ resource "juju_integration" "wp_to_percona" {
 - `username` (String) This is the username registered with the controller to be used. This can also be set by the `JUJU_USERNAME` environment variable
 
 
-[0]: https://juju.is "Juju | Operator lifecycle manager for K8s and traditional workloads"
+[0]: https://juju.is "Juju | An open source application orchestration engine"
