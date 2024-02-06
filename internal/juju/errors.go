@@ -10,6 +10,9 @@ import (
 )
 
 func typedError(err error) error {
+	if err == nil {
+		return nil
+	}
 	switch {
 	case strings.Contains(err.Error(), "not found"):
 		return jujuerrors.WithType(err, jujuerrors.NotFound)
