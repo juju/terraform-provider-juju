@@ -250,7 +250,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	response, err := r.client.Machines.CreateMachine(&juju.CreateMachineInput{
+	response, err := r.client.Machines.CreateMachine(ctx, &juju.CreateMachineInput{
 		Constraints:    data.Constraints.ValueString(),
 		ModelName:      data.ModelName.ValueString(),
 		Disks:          data.Disks.ValueString(),

@@ -4,11 +4,13 @@
 package juju
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/juju/clock"
 	"github.com/juju/cmd/v3"
 	"github.com/juju/errors"
 	apiclient "github.com/juju/juju/api/client/client"
@@ -23,6 +25,7 @@ import (
 	"github.com/juju/juju/environs/manual/sshprovisioner"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/juju/storage"
+	"github.com/juju/retry"
 )
 
 type machinesClient struct {
@@ -77,7 +80,7 @@ func newMachinesClient(sc SharedClient) *machinesClient {
 	}
 }
 
-func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachineResponse, error) {
+func (c machinesClient) CreateMachine(ctx context.Context, input *CreateMachineInput) (*CreateMachineResponse, error) {
 	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return nil, err
@@ -135,10 +138,12 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 	if opSys == "" {
 		opSys = input.Series
 	}
-	machineParams.Base, err = baseFromOperatingSystem(opSys)
+	paramsBase, err := baseFromOperatingSystem(opSys)
 	if err != nil {
 		return nil, err
 	}
+	machineParams.Base = paramsBase
+
 	addMachineArgs := []params.AddMachineParams{machineParams}
 	machines, err := machineAPIClient.AddMachines(addMachineArgs)
 	if err != nil {
@@ -147,11 +152,41 @@ func (c machinesClient) CreateMachine(input *CreateMachineInput) (*CreateMachine
 	if machines[0].Error != nil {
 		return nil, machines[0].Error
 	}
+	machineID := machines[0].Machine
+
+	// Read the machine to ensure we have a base and series. It's
+	// not a required field in a minimal machine config.
+	readResponse, err := c.readMachineWithRetryOnNotFound(ctx,
+		ReadMachineInput{ModelName: input.ModelName, ID: machineID})
+
 	return &CreateMachineResponse{
-		ID:     machines[0].Machine,
-		Base:   input.Base,
-		Series: input.Series,
+		ID:     machineID,
+		Base:   readResponse.Base,
+		Series: readResponse.Series,
 	}, err
+}
+
+func baseAndSeriesFromParams(machineBase *params.Base) (baseStr, seriesStr string, err error) {
+	if machineBase == nil {
+		panic("heather")
+	}
+	channel, err := series.ParseChannel(machineBase.Channel)
+	if err != nil {
+		return "", "", err
+	}
+	// This might cause problems later, but today, no one except for juju internals
+	// uses the channel risk. Using the risk makes the base appear to have changed
+	// with terraform.
+	baseStr = fmt.Sprintf("%s@%s", machineBase.Name, channel.Track)
+
+	seriesStr, err = series.GetSeriesFromBase(series.Base{
+		Name:    machineBase.Name,
+		Channel: series.Channel{Track: channel.Track, Risk: channel.Risk},
+	})
+	if err != nil {
+		return "", "", errors.NotValidf("Base or Series %q", machineBase)
+	}
+	return baseStr, seriesStr, err
 }
 
 func baseFromOperatingSystem(opSys string) (*params.Base, error) {
@@ -227,8 +262,18 @@ func manualProvision(client manual.ProvisioningClientAPI,
 		return nil, errors.Annotatef(err, "error detecting hardware characteristics")
 	}
 
+	machineBase, err := series.GetBaseFromSeries(machineSeries)
+	if err != nil {
+		return nil, err
+	}
+	// This might cause problems later, but today, no one except for juju internals
+	// uses the channel risk. Using the risk makes the base appear to have changed
+	// with terraform.
+	baseStr := fmt.Sprintf("%s@%s", machineBase.Name, machineBase.Channel.Track)
+
 	return &CreateMachineResponse{
 		ID:     machineId,
+		Base:   baseStr,
 		Series: machineSeries,
 	}, nil
 }
@@ -252,19 +297,47 @@ func (c machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse
 	if !exists {
 		return response, fmt.Errorf("no status returned for machine: %s", input.ID)
 	}
+	c.Tracef("ReadMachine:Machine status result", map[string]interface{}{"machineStatus": machineStatus})
 	response.ID = machineStatus.Id
-	channel, err := series.ParseChannel(machineStatus.Base.Channel)
+	response.Base, response.Series, err = baseAndSeriesFromParams(&machineStatus.Base)
 	if err != nil {
 		return response, err
 	}
-	// This might cause problems later, but today, no one except for juju internals
-	// uses the channel risk. Using the risk makes the base appear to have changed
-	// with terraform.
-	response.Base = fmt.Sprintf("%s@%s", machineStatus.Base.Name, channel.Track)
-	response.Series = machineStatus.Series
 	response.Constraints = machineStatus.Constraints
-
 	return response, nil
+}
+
+// readMachineWithRetryOnNotFound calls ReadMachine until
+// successful, or the count is exceeded when the error is of type
+// not found. Delay indicates how long to wait between attempts.
+func (c machinesClient) readMachineWithRetryOnNotFound(ctx context.Context, input ReadMachineInput) (ReadMachineResponse, error) {
+	var output ReadMachineResponse
+	err := retry.Call(retry.CallArgs{
+		Func: func() error {
+			var err error
+			output, err = c.ReadMachine(input)
+			typedErr := typedError(err)
+			if errors.Is(typedErr, errors.NotFound) {
+				return nil
+			}
+			return err
+		},
+		NotifyFunc: func(err error, attempt int) {
+			if attempt%4 == 0 {
+				message := fmt.Sprintf("waiting for machine %q", input.ID)
+				if attempt != 4 {
+					message = "still " + message
+				}
+				c.Debugf(message)
+			}
+		},
+		BackoffFunc: retry.DoubleDelay,
+		Attempts:    30,
+		Delay:       time.Second,
+		Clock:       clock.WallClock,
+		Stop:        ctx.Done(),
+	})
+	return output, err
 }
 
 func (c machinesClient) DestroyMachine(input *DestroyMachineInput) error {
