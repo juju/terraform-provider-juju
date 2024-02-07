@@ -697,14 +697,46 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 // not found. Delay indicates how long to wait between attempts.
 func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Context, input *ReadApplicationInput) (*ReadApplicationResponse, error) {
 	var output *ReadApplicationResponse
-	err := retry.Call(retry.CallArgs{
+	modelType, err := c.ModelType(input.ModelName)
+	if err != nil {
+		return nil, jujuerrors.Annotatef(err, "getting model type")
+	}
+	retryErr := retry.Call(retry.CallArgs{
 		Func: func() error {
 			var err error
 			output, err = c.ReadApplication(input)
 			if errors.As(err, &ApplicationNotFoundError) {
+				return err
+			} else if err != nil {
+				// Log the error to the terraform Diagnostics to be
+				// caught in the provider. Return nil so we stop
+				// retrying.
+				c.Errorf(err, fmt.Sprintf("ReadApplicationWithRetryOnNotFound %q", input.AppName))
 				return nil
 			}
-			return err
+			// NOTE: An IAAS subordinate should also have machines. However, they
+			// will not be listed until after the relation has been created.
+			// Those happen with the integration resource which will not be
+			// run by terraform before the application resource finishes. Thus
+			// do not block here for subordinates.
+			if modelType != model.IAAS || !output.Principal || output.Units == 0 {
+				// No need to wait for machines in these cases.
+				return nil
+			}
+			if output.Placement == "" {
+				return fmt.Errorf("ReadApplicationWithRetryOnNotFound: no machines found in output")
+			}
+			machines := strings.Split(output.Placement, ",")
+			if len(machines) != output.Units {
+				return fmt.Errorf("ReadApplicationWithRetryOnNotFound: need %d machines, have %d", output.Units, len(machines))
+			}
+			// NOTE: An IAAS subordinate should also have machines. However, they
+			// will not be listed until after the relation has been created.
+			// Those happen with the integration resource which will not be
+			// run by terraform before the application resource finishes. Thus
+			// do not block here for subordinates.
+			c.Tracef("Have machines - returning", map[string]interface{}{"output": output})
+			return nil
 		},
 		NotifyFunc: func(err error, attempt int) {
 			if attempt%4 == 0 {
@@ -712,7 +744,7 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 				if attempt != 4 {
 					message = "still " + message
 				}
-				c.Debugf(message)
+				c.Debugf(message, map[string]interface{}{"err": err})
 			}
 		},
 		BackoffFunc: retry.DoubleDelay,
@@ -721,7 +753,7 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 		Clock:       clock.WallClock,
 		Stop:        ctx.Done(),
 	})
-	return output, err
+	return output, retryErr
 }
 
 func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadApplicationResponse, error) {

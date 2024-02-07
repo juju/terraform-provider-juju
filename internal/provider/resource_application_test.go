@@ -230,6 +230,7 @@ func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "model", modelName),
 					resource.TestCheckResourceAttr(resourceName, "name", charmName),
+					resource.TestCheckResourceAttr(resourceName, "placement", "0"),
 					resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
 					resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
 				),
