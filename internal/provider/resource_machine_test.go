@@ -25,6 +25,7 @@ func TestAcc_ResourceMachine(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
+					resource.TestCheckResourceAttr("juju_machine.this", "series", "jammy"),
 					resource.TestCheckResourceAttr("juju_machine.this", "base", "ubuntu@22.04"),
 				),
 			},

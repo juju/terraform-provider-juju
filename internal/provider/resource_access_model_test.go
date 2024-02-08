@@ -29,7 +29,7 @@ func TestAcc_ResourceAccessModel(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccResourceAccessModel(userName, userPassword, modelName1, accessFail),
-				ExpectError: regexp.MustCompile("Error running pre-apply refresh.*"),
+				ExpectError: regexp.MustCompile("Invalid Attribute Value Match.*"),
 			},
 			{
 				Config: testAccResourceAccessModel(userName, userPassword, modelName1, accessSuccess),
