@@ -2,28 +2,28 @@
 
 > **Warning** The provider is under active development and will initially support only some Juju functionality. Use releases at your own risk.
 
-The provider can be used to interact with Juju - a model-driven Operator Lifecycle Manager (OLM).
+The provider can be used to interact with Juju - an open source orchestration engine.
 
 ##  Scope
 
-Currently, you can manage the following:
+Today this provider allows you to manage the following via resources:
 
-- Applications (from Charmhub only)
-- Cloud Credentials
-- Integrations ("relations")
-- Offers
-- SSH keys
-- Machines
-- Models and model permissions
-- Users
+* Applications and deploy charms
+* Credentials for existing clouds
+* Integrations
+* Machines
+* Models
+* Model ssh keys
+* Offers
+* Users
 
-Data Sources are avialable for:
+and refer to the following via data sources:
 
-- Machines
-- Models
-- Offers
+* Machines
+* Models
+* Offers
 
-_Note:_ These features may not have functional parity with the juju cli at this time.
+_Note:_ These features may not have functional parity with the juju CLI at this time.
 
 ## Requirements
 
