@@ -32,6 +32,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
       - run: go build -v .
 
   # Run acceptance tests in a matrix with Terraform CLI versions
