@@ -75,6 +75,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Determine which tests to run
+        uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            go:
+              - '**.go'
+              - 'go.mod'
       - uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
@@ -82,7 +90,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.53.3
+          version: v1.54.0
           args: --print-issued-lines=true
 
   # This runs golangci-lint against the codebase
