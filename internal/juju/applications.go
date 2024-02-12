@@ -452,7 +452,7 @@ func (c applicationsClient) baseToUse(modelconfigAPIClient *apimodelconfig.Clien
 	supportedBases := intersectionOfBases(charmBases, supportedWorkloadBases)
 	if len(supportedBases) == 0 {
 		return base.Base{}, jujuerrors.NewNotSupported(nil,
-			fmt.Sprintf("This charm has no bases supported by the charm and in the list of juju workload bases for the current version of juju."))
+			"This charm has no bases supported by the charm and in the list of juju workload bases for the current version of juju.")
 	}
 
 	// If the inputBase is supported by the charm and is a supported
