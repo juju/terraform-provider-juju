@@ -45,10 +45,10 @@ jobs:
             juju-channel: "2.9/stable"
           - cloud: "lxd"
             cloud-channel: "5.19/stable"
-            juju-channel: "3.3/stable"
+            juju-channel: "3.2/stable"
           - cloud: "microk8s"
             cloud-channel: "1.28-strict/stable"
-            juju-channel: "3.3/stable"
+            juju-channel: "3.2/stable"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
