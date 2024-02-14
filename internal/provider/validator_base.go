@@ -7,7 +7,7 @@ import (
 	"context"
 
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
-	"github.com/juju/juju/core/series"
+	"github.com/juju/juju/core/base"
 )
 
 type stringIsBaseValidator struct{}
@@ -29,7 +29,7 @@ func (v stringIsBaseValidator) ValidateString(_ context.Context, req validator.S
 		return
 	}
 
-	if _, err := series.ParseBaseFromString(req.ConfigValue.ValueString()); err != nil {
+	if _, err := base.ParseBaseFromString(req.ConfigValue.ValueString()); err != nil {
 		resp.Diagnostics.AddAttributeError(
 			req.Path,
 			"Invalid Base",

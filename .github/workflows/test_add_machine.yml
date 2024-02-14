@@ -52,7 +52,7 @@ jobs:
           - "1.6.*"
         juju:
           - "2.9/stable"
-          - "3.1/stable"
+          - "3.2/stable"
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4

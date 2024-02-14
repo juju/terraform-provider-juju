@@ -112,8 +112,8 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 		return nil, err
 	}
 
-	//integration is created - fetch the status in order to validate
-	status, err := getStatus(conn)
+	// integration is created - fetch the status in order to validate
+	status, err := c.getStatus(conn)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 	}
 	defer func() { _ = conn.Close() }()
 
-	status, err := getStatus(conn)
+	status, err := c.getStatus(conn)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +224,7 @@ func (c integrationsClient) UpdateIntegration(input *UpdateIntegrationInput) (*U
 	//TODO: check deletion success and force?
 
 	//integration is updated - fetch the status in order to validate
-	status, err := getStatus(conn)
+	status, err := c.getStatus(conn)
 	if err != nil {
 		return nil, err
 	}
@@ -260,8 +260,8 @@ func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
 	return nil
 }
 
-func getStatus(conn api.Connection) (*params.FullStatus, error) {
-	client := apiclient.NewClient(conn)
+func (c integrationsClient) getStatus(conn api.Connection) (*params.FullStatus, error) {
+	client := apiclient.NewClient(conn, c.JujuLogger())
 
 	status, err := client.Status(nil)
 	if err != nil {
