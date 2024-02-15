@@ -8,7 +8,8 @@ import (
 	"text/template"
 )
 
-type TemplateData map[string]string
+// TemplateData is a map of string to any that is used to pass data to a template.
+type TemplateData map[string]any
 
 // GetStringFromTemplateWithData returns a string from a template with data.
 //

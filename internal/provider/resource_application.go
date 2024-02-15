@@ -196,7 +196,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							},
 						},
 						"revision": schema.Int64Attribute{
-							Description: "The revision of the charm to deploy.",
+							Description: "The revision of the charm to deploy. During the update phase, the charm revision should be update before config update, to avoid issues with config parameters parsing.",
 							Optional:    true,
 							Computed:    true,
 							PlanModifiers: []planmodifier.Int64{

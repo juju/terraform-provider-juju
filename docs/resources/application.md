@@ -85,7 +85,7 @@ Optional:
 
 - `base` (String) The operating system on which to deploy. E.g. ubuntu@22.04.
 - `channel` (String) The channel to use when deploying a charm. Specified as \<track>/\<risk>/\<branch>.
-- `revision` (Number) The revision of the charm to deploy.
+- `revision` (Number) The revision of the charm to deploy. During the update phase, the charm revision should be update before config update, to avoid issues with config parameters parsing.
 - `series` (String, Deprecated) The series on which to deploy.
 
 

@@ -936,6 +936,25 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		auxConfig["trust"] = fmt.Sprintf("%v", *input.Trust)
 	}
 
+	// Use the revision and channel info to create the
+	// corresponding SetCharm info.
+	//
+	// Note: the operations with revisions should be done
+	// before the operations with config. Because the config params
+	// can be changed from one revision to another. So "Revision-Config"
+	// ordering will help to prevent issues with the configuration parsing.
+	if input.Revision != nil || input.Channel != "" {
+		setCharmConfig, err := c.computeSetCharmConfig(input, applicationAPIClient, charmsAPIClient, resourcesAPIClient)
+		if err != nil {
+			return err
+		}
+
+		err = applicationAPIClient.SetCharm(model.GenerationMaster, *setCharmConfig)
+		if err != nil {
+			return err
+		}
+	}
+
 	if auxConfig != nil {
 		err := applicationAPIClient.SetConfig("master", input.AppName, "", auxConfig)
 		if err != nil {
@@ -1017,20 +1036,6 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 					return err
 				}
 			}
-		}
-	}
-
-	// Use the revision and channel info to create the
-	// corresponding SetCharm info.
-	if input.Revision != nil || input.Channel != "" {
-		setCharmConfig, err := c.computeSetCharmConfig(input, applicationAPIClient, charmsAPIClient, resourcesAPIClient)
-		if err != nil {
-			return err
-		}
-
-		err = applicationAPIClient.SetCharm(model.GenerationMaster, *setCharmConfig)
-		if err != nil {
-			return err
 		}
 	}
 
