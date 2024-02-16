@@ -117,8 +117,7 @@ git remote add upstream https://github.com/juju/terraform-provider-juju.git
 Make sure your local copy and GitHub fork stay in sync with upstream:
 
 ```shell
-cd juju
-git pull upstream
+git pull upstream/main --rebase
 ```
 
 Merge commits for sync actions will be rejected.
