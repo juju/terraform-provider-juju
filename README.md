@@ -106,6 +106,22 @@ make testmicrok8s
 ```
 _Note:_ Acceptance tests create real resources.
 
+### Staying in sync
+
+To simplify staying in sync with upstream, give it a "remote" name:
+
+```shell
+git remote add upstream https://github.com/juju/terraform-provider-juju.git
+```
+
+Make sure your local copy and GitHub fork stay in sync with upstream:
+
+```shell
+git pull upstream/main --rebase
+```
+
+Merge commits for sync actions will be rejected.
+
 ### Adding Dependencies
 
 This provider uses [Go modules](https://github.com/golang/go/wiki/Modules).
