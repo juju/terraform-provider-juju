@@ -27,6 +27,7 @@ require (
 	github.com/juju/version/v2 v2.0.1
 	github.com/rs/zerolog v1.32.0
 	github.com/stretchr/testify v1.8.4
+	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
@@ -213,7 +214,6 @@ require (
 	gopkg.in/retry.v1 v1.0.3 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.23.4 // indirect
 	k8s.io/apiextensions-apiserver v0.21.10 // indirect

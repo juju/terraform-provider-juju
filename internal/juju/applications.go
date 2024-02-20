@@ -42,6 +42,7 @@ import (
 	"github.com/juju/names/v4"
 	"github.com/juju/retry"
 	"github.com/juju/version/v2"
+	goyaml "gopkg.in/yaml.v2"
 )
 
 var ApplicationNotFoundError = &applicationNotFoundError{}
@@ -113,6 +114,82 @@ type CreateApplicationInput struct {
 	Constraints     constraints.Value
 }
 
+// validateAndTransform returns transformedCreateApplicationInput which
+// validated and in the proper format for both the new and legacy deployment
+// methods. Select input is not transformed due to differences in the
+// 2 deployement methods, such as config.
+func (input CreateApplicationInput) validateAndTransform() (parsed transformedCreateApplicationInput, err error) {
+	parsed.charmChannel = input.CharmChannel
+	parsed.charmName = input.CharmName
+	parsed.charmRevision = input.CharmRevision
+	parsed.constraints = input.Constraints
+	parsed.config = input.Config
+	parsed.expose = input.Expose
+	parsed.trust = input.Trust
+	parsed.units = input.Units
+
+	appName := input.ApplicationName
+	if appName == "" {
+		appName = input.CharmName
+	}
+	if err = names.ValidateApplicationName(appName); err != nil {
+		return
+	}
+	parsed.applicationName = appName
+
+	// Look at input.CharmBase and input.CharmSeries for an operating
+	// system to deploy with. Only one is allowed and Charm Base is
+	// preferred. Luckily, the DeduceOrigin method returns an origin which
+	// does contain the base and a series.
+	var userSuppliedBase base.Base
+	if input.CharmBase != "" {
+		userSuppliedBase, err = base.ParseBaseFromString(input.CharmBase)
+		if err != nil {
+			return
+		}
+	} else if input.CharmSeries != "" {
+		userSuppliedBase, err = base.GetBaseFromSeries(input.CharmSeries)
+		if err != nil {
+			return
+		}
+	}
+	parsed.charmBase = userSuppliedBase
+
+	placements := []*instance.Placement{}
+	if input.Placement == "" {
+		placements = nil
+	} else {
+		placementDirectives := strings.Split(input.Placement, ",")
+		// force this to be sorted
+		sort.Strings(placementDirectives)
+
+		for _, directive := range placementDirectives {
+			appPlacement, err := instance.ParsePlacement(directive)
+			if err != nil {
+				return parsed, err
+			}
+			placements = append(placements, appPlacement)
+		}
+	}
+	parsed.placement = placements
+
+	return
+}
+
+type transformedCreateApplicationInput struct {
+	applicationName string
+	charmName       string
+	charmChannel    string
+	charmBase       base.Base
+	charmRevision   int
+	config          map[string]string
+	constraints     constraints.Value
+	expose          map[string]interface{}
+	placement       []*instance.Placement
+	units           int
+	trust           bool
+}
+
 type CreateApplicationResponse struct {
 	AppName string
 }
@@ -179,69 +256,94 @@ func resolveCharmURL(charmName string) (*charm.URL, error) {
 }
 
 func (c applicationsClient) CreateApplication(ctx context.Context, input *CreateApplicationInput) (*CreateApplicationResponse, error) {
-	appName := input.ApplicationName
-	if appName == "" {
-		appName = input.CharmName
-	}
-	if err := names.ValidateApplicationName(appName); err != nil {
-		return nil, err
-	}
-
 	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = conn.Close() }()
 
+	transformedInput, err := input.validateAndTransform()
+	if err != nil {
+		return nil, err
+	}
+
+	applicationAPIClient := apiapplication.NewClient(conn)
+	if applicationAPIClient.BestAPIVersion() >= 19 {
+		err = c.deployFromRepository(applicationAPIClient, transformedInput)
+	} else {
+		err = c.legacyDeploy(ctx, conn, applicationAPIClient, transformedInput)
+		err = jujuerrors.Annotate(err, "legacy deploy method")
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// If we have managed to deploy something, now we have
+	// to check if we have to expose something
+	err = c.processExpose(applicationAPIClient, transformedInput.applicationName, transformedInput.expose)
+
+	return &CreateApplicationResponse{
+		AppName: transformedInput.applicationName,
+	}, err
+}
+
+func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplication.Client, transformedInput transformedCreateApplicationInput) error {
+	settingsForYaml := map[interface{}]interface{}{transformedInput.applicationName: transformedInput.config}
+	configYaml, err := goyaml.Marshal(settingsForYaml)
+	if err != nil {
+		return jujuerrors.Trace(err)
+	}
+
+	c.Tracef("Calling DeployFromRepository")
+	_, _, errs := applicationAPIClient.DeployFromRepository(apiapplication.DeployFromRepositoryArg{
+		CharmName:       transformedInput.charmName,
+		ApplicationName: transformedInput.applicationName,
+		Base:            &transformedInput.charmBase,
+		Channel:         &transformedInput.charmChannel,
+		ConfigYAML:      string(configYaml),
+		Cons:            transformedInput.constraints,
+		NumUnits:        &transformedInput.units,
+		Placement:       transformedInput.placement,
+		Revision:        &transformedInput.charmRevision,
+		Trust:           transformedInput.trust,
+	})
+	return errors.Join(errs...)
+}
+
+func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connection, applicationAPIClient *apiapplication.Client, transformedInput transformedCreateApplicationInput) error {
 	// Version needed for operating system selection.
 	c.controllerVersion, _ = conn.ServerVersion()
 
 	charmsAPIClient := apicharms.NewClient(conn)
-	applicationAPIClient := apiapplication.NewClient(conn)
 	modelconfigAPIClient := apimodelconfig.NewClient(conn)
 
-	channel, err := charm.ParseChannel(input.CharmChannel)
+	channel, err := charm.ParseChannel(transformedInput.charmChannel)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	charmURL, err := resolveCharmURL(input.CharmName)
+	charmURL, err := resolveCharmURL(transformedInput.charmName)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if charmURL.Revision != UnspecifiedRevision {
-		return nil, fmt.Errorf("cannot specify revision in a charm name")
+		return fmt.Errorf("cannot specify revision in a charm name")
 	}
-	if input.CharmRevision != UnspecifiedRevision && channel.Empty() {
-		return nil, fmt.Errorf("specifying a revision requires a channel for future upgrades")
+	if transformedInput.charmRevision != UnspecifiedRevision && channel.Empty() {
+		return fmt.Errorf("specifying a revision requires a channel for future upgrades")
 	}
 
-	// Look at input.CharmBase and input.CharmSeries for an operating
-	// system to deploy with. Only one is allowed and Charm Base is
-	// preferred. Luckily, the DeduceOrigin method returns an origin which
-	// does contain the base and a series.
-	var userSuppliedBase base.Base
-	if input.CharmBase != "" {
-		userSuppliedBase, err = base.ParseBaseFromString(input.CharmBase)
-		if err != nil {
-			return nil, err
-		}
-	} else if input.CharmSeries != "" {
-		userSuppliedBase, err = base.GetBaseFromSeries(input.CharmSeries)
-		if err != nil {
-			return nil, err
-		}
-	}
+	userSuppliedBase := transformedInput.charmBase
 	platformCons, err := modelconfigAPIClient.GetModelConstraints()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	platform := utils.MakePlatform(input.Constraints, userSuppliedBase, platformCons)
+	platform := utils.MakePlatform(transformedInput.constraints, userSuppliedBase, platformCons)
 
 	urlForOrigin := charmURL
-	if input.CharmRevision != UnspecifiedRevision {
-		urlForOrigin = urlForOrigin.WithRevision(input.CharmRevision)
+	if transformedInput.charmRevision != UnspecifiedRevision {
+		urlForOrigin = urlForOrigin.WithRevision(transformedInput.charmRevision)
 	}
 
 	// Juju 2.9 cares that the series is in the origin. Juju 3.3 does not.
@@ -249,14 +351,14 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	if !userSuppliedBase.Empty() {
 		userSuppliedSeries, err := base.GetSeriesFromBase(userSuppliedBase)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		urlForOrigin = urlForOrigin.WithSeries(userSuppliedSeries)
 	}
 
 	origin, err := utils.DeduceOrigin(urlForOrigin, channel, platform)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Charm or bundle has been supplied as a URL so we resolve and
@@ -264,11 +366,12 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	// argument so users can target a specific origin.
 	resolvedURL, resolvedOrigin, supportedBases, err := resolveCharm(charmsAPIClient, charmURL, origin)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if resolvedOrigin.Type == "bundle" {
-		return nil, jujuerrors.NotSupportedf("deploying bundles")
+		return jujuerrors.NotSupportedf("deploying bundles")
 	}
+	c.Tracef("resolveCharm returned", map[string]interface{}{"resolvedURL": resolvedURL, "resolvedOrigin": resolvedOrigin, "supportedBases": supportedBases})
 
 	baseToUse, err := c.baseToUse(modelconfigAPIClient, userSuppliedBase, resolvedOrigin.Base, supportedBases)
 	if err != nil {
@@ -276,34 +379,17 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	}
 	// Double check we got what was requested.
 	if !userSuppliedBase.Empty() && !userSuppliedBase.IsCompatible(baseToUse) {
-		return nil, jujuerrors.Errorf(
+		return jujuerrors.Errorf(
 			"juju bug (LP 2039179), requested base %q does not match base %q found for charm.",
 			userSuppliedBase, baseToUse)
 	}
 	resolvedOrigin.Base = baseToUse
 
-	appConfig := input.Config
+	appConfig := transformedInput.config
 	if appConfig == nil {
 		appConfig = make(map[string]string)
 	}
-	appConfig["trust"] = fmt.Sprintf("%v", input.Trust)
-
-	placements := []*instance.Placement{}
-	if input.Placement == "" {
-		placements = nil
-	} else {
-		placementDirectives := strings.Split(input.Placement, ",")
-		// force this to be sorted
-		sort.Strings(placementDirectives)
-
-		for _, directive := range placementDirectives {
-			appPlacement, err := instance.ParsePlacement(directive)
-			if err != nil {
-				return nil, err
-			}
-			placements = append(placements, appPlacement)
-		}
-	}
+	appConfig["trust"] = fmt.Sprintf("%v", transformedInput.trust)
 
 	// If a plan element, with RequiresReplace in the schema, is
 	// changed. Terraform calls the Destroy method then the Create
@@ -316,7 +402,7 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	// * cannot add application "replace": charm "ch:amd64/jammy/mysql-196" not found
 	// * cannot add application "replace": application already exists
 	// * cannot add application "replace": charm: not found or not alive
-	err = retry.Call(retry.CallArgs{
+	return retry.Call(retry.CallArgs{
 		Func: func() error {
 			resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, resolvedOrigin, false)
 			if err != nil {
@@ -335,20 +421,20 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 				Origin: resultOrigin,
 			}
 
-			resources, err := c.processResources(charmsAPIClient, conn, charmID, appName)
+			resources, err := c.processResources(charmsAPIClient, conn, charmID, transformedInput.applicationName)
 			if err != nil && !jujuerrors.Is(err, jujuerrors.AlreadyExists) {
 				return err
 			}
 
 			args := apiapplication.DeployArgs{
 				CharmID:         charmID,
-				ApplicationName: appName,
-				NumUnits:        input.Units,
+				ApplicationName: transformedInput.applicationName,
+				NumUnits:        transformedInput.units,
 				CharmOrigin:     resultOrigin,
 				Config:          appConfig,
-				Cons:            input.Constraints,
+				Cons:            transformedInput.constraints,
 				Resources:       resources,
-				Placement:       placements,
+				Placement:       transformedInput.placement,
 			}
 			c.Tracef("Calling Deploy", map[string]interface{}{"args": args})
 			if err = applicationAPIClient.Deploy(args); err != nil {
@@ -365,8 +451,8 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 			return !errors.Is(err, jujuerrors.NotFound) && !errors.Is(err, jujuerrors.AlreadyExists)
 		},
 		NotifyFunc: func(err error, attempt int) {
-			c.Errorf(err, fmt.Sprintf("deploy application %q retry", appName))
-			message := fmt.Sprintf("waiting for application %q deploy, attempt %d", appName, attempt)
+			c.Errorf(err, fmt.Sprintf("deploy application %q retry", transformedInput.applicationName))
+			message := fmt.Sprintf("waiting for application %q deploy, attempt %d", transformedInput.applicationName, attempt)
 			c.Debugf(message)
 		},
 		BackoffFunc: retry.DoubleDelay,
@@ -375,16 +461,6 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 		Clock:       clock.WallClock,
 		Stop:        ctx.Done(),
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	// If we have managed to deploy something, now we have
-	// to check if we have to expose something
-	err = c.processExpose(applicationAPIClient, appName, input.Expose)
-	return &CreateApplicationResponse{
-		AppName: appName,
-	}, err
 }
 
 // supportedWorkloadBase returns a slice of supported workload basees
