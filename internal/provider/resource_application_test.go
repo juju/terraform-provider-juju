@@ -9,6 +9,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
 func TestAcc_ResourceApplication(t *testing.T) {
@@ -132,6 +134,37 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 				ImportStateVerify: true,
 				ImportState:       true,
 				ResourceName:      "juju_application.this",
+			},
+		},
+	})
+}
+
+// TestAcc_ResourceApplication_UpdatesRevisionConfig will test the revision update that have new config parameters on
+// the charm. The test will check that the config is updated and the revision is updated as well.
+func TestAcc_ResourceApplication_UpdatesRevisionConfig(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+	appName := "github-runner"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, appName, 88, ""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
+					resource.TestCheckResourceAttr("juju_application."+appName, "charm.#", "1"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "charm.0.name", appName),
+					resource.TestCheckResourceAttr("juju_application."+appName, "charm.0.revision", "88"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, appName, 95, ""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application."+appName, "charm.0.revision", "95"),
+				),
 			},
 		},
 	})
@@ -288,6 +321,40 @@ func testAccResourceApplicationBasic(modelName, appName string) string {
 		}
 		`, modelName, appName)
 	}
+}
+
+func testAccResourceApplicationWithRevisionAndConfig(modelName, appName string, revision int, configParamName string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceApplicationWithRevisionAndConfig",
+		`
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_application" "{{.AppName}}" {
+  name  = "{{.AppName}}"
+  model = juju_model.{{.ModelName}}.name
+
+  charm {
+    name     = "{{.AppName}}"
+    revision = {{.Revision}}
+    channel  = "latest/edge"
+  }
+
+  {{ if ne .ConfigParamName "" }}
+  config = {
+    {{.ConfigParamName}} = "{{.ConfigParamName}}-value"
+  }
+  {{ end }}
+
+  units = 1
+}
+`, internaltesting.TemplateData{
+			"ModelName":       modelName,
+			"AppName":         appName,
+			"Revision":        fmt.Sprintf("%d", revision),
+			"ConfigParamName": configParamName,
+		})
 }
 
 func testAccResourceApplicationUpdates(modelName string, units int, expose bool, hostname string) string {
