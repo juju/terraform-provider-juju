@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
+
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
@@ -32,12 +33,13 @@ import (
 )
 
 const (
-	CharmKey     = "charm"
-	CidrsKey     = "cidrs"
-	ConfigKey    = "config"
-	EndpointsKey = "endpoints"
-	ExposeKey    = "expose"
-	SpacesKey    = "spaces"
+	CharmKey            = "charm"
+	CidrsKey            = "cidrs"
+	ConfigKey           = "config"
+	EndpointsKey        = "endpoints"
+	ExposeKey           = "expose"
+	SpacesKey           = "spaces"
+	EndpointBindingsKey = "endpoint_bindings"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -59,13 +61,14 @@ type applicationResource struct {
 // applicationResourceModel describes the application data model.
 // tfsdk must match user resource schema attribute names.
 type applicationResourceModel struct {
-	ApplicationName types.String `tfsdk:"name"`
-	Charm           types.List   `tfsdk:"charm"`
-	Config          types.Map    `tfsdk:"config"`
-	Constraints     types.String `tfsdk:"constraints"`
-	Expose          types.List   `tfsdk:"expose"`
-	ModelName       types.String `tfsdk:"model"`
-	Placement       types.String `tfsdk:"placement"`
+	ApplicationName  types.String `tfsdk:"name"`
+	Charm            types.List   `tfsdk:"charm"`
+	Config           types.Map    `tfsdk:"config"`
+	Constraints      types.String `tfsdk:"constraints"`
+	Expose           types.List   `tfsdk:"expose"`
+	ModelName        types.String `tfsdk:"model"`
+	Placement        types.String `tfsdk:"placement"`
+	EndpointBindings types.Set    `tfsdk:"endpoint_bindings"`
 	// TODO - remove Principal when we version the schema
 	// and remove deprecated elements. Once we create upgrade
 	// functionality it can be removed from the structure.
@@ -172,6 +175,27 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"endpoint_bindings": schema.SetNestedAttribute{
+				Description: "Configure endpoint bindings",
+				Optional:    true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"endpoint": schema.StringAttribute{
+							Description: "Name of the endpoint to bind to a space.",
+							Optional:    true,
+						},
+						"space": schema.StringAttribute{
+							Description: "Name of the space to bind the endpoint to.",
+							Required:    true,
+						},
+					},
+				},
+				Validators: []validator.Set{
+					setNestedIsAttributeUniqueValidator{
+						PathExpressions: path.MatchRelative().AtAnySetValue().MergeExpressions(path.MatchRelative().AtName("endpoint")),
+					},
 				},
 			},
 		},
@@ -314,6 +338,17 @@ func parseNestedExpose(value map[string]interface{}) nestedExpose {
 	return resp
 }
 
+// nestedEndpointBinding represents the single element of endpoint_bindings
+// ListNestedAttribute
+type nestedEndpointBinding struct {
+	Endpoint types.String `tfsdk:"endpoint"`
+	Space    types.String `tfsdk:"space"`
+}
+
+func (n nestedEndpointBinding) transformToStringTuple() (string, string) {
+	return n.Endpoint.ValueString(), n.Space.ValueString()
+}
+
 // Create is called when the provider must create a new resource. Config
 // and planned state values should be read from the
 // CreateRequest and new state values set on the CreateResponse.
@@ -384,22 +419,41 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		}
 	}
 
+	// Parse endpoint bindings
+	var endpointBindings map[string]string
+	if !plan.EndpointBindings.IsNull() {
+		var endpointBindingsSlice []nestedEndpointBinding
+		resp.Diagnostics.Append(plan.EndpointBindings.ElementsAs(ctx, &endpointBindingsSlice, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		r.trace("Creating application, endpoint bindings values", map[string]interface{}{"endpointBindingsSlice": endpointBindingsSlice})
+		if len(endpointBindingsSlice) > 0 {
+			endpointBindings = make(map[string]string)
+			for _, binding := range endpointBindingsSlice {
+				key, value := binding.transformToStringTuple()
+				endpointBindings[key] = value
+			}
+		}
+	}
+
 	modelName := plan.ModelName.ValueString()
 	createResp, err := r.client.Applications.CreateApplication(ctx,
 		&juju.CreateApplicationInput{
-			ApplicationName: plan.ApplicationName.ValueString(),
-			ModelName:       modelName,
-			CharmName:       charmName,
-			CharmChannel:    channel,
-			CharmRevision:   revision,
-			CharmBase:       planCharm.Base.ValueString(),
-			CharmSeries:     planCharm.Series.ValueString(),
-			Units:           int(plan.UnitCount.ValueInt64()),
-			Config:          configField,
-			Constraints:     parsedConstraints,
-			Trust:           plan.Trust.ValueBool(),
-			Expose:          expose,
-			Placement:       plan.Placement.ValueString(),
+			ApplicationName:  plan.ApplicationName.ValueString(),
+			ModelName:        modelName,
+			CharmName:        charmName,
+			CharmChannel:     channel,
+			CharmRevision:    revision,
+			CharmBase:        planCharm.Base.ValueString(),
+			CharmSeries:      planCharm.Series.ValueString(),
+			Units:            int(plan.UnitCount.ValueInt64()),
+			Config:           configField,
+			Constraints:      parsedConstraints,
+			Trust:            plan.Trust.ValueBool(),
+			Expose:           expose,
+			Placement:        plan.Placement.ValueString(),
+			EndpointBindings: endpointBindings,
 		},
 	)
 	if err != nil {
@@ -542,6 +596,15 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
+	endpointBindingsType := req.State.Schema.GetAttributes()[EndpointBindingsKey].(schema.SetNestedAttribute).NestedObject.Type()
+	if response.EndpointBindings != nil {
+		state.EndpointBindings, dErr = r.computeEndpointBindingsWithoutDefaultValues(ctx, endpointBindingsType, state.EndpointBindings, response.EndpointBindings)
+		if dErr.HasError() {
+			resp.Diagnostics.Append(dErr...)
+			return
+		}
+	}
+
 	r.trace("Found", applicationResourceModelForLogging(ctx, &state))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -580,6 +643,56 @@ func (r *applicationResource) configureConfigData(ctx context.Context, configTyp
 		return types.MapValueFrom(ctx, configType, previousConfig)
 	}
 	return config, nil
+}
+
+// Compute endpoint bindings between the previous and the current endpoint bindings values.
+// removing endpoint bindings that are the same as default space but not stated in previous config
+func (r *applicationResource) computeEndpointBindingsWithoutDefaultValues(ctx context.Context, endpointBindingsType attr.Type, prevEb types.Set, newEb map[string]string) (types.Set, diag.Diagnostics) {
+	var previousEndpointBindingsSlice []nestedEndpointBinding
+	diagErr := prevEb.ElementsAs(ctx, &previousEndpointBindingsSlice, false)
+	if diagErr.HasError() {
+		r.trace("computeEndpointBindingsDelta failed to parse previous endpoint bindings")
+		return types.Set{}, diagErr
+	}
+
+	var previousEndpointBindings map[string]string
+	if previousEndpointBindingsSlice != nil {
+		previousEndpointBindings = make(map[string]string)
+		for _, eb := range previousEndpointBindingsSlice {
+			previousEndpointBindings[eb.Endpoint.ValueString()] = eb.Space.ValueString()
+		}
+	}
+
+	var defaultSpace string
+
+	// find the default space in the new endpoint bindings
+	for endpoint, space := range newEb {
+		if endpoint == "" {
+			defaultSpace = space
+			break
+		}
+	}
+	if defaultSpace == "" {
+		return types.Set{}, diag.Diagnostics{diag.NewErrorDiagnostic(
+			"No default space found",
+			"Unable to find default space from controller response, there should always be a default space",
+		)}
+	}
+
+	var endpointBindingsSlice []nestedEndpointBinding
+	for endpoint, space := range newEb {
+		if _, ok := previousEndpointBindings[endpoint]; ok || space != defaultSpace {
+			var endpointString types.String
+			if endpoint == "" {
+				endpointString = types.StringNull()
+			} else {
+				endpointString = types.StringValue(endpoint)
+			}
+			endpointBindingsSlice = append(endpointBindingsSlice, nestedEndpointBinding{Endpoint: endpointString, Space: types.StringValue(space)})
+		}
+	}
+
+	return types.SetValueFrom(ctx, endpointBindingsType, endpointBindingsSlice)
 }
 
 // Update is called to update the state of the resource. Config, planned
@@ -690,6 +803,15 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		updateApplicationInput.Constraints = &appConstraints
 	}
 
+	if !plan.EndpointBindings.Equal(state.EndpointBindings) {
+		endpointBindings, diag := r.computeEndpointBindingsDeltas(ctx, state.EndpointBindings, plan.EndpointBindings)
+		if diag.HasError() {
+			resp.Diagnostics.Append(diag...)
+			return
+		}
+		updateApplicationInput.EndpointBindings = endpointBindings
+	}
+
 	if err := r.client.Applications.UpdateApplication(&updateApplicationInput); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update application resource, got error: %s", err))
 		return
@@ -758,6 +880,37 @@ func (r *applicationResource) computeExposeDeltas(ctx context.Context, stateExpo
 		}
 	}
 	return toExpose, toUnexpose, diags
+}
+
+// computeEndpointBindingsDeltas computes the differences between the previously
+// stored endpoint bindings value and the current one.
+// It returns a map of endpoint bindings to bind and unbind.
+// Unbinding is represented by an empty string, and means that the endpoint
+// should bound to the default space.
+func (*applicationResource) computeEndpointBindingsDeltas(ctx context.Context, stateEndpointBindings types.Set, planEndpointBindings types.Set) (map[string]string, diag.Diagnostics) {
+	diags := diag.Diagnostics{}
+
+	var planEndpointBindingsSlice, stateEndpointBindingsSlice []nestedEndpointBinding
+	diags.Append(planEndpointBindings.ElementsAs(ctx, &planEndpointBindingsSlice, false)...)
+	diags.Append(stateEndpointBindings.ElementsAs(ctx, &stateEndpointBindingsSlice, false)...)
+	if diags.HasError() {
+		return map[string]string{}, diags
+	}
+	planEndpointBindingsMap := make(map[string]string)
+	for _, binding := range planEndpointBindingsSlice {
+		key, value := binding.transformToStringTuple()
+		planEndpointBindingsMap[key] = value
+	}
+
+	for _, binding := range stateEndpointBindingsSlice {
+		key, _ := binding.transformToStringTuple()
+		if _, ok := planEndpointBindingsMap[key]; !ok {
+			// this was unset in the plan, unbind it
+			planEndpointBindingsMap[key] = ""
+		}
+	}
+
+	return planEndpointBindingsMap, nil
 }
 
 // Delete is called when the provider must delete the resource. Config
