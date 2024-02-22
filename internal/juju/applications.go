@@ -384,6 +384,13 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 			userSuppliedBase, baseToUse)
 	}
 	resolvedOrigin.Base = baseToUse
+	// 3.3 version of ResolveCharm does not always include the series
+	// in the url. However, juju 2.9 requires it.
+	series, err := base.GetSeriesFromBase(baseToUse)
+	if err != nil {
+		return err
+	}
+	resolvedURL = resolvedURL.WithSeries(series)
 
 	appConfig := transformedInput.config
 	if appConfig == nil {
@@ -404,6 +411,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 	// * cannot add application "replace": charm: not found or not alive
 	return retry.Call(retry.CallArgs{
 		Func: func() error {
+			c.Tracef("AddCharm ", map[string]interface{}{"resolvedURL": resolvedURL, "resolvedOrigin": resolvedOrigin})
 			resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, resolvedOrigin, false)
 			if err != nil {
 				err2 := typedError(err)
