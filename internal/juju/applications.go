@@ -310,6 +310,10 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplic
 	return errors.Join(errs...)
 }
 
+// TODO (hml) 23-Feb-2024
+// Remove the funcationality associated with legacyDeploy
+// once the provider no longer supports a version of juju
+// before 3.3.
 func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connection, applicationAPIClient *apiapplication.Client, transformedInput transformedCreateApplicationInput) error {
 	// Version needed for operating system selection.
 	c.controllerVersion, _ = conn.ServerVersion()
