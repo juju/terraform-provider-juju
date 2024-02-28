@@ -1075,13 +1075,24 @@ func (c applicationsClient) computeSetCharmConfig(
 		return nil, err
 	}
 
+	// You can only refresh on the revision OR the channel at once.
 	newURL := oldURL
+	newOrigin := oldOrigin
 	if input.Revision != nil {
 		newURL = oldURL.WithRevision(*input.Revision)
-	}
-
-	newOrigin := oldOrigin
-	if input.Channel != "" {
+		newOrigin.Revision = input.Revision
+		// If the charm has an ID and Hash, it's been deployed before.
+		// Remove to trick juju into finding the new revision the user
+		// has requested. If they exist, the charm will be resolved with
+		// the channel potentially causing the wrong charm revision to
+		// be installed.
+		//
+		// There is a risk if the charm has been renamed in charmhub that
+		// the resolve charm will fail as we're using the name instead of
+		// the ID. This needs to be fixed in Juju.
+		newOrigin.ID = ""
+		newOrigin.Hash = ""
+	} else if input.Channel != "" {
 		parsedChannel, err := charm.ParseChannel(input.Channel)
 		if err != nil {
 			return nil, err
@@ -1095,18 +1106,40 @@ func (c applicationsClient) computeSetCharmConfig(
 		}
 	}
 
-	resolvedURL, resolvedOrigin, _, err := resolveCharm(charmsAPIClient, newURL, newOrigin)
+	resolvedURL, resolvedOrigin, supportedBases, err := resolveCharm(charmsAPIClient, newURL, newOrigin)
 	if err != nil {
 		return nil, err
 	}
 
-	resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, resolvedOrigin, false)
+	// Ensure that the new charm supports the architecture and
+	// operating system currently used by the deployed application.
+	if oldOrigin.Architecture != resolvedOrigin.Architecture {
+		msg := fmt.Sprintf("the new charm does not support the current architecture %q", oldOrigin.Architecture)
+		return nil, errors.New(msg)
+	}
+	if !basesContain(oldOrigin.Base, supportedBases) {
+		msg := fmt.Sprintf("the new charm does not support the current operating system %q", oldOrigin.Base.String())
+		return nil, errors.New(msg)
+	}
+
+	// Ensure the new revision or channel is contained
+	// in the origin to be saved by juju when AddCharm
+	// is called.
+	if input.Revision != nil {
+		oldOrigin.Revision = input.Revision
+	} else if input.Channel != "" {
+		oldOrigin.Track = newOrigin.Track
+		oldOrigin.Risk = newOrigin.Risk
+		oldOrigin.Branch = newOrigin.Branch
+	}
+
+	resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, oldOrigin, false)
 	if err != nil {
 		return nil, err
 	}
 
 	apiCharmID := apiapplication.CharmID{
-		URL:    newURL,
+		URL:    resolvedURL,
 		Origin: resultOrigin,
 	}
 

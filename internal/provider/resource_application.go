@@ -629,9 +629,14 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 		planCharm := planCharms[0]
 		stateCharm := stateCharms[0]
-		if !planCharm.Channel.Equal(stateCharm.Channel) {
+		if !planCharm.Channel.Equal(stateCharm.Channel) && !planCharm.Revision.Equal(stateCharm.Revision) {
+			resp.Diagnostics.AddWarning("Not Supported", "Changing an application's revision and channel at the same time.")
+		} else if !planCharm.Channel.Equal(stateCharm.Channel) {
 			updateApplicationInput.Channel = planCharm.Channel.ValueString()
+		} else if !planCharm.Revision.Equal(stateCharm.Revision) {
+			updateApplicationInput.Revision = intPtr(planCharm.Revision)
 		}
+
 		if !planCharm.Series.Equal(stateCharm.Series) || !planCharm.Base.Equal(stateCharm.Base) {
 			// This violates terraform's declarative model. We could implement
 			// `juju set-application-base`, usually used after `upgrade-machine`,
@@ -641,9 +646,6 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 			// `upgrade-machine`. There is also a question of how to handle a
 			// change to series, revision and channel at the same time.
 			resp.Diagnostics.AddWarning("Not Supported", "Changing an application's operating system after deploy.")
-		}
-		if !planCharm.Revision.Equal(stateCharm.Revision) {
-			updateApplicationInput.Revision = intPtr(planCharm.Revision)
 		}
 	}
 
