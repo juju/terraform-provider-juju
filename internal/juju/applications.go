@@ -1313,7 +1313,6 @@ func computeUpdatedBindings(currentBindings map[string]string, inputBindings map
 			}
 			endpointBindings[k] = newSpace
 		} else {
-
 			if currentSpace == oldDefault {
 				endpointBindings[k] = defaultSpace
 			} else {

@@ -25,7 +25,7 @@ func (v setNestedIsAttributeUniqueValidator) Description(ctx context.Context) st
 
 // MarkdownDescription returns a markdown formatted description of the validator's behavior, suitable for a practitioner to understand its impact.
 func (v setNestedIsAttributeUniqueValidator) MarkdownDescription(context.Context) string {
-	return fmt.Sprintf("Ensure following attributes have unique values accross the set: %q", v.PathExpressions.String())
+	return fmt.Sprintf("Ensure following attributes have unique values across the set: %q", v.PathExpressions.String())
 }
 
 // Validate runs the main validation logic of the validator, reading configuration data out of `req` and updating `resp` with diagnostics.

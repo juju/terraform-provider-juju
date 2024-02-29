@@ -633,7 +633,7 @@ func setupModelAndSpaces(t *testing.T, modelName string) (string, string, func()
 		t.Fatal(err)
 	}
 	cleanUp := func() {
-		TestClient.Models.DestroyModel(internaljuju.DestroyModelInput{UUID: model.UUID})
+		_ = TestClient.Models.DestroyModel(internaljuju.DestroyModelInput{UUID: model.UUID})
 		_ = conn.Close()
 	}
 
@@ -674,7 +674,6 @@ func testAccResourceApplicationEndpointBindings(modelName, appName, constraints 
 			"space"    = %q,
 		},
 		`, endpoint, space)
-
 		}
 	}
 
