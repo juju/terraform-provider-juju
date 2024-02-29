@@ -232,6 +232,10 @@ func (c *modelsClient) ReadModel(name string) (*ReadModelResponse, error) {
 		return nil, &modelNotFoundError{uuid: modelUUIDTag.Id()}
 	}
 
+	// Check if the model has an error first
+	if models[0].Error != nil {
+		return nil, models[0].Error
+	}
 	modelInfo := *models[0].Result
 
 	modelConfig, err := modelconfigClient.ModelGet()
