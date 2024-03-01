@@ -49,9 +49,9 @@ jobs:
         cloud:
           - "lxd"
         terraform:
-          - "1.6.*"
+          - "1.7.*"
         juju:
-          - "2.9/stable"
+          - "2.9/edge"
           - "3/stable"
     timeout-minutes: 60
     steps:

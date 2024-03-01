@@ -35,11 +35,11 @@ jobs:
       fail-fast: false
       matrix:
         terraform:
-          - "1.6.*"
+          - "1.7.*"
         include:
           - cloud: "lxd"
             cloud-channel: "5.19/stable"
-            juju-channel: "2.9/stable"
+            juju-channel: "2.9/edge"
           - cloud: "microk8s"
             cloud-channel: "1.28/stable"
             juju-channel: "2.9/stable"
