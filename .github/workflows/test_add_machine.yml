@@ -49,7 +49,7 @@ jobs:
         cloud:
           - "lxd"
         terraform:
-          - "1.6.*"
+          - "1.7.*"
         juju:
           - "2.9/stable"
           - "3/stable"
