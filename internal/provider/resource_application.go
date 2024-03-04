@@ -6,7 +6,6 @@ package provider
 import (
 	"context"
 	"fmt"
-
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
@@ -177,13 +176,13 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"endpoint_bindings": schema.SetNestedAttribute{
+			EndpointBindingsKey: schema.SetNestedAttribute{
 				Description: "Configure endpoint bindings",
 				Optional:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"endpoint": schema.StringAttribute{
-							Description: "Name of the endpoint to bind to a space.",
+							Description: "Name of the endpoint to bind to a space. Keep null (or undefined) to define default binding.",
 							Optional:    true,
 						},
 						"space": schema.StringAttribute{

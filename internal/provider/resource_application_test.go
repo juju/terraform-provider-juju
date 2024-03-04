@@ -299,10 +299,10 @@ func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 				PreConfig: func() {},
 				Config:    testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_application.this", "endpoint_bindings.#", "2"),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_application.this", "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_application.this", "endpoint_bindings.*", map[string]string{"endpoint": "ubuntu", "space": publicSpace}),
+					resource.TestCheckResourceAttr(fmt.Sprintf("juju_application.%s", appName), "model", modelName),
+					resource.TestCheckResourceAttr(fmt.Sprintf("juju_application.%s", appName), "endpoint_bindings.#", "2"),
+					resource.TestCheckTypeSetElemNestedAttrs(fmt.Sprintf("juju_application.%s", appName), "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
+					resource.TestCheckTypeSetElemNestedAttrs(fmt.Sprintf("juju_application.%s", appName), "endpoint_bindings.*", map[string]string{"endpoint": "ubuntu", "space": publicSpace}),
 					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
 				),
 			},
@@ -330,9 +330,9 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 				PreConfig: func() {},
 				Config:    testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": managementSpace}),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_application.this", "endpoint_bindings.#", "1"),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_application.this", "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
+					resource.TestCheckResourceAttr(fmt.Sprintf("juju_application.%s", appName), "model", modelName),
+					resource.TestCheckResourceAttr(fmt.Sprintf("juju_application.%s", appName), "endpoint_bindings.#", "1"),
+					resource.TestCheckTypeSetElemNestedAttrs(fmt.Sprintf("juju_application.%s", appName), "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
 					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, managementSpace, map[string]string{"": managementSpace}),
 				),
 			},
@@ -342,9 +342,9 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 				PreConfig: func() {},
 				Config:    testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": publicSpace}),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_application.this", "endpoint_bindings.#", "1"),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_application.this", "endpoint_bindings.*", map[string]string{"endpoint": "", "space": publicSpace}),
+					resource.TestCheckResourceAttr(fmt.Sprintf("juju_application.%s", appName), "model", modelName),
+					resource.TestCheckResourceAttr(fmt.Sprintf("juju_application.%s", appName), "endpoint_bindings.#", "1"),
+					resource.TestCheckTypeSetElemNestedAttrs(fmt.Sprintf("juju_application.%s", appName), "endpoint_bindings.*", map[string]string{"endpoint": "", "space": publicSpace}),
 					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, publicSpace, map[string]string{"": publicSpace, "ubuntu": publicSpace, "another": publicSpace}),
 				),
 			},
@@ -354,10 +354,10 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 				PreConfig: func() {},
 				Config:    testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_application.this", "endpoint_bindings.#", "2"),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_application.this", "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_application.this", "endpoint_bindings.*", map[string]string{"endpoint": "ubuntu", "space": publicSpace}),
+					resource.TestCheckResourceAttr(fmt.Sprintf("juju_application.%s", appName), "model", modelName),
+					resource.TestCheckResourceAttr(fmt.Sprintf("juju_application.%s", appName), "endpoint_bindings.#", "2"),
+					resource.TestCheckTypeSetElemNestedAttrs(fmt.Sprintf("juju_application.%s", appName), "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
+					resource.TestCheckTypeSetElemNestedAttrs(fmt.Sprintf("juju_application.%s", appName), "endpoint_bindings.*", map[string]string{"endpoint": "ubuntu", "space": publicSpace}),
 					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace, "another": managementSpace}),
 				),
 			},
@@ -676,25 +676,29 @@ func testAccResourceApplicationEndpointBindings(modelName, appName, constraints 
 		`, endpoint, space)
 		}
 	}
-
-	return fmt.Sprintf(`
-data "juju_model" "this" {
-  name = %q
+	return internaltesting.GetStringFromTemplateWithData("testAccResourceApplicationEndpointBindings", `
+data "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
 }
 
-resource "juju_application" "this" {
-  model       = data.juju_model.this.name
-  name        = %q
-  constraints = %q
+resource "juju_application" "{{.AppName}}" {
+  model       = data.juju_model.{{.ModelName}}.name
+  name        = "{{.AppName}}"
+  constraints = "{{.Constraints}}"
   charm {
     name     = "jameinel-ubuntu-lite"
     revision = 10
   }
   endpoint_bindings = [
-	%s
+	{{.EndpointBindings}}
   ]
 }
-`, modelName, appName, constraints, endpoints)
+`, internaltesting.TemplateData{
+		"ModelName":        modelName,
+		"AppName":          appName,
+		"Constraints":      constraints,
+		"EndpointBindings": endpoints,
+	})
 }
 
 func testCheckEndpointsAreSetToCorrectSpace(modelName, appName, defaultSpace string, configuredEndpoints map[string]string) resource.TestCheckFunc {

@@ -182,12 +182,12 @@ func (input CreateApplicationInput) validateAndTransform(conn api.Connection) (p
 		if err != nil {
 			return parsed, err
 		}
-		kwownSpaceNames := set.NewStrings()
+		knownSpaceNames := set.NewStrings()
 		for _, space := range knownSpaces {
-			kwownSpaceNames.Add(space.Name)
+			knownSpaceNames.Add(space.Name)
 		}
 		for endpoint, space := range input.EndpointBindings {
-			if !kwownSpaceNames.Contains(space) {
+			if !knownSpaceNames.Contains(space) {
 				return parsed, fmt.Errorf("unknown space %q", space)
 			}
 			endpointBindings[endpoint] = space
