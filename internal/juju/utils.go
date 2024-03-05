@@ -89,9 +89,11 @@ func populateControllerConfig() {
 		return
 	}
 
+	controllerName := ""
 	// convert to the map and extract the only entry
 	controllerConfig := controllerConfig{}
-	for _, v := range cliOutput.(map[string]interface{}) {
+	for name, v := range cliOutput.(map[string]interface{}) {
+		controllerName = name
 		// now v is a map[string]interface{} type
 		marshalled, err := json.Marshal(v)
 		if err != nil {
@@ -108,6 +110,7 @@ func populateControllerConfig() {
 	}
 
 	localProviderConfig = map[string]string{}
+	localProviderConfig["JUJU_CONTROLLER_NAME"] = controllerName
 	localProviderConfig["JUJU_CONTROLLER_ADDRESSES"] = strings.Join(controllerConfig.ProviderDetails.ApiEndpoints, ",")
 	localProviderConfig["JUJU_CA_CERT"] = controllerConfig.ProviderDetails.CACert
 	localProviderConfig["JUJU_USERNAME"] = controllerConfig.Account.User

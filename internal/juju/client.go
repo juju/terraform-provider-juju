@@ -29,6 +29,7 @@ const (
 )
 
 type ControllerConfiguration struct {
+	Name                string
 	ControllerAddresses []string
 	Username            string
 	Password            string
@@ -124,12 +125,11 @@ func (sc *sharedClient) GetConnection(modelName *string) (api.Connection, error)
 		do.RetryDelay = 1 * time.Second
 	}
 
-	connr, err := connector.NewSimple(connector.SimpleConfig{
-		ControllerAddresses: sc.controllerConfig.ControllerAddresses,
-		Username:            sc.controllerConfig.Username,
-		Password:            sc.controllerConfig.Password,
-		CACert:              sc.controllerConfig.CACert,
-		ModelUUID:           modelUUID,
+	connr, err := connector.NewClientStore(connector.ClientStoreConfig{
+		ControllerName: sc.controllerConfig.Name,
+		ModelUUID:      modelUUID,
+		ClientStore:    nil,
+		AccountDetails: nil,
 	}, dialOptions)
 	if err != nil {
 		return nil, err

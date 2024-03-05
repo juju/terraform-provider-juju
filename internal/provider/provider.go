@@ -23,15 +23,17 @@ import (
 )
 
 const (
-	JujuControllerEnvKey = "JUJU_CONTROLLER_ADDRESSES"
-	JujuUsernameEnvKey   = "JUJU_USERNAME"
-	JujuPasswordEnvKey   = "JUJU_PASSWORD"
-	JujuCACertEnvKey     = "JUJU_CA_CERT"
+	JujuControllerNameEnvKey = "JUJU_CONTROLLER_NAME"
+	JujuControllerEnvKey     = "JUJU_CONTROLLER_ADDRESSES"
+	JujuUsernameEnvKey       = "JUJU_USERNAME"
+	JujuPasswordEnvKey       = "JUJU_PASSWORD"
+	JujuCACertEnvKey         = "JUJU_CA_CERT"
 
-	JujuController = "controller_addresses"
-	JujuUsername   = "username"
-	JujuPassword   = "password"
-	JujuCACert     = "ca_certificate"
+	JujuControllerName = "controller_name"
+	JujuController     = "controller_addresses"
+	JujuUsername       = "username"
+	JujuPassword       = "password"
+	JujuCACert         = "ca_certificate"
 )
 
 // populateJujuProviderModelLive gets the controller config,
@@ -40,6 +42,7 @@ const (
 func populateJujuProviderModelLive() (jujuProviderModel, error) {
 	data := jujuProviderModel{}
 	controllerConfig, cliNotExist := juju.GetLocalControllerConfig()
+	data.Name = types.StringValue(getField(JujuControllerNameEnvKey, controllerConfig))
 	data.ControllerAddrs = types.StringValue(getField(JujuControllerEnvKey, controllerConfig))
 	data.UserName = types.StringValue(getField(JujuUsernameEnvKey, controllerConfig))
 	data.Password = types.StringValue(getField(JujuPasswordEnvKey, controllerConfig))
@@ -76,6 +79,7 @@ type jujuProvider struct {
 }
 
 type jujuProviderModel struct {
+	Name            types.String `tfsdk:"controller_name"`
 	ControllerAddrs types.String `tfsdk:"controller_addresses"`
 	UserName        types.String `tfsdk:"username"`
 	Password        types.String `tfsdk:"password"`
@@ -102,6 +106,10 @@ func (p *jujuProvider) Metadata(_ context.Context, _ provider.MetadataRequest, r
 func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
+			JujuControllerName: schema.StringAttribute{
+				Description: fmt.Sprintf("This is the Controller name to connect to. This can also be set by the `%s` environment variable", JujuControllerNameEnvKey),
+				Optional:    true,
+			},
 			JujuController: schema.StringAttribute{
 				Description: fmt.Sprintf("This is the Controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `%s` environment variable.", JujuControllerEnvKey),
 				Optional:    true,
@@ -139,6 +147,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	}
 
 	config := juju.ControllerConfiguration{
+		Name:                data.Name.ValueString(),
 		ControllerAddresses: strings.Split(data.ControllerAddrs.ValueString(), ","),
 		Username:            data.UserName.ValueString(),
 		Password:            data.Password.ValueString(),
