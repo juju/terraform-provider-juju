@@ -77,6 +77,26 @@ func TestProviderConfigurePasswordFromEnv(t *testing.T) {
 	assert.Equal(t, "invalid entity name or password (unauthorized access)", err.Detail())
 }
 
+func TestProviderConfigureClientIDAndSecretFromEnv(t *testing.T) {
+	testAccPreCheck(t)
+	jujuProvider := NewJujuProvider("dev")
+	emptyValue := ""
+	t.Setenv(JujuUsernameEnvKey, emptyValue)
+	t.Setenv(JujuPasswordEnvKey, emptyValue)
+
+	clientIDValue := "test-client-id"
+	t.Setenv(JujuClientIDEnvKey, clientIDValue)
+	clientSecretValue := "test-client-secret"
+	t.Setenv(JujuClientSecretEnvKey, clientSecretValue)
+
+	confResp := configureProvider(t, jujuProvider)
+	// This is a live test, expect that the client connection will fail.
+	assert.Equal(t, confResp.Diagnostics.HasError(), true)
+	err := confResp.Diagnostics.Errors()[0]
+	assert.Equal(t, diag.SeverityError, err.Severity())
+	assert.Equal(t, "this version of Juju does not support login from old clients (not supported) (not supported)", err.Detail())
+}
+
 func TestProviderConfigureAddresses(t *testing.T) {
 	testAccPreCheck(t)
 	jujuProvider := NewJujuProvider("dev")
@@ -161,10 +181,12 @@ func configureProvider(t *testing.T, p provider.Provider) provider.ConfigureResp
 	conf := jujuProviderModel{}
 
 	mapTypes := map[string]attr.Type{
-		JujuController: types.StringType,
-		JujuUsername:   types.StringType,
-		JujuPassword:   types.StringType,
-		JujuCACert:     types.StringType,
+		JujuController:   types.StringType,
+		JujuUsername:     types.StringType,
+		JujuPassword:     types.StringType,
+		JujuCACert:       types.StringType,
+		JujuClientID:     types.StringType,
+		JujuClientSecret: types.StringType,
 	}
 
 	val, confObjErr := types.ObjectValueFrom(context.Background(), mapTypes, conf)
@@ -189,5 +211,5 @@ func TestFrameworkProviderSchema(t *testing.T) {
 	resp := provider.SchemaResponse{}
 	jujuProvider.Schema(context.Background(), req, &resp)
 	assert.Equal(t, resp.Diagnostics.HasError(), false)
-	assert.Len(t, resp.Schema.Attributes, 4)
+	assert.Len(t, resp.Schema.Attributes, 6)
 }

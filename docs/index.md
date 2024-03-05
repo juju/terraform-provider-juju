@@ -200,6 +200,8 @@ resource "juju_integration" "wp_to_percona" {
 ### Optional
 
 - `ca_certificate` (String) This is the certificate to use for identification. This can also be set by the `JUJU_CA_CERT` environment variable
+- `client_id` (String, Sensitive) This is the client ID to be used. This can also be set by the `JUJU_CLIENT_ID` environment variable
+- `client_secret` (String, Sensitive) This is the client secret to be used. This can also be set by the `JUJU_CLIENT_SECRET` environment variable
 - `controller_addresses` (String) This is the Controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `JUJU_CONTROLLER_ADDRESSES` environment variable.
 - `password` (String, Sensitive) This is the password of the username to be used. This can also be set by the `JUJU_PASSWORD` environment variable
 - `username` (String) This is the username registered with the controller to be used. This can also be set by the `JUJU_USERNAME` environment variable

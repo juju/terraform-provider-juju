@@ -8,7 +8,7 @@ import (
 
 	"github.com/juju/juju/api/client/usermanager"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/names/v4"
+	"github.com/juju/names/v5"
 )
 
 type usersClient struct {

@@ -10,7 +10,7 @@ import (
 	cloudapi "github.com/juju/juju/api/client/cloud"
 	jujucloud "github.com/juju/juju/cloud"
 	"github.com/juju/juju/jujuclient"
-	"github.com/juju/names/v4"
+	"github.com/juju/names/v5"
 )
 
 type credentialsClient struct {
