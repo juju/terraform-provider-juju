@@ -26,7 +26,7 @@ require (
 	github.com/juju/utils/v3 v3.1.0
 	github.com/juju/version/v2 v2.0.1
 	github.com/rs/zerolog v1.32.0
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
