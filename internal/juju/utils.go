@@ -15,7 +15,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	apiapplication "github.com/juju/juju/api/client/application"
-	"github.com/juju/names/v4"
+	"github.com/juju/names/v5"
 )
 
 // controllerConfig is a representation of the output
