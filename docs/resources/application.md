@@ -99,7 +99,7 @@ Required:
 
 Optional:
 
-- `endpoint` (String) Name of the endpoint to bind to a space.
+- `endpoint` (String) Name of the endpoint to bind to a space. Keep null (or undefined) to define default binding.
 
 
 <a id="nestedblock--expose"></a>
