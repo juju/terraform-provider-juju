@@ -67,6 +67,17 @@ resource "juju_application" "placement_example" {
 - `expose` (Block List) Makes an application publicly available over the network (see [below for nested schema](#nestedblock--expose))
 - `name` (String) A custom name for the application deployment. If empty, uses the charm's name.
 - `placement` (String) Specify the target location for the application's units
+- `resources` (Map of Number) Charm resource revisions. Must evaluate to an integer.
+
+	There are a few scenarios that need to be considered:
+	* If the plan does not specify resource revision and resources are added to the plan,
+	resources with specified revisions will be attached to the application (equivalent
+	to juju attach-resource).
+	* If the plan does specify resource revisions and:
+		* If the charm revision or channel is updated, then resources get updated to the 
+		  latest revision.
+		* If the charm revision or channel are not updated, then no changes will take 
+		  place (juju does not have an "un-attach" command for resources).
 - `trust` (Boolean) Set the trust for the application.
 - `units` (Number) The number of application units to deploy for the charm.
 

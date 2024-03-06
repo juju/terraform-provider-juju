@@ -135,6 +135,7 @@ type CreateApplicationInput struct {
 	Placement        string
 	Constraints      constraints.Value
 	EndpointBindings map[string]string
+	Resources        map[string]int
 }
 
 // validateAndTransform returns transformedCreateApplicationInput which
@@ -150,6 +151,7 @@ func (input CreateApplicationInput) validateAndTransform(conn api.Connection) (p
 	parsed.expose = input.Expose
 	parsed.trust = input.Trust
 	parsed.units = input.Units
+	parsed.resources = input.Resources
 
 	appName := input.ApplicationName
 	if appName == "" {
@@ -234,6 +236,7 @@ type transformedCreateApplicationInput struct {
 	units            int
 	trust            bool
 	endpointBindings map[string]string
+	resources        map[string]int
 }
 
 type CreateApplicationResponse struct {
@@ -259,6 +262,7 @@ type ReadApplicationResponse struct {
 	Principal        bool
 	Placement        string
 	EndpointBindings map[string]string
+	Resources        map[string]int
 }
 
 type UpdateApplicationInput struct {
@@ -277,6 +281,7 @@ type UpdateApplicationInput struct {
 	Placement        map[string]interface{}
 	Constraints      *constraints.Value
 	EndpointBindings map[string]string
+	Resources        map[string]int
 }
 
 type DestroyApplicationInput struct {
@@ -336,6 +341,11 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplic
 		return jujuerrors.Trace(err)
 	}
 
+	resources := make(map[string]string)
+	for k, v := range transformedInput.resources {
+		resources[k] = strconv.Itoa(v)
+	}
+
 	c.Tracef("Calling DeployFromRepository")
 	_, _, errs := applicationAPIClient.DeployFromRepository(apiapplication.DeployFromRepositoryArg{
 		CharmName:        transformedInput.charmName,
@@ -349,6 +359,7 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplic
 		Placement:        transformedInput.placement,
 		Revision:         &transformedInput.charmRevision,
 		Trust:            transformedInput.trust,
+		Resources:        resources,
 	})
 	return errors.Join(errs...)
 }
@@ -476,7 +487,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 				Origin: resultOrigin,
 			}
 
-			resources, err := c.processResources(charmsAPIClient, conn, charmID, transformedInput.applicationName)
+			resources, err := c.processResources(charmsAPIClient, conn, charmID, transformedInput.applicationName, transformedInput.resources)
 			if err != nil && !jujuerrors.Is(err, jujuerrors.AlreadyExists) {
 				return err
 			}
@@ -687,14 +698,14 @@ func splitCommaDelimitedList(list string) []string {
 
 // processResources is a helper function to process the charm
 // metadata and request the download of any additional resource.
-func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string) (map[string]string, error) {
+func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string, resources map[string]int) (map[string]string, error) {
 	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL.String())
 	if err != nil {
 		return nil, typedError(err)
 	}
 
 	// check if we have resources to request
-	if len(charmInfo.Meta.Resources) == 0 {
+	if len(charmInfo.Meta.Resources) == 0 && len(resources) == 0 {
 		return nil, nil
 	}
 
@@ -703,7 +714,7 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 		return nil, err
 	}
 
-	return addPendingResources(appName, charmInfo.Meta.Resources, charmID, resourcesAPIClient)
+	return addPendingResources(appName, charmInfo.Meta.Resources, resources, charmID, resourcesAPIClient)
 }
 
 // ReadApplicationWithRetryOnNotFound calls ReadApplication until
@@ -929,6 +940,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	if err != nil {
 		return nil, jujuerrors.Annotate(err, "failed to get series from base")
 	}
+
 	defaultSpace, err := getModelDefaultSpace(modelconfigAPIClient)
 	if err != nil {
 		return nil, err
@@ -948,6 +960,21 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		}
 	}
 
+	resourcesAPIClient, err := apiresources.NewClient(conn)
+	if err != nil {
+		return nil, err
+	}
+	resources, err := resourcesAPIClient.ListResources([]string{input.AppName})
+	if err != nil {
+		return nil, jujuerrors.Annotate(err, "failed to list application resources")
+	}
+	resourceRevisions := make(map[string]int)
+	for _, iResources := range resources {
+		for _, resource := range iResources.Resources {
+			resourceRevisions[resource.Name] = resource.Revision
+		}
+	}
+
 	response := &ReadApplicationResponse{
 		Name:             charmURL.Name,
 		Channel:          appInfo.Channel,
@@ -962,6 +989,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		Principal:        appInfo.Principal,
 		Placement:        placement,
 		EndpointBindings: endpointBindings,
+		Resources:        resourceRevisions,
 	}
 
 	return response, nil
@@ -1031,7 +1059,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	// before the operations with config. Because the config params
 	// can be changed from one revision to another. So "Revision-Config"
 	// ordering will help to prevent issues with the configuration parsing.
-	if input.Revision != nil || input.Channel != "" {
+	if input.Revision != nil || input.Channel != "" || len(input.Resources) != 0 {
 		setCharmConfig, err := c.computeSetCharmConfig(input, applicationAPIClient, charmsAPIClient, resourcesAPIClient)
 		if err != nil {
 			return err
@@ -1252,7 +1280,7 @@ func (c applicationsClient) computeSetCharmConfig(
 		Origin: resultOrigin,
 	}
 
-	resourceIDs, err := c.updateResources(input.AppName, charmsAPIClient, apiCharmID, resourcesAPIClient)
+	resourceIDs, err := c.updateResources(input.AppName, input.Resources, charmsAPIClient, apiCharmID, resourcesAPIClient)
 	if err != nil {
 		return nil, err
 	}
@@ -1285,12 +1313,18 @@ func strPtr(in string) *string {
 	return &in
 }
 
-func (c applicationsClient) updateResources(appName string, charmsAPIClient *apicharms.Client,
+func (c applicationsClient) updateResources(appName string, resources map[string]int, charmsAPIClient *apicharms.Client,
 	charmID apiapplication.CharmID, resourcesAPIClient *apiresources.Client) (map[string]string, error) {
 	meta, err := utils.GetMetaResources(charmID.URL, charmsAPIClient)
 	if err != nil {
 		return nil, err
 	}
+
+	resourceRevisions := make(map[string]string)
+	for k, v := range resources {
+		resourceRevisions[k] = strconv.Itoa(v)
+	}
+
 	// TODO (cderici): Provided resources for GetUpgradeResources are user inputs.
 	// It's a map[string]string that should come from the plan itself. We currently
 	// don't have a resources block in the charm.
@@ -1299,7 +1333,7 @@ func (c applicationsClient) updateResources(appName string, charmsAPIClient *api
 		charmsAPIClient,
 		resourcesAPIClient,
 		appName,
-		nil,
+		resourceRevisions, // nil
 		meta,
 	)
 	if err != nil {
@@ -1309,10 +1343,10 @@ func (c applicationsClient) updateResources(appName string, charmsAPIClient *api
 		return nil, nil
 	}
 
-	return addPendingResources(appName, filtered, charmID, resourcesAPIClient)
+	return addPendingResources(appName, filtered, resources, charmID, resourcesAPIClient)
 }
 
-func addPendingResources(appName string, resourcesToBeAdded map[string]charmresources.Meta,
+func addPendingResources(appName string, resourcesToBeAdded map[string]charmresources.Meta, resourceRevisions map[string]int,
 	charmID apiapplication.CharmID, resourcesAPIClient *apiresources.Client) (map[string]string, error) {
 	pendingResources := []charmresources.Resource{}
 	for _, v := range resourcesToBeAdded {
@@ -1321,6 +1355,12 @@ func addPendingResources(appName string, resourcesToBeAdded map[string]charmreso
 			Origin:   charmresources.OriginStore,
 			Revision: -1,
 		}
+		if resourceRevisions != nil {
+			if revision, ok := resourceRevisions[v.Name]; ok {
+				aux.Revision = revision
+			}
+		}
+
 		pendingResources = append(pendingResources, aux)
 	}
 
