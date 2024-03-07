@@ -78,24 +78,22 @@ If you wish to work on the provider, you'll first need [Go](http://www.golang.or
 
 See also [Building The Provider](#building-the-provider)
 
+### Writing Acceptance Tests
+
+Acceptance tests usually require Terraform plans to be included to the various steps of the test.
+This plans can be generated with help of `testing/plangenerator` package. You may use `GetStringFromTemplateWithData`
+function to generate a plan from a template. This function will replace the placeholders in the template with the data.
+
+The example can be found in the comments to `GetStringFromTemplateWithData` function.
+
+### Running Acceptance Tests
+
 Prior to running the tests locally, ensure you have the following environmental variables set:
 
 - `JUJU_CONTROLLER_ADDRESSES`
 - `JUJU_USERNAME`
 - `JUJU_PASSWORD`
 - `JUJU_CA_CERT`
-
-### Writing Acceptance Tests
-
-Acceptance tests usually require Terraform plans to be included to the various steps of the test. 
-This plans can be generated with help of `testing/plangenerator` package. You may use `GetStringFromTemplateWithData`
-function to generate a plan from a template. This function will replace the placeholders in the template with the data. 
-
-The example can be found in the comments to `GetStringFromTemplateWithData` function.
-
-### Testing
-
-```shell
 
 For example, here they are set using the currently active controller:
 
