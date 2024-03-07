@@ -597,7 +597,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 
 	endpointBindingsType := req.State.Schema.GetAttributes()[EndpointBindingsKey].(schema.SetNestedAttribute).NestedObject.Type()
 	if response.EndpointBindings != nil {
-		state.EndpointBindings, dErr = r.computeEndpointBindingsWithoutDefaultValues(ctx, endpointBindingsType, state.EndpointBindings, response.EndpointBindings)
+		state.EndpointBindings, dErr = r.toEndpointBindingsSet(ctx, endpointBindingsType, response.EndpointBindings)
 		if dErr.HasError() {
 			resp.Diagnostics.Append(dErr...)
 			return
@@ -644,51 +644,20 @@ func (r *applicationResource) configureConfigData(ctx context.Context, configTyp
 	return config, nil
 }
 
-// Compute endpoint bindings between the previous and the current endpoint bindings values.
-// removing endpoint bindings that are the same as default space but not stated in previous config
-func (r *applicationResource) computeEndpointBindingsWithoutDefaultValues(ctx context.Context, endpointBindingsType attr.Type, prevEb types.Set, newEb map[string]string) (types.Set, diag.Diagnostics) {
-	var previousEndpointBindingsSlice []nestedEndpointBinding
-	diagErr := prevEb.ElementsAs(ctx, &previousEndpointBindingsSlice, false)
-	if diagErr.HasError() {
-		r.trace("computeEndpointBindingsDelta failed to parse previous endpoint bindings")
-		return types.Set{}, diagErr
+// Convert the endpoint bindings from the juju api to terraform nestedEndpointBinding set
+func (r *applicationResource) toEndpointBindingsSet(ctx context.Context, endpointBindingsType attr.Type, endpointBindings map[string]string) (types.Set, diag.Diagnostics) {
+	if len(endpointBindings) == 0 {
+		return types.SetNull(endpointBindingsType), nil
 	}
-
-	var previousEndpointBindings map[string]string
-	if previousEndpointBindingsSlice != nil {
-		previousEndpointBindings = make(map[string]string)
-		for _, eb := range previousEndpointBindingsSlice {
-			previousEndpointBindings[eb.Endpoint.ValueString()] = eb.Space.ValueString()
-		}
-	}
-
-	var defaultSpace string
-
-	// find the default space in the new endpoint bindings
-	for endpoint, space := range newEb {
+	endpointBindingsSlice := make([]nestedEndpointBinding, 0, len(endpointBindings))
+	for endpoint, space := range endpointBindings {
+		var endpointString types.String
 		if endpoint == "" {
-			defaultSpace = space
-			break
+			endpointString = types.StringNull()
+		} else {
+			endpointString = types.StringValue(endpoint)
 		}
-	}
-	if defaultSpace == "" {
-		return types.Set{}, diag.Diagnostics{diag.NewErrorDiagnostic(
-			"No default space found",
-			"Unable to find default space from controller response, there should always be a default space",
-		)}
-	}
-
-	var endpointBindingsSlice []nestedEndpointBinding
-	for endpoint, space := range newEb {
-		if _, ok := previousEndpointBindings[endpoint]; ok || (endpoint == "" || space != defaultSpace) {
-			var endpointString types.String
-			if endpoint == "" {
-				endpointString = types.StringNull()
-			} else {
-				endpointString = types.StringValue(endpoint)
-			}
-			endpointBindingsSlice = append(endpointBindingsSlice, nestedEndpointBinding{Endpoint: endpointString, Space: types.StringValue(space)})
-		}
+		endpointBindingsSlice = append(endpointBindingsSlice, nestedEndpointBinding{Endpoint: endpointString, Space: types.StringValue(space)})
 	}
 
 	return types.SetValueFrom(ctx, endpointBindingsType, endpointBindingsSlice)

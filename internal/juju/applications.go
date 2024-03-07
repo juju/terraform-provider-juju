@@ -37,6 +37,7 @@ import (
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/core/model"
+	"github.com/juju/juju/core/network"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
 	jujuversion "github.com/juju/juju/version"
@@ -892,33 +893,29 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	if err != nil {
 		return nil, jujuerrors.Annotate(err, "failed to get series from base")
 	}
-	var endpointBindings map[string]string
-	if len(appStatus.EndpointBindings) > 0 {
-		endpointBindings = make(map[string]string)
-		attrs, err := modelconfigAPIClient.ModelGet()
-		if err != nil {
-			return nil, jujuerrors.Annotate(err, "failed to get model config")
-		}
-		modelConfig, err := config.New(config.NoDefaults, attrs)
-		if err != nil {
-			return nil, jujuerrors.Annotate(err, "failed to cast model config")
-		}
 
-		modelDefaultSpace := modelConfig.DefaultSpace()
-		appDefaultSpace, ok := appStatus.EndpointBindings[""]
-		if !ok {
-			appDefaultSpace = modelDefaultSpace
-			c.Tracef("endpoint \"\" not found for application, using model default space", map[string]interface{}{"application": input.AppName, "modelDefaultSpace": modelDefaultSpace})
-		}
+	attrs, err := modelconfigAPIClient.ModelGet()
+	if err != nil {
+		return nil, jujuerrors.Annotate(err, "failed to get model config")
+	}
+	modelConfig, err := config.New(config.UseDefaults, attrs)
+	if err != nil {
+		return nil, jujuerrors.Annotate(err, "failed to cast model config")
+	}
 
-		if appDefaultSpace != modelDefaultSpace {
-			endpointBindings[""] = appDefaultSpace
-		}
+	defaultSpace := modelConfig.DefaultSpace()
+	if defaultSpace == "" {
+		defaultSpace = network.AlphaSpaceName
+	}
+	appDefaultSpace := appStatus.EndpointBindings[""]
 
-		for endpoint, space := range appStatus.EndpointBindings {
-			if space != appDefaultSpace {
-				endpointBindings[endpoint] = space
-			}
+	endpointBindings := make(map[string]string)
+	if appDefaultSpace != defaultSpace {
+		endpointBindings[""] = appDefaultSpace
+	}
+	for endpoint, space := range appStatus.EndpointBindings {
+		if endpoint != "" && space != appDefaultSpace {
+			endpointBindings[endpoint] = space
 		}
 	}
 
