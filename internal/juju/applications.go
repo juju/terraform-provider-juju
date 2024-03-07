@@ -893,21 +893,14 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	if err != nil {
 		return nil, jujuerrors.Annotate(err, "failed to get series from base")
 	}
-
-	attrs, err := modelconfigAPIClient.ModelGet()
+	defaultSpace, err := getModelDefaultSpace(modelconfigAPIClient)
 	if err != nil {
-		return nil, jujuerrors.Annotate(err, "failed to get model config")
-	}
-	modelConfig, err := config.New(config.UseDefaults, attrs)
-	if err != nil {
-		return nil, jujuerrors.Annotate(err, "failed to cast model config")
-	}
-
-	defaultSpace := modelConfig.DefaultSpace()
-	if defaultSpace == "" {
-		defaultSpace = network.AlphaSpaceName
+		return nil, err
 	}
 	appDefaultSpace := appStatus.EndpointBindings[""]
+	if appDefaultSpace == "" {
+		appDefaultSpace = defaultSpace
+	}
 
 	endpointBindings := make(map[string]string)
 	if appDefaultSpace != defaultSpace {
@@ -961,6 +954,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	applicationAPIClient := apiapplication.NewClient(conn)
 	charmsAPIClient := apicharms.NewClient(conn)
 	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
+	modelconfigAPIClient := apimodelconfig.NewClient(conn)
 
 	resourcesAPIClient, err := apiresources.NewClient(conn)
 	if err != nil {
@@ -1022,7 +1016,11 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	}
 
 	if len(input.EndpointBindings) > 0 {
-		endpointBindingsParams, err := computeUpdatedBindings(appStatus.EndpointBindings, input.EndpointBindings, input.AppName)
+		modelDefaultSpace, err := getModelDefaultSpace(modelconfigAPIClient)
+		if err != nil {
+			return err
+		}
+		endpointBindingsParams, err := computeUpdatedBindings(modelDefaultSpace, appStatus.EndpointBindings, input.EndpointBindings, input.AppName)
 		if err != nil {
 			return err
 		}
@@ -1313,21 +1311,21 @@ func addPendingResources(appName string, resourcesToBeAdded map[string]charmreso
 	return toReturn, nil
 }
 
-func computeUpdatedBindings(currentBindings map[string]string, inputBindings map[string]string, appName string) (params.ApplicationMergeBindingsArgs, error) {
-	var newDefaultSpace string
+func computeUpdatedBindings(modelDefaultSpace string, currentBindings map[string]string, inputBindings map[string]string, appName string) (params.ApplicationMergeBindingsArgs, error) {
+	var defaultSpace string
 	oldDefault := currentBindings[""]
-	defaultSpace := oldDefault
+	newDefaultSpace := inputBindings[""]
 
-	for k, v := range inputBindings {
+	for k := range inputBindings {
 		if _, ok := currentBindings[k]; !ok {
 			return params.ApplicationMergeBindingsArgs{}, fmt.Errorf("endpoint %q does not exist", k)
 		}
-		if k == "" {
-			newDefaultSpace = v
-		}
 	}
+
 	if newDefaultSpace != "" {
 		defaultSpace = newDefaultSpace
+	} else {
+		defaultSpace = modelDefaultSpace
 	}
 
 	endpointBindings := make(map[string]string)
@@ -1354,4 +1352,21 @@ func computeUpdatedBindings(currentBindings map[string]string, inputBindings map
 		},
 	}
 	return endpointBindingsParams, nil
+}
+
+func getModelDefaultSpace(modelconfigAPIClient *apimodelconfig.Client) (string, error) {
+	attrs, err := modelconfigAPIClient.ModelGet()
+	if err != nil {
+		return "", jujuerrors.Annotate(err, "failed to get model config")
+	}
+	modelConfig, err := config.New(config.UseDefaults, attrs)
+	if err != nil {
+		return "", jujuerrors.Annotate(err, "failed to cast model config")
+	}
+
+	defaultSpace := modelConfig.DefaultSpace()
+	if defaultSpace == "" {
+		defaultSpace = network.AlphaSpaceName
+	}
+	return defaultSpace, nil
 }
