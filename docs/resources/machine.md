@@ -34,6 +34,7 @@ resource "juju_machine" "this_machine" {
 - `constraints` (String) Machine constraints that overwrite those available from 'juju get-model-constraints' and provider's defaults.
 - `disks` (String) Storage constraints for disks to attach to the machine(s).
 - `name` (String) A name for the machine resource in Terraform.
+- `placement` (String) Additional information about how to allocate the machine in the cloud.
 - `private_key_file` (String) The file path to read the private key from.
 - `public_key_file` (String) The file path to read the public key from.
 - `series` (String, Deprecated) The operating system series to install on the new machine(s).

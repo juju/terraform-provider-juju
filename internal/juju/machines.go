@@ -19,6 +19,7 @@ import (
 	"github.com/juju/juju/cmd/juju/common"
 	"github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/constraints"
+	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/environs/manual"
@@ -37,6 +38,7 @@ type CreateMachineInput struct {
 	Constraints string
 	Disks       string
 	Base        string
+	Placement   string
 	Series      string
 	InstanceId  string
 
@@ -105,6 +107,22 @@ func (c machinesClient) CreateMachine(ctx context.Context, input *CreateMachineI
 	}
 
 	var machineParams params.AddMachineParams
+
+	placement := input.Placement
+	if placement != "" {
+		machineParams.Placement, err = instance.ParsePlacement(placement)
+		if err == instance.ErrPlacementScopeMissing {
+			modelUUID, err := c.ModelUUID(input.ModelName)
+			if err != nil {
+				return nil, err
+			}
+			placement = modelUUID + ":" + placement
+			machineParams.Placement, err = instance.ParsePlacement(placement)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 
 	if input.Constraints == "" {
 		modelConstraints, err := modelConfigAPIClient.GetModelConstraints()
@@ -300,11 +318,19 @@ func (c machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse
 		return response, err
 	}
 
-	machineStatus, exists := status.Machines[input.ID]
+	machineIDParts := strings.Split(input.ID, "/")
+	machineStatus, exists := status.Machines[machineIDParts[0]]
 	if !exists {
 		return response, fmt.Errorf("no status returned for machine: %s", input.ID)
 	}
 	c.Tracef("ReadMachine:Machine status result", map[string]interface{}{"machineStatus": machineStatus})
+	if len(machineIDParts) > 1 {
+		// check for containers
+		machineStatus, exists = machineStatus.Containers[input.ID]
+		if !exists {
+			return response, fmt.Errorf("no status returned for container in machine: %s", input.ID)
+		}
+	}
 	response.ID = machineStatus.Id
 	response.Base, response.Series, err = baseAndSeriesFromParams(&machineStatus.Base)
 	if err != nil {

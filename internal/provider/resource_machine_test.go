@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
 func TestAcc_ResourceMachine(t *testing.T) {
@@ -57,6 +58,33 @@ func TestAcc_ResourceMachine_Minimal(t *testing.T) {
 			},
 			{
 				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      resourceName,
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceMachine_WithPlacement(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-machine")
+	resourceName := "juju_machine.this_machine_1"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceMachineWithPlacement(modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "model", modelName),
+					resource.TestCheckResourceAttr(resourceName, "machine_id", "0/lxd/0"),
+					resource.TestCheckResourceAttr(resourceName, "placement", "lxd:0"),
+				),
+			},
+			{
+				ImportStateVerify: false,
 				ImportState:       true,
 				ResourceName:      resourceName,
 			},
@@ -172,4 +200,28 @@ resource "juju_machine" "this_machine" {
     private_key_file = %q
 }
 `, modelName, IP, pubKeyPath, privKeyPath)
+}
+
+func testAccResourceMachineWithPlacement(modelName string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceMachineWithPlacement",
+		`
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_machine" "this_machine" {
+	name = "manually_provisioned_machine"
+	model = juju_model.{{.ModelName}}.name
+}
+
+resource "juju_machine" "this_machine_1" {
+	model     = juju_model.{{.ModelName}}.name
+	name      = "this_machine"
+	placement = "lxd:0"
+	depends_on = [juju_machine.this_machine]
+  }
+`, internaltesting.TemplateData{
+			"ModelName": modelName,
+		})
 }
