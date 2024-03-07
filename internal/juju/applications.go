@@ -175,6 +175,8 @@ func (input CreateApplicationInput) validateAndTransform(conn api.Connection) (p
 	}
 	parsed.placement = placements
 
+	// remove this validation once the provider bug lp#2055868
+	// is fixed.
 	endpointBindings := map[string]string{}
 	if len(input.EndpointBindings) > 0 {
 		spaceAPIClient := apispaces.NewAPI(conn)
@@ -730,6 +732,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	applicationAPIClient := apiapplication.NewClient(conn)
 	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
+	modelconfigAPIClient := apimodelconfig.NewClient(conn)
 
 	apps, err := applicationAPIClient.ApplicationsInfo([]names.ApplicationTag{names.NewApplicationTag(input.AppName)})
 	if err != nil {
@@ -891,7 +894,32 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	}
 	var endpointBindings map[string]string
 	if len(appStatus.EndpointBindings) > 0 {
-		endpointBindings = appStatus.EndpointBindings
+		endpointBindings = make(map[string]string)
+		attrs, err := modelconfigAPIClient.ModelGet()
+		if err != nil {
+			return nil, jujuerrors.Annotate(err, "failed to get model config")
+		}
+		modelConfig, err := config.New(config.NoDefaults, attrs)
+		if err != nil {
+			return nil, jujuerrors.Annotate(err, "failed to cast model config")
+		}
+
+		modelDefaultSpace := modelConfig.DefaultSpace()
+		appDefaultSpace, ok := appStatus.EndpointBindings[""]
+		if !ok {
+			appDefaultSpace = modelDefaultSpace
+			c.Tracef("endpoint \"\" not found for application, using model default space", map[string]interface{}{"application": input.AppName, "modelDefaultSpace": modelDefaultSpace})
+		}
+
+		if appDefaultSpace != modelDefaultSpace {
+			endpointBindings[""] = appDefaultSpace
+		}
+
+		for endpoint, space := range appStatus.EndpointBindings {
+			if space != appDefaultSpace {
+				endpointBindings[endpoint] = space
+			}
+		}
 	}
 
 	response := &ReadApplicationResponse{

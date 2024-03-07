@@ -680,7 +680,7 @@ func (r *applicationResource) computeEndpointBindingsWithoutDefaultValues(ctx co
 
 	var endpointBindingsSlice []nestedEndpointBinding
 	for endpoint, space := range newEb {
-		if _, ok := previousEndpointBindings[endpoint]; ok || space != defaultSpace {
+		if _, ok := previousEndpointBindings[endpoint]; ok || (endpoint == "" || space != defaultSpace) {
 			var endpointString types.String
 			if endpoint == "" {
 				endpointString = types.StringNull()
