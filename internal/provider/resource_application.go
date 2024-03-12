@@ -596,7 +596,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 
 	endpointBindingsType := req.State.Schema.GetAttributes()[EndpointBindingsKey].(schema.SetNestedAttribute).NestedObject.Type()
-	if response.EndpointBindings != nil {
+	if len(response.EndpointBindings) > 0 {
 		state.EndpointBindings, dErr = r.toEndpointBindingsSet(ctx, endpointBindingsType, response.EndpointBindings)
 		if dErr.HasError() {
 			resp.Diagnostics.Append(dErr...)
@@ -646,9 +646,6 @@ func (r *applicationResource) configureConfigData(ctx context.Context, configTyp
 
 // Convert the endpoint bindings from the juju api to terraform nestedEndpointBinding set
 func (r *applicationResource) toEndpointBindingsSet(ctx context.Context, endpointBindingsType attr.Type, endpointBindings map[string]string) (types.Set, diag.Diagnostics) {
-	if len(endpointBindings) == 0 {
-		return types.SetNull(endpointBindingsType), nil
-	}
 	endpointBindingsSlice := make([]nestedEndpointBinding, 0, len(endpointBindings))
 	for endpoint, space := range endpointBindings {
 		var endpointString types.String
