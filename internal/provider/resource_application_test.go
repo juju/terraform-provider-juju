@@ -5,11 +5,20 @@ package provider
 
 import (
 	"fmt"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
+	apiapplication "github.com/juju/juju/api/client/application"
+	apiclient "github.com/juju/juju/api/client/client"
+	apispaces "github.com/juju/juju/api/client/spaces"
+	"github.com/juju/juju/rpc/params"
+	"github.com/juju/names/v4"
+	internaljuju "github.com/juju/terraform-provider-juju/internal/juju"
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
@@ -270,6 +279,107 @@ func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-application-bindings")
+	appName := "test-app"
+
+	managementSpace, publicSpace, cleanUp := setupModelAndSpaces(t, modelName)
+	defer cleanUp()
+
+	constraints := "arch=amd64 spaces=" + managementSpace + "," + publicSpace
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// test creating a single application with default endpoint bound to management space, and ubuntu endpoint bound to public space
+				Config: testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
+					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "2"),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "ubuntu", "space": publicSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
+				),
+			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      "juju_application." + appName,
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-application-bindings-update")
+	appName := "test-app-update"
+
+	managementSpace, publicSpace, cleanUp := setupModelAndSpaces(t, modelName)
+	defer cleanUp()
+	constraints := "arch=amd64 spaces=" + managementSpace + "," + publicSpace
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// test creating a single application with default endpoint bound to management space
+				Config: testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": managementSpace}),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
+					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "1"),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, managementSpace, map[string]string{"": managementSpace}),
+				),
+			},
+			{
+				// updating the existing application's default endpoint to be bound to public space
+				// this means all endpoints should be bound to public space (since no endpoint was on a different space)
+				Config: testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": publicSpace}),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
+					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "1"),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": publicSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, publicSpace, map[string]string{"": publicSpace, "ubuntu": publicSpace, "another": publicSpace}),
+				),
+			},
+			{
+				// updating the existing application's default endpoint to be bound to management space, and specifying ubuntu endpoint to be bound to public space
+				// this means all endpoints should be bound to public space, except for ubuntu which should be bound to public space
+				Config: testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
+					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "2"),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "ubuntu", "space": publicSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace, "another": managementSpace}),
+				),
+			},
+			{
+				// removing the endpoint bindings reverts to model's default space
+				Config: testAccResourceApplicationEndpointBindings(modelName, appName, constraints, nil),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
+					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "0"),
+					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, "alpha", map[string]string{"": "alpha", "ubuntu": "alpha", "another": "alpha"}),
+				),
+			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      "juju_application." + appName,
+			},
+		},
+	})
+}
+
 func testAccResourceApplicationBasic_Minimal(modelName, charmName string) string {
 	return fmt.Sprintf(`
 		resource "juju_model" "testmodel" {
@@ -520,4 +630,158 @@ resource "juju_application" "subordinate" {
     }
 } 
 `, modelName, constraints)
+}
+
+func setupModelAndSpaces(t *testing.T, modelName string) (string, string, func()) {
+	// All the space setup is needed until https://github.com/juju/terraform-provider-juju/issues/336 is implemented
+	// called to have TestClient populated
+	testAccPreCheck(t)
+	model, err := TestClient.Models.CreateModel(internaljuju.CreateModelInput{
+		Name: modelName,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conn, err := TestClient.Models.GetConnection(&modelName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanUp := func() {
+		_ = TestClient.Models.DestroyModel(internaljuju.DestroyModelInput{UUID: model.UUID})
+		_ = conn.Close()
+	}
+
+	managementBridgeCidr := os.Getenv("TEST_MANAGEMENT_BR")
+	publicBridgeCidr := os.Getenv("TEST_PUBLIC_BR")
+	if managementBridgeCidr == "" || publicBridgeCidr == "" {
+		t.Skip("Management or Public bridge not set")
+	}
+
+	publicSpace := "public"
+	managementSpace := "management"
+	spaceAPIClient := apispaces.NewAPI(conn)
+	err = spaceAPIClient.CreateSpace(managementSpace, []string{managementBridgeCidr}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = spaceAPIClient.CreateSpace(publicSpace, []string{publicBridgeCidr}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return managementSpace, publicSpace, cleanUp
+}
+
+func testAccResourceApplicationEndpointBindings(modelName, appName, constraints string, endpointBindings map[string]string) string {
+	var endpoints string
+	for endpoint, space := range endpointBindings {
+		if endpoint == "" {
+			endpoints += fmt.Sprintf(`
+		{
+			"space"    = %q,
+		},
+		`, space)
+		} else {
+			endpoints += fmt.Sprintf(`
+		{
+			"endpoint" = %q,
+			"space"    = %q,
+		},
+		`, endpoint, space)
+		}
+	}
+	if len(endpoints) > 0 {
+		endpoints = "[" + endpoints + "]"
+	} else {
+		endpoints = "null"
+	}
+	return internaltesting.GetStringFromTemplateWithData("testAccResourceApplicationEndpointBindings", `
+data "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_application" "{{.AppName}}" {
+  model       = data.juju_model.{{.ModelName}}.name
+  name        = "{{.AppName}}"
+  constraints = "{{.Constraints}}"
+  charm {
+    name     = "jameinel-ubuntu-lite"
+    revision = 10
+  }
+  endpoint_bindings = {{.EndpointBindings}}
+}
+`, internaltesting.TemplateData{
+		"ModelName":        modelName,
+		"AppName":          appName,
+		"Constraints":      constraints,
+		"EndpointBindings": endpoints,
+	})
+}
+
+func testCheckEndpointsAreSetToCorrectSpace(modelName, appName, defaultSpace string, configuredEndpoints map[string]string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		conn, err := TestClient.Models.GetConnection(&modelName)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = conn.Close() }()
+
+		applicationAPIClient := apiapplication.NewClient(conn)
+		clientAPIClient := apiclient.NewClient(conn, TestClient.Applications.JujuLogger())
+
+		apps, err := applicationAPIClient.ApplicationsInfo([]names.ApplicationTag{names.NewApplicationTag(appName)})
+		if err != nil {
+			return err
+		}
+		if len(apps) > 1 {
+			return fmt.Errorf("more than one result for application: %s", appName)
+		}
+		if len(apps) < 1 {
+			return fmt.Errorf("no results for application: %s", appName)
+		}
+		if apps[0].Error != nil {
+			return apps[0].Error
+		}
+
+		appInfo := apps[0].Result
+		appInfoBindings := appInfo.EndpointBindings
+
+		var appStatus params.ApplicationStatus
+		var exists bool
+		// Block on the application being active
+		// This is needed to make sure the units have access
+		// to ip addresses part of the spaces
+		for i := 0; i < 10; i++ {
+			status, err := clientAPIClient.Status(&apiclient.StatusArgs{
+				Patterns: []string{appName},
+			})
+			if err != nil {
+				return err
+			}
+			appStatus, exists = status.Applications[appName]
+
+			if !exists || appStatus.Status.Status != "active" {
+				time.Sleep(10 * time.Second)
+			}
+		}
+		if !exists {
+			return fmt.Errorf("no status returned for application: %s", appName)
+		}
+		if appStatus.Status.Status != "active" {
+			return fmt.Errorf("application %s is not active, status: %s", appName, appStatus.Status.Status)
+		}
+		for endpoint, space := range appInfoBindings {
+			if ep, ok := configuredEndpoints[endpoint]; ok {
+				if ep != space {
+					return fmt.Errorf("endpoint %q is bound to %q, expected %q", endpoint, space, ep)
+				}
+			} else {
+				if space != defaultSpace {
+					return fmt.Errorf("endpoint %q is bound to %q, expected %q", endpoint, space, defaultSpace)
+				}
+			}
+		}
+		return nil
+	}
 }

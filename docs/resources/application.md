@@ -63,6 +63,7 @@ resource "juju_application" "placement_example" {
 - `charm` (Block List) The name of the charm to be installed from Charmhub. (see [below for nested schema](#nestedblock--charm))
 - `config` (Map of String) Application specific configuration. Must evaluate to a string, integer or boolean.
 - `constraints` (String) Constraints imposed on this application.
+- `endpoint_bindings` (Attributes Set) Configure endpoint bindings (see [below for nested schema](#nestedatt--endpoint_bindings))
 - `expose` (Block List) Makes an application publicly available over the network (see [below for nested schema](#nestedblock--expose))
 - `name` (String) A custom name for the application deployment. If empty, uses the charm's name.
 - `placement` (String) Specify the target location for the application's units
@@ -87,6 +88,18 @@ Optional:
 - `channel` (String) The channel to use when deploying a charm. Specified as \<track>/\<risk>/\<branch>.
 - `revision` (Number) The revision of the charm to deploy. During the update phase, the charm revision should be update before config update, to avoid issues with config parameters parsing.
 - `series` (String, Deprecated) The series on which to deploy.
+
+
+<a id="nestedatt--endpoint_bindings"></a>
+### Nested Schema for `endpoint_bindings`
+
+Required:
+
+- `space` (String) Name of the space to bind the endpoint to.
+
+Optional:
+
+- `endpoint` (String) Name of the endpoint to bind to a space. Keep null (or undefined) to define default binding.
 
 
 <a id="nestedblock--expose"></a>

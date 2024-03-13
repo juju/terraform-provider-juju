@@ -30,12 +30,14 @@ import (
 	apiclient "github.com/juju/juju/api/client/client"
 	apimodelconfig "github.com/juju/juju/api/client/modelconfig"
 	apiresources "github.com/juju/juju/api/client/resources"
+	apispaces "github.com/juju/juju/api/client/spaces"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
 	"github.com/juju/juju/cmd/juju/application/utils"
 	"github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/core/model"
+	"github.com/juju/juju/core/network"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
 	jujuversion "github.com/juju/juju/version"
@@ -99,26 +101,27 @@ func ConfigEntryToString(input interface{}) string {
 }
 
 type CreateApplicationInput struct {
-	ApplicationName string
-	ModelName       string
-	CharmName       string
-	CharmChannel    string
-	CharmBase       string
-	CharmSeries     string
-	CharmRevision   int
-	Units           int
-	Trust           bool
-	Expose          map[string]interface{}
-	Config          map[string]string
-	Placement       string
-	Constraints     constraints.Value
+	ApplicationName  string
+	ModelName        string
+	CharmName        string
+	CharmChannel     string
+	CharmBase        string
+	CharmSeries      string
+	CharmRevision    int
+	Units            int
+	Trust            bool
+	Expose           map[string]interface{}
+	Config           map[string]string
+	Placement        string
+	Constraints      constraints.Value
+	EndpointBindings map[string]string
 }
 
 // validateAndTransform returns transformedCreateApplicationInput which
 // validated and in the proper format for both the new and legacy deployment
 // methods. Select input is not transformed due to differences in the
 // 2 deployement methods, such as config.
-func (input CreateApplicationInput) validateAndTransform() (parsed transformedCreateApplicationInput, err error) {
+func (input CreateApplicationInput) validateAndTransform(conn api.Connection) (parsed transformedCreateApplicationInput, err error) {
 	parsed.charmChannel = input.CharmChannel
 	parsed.charmName = input.CharmName
 	parsed.charmRevision = input.CharmRevision
@@ -173,21 +176,44 @@ func (input CreateApplicationInput) validateAndTransform() (parsed transformedCr
 	}
 	parsed.placement = placements
 
+	// remove this validation once the provider bug lp#2055868
+	// is fixed.
+	endpointBindings := map[string]string{}
+	if len(input.EndpointBindings) > 0 {
+		spaceAPIClient := apispaces.NewAPI(conn)
+		knownSpaces, err := spaceAPIClient.ListSpaces()
+		if err != nil {
+			return parsed, err
+		}
+		knownSpaceNames := set.NewStrings()
+		for _, space := range knownSpaces {
+			knownSpaceNames.Add(space.Name)
+		}
+		for endpoint, space := range input.EndpointBindings {
+			if !knownSpaceNames.Contains(space) {
+				return parsed, fmt.Errorf("unknown space %q", space)
+			}
+			endpointBindings[endpoint] = space
+		}
+	}
+	parsed.endpointBindings = endpointBindings
+
 	return
 }
 
 type transformedCreateApplicationInput struct {
-	applicationName string
-	charmName       string
-	charmChannel    string
-	charmBase       base.Base
-	charmRevision   int
-	config          map[string]string
-	constraints     constraints.Value
-	expose          map[string]interface{}
-	placement       []*instance.Placement
-	units           int
-	trust           bool
+	applicationName  string
+	charmName        string
+	charmChannel     string
+	charmBase        base.Base
+	charmRevision    int
+	config           map[string]string
+	constraints      constraints.Value
+	expose           map[string]interface{}
+	placement        []*instance.Placement
+	units            int
+	trust            bool
+	endpointBindings map[string]string
 }
 
 type CreateApplicationResponse struct {
@@ -200,18 +226,19 @@ type ReadApplicationInput struct {
 }
 
 type ReadApplicationResponse struct {
-	Name        string
-	Channel     string
-	Revision    int
-	Base        string
-	Series      string
-	Units       int
-	Trust       bool
-	Config      map[string]ConfigEntry
-	Constraints constraints.Value
-	Expose      map[string]interface{}
-	Principal   bool
-	Placement   string
+	Name             string
+	Channel          string
+	Revision         int
+	Base             string
+	Series           string
+	Units            int
+	Trust            bool
+	Config           map[string]ConfigEntry
+	Constraints      constraints.Value
+	Expose           map[string]interface{}
+	Principal        bool
+	Placement        string
+	EndpointBindings map[string]string
 }
 
 type UpdateApplicationInput struct {
@@ -227,8 +254,9 @@ type UpdateApplicationInput struct {
 	Unexpose []string
 	Config   map[string]string
 	//Series    string // Unsupported today
-	Placement   map[string]interface{}
-	Constraints *constraints.Value
+	Placement        map[string]interface{}
+	Constraints      *constraints.Value
+	EndpointBindings map[string]string
 }
 
 type DestroyApplicationInput struct {
@@ -262,7 +290,7 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	}
 	defer func() { _ = conn.Close() }()
 
-	transformedInput, err := input.validateAndTransform()
+	transformedInput, err := input.validateAndTransform(conn)
 	if err != nil {
 		return nil, err
 	}
@@ -296,16 +324,17 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplic
 
 	c.Tracef("Calling DeployFromRepository")
 	_, _, errs := applicationAPIClient.DeployFromRepository(apiapplication.DeployFromRepositoryArg{
-		CharmName:       transformedInput.charmName,
-		ApplicationName: transformedInput.applicationName,
-		Base:            &transformedInput.charmBase,
-		Channel:         &transformedInput.charmChannel,
-		ConfigYAML:      string(configYaml),
-		Cons:            transformedInput.constraints,
-		NumUnits:        &transformedInput.units,
-		Placement:       transformedInput.placement,
-		Revision:        &transformedInput.charmRevision,
-		Trust:           transformedInput.trust,
+		CharmName:        transformedInput.charmName,
+		ApplicationName:  transformedInput.applicationName,
+		Base:             &transformedInput.charmBase,
+		Channel:          &transformedInput.charmChannel,
+		ConfigYAML:       string(configYaml),
+		Cons:             transformedInput.constraints,
+		EndpointBindings: transformedInput.endpointBindings,
+		NumUnits:         &transformedInput.units,
+		Placement:        transformedInput.placement,
+		Revision:         &transformedInput.charmRevision,
+		Trust:            transformedInput.trust,
 	})
 	return errors.Join(errs...)
 }
@@ -439,14 +468,15 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 			}
 
 			args := apiapplication.DeployArgs{
-				CharmID:         charmID,
-				ApplicationName: transformedInput.applicationName,
-				NumUnits:        transformedInput.units,
-				CharmOrigin:     resultOrigin,
-				Config:          appConfig,
-				Cons:            transformedInput.constraints,
-				Resources:       resources,
-				Placement:       transformedInput.placement,
+				CharmID:          charmID,
+				ApplicationName:  transformedInput.applicationName,
+				NumUnits:         transformedInput.units,
+				CharmOrigin:      resultOrigin,
+				Config:           appConfig,
+				Cons:             transformedInput.constraints,
+				Resources:        resources,
+				Placement:        transformedInput.placement,
+				EndpointBindings: transformedInput.endpointBindings,
 			}
 			c.Tracef("Calling Deploy", map[string]interface{}{"args": args})
 			if err = applicationAPIClient.Deploy(args); err != nil {
@@ -703,6 +733,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	applicationAPIClient := apiapplication.NewClient(conn)
 	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
+	modelconfigAPIClient := apimodelconfig.NewClient(conn)
 
 	apps, err := applicationAPIClient.ApplicationsInfo([]names.ApplicationTag{names.NewApplicationTag(input.AppName)})
 	if err != nil {
@@ -862,19 +893,39 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	if err != nil {
 		return nil, jujuerrors.Annotate(err, "failed to get series from base")
 	}
+	defaultSpace, err := getModelDefaultSpace(modelconfigAPIClient)
+	if err != nil {
+		return nil, err
+	}
+	appDefaultSpace := appStatus.EndpointBindings[""]
+	if appDefaultSpace == "" {
+		appDefaultSpace = defaultSpace
+	}
+
+	endpointBindings := make(map[string]string)
+	if appDefaultSpace != defaultSpace {
+		endpointBindings[""] = appDefaultSpace
+	}
+	for endpoint, space := range appStatus.EndpointBindings {
+		if endpoint != "" && space != appDefaultSpace {
+			endpointBindings[endpoint] = space
+		}
+	}
+
 	response := &ReadApplicationResponse{
-		Name:        charmURL.Name,
-		Channel:     appInfo.Channel,
-		Revision:    charmURL.Revision,
-		Base:        fmt.Sprintf("%s@%s", appInfo.Base.Name, baseChannel.Track),
-		Series:      seriesString,
-		Units:       unitCount,
-		Trust:       trustValue,
-		Expose:      exposed,
-		Config:      conf,
-		Constraints: appConstraints,
-		Principal:   appInfo.Principal,
-		Placement:   placement,
+		Name:             charmURL.Name,
+		Channel:          appInfo.Channel,
+		Revision:         charmURL.Revision,
+		Base:             fmt.Sprintf("%s@%s", appInfo.Base.Name, baseChannel.Track),
+		Series:           seriesString,
+		Units:            unitCount,
+		Trust:            trustValue,
+		Expose:           exposed,
+		Config:           conf,
+		Constraints:      appConstraints,
+		Principal:        appInfo.Principal,
+		Placement:        placement,
+		EndpointBindings: endpointBindings,
 	}
 
 	return response, nil
@@ -903,6 +954,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	applicationAPIClient := apiapplication.NewClient(conn)
 	charmsAPIClient := apicharms.NewClient(conn)
 	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
+	modelconfigAPIClient := apimodelconfig.NewClient(conn)
 
 	resourcesAPIClient, err := apiresources.NewClient(conn)
 	if err != nil {
@@ -959,6 +1011,22 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		err := applicationAPIClient.SetConfig("master", input.AppName, "", auxConfig)
 		if err != nil {
 			c.Errorf(err, "setting configuration params")
+			return err
+		}
+	}
+
+	if len(input.EndpointBindings) > 0 {
+		modelDefaultSpace, err := getModelDefaultSpace(modelconfigAPIClient)
+		if err != nil {
+			return err
+		}
+		endpointBindingsParams, err := computeUpdatedBindings(modelDefaultSpace, appStatus.EndpointBindings, input.EndpointBindings, input.AppName)
+		if err != nil {
+			return err
+		}
+		err = applicationAPIClient.MergeBindings(endpointBindingsParams)
+		if err != nil {
+			c.Errorf(err, "setting endpoint bindings")
 			return err
 		}
 	}
@@ -1241,4 +1309,64 @@ func addPendingResources(appName string, resourcesToBeAdded map[string]charmreso
 	}
 
 	return toReturn, nil
+}
+
+func computeUpdatedBindings(modelDefaultSpace string, currentBindings map[string]string, inputBindings map[string]string, appName string) (params.ApplicationMergeBindingsArgs, error) {
+	var defaultSpace string
+	oldDefault := currentBindings[""]
+	newDefaultSpace := inputBindings[""]
+
+	for k := range inputBindings {
+		if _, ok := currentBindings[k]; !ok {
+			return params.ApplicationMergeBindingsArgs{}, fmt.Errorf("endpoint %q does not exist", k)
+		}
+	}
+
+	if newDefaultSpace != "" {
+		defaultSpace = newDefaultSpace
+	} else {
+		defaultSpace = modelDefaultSpace
+	}
+
+	endpointBindings := make(map[string]string)
+	for k, currentSpace := range currentBindings {
+		if newSpace, ok := inputBindings[k]; ok {
+			if newSpace == "" {
+				newSpace = defaultSpace
+			}
+			endpointBindings[k] = newSpace
+		} else {
+			if currentSpace == oldDefault {
+				endpointBindings[k] = defaultSpace
+			} else {
+				endpointBindings[k] = currentSpace
+			}
+		}
+	}
+	endpointBindingsParams := params.ApplicationMergeBindingsArgs{
+		Args: []params.ApplicationMergeBindings{
+			{
+				ApplicationTag: names.NewApplicationTag(appName).String(),
+				Bindings:       endpointBindings,
+			},
+		},
+	}
+	return endpointBindingsParams, nil
+}
+
+func getModelDefaultSpace(modelconfigAPIClient *apimodelconfig.Client) (string, error) {
+	attrs, err := modelconfigAPIClient.ModelGet()
+	if err != nil {
+		return "", jujuerrors.Annotate(err, "failed to get model config")
+	}
+	modelConfig, err := config.New(config.UseDefaults, attrs)
+	if err != nil {
+		return "", jujuerrors.Annotate(err, "failed to cast model config")
+	}
+
+	defaultSpace := modelConfig.DefaultSpace()
+	if defaultSpace == "" {
+		defaultSpace = network.AlphaSpaceName
+	}
+	return defaultSpace, nil
 }
