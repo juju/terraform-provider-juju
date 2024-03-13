@@ -247,6 +247,60 @@ func TestAcc_ResourceRevisionUpdatesLXD(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceRevisionAddedToPlanLXD(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-resource-revision-updates-lxd")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 20, "", "", -1),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr("juju_application.juju-qa-test", "resources"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "foo-file", 4),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "4"),
+				),
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceRevisionRemovedFromPlanLXD(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-resource-revision-updates-lxd")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// we specify the resource revision 4
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 20, "", "foo-file", 4),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "4"),
+				),
+			},
+			{
+				// then remove the resource revision and update the charm revision
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "", -1),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr("juju_application.juju-qa-test", "resources"),
+				),
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceRevisionUpdatesMicrok8s(t *testing.T) {
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")

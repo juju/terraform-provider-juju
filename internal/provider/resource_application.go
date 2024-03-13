@@ -51,7 +51,7 @@ Charm resource revisions. Must evaluate to an integer.
 	* If the plan does specify resource revisions and:
 		* If the charm revision or channel is updated, then resources get updated to the 
 		  latest revision.
-		* If the charm revision or channel are not updated, then no changes will take 
+	    * If the charm revision or channel are not updated, then no changes will take 
 		  place (juju does not have an "un-attach" command for resources).
 `
 )

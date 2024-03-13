@@ -74,9 +74,9 @@ resource "juju_application" "placement_example" {
 	resources with specified revisions will be attached to the application (equivalent
 	to juju attach-resource).
 	* If the plan does specify resource revisions and:
-		* If the charm revision or channel is updated, then resources do NOT get updated to the 
+		* If the charm revision or channel is updated, then resources get updated to the 
 		  latest revision.
-		* If the charm revision or channel are not updated, then no changes will take 
+	    * If the charm revision or channel are not updated, then no changes will take 
 		  place (juju does not have an "un-attach" command for resources).
 - `trust` (Boolean) Set the trust for the application.
 - `units` (Number) The number of application units to deploy for the charm.
