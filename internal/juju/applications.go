@@ -749,7 +749,7 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 			// Those happen with the integration resource which will not be
 			// run by terraform before the application resource finishes. Thus
 			// do not block here for subordinates.
-			c.Tracef("Have machines - returning", map[string]interface{}{"output": output})
+			c.Tracef("Have machines - returning", map[string]interface{}{"output": *output})
 			return nil
 		},
 		NotifyFunc: func(err error, attempt int) {
@@ -800,6 +800,8 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	appInfo := apps[0].Result
 
+	// TODO: Investigate why we're getting the full status here when
+	// application status is needed.
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
 		return nil, err
