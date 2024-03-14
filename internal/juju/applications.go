@@ -784,20 +784,6 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	appInfo := apps[0].Result
 
-	var appConstraints constraints.Value = constraints.Value{}
-	// constraints do not apply to subordinate applications.
-	if appInfo.Principal {
-		queryConstraints, err := applicationAPIClient.GetConstraints(input.AppName)
-		if err != nil {
-			c.Errorf(err, "found when querying the application constraints")
-			return nil, err
-		}
-		if len(queryConstraints) != 1 {
-			return nil, fmt.Errorf("expected one set of application constraints, received %d", len(queryConstraints))
-		}
-		appConstraints = queryConstraints[0]
-	}
-
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
 		return nil, err
@@ -954,7 +940,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		Trust:            trustValue,
 		Expose:           exposed,
 		Config:           conf,
-		Constraints:      appConstraints,
+		Constraints:      appInfo.Constraints,
 		Principal:        appInfo.Principal,
 		Placement:        placement,
 		EndpointBindings: endpointBindings,
