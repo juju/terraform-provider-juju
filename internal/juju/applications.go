@@ -25,6 +25,7 @@ import (
 	"github.com/juju/collections/set"
 	jujuerrors "github.com/juju/errors"
 	"github.com/juju/juju/api"
+	"github.com/juju/juju/api/base"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apicharms "github.com/juju/juju/api/client/charms"
 	apiclient "github.com/juju/juju/api/client/client"
@@ -33,7 +34,7 @@ import (
 	apispaces "github.com/juju/juju/api/client/spaces"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
 	"github.com/juju/juju/cmd/juju/application/utils"
-	"github.com/juju/juju/core/base"
+	corebase "github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/core/model"
@@ -61,6 +62,25 @@ func (ae *applicationNotFoundError) Error() string {
 type applicationsClient struct {
 	SharedClient
 	controllerVersion version.Number
+
+	getApplicationAPIClient func(base.APICallCloser) ApplicationAPIClient
+	getClientAPIClient      func(api.Connection) ClientAPIClient
+	getModelConfigAPIClient func(api.Connection) ModelConfigAPIClient
+}
+
+func newApplicationClient(sc SharedClient) *applicationsClient {
+	return &applicationsClient{
+		SharedClient: sc,
+		getApplicationAPIClient: func(closer base.APICallCloser) ApplicationAPIClient {
+			return apiapplication.NewClient(closer)
+		},
+		getClientAPIClient: func(conn api.Connection) ClientAPIClient {
+			return apiclient.NewClient(conn, sc.JujuLogger())
+		},
+		getModelConfigAPIClient: func(conn api.Connection) ModelConfigAPIClient {
+			return apimodelconfig.NewClient(conn)
+		},
+	}
 }
 
 // ConfigEntry is an auxiliar struct to keep information about
@@ -144,14 +164,14 @@ func (input CreateApplicationInput) validateAndTransform(conn api.Connection) (p
 	// system to deploy with. Only one is allowed and Charm Base is
 	// preferred. Luckily, the DeduceOrigin method returns an origin which
 	// does contain the base and a series.
-	var userSuppliedBase base.Base
+	var userSuppliedBase corebase.Base
 	if input.CharmBase != "" {
-		userSuppliedBase, err = base.ParseBaseFromString(input.CharmBase)
+		userSuppliedBase, err = corebase.ParseBaseFromString(input.CharmBase)
 		if err != nil {
 			return
 		}
 	} else if input.CharmSeries != "" {
-		userSuppliedBase, err = base.GetBaseFromSeries(input.CharmSeries)
+		userSuppliedBase, err = corebase.GetBaseFromSeries(input.CharmSeries)
 		if err != nil {
 			return
 		}
@@ -205,7 +225,7 @@ type transformedCreateApplicationInput struct {
 	applicationName  string
 	charmName        string
 	charmChannel     string
-	charmBase        base.Base
+	charmBase        corebase.Base
 	charmRevision    int
 	config           map[string]string
 	constraints      constraints.Value
@@ -262,12 +282,6 @@ type UpdateApplicationInput struct {
 type DestroyApplicationInput struct {
 	ApplicationName string
 	ModelName       string
-}
-
-func newApplicationClient(sc SharedClient) *applicationsClient {
-	return &applicationsClient{
-		SharedClient: sc,
-	}
 }
 
 func resolveCharmURL(charmName string) (*charm.URL, error) {
@@ -382,7 +396,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 	// Juju 2.9 cares that the series is in the origin. Juju 3.3 does not.
 	// We are supporting both now.
 	if !userSuppliedBase.Empty() {
-		userSuppliedSeries, err := base.GetSeriesFromBase(userSuppliedBase)
+		userSuppliedSeries, err := corebase.GetSeriesFromBase(userSuppliedBase)
 		if err != nil {
 			return err
 		}
@@ -419,7 +433,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 	resolvedOrigin.Base = baseToUse
 	// 3.3 version of ResolveCharm does not always include the series
 	// in the url. However, juju 2.9 requires it.
-	series, err := base.GetSeriesFromBase(baseToUse)
+	series, err := corebase.GetSeriesFromBase(baseToUse)
 	if err != nil {
 		return err
 	}
@@ -509,21 +523,21 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 // depending on the controller agent version. This provider currently
 // uses juju 3.3.0 code. However, the supported workload base list is
 // different between juju 2 and juju 3. Handle that here.
-func (c applicationsClient) supportedWorkloadBase(imageStream string) ([]base.Base, error) {
-	supportedBases, err := base.WorkloadBases(time.Now(), base.Base{}, imageStream)
+func (c applicationsClient) supportedWorkloadBase(imageStream string) ([]corebase.Base, error) {
+	supportedBases, err := corebase.WorkloadBases(time.Now(), corebase.Base{}, imageStream)
 	if err != nil {
 		return nil, err
 	}
 	if c.controllerVersion.Major > 2 {
 		// SupportedBases include those supported with juju 3.x; juju 2.9.x
 		// supports more. If we have a juju 2.9.x controller add them back.
-		additionallySupported := []base.Base{
-			{OS: "ubuntu", Channel: base.Channel{Track: "18.04"}}, // bionic
-			{OS: "ubuntu", Channel: base.Channel{Track: "16.04"}}, // xenial
-			{OS: "ubuntu", Channel: base.Channel{Track: "14.04"}}, // trusty
-			{OS: "ubuntu", Channel: base.Channel{Track: "12.04"}}, // precise
+		additionallySupported := []corebase.Base{
+			{OS: "ubuntu", Channel: corebase.Channel{Track: "18.04"}}, // bionic
+			{OS: "ubuntu", Channel: corebase.Channel{Track: "16.04"}}, // xenial
+			{OS: "ubuntu", Channel: corebase.Channel{Track: "14.04"}}, // trusty
+			{OS: "ubuntu", Channel: corebase.Channel{Track: "12.04"}}, // precise
 			{OS: "windows"},
-			{OS: "centos", Channel: base.Channel{Track: "7"}}, // centos7
+			{OS: "centos", Channel: corebase.Channel{Track: "7"}}, // centos7
 		}
 		supportedBases = append(supportedBases, additionallySupported...)
 	}
@@ -548,28 +562,28 @@ func (c applicationsClient) supportedWorkloadBase(imageStream string) ([]base.Ba
 //
 // Note, we are re-implementing the logic of base_selector in juju code as it's
 // a private object.
-func (c applicationsClient) baseToUse(modelconfigAPIClient *apimodelconfig.Client, inputBase, suggestedBase base.Base, charmBases []base.Base) (base.Base, error) {
+func (c applicationsClient) baseToUse(modelconfigAPIClient *apimodelconfig.Client, inputBase, suggestedBase corebase.Base, charmBases []corebase.Base) (corebase.Base, error) {
 	c.Tracef("baseToUse", map[string]interface{}{"inputBase": inputBase, "suggestedBase": suggestedBase, "charmBases": charmBases})
 
 	attrs, err := modelconfigAPIClient.ModelGet()
 	if err != nil {
-		return base.Base{}, jujuerrors.Wrap(err, errors.New("cannot fetch model settings"))
+		return corebase.Base{}, jujuerrors.Wrap(err, errors.New("cannot fetch model settings"))
 	}
 	modelConfig, err := config.New(config.NoDefaults, attrs)
 	if err != nil {
-		return base.Base{}, err
+		return corebase.Base{}, err
 	}
 
 	supportedWorkloadBases, err := c.supportedWorkloadBase(modelConfig.ImageStream())
 	if err != nil {
-		return base.Base{}, err
+		return corebase.Base{}, err
 	}
 
 	// We can choose from a list of bases, supported both as
 	// workload bases and by the charm.
 	supportedBases := intersectionOfBases(charmBases, supportedWorkloadBases)
 	if len(supportedBases) == 0 {
-		return base.Base{}, jujuerrors.NewNotSupported(nil,
+		return corebase.Base{}, jujuerrors.NewNotSupported(nil,
 			"This charm has no bases supported by the charm and in the list of juju workload bases for the current version of juju.")
 	}
 
@@ -578,7 +592,7 @@ func (c applicationsClient) baseToUse(modelconfigAPIClient *apimodelconfig.Clien
 	if basesContain(inputBase, supportedBases) {
 		return inputBase, nil
 	} else if !inputBase.Empty() {
-		return base.Base{}, jujuerrors.NewNotSupported(nil,
+		return corebase.Base{}, jujuerrors.NewNotSupported(nil,
 			fmt.Sprintf("base %q either not supported by the charm, or an unsupported juju workload base with the current version of juju.", inputBase))
 	}
 
@@ -586,9 +600,9 @@ func (c applicationsClient) baseToUse(modelconfigAPIClient *apimodelconfig.Clien
 	// use that if a supportedBase.
 	defaultBaseString, explicit := modelConfig.DefaultBase()
 	if explicit {
-		defaultBase, err := base.ParseBaseFromString(defaultBaseString)
+		defaultBase, err := corebase.ParseBaseFromString(defaultBaseString)
 		if err != nil {
-			return base.Base{}, err
+			return corebase.Base{}, err
 		}
 		if basesContain(defaultBase, supportedBases) {
 			return defaultBase, nil
@@ -615,7 +629,7 @@ func (c applicationsClient) baseToUse(modelconfigAPIClient *apimodelconfig.Clien
 // an expose request is done populating the request arguments with
 // the endpoints, spaces, and cidrs contained in the exposeConfig
 // map.
-func (c applicationsClient) processExpose(applicationAPIClient *apiapplication.Client, applicationName string, expose map[string]interface{}) error {
+func (c applicationsClient) processExpose(applicationAPIClient ApplicationAPIClient, applicationName string, expose map[string]interface{}) error {
 	// nothing to do
 	if expose == nil {
 		return nil
@@ -763,9 +777,9 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	}
 	defer func() { _ = conn.Close() }()
 
-	applicationAPIClient := apiapplication.NewClient(conn)
-	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
-	modelconfigAPIClient := apimodelconfig.NewClient(conn)
+	applicationAPIClient := c.getApplicationAPIClient(conn)
+	clientAPIClient := c.getClientAPIClient(conn)
+	modelconfigAPIClient := c.getModelConfigAPIClient(conn)
 
 	apps, err := applicationAPIClient.ApplicationsInfo([]names.ApplicationTag{names.NewApplicationTag(input.AppName)})
 	if err != nil {
@@ -776,9 +790,11 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("more than one result for application: %s", input.AppName)
 	}
 	if len(apps) < 1 {
-		return nil, fmt.Errorf("no results for application: %s", input.AppName)
+		return nil, &applicationNotFoundError{input.AppName}
 	}
 	if apps[0].Error != nil {
+		// Return applicationNotFoundError to trigger retry.
+		c.Debugf("Actual error from ApplicationsInfo", map[string]interface{}{"err": apps[0].Error})
 		return nil, &applicationNotFoundError{input.AppName}
 	}
 
@@ -903,11 +919,11 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	// ParseChannel to send back a base without the risk.
 	// Having the risk will cause issues with the provider
 	// saving a different value than the user did.
-	baseChannel, err := base.ParseChannel(appInfo.Base.Channel)
+	baseChannel, err := corebase.ParseChannel(appInfo.Base.Channel)
 	if err != nil {
 		return nil, jujuerrors.Annotate(err, "failed parse channel for base")
 	}
-	seriesString, err := base.GetSeriesFromChannel(appInfo.Base.Name, baseChannel.Track)
+	seriesString, err := corebase.GetSeriesFromChannel(appInfo.Base.Name, baseChannel.Track)
 	if err != nil {
 		return nil, jujuerrors.Annotate(err, "failed to get series from base")
 	}
@@ -969,10 +985,10 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	}
 	defer func() { _ = conn.Close() }()
 
-	applicationAPIClient := apiapplication.NewClient(conn)
+	applicationAPIClient := c.getApplicationAPIClient(conn)
 	charmsAPIClient := apicharms.NewClient(conn)
-	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
-	modelconfigAPIClient := apimodelconfig.NewClient(conn)
+	clientAPIClient := c.getClientAPIClient(conn)
+	modelconfigAPIClient := c.getModelConfigAPIClient(conn)
 
 	resourcesAPIClient, err := apiresources.NewClient(conn)
 	if err != nil {
@@ -1157,7 +1173,7 @@ func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) e
 // to indicate juju what charm to be deployed.
 func (c applicationsClient) computeSetCharmConfig(
 	input *UpdateApplicationInput,
-	applicationAPIClient *apiapplication.Client,
+	applicationAPIClient ApplicationAPIClient,
 	charmsAPIClient *apicharms.Client,
 	resourcesAPIClient *apiresources.Client,
 ) (*apiapplication.SetCharmConfig, error) {
@@ -1248,16 +1264,16 @@ func (c applicationsClient) computeSetCharmConfig(
 	return &toReturn, nil
 }
 
-func resolveCharm(charmsAPIClient *apicharms.Client, curl *charm.URL, origin apicommoncharm.Origin) (*charm.URL, apicommoncharm.Origin, []base.Base, error) {
+func resolveCharm(charmsAPIClient *apicharms.Client, curl *charm.URL, origin apicommoncharm.Origin) (*charm.URL, apicommoncharm.Origin, []corebase.Base, error) {
 	// Charm or bundle has been supplied as a URL so we resolve and
 	// deploy using the store but pass in the origin command line
 	// argument so users can target a specific origin.
 	resolved, err := charmsAPIClient.ResolveCharms([]apicharms.CharmToResolve{{URL: curl, Origin: origin}})
 	if err != nil {
-		return nil, apicommoncharm.Origin{}, []base.Base{}, err
+		return nil, apicommoncharm.Origin{}, []corebase.Base{}, err
 	}
 	if len(resolved) != 1 {
-		return nil, apicommoncharm.Origin{}, []base.Base{}, fmt.Errorf("expected only one resolution, received %d", len(resolved))
+		return nil, apicommoncharm.Origin{}, []corebase.Base{}, fmt.Errorf("expected only one resolution, received %d", len(resolved))
 	}
 	resolvedCharm := resolved[0]
 	return resolvedCharm.URL, resolvedCharm.Origin, resolvedCharm.SupportedBases, resolvedCharm.Error
@@ -1372,7 +1388,7 @@ func computeUpdatedBindings(modelDefaultSpace string, currentBindings map[string
 	return endpointBindingsParams, nil
 }
 
-func getModelDefaultSpace(modelconfigAPIClient *apimodelconfig.Client) (string, error) {
+func getModelDefaultSpace(modelconfigAPIClient ModelConfigAPIClient) (string, error) {
 	attrs, err := modelconfigAPIClient.ModelGet()
 	if err != nil {
 		return "", jujuerrors.Annotate(err, "failed to get model config")
