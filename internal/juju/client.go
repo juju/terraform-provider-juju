@@ -55,21 +55,6 @@ func (j jujuModel) String() string {
 	return fmt.Sprintf("uuid(%s) type(%s)", j.uuid, j.modelType.String())
 }
 
-type SharedClient interface {
-	AddModel(modelName, modelUUID string, modelType model.ModelType)
-	GetConnection(modelName *string) (api.Connection, error)
-	ModelType(modelName string) (model.ModelType, error)
-	ModelUUID(modelName string) (string, error)
-	RemoveModel(modelUUID string)
-
-	JujuLogger() *jujuLoggerShim
-
-	Debugf(msg string, additionalFields ...map[string]interface{})
-	Errorf(err error, msg string)
-	Tracef(msg string, additionalFields ...map[string]interface{})
-	Warnf(msg string, additionalFields ...map[string]interface{})
-}
-
 type sharedClient struct {
 	controllerConfig ControllerConfiguration
 

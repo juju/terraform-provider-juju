@@ -59,6 +59,11 @@ USERNAME="$(shell cat ~/.local/share/juju/accounts.yaml | yq .controllers.${CONT
 PASSWORD="$(shell cat ~/.local/share/juju/accounts.yaml | yq .controllers.${CONTROLLER}.password|tr -d '"')"
 CA_CERT="$(shell ${JUJU} show-controller $(echo ${CONTROLLER}|tr -d '"')| yq .${CONTROLLER}.details.\"ca-cert\"|tr -d '"'|sed 's/\\n/\n/g')"
 
+.PHONY: juju-unit-test
+juju-unit-test:
+## juju-unit-test: Run unit tests for internal/juju
+	go test ./internal/juju/... -v $(TESTARGS)
+
 .PHONY: envtestlxd
 envtestlxd:
 ## envtestlxd: Under development - Include env var and run unit tests against lxd
@@ -68,12 +73,12 @@ envtestlxd:
 
 .PHONY: testlxd
 testlxd:
-## testlxd: Run unit tests against lxd
+## testlxd: Run acceptance tests against lxd
 	TF_ACC=1 TEST_CLOUD=lxd go test ./... -v $(TESTARGS) -timeout 120m
 
 .PHONY: testmicrok8s
 testmicrok8s:
-## testmicrok8s: Run unit tests against microk8s
+## testmicrok8s: Run acceptance tests against microk8s
 	TF_ACC=1 TEST_CLOUD=microk8s go test ./... -v $(TESTARGS) -timeout 120m
 
 PACKAGES=terraform golangci-lint go

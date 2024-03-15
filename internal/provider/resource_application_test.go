@@ -18,6 +18,7 @@ import (
 	apispaces "github.com/juju/juju/api/client/spaces"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v4"
+
 	internaljuju "github.com/juju/terraform-provider-juju/internal/juju"
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
@@ -221,6 +222,16 @@ func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 		charmName = "hello-juju"
 	}
 	resourceName := "juju_application.testapp"
+	checkResourceAttr := []resource.TestCheckFunc{
+		resource.TestCheckResourceAttr(resourceName, "model", modelName),
+		resource.TestCheckResourceAttr(resourceName, "name", charmName),
+		resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
+		resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
+	}
+	if testingCloud == LXDCloudTesting {
+		// Microk8s doesn't have machine, thus no placement
+		checkResourceAttr = append(checkResourceAttr, resource.TestCheckResourceAttr(resourceName, "placement", "0"))
+	}
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
@@ -228,19 +239,13 @@ func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 			{
 				Config: testAccResourceApplicationBasic_Minimal(modelName, charmName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "model", modelName),
-					resource.TestCheckResourceAttr(resourceName, "name", charmName),
-					resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
-					resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
-				),
+					checkResourceAttr...),
 			},
-			// TODO: Fix the provider so this tests succeeds.
-			// Temporarily not testing, - Fixing via JUJU-5472
-			//{
-			//ImportStateVerify: true,
-			//ImportState:       true,
-			//ResourceName:      resourceName,
-			//},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      resourceName,
+			},
 		},
 	})
 }
