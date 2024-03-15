@@ -8,9 +8,11 @@ import (
 	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
+	apiresources "github.com/juju/juju/api/client/resources"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/model"
+	"github.com/juju/juju/core/resources"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v4"
 )
@@ -54,4 +56,9 @@ type ApplicationAPIClient interface {
 
 type ModelConfigAPIClient interface {
 	ModelGet() (map[string]interface{}, error)
+}
+
+type ResourceAPIClient interface {
+	AddPendingResources(args apiresources.AddPendingResourcesArgs) ([]string, error)
+	ListResources(applications []string) ([]resources.ApplicationResources, error)
 }

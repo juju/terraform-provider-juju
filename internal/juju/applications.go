@@ -66,6 +66,7 @@ type applicationsClient struct {
 	getApplicationAPIClient func(base.APICallCloser) ApplicationAPIClient
 	getClientAPIClient      func(api.Connection) ClientAPIClient
 	getModelConfigAPIClient func(api.Connection) ModelConfigAPIClient
+	getResourceAPIClient    func(connection api.Connection) (ResourceAPIClient, error)
 }
 
 func newApplicationClient(sc SharedClient) *applicationsClient {
@@ -79,6 +80,9 @@ func newApplicationClient(sc SharedClient) *applicationsClient {
 		},
 		getModelConfigAPIClient: func(conn api.Connection) ModelConfigAPIClient {
 			return apimodelconfig.NewClient(conn)
+		},
+		getResourceAPIClient: func(conn api.Connection) (ResourceAPIClient, error) {
+			return apiresources.NewClient(conn)
 		},
 	}
 }
@@ -709,7 +713,7 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 		return nil, nil
 	}
 
-	resourcesAPIClient, err := apiresources.NewClient(conn)
+	resourcesAPIClient, err := c.getResourceAPIClient(conn)
 	if err != nil {
 		return nil, err
 	}
@@ -960,7 +964,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		}
 	}
 
-	resourcesAPIClient, err := apiresources.NewClient(conn)
+	resourcesAPIClient, err := c.getResourceAPIClient(conn)
 	if err != nil {
 		return nil, err
 	}
@@ -1020,7 +1024,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	clientAPIClient := c.getClientAPIClient(conn)
 	modelconfigAPIClient := c.getModelConfigAPIClient(conn)
 
-	resourcesAPIClient, err := apiresources.NewClient(conn)
+	resourcesAPIClient, err := c.getResourceAPIClient(conn)
 	if err != nil {
 		return err
 	}
@@ -1205,7 +1209,7 @@ func (c applicationsClient) computeSetCharmConfig(
 	input *UpdateApplicationInput,
 	applicationAPIClient ApplicationAPIClient,
 	charmsAPIClient *apicharms.Client,
-	resourcesAPIClient *apiresources.Client,
+	resourcesAPIClient ResourceAPIClient,
 ) (*apiapplication.SetCharmConfig, error) {
 	oldURL, oldOrigin, err := applicationAPIClient.GetCharmURLOrigin("", input.AppName)
 	if err != nil {
@@ -1314,7 +1318,7 @@ func strPtr(in string) *string {
 }
 
 func (c applicationsClient) updateResources(appName string, resources map[string]int, charmsAPIClient *apicharms.Client,
-	charmID apiapplication.CharmID, resourcesAPIClient *apiresources.Client) (map[string]string, error) {
+	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient) (map[string]string, error) {
 	meta, err := utils.GetMetaResources(charmID.URL, charmsAPIClient)
 	if err != nil {
 		return nil, err
@@ -1347,7 +1351,7 @@ func (c applicationsClient) updateResources(appName string, resources map[string
 }
 
 func addPendingResources(appName string, resourcesToBeAdded map[string]charmresources.Meta, resourceRevisions map[string]int,
-	charmID apiapplication.CharmID, resourcesAPIClient *apiresources.Client) (map[string]string, error) {
+	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient) (map[string]string, error) {
 	pendingResources := []charmresources.Resource{}
 	for _, v := range resourcesToBeAdded {
 		aux := charmresources.Resource{
