@@ -39,6 +39,21 @@ const (
 	ExposeKey           = "expose"
 	SpacesKey           = "spaces"
 	EndpointBindingsKey = "endpoint_bindings"
+	ResourceKey         = "resources"
+
+	resourceKeyMarkdownDescription = `
+Charm resource revisions. Must evaluate to an integer.
+
+	There are a few scenarios that need to be considered:
+	* If the plan does not specify resource revision and resources are added to the plan,
+	resources with specified revisions will be attached to the application (equivalent
+	to juju attach-resource).
+	* If the plan does specify resource revisions and:
+		* If the charm revision or channel is updated, then resources get updated to the 
+		  latest revision.
+	    * If the charm revision or channel are not updated, then no changes will take 
+		  place (juju does not have an "un-attach" command for resources).
+`
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -68,6 +83,7 @@ type applicationResourceModel struct {
 	ModelName        types.String `tfsdk:"model"`
 	Placement        types.String `tfsdk:"placement"`
 	EndpointBindings types.Set    `tfsdk:"endpoint_bindings"`
+	Resources        types.Map    `tfsdk:"resources"`
 	// TODO - remove Principal when we version the schema
 	// and remove deprecated elements. Once we create upgrade
 	// functionality it can be removed from the structure.
@@ -196,6 +212,11 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 						PathExpressions: path.MatchRelative().AtAnySetValue().MergeExpressions(path.MatchRelative().AtName("endpoint")),
 					},
 				},
+			},
+			ResourceKey: schema.MapAttribute{
+				Optional:            true,
+				ElementType:         types.Int64Type,
+				MarkdownDescription: resourceKeyMarkdownDescription,
 			},
 		},
 		Blocks: map[string]schema.Block{
@@ -392,6 +413,12 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
+	resourceRevisions := make(map[string]int)
+	resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &resourceRevisions, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// If the plan has an empty expose block, that has meaning.
 	// It's equivalent to using the expose flag on the juju cli.
 	// Be sure to understand if the expose block exists or not.
@@ -453,6 +480,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 			Expose:           expose,
 			Placement:        plan.Placement.ValueString(),
 			EndpointBindings: endpointBindings,
+			Resources:        resourceRevisions,
 		},
 	)
 	if err != nil {
@@ -604,6 +632,13 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		}
 	}
 
+	resourceType := req.State.Schema.GetAttributes()[ResourceKey].(schema.MapAttribute).ElementType
+	state.Resources, dErr = r.configureResourceData(ctx, resourceType, state.Resources, response.Resources)
+	if dErr.HasError() {
+		resp.Diagnostics.Append(dErr...)
+		return
+	}
+
 	r.trace("Found", applicationResourceModelForLogging(ctx, &state))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -658,6 +693,35 @@ func (r *applicationResource) toEndpointBindingsSet(ctx context.Context, endpoin
 	}
 
 	return types.SetValueFrom(ctx, endpointBindingsType, endpointBindingsSlice)
+}
+
+func (r *applicationResource) configureResourceData(ctx context.Context, resourceType attr.Type, resources types.Map, respResources map[string]int) (types.Map, diag.Diagnostics) {
+	var previousResources map[string]int
+	diagErr := resources.ElementsAs(ctx, &previousResources, false)
+	if diagErr.HasError() {
+		r.trace("configureResourceData exit A")
+		return types.Map{}, diagErr
+	}
+	if previousResources == nil {
+		previousResources = make(map[string]int)
+	}
+	// known previously
+	// update the values from the previous config
+	changes := false
+	for k, v := range respResources {
+		// Add if the value has changed from the previous state
+		if previousValue, found := previousResources[k]; found {
+			if v != previousValue {
+				// remember that this terraform schema type only accepts strings
+				previousResources[k] = v
+				changes = true
+			}
+		}
+	}
+	if changes {
+		return types.MapValueFrom(ctx, resourceType, previousResources)
+	}
+	return resources, nil
 }
 
 // Update is called to update the state of the resource. Config, planned
@@ -756,6 +820,36 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 					updateApplicationInput.Config = make(map[string]string)
 				}
 				updateApplicationInput.Config[k] = v
+			}
+		}
+	}
+
+	// if resources in the plan are equal to resources stored in the state,
+	// we pass on the resources specified in the plan, which tells the provider
+	// NOT to update resources, because we want revisions fixed to those
+	// specified in the plan.
+	if plan.Resources.Equal(state.Resources) {
+		planResourceMap := make(map[string]int)
+		resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &planResourceMap, false)...)
+		updateApplicationInput.Resources = planResourceMap
+	} else {
+		planResourceMap := make(map[string]int)
+		stateResourceMap := make(map[string]int)
+		resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &planResourceMap, false)...)
+		resp.Diagnostics.Append(state.Resources.ElementsAs(ctx, &stateResourceMap, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		// what happens when the plan suddenly does not specify resource
+		// revisions, but state does..
+		for k, v := range planResourceMap {
+			if stateResourceMap[k] != v {
+				if updateApplicationInput.Resources == nil {
+					// initialize just in case
+					updateApplicationInput.Resources = make(map[string]int)
+				}
+				updateApplicationInput.Resources[k] = v
 			}
 		}
 	}

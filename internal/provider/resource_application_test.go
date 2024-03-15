@@ -163,7 +163,7 @@ func TestAcc_ResourceApplication_UpdatesRevisionConfig(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, appName, 88, ""),
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, appName, 88, "", "", -1),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
 					resource.TestCheckResourceAttr("juju_application."+appName, "charm.#", "1"),
@@ -172,7 +172,7 @@ func TestAcc_ResourceApplication_UpdatesRevisionConfig(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, appName, 96, configParamName),
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, appName, 96, configParamName, "", -1),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application."+appName, "charm.0.revision", "96"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "config."+configParamName, configParamName+"-value"),
@@ -207,6 +207,128 @@ func TestAcc_CharmUpdates(t *testing.T) {
 				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/stable"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
+				),
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceRevisionUpdatesLXD(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-resource-revision-updates-lxd")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "foo-file", 4),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "4"),
+				),
+			},
+			{
+				// change resource revision to 3
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "foo-file", 3),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "3"),
+				),
+			},
+			{
+				// change back to 4
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "foo-file", 4),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "4"),
+				),
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceRevisionAddedToPlanLXD(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-resource-revision-updates-lxd")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 20, "", "", -1),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr("juju_application.juju-qa-test", "resources"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "foo-file", 4),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "4"),
+				),
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceRevisionRemovedFromPlanLXD(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-resource-revision-updates-lxd")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// we specify the resource revision 4
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 20, "", "foo-file", 4),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "4"),
+				),
+			},
+			{
+				// then remove the resource revision and update the charm revision
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "", -1),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr("juju_application.juju-qa-test", "resources"),
+				),
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceRevisionUpdatesMicrok8s(t *testing.T) {
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with Microk8s")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-resource-revision-updates-microk8s")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "postgresql-k8s", 20, "", "postgresql-image", 152),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.postgresql-k8s", "resources.postgresql-image", "152"),
+				),
+			},
+			{
+				// change resource revision to 151
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "postgresql-k8s", 20, "", "postgresql-image", 151),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.postgresql-k8s", "resources.postgresql-image", "151"),
+				),
+			},
+			{
+				// change back to 152
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "postgresql-k8s", 20, "", "postgresql-image", 152),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.postgresql-k8s", "resources.postgresql-image", "152"),
 				),
 			},
 		},
@@ -440,7 +562,7 @@ func testAccResourceApplicationBasic(modelName, appName string) string {
 	}
 }
 
-func testAccResourceApplicationWithRevisionAndConfig(modelName, appName string, revision int, configParamName string) string {
+func testAccResourceApplicationWithRevisionAndConfig(modelName, appName string, revision int, configParamName string, resourceName string, resourceRevision int) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceApplicationWithRevisionAndConfig",
 		`
@@ -464,13 +586,21 @@ resource "juju_application" "{{.AppName}}" {
   }
   {{ end }}
 
+  {{ if ne .ResourceParamName "" }}
+  resources = {
+    {{.ResourceParamName}} = {{.ResourceParamRevision}}
+  }
+  {{ end }}
+
   units = 1
 }
 `, internaltesting.TemplateData{
-			"ModelName":       modelName,
-			"AppName":         appName,
-			"Revision":        revision,
-			"ConfigParamName": configParamName,
+			"ModelName":             modelName,
+			"AppName":               appName,
+			"Revision":              revision,
+			"ConfigParamName":       configParamName,
+			"ResourceParamName":     resourceName,
+			"ResourceParamRevision": resourceRevision,
 		})
 }
 

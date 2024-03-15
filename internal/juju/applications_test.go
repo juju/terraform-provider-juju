@@ -12,6 +12,7 @@ import (
 	"github.com/juju/juju/api/base"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/model"
+	"github.com/juju/juju/core/resources"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v4"
@@ -31,7 +32,7 @@ type ApplicationSuite struct {
 
 	mockApplicationClient *MockApplicationAPIClient
 	mockClient            *MockClientAPIClient
-
+	mockResourceAPIClient *MockResourceAPIClient
 	mockConnection        *MockConnection
 	mockModelConfigClient *MockModelConfigAPIClient
 	mockSharedClient      *MockSharedClient
@@ -48,6 +49,13 @@ func (s *ApplicationSuite) setupMocks(t *testing.T) *gomock.Controller {
 
 	s.mockConnection = NewMockConnection(ctlr)
 	s.mockConnection.EXPECT().Close().Return(nil).AnyTimes()
+
+	s.mockResourceAPIClient = NewMockResourceAPIClient(ctlr)
+	s.mockResourceAPIClient.EXPECT().ListResources(gomock.Any()).DoAndReturn(
+		func(applications []string) ([]resources.ApplicationResources, error) {
+			results := make([]resources.ApplicationResources, len(applications))
+			return results, nil
+		}).AnyTimes()
 
 	s.mockModelConfigClient = NewMockModelConfigAPIClient(ctlr)
 	minConfig := map[string]interface{}{
@@ -89,6 +97,9 @@ func (s *ApplicationSuite) getApplicationsClient() applicationsClient {
 		},
 		getModelConfigAPIClient: func(_ api.Connection) ModelConfigAPIClient {
 			return s.mockModelConfigClient
+		},
+		getResourceAPIClient: func(_ api.Connection) (ResourceAPIClient, error) {
+			return s.mockResourceAPIClient, nil
 		},
 	}
 }
