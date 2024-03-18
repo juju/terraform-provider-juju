@@ -1,3 +1,26 @@
+## 0.11.0 (March 18, 2024)
+
+NOTES:
+* **This release requires juju controller version 2.9.47 or later juju.**
+* This release uses juju client api code from the juju 3.3.0 release. 
+
+ENHANCEMENTS:
+
+* Add resource revisions for juju_application. This is similar to 
+`juju deploy <charm> --resource <name>:#` and `juju attach-resource <application> <name>:#`.
+* Add kvm and/or lxd machines via the juju_machine resource. This is similar to 
+`juju add-machine lxd` and `juju add-machine kvm:0` commands.
+* Use the DeployFromRevision API endpoint from juju for application deployments with juju 3.3+.
+* Add space support for the juju_application resources. You can now specify endpoint bindings for
+applications. This is similar to `juju deploy --bind` and `juju bind` commands.
+
+BUG FIXES:
+* Fix upgrade charm revision for application resources by @hmlanigan in https://github.com/juju/terraform-provider-juju/pull/414
+* Fixes Config/Revision update ordering. by @anvial in https://github.com/juju/terraform-provider-juju/pull/407
+* Adds error check to ReadModel function by @anvial in https://github.com/juju/terraform-provider-juju/pull/416
+* Add info about `plangenerator` to README. by @anvial in https://github.com/juju/terraform-provider-juju/pull/429
+* Update retry to improve machine placement on read and introduce internal/juju unit tests with mocking by @hmlanigan in https://github.com/juju/terraform-provider-juju/pull/433
+
 ## 0.10.1 (January 12, 2024)
 
 BUG FIXES:
