@@ -5,19 +5,12 @@ name: Unit Tests
 # This GitHub action runs your tests for each pull request.
 on:
   pull_request:
-    paths-ignore:
-      - "README.md"
-      - "project-docs/**"
-      - ".github/ISSUE_TEMPLATE/**"
-      - ".github/PULL_REQUEST_TEMPLATE.md"
+    types: [opened, synchronize, reopened, ready_for_review]
+  #    paths-ignore:
+  #     DON'T SET - these are "required" so they need to run on every PR
   push:
     branches:
       - "main"
-    paths-ignore:
-      - "README.md"
-      - "project-docs/**"
-      - ".github/ISSUE_TEMPLATE/**"
-      - ".github/PULL_REQUEST_TEMPLATE.md"
 
 # Testing only needs permissions to read the repository contents.
 permissions:
