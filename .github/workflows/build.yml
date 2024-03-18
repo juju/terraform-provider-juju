@@ -6,18 +6,12 @@ name: Build
 # This GitHub action runs your tests for each pull request.
 on:
   pull_request:
-    paths-ignore:
-      - "README.md"
-      - "Makefile"
-      - "project-docs/**"
+    types: [opened, synchronize, reopened, ready_for_review]
+#    paths-ignore:
+#     DON'T SET - these are "required" so they need to run on every PR
   push:
     branches:
       - "main"
-    paths-ignore:
-      - "README.md"
-      - "Makefile"
-      - "project-docs/**"
-
 
 # Testing only needs permissions to read the repository contents.
 permissions:
