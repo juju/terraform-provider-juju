@@ -12,7 +12,7 @@ import (
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/names/v4"
+	"github.com/juju/names/v5"
 )
 
 var ModelNotFoundError = &modelNotFoundError{}
