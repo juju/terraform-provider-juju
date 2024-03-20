@@ -54,10 +54,10 @@ endif
 
 JUJU=juju
 CONTROLLER=$(shell ${JUJU} whoami | yq .Controller)
-CONTROLLER_ADDRESSES="$(shell ${JUJU} show-controller | yq .${CONTROLLER}.details.\"api-endpoints\" | tr -d "[]' "|tr -d '"'|tr -d '\n')"
-USERNAME="$(shell cat ~/.local/share/juju/accounts.yaml | yq .controllers.${CONTROLLER}.user|tr -d '"')"
-PASSWORD="$(shell cat ~/.local/share/juju/accounts.yaml | yq .controllers.${CONTROLLER}.password|tr -d '"')"
-CA_CERT="$(shell ${JUJU} show-controller $(echo ${CONTROLLER}|tr -d '"')| yq .${CONTROLLER}.details.\"ca-cert\"|tr -d '"'|sed 's/\\n/\n/g')"
+CONTROLLER_ADDRESSES="$(shell ${JUJU} show-controller | yq '.${CONTROLLER}.details."api-endpoints"' | tr -d "[]' "|tr -d '"'|tr -d '\n')"
+USERNAME="$(shell cat ~/.local/share/juju/accounts.yaml | yq '.controllers.${CONTROLLER}.user'|tr -d '"')"
+PASSWORD="$(shell cat ~/.local/share/juju/accounts.yaml | yq '.controllers.${CONTROLLER}.password'|tr -d '"')"
+CA_CERT="$(shell ${JUJU} show-controller $(echo ${CONTROLLER}|tr -d '"')| yq '.${CONTROLLER}.details."ca-cert"'|tr -d '"'|sed 's/\\n/\n/g')"
 
 .PHONY: juju-unit-test
 juju-unit-test:
