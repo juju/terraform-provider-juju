@@ -24,15 +24,15 @@ type userSecretResource struct {
 }
 
 type userSecretResourceModel struct {
-	// ID of the user to whom the secret is added, updated or from whom it is removed. This attribute is required.
-	UserId types.String `tsfsdk:"user_id"`
-	// ID of the secret to be updated or removed. This attribute is required for 'update' and 'remove' actions.
-	SecretID types.String `tsfsdk:"secret_id"`
-	// Action to be performed - either 'add', 'update' or 'remove'. This attribute is required.
-	Action types.String `tsfsdk:"action"`
+	// ID of the model to which the user secret belongs. This attribute is required for all actions.
+	ModelId types.String `tfsdk:"model_id"`
+	// URI of the secret to be updated or removed. This attribute is required for 'update' and 'remove' actions.
+	SecretURI types.String `tsfsdk:"secret_uri"`
 	// Value of the secret to be added or updated. This attribute is required for 'add' and 'update' actions.
 	// Template: [<key>[#base64]]=<value>[ ...]
 	Value types.String `tsfsdk:"value"`
+	// Description of the user secret.
+	Description types.String `tsfsdk:"description"`
 	// ID is required by the testing framework
 	ID types.String `tsfsdk:"id"`
 }
@@ -45,19 +45,25 @@ func (u *userSecretResource) Schema(_ context.Context, req resource.SchemaReques
 	resp.Schema = schema.Schema{
 		Description: "A resource that represents a Juju user secret.",
 		Attributes: map[string]schema.Attribute{
-			"user_id": schema.StringAttribute{
-				Description: "ID of the user to whom the secret is added, updated or from whom it is removed.",
+			"model_id": schema.StringAttribute{
+				Description: "The ID of the model to operate in.",
 				Required:    true,
 			},
-			"secret_id": schema.StringAttribute{
-				Description: "ID of the secret to be updated or removed.",
-			},
-			"action": schema.StringAttribute{
-				Description: "Action to be performed - either 'add', 'update' or 'remove'.",
-				Required:    true,
+			"secret_uri": schema.StringAttribute{
+				Description: "The URI of the secret to be updated or removed.",
+				Computed:    true,
 			},
 			"value": schema.StringAttribute{
-				Description: "Value of the secret to be added or updated.",
+				Description: "The value of the secret to be added or updated.",
+				Sensitive:   true,
+				Required:    true,
+			},
+			"description": schema.StringAttribute{
+				Description: "The description of the user secret.",
+				Optional:    true,
+			},
+			"id": schema.StringAttribute{
+				Description: "The ID of the user secret.",
 			},
 		},
 	}
@@ -100,25 +106,25 @@ func (u *userSecretResource) Add(ctx context.Context, req resource.CreateRequest
 	var data userSecretResourceModel
 
 	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data))
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// TODO - implement the UserSecret in internal.
-	_, err := u.client.UserSecrets.AddUserSecret(&juju.AddUserSecretInput{
-		UserId: data.UserId.ValueString(),
-		Value:  data.Value.ValueString(),
+	_, err := u.client.UserSecret.AddUserSecret(&juju.AddUserSecretInput{
+		ModelId: data.ModelId.ValueString(),
+		Value:   data.Value.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to add user secret, got error: %s", err))
 		return
 	}
-	u.trace(fmt.Sprintf("add user secret resource %q", data.UserId))
+	u.trace(fmt.Sprintf("add user secret resource %q", data.ID))
 
 	// Save data into Terraform state
 	data.ID = types.StringValue(newID())
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data))
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (u *userSecretResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
