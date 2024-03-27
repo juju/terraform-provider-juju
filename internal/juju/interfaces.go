@@ -9,10 +9,12 @@ import (
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
 	apiresources "github.com/juju/juju/api/client/resources"
+	apisecrets "github.com/juju/juju/api/client/secrets"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/resources"
+	"github.com/juju/juju/core/secrets"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v4"
 )
@@ -61,4 +63,14 @@ type ModelConfigAPIClient interface {
 type ResourceAPIClient interface {
 	AddPendingResources(args apiresources.AddPendingResourcesArgs) ([]string, error)
 	ListResources(applications []string) ([]resources.ApplicationResources, error)
+}
+
+type SecretAPIClient interface {
+	CreateSecret(name, description string, data map[string]string) (string, error)
+	ListSecrets(reveal bool, filter secrets.Filter) ([]apisecrets.SecretDetails, error)
+	UpdateSecret(
+		uri *secrets.URI, name string, autoPrune *bool,
+		newName string, description string, data map[string]string,
+	) error
+	RemoveSecret(uri *secrets.URI, name string, revision *int) error
 }

@@ -44,6 +44,7 @@ type Client struct {
 	Offers       offersClient
 	SSHKeys      sshKeysClient
 	Users        usersClient
+	Secrets      secretsClient
 }
 
 type jujuModel struct {
@@ -87,6 +88,7 @@ func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, er
 		Offers:       *newOffersClient(sc),
 		SSHKeys:      *newSSHKeysClient(sc),
 		Users:        *newUsersClient(sc),
+		Secrets:      *newSecretsClient(sc),
 	}, nil
 }
 
