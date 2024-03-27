@@ -108,6 +108,7 @@ func populateControllerConfig() {
 	}
 
 	localProviderConfig = map[string]string{}
+	localProviderConfig["JUJU_AGENT_VERSION"] = controllerConfig.ProviderDetails.AgentVersion
 	localProviderConfig["JUJU_CONTROLLER_ADDRESSES"] = strings.Join(controllerConfig.ProviderDetails.ApiEndpoints, ",")
 	localProviderConfig["JUJU_CA_CERT"] = controllerConfig.ProviderDetails.CACert
 	localProviderConfig["JUJU_USERNAME"] = controllerConfig.Account.User

@@ -99,6 +99,7 @@ For example, here they are set using the currently active controller:
 
 ```shell
 export CONTROLLER=$(juju whoami | yq .Controller)
+export JUJU_AGENT_VERSION="$(juju show-controller | yq .[$CONTROLLER].details.\"agent-version\"|tr -d '"')"
 export JUJU_CONTROLLER_ADDRESSES="$(juju show-controller | yq '.[$CONTROLLER]'.details.\"api-endpoints\" | tr -d "[]' "|tr -d '"'|tr -d '\n')"
 export JUJU_USERNAME="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.user|tr -d '"')"
 export JUJU_PASSWORD="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password|tr -d '"')"

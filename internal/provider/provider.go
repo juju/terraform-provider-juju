@@ -233,6 +233,7 @@ func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
 		func() resource.Resource { return NewOfferResource() },
 		func() resource.Resource { return NewSSHKeyResource() },
 		func() resource.Resource { return NewUserResource() },
+		func() resource.Resource { return NewSecretResource() },
 	}
 }
 
