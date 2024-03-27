@@ -26,8 +26,8 @@ type userSecretResource struct {
 type userSecretResourceModel struct {
 	// Model to which the user secret belongs. This attribute is required for all actions.
 	Model types.String `tfsdk:"model"`
-	// URI of the secret to be updated or removed. This attribute is required for 'update' and 'remove' actions.
-	SecretURI types.String `tsfsdk:"secret_uri"`
+	// Name of the secret to be updated or removed. This attribute is required for 'update' and 'remove' actions.
+	Name types.String `tsfsdk:"name"`
 	// Value of the secret to be added or updated. This attribute is required for 'add' and 'update' actions.
 	// Template: [<key>[#base64]]=<value>[ ...]
 	Value types.String `tsfsdk:"value"`
@@ -46,11 +46,11 @@ func (u *userSecretResource) Schema(_ context.Context, req resource.SchemaReques
 		Description: "A resource that represents a Juju user secret.",
 		Attributes: map[string]schema.Attribute{
 			"model": schema.StringAttribute{
-				Description: "Model o which the user secret belongs.",
+				Description: "The model in which the user secret belongs.",
 				Required:    true,
 			},
-			"secret_uri": schema.StringAttribute{
-				Description: "The URI of the secret to be updated or removed.",
+			"name": schema.StringAttribute{
+				Description: "The name of the secret to be added, updated or removed.",
 				Computed:    true,
 			},
 			"value": schema.StringAttribute{
