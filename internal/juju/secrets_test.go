@@ -301,7 +301,7 @@ func (s *SecretSuite) TestDeleteSecret() {
 	s.Assert().NoError(err)
 }
 
-func (s *SecretSuite) TestUpdateSecretAccess() {
+func (s *SecretSuite) TestUpdateAccessSecret() {
 	ctlr := s.setupMocks(s.T())
 	defer ctlr.Finish()
 
@@ -315,14 +315,14 @@ func (s *SecretSuite) TestUpdateSecretAccess() {
 	s.mockSecretClient.EXPECT().RevokeSecret(secretURI, "", applications).Return([]error{nil}, nil).AnyTimes()
 
 	client := s.getSecretsClient()
-	err = client.UpdateSecretAccess(&GrantRevokeSecretAccessInput{
+	err = client.UpdateAccessSecret(&GrantRevokeAccessSecretInput{
 		SecretId:     secretId,
 		ModelName:    s.testModelName,
 		Applications: applications,
 	}, GrantAccess)
 	s.Require().NoError(err)
 
-	err = client.UpdateSecretAccess(&GrantRevokeSecretAccessInput{
+	err = client.UpdateAccessSecret(&GrantRevokeAccessSecretInput{
 		SecretId:     secretId,
 		ModelName:    s.testModelName,
 		Applications: applications,

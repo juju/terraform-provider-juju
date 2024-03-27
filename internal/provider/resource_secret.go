@@ -79,6 +79,9 @@ func (s *secretResource) Schema(_ context.Context, req resource.SchemaRequest, r
 			"secret_id": schema.StringAttribute{
 				Description: "The ID of the secret.",
 				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"info": schema.StringAttribute{
 				Description: "The description of the secret.",

@@ -24,6 +24,7 @@ const (
 	PrefixCharm         = "charm-"
 	PrefixUser          = "user-"
 	PrefixMachine       = "machine-"
+	PrefixApplication   = "application-"
 	UnspecifiedRevision = -1
 	connectionTimeout   = 30 * time.Second
 )

@@ -35,10 +35,10 @@ type secretsClient struct {
 	getSecretAPIClient func(connection api.Connection) SecretAPIClient
 }
 
-type SecretAccessAction int
+type AccessSecretAction int
 
 const (
-	GrantAccess SecretAccessAction = iota
+	GrantAccess AccessSecretAction = iota
 	RevokeAccess
 )
 
@@ -61,10 +61,11 @@ type ReadSecretInput struct {
 }
 
 type ReadSecretOutput struct {
-	SecretId string
-	Name     string
-	Value    map[string]string
-	Info     string
+	SecretId     string
+	Name         string
+	Value        map[string]string
+	Applications []string
+	Info         string
 }
 
 type UpdateSecretInput struct {
@@ -81,7 +82,7 @@ type DeleteSecretInput struct {
 	ModelName string
 }
 
-type GrantRevokeSecretAccessInput struct {
+type GrantRevokeAccessSecretInput struct {
 	SecretId     string
 	ModelName    string
 	Applications []string
@@ -176,11 +177,15 @@ func (c *secretsClient) ReadSecret(input *ReadSecretInput) (ReadSecretOutput, er
 		return ReadSecretOutput{}, err
 	}
 
+	// Get applications from Access info
+	applications := getApplicationsFromAccessInfo(results[0].Access)
+
 	return ReadSecretOutput{
-		SecretId: results[0].Metadata.URI.String(),
-		Name:     results[0].Metadata.Label,
-		Value:    decodedValue,
-		Info:     results[0].Metadata.Description,
+		SecretId:     results[0].Metadata.URI.String(),
+		Name:         results[0].Metadata.Label,
+		Value:        decodedValue,
+		Applications: applications,
+		Info:         results[0].Metadata.Description,
 	}, nil
 }
 
@@ -266,8 +271,8 @@ func (c *secretsClient) DeleteSecret(input *DeleteSecretInput) error {
 	return nil
 }
 
-// UpdateSecretAccess updates access to a secret.
-func (c *secretsClient) UpdateSecretAccess(input *GrantRevokeSecretAccessInput, op SecretAccessAction) error {
+// UpdateAccessSecret updates access to a secret.
+func (c *secretsClient) UpdateAccessSecret(input *GrantRevokeAccessSecretInput, op AccessSecretAction) error {
 	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return err
@@ -300,4 +305,14 @@ func (c *secretsClient) UpdateSecretAccess(input *GrantRevokeSecretAccessInput, 
 	}
 
 	return nil
+}
+
+// getApplicationsFromAccessInfo returns a list of applications from the access info.
+func getApplicationsFromAccessInfo(accessInfo []coresecrets.AccessInfo) []string {
+	applications := make([]string, 0, len(accessInfo))
+	for _, info := range accessInfo {
+		// Trim the prefix "application-" from the application name (info.Target)
+		applications = append(applications, strings.TrimPrefix(info.Target, PrefixApplication))
+	}
+	return applications
 }
