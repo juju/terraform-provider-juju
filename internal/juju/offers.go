@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	jujuerrors "github.com/juju/errors"
 	"github.com/juju/juju/api/client/application"
 	apiapplication "github.com/juju/juju/api/client/application"
 	"github.com/juju/juju/api/client/applicationoffers"
@@ -192,6 +193,10 @@ func (c offersClient) DestroyOffer(input *DestroyOfferInput) error {
 
 	client := applicationoffers.NewClient(conn)
 	offer, err := client.ApplicationOffer(input.OfferURL)
+	if jujuerrors.Is(err, jujuerrors.NotFound) {
+		// Offer is already destroyed
+		return nil
+	}
 	if err != nil {
 		return err
 	}
