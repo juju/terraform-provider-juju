@@ -44,7 +44,7 @@ jobs:
         cloud:
           - "microk8s"
         terraform:
-          - "1.7.*"
+          - "1.8.*"
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
