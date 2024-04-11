@@ -45,12 +45,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        terraform: ["1.5.*", "1.6.*", "1.7.*"]
+        terraform: ["1.6.*", "1.7.*", "1.8.*"]
         action-operator:
-          - { cloud: "lxd", cloud-channel: "5.19", juju: "2.9/edge" }
-          - { cloud: "lxd", cloud-channel: "5.19", juju: "3" }
-          - { cloud: "microk8s", cloud-channel: "1.28", juju: "2.9" }
-          - { cloud: "microk8s", cloud-channel: "1.28-strict", juju: "3" }
+          - { lxd-channel: "5.19/stable", cloud: "lxd", cloud-channel: "5.19", juju: "2.9" }
+          - { lxd-channel: "5.19/stable", cloud: "lxd", cloud-channel: "5.19", juju: "3" }
+          - { lxd-channel: "5.19/stable", cloud: "microk8s", cloud-channel: "1.28", juju: "2.9" }
+          - { lxd-channel: "5.19/stable", cloud: "microk8s", cloud-channel: "1.28-strict", juju: "3" }
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +68,7 @@ jobs:
           provider: ${{ matrix.action-operator.cloud }}
           channel: ${{ matrix.action-operator.cloud-channel }}
           juju-channel: ${{ matrix.action-operator.juju }}
+          lxd-channel: ${{ matrix.action-operator.lxd-channel }}
       - name: Create additional networks when testing with LXD
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
         run: |
