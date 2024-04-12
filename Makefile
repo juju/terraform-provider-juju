@@ -67,9 +67,7 @@ juju-unit-test:
 .PHONY: envtestlxd
 envtestlxd:
 ## envtestlxd: Under development - Include env var and run unit tests against lxd
-	JUJU_CONTROLLER_ADDRESSES=${CONTROLLER_ADDRESSES} \
-	JUJU_USERNAME=${USERNAME} JUJU_PASSWORD=${PASSWORD} \
-	JUJU_CA_CERT=${CA_CERT} TF_ACC=1 TEST_CLOUD=lxd go test ./... -v $(TESTARGS) -timeout 120m
+	JUJU_CONTROLLER_ADDRESSES=${CONTROLLER_ADDRESSES} JUJU_USERNAME=${USERNAME} JUJU_PASSWORD=${PASSWORD} JUJU_CA_CERT=${CA_CERT} TF_ACC=1 TEST_CLOUD=lxd go test ./... -v $(TESTARGS) -timeout 120m
 
 .PHONY: testlxd
 testlxd:
