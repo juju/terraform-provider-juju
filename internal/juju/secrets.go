@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 
 	jujuerrors "github.com/juju/errors"
 	"github.com/juju/juju/api"
@@ -33,6 +34,13 @@ type secretsClient struct {
 
 	getSecretAPIClient func(connection api.Connection) SecretAPIClient
 }
+
+type SecretAccessAction int
+
+const (
+	GrantAccess SecretAccessAction = iota
+	RevokeAccess
+)
 
 type CreateSecretInput struct {
 	ModelName string
@@ -71,6 +79,25 @@ type UpdateSecretInput struct {
 type DeleteSecretInput struct {
 	SecretId  string
 	ModelName string
+}
+
+type GrantRevokeSecretAccessInput struct {
+	SecretId     string
+	ModelName    string
+	Applications []string
+}
+
+type MultiError struct {
+	Errors []error
+}
+
+// Error returns a string representation of the MultiError.
+func (m *MultiError) Error() string {
+	errStrs := make([]string, 0, len(m.Errors))
+	for _, err := range m.Errors {
+		errStrs = append(errStrs, err.Error())
+	}
+	return strings.Join(errStrs, ", ")
 }
 
 func newSecretsClient(sc SharedClient) *secretsClient {
@@ -234,6 +261,42 @@ func (c *secretsClient) DeleteSecret(input *DeleteSecretInput) error {
 	err = secretAPIClient.RemoveSecret(secretURI, "", nil)
 	if !errors.Is(err, jujuerrors.NotFound) {
 		return typedError(err)
+	}
+
+	return nil
+}
+
+// UpdateSecretAccess updates access to a secret.
+func (c *secretsClient) UpdateSecretAccess(input *GrantRevokeSecretAccessInput, op SecretAccessAction) error {
+	conn, err := c.GetConnection(&input.ModelName)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	secretAPIClient := c.getSecretAPIClient(conn)
+
+	secretURI, err := coresecrets.ParseURI(input.SecretId)
+	if err != nil {
+		return err
+	}
+
+	var results []error
+	switch op {
+	case GrantAccess:
+		results, err = secretAPIClient.GrantSecret(secretURI, "", input.Applications)
+	case RevokeAccess:
+		results, err = secretAPIClient.RevokeSecret(secretURI, "", input.Applications)
+	default:
+		return errors.New("invalid op")
+	}
+
+	if err != nil {
+		return typedError(err)
+	}
+	err = ProcessErrorResults(results)
+	if err != nil {
+		return err
 	}
 
 	return nil
