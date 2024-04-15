@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -147,10 +148,18 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Computed:    true,
 						},
 						"offer_url": schema.StringAttribute{
-							Description: "The URL of a remote application.",
+							Description: "The URL of a remote application. The `name` and `endpoint` fields cannot be used alongside `offer_url`.",
 							Optional:    true,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
+							},
+							Validators: []validator.String{
+								stringvalidator.ConflictsWith(
+									path.Expressions{
+										path.MatchRoot("name"),
+										path.MatchRoot("endpoint"),
+									}...,
+								),
 							},
 						},
 					},
