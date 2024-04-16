@@ -19,6 +19,7 @@ const (
 	LogDataSourceMachine = "datasource-machine"
 	LogDataSourceModel   = "datasource-model"
 	LogDataSourceOffer   = "datasource-offer"
+	LogDataSourceSecret  = "datasource-secret"
 
 	LogResourceApplication = "resource-application"
 	LogResourceAccessModel = "resource-assess-model"

@@ -68,6 +68,7 @@ jobs:
         run: |
           echo "Determine Juju details"
           CONTROLLER=$(juju whoami --format yaml | yq .controller)
+          JUJU_AGENT_VERSION=$(juju show-controller | yq .$CONTROLLER.details.agent-version |tr -d '"')
           JUJU_USERNAME=$(juju show-controller | yq .$CONTROLLER.account.user)
           JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password)
           JUJU_CA_CERT=$(juju show-controller | yq .$CONTROLLER.details.ca-cert | sed ':a;N;$!ba;s/\n/\\n/g')
