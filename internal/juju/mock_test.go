@@ -12,7 +12,7 @@ package juju
 import (
 	reflect "reflect"
 
-	charm "github.com/juju/charm/v11"
+	charm "github.com/juju/charm/v12"
 	api "github.com/juju/juju/api"
 	application "github.com/juju/juju/api/client/application"
 	client "github.com/juju/juju/api/client/client"
@@ -24,7 +24,7 @@ import (
 	resources0 "github.com/juju/juju/core/resources"
 	secrets0 "github.com/juju/juju/core/secrets"
 	params "github.com/juju/juju/rpc/params"
-	names "github.com/juju/names/v4"
+	names "github.com/juju/names/v5"
 	gomock "go.uber.org/mock/gomock"
 )
 

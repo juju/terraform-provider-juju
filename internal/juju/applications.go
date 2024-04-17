@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juju/charm/v11"
-	charmresources "github.com/juju/charm/v11/resource"
+	"github.com/juju/charm/v12"
+	charmresources "github.com/juju/charm/v12/resource"
 	"github.com/juju/clock"
 	"github.com/juju/collections/set"
 	jujuerrors "github.com/juju/errors"
@@ -42,7 +42,7 @@ import (
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
 	jujuversion "github.com/juju/juju/version"
-	"github.com/juju/names/v4"
+	"github.com/juju/names/v5"
 	"github.com/juju/retry"
 	"github.com/juju/version/v2"
 	goyaml "gopkg.in/yaml.v2"
@@ -418,7 +418,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 		urlForOrigin = urlForOrigin.WithSeries(userSuppliedSeries)
 	}
 
-	origin, err := utils.DeduceOrigin(urlForOrigin, channel, platform)
+	origin, err := utils.MakeOrigin(charm.Schema(urlForOrigin.Schema), transformedInput.charmRevision, channel, platform)
 	if err != nil {
 		return err
 	}
@@ -487,7 +487,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 			}
 
 			charmID := apiapplication.CharmID{
-				URL:    resolvedURL,
+				URL:    resolvedURL.String(),
 				Origin: resultOrigin,
 			}
 
@@ -703,7 +703,7 @@ func splitCommaDelimitedList(list string) []string {
 // processResources is a helper function to process the charm
 // metadata and request the download of any additional resource.
 func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string, resources map[string]int) (map[string]string, error) {
-	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL.String())
+	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL)
 	if err != nil {
 		return nil, typedError(err)
 	}
@@ -1280,7 +1280,7 @@ func (c applicationsClient) computeSetCharmConfig(
 	}
 
 	apiCharmID := apiapplication.CharmID{
-		URL:    resolvedURL,
+		URL:    resolvedURL.String(),
 		Origin: resultOrigin,
 	}
 

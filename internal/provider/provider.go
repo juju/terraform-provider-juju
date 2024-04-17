@@ -12,26 +12,33 @@ import (
 	"os"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
 const (
-	JujuControllerEnvKey = "JUJU_CONTROLLER_ADDRESSES"
-	JujuUsernameEnvKey   = "JUJU_USERNAME"
-	JujuPasswordEnvKey   = "JUJU_PASSWORD"
-	JujuCACertEnvKey     = "JUJU_CA_CERT"
+	JujuControllerEnvKey   = "JUJU_CONTROLLER_ADDRESSES"
+	JujuUsernameEnvKey     = "JUJU_USERNAME"
+	JujuPasswordEnvKey     = "JUJU_PASSWORD"
+	JujuCACertEnvKey       = "JUJU_CA_CERT"
+	JujuClientIDEnvKey     = "JUJU_CLIENT_ID"
+	JujuClientSecretEnvKey = "JUJU_CLIENT_SECRET"
 
-	JujuController = "controller_addresses"
-	JujuUsername   = "username"
-	JujuPassword   = "password"
-	JujuCACert     = "ca_certificate"
+	JujuController   = "controller_addresses"
+	JujuUsername     = "username"
+	JujuPassword     = "password"
+	JujuClientID     = "client_id"
+	JujuClientSecret = "client_secret"
+	JujuCACert       = "ca_certificate"
 )
 
 // populateJujuProviderModelLive gets the controller config,
@@ -43,6 +50,8 @@ func populateJujuProviderModelLive() (jujuProviderModel, error) {
 	data.ControllerAddrs = types.StringValue(getField(JujuControllerEnvKey, controllerConfig))
 	data.UserName = types.StringValue(getField(JujuUsernameEnvKey, controllerConfig))
 	data.Password = types.StringValue(getField(JujuPasswordEnvKey, controllerConfig))
+	data.ClientID = types.StringValue(getField(JujuClientIDEnvKey, controllerConfig))
+	data.ClientSecret = types.StringValue(getField(JujuClientSecretEnvKey, controllerConfig))
 	data.CACert = types.StringValue(getField(JujuCACertEnvKey, controllerConfig))
 	// Only error if a valid controller config could not be fetched
 	// from the environment variables.
@@ -80,13 +89,17 @@ type jujuProviderModel struct {
 	UserName        types.String `tfsdk:"username"`
 	Password        types.String `tfsdk:"password"`
 	CACert          types.String `tfsdk:"ca_certificate"`
+	ClientID        types.String `tfsdk:"client_id"`
+	ClientSecret    types.String `tfsdk:"client_secret"`
 }
 
 func (j jujuProviderModel) valid() bool {
+	validUserPass := j.UserName.ValueString() != "" && j.Password.ValueString() != ""
+	validClientCredentials := j.ClientID.ValueString() != "" && j.ClientSecret.ValueString() != ""
+
 	return j.ControllerAddrs.ValueString() != "" &&
-		j.UserName.ValueString() != "" &&
-		j.Password.ValueString() != "" &&
-		j.CACert.ValueString() != ""
+		j.CACert.ValueString() != "" &&
+		(validUserPass || validClientCredentials)
 }
 
 // Metadata returns the metadata for the provider, such as
@@ -109,11 +122,44 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 			JujuUsername: schema.StringAttribute{
 				Description: fmt.Sprintf("This is the username registered with the controller to be used. This can also be set by the `%s` environment variable", JujuUsernameEnvKey),
 				Optional:    true,
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.Expressions{
+						path.MatchRoot(JujuClientID),
+						path.MatchRoot(JujuClientSecret),
+					}...),
+				},
 			},
 			JujuPassword: schema.StringAttribute{
 				Description: fmt.Sprintf("This is the password of the username to be used. This can also be set by the `%s` environment variable", JujuPasswordEnvKey),
 				Optional:    true,
 				Sensitive:   true,
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.Expressions{
+						path.MatchRoot(JujuClientID),
+						path.MatchRoot(JujuClientSecret),
+					}...),
+				},
+			},
+			JujuClientID: schema.StringAttribute{
+				Description: fmt.Sprintf("This is the client ID to be used. This can also be set by the `%s` environment variable", JujuClientIDEnvKey),
+				Optional:    true,
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.Expressions{
+						path.MatchRoot(JujuUsername),
+						path.MatchRoot(JujuPassword),
+					}...),
+				},
+			},
+			JujuClientSecret: schema.StringAttribute{
+				Description: fmt.Sprintf("This is the client secret to be used. This can also be set by the `%s` environment variable", JujuClientSecretEnvKey),
+				Optional:    true,
+				Sensitive:   true,
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.Expressions{
+						path.MatchRoot(JujuUsername),
+						path.MatchRoot(JujuPassword),
+					}...),
+				},
 			},
 			JujuCACert: schema.StringAttribute{
 				Description: fmt.Sprintf("This is the certificate to use for identification. This can also be set by the `%s` environment variable", JujuCACertEnvKey),
@@ -143,6 +189,8 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		Username:            data.UserName.ValueString(),
 		Password:            data.Password.ValueString(),
 		CACert:              data.CACert.ValueString(),
+		ClientID:            data.ClientID.ValueString(),
+		ClientSecret:        data.ClientSecret.ValueString(),
 	}
 	client, err := juju.NewClient(ctx, config)
 	if err != nil {
@@ -197,13 +245,24 @@ func getJujuProviderModel(ctx context.Context, req provider.ConfigureRequest) (j
 	if data.Password.ValueString() == "" {
 		data.Password = liveData.Password
 	}
+	if data.ClientID.ValueString() == "" {
+		data.ClientID = liveData.ClientID
+	}
+	if data.ClientSecret.ValueString() == "" {
+		data.ClientSecret = liveData.ClientSecret
+	}
 	if data.CACert.ValueString() == "" {
 		data.CACert = liveData.CACert
 	}
 
 	// Validate controller config and return helpful error messages.
-	if data.UserName.ValueString() == "" || data.Password.ValueString() == "" {
-		diags.AddError("Username and password must be set", "Currently the provider can only authenticate using username and password based authentication, if both are empty the provider will panic")
+	validUserPass := (data.UserName.ValueString() != "" && data.Password.ValueString() != "")
+	validClientCredentials := (data.ClientID.ValueString() != "" && data.ClientSecret.ValueString() != "")
+	if !validUserPass && !validClientCredentials {
+		diags.AddError(
+			"Username and password or client id and client secret must be set",
+			"Currently the provider can authenticate using username and password or client id and client secret, otherwise it will panic",
+		)
 	}
 
 	if data.ControllerAddrs.ValueString() == "" {
