@@ -28,6 +28,7 @@ const (
 	LogResourceOffer       = "resource-offer"
 	LogResourceSSHKey      = "resource-sshkey"
 	LogResourceUser        = "resource-user"
+	LogResourceSecret      = "resource-secret"
 )
 
 const LogResourceIntegration = "resource-integration"
