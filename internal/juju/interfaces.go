@@ -73,4 +73,6 @@ type SecretAPIClient interface {
 		newName string, description string, data map[string]string,
 	) error
 	RemoveSecret(uri *secrets.URI, name string, revision *int) error
+	GrantSecret(uri *secrets.URI, name string, apps []string) ([]error, error)
+	RevokeSecret(uri *secrets.URI, name string, apps []string) ([]error, error)
 }
