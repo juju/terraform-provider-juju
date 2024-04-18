@@ -61,93 +61,9 @@ Please, refer to the [Terraform docs for the Juju provider](https://registry.ter
 
 ## Developing the Provider
 
-__Note:__ Commits provided as part of a PR must be [signed via git](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits) for the PR to merge.
+Please see the [Developing wiki](https://github.com/juju/terraform-provider-juju/wiki/Developing)
 
-### Planning & Design
-
-When creating a new resource, datasource or changing a current schema please document the 
-changes and create an github issue for review and approval before coding.
-
-Consider writing documents for the project-docs/decisions folder.
-
-New resources and datasources will require import and use example documents.
-
-### Coding
-
-If you wish to work on the provider, you'll first need [Go](http://www.golang.org) installed on your machine (see [Requirements](#requirements) above).
-
-See also [Building The Provider](#building-the-provider)
-
-### Writing Acceptance Tests
-
-Acceptance tests usually require Terraform plans to be included to the various steps of the test.
-This plans can be generated with help of `testing/plangenerator` package. You may use `GetStringFromTemplateWithData`
-function to generate a plan from a template. This function will replace the placeholders in the template with the data.
-
-The example can be found in the comments to `GetStringFromTemplateWithData` function.
-
-### Running Acceptance Tests
-
-Prior to running the tests locally, ensure you have the following environmental variables set:
-
-- `JUJU_CONTROLLER_ADDRESSES`
-- `JUJU_USERNAME`
-- `JUJU_PASSWORD`
-- `JUJU_CA_CERT`
-
-For example, here they are set using the currently active controller:
-
-```shell
-export CONTROLLER=$(juju whoami | yq .Controller)
-export JUJU_AGENT_VERSION="$(juju show-controller | yq .[$CONTROLLER].details.\"agent-version\"|tr -d '"')"
-export JUJU_CONTROLLER_ADDRESSES="$(juju show-controller | yq '.[$CONTROLLER]'.details.\"api-endpoints\" | tr -d "[]' "|tr -d '"'|tr -d '\n')"
-export JUJU_USERNAME="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.user|tr -d '"')"
-export JUJU_PASSWORD="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password|tr -d '"')"
-export JUJU_CA_CERT="$(juju show-controller $(echo $CONTROLLER|tr -d '"') | yq '.[$CONTROLLER]'.details.\"ca-cert\"|tr -d '"'|sed 's/\\n/\n/g')"
-```
-
-Then, finally, run the Acceptance tests:
-
-```shell
-make testlxd
-```
-And
-```shell
-make testmicrok8s
-```
-_Note:_ Acceptance tests create real resources.
-
-### Staying in sync
-
-To simplify staying in sync with upstream, give it a "remote" name:
-
-```shell
-git remote add upstream https://github.com/juju/terraform-provider-juju.git
-```
-
-Make sure your local copy and GitHub fork stay in sync with upstream:
-
-```shell
-git pull upstream/main --rebase
-```
-
-Merge commits for sync actions will be rejected.
-
-### Adding Dependencies
-
-This provider uses [Go modules](https://github.com/golang/go/wiki/Modules).
-Please see the Go documentation for the most up to date information about using Go modules.
-
-To add a new dependency `github.com/author/dependency` to your Terraform provider:
-
-```shell
-go get github.com/author/dependency
-go mod tidy
-```
-
-Then commit the changes to `go.mod` and `go.sum`.
-
-### Debugging
+## Debugging
 
 To debug, setup environment variables:
 

@@ -51,6 +51,16 @@ body:
       required: true
 
   - type: textarea
+    id: Example terraform plan
+    attributes:
+      label: Example terraform plan
+      description: |
+        Example of how the Schema would look as a Terraform plan and integrate with other resources and/or data sources.
+      render: terraform
+    validations:
+      required: true
+
+  - type: textarea
     id: Info
     attributes:
       label: "Notes & References"
