@@ -240,7 +240,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 								stringplanmodifier.UseStateForUnknown(),
 							},
 							Validators: []validator.String{
-								stringIsChannelValidator{},
+								StringIsChannelValidator{},
 							},
 						},
 						"revision": schema.Int64Attribute{

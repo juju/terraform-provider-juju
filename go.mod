@@ -113,6 +113,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/juju/ansiterm v1.0.0 // indirect
 	github.com/juju/blobstore/v3 v3.0.2 // indirect
+	github.com/juju/charm/v11 v11.1.0 // indirect
 	github.com/juju/description/v5 v5.0.4 // indirect
 	github.com/juju/featureflag v1.0.0 // indirect
 	github.com/juju/gnuflag v1.0.0 // indirect
