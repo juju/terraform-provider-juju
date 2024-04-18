@@ -105,11 +105,20 @@ func (d *secretDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return
 	}
 
-	readSecretOutput, err := d.client.Secrets.ReadSecret(&juju.ReadSecretInput{
-		ModelName: data.Model.ValueString(),
-		Name:      data.Name.ValueStringPointer(),
-		Revision:  nil,
-	})
+	var readSecretInput juju.ReadSecretInput
+	if data.SecretId.IsNull() || data.SecretId.IsUnknown() {
+		readSecretInput = juju.ReadSecretInput{
+			ModelName: data.Model.ValueString(),
+			Name:      data.Name.ValueStringPointer(),
+		}
+	} else {
+		readSecretInput = juju.ReadSecretInput{
+			ModelName: data.Model.ValueString(),
+			SecretId:  data.SecretId.ValueString(),
+		}
+	}
+
+	readSecretOutput, err := d.client.Secrets.ReadSecret(&readSecretInput)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read secret, got error: %s", err))
 		return
