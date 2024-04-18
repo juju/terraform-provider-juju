@@ -16,7 +16,8 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.22.1
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-testing v1.7.0
-	github.com/juju/charm/v12 v12.0.0
+	github.com/juju/charm/v11 v11.1.0
+	github.com/juju/charm/v12 v12.0.1
 	github.com/juju/clock v1.0.3
 	github.com/juju/cmd/v3 v3.0.14
 	github.com/juju/collections v1.0.4
@@ -113,7 +114,6 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/juju/ansiterm v1.0.0 // indirect
 	github.com/juju/blobstore/v3 v3.0.2 // indirect
-	github.com/juju/charm/v11 v11.1.0 // indirect
 	github.com/juju/description/v5 v5.0.4 // indirect
 	github.com/juju/featureflag v1.0.0 // indirect
 	github.com/juju/gnuflag v1.0.0 // indirect
