@@ -26,6 +26,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
+
 	"github.com/juju/juju/core/constraints"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -237,6 +238,9 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Computed:    true,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
+							},
+							Validators: []validator.String{
+								StringIsChannelValidator{},
 							},
 						},
 						"revision": schema.Int64Attribute{
