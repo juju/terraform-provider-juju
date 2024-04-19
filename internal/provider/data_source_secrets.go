@@ -34,7 +34,7 @@ type secretDataSource struct {
 type secretDataSourceModel struct {
 	// Model to which the secret belongs.
 	Model types.String `tfsdk:"model"`
-	// Name of the secret to be updated or removed.
+	// Name of the secret in the model.
 	Name types.String `tfsdk:"name"`
 	// SecretId is the ID of the secret.
 	SecretId types.String `tfsdk:"secret_id"`
