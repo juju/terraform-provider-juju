@@ -70,7 +70,7 @@ Optional:
 
 - `endpoint` (String) The endpoint name.
 - `name` (String) The name of the application.
-- `offer_url` (String) The URL of a remote application.
+- `offer_url` (String) The URL of a remote application.  The `name` and `endpoint` fields cannot be used alongside `offer_url`.
 
 
 ### Notes
