@@ -8,7 +8,7 @@ data "juju_secret" "my_secret_data_source" {
 }
 
 resource "juju_application" "ubuntu" {
-  model = juju_model.my_model.name
+  model = data.juju_model.my_model.name
   name  = "ubuntu"
 
   charm {
@@ -21,7 +21,7 @@ resource "juju_application" "ubuntu" {
 }
 
 resource "juju_access_secret" "my_secret_access" {
-  model = juju_model.my_model.name
+  model = data.juju_model.my_model.name
   applications = [
     juju_application.ubuntu.name
   ]
