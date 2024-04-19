@@ -53,6 +53,19 @@ provider "juju" {
 }
 ```
 
+### Client credentials
+
+Define the client credentials in the provider definition in your terraform plan.
+
+``` terraform
+provider "juju" {
+  controller_addresses = "10.225.205.241:17070,10.225.205.242:17070"
+  client_id = "jujuclientid"
+  client_secret = "jujuclientsecret"
+  ca_certificate = file("~/ca-cert.pem")
+}
+```
+
 ### Environment variables
 
 Define the Juju controller credentials in the provider definition via environment variables. These can be set up as follows:
@@ -78,6 +91,9 @@ Terraform 0.13 and later:
 
 Terraform 0.12 and earlier:
 {{tffile "examples/provider/provider_0.12.tf"}}
+
+Terraform 0.12 and later with client credentials:
+{{tffile "examples/provider/provider_client_credentials.tf"}}
 {{- end }}
 
 {{ .SchemaMarkdown | trimspace }}

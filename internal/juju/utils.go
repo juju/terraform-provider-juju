@@ -15,7 +15,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	apiapplication "github.com/juju/juju/api/client/application"
-	"github.com/juju/names/v4"
+	"github.com/juju/names/v5"
 )
 
 // controllerConfig is a representation of the output
@@ -108,6 +108,7 @@ func populateControllerConfig() {
 	}
 
 	localProviderConfig = map[string]string{}
+	localProviderConfig["JUJU_AGENT_VERSION"] = controllerConfig.ProviderDetails.AgentVersion
 	localProviderConfig["JUJU_CONTROLLER_ADDRESSES"] = strings.Join(controllerConfig.ProviderDetails.ApiEndpoints, ",")
 	localProviderConfig["JUJU_CA_CERT"] = controllerConfig.ProviderDetails.CACert
 	localProviderConfig["JUJU_USERNAME"] = controllerConfig.Account.User
@@ -155,4 +156,12 @@ func WaitForAppsAvailable(ctx context.Context, client *apiapplication.Client, ap
 			return errors.New("the context was done waiting for apps")
 		}
 	}
+}
+
+// ProcessErrorResults processes the results of a secret operation.
+func ProcessErrorResults(results []error) error {
+	if results[0] != nil && len(results) > 1 {
+		return &MultiError{Errors: results}
+	}
+	return nil
 }

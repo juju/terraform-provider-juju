@@ -33,6 +33,8 @@ type ControllerConfiguration struct {
 	Username            string
 	Password            string
 	CACert              string
+	ClientID            string
+	ClientSecret        string
 }
 
 type Client struct {
@@ -115,6 +117,8 @@ func (sc *sharedClient) GetConnection(modelName *string) (api.Connection, error)
 		ControllerAddresses: sc.controllerConfig.ControllerAddresses,
 		Username:            sc.controllerConfig.Username,
 		Password:            sc.controllerConfig.Password,
+		ClientID:            sc.controllerConfig.ClientID,
+		ClientSecret:        sc.controllerConfig.ClientSecret,
 		CACert:              sc.controllerConfig.CACert,
 		ModelUUID:           modelUUID,
 	}, dialOptions)

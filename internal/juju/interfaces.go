@@ -4,7 +4,7 @@
 package juju
 
 import (
-	"github.com/juju/charm/v11"
+	"github.com/juju/charm/v12"
 	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
@@ -16,7 +16,7 @@ import (
 	"github.com/juju/juju/core/resources"
 	"github.com/juju/juju/core/secrets"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/names/v4"
+	"github.com/juju/names/v5"
 )
 
 type SharedClient interface {
@@ -73,4 +73,6 @@ type SecretAPIClient interface {
 		newName string, description string, data map[string]string,
 	) error
 	RemoveSecret(uri *secrets.URI, name string, revision *int) error
+	GrantSecret(uri *secrets.URI, name string, apps []string) ([]error, error)
+	RevokeSecret(uri *secrets.URI, name string, apps []string) ([]error, error)
 }

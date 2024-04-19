@@ -1,10 +1,10 @@
 provider "juju" {
-  version = "~> 0.11.0"
+  version = "~> 0.10.0"
 
   controller_addresses = "10.225.205.241:17070,10.225.205.242:17070"
 
-  username = "jujuuser"
-  password = "password1"
+  client_id     = "jujuclientid"
+  client_secret = "jujuclientsecret"
 
   ca_certificate = file("~/ca-cert.pem")
 }

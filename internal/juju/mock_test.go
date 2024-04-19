@@ -12,7 +12,7 @@ package juju
 import (
 	reflect "reflect"
 
-	charm "github.com/juju/charm/v11"
+	charm "github.com/juju/charm/v12"
 	api "github.com/juju/juju/api"
 	application "github.com/juju/juju/api/client/application"
 	client "github.com/juju/juju/api/client/client"
@@ -24,7 +24,7 @@ import (
 	resources0 "github.com/juju/juju/core/resources"
 	secrets0 "github.com/juju/juju/core/secrets"
 	params "github.com/juju/juju/rpc/params"
-	names "github.com/juju/names/v4"
+	names "github.com/juju/names/v5"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -610,6 +610,21 @@ func (mr *MockSecretAPIClientMockRecorder) CreateSecret(arg0, arg1, arg2 any) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSecret", reflect.TypeOf((*MockSecretAPIClient)(nil).CreateSecret), arg0, arg1, arg2)
 }
 
+// GrantSecret mocks base method.
+func (m *MockSecretAPIClient) GrantSecret(arg0 *secrets0.URI, arg1 string, arg2 []string) ([]error, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GrantSecret", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]error)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GrantSecret indicates an expected call of GrantSecret.
+func (mr *MockSecretAPIClientMockRecorder) GrantSecret(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantSecret", reflect.TypeOf((*MockSecretAPIClient)(nil).GrantSecret), arg0, arg1, arg2)
+}
+
 // ListSecrets mocks base method.
 func (m *MockSecretAPIClient) ListSecrets(arg0 bool, arg1 secrets0.Filter) ([]secrets.SecretDetails, error) {
 	m.ctrl.T.Helper()
@@ -637,6 +652,21 @@ func (m *MockSecretAPIClient) RemoveSecret(arg0 *secrets0.URI, arg1 string, arg2
 func (mr *MockSecretAPIClientMockRecorder) RemoveSecret(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveSecret", reflect.TypeOf((*MockSecretAPIClient)(nil).RemoveSecret), arg0, arg1, arg2)
+}
+
+// RevokeSecret mocks base method.
+func (m *MockSecretAPIClient) RevokeSecret(arg0 *secrets0.URI, arg1 string, arg2 []string) ([]error, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RevokeSecret", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]error)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RevokeSecret indicates an expected call of RevokeSecret.
+func (mr *MockSecretAPIClientMockRecorder) RevokeSecret(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeSecret", reflect.TypeOf((*MockSecretAPIClient)(nil).RevokeSecret), arg0, arg1, arg2)
 }
 
 // UpdateSecret mocks base method.

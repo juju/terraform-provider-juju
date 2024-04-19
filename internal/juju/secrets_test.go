@@ -301,6 +301,35 @@ func (s *SecretSuite) TestDeleteSecret() {
 	s.Assert().NoError(err)
 }
 
+func (s *SecretSuite) TestUpdateSecretAccess() {
+	ctlr := s.setupMocks(s.T())
+	defer ctlr.Finish()
+
+	secretId := "secret:9m4e2mr0ui3e8a215n4g"
+	applications := []string{"app1", "app2"}
+
+	secretURI, err := coresecrets.ParseURI(secretId)
+	s.Require().NoError(err)
+
+	s.mockSecretClient.EXPECT().GrantSecret(secretURI, "", applications).Return([]error{nil}, nil).AnyTimes()
+	s.mockSecretClient.EXPECT().RevokeSecret(secretURI, "", applications).Return([]error{nil}, nil).AnyTimes()
+
+	client := s.getSecretsClient()
+	err = client.UpdateSecretAccess(&GrantRevokeSecretAccessInput{
+		SecretId:     secretId,
+		ModelName:    s.testModelName,
+		Applications: applications,
+	}, GrantAccess)
+	s.Require().NoError(err)
+
+	err = client.UpdateSecretAccess(&GrantRevokeSecretAccessInput{
+		SecretId:     secretId,
+		ModelName:    s.testModelName,
+		Applications: applications,
+	}, RevokeAccess)
+	s.Require().NoError(err)
+}
+
 // In order for 'go test' to run this suite, we need to create
 // a normal test function and pass our suite to suite.Run
 func TestUserSecretSuite(t *testing.T) {

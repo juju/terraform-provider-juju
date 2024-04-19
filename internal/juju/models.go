@@ -12,7 +12,7 @@ import (
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/names/v4"
+	"github.com/juju/names/v5"
 )
 
 var ModelNotFoundError = &modelNotFoundError{}
@@ -175,7 +175,7 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 	resp.Type = modelInfo.Type.String()
 	resp.UUID = modelInfo.UUID
 
-	// Add the model to the client cache of jujuModel
+	// Add a model object on the client internal to the provider
 	c.AddModel(modelInfo.Name, modelInfo.UUID, modelInfo.Type)
 
 	// set constraints when required
