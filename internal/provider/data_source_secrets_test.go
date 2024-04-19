@@ -10,11 +10,16 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
+// TODO(aflynn): Add add actual usage of the data source to the test. This is
+// blocked on the lack of schema for secret access.
+
 func TestAcc_DataSourceSecret(t *testing.T) {
-	if os.Getenv("JUJU_AGENT_VERSION") == "" || internaltesting.CompareVersions(os.Getenv("JUJU_AGENT_VERSION"), "3.3.0") < 0 {
+	version := os.Getenv("JUJU_AGENT_VERSION")
+	if version == "" || internaltesting.CompareVersions(version, "3.3.0") < 0 {
 		t.Skip("JUJU_AGENT_VERSION is not set or is below 3.3.0")
 	}
 	modelName := acctest.RandomWithPrefix("tf-datasource-secret-test-model")
