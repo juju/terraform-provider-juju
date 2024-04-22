@@ -13,14 +13,23 @@ A resource that represents a Juju secret.
 ## Example Usage
 
 ```terraform
-resource "juju_secret" "this" {
+resource "juju_secret" "my-secret" {
   model = juju_model.development.name
-  name  = "this_secret_name"
+  name  = "my_secret_name"
   value = {
     key1 = "value1"
     key2 = "value2"
   }
   info = "This is the secret"
+}
+
+resource "juju_application" "my-application" {
+  #
+  config = {
+    # Reference my-secret within the plan by using the secret_id
+    secret = juju_secret.my-secret.secret_id
+  }
+  #
 }
 ```
 
@@ -39,21 +48,14 @@ resource "juju_secret" "this" {
 
 ### Read-Only
 
-- `secret_id` (String) The ID of the secret.
+- `id` (String) The ID of the secret. Used for terraform import.
+- `secret_id` (String) The ID of the secret. E.g. coj8mulh8b41e8nv6p90
 
 ## Import
 
 Import is supported using the following syntax:
 
 ```shell
-# Secrets can be imported by using the URI as in the juju show-secrets output.
-# Example:
-# $juju show-secret secret-name
-# coh2uo2ji6m0ue9a7tj0:
-#   revision: 1
-#   owner: <model>
-#   name: secret-name
-#   created: 2024-04-19T08:46:25Z
-#   updated: 2024-04-19T08:46:25Z
-$ terraform import juju_secret.secret-name coh2uo2ji6m0ue9a7tj0
+# Secrets can be imported by using the model and secret names.
+$ terraform import juju_secret.secret-name testmodel:secret-name
 ```

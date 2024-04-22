@@ -6,9 +6,9 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -43,10 +43,58 @@ type accessSecretResourceModel struct {
 	SecretId types.String `tfsdk:"secret_id"`
 	// Applications is the list of applications to which the secret is granted or revoked.
 	Applications types.List `tfsdk:"applications"`
+	// ID is used during terraform import.
+	ID types.String `tfsdk:"id"`
 }
 
+// ImportState reads the secret based on the model name and secret name to be
+// imported into terraform.
 func (s *accessSecretResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	// Prevent panic if the provider has not been configured.
+	if s.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "access secret", "import")
+		return
+	}
+	// model:name
+	parts := strings.Split(req.ID, ":")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		resp.Diagnostics.AddError(
+			"Unexpected Import Identifier",
+			fmt.Sprintf("Expected import identifier with format: <modelname>:<secretname>. Got: %q", req.ID),
+		)
+		return
+	}
+	modelName := parts[0]
+	secretName := parts[1]
+
+	readSecretOutput, err := s.client.Secrets.ReadSecret(&juju.ReadSecretInput{
+		ModelName: modelName,
+		Name:      &secretName,
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read secret for import, got error: %s", err))
+		return
+	}
+
+	// Save the secret access details into the Terraform state
+	state := accessSecretResourceModel{
+		Model:    types.StringValue(modelName),
+		SecretId: types.StringValue(readSecretOutput.SecretId),
+		ID:       types.StringValue(newSecretID(modelName, readSecretOutput.SecretId)),
+	}
+
+	// Save the secret details into the Terraform state
+	secretApplications, errDiag := types.ListValueFrom(ctx, types.StringType, readSecretOutput.Applications)
+	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	state.Applications = secretApplications
+
+	// Save state into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+
+	s.trace(fmt.Sprintf("import access secret resource %q", state.SecretId))
 }
 
 func (s *accessSecretResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -66,16 +114,23 @@ func (s *accessSecretResource) Schema(_ context.Context, req resource.SchemaRequ
 				},
 			},
 			"secret_id": schema.StringAttribute{
-				Description: "The ID of the secret.",
+				Description: "The ID of the secret. E.g. coj8mulh8b41e8nv6p90",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"applications": schema.ListAttribute{
-				Description: "The list of applications to which the secret is granted or revoked.",
+				Description: "The list of applications to which the secret is granted.",
 				Required:    true,
 				ElementType: types.StringType,
+			},
+			"id": schema.StringAttribute{
+				Description: "The ID of the secret. Used for terraform import.",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
@@ -98,7 +153,7 @@ func (s *accessSecretResource) Configure(ctx context.Context, req resource.Confi
 	}
 	s.client = client
 	// Create the local logging subsystem here, using the TF context when creating it.
-	s.subCtx = tflog.NewSubsystem(ctx, LogResourceSecret)
+	s.subCtx = tflog.NewSubsystem(ctx, LogResourceAccessSecret)
 }
 
 // Create is called when the resource is being created.
@@ -131,9 +186,10 @@ func (s *accessSecretResource) Create(ctx context.Context, req resource.CreateRe
 	}
 
 	// Save plan into Terraform state
+	plan.ID = types.StringValue(newSecretID(plan.Model.ValueString(), plan.SecretId.ValueString()))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 
-	s.trace(fmt.Sprintf("grant secret access to %q", plan.SecretId))
+	s.trace(fmt.Sprintf("grant secret access to %s", plan.SecretId))
 }
 
 // Read is called when the resource is being read.
@@ -169,10 +225,12 @@ func (s *accessSecretResource) Read(ctx context.Context, req resource.ReadReques
 	}
 	state.Applications = secretApplications
 
+	state.ID = types.StringValue(newSecretID(state.Model.ValueString(), readSecretOutput.SecretId))
+
 	// Save state into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 
-	s.trace(fmt.Sprintf("read secret access %q", state.SecretId))
+	s.trace(fmt.Sprintf("read secret access %s", state.SecretId))
 }
 
 // Update is called when the resource is being updated.
@@ -264,7 +322,7 @@ func (s *accessSecretResource) Update(ctx context.Context, req resource.UpdateRe
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 
-	s.trace(fmt.Sprintf("update secret access %q", state.SecretId))
+	s.trace(fmt.Sprintf("update secret access %s", state.SecretId))
 }
 
 // Delete is called when the resource is being deleted.
@@ -310,7 +368,7 @@ func (s *accessSecretResource) Delete(ctx context.Context, req resource.DeleteRe
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 
-	s.trace(fmt.Sprintf("revoke secret access %q", state.SecretId))
+	s.trace(fmt.Sprintf("revoke secret access %s", state.SecretId))
 }
 
 func (s *accessSecretResource) trace(msg string, additionalFields ...map[string]interface{}) {

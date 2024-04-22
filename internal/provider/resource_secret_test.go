@@ -4,11 +4,13 @@
 package provider
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
@@ -73,6 +75,12 @@ func TestAcc_ResourceSecret_CreateWithInfo(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "value.key1", "value1"),
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "value.key2", "value2"),
 				),
+			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ImportStateId:     fmt.Sprintf("%s:%s", modelName, secretName),
+				ResourceName:      "juju_secret." + secretName,
 			},
 		},
 	})
