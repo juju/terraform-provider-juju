@@ -130,8 +130,12 @@ func (c *secretsClient) CreateSecret(input *CreateSecretInput) (CreateSecretOutp
 	if err != nil {
 		return CreateSecretOutput{}, typedError(err)
 	}
+	secretURI, err := coresecrets.ParseURI(secretId)
+	if err != nil {
+		return CreateSecretOutput{}, typedError(err)
+	}
 	return CreateSecretOutput{
-		SecretId: secretId,
+		SecretId: secretURI.ID,
 	}, nil
 }
 
@@ -181,7 +185,7 @@ func (c *secretsClient) ReadSecret(input *ReadSecretInput) (ReadSecretOutput, er
 	applications := getApplicationsFromAccessInfo(results[0].Access)
 
 	return ReadSecretOutput{
-		SecretId:     results[0].Metadata.URI.String(),
+		SecretId:     results[0].Metadata.URI.ID,
 		Name:         results[0].Metadata.Label,
 		Value:        decodedValue,
 		Applications: applications,

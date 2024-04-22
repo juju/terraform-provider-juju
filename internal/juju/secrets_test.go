@@ -51,9 +51,12 @@ func (s *SecretSuite) TestCreateSecret() {
 	decodedValue := map[string]string{"key": "value"}
 	encodedValue := map[string]string{"key": base64.StdEncoding.EncodeToString([]byte("value"))}
 
+	secretId := "secret:9m4e2mr0ui3e8a215n4g"
+	secretURI, err := coresecrets.ParseURI(secretId)
+	s.Require().NoError(err)
 	s.mockSecretClient.EXPECT().CreateSecret(
 		"test-secret", "test info", encodedValue,
-	).Return("secret-id", nil).AnyTimes()
+	).Return(secretURI.ID, nil).AnyTimes()
 
 	client := s.getSecretsClient()
 	output, err := client.CreateSecret(&CreateSecretInput{
@@ -65,7 +68,7 @@ func (s *SecretSuite) TestCreateSecret() {
 	s.Require().NoError(err)
 
 	s.Assert().NotNil(output)
-	s.Assert().Equal("secret-id", output.SecretId)
+	s.Assert().Equal(secretURI.ID, output.SecretId)
 }
 
 func (s *SecretSuite) TestCreateSecretError() {
@@ -114,6 +117,7 @@ func (s *SecretSuite) TestReadSecret() {
 	).Return([]apisecrets.SecretDetails{
 		{
 			Metadata: coresecrets.SecretMetadata{
+				URI:     secretURI,
 				Version: 1,
 			},
 			Revisions: []coresecrets.SecretRevisionMetadata{
@@ -204,6 +208,7 @@ func (s *SecretSuite) TestUpdateSecretWithRenaming() {
 	).Return([]apisecrets.SecretDetails{
 		{
 			Metadata: coresecrets.SecretMetadata{
+				URI:     secretURI,
 				Version: 1,
 			},
 			Revisions: []coresecrets.SecretRevisionMetadata{
@@ -259,6 +264,7 @@ func (s *SecretSuite) TestUpdateSecret() {
 	).Return([]apisecrets.SecretDetails{
 		{
 			Metadata: coresecrets.SecretMetadata{
+				URI:         secretURI,
 				Version:     1,
 				Description: secretInfo,
 			},
