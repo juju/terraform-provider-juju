@@ -13,8 +13,11 @@ import (
 )
 
 func TestAcc_ResourceSecret_CreateWithoutName(t *testing.T) {
-	if os.Getenv("JUJU_AGENT_VERSION") == "" || internaltesting.CompareVersions(os.Getenv("JUJU_AGENT_VERSION"), "3.3.0") < 0 {
-		t.Skip("JUJU_AGENT_VERSION is not set or is below 3.3.0")
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
+		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
 	}
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
@@ -42,8 +45,11 @@ func TestAcc_ResourceSecret_CreateWithoutName(t *testing.T) {
 }
 
 func TestAcc_ResourceSecret_CreateWithInfo(t *testing.T) {
-	if os.Getenv("JUJU_AGENT_VERSION") == "" || internaltesting.CompareVersions(os.Getenv("JUJU_AGENT_VERSION"), "3.3.0") < 0 {
-		t.Skip("JUJU_AGENT_VERSION is not set or is below 3.3.0")
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
+		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
 	}
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
@@ -73,8 +79,11 @@ func TestAcc_ResourceSecret_CreateWithInfo(t *testing.T) {
 }
 
 func TestAcc_ResourceSecret_CreateWithNoInfo(t *testing.T) {
-	if os.Getenv("JUJU_AGENT_VERSION") == "" || internaltesting.CompareVersions(os.Getenv("JUJU_AGENT_VERSION"), "3.3.0") < 0 {
-		t.Skip("JUJU_AGENT_VERSION is not set or is below 3.3.0")
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
+		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
 	}
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
@@ -102,8 +111,11 @@ func TestAcc_ResourceSecret_CreateWithNoInfo(t *testing.T) {
 }
 
 func TestAcc_ResourceSecret_Update(t *testing.T) {
-	if os.Getenv("JUJU_AGENT_VERSION") == "" || internaltesting.CompareVersions(os.Getenv("JUJU_AGENT_VERSION"), "3.3.0") < 0 {
-		t.Skip("JUJU_AGENT_VERSION is not set or is below 3.3.0")
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
+		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
 	}
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")

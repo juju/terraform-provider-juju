@@ -19,6 +19,7 @@ const TestCloudEnvKey string = "TEST_CLOUD"
 const TestMachineIPEnvKey string = "TEST_ADD_MACHINE_IP"
 const TestSSHPublicKeyFileEnvKey string = "TEST_SSH_PUB_KEY_PATH"
 const TestSSHPrivateKeyFileEnvKey string = "TEST_SSH_PRIV_KEY_PATH"
+const TestJujuAgentVersion = "JUJU_AGENT_VERSION"
 
 // CloudTesting is a value indicating the current cloud
 // available for testing
