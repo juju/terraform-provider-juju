@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -51,6 +52,37 @@ func TestAcc_ResourceAccessSecret_GrantRevoke(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "model", modelName),
 					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "applications.0", "jul"),
 				),
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceAccessSecret_Import(t *testing.T) {
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
+		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceSecretWithAccess(modelName, true),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "model", modelName),
+					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "applications.0", "jul"),
+				),
+			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ImportStateId:     fmt.Sprintf("%s:test_secret_name", modelName),
+				ResourceName:      "juju_access_secret.test_access_secret",
 			},
 		},
 	})

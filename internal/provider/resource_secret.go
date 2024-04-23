@@ -6,14 +6,15 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -45,10 +46,62 @@ type secretResourceModel struct {
 	SecretId types.String `tfsdk:"secret_id"`
 	// Info is the description of the secret. This attribute is optional for all actions.
 	Info types.String `tfsdk:"info"`
+	// ID is used during terraform import.
+	ID types.String `tfsdk:"id"`
 }
 
+// ImportState reads the secret based on the model name and secret name to be
+// imported into terraform.
 func (s *secretResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	// Prevent panic if the provider has not been configured.
+	if s.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "secret", "import")
+		return
+	}
+
+	// model:name
+	parts := strings.Split(req.ID, ":")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		resp.Diagnostics.AddError(
+			"Unexpected Import Identifier",
+			fmt.Sprintf("Expected import identifier with format: <modelname>:<secretname>. Got: %q", req.ID),
+		)
+		return
+	}
+	modelName := parts[0]
+	secretName := parts[1]
+
+	readSecretOutput, err := s.client.Secrets.ReadSecret(&juju.ReadSecretInput{
+		ModelName: modelName,
+		Name:      &secretName,
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read secret for import, got error: %s", err))
+		return
+	}
+
+	// Save the secret details into the Terraform state
+	state := secretResourceModel{
+		Model:    types.StringValue(modelName),
+		Name:     types.StringValue(readSecretOutput.Name),
+		SecretId: types.StringValue(readSecretOutput.SecretId),
+	}
+
+	if readSecretOutput.Info != "" {
+		state.Info = types.StringValue(readSecretOutput.Info)
+	}
+
+	secretValue, errDiag := types.MapValueFrom(ctx, types.StringType, readSecretOutput.Value)
+	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	state.Value = secretValue
+
+	// Save state into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+
+	s.trace(fmt.Sprintf("import secret resource %q", state.SecretId))
 }
 
 func (s *secretResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -77,7 +130,7 @@ func (s *secretResource) Schema(_ context.Context, req resource.SchemaRequest, r
 				Sensitive:   true,
 			},
 			"secret_id": schema.StringAttribute{
-				Description: "The ID of the secret.",
+				Description: "The ID of the secret. E.g. coj8mulh8b41e8nv6p90",
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -86,6 +139,13 @@ func (s *secretResource) Schema(_ context.Context, req resource.SchemaRequest, r
 			"info": schema.StringAttribute{
 				Description: "The description of the secret.",
 				Optional:    true,
+			},
+			"id": schema.StringAttribute{
+				Description: "The ID of the secret. Used for terraform import.",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
@@ -144,11 +204,20 @@ func (s *secretResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	plan.SecretId = types.StringValue(createSecretOutput.SecretId)
-
+	plan.ID = types.StringValue(newSecretID(plan.Model.ValueString(), plan.SecretId.ValueString()))
+	s.trace(fmt.Sprintf("saving secret resource %q", plan.SecretId.ValueString()),
+		map[string]interface{}{
+			"secretID": plan.SecretId.ValueString(),
+			"name":     plan.Name.ValueString(),
+			"model":    plan.Model.ValueString(),
+			"info":     plan.Info.ValueString(),
+			"values":   plan.Value.String(),
+			"id":       plan.ID.ValueString(),
+		})
 	// Save plan into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 
-	s.trace(fmt.Sprintf("created secret resource %q", plan.SecretId))
+	s.trace(fmt.Sprintf("created secret resource %s", plan.SecretId))
 }
 
 // Read reads the details of a secret in the Juju model.
@@ -172,8 +241,6 @@ func (s *secretResource) Read(ctx context.Context, req resource.ReadRequest, res
 	readSecretOutput, err := s.client.Secrets.ReadSecret(&juju.ReadSecretInput{
 		SecretId:  state.SecretId.ValueString(),
 		ModelName: state.Model.ValueString(),
-		Name:      state.Name.ValueStringPointer(),
-		Revision:  nil,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read secret, got error: %s", err))
@@ -187,6 +254,7 @@ func (s *secretResource) Read(ctx context.Context, req resource.ReadRequest, res
 	if !state.Info.IsNull() {
 		state.Info = types.StringValue(readSecretOutput.Info)
 	}
+	state.ID = types.StringValue(newSecretID(state.Model.ValueString(), readSecretOutput.SecretId))
 
 	secretValue, errDiag := types.MapValueFrom(ctx, types.StringType, readSecretOutput.Value)
 	resp.Diagnostics.Append(errDiag...)
@@ -198,7 +266,7 @@ func (s *secretResource) Read(ctx context.Context, req resource.ReadRequest, res
 	// Save state into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 
-	s.trace(fmt.Sprintf("read secret resource %q", state.SecretId))
+	s.trace(fmt.Sprintf("read secret resource %s", state.SecretId))
 }
 
 // Update updates the details of a secret in the Juju model.
@@ -270,7 +338,7 @@ func (s *secretResource) Update(ctx context.Context, req resource.UpdateRequest,
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 
-	s.trace(fmt.Sprintf("updated secret resource %q", state.SecretId))
+	s.trace(fmt.Sprintf("updated secret resource %s", state.SecretId))
 }
 
 // Delete removes a secret from the Juju model.
@@ -300,7 +368,7 @@ func (s *secretResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	s.trace(fmt.Sprintf("deleted secret resource %q", state.SecretId))
+	s.trace(fmt.Sprintf("deleted secret resource %s", state.SecretId))
 }
 
 func (s *secretResource) trace(msg string, additionalFields ...map[string]interface{}) {
@@ -308,4 +376,8 @@ func (s *secretResource) trace(msg string, additionalFields ...map[string]interf
 		return
 	}
 	tflog.SubsystemTrace(s.subCtx, LogResourceSecret, msg, additionalFields...)
+}
+
+func newSecretID(model, secret string) string {
+	return fmt.Sprintf("%s:%s", model, secret)
 }
