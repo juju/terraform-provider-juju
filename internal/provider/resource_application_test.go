@@ -887,7 +887,7 @@ func testCheckEndpointsAreSetToCorrectSpace(modelName, appName, defaultSpace str
 		// Block on the application being active
 		// This is needed to make sure the units have access
 		// to ip addresses part of the spaces
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 50; i++ {
 			status, err := clientAPIClient.Status(&apiclient.StatusArgs{
 				Patterns: []string{appName},
 			})
@@ -895,10 +895,13 @@ func testCheckEndpointsAreSetToCorrectSpace(modelName, appName, defaultSpace str
 				return err
 			}
 			appStatus, exists = status.Applications[appName]
-
-			if !exists || appStatus.Status.Status != "active" {
-				time.Sleep(10 * time.Second)
+			if exists && appStatus.Status.Status == "active" {
+				break
 			}
+			if exists && appStatus.Status.Status == "error" {
+				return fmt.Errorf("application %s has error status", appName)
+			}
+			time.Sleep(10 * time.Second)
 		}
 		if !exists {
 			return fmt.Errorf("no status returned for application: %s", appName)
