@@ -1,3 +1,20 @@
+## 0.12.0 (April 22, 2024)
+
+NOTES:
+* **This release requires juju controller version 2.9.49 or later juju.**
+* This release uses juju client api code from the juju 3.5-beta1 candidate release.
+* The added JAAS login enhancements requires Juju controller version 3.5.0 or higher.
+* The added Juju secrets support requires Juju controller version 3.4.0 or higher.
+
+ENHANCEMENTS:
+* Support for user secret management is added. You can now use `juju_secret` and `juju_access_secret` resources to create and manage secrets, as well as grant/revoke access to the applications in your plan. You can also use `juju_secret` data source in your configuration to access a secret.
+* Provider config is enhanced with support for Client ID and secret to enable logging in to JAAS using client credentials.
+
+BUG FIXES:
+
+* Channel for charms in an application resource requires both track and risk (e.g., `latest` vs `latest/stable`). A validation for channel in application resource is added by @Aflynn50 in https://github.com/juju/terraform-provider-juju/pull/447
+
+
 ## 0.11.0 (March 18, 2024)
 
 NOTES:
