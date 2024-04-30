@@ -114,6 +114,10 @@ func (sc *sharedClient) GetConnection(modelName *string) (api.Connection, error)
 		do.RetryDelay = 1 * time.Second
 	}
 
+	if sc.controllerConfig.ClientID != "" {
+		sc.controllerConfig.Username = sc.controllerConfig.ClientID
+	}
+
 	connr, err := connector.NewSimple(connector.SimpleConfig{
 		ControllerAddresses: sc.controllerConfig.ControllerAddresses,
 		Username:            sc.controllerConfig.Username,
