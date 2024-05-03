@@ -6,7 +6,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for pointing out this issue. Please provide info below so we could diagnose and fix it fast.
+        Thanks for pointing out this issue. Can you reproduce the problem with the latest release?
+        Please provide info below so we could diagnose and fix it fast.
 
   - type: textarea
     id: Description
@@ -33,7 +34,7 @@ body:
     attributes:
       label: Terraform Juju Provider version
       description: What version of terraform-provider-juju exhibits this issue?
-      placeholder: ex. edge, 0.7.0, 0.8.0
+      placeholder: ex. 0.11.0, 0.12.0
     validations:
       required: true
 
@@ -43,6 +44,15 @@ body:
       label: Terraform version
       description: What version of Terraform are we running against? `terraform -v`
       placeholder: ex. v1.5.2
+    validations:
+      required: true
+
+  - type: input
+    id: Juju-Version
+    attributes:
+      label: Juju version
+      description: What version of Juju is the controller running? `juju show-controller | grep controller-model-version`
+      placeholder: ex. 3.4.1
     validations:
       required: true
 
