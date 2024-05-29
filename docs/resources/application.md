@@ -55,7 +55,7 @@ resource "juju_application" "this" {
 - `expose` (Block List) Makes an application publicly available over the network (see [below for nested schema](#nestedblock--expose))
 - `name` (String) A custom name for the application deployment. If empty, uses the charm's name.
 - `placement` (String) Specify the target location for the application's units
-- `resources` (Map of Number) Charm resource revisions. Must evaluate to an integer.
+- `resources` (Map of String) Charm resource revisions. Must evaluate to a string. A resource could be a resource revision number or a custom resource.
 
 	There are a few scenarios that need to be considered:
 	* If the plan does not specify resource revision and resources are added to the plan,

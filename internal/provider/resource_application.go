@@ -46,7 +46,7 @@ const (
 	StorageKey          = "storage"
 
 	resourceKeyMarkdownDescription = `
-Charm resource revisions. Must evaluate to an integer.
+Charm resource revisions. Must evaluate to a string. A resource could be a resource revision number or a custom resource.
 
 	There are a few scenarios that need to be considered:
 	* If the plan does not specify resource revision and resources are added to the plan,
@@ -261,7 +261,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 			},
 			ResourceKey: schema.MapAttribute{
 				Optional:            true,
-				ElementType:         types.Int64Type,
+				ElementType:         types.StringType,
 				MarkdownDescription: resourceKeyMarkdownDescription,
 			},
 		},
@@ -470,7 +470,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	resourceRevisions := make(map[string]int)
+	resourceRevisions := make(map[string]string)
 	resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &resourceRevisions, false)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -827,15 +827,15 @@ func (r *applicationResource) toEndpointBindingsSet(ctx context.Context, endpoin
 	return types.SetValueFrom(ctx, endpointBindingsType, endpointBindingsSlice)
 }
 
-func (r *applicationResource) configureResourceData(ctx context.Context, resourceType attr.Type, resources types.Map, respResources map[string]int) (types.Map, diag.Diagnostics) {
-	var previousResources map[string]int
+func (r *applicationResource) configureResourceData(ctx context.Context, resourceType attr.Type, resources types.Map, respResources map[string]string) (types.Map, diag.Diagnostics) {
+	var previousResources map[string]string
 	diagErr := resources.ElementsAs(ctx, &previousResources, false)
 	if diagErr.HasError() {
 		r.trace("configureResourceData exit A")
 		return types.Map{}, diagErr
 	}
 	if previousResources == nil {
-		previousResources = make(map[string]int)
+		previousResources = make(map[string]string)
 	}
 	// known previously
 	// update the values from the previous config
@@ -844,7 +844,7 @@ func (r *applicationResource) configureResourceData(ctx context.Context, resourc
 		// Add if the value has changed from the previous state
 		if previousValue, found := previousResources[k]; found {
 			if v != previousValue {
-				// remember that this terraform schema type only accepts strings
+				// remember that this Terraform schema type only accepts strings
 				previousResources[k] = v
 				changes = true
 			}
@@ -961,12 +961,12 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	// NOT to update resources, because we want revisions fixed to those
 	// specified in the plan.
 	if plan.Resources.Equal(state.Resources) {
-		planResourceMap := make(map[string]int)
+		planResourceMap := make(map[string]string)
 		resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &planResourceMap, false)...)
 		updateApplicationInput.Resources = planResourceMap
 	} else {
-		planResourceMap := make(map[string]int)
-		stateResourceMap := make(map[string]int)
+		planResourceMap := make(map[string]string)
+		stateResourceMap := make(map[string]string)
 		resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &planResourceMap, false)...)
 		resp.Diagnostics.Append(state.Resources.ElementsAs(ctx, &stateResourceMap, false)...)
 		if resp.Diagnostics.HasError() {
@@ -974,12 +974,12 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 
 		// what happens when the plan suddenly does not specify resource
-		// revisions, but state does..
+		// revisions, but state does.
 		for k, v := range planResourceMap {
 			if stateResourceMap[k] != v {
 				if updateApplicationInput.Resources == nil {
 					// initialize just in case
-					updateApplicationInput.Resources = make(map[string]int)
+					updateApplicationInput.Resources = make(map[string]string)
 				}
 				updateApplicationInput.Resources[k] = v
 			}
