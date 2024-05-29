@@ -27,7 +27,7 @@ require (
 	github.com/juju/retry v1.0.0
 	github.com/juju/utils/v3 v3.1.1
 	github.com/juju/version/v2 v2.0.1
-	github.com/rs/zerolog v1.32.0
+	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/mock v0.4.0
 	gopkg.in/httprequest.v1 v1.2.1
