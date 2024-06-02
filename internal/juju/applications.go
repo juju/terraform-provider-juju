@@ -70,7 +70,7 @@ const (
 )
 
 const (
-	// HeaderContentType is the header name for the type of a file upload.
+	// HeaderContentType is the header name for the type of file upload.
 	HeaderContentType = "Content-Type"
 	// HeaderContentSha384 is the header name for the sha hash of a file upload.
 	HeaderContentSha384 = "Content-Sha384"
@@ -476,7 +476,7 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	if applicationAPIClient.BestAPIVersion() >= 19 {
 		err = c.deployFromRepository(applicationAPIClient, resourceHttpClient, transformedInput)
 	} else {
-		err = c.legacyDeploy(ctx, conn, applicationAPIClient, transformedInput, resourceHttpClient)
+		err = c.legacyDeploy(ctx, conn, applicationAPIClient, transformedInput)
 		err = jujuerrors.Annotate(err, "legacy deploy method")
 	}
 	if err != nil {
@@ -531,7 +531,7 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplic
 // Remove the funcationality associated with legacyDeploy
 // once the provider no longer supports a version of juju
 // before 3.3.
-func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connection, applicationAPIClient *apiapplication.Client, transformedInput transformedCreateApplicationInput, resourceHttpClient *HttpRequestClient) error {
+func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connection, applicationAPIClient *apiapplication.Client, transformedInput transformedCreateApplicationInput) error {
 	// Version needed for operating system selection.
 	c.controllerVersion, _ = conn.ServerVersion()
 
@@ -650,7 +650,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 				Origin: resultOrigin,
 			}
 
-			resources, err := c.processResources(charmsAPIClient, conn, charmID, transformedInput.applicationName, transformedInput.resources, resourceHttpClient)
+			resources, err := c.processResources(charmsAPIClient, conn, charmID, transformedInput.applicationName, transformedInput.resources)
 			if err != nil && !jujuerrors.Is(err, jujuerrors.AlreadyExists) {
 				return err
 			}
@@ -862,7 +862,7 @@ func splitCommaDelimitedList(list string) []string {
 
 // processResources is a helper function to process the charm
 // metadata and request the download of any additional resource.
-func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string, resources map[string]string, resourceHttpClient *HttpRequestClient) (map[string]string, error) {
+func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string, resources map[string]string) (map[string]string, error) {
 	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL)
 	if err != nil {
 		return nil, typedError(err)
@@ -878,7 +878,7 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 		return nil, err
 	}
 
-	return addPendingResources(appName, charmInfo.Meta.Resources, resources, charmID, resourcesAPIClient, resourceHttpClient)
+	return addPendingResources(appName, charmInfo.Meta.Resources, resources, charmID, resourcesAPIClient)
 }
 
 // ReadApplicationWithRetryOnNotFound calls ReadApplication until
@@ -1573,65 +1573,74 @@ func (c applicationsClient) updateResources(appName string, resources map[string
 		return nil, nil
 	}
 
-	return addPendingResources(appName, filtered, resources, charmID, resourcesAPIClient, resourceHttpClient)
+	return addPendingResources(appName, filtered, resources, charmID, resourcesAPIClient)
 }
 
 func addPendingResources(appName string, resourcesToBeAdded map[string]charmresources.Meta, resourcesRevisions map[string]string,
-	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient, resourceHttpClient *HttpRequestClient) (map[string]string, error) {
-	pendingResources := []charmresources.Resource{}
-	pendingResourceUploads := []apiapplication.PendingResourceUpload{}
+	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient) (map[string]string, error) {
+	pendingResourcesforAdd := []charmresources.Resource{}
+	toReturn := map[string]string{}
 
 	for _, resourceMeta := range resourcesToBeAdded {
-		aux := charmresources.Resource{
-			Meta:     resourceMeta,
-			Origin:   charmresources.OriginStore,
-			Revision: -1,
-		}
 		if resourcesRevisions != nil {
-			if revision, ok := resourcesRevisions[resourceMeta.Name]; ok {
-				if isInt(revision) {
-					iRevision, err := strconv.Atoi(revision)
+			if deployValue, ok := resourcesRevisions[resourceMeta.Name]; ok {
+				if isInt(deployValue) {
+					// A resource revision is provided
+					providedRev, err := strconv.Atoi(deployValue)
 					if err != nil {
 						return nil, typedError(err)
 					}
-					aux.Revision = iRevision
+					aux := charmresources.Resource{
+						Meta:     resourceMeta,
+						Origin:   charmresources.OriginStore,
+						Revision: -1,
+					}
+					aux.Revision = providedRev
+					pendingResourcesforAdd = append(pendingResourcesforAdd, aux)
+				} else {
+					// A new resource to be uploaded by the client
+					uux := charmresources.Resource{
+						Meta:   resourceMeta,
+						Origin: charmresources.OriginUpload,
+					}
+
+					fileSystem := osFilesystem{}
+					t, typeParseErr := charmresources.ParseType(resourceMeta.Type.String())
+					if typeParseErr != nil {
+						return nil, typedError(typeParseErr)
+					}
+					r, openResErr := resourcecmd.OpenResource(deployValue, t, fileSystem.Open)
+					if openResErr != nil {
+						return nil, typedError(openResErr)
+					}
+					toRequestUpload, err := resourcesAPIClient.UploadPendingResource(appName, uux, deployValue, r)
+					if err != nil {
+						return nil, typedError(err)
+					}
+					// Add the resource name and the corresponding UUID to the resources map
+					toReturn[resourceMeta.Name] = toRequestUpload
 				}
-				pendingResourceUploads = append(pendingResourceUploads, apiapplication.PendingResourceUpload{
-					Name:     resourceMeta.Name,
-					Filename: resourcesRevisions[resourceMeta.Name],
-					Type:     resourceMeta.Type.String(),
-				})
 			}
 		}
-
-		pendingResources = append(pendingResources, aux)
 	}
 
-	resourcesReq := apiresources.AddPendingResourcesArgs{
-		ApplicationID: appName,
-		CharmID: apiresources.CharmID{
-			URL:    charmID.URL,
-			Origin: charmID.Origin,
-		},
-		Resources: pendingResources,
-	}
-
-	toRequest, err := resourcesAPIClient.AddPendingResources(resourcesReq)
-	if err != nil {
-		return nil, typedError(err)
-	}
-
-	fileSystem := osFilesystem{}
-	uploadErr := uploadExistingPendingResources(appName, pendingResourceUploads, fileSystem, resourceHttpClient)
-
-	if uploadErr != nil {
-		return nil, uploadErr
-	}
-
-	// now build a map with the resource name and the corresponding UUID
-	toReturn := map[string]string{}
-	for i, argsResource := range pendingResources {
-		toReturn[argsResource.Meta.Name] = toRequest[i]
+	if len(pendingResourcesforAdd) != 0 {
+		resourcesReqforAdd := apiresources.AddPendingResourcesArgs{
+			ApplicationID: appName,
+			CharmID: apiresources.CharmID{
+				URL:    charmID.URL,
+				Origin: charmID.Origin,
+			},
+			Resources: pendingResourcesforAdd,
+		}
+		toRequestAdd, err := resourcesAPIClient.AddPendingResources(resourcesReqforAdd)
+		if err != nil {
+			return nil, typedError(err)
+		}
+		// Add the resource name and the corresponding UUID to the resources map
+		for i, argsResource := range pendingResourcesforAdd {
+			toReturn[argsResource.Meta.Name] = toRequestAdd[i]
+		}
 	}
 
 	return toReturn, nil
@@ -1650,7 +1659,7 @@ func upload(appName, name, filename, pendingID string, reader io.ReadSeeker, res
 	if err != nil {
 		return jujuerrors.Trace(err)
 	}
-	var response params.UploadResult // ignored
+	var response params.UploadResult
 	if err := resourceHttpClient.httpClient.Do(resourceHttpClient.facade.RawAPICaller().Context(), req, &response); err != nil {
 		return jujuerrors.Trace(err)
 	}
@@ -1706,6 +1715,7 @@ func uploadExistingPendingResources(
 	if pendingResources == nil {
 		return nil
 	}
+	pendingID := ""
 
 	for _, pendingResUpload := range pendingResources {
 		t, typeParseErr := charmresources.ParseType(pendingResUpload.Type)
@@ -1718,7 +1728,7 @@ func uploadExistingPendingResources(
 		if openResErr != nil {
 			return jujuerrors.Annotatef(openResErr, "unable to open resource %v", pendingResUpload.Name)
 		}
-		uploadErr := upload(appName, pendingResUpload.Name, pendingResUpload.Filename, "", r, resourceHttpClient)
+		uploadErr := upload(appName, pendingResUpload.Name, pendingResUpload.Filename, pendingID, r, resourceHttpClient)
 
 		if uploadErr != nil {
 			return jujuerrors.Trace(uploadErr)
