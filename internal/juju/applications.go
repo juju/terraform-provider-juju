@@ -61,8 +61,7 @@ const (
 	ContentTypeRaw = "application/octet-stream"
 )
 const (
-	// MediaTypeFormData is the media type for file uploads (see
-	// mime.FormatMediaType).
+	// MediaTypeFormData is the media type for file uploads (see mime.FormatMediaType).
 	MediaTypeFormData = "form-data"
 	// QueryParamPendingID is the query parameter we use to send up the pending id.
 	QueryParamPendingID = "pendingid"
@@ -76,14 +75,12 @@ const (
 	// HeaderContentLength is the header name for the length of a file upload.
 	HeaderContentLength = "Content-Length"
 	// HeaderContentDisposition is the header name for value that holds the filename.
-	// The params are formatted according to  RFC 2045 and RFC 2616 (see
-	// mime.ParseMediaType and mime.FormatMediaType).
+	// See mime.ParseMediaType and mime.FormatMediaType.
 	HeaderContentDisposition = "Content-Disposition"
 )
 
 const (
-	// HTTPEndpointPath is the URL path, with substitutions, for
-	// a resource request.
+	// HTTPEndpointPath is the URL path, with substitutions, for a resource request.
 	HTTPEndpointPath = "/applications/%s/resources/%s"
 )
 
@@ -115,8 +112,7 @@ type UploadRequest struct {
 
 type HttpRequestClient struct {
 	base.ClientFacade
-	facade base.FacadeCaller
-
+	facade     base.FacadeCaller
 	httpClient jujuhttp.HTTPDoer
 }
 
@@ -130,7 +126,7 @@ type applicationNotFoundError struct {
 var ApplicationNotFoundError = &applicationNotFoundError{}
 
 // newEndpointPath returns the API URL path for the identified resource.
-func newEndpointPath(application, name string) string {
+func newEndpointPath(application string, name string) string {
 	return fmt.Sprintf(HTTPEndpointPath, application, name)
 }
 
@@ -407,7 +403,7 @@ func (osFilesystem) Stat(name string) (os.FileInfo, error) {
 	return os.Stat(name)
 }
 
-// Checks if strings consists from digits
+// isInt checks if strings consists from digits
 // Used to detect resources which are given with revision number
 func isInt(s string) bool {
 	for _, c := range s {
@@ -486,10 +482,13 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplic
 		Trust:            transformedInput.trust,
 		Resources:        transformedInput.resources,
 	})
+
 	if len(errs) != 0 {
 		return errors.Join(errs...)
 	}
+
 	fileSystem := osFilesystem{}
+	// Upload the provided local resources to Juju
 	uploadErr := uploadExistingPendingResources(deployInfo.Name, localPendingResources, fileSystem, resourceHttpClient)
 
 	if uploadErr != nil {
@@ -499,7 +498,7 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplic
 }
 
 // TODO (hml) 23-Feb-2024
-// Remove the funcationality associated with legacyDeploy
+// Remove the functionality associated with legacyDeploy
 // once the provider no longer supports a version of juju
 // before 3.3.
 func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connection, applicationAPIClient *apiapplication.Client, transformedInput transformedCreateApplicationInput) error {
@@ -1415,7 +1414,7 @@ func (c applicationsClient) computeSetCharmConfig(
 		Origin: resultOrigin,
 	}
 
-	resourceIDs, err := c.updateResources(input.AppName, input.Resources, charmsAPIClient, apiCharmID, resourcesAPIClient, resourceHttpClient)
+	resourceIDs, err := c.updateResources(input.AppName, input.Resources, charmsAPIClient, apiCharmID, resourcesAPIClient)
 	if err != nil {
 		return nil, err
 	}
@@ -1449,7 +1448,7 @@ func strPtr(in string) *string {
 }
 
 func (c applicationsClient) updateResources(appName string, resources map[string]string, charmsAPIClient *apicharms.Client,
-	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient, resourceHttpClient *HttpRequestClient) (map[string]string, error) {
+	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient) (map[string]string, error) {
 	meta, err := utils.GetMetaResources(charmID.URL, charmsAPIClient)
 	if err != nil {
 		return nil, err
@@ -1487,16 +1486,20 @@ func addPendingResources(appName string, resourcesToBeAdded map[string]charmreso
 					if err != nil {
 						return nil, typedError(err)
 					}
-					aux := charmresources.Resource{
+					resourceFromCharmhub := charmresources.Resource{
 						Meta:     resourceMeta,
 						Origin:   charmresources.OriginStore,
 						Revision: -1,
 					}
-					aux.Revision = providedRev
-					pendingResourcesforAdd = append(pendingResourcesforAdd, aux)
+					// If the resource is removed, revision does not exist
+					// Charm is deployed with default resources according to charm revision or channel
+					if providedRev != 0 {
+						resourceFromCharmhub.Revision = providedRev
+					}
+					pendingResourcesforAdd = append(pendingResourcesforAdd, resourceFromCharmhub)
 				} else {
 					// A new resource to be uploaded by the client
-					uux := charmresources.Resource{
+					localResource := charmresources.Resource{
 						Meta:   resourceMeta,
 						Origin: charmresources.OriginUpload,
 					}
@@ -1510,7 +1513,7 @@ func addPendingResources(appName string, resourcesToBeAdded map[string]charmreso
 					if openResErr != nil {
 						return nil, typedError(openResErr)
 					}
-					toRequestUpload, err := resourcesAPIClient.UploadPendingResource(appName, uux, deployValue, r)
+					toRequestUpload, err := resourcesAPIClient.UploadPendingResource(appName, localResource, deployValue, r)
 					if err != nil {
 						return nil, typedError(err)
 					}
