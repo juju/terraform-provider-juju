@@ -22,3 +22,21 @@ resource "juju_application" "this" {
     external-hostname = "..."
   }
 }
+
+resource "juju_application" "custom_resources_example" {
+  name  = "placement-example"
+  model = juju_model.development.name
+  charm {
+    name     = "hello-kubecon"
+    channel  = "edge"
+    revision = 14
+    series   = "trusty"
+  }
+
+  resources = {
+    gosherve-image = "gatici/gosherve:1.0"
+  }
+
+  units     = 3
+  placement = "0,1,2"
+}
