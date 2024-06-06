@@ -1,0 +1,1 @@
+testing custom foo file resource.

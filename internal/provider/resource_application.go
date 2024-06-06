@@ -47,16 +47,26 @@ const (
 
 	resourceKeyMarkdownDescription = `
 Charm resource revisions. Must evaluate to a string. A resource could be a resource revision number or a custom resource.
-
-	There are a few scenarios that need to be considered:
-	* If the plan does not specify resource revision and resources are added to the plan,
-	resources with specified revisions will be attached to the application (equivalent
-	to juju attach-resource).
-	* If the plan does specify resource revisions and:
-		* If the charm revision or channel is updated, then resources get updated to the 
-		  latest revision.
-	    * If the charm revision or channel are not updated, then no changes will take 
-		  place (juju does not have an "un-attach" command for resources).
+There are a few scenarios that need to be considered:
+  * If the plan does not specify a resource and resources are added to the plan (as a revision number or a custom resource), specified resources are attached to the application (equivalent to juju attach-resource).
+  * If the plan does specify resource revisions and if the charm revision or channel is updated, existing resources are kept.  (Resources are not detached)
+  * If the plan does specify resource revisions and resources are removed from the plan:
+          - If charm revision/channel is updated, the resources associated with the updated charm revision or channel  is attached.
+          - If the charm revision/channel are not updated then the resources associated with the existing charm revision/channel are attached.
+  * Charm could be deployed without resource, then resource could be  added later.
+  * Resources could be provided in the following formats:
+          - A custom repository URL
+          - A files ends with .txt, .json  or .yaml
+          - A resource revision from CharmHub
+    * Charm could be deployed with resources.
+    * If the provided resource revision does not exist during initial deployment or update, Client does not start deployment with an error that resource was not found in the store.
+    * If the provided custom resource does not exist during initial deployment or update, Client  start deployment and charm could not be deployed properly and charm will be in error state.
+    *  If the Provided resource type is not correct then Client fails with incorrect resource error for below scenarios:
+          - An image is expected but file does not include image URL
+          - A plain text file is expected but a .json file is provided.
+    *  If the provided resource does not exist then Client fails with path is not valid error.
+    *  If provided resource value is changed from an int to a file  then the image resource from the file is attached.
+    *  If provided resource value is changed from a file to an int then image revision is attached.
 `
 )
 
@@ -982,6 +992,17 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 					updateApplicationInput.Resources = make(map[string]string)
 				}
 				updateApplicationInput.Resources[k] = v
+			}
+		}
+		// Resources are removed
+		if len(planResourceMap) == 0 && len(stateResourceMap) != 0 {
+			for k := range stateResourceMap {
+				if updateApplicationInput.Resources == nil {
+					// initialize the resources
+					updateApplicationInput.Resources = make(map[string]string)
+					// Set resource revision
+					updateApplicationInput.Resources[k] = "0"
+				}
 			}
 		}
 	}
