@@ -181,7 +181,6 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(path.Expressions{
 						path.MatchRoot(SSHAddressKey),
-						path.MatchRoot(ConstraintsKey),
 					}...),
 				},
 			},
