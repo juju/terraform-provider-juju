@@ -150,6 +150,9 @@ func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
 }
 
 func testAccPreCheck(t *testing.T) {
+	if TestClient != nil {
+		return
+	}
 	if v := os.Getenv(JujuUsernameEnvKey); v == "" {
 		t.Fatalf("%s must be set for acceptance tests", JujuUsernameEnvKey)
 	}
@@ -170,7 +173,9 @@ func testAccPreCheck(t *testing.T) {
 	}
 	confResp := configureProvider(t, Provider)
 	assert.Equal(t, confResp.Diagnostics.HasError(), false)
-	TestClient = confResp.ResourceData.(*juju.Client)
+	testClient, ok := confResp.ResourceData.(*juju.Client)
+	assert.Truef(t, ok, "ResourceData, not of type juju client")
+	TestClient = testClient
 }
 
 func configureProvider(t *testing.T, p provider.Provider) provider.ConfigureResponse {
