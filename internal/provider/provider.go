@@ -65,13 +65,13 @@ func jujuProviderModelLiveDiscovery() (jujuProviderModel, bool) {
 		data.ControllerAddrs = types.StringValue(ctrlAddrs)
 	}
 	if caCert, ok := controllerConfig[JujuCACertEnvKey]; ok && caCert != "" {
-		data.ControllerAddrs = types.StringValue(caCert)
+		data.CACert = types.StringValue(caCert)
 	}
 	if user, ok := controllerConfig[JujuUsernameEnvKey]; ok && user != "" {
-		data.ControllerAddrs = types.StringValue(user)
+		data.UserName = types.StringValue(user)
 	}
 	if password, ok := controllerConfig[JujuPasswordEnvKey]; ok && password != "" {
-		data.ControllerAddrs = types.StringValue(password)
+		data.Password = types.StringValue(password)
 	}
 	return data, cliNotExist
 }
