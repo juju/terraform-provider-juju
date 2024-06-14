@@ -55,16 +55,11 @@ var singleQuery sync.Once
 
 // GetLocalControllerConfig runs the locally installed juju command,
 // if available, to get the current controller configuration.
-func GetLocalControllerConfig() (map[string]string, error) {
+func GetLocalControllerConfig() (map[string]string, bool) {
 	// populate the controller controllerConfig information only once
 	singleQuery.Do(populateControllerConfig)
 
-	// if empty something went wrong
-	if localProviderConfig == nil {
-		return nil, errors.New("the Juju CLI could not be accessed")
-	}
-
-	return localProviderConfig, nil
+	return localProviderConfig, localProviderConfig == nil
 }
 
 // populateControllerConfig executes the local juju CLI command

@@ -21,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -39,37 +40,50 @@ const (
 	JujuClientID     = "client_id"
 	JujuClientSecret = "client_secret"
 	JujuCACert       = "ca_certificate"
+
+	TwoSourcesAuthWarning = "Two sources of identity for controller login"
 )
 
-// populateJujuProviderModelLive gets the controller config,
-// first from environment variables, then from a live juju
-// controller as a fallback.
-func populateJujuProviderModelLive() (jujuProviderModel, error) {
-	data := jujuProviderModel{}
-	controllerConfig, cliNotExist := juju.GetLocalControllerConfig()
-	data.ControllerAddrs = types.StringValue(getField(JujuControllerEnvKey, controllerConfig))
-	data.UserName = types.StringValue(getField(JujuUsernameEnvKey, controllerConfig))
-	data.Password = types.StringValue(getField(JujuPasswordEnvKey, controllerConfig))
-	data.ClientID = types.StringValue(getField(JujuClientIDEnvKey, controllerConfig))
-	data.ClientSecret = types.StringValue(getField(JujuClientSecretEnvKey, controllerConfig))
-	data.CACert = types.StringValue(getField(JujuCACertEnvKey, controllerConfig))
-	// Only error if a valid controller config could not be fetched
-	// from the environment variables.
-	if cliNotExist != nil && !data.valid() {
-		return data, errors.New("unable to acquire Juju controller config: no working Juju client, and environment variables are not fully set")
+// jujuProviderModelEnvVar gets the controller config,
+// from environment variables.
+func jujuProviderModelEnvVar() jujuProviderModel {
+	return jujuProviderModel{
+		ControllerAddrs: getEnvVar(JujuControllerEnvKey),
+		CACert:          getEnvVar(JujuCACertEnvKey),
+		ClientID:        getEnvVar(JujuClientIDEnvKey),
+		ClientSecret:    getEnvVar(JujuClientSecretEnvKey),
+		UserName:        getEnvVar(JujuUsernameEnvKey),
+		Password:        getEnvVar(JujuPasswordEnvKey),
 	}
-
-	return data, nil
 }
 
-func getField(field string, config map[string]string) string {
-	// get the value from the environment variable
-	controller := os.Getenv(field)
-	if controller == "" {
-		// fall back to the live juju data
-		controller = config[field]
+func jujuProviderModelLiveDiscovery() (jujuProviderModel, bool) {
+	data := jujuProviderModel{}
+	controllerConfig, cliNotExist := juju.GetLocalControllerConfig()
+
+	if ctrlAddrs, ok := controllerConfig[JujuControllerEnvKey]; ok && ctrlAddrs != "" {
+		data.ControllerAddrs = types.StringValue(ctrlAddrs)
 	}
-	return controller
+	if caCert, ok := controllerConfig[JujuCACertEnvKey]; ok && caCert != "" {
+		data.CACert = types.StringValue(caCert)
+	}
+	if user, ok := controllerConfig[JujuUsernameEnvKey]; ok && user != "" {
+		data.UserName = types.StringValue(user)
+	}
+	if password, ok := controllerConfig[JujuPasswordEnvKey]; ok && password != "" {
+		data.Password = types.StringValue(password)
+	}
+	return data, cliNotExist
+}
+
+func getEnvVar(field string) types.String {
+	value := types.StringNull()
+	envVar := os.Getenv(field)
+	if envVar != "" {
+		// fall back to the live juju data
+		value = types.StringValue(envVar)
+	}
+	return value
 }
 
 // Ensure jujuProvider satisfies various provider interfaces.
@@ -93,13 +107,62 @@ type jujuProviderModel struct {
 	ClientSecret    types.String `tfsdk:"client_secret"`
 }
 
+func (j jujuProviderModel) loginViaUsername() bool {
+	return j.UserName.ValueString() != "" && j.Password.ValueString() != ""
+}
+
+func (j jujuProviderModel) loginViaClientCredentials() bool {
+	return j.ClientID.ValueString() != "" && j.ClientSecret.ValueString() != ""
+}
+
 func (j jujuProviderModel) valid() bool {
-	validUserPass := j.UserName.ValueString() != "" && j.Password.ValueString() != ""
-	validClientCredentials := j.ClientID.ValueString() != "" && j.ClientSecret.ValueString() != ""
+	validUserPass := j.loginViaUsername()
+	validClientCredentials := j.loginViaClientCredentials()
 
 	return j.ControllerAddrs.ValueString() != "" &&
 		j.CACert.ValueString() != "" &&
-		(validUserPass || validClientCredentials)
+		(validUserPass || validClientCredentials) &&
+		!(validUserPass && validClientCredentials)
+}
+
+// merge 2 providerModels together. The receiver data takes
+// precedence. If the model is valid after the client ID and
+// client secret are set, return. They take precedence over
+// username and password. The two combinations are also
+// mutually exclusive. Diagnostic warning are returned if
+// the new data contains a username but the current data has
+// client ID.
+func (j jujuProviderModel) merge(in jujuProviderModel, from string) (jujuProviderModel, diag.Diagnostics) {
+	diags := diag.Diagnostics{}
+	mergedModel := j
+	if mergedModel.ControllerAddrs.ValueString() == "" {
+		mergedModel.ControllerAddrs = in.ControllerAddrs
+	}
+	if mergedModel.CACert.ValueString() == "" {
+		mergedModel.CACert = in.CACert
+	}
+	if mergedModel.ClientID.ValueString() == "" {
+		mergedModel.ClientID = in.ClientID
+	}
+	if mergedModel.ClientSecret.ValueString() == "" {
+		mergedModel.ClientSecret = in.ClientSecret
+	}
+	if mergedModel.valid() {
+		if in.UserName.ValueString() != "" {
+			diags.AddWarning(TwoSourcesAuthWarning,
+				fmt.Sprintf("Ignoring Username value. Username provided via %s,"+
+					"however Client ID already available. Only one login type is possible.", from))
+		}
+
+		return mergedModel, diags
+	}
+	if mergedModel.UserName.ValueString() == "" {
+		mergedModel.UserName = in.UserName
+	}
+	if mergedModel.Password.ValueString() == "" {
+		mergedModel.Password = in.Password
+	}
+	return mergedModel, diags
 }
 
 // Metadata returns the metadata for the provider, such as
@@ -215,65 +278,83 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 // the plan being used, then fall back to the JUJU_ environment variables,
 // lastly check to see if an active juju can supply the data.
 func getJujuProviderModel(ctx context.Context, req provider.ConfigureRequest) (jujuProviderModel, diag.Diagnostics) {
-	var data jujuProviderModel
+	var planData jujuProviderModel
 	var diags diag.Diagnostics
 
-	// Read Terraform configuration data into the data model
-	diags.Append(req.Config.Get(ctx, &data)...)
+	// Read Terraform configuration data into the juju provider model.
+	diags.Append(req.Config.Get(ctx, &planData)...)
 	if diags.HasError() {
-		return data, diags
+		return planData, diags
 	}
-	if data.valid() {
+	if planData.valid() {
 		// The plan contained full controller config,
 		// no need to continue
-		return data, diags
+		return planData, diags
+	}
+	// If validation failed because we have both username/password
+	// and client ID/secret combinations in the plan. Exit now.
+	if planData.UserName.ValueString() != "" && planData.ClientID.ValueString() != "" {
+		diags.AddError("Only username and password OR client id and "+
+			"client secret may be used.",
+			"Both username and client id are set in the plan. Please remove "+
+				"one of the login methods and try again.")
+		return planData, diags
 	}
 
 	// Not all controller config contained in the plan, attempt
-	// to find it.
-	liveData, err := populateJujuProviderModelLive()
-	if err != nil {
-		diags.AddError("Unable to get live controller data", err.Error())
-		return data, diags
+	// to find it via the optional environment variables.
+	envVarData := jujuProviderModelEnvVar()
+	planEnvVarDataModel, planEnvVarDataDiags := planData.merge(envVarData, "environment variables")
+	diags.Append(planEnvVarDataDiags...)
+	if planEnvVarDataModel.valid() {
+		return planEnvVarDataModel, diags
 	}
-	if data.ControllerAddrs.ValueString() == "" {
-		data.ControllerAddrs = liveData.ControllerAddrs
+	if planEnvVarDataModel.loginViaClientCredentials() {
+		if planEnvVarDataModel.ControllerAddrs.ValueString() == "" {
+			diags.AddError("Controller address required", "The provider must know which juju controller to use. Please add to plan or use the JUJU_CONTROLLER_ADDRESSES environment variable.")
+		}
+		if planEnvVarDataModel.CACert.ValueString() == "" {
+			diags.AddError("Controller CACert required", "For the Juju certificate authority to be trusted by your system. Please add to plan or use the JUJU_CA_CERT environment variable.")
+		}
 	}
-	if data.UserName.ValueString() == "" {
-		data.UserName = liveData.UserName
+	if diags.HasError() {
+		return planEnvVarDataModel, diags
 	}
-	if data.Password.ValueString() == "" {
-		data.Password = liveData.Password
-	}
-	if data.ClientID.ValueString() == "" {
-		data.ClientID = liveData.ClientID
-	}
-	if data.ClientSecret.ValueString() == "" {
-		data.ClientSecret = liveData.ClientSecret
-	}
-	if data.CACert.ValueString() == "" {
-		data.CACert = liveData.CACert
+
+	// Not all controller config contained in the plan, attempt
+	// to find it via live discovery.
+	liveData, cliAlive := jujuProviderModelLiveDiscovery()
+	errMsgDataModel := planEnvVarDataModel
+	if cliAlive {
+		livePlanEnvVarDataModel, livePlanEnvVarDataDiags := planEnvVarDataModel.merge(liveData, "live discovery")
+		diags.Append(livePlanEnvVarDataDiags...)
+		if livePlanEnvVarDataModel.valid() {
+			return livePlanEnvVarDataModel, diags
+		}
+		errMsgDataModel = livePlanEnvVarDataModel
+	} else {
+		tflog.Debug(ctx, "Live discovery of juju controller failed. The Juju CLI could not be accessed.")
 	}
 
 	// Validate controller config and return helpful error messages.
-	validUserPass := (data.UserName.ValueString() != "" && data.Password.ValueString() != "")
-	validClientCredentials := (data.ClientID.ValueString() != "" && data.ClientSecret.ValueString() != "")
-	if !validUserPass && !validClientCredentials {
+	if !errMsgDataModel.loginViaUsername() && !errMsgDataModel.loginViaClientCredentials() {
 		diags.AddError(
 			"Username and password or client id and client secret must be set",
-			"Currently the provider can authenticate using username and password or client id and client secret, otherwise it will panic",
+			"Currently the provider can authenticate using username and password or client id and client secret, otherwise it will panic.",
 		)
 	}
-
-	if data.ControllerAddrs.ValueString() == "" {
+	if errMsgDataModel.ControllerAddrs.ValueString() == "" {
 		diags.AddError("Controller address required", "The provider must know which juju controller to use.")
 	}
-
-	if data.CACert.ValueString() == "" {
-		diags.AddError("Controller CACert", "Required for the Juju certificate authority to be trusted by your system")
+	if errMsgDataModel.CACert.ValueString() == "" {
+		diags.AddError("Controller CACert required", "For the Juju certificate authority to be trusted by your system.")
+	}
+	if diags.HasError() {
+		tflog.Debug(ctx, "Current login values.",
+			map[string]interface{}{"jujuProviderModel": planData})
 	}
 
-	return data, diags
+	return errMsgDataModel, diags
 }
 
 // Resources returns a slice of functions to instantiate each Resource

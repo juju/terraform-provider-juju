@@ -7,7 +7,7 @@ import (
 	"context"
 
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
-	"github.com/juju/charm/v11"
+	"github.com/juju/charm/v12"
 )
 
 type StringIsChannelValidator struct{}

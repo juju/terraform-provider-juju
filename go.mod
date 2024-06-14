@@ -5,8 +5,8 @@ go 1.21
 require (
 	github.com/bflad/tfproviderlint v0.30.0
 	github.com/hashicorp/terraform-plugin-docs v0.19.4
-	// v3.5-beta1
-	github.com/juju/juju v0.0.0-20240415234708-a7538882134d
+	// v3.5.1
+	github.com/juju/juju v0.0.0-20240524040137-95c267441801
 
 )
 
@@ -16,8 +16,7 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.23.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-testing v1.8.0
-	github.com/juju/charm/v11 v11.2.0
-	github.com/juju/charm/v12 v12.0.1
+	github.com/juju/charm/v12 v12.0.2
 	github.com/juju/clock v1.0.3
 	github.com/juju/cmd/v3 v3.0.14
 	github.com/juju/collections v1.0.4
@@ -129,8 +128,8 @@ require (
 	github.com/juju/lumberjack/v2 v2.0.2 // indirect
 	github.com/juju/mgo/v3 v3.0.4 // indirect
 	github.com/juju/mutex/v2 v2.0.0 // indirect
-	github.com/juju/os/v2 v2.2.3 // indirect
-	github.com/juju/packaging/v2 v2.0.1 // indirect
+	github.com/juju/os/v2 v2.2.5 // indirect
+	github.com/juju/packaging/v3 v3.0.0 // indirect
 	github.com/juju/persistent-cookiejar v1.0.0 // indirect
 	github.com/juju/proxy v1.0.0 // indirect
 	github.com/juju/pubsub/v2 v2.0.0 // indirect
