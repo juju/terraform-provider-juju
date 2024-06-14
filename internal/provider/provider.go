@@ -60,6 +60,9 @@ func jujuProviderModelEnvVar() jujuProviderModel {
 func jujuProviderModelLiveDiscovery() (jujuProviderModel, bool) {
 	data := jujuProviderModel{}
 	controllerConfig, cliNotExist := juju.GetLocalControllerConfig()
+	if cliNotExist {
+		return data, false
+	}
 
 	if ctrlAddrs, ok := controllerConfig[JujuControllerEnvKey]; ok && ctrlAddrs != "" {
 		data.ControllerAddrs = types.StringValue(ctrlAddrs)
@@ -73,7 +76,7 @@ func jujuProviderModelLiveDiscovery() (jujuProviderModel, bool) {
 	if password, ok := controllerConfig[JujuPasswordEnvKey]; ok && password != "" {
 		data.Password = types.StringValue(password)
 	}
-	return data, cliNotExist
+	return data, true
 }
 
 func getEnvVar(field string) types.String {
