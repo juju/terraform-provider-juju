@@ -12,12 +12,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math"
+	"mime"
+	"net/http"
+	"os"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/juju/charm/v12"
 	charmresources "github.com/juju/charm/v12/resource"
@@ -33,7 +38,10 @@ import (
 	apiresources "github.com/juju/juju/api/client/resources"
 	apispaces "github.com/juju/juju/api/client/spaces"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
+	jujuhttp "github.com/juju/juju/api/http"
 	"github.com/juju/juju/cmd/juju/application/utils"
+	resourcecmd "github.com/juju/juju/cmd/juju/resource"
+	"github.com/juju/juju/cmd/modelcmd"
 	corebase "github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
@@ -48,11 +56,92 @@ import (
 	goyaml "gopkg.in/yaml.v2"
 )
 
-var ApplicationNotFoundError = &applicationNotFoundError{}
+const (
+	// ContentTypeRaw is the HTTP content-type value used for raw, unformatted content.
+	ContentTypeRaw = "application/octet-stream"
+)
+const (
+	// MediaTypeFormData is the media type for file uploads (see mime.FormatMediaType).
+	MediaTypeFormData = "form-data"
+	// QueryParamPendingID is the query parameter we use to send up the pending ID.
+	QueryParamPendingID = "pendingid"
+)
+
+const (
+	// HeaderContentType is the header name for the type of file upload.
+	HeaderContentType = "Content-Type"
+	// HeaderContentSha384 is the header name for the sha hash of a file upload.
+	HeaderContentSha384 = "Content-Sha384"
+	// HeaderContentLength is the header name for the length of a file upload.
+	HeaderContentLength = "Content-Length"
+	// HeaderContentDisposition is the header name for value that holds the filename.
+	HeaderContentDisposition = "Content-Disposition"
+)
+
+const (
+	// HTTPEndpointPath is the URL path, with substitutions, for a resource request.
+	HTTPEndpointPath = "/applications/%s/resources/%s"
+)
+
+const FilenameParamForContentDispositionHeader = "filename"
+
+// UploadRequest defines a single upload request.
+type UploadRequest struct {
+	// Application is the application ID.
+	Application string
+
+	// Name is the resource name.
+	Name string
+
+	// Filename is the name of the file as it exists on disk.
+	Filename string
+
+	// Size is the size of the uploaded data, in bytes.
+	Size int64
+
+	// Fingerprint is the fingerprint of the uploaded data.
+	Fingerprint charmresources.Fingerprint
+
+	// PendingID is the pending ID to associate with this upload, if any.
+	PendingID string
+
+	// Content is the content to upload.
+	Content io.ReadSeeker
+}
+
+type HttpRequestClient struct {
+	base.ClientFacade
+	facade     base.FacadeCaller
+	httpClient jujuhttp.HTTPDoer
+}
+
+type osFilesystem struct{}
 
 // ApplicationNotFoundError
 type applicationNotFoundError struct {
 	appName string
+}
+
+var ApplicationNotFoundError = &applicationNotFoundError{}
+
+// newEndpointPath returns the API URL path for the identified resource.
+func newEndpointPath(application string, name string) string {
+	return fmt.Sprintf(HTTPEndpointPath, application, name)
+}
+
+// ResourceHttpClient returns a new Client for the given raw API caller.
+func ResourceHttpClient(apiCaller base.APICallCloser) *HttpRequestClient {
+	frontend, backend := base.NewClientFacade(apiCaller, "Resources")
+
+	httpClient, err := apiCaller.HTTPClient()
+	if err != nil {
+		return nil
+	}
+	return &HttpRequestClient{
+		ClientFacade: frontend,
+		facade:       backend,
+		httpClient:   httpClient,
+	}
 }
 
 func (ae *applicationNotFoundError) Error() string {
@@ -87,7 +176,7 @@ func newApplicationClient(sc SharedClient) *applicationsClient {
 	}
 }
 
-// ConfigEntry is an auxiliar struct to keep information about
+// ConfigEntry is an auxiliary struct to keep information about
 // juju application config entries. Specially, we want to know
 // if they have the default value.
 type ConfigEntry struct {
@@ -139,13 +228,13 @@ type CreateApplicationInput struct {
 	Placement        string
 	Constraints      constraints.Value
 	EndpointBindings map[string]string
-	Resources        map[string]int
+	Resources        map[string]string
 }
 
 // validateAndTransform returns transformedCreateApplicationInput which
 // validated and in the proper format for both the new and legacy deployment
 // methods. Select input is not transformed due to differences in the
-// 2 deployement methods, such as config.
+// 2 deployment methods, such as config.
 func (input CreateApplicationInput) validateAndTransform(conn api.Connection) (parsed transformedCreateApplicationInput, err error) {
 	parsed.charmChannel = input.CharmChannel
 	parsed.charmName = input.CharmName
@@ -240,7 +329,7 @@ type transformedCreateApplicationInput struct {
 	units            int
 	trust            bool
 	endpointBindings map[string]string
-	resources        map[string]int
+	resources        map[string]string
 }
 
 type CreateApplicationResponse struct {
@@ -266,7 +355,7 @@ type ReadApplicationResponse struct {
 	Principal        bool
 	Placement        string
 	EndpointBindings map[string]string
-	Resources        map[string]int
+	Resources        map[string]string
 }
 
 type UpdateApplicationInput struct {
@@ -285,12 +374,43 @@ type UpdateApplicationInput struct {
 	Placement        map[string]interface{}
 	Constraints      *constraints.Value
 	EndpointBindings map[string]string
-	Resources        map[string]int
+	Resources        map[string]string
 }
 
 type DestroyApplicationInput struct {
 	ApplicationName string
 	ModelName       string
+}
+
+func (osFilesystem) Create(name string) (*os.File, error) {
+	return os.Create(name)
+}
+
+func (osFilesystem) RemoveAll(path string) error {
+	return os.RemoveAll(path)
+}
+
+func (osFilesystem) Open(name string) (modelcmd.ReadSeekCloser, error) {
+	return os.Open(name)
+}
+
+func (osFilesystem) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
+	return os.OpenFile(name, flag, perm)
+}
+
+func (osFilesystem) Stat(name string) (os.FileInfo, error) {
+	return os.Stat(name)
+}
+
+// isInt checks if strings consists from digits
+// Used to detect resources which are given with revision number
+func isInt(s string) bool {
+	for _, c := range s {
+		if !unicode.IsDigit(c) {
+			return false
+		}
+	}
+	return true
 }
 
 func resolveCharmURL(charmName string) (*charm.URL, error) {
@@ -319,8 +439,9 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	}
 
 	applicationAPIClient := apiapplication.NewClient(conn)
+	resourceHttpClient := ResourceHttpClient(conn)
 	if applicationAPIClient.BestAPIVersion() >= 19 {
-		err = c.deployFromRepository(applicationAPIClient, transformedInput)
+		err = c.deployFromRepository(applicationAPIClient, resourceHttpClient, transformedInput)
 	} else {
 		err = c.legacyDeploy(ctx, conn, applicationAPIClient, transformedInput)
 		err = jujuerrors.Annotate(err, "legacy deploy method")
@@ -338,20 +459,15 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	}, err
 }
 
-func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplication.Client, transformedInput transformedCreateApplicationInput) error {
+func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplication.Client, resourceHttpClient *HttpRequestClient, transformedInput transformedCreateApplicationInput) error {
 	settingsForYaml := map[interface{}]interface{}{transformedInput.applicationName: transformedInput.config}
 	configYaml, err := goyaml.Marshal(settingsForYaml)
 	if err != nil {
 		return jujuerrors.Trace(err)
 	}
 
-	resources := make(map[string]string)
-	for k, v := range transformedInput.resources {
-		resources[k] = strconv.Itoa(v)
-	}
-
 	c.Tracef("Calling DeployFromRepository")
-	_, _, errs := applicationAPIClient.DeployFromRepository(apiapplication.DeployFromRepositoryArg{
+	deployInfo, localPendingResources, errs := applicationAPIClient.DeployFromRepository(apiapplication.DeployFromRepositoryArg{
 		CharmName:        transformedInput.charmName,
 		ApplicationName:  transformedInput.applicationName,
 		Base:             &transformedInput.charmBase,
@@ -363,13 +479,25 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplic
 		Placement:        transformedInput.placement,
 		Revision:         &transformedInput.charmRevision,
 		Trust:            transformedInput.trust,
-		Resources:        resources,
+		Resources:        transformedInput.resources,
 	})
-	return errors.Join(errs...)
+
+	if len(errs) != 0 {
+		return errors.Join(errs...)
+	}
+
+	fileSystem := osFilesystem{}
+	// Upload the provided local resources to Juju
+	uploadErr := uploadExistingPendingResources(deployInfo.Name, localPendingResources, fileSystem, resourceHttpClient)
+
+	if uploadErr != nil {
+		return uploadErr
+	}
+	return nil
 }
 
 // TODO (hml) 23-Feb-2024
-// Remove the funcationality associated with legacyDeploy
+// Remove the functionality associated with legacyDeploy
 // once the provider no longer supports a version of juju
 // before 3.3.
 func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connection, applicationAPIClient *apiapplication.Client, transformedInput transformedCreateApplicationInput) error {
@@ -702,7 +830,7 @@ func splitCommaDelimitedList(list string) []string {
 
 // processResources is a helper function to process the charm
 // metadata and request the download of any additional resource.
-func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string, resources map[string]int) (map[string]string, error) {
+func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string, resources map[string]string) (map[string]string, error) {
 	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL)
 	if err != nil {
 		return nil, typedError(err)
@@ -972,10 +1100,10 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	if err != nil {
 		return nil, jujuerrors.Annotate(err, "failed to list application resources")
 	}
-	resourceRevisions := make(map[string]int)
+	resourceRevisions := make(map[string]string)
 	for _, iResources := range resources {
 		for _, resource := range iResources.Resources {
-			resourceRevisions[resource.Name] = resource.Revision
+			resourceRevisions[resource.Name] = strconv.Itoa(resource.Revision)
 		}
 	}
 
@@ -1023,7 +1151,6 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	charmsAPIClient := apicharms.NewClient(conn)
 	clientAPIClient := c.getClientAPIClient(conn)
 	modelconfigAPIClient := c.getModelConfigAPIClient(conn)
-
 	resourcesAPIClient, err := c.getResourceAPIClient(conn)
 	if err != nil {
 		return err
@@ -1299,7 +1426,7 @@ func (c applicationsClient) computeSetCharmConfig(
 }
 
 func resolveCharm(charmsAPIClient *apicharms.Client, curl *charm.URL, origin apicommoncharm.Origin) (*charm.URL, apicommoncharm.Origin, []corebase.Base, error) {
-	// Charm or bundle has been supplied as a URL so we resolve and
+	// Charm or bundle has been supplied as a URL, so we resolve and
 	// deploy using the store but pass in the origin command line
 	// argument so users can target a specific origin.
 	resolved, err := charmsAPIClient.ResolveCharms([]apicharms.CharmToResolve{{URL: curl, Origin: origin}})
@@ -1317,27 +1444,18 @@ func strPtr(in string) *string {
 	return &in
 }
 
-func (c applicationsClient) updateResources(appName string, resources map[string]int, charmsAPIClient *apicharms.Client,
+func (c applicationsClient) updateResources(appName string, resources map[string]string, charmsAPIClient *apicharms.Client,
 	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient) (map[string]string, error) {
 	meta, err := utils.GetMetaResources(charmID.URL, charmsAPIClient)
 	if err != nil {
 		return nil, err
 	}
-
-	resourceRevisions := make(map[string]string)
-	for k, v := range resources {
-		resourceRevisions[k] = strconv.Itoa(v)
-	}
-
-	// TODO (cderici): Provided resources for GetUpgradeResources are user inputs.
-	// It's a map[string]string that should come from the plan itself. We currently
-	// don't have a resources block in the charm.
 	filtered, err := utils.GetUpgradeResources(
 		charmID,
 		charmsAPIClient,
 		resourcesAPIClient,
 		appName,
-		resourceRevisions, // nil
+		resources,
 		meta,
 	)
 	if err != nil {
@@ -1350,45 +1468,176 @@ func (c applicationsClient) updateResources(appName string, resources map[string
 	return addPendingResources(appName, filtered, resources, charmID, resourcesAPIClient)
 }
 
-func addPendingResources(appName string, resourcesToBeAdded map[string]charmresources.Meta, resourceRevisions map[string]int,
+func addPendingResources(appName string, resourcesToBeAdded map[string]charmresources.Meta, resourcesRevisions map[string]string,
 	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient) (map[string]string, error) {
-	pendingResources := []charmresources.Resource{}
-	for _, v := range resourcesToBeAdded {
-		aux := charmresources.Resource{
-			Meta:     v,
-			Origin:   charmresources.OriginStore,
-			Revision: -1,
-		}
-		if resourceRevisions != nil {
-			if revision, ok := resourceRevisions[v.Name]; ok {
-				aux.Revision = revision
-			}
-		}
-
-		pendingResources = append(pendingResources, aux)
-	}
-
-	resourcesReq := apiresources.AddPendingResourcesArgs{
-		ApplicationID: appName,
-		CharmID: apiresources.CharmID{
-			URL:    charmID.URL,
-			Origin: charmID.Origin,
-		},
-		Resources: pendingResources,
-	}
-
-	toRequest, err := resourcesAPIClient.AddPendingResources(resourcesReq)
-	if err != nil {
-		return nil, typedError(err)
-	}
-
-	// now build a map with the resource name and the corresponding UUID
+	pendingResourcesforAdd := []charmresources.Resource{}
 	toReturn := map[string]string{}
-	for i, argsResource := range pendingResources {
-		toReturn[argsResource.Meta.Name] = toRequest[i]
+
+	for _, resourceMeta := range resourcesToBeAdded {
+		if resourcesRevisions != nil {
+			if deployValue, ok := resourcesRevisions[resourceMeta.Name]; ok {
+				if isInt(deployValue) {
+					// A resource revision is provided
+					providedRev, err := strconv.Atoi(deployValue)
+					if err != nil {
+						return nil, typedError(err)
+					}
+					resourceFromCharmhub := charmresources.Resource{
+						Meta:     resourceMeta,
+						Origin:   charmresources.OriginStore,
+						Revision: -1,
+					}
+					// if the resource is removed, providedRev is 0
+					// Then, Charm is deployed with default resources according to channel
+					// Otherwise, Charm is deployed with the provided revision
+					if providedRev != 0 {
+						resourceFromCharmhub.Revision = providedRev
+					}
+					pendingResourcesforAdd = append(pendingResourcesforAdd, resourceFromCharmhub)
+				} else {
+					// A new resource to be uploaded by the client
+					localResource := charmresources.Resource{
+						Meta:   resourceMeta,
+						Origin: charmresources.OriginUpload,
+					}
+
+					fileSystem := osFilesystem{}
+					t, typeParseErr := charmresources.ParseType(resourceMeta.Type.String())
+					if typeParseErr != nil {
+						return nil, typedError(typeParseErr)
+					}
+					r, openResErr := resourcecmd.OpenResource(deployValue, t, fileSystem.Open)
+					if openResErr != nil {
+						return nil, typedError(openResErr)
+					}
+					toRequestUpload, err := resourcesAPIClient.UploadPendingResource(appName, localResource, deployValue, r)
+					if err != nil {
+						return nil, typedError(err)
+					}
+					// Add the resource name and the corresponding UUID to the resources map
+					toReturn[resourceMeta.Name] = toRequestUpload
+				}
+			}
+		} else {
+			// If there is no resource revisions, Charm is deployed with default resources according to channel
+			resourceFromCharmhub := charmresources.Resource{
+				Meta:     resourceMeta,
+				Origin:   charmresources.OriginStore,
+				Revision: -1,
+			}
+			pendingResourcesforAdd = append(pendingResourcesforAdd, resourceFromCharmhub)
+		}
+	}
+	if len(pendingResourcesforAdd) != 0 {
+		resourcesReqforAdd := apiresources.AddPendingResourcesArgs{
+			ApplicationID: appName,
+			CharmID: apiresources.CharmID{
+				URL:    charmID.URL,
+				Origin: charmID.Origin,
+			},
+			Resources: pendingResourcesforAdd,
+		}
+		toRequestAdd, err := resourcesAPIClient.AddPendingResources(resourcesReqforAdd)
+		if err != nil {
+			return nil, typedError(err)
+		}
+		// Add the resource name and the corresponding UUID to the resources map
+		for i, argsResource := range pendingResourcesforAdd {
+			toReturn[argsResource.Meta.Name] = toRequestAdd[i]
+		}
+	}
+	return toReturn, nil
+}
+
+// Upload sends the provided resource blob up to Juju.
+func upload(appName, name, filename, pendingID string, reader io.ReadSeeker, resourceHttpClient *HttpRequestClient) error {
+	uReq, err := apiresources.NewUploadRequest(appName, name, filename, reader)
+	if err != nil {
+		return jujuerrors.Trace(err)
+	}
+	if pendingID != "" {
+		uReq.PendingID = pendingID
+	}
+	req, err := uReq.HTTPRequest()
+	if err != nil {
+		return jujuerrors.Trace(err)
+	}
+	var response params.UploadResult
+	if err := resourceHttpClient.httpClient.Do(resourceHttpClient.facade.RawAPICaller().Context(), req, &response); err != nil {
+		return jujuerrors.Trace(err)
 	}
 
-	return toReturn, nil
+	return nil
+}
+
+// setFilename sets a name to the file.
+func setFilename(filename string, req *http.Request) {
+	filename = mime.BEncoding.Encode("utf-8", filename)
+
+	disp := mime.FormatMediaType(
+		MediaTypeFormData,
+		map[string]string{FilenameParamForContentDispositionHeader: filename},
+	)
+
+	req.Header.Set(HeaderContentDisposition, disp)
+}
+
+// HTTPRequest generates a new HTTP request.
+func (ur UploadRequest) HTTPRequest() (*http.Request, error) {
+	urlStr := newEndpointPath(ur.Application, ur.Name)
+
+	req, err := http.NewRequest(http.MethodPut, urlStr, ur.Content)
+	if err != nil {
+		return nil, jujuerrors.Trace(err)
+	}
+
+	req.Header.Set(HeaderContentType, ContentTypeRaw)
+	req.Header.Set(HeaderContentSha384, ur.Fingerprint.String())
+	req.Header.Set(HeaderContentLength, fmt.Sprint(ur.Size))
+	setFilename(ur.Filename, req)
+
+	req.ContentLength = ur.Size
+
+	if ur.PendingID != "" {
+		query := req.URL.Query()
+		query.Set(QueryParamPendingID, ur.PendingID)
+		req.URL.RawQuery = query.Encode()
+	}
+
+	return req, nil
+}
+
+// UploadExistingPendingResources uploads local resources. Used
+// after DeployFromRepository, where the resources have been added
+// to the controller.
+func uploadExistingPendingResources(
+	appName string,
+	pendingResources []apiapplication.PendingResourceUpload,
+	filesystem modelcmd.Filesystem,
+	resourceHttpClient *HttpRequestClient) error {
+	if pendingResources == nil {
+		return nil
+	}
+	pendingID := ""
+
+	for _, pendingResUpload := range pendingResources {
+		t, typeParseErr := charmresources.ParseType(pendingResUpload.Type)
+		if typeParseErr != nil {
+			return jujuerrors.Annotatef(typeParseErr, "invalid type %v for pending resource %v",
+				pendingResUpload.Type, pendingResUpload.Name)
+		}
+
+		r, openResErr := resourcecmd.OpenResource(pendingResUpload.Filename, t, filesystem.Open)
+		if openResErr != nil {
+			return jujuerrors.Annotatef(openResErr, "unable to open resource %v", pendingResUpload.Name)
+		}
+		uploadErr := upload(appName, pendingResUpload.Name, pendingResUpload.Filename, pendingID, r, resourceHttpClient)
+
+		if uploadErr != nil {
+			return jujuerrors.Trace(uploadErr)
+		}
+	}
+	return nil
 }
 
 func computeUpdatedBindings(modelDefaultSpace string, currentBindings map[string]string, inputBindings map[string]string, appName string) (params.ApplicationMergeBindingsArgs, error) {

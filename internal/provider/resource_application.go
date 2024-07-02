@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -28,7 +29,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
 	"github.com/juju/juju/core/constraints"
-
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -43,17 +43,25 @@ const (
 	ResourceKey         = "resources"
 
 	resourceKeyMarkdownDescription = `
-Charm resource revisions. Must evaluate to an integer.
-
-	There are a few scenarios that need to be considered:
-	* If the plan does not specify resource revision and resources are added to the plan,
-	resources with specified revisions will be attached to the application (equivalent
-	to juju attach-resource).
-	* If the plan does specify resource revisions and:
-		* If the charm revision or channel is updated, then resources get updated to the 
-		  latest revision.
-	    * If the charm revision or channel are not updated, then no changes will take 
-		  place (juju does not have an "un-attach" command for resources).
+Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
+There are a few scenarios that need to be considered:
+* Charms could be deployed with specifying the resources (from CharmHub or an OCI image repository). If the resources are not specified, the resources which are associated with the Charm in the CharmHub are used.
+  Resource inputs are provided in a string format.
+  - Resource revision number from CharmHub (string)
+  - OCI image information as a URL (string)
+  - A path of json or yaml file which includes OCI image repository information (string)
+* Changing resource input from a revision to a custom OCI resource is processed and updated smoothly according to the provided input.
+* Resources could be added to the Terraform plan after deployment.
+  - If the resources are added to the plan (as a revision number or a custom OCI image resource), specified resources are attached to the application (equivalent to juju attach-resource).
+* Charm which includes resources could be updated.
+  If the plan does specify resource revisions from CharmHub:
+  - if the charm channel is updated, resources get updated to the latest revision associated with the updated channel.
+  If the plan does specify custom OCI image resources:
+  - if the charm channel is updated, existing resources are kept. (Resources are not detached)
+* Resources could be removed from the Terraform plan.
+  If the plan does specify resource revisions from CharmHub or custom OCI images, then resources are removed from the plan:
+  - If the charm channel is updated, resources get updated to the latest revision associated with the updated charm channel.
+  - If the charm channel is not updated then the resources get updated to the latest revision associated with the existing charm channel.
 `
 )
 
@@ -93,6 +101,17 @@ type applicationResourceModel struct {
 	UnitCount types.Int64 `tfsdk:"units"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
+}
+
+// isInt checks if strings consists from digits
+// Used to detect resources which are given with revision number
+func isInt(s string) bool {
+	for _, c := range s {
+		if !unicode.IsDigit(c) {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *applicationResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -265,7 +284,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 			},
 			ResourceKey: schema.MapAttribute{
 				Optional:            true,
-				ElementType:         types.Int64Type,
+				ElementType:         types.StringType,
 				MarkdownDescription: resourceKeyMarkdownDescription,
 			},
 		},
@@ -466,7 +485,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	resourceRevisions := make(map[string]int)
+	resourceRevisions := make(map[string]string)
 	resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &resourceRevisions, false)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -748,15 +767,15 @@ func (r *applicationResource) toEndpointBindingsSet(ctx context.Context, endpoin
 	return types.SetValueFrom(ctx, endpointBindingsType, endpointBindingsSlice)
 }
 
-func (r *applicationResource) configureResourceData(ctx context.Context, resourceType attr.Type, resources types.Map, respResources map[string]int) (types.Map, diag.Diagnostics) {
-	var previousResources map[string]int
+func (r *applicationResource) configureResourceData(ctx context.Context, resourceType attr.Type, resources types.Map, respResources map[string]string) (types.Map, diag.Diagnostics) {
+	var previousResources map[string]string
 	diagErr := resources.ElementsAs(ctx, &previousResources, false)
 	if diagErr.HasError() {
 		r.trace("configureResourceData exit A")
 		return types.Map{}, diagErr
 	}
 	if previousResources == nil {
-		previousResources = make(map[string]int)
+		previousResources = make(map[string]string)
 	}
 	// known previously
 	// update the values from the previous config
@@ -765,7 +784,7 @@ func (r *applicationResource) configureResourceData(ctx context.Context, resourc
 		// Add if the value has changed from the previous state
 		if previousValue, found := previousResources[k]; found {
 			if v != previousValue {
-				// remember that this terraform schema type only accepts strings
+				// remember that this Terraform schema type only accepts strings
 				previousResources[k] = v
 				changes = true
 			}
@@ -882,12 +901,22 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	// NOT to update resources, because we want revisions fixed to those
 	// specified in the plan.
 	if plan.Resources.Equal(state.Resources) {
-		planResourceMap := make(map[string]int)
+		planResourceMap := make(map[string]string)
 		resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &planResourceMap, false)...)
 		updateApplicationInput.Resources = planResourceMap
+		// Resource revisions exists in the plan but channel is updated
+		// Then, the resources get updated to the latest resource revision according to charm channel
+		if len(updateApplicationInput.Resources) != 0 && updateApplicationInput.Channel != "" {
+			for k, v := range updateApplicationInput.Resources {
+				if isInt(v) {
+					// Set resource revision to zero gets the latest resource revision from CharmHub
+					updateApplicationInput.Resources[k] = "0"
+				}
+			}
+		}
 	} else {
-		planResourceMap := make(map[string]int)
-		stateResourceMap := make(map[string]int)
+		planResourceMap := make(map[string]string)
+		stateResourceMap := make(map[string]string)
 		resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &planResourceMap, false)...)
 		resp.Diagnostics.Append(state.Resources.ElementsAs(ctx, &stateResourceMap, false)...)
 		if resp.Diagnostics.HasError() {
@@ -895,14 +924,40 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 
 		// what happens when the plan suddenly does not specify resource
-		// revisions, but state does..
+		// revisions, but state does.
 		for k, v := range planResourceMap {
 			if stateResourceMap[k] != v {
 				if updateApplicationInput.Resources == nil {
 					// initialize just in case
-					updateApplicationInput.Resources = make(map[string]int)
+					updateApplicationInput.Resources = make(map[string]string)
 				}
 				updateApplicationInput.Resources[k] = v
+			}
+		}
+		// Resources are removed
+		// Then, the resources get updated to the latest resource revision according to channel
+		if len(planResourceMap) == 0 && len(stateResourceMap) != 0 {
+			for k := range stateResourceMap {
+				if updateApplicationInput.Resources == nil {
+					// initialize the resources
+					updateApplicationInput.Resources = make(map[string]string)
+					// Set resource revision to zero gets the latest resource revision from CharmHub
+					updateApplicationInput.Resources[k] = "0"
+				}
+			}
+		}
+		// Resource revisions exists in the plan but channel is updated
+		// Then, the resources get updated to the latest resource revision according to channel
+		if len(planResourceMap) != 0 && updateApplicationInput.Channel != "" {
+			for k, v := range planResourceMap {
+				if isInt(v) {
+					if updateApplicationInput.Resources == nil {
+						// initialize just in case
+						updateApplicationInput.Resources = make(map[string]string)
+					}
+					// Set resource revision to zero gets the latest resource revision from CharmHub
+					updateApplicationInput.Resources[k] = "0"
+				}
 			}
 		}
 	}

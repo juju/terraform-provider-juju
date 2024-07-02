@@ -18,6 +18,7 @@ import (
 	"github.com/juju/names/v4"
 	"github.com/juju/utils/v3"
 	"github.com/juju/version/v2"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/mock/gomock"
 )
@@ -302,4 +303,20 @@ func (s *ApplicationSuite) TestReadApplicationRetrySubordinate() {
 // a normal test function and pass our suite to suite.Run
 func TestApplicationSuite(t *testing.T) {
 	suite.Run(t, new(ApplicationSuite))
+}
+
+func TestNewEndpointPath(t *testing.T) {
+	application := "ausf"
+	name := "sdcore-ausf-k8s"
+	want := "/applications/ausf/resources/sdcore-ausf-k8s"
+	got := newEndpointPath(application, name)
+	assert.Equal(t, got, want)
+}
+
+func TestNewEndpointPathEmptyInputs(t *testing.T) {
+	application := ""
+	name := ""
+	want := "/applications//resources/"
+	got := newEndpointPath(application, name)
+	assert.Equal(t, got, want)
 }
