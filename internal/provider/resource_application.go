@@ -5,7 +5,9 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/dustin/go-humanize"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
@@ -19,8 +21,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -28,6 +30,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
 	"github.com/juju/juju/core/constraints"
+	jujustorage "github.com/juju/juju/storage"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -41,6 +44,7 @@ const (
 	SpacesKey           = "spaces"
 	EndpointBindingsKey = "endpoint_bindings"
 	ResourceKey         = "resources"
+	StorageKey          = "storage"
 
 	resourceKeyMarkdownDescription = `
 Charm resource revisions. Must evaluate to an integer.
@@ -76,15 +80,17 @@ type applicationResource struct {
 // applicationResourceModel describes the application data model.
 // tfsdk must match user resource schema attribute names.
 type applicationResourceModel struct {
-	ApplicationName  types.String `tfsdk:"name"`
-	Charm            types.List   `tfsdk:"charm"`
-	Config           types.Map    `tfsdk:"config"`
-	Constraints      types.String `tfsdk:"constraints"`
-	Expose           types.List   `tfsdk:"expose"`
-	ModelName        types.String `tfsdk:"model"`
-	Placement        types.String `tfsdk:"placement"`
-	EndpointBindings types.Set    `tfsdk:"endpoint_bindings"`
-	Resources        types.Map    `tfsdk:"resources"`
+	ApplicationName   types.String `tfsdk:"name"`
+	Charm             types.List   `tfsdk:"charm"`
+	Config            types.Map    `tfsdk:"config"`
+	Constraints       types.String `tfsdk:"constraints"`
+	Expose            types.List   `tfsdk:"expose"`
+	ModelName         types.String `tfsdk:"model"`
+	Placement         types.String `tfsdk:"placement"`
+	EndpointBindings  types.Set    `tfsdk:"endpoint_bindings"`
+	Resources         types.Map    `tfsdk:"resources"`
+	StorageDirectives types.Map    `tfsdk:"storage_directives"`
+	Storage           types.Set    `tfsdk:"storage"`
 	// TODO - remove Principal when we version the schema
 	// and remove deprecated elements. Once we create upgrade
 	// functionality it can be removed from the structure.
@@ -164,52 +170,41 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"storage": schema.SetNestedAttribute{
-				Description: "Configure storage constraints for the juju application.",
+			"storage_directives": schema.MapAttribute{
+				Description: "Storage directives (constraints) for the juju application. " +
+					"The map key is the label of the storage defined by the charm, " +
+					"the map value is the storage directive in the form <pool>,<count>,<size>.",
+				ElementType: types.StringType,
 				Optional:    true,
+				Validators: []validator.Map{
+					stringIsStorageDirectiveValidator{},
+				},
+				PlanModifiers: []planmodifier.Map{
+					mapplanmodifier.RequiresReplaceIf(storageDirectivesMapRequiresReplace, "", ""),
+				},
+			},
+			"storage": schema.SetNestedAttribute{
+				Description: "Storage used by the application.",
+				Optional:    true,
+				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"label": schema.StringAttribute{
 							Description: "The specific storage option defined in the charm.",
-							Required:    true,
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.RequiresReplaceIfConfigured(),
-								stringplanmodifier.UseStateForUnknown(),
-							},
+							Computed:    true,
 						},
 						"size": schema.StringAttribute{
-							Description: "The size of each volume. E.g. 100G.",
-							Optional:    true,
+							Description: "The size of each volume.",
 							Computed:    true,
-							Default:     stringdefault.StaticString("1G"),
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.RequiresReplaceIfConfigured(),
-								stringplanmodifier.UseStateForUnknown(),
-							},
 						},
 						"pool": schema.StringAttribute{
-							Description: "Name of the storage pool to use. E.g. ebs on aws.",
-							Optional:    true,
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.RequiresReplaceIfConfigured(),
-								stringplanmodifier.UseStateForUnknown(),
-							},
+							Description: "Name of the storage pool to use.",
+							Computed:    true,
 						},
 						"count": schema.Int64Attribute{
 							Description: "The number of volumes.",
-							Optional:    true,
 							Computed:    true,
-							Default:     int64default.StaticInt64(int64(1)),
-							PlanModifiers: []planmodifier.Int64{
-								int64planmodifier.RequiresReplaceIfConfigured(),
-								int64planmodifier.UseStateForUnknown(),
-							},
 						},
-					},
-				},
-				Validators: []validator.Set{
-					setNestedIsAttributeUniqueValidator{
-						PathExpressions: path.MatchRelative().AtAnySetValue().MergeExpressions(path.MatchRelative().AtName("label")),
 					},
 				},
 			},
@@ -422,6 +417,14 @@ func (n nestedEndpointBinding) transformToStringTuple() (string, string) {
 	return n.Endpoint.ValueString(), n.Space.ValueString()
 }
 
+// nestedStorage represents the single element of the storage SetNestedAttribute
+type nestedStorage struct {
+	Label types.String `tfsdk:"label"`
+	Size  types.String `tfsdk:"size"`
+	Pool  types.String `tfsdk:"pool"`
+	Count types.Int64  `tfsdk:"count"`
+}
+
 // Create is called when the provider must create a new resource. Config
 // and planned state values should be read from the
 // CreateRequest and new state values set on the CreateResponse.
@@ -516,30 +519,65 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		}
 	}
 
+	// Parse storage
+	var storageConstraints map[string]jujustorage.Constraints
+	if !plan.StorageDirectives.IsUnknown() {
+		storageDirectives := make(map[string]string)
+		resp.Diagnostics.Append(plan.StorageDirectives.ElementsAs(ctx, &storageDirectives, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		storageConstraints = make(map[string]jujustorage.Constraints, len(storageDirectives))
+		for k, v := range storageDirectives {
+			result, err := jujustorage.ParseConstraints(v)
+			if err != nil {
+				resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse storage directives, got error: %s", err))
+				return
+			}
+			storageConstraints[k] = result
+		}
+	}
+
 	modelName := plan.ModelName.ValueString()
 	createResp, err := r.client.Applications.CreateApplication(ctx,
 		&juju.CreateApplicationInput{
-			ApplicationName:  plan.ApplicationName.ValueString(),
-			ModelName:        modelName,
-			CharmName:        charmName,
-			CharmChannel:     channel,
-			CharmRevision:    revision,
-			CharmBase:        planCharm.Base.ValueString(),
-			CharmSeries:      planCharm.Series.ValueString(),
-			Units:            int(plan.UnitCount.ValueInt64()),
-			Config:           configField,
-			Constraints:      parsedConstraints,
-			Trust:            plan.Trust.ValueBool(),
-			Expose:           expose,
-			Placement:        plan.Placement.ValueString(),
-			EndpointBindings: endpointBindings,
-			Resources:        resourceRevisions,
+			ApplicationName:    plan.ApplicationName.ValueString(),
+			ModelName:          modelName,
+			CharmName:          charmName,
+			CharmChannel:       channel,
+			CharmRevision:      revision,
+			CharmBase:          planCharm.Base.ValueString(),
+			CharmSeries:        planCharm.Series.ValueString(),
+			Units:              int(plan.UnitCount.ValueInt64()),
+			Config:             configField,
+			Constraints:        parsedConstraints,
+			Trust:              plan.Trust.ValueBool(),
+			Expose:             expose,
+			Placement:          plan.Placement.ValueString(),
+			EndpointBindings:   endpointBindings,
+			Resources:          resourceRevisions,
+			StorageConstraints: storageConstraints,
 		},
 	)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create application, got error: %s", err))
 		return
 	}
+
+	// trace storage constraints
+	r.trace("create application storage constraints", map[string]interface{}{"storageConstraints": storageConstraints})
+
+	// write storage constraints to private state
+	var setStorageConstraintBytes []byte
+	if len(storageConstraints) > 0 {
+		setStorageConstraintBytes, err = json.Marshal(storageConstraints)
+		if err != nil {
+			resp.Diagnostics.AddError("Internal Error", fmt.Sprintf("Unable to marshal storage constraints, got error: %s", err))
+			return
+		}
+	}
+	resp.Private.SetKey(ctx, "storage", setStorageConstraintBytes)
+
 	r.trace(fmt.Sprintf("create application resource %q", createResp.AppName))
 
 	readResp, err := r.client.Applications.ReadApplicationWithRetryOnNotFound(ctx, &juju.ReadApplicationInput{
@@ -568,10 +606,42 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		resp.Diagnostics.Append(dErr...)
 		return
 	}
+
+	storageType := req.Config.Schema.GetAttributes()[StorageKey].(schema.SetNestedAttribute).NestedObject.Type()
+	nestedStorageSlice := make([]nestedStorage, 0, len(readResp.Storage))
+	for name, storage := range readResp.Storage {
+		humanizedSize := transformSizeToHumanizedFormat(storage.Size)
+		nestedStorageSlice = append(nestedStorageSlice, nestedStorage{
+			Label: types.StringValue(name),
+			Size:  types.StringValue(humanizedSize),
+			Pool:  types.StringValue(storage.Pool),
+			Count: types.Int64Value(int64(storage.Count)),
+		})
+	}
+	if len(nestedStorageSlice) > 0 {
+		plan.Storage, dErr = types.SetValueFrom(ctx, storageType, nestedStorageSlice)
+		if dErr.HasError() {
+			resp.Diagnostics.Append(dErr...)
+			return
+		}
+	} else {
+		plan.Storage = types.SetNull(storageType)
+	}
+
 	plan.ID = types.StringValue(newAppID(plan.ModelName.ValueString(), createResp.AppName))
 	r.trace("Created", applicationResourceModelForLogging(ctx, &plan))
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func transformSizeToHumanizedFormat(size uint64) string {
+	// remove the decimal point and the trailing zero
+	formattedSize := strings.ReplaceAll(humanize.Bytes(size*humanize.MByte), ".0", "")
+	// remove all spaces
+	formattedSize = strings.ReplaceAll(formattedSize, " ", "")
+	// remove the B at the end
+	formattedSize = formattedSize[:len(formattedSize)-1]
+	return formattedSize
 }
 
 func handleApplicationNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
@@ -625,7 +695,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 	if response == nil {
 		return
 	}
-	r.trace(fmt.Sprintf("read application resource %q", appName))
+	r.trace("read application", map[string]interface{}{"resource": appName, "response": response})
 
 	state.ApplicationName = types.StringValue(appName)
 	state.ModelName = types.StringValue(modelName)
@@ -683,6 +753,46 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 			resp.Diagnostics.Append(dErr...)
 			return
 		}
+	}
+
+	var getPrivateStorageConstraintBytes []byte
+	getPrivateStorageConstraintBytes, dErr = req.Private.GetKey(ctx, "storage")
+	if dErr.HasError() {
+		resp.Diagnostics.Append(dErr...)
+		return
+	}
+	var privateStorageConstraints map[string]jujustorage.Constraints
+	if len(getPrivateStorageConstraintBytes) > 0 {
+		if err := json.Unmarshal(getPrivateStorageConstraintBytes, &privateStorageConstraints); err != nil {
+			resp.Diagnostics.AddError("Internal Error", fmt.Sprintf("Unable to unmarshal storage constraints, got error: %s", err))
+			return
+		}
+	}
+	// trace private storage constraints
+	r.trace("read private storage constraints", map[string]interface{}{"privateStorageConstraints": privateStorageConstraints})
+
+	// convert the storage map to a list of nestedStorage
+	nestedStorageSlice := make([]nestedStorage, 0, len(response.Storage))
+	for name, storage := range response.Storage {
+		if _, ok := privateStorageConstraints[name]; !ok {
+			humanizedSize := transformSizeToHumanizedFormat(storage.Size)
+			nestedStorageSlice = append(nestedStorageSlice, nestedStorage{
+				Label: types.StringValue(name),
+				Size:  types.StringValue(humanizedSize),
+				Pool:  types.StringValue(storage.Pool),
+				Count: types.Int64Value(int64(storage.Count)),
+			})
+		}
+	}
+	storageType := req.State.Schema.GetAttributes()[StorageKey].(schema.SetNestedAttribute).NestedObject.Type()
+	if len(nestedStorageSlice) > 0 {
+		state.Storage, dErr = types.SetValueFrom(ctx, storageType, nestedStorageSlice)
+		if dErr.HasError() {
+			resp.Diagnostics.Append(dErr...)
+			return
+		}
+	} else {
+		state.Storage = types.SetNull(storageType)
 	}
 
 	resourceType := req.State.Schema.GetAttributes()[ResourceKey].(schema.MapAttribute).ElementType
@@ -916,12 +1026,23 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	if !plan.EndpointBindings.Equal(state.EndpointBindings) {
-		endpointBindings, diag := r.computeEndpointBindingsDeltas(ctx, state.EndpointBindings, plan.EndpointBindings)
-		if diag.HasError() {
-			resp.Diagnostics.Append(diag...)
+		endpointBindings, dErr := r.computeEndpointBindingsDeltas(ctx, state.EndpointBindings, plan.EndpointBindings)
+		if dErr.HasError() {
+			resp.Diagnostics.Append(dErr...)
 			return
 		}
 		updateApplicationInput.EndpointBindings = endpointBindings
+	}
+
+	// Check if we have new storage in plan that not existed in the state, and add their constraints to the
+	// update application input.
+	if !plan.StorageDirectives.Equal(state.StorageDirectives) {
+		directives, dErr := r.updateStorage(ctx, plan, state)
+		resp.Diagnostics.Append(dErr...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		updateApplicationInput.StorageConstraints = directives
 	}
 
 	if err := r.client.Applications.UpdateApplication(&updateApplicationInput); err != nil {
@@ -929,10 +1050,94 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
+	// If the plan has refreshed the charm, changed the unit count,
+	// or changed placement, wait for the changes to be seen in
+	// status. Including storage as it can be added on a refresh.
+	storageType := req.Config.Schema.GetAttributes()[StorageKey].(schema.SetNestedAttribute).NestedObject.Type()
+	if updateApplicationInput.Channel != "" ||
+		updateApplicationInput.Revision != nil ||
+		updateApplicationInput.Placement != nil ||
+		updateApplicationInput.Units != nil {
+		readResp, err := r.client.Applications.ReadApplicationWithRetryOnNotFound(ctx, &juju.ReadApplicationInput{
+			ModelName: updateApplicationInput.ModelName,
+			AppName:   updateApplicationInput.AppName,
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read application resource after update, got error: %s", err))
+			return
+		}
+		plan.Placement = types.StringValue(readResp.Placement)
+
+		var nestedStorageSlice []nestedStorage
+		for name, storage := range readResp.Storage {
+			humanizedSize := transformSizeToHumanizedFormat(storage.Size)
+			nestedStorageSlice = append(nestedStorageSlice, nestedStorage{
+				Label: types.StringValue(name),
+				Size:  types.StringValue(humanizedSize),
+				Pool:  types.StringValue(storage.Pool),
+				Count: types.Int64Value(int64(storage.Count)),
+			})
+		}
+		if len(nestedStorageSlice) > 0 {
+			var dErr diag.Diagnostics
+			plan.Storage, dErr = types.SetValueFrom(ctx, storageType, nestedStorageSlice)
+			if dErr.HasError() {
+				resp.Diagnostics.Append(dErr...)
+				return
+			}
+		} else {
+			plan.Storage = types.SetNull(storageType)
+		}
+	} else {
+		if !state.Storage.IsUnknown() {
+			plan.Storage = state.Storage
+		} else {
+			plan.Storage.IsNull()
+		}
+	}
+
 	plan.ID = types.StringValue(newAppID(plan.ModelName.ValueString(), plan.ApplicationName.ValueString()))
 	plan.Principal = types.BoolNull()
 	r.trace("Updated", applicationResourceModelForLogging(ctx, &plan))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// updateStorage compares the plan storage directives to the
+// state storage directives, any new labels are returned to be
+// added as storage constraints.
+func (r *applicationResource) updateStorage(
+	ctx context.Context,
+	plan applicationResourceModel,
+	state applicationResourceModel,
+) (map[string]jujustorage.Constraints, diag.Diagnostics) {
+	diagnostics := diag.Diagnostics{}
+	var updatedStorageDirectivesMap map[string]jujustorage.Constraints
+
+	var planStorageDirectives, stateStorageDirectives map[string]string
+	diagnostics.Append(plan.StorageDirectives.ElementsAs(ctx, &planStorageDirectives, false)...)
+	if diagnostics.HasError() {
+		return updatedStorageDirectivesMap, diagnostics
+	}
+	diagnostics.Append(state.StorageDirectives.ElementsAs(ctx, &stateStorageDirectives, false)...)
+	if diagnostics.HasError() {
+		return updatedStorageDirectivesMap, diagnostics
+	}
+
+	// Create a map of updated storage directives that are in the plan but not in the state
+	updatedStorageDirectivesMap = make(map[string]jujustorage.Constraints)
+	for label, constraintString := range planStorageDirectives {
+		if _, ok := stateStorageDirectives[label]; !ok {
+			cons, err := jujustorage.ParseConstraints(constraintString)
+			if err != nil {
+				// Just in case, as this should have been validated out before now.
+				diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse storage directives, got error: %s", err))
+				continue
+			}
+			updatedStorageDirectivesMap[label] = cons
+		}
+	}
+
+	return updatedStorageDirectivesMap, diagnostics
 }
 
 // computeExposeDeltas computes the differences between the previously
@@ -1112,6 +1317,7 @@ func applicationResourceModelForLogging(_ context.Context, app *applicationResou
 		"expose":           app.Expose.String(),
 		"trust":            app.Trust.ValueBoolPointer(),
 		"units":            app.UnitCount.ValueInt64(),
+		"storage":          app.Storage.String(),
 	}
 	return value
 }
