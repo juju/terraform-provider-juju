@@ -4,6 +4,8 @@
 package juju
 
 import (
+	"io"
+
 	jaasparams "github.com/canonical/jimm-go-sdk/v3/api/params"
 	"github.com/juju/charm/v12"
 	charmresources "github.com/juju/charm/v12/resource"
@@ -19,7 +21,6 @@ import (
 	"github.com/juju/juju/core/secrets"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
-	"io"
 )
 
 type SharedClient interface {

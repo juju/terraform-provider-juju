@@ -39,7 +39,7 @@ resource "juju_application" "this" {
 }
 
 resource "juju_application" "custom_resources_example" {
-  name  = "placement-example"
+  name  = "custom-resource-example"
   model = juju_model.development.name
   charm {
     name     = "hello-kubecon"
@@ -73,17 +73,26 @@ resource "juju_application" "custom_resources_example" {
 - `expose` (Block List) Makes an application publicly available over the network (see [below for nested schema](#nestedblock--expose))
 - `name` (String) A custom name for the application deployment. If empty, uses the charm's name.
 - `placement` (String) Specify the target location for the application's units
-- `resources` (Map of String) Charm resource revisions. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
+- `resources` (Map of String) Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
 
-	There are a few scenarios that need to be considered:
-	* If the plan does not specify resource revision and resources are added to the plan,
-	resources with specified revisions will be attached to the application (equivalent
-	to juju attach-resource).
-	* If the plan does specify resource revisions and:
-		* If the charm revision or channel is updated, then resources get updated to the 
-		  latest revision.
-	    * If the charm revision or channel are not updated, then no changes will take 
-		  place (juju does not have an "un-attach" command for resources).
+There are a few scenarios that need to be considered:
+* Charms could be deployed with specifying the resources (from CharmHub or an OCI image repository). If the resources are not specified, the resources which are associated with the Charm in the CharmHub are used.
+  Resource inputs are provided in a string format.
+	- Resource revision number from CharmHub (string)
+	- OCI image information as a URL (string)
+	- A path of json or yaml file which includes OCI image repository information (string)
+* Changing resource input from a revision to a custom OCI resource is processed and updated smoothly according to the provided input.
+* Resources could be added to the Terraform plan after deployment.
+	- If the resources are added to the plan (as a revision number or a custom OCI image resource), specified resources are attached to the application (equivalent to juju attach-resource).
+* Charm which includes resources could be updated.
+  If the plan does specify resource revisions from CharmHub:
+	- if the charm channel is updated, resources get updated to the latest revision associated with the updated channel.
+	  If the plan does specify custom OCI image resources:
+	- if the charm channel is updated, existing resources are kept. (Resources are not detached)
+* Resources could be removed from the Terraform plan.
+  If the plan does specify resource revisions from CharmHub or custom OCI images, then resources are removed from the plan:
+	- If the charm channel is updated, resources get updated to the latest revision associated with the updated charm channel.
+	- If the charm channel is not updated then the resources get updated to the latest revision associated with the existing charm channel.
 - `storage` (Attributes Set) Storage used by the application. (see [below for nested schema](#nestedatt--storage))
 - `storage_directives` (Map of String) Storage directives (constraints) for the juju application. The map key is the label of the storage defined by the charm, the map value is the storage directive in the form <pool>,<count>,<size>. Changing an existing key/value pair will cause the application to be replaced. Adding a new key/value pair will add storage to the application on upgrade.
 - `trust` (Boolean) Set the trust for the application.

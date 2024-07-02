@@ -64,7 +64,7 @@ const (
 const (
 	// MediaTypeFormData is the media type for file uploads (see mime.FormatMediaType).
 	MediaTypeFormData = "form-data"
-	// QueryParamPendingID is the query parameter we use to send up the pending id.
+	// QueryParamPendingID is the query parameter we use to send up the pending ID.
 	QueryParamPendingID = "pendingid"
 )
 
@@ -76,7 +76,6 @@ const (
 	// HeaderContentLength is the header name for the length of a file upload.
 	HeaderContentLength = "Content-Length"
 	// HeaderContentDisposition is the header name for value that holds the filename.
-	// See mime.ParseMediaType and mime.FormatMediaType.
 	HeaderContentDisposition = "Content-Disposition"
 )
 
@@ -1253,7 +1252,6 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	charmsAPIClient := apicharms.NewClient(conn)
 	clientAPIClient := c.getClientAPIClient(conn)
 	modelconfigAPIClient := c.getModelConfigAPIClient(conn)
-	resourceHttpClient := ResourceHttpClient(conn)
 	resourcesAPIClient, err := c.getResourceAPIClient(conn)
 	if err != nil {
 		return err
@@ -1294,7 +1292,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	// can be changed from one revision to another. So "Revision-Config"
 	// ordering will help to prevent issues with the configuration parsing.
 	if input.Revision != nil || input.Channel != "" || len(input.Resources) != 0 {
-		setCharmConfig, err := c.computeSetCharmConfig(input, applicationAPIClient, charmsAPIClient, resourcesAPIClient, resourceHttpClient)
+		setCharmConfig, err := c.computeSetCharmConfig(input, applicationAPIClient, charmsAPIClient, resourcesAPIClient)
 		if err != nil {
 			return err
 		}
@@ -1442,7 +1440,6 @@ func (c applicationsClient) computeSetCharmConfig(
 	applicationAPIClient ApplicationAPIClient,
 	charmsAPIClient *apicharms.Client,
 	resourcesAPIClient ResourceAPIClient,
-	resourceHttpClient *HttpRequestClient,
 ) (*apiapplication.SetCharmConfig, error) {
 	oldURL, oldOrigin, err := applicationAPIClient.GetCharmURLOrigin("", input.AppName)
 	if err != nil {
@@ -1532,7 +1529,7 @@ func (c applicationsClient) computeSetCharmConfig(
 }
 
 func resolveCharm(charmsAPIClient *apicharms.Client, curl *charm.URL, origin apicommoncharm.Origin) (*charm.URL, apicommoncharm.Origin, []corebase.Base, error) {
-	// Charm or bundle has been supplied as a URL so we resolve and
+	// Charm or bundle has been supplied as a URL, so we resolve and
 	// deploy using the store but pass in the origin command line
 	// argument so users can target a specific origin.
 	resolved, err := charmsAPIClient.ResolveCharms([]apicharms.CharmToResolve{{URL: curl, Origin: origin}})
@@ -1556,7 +1553,6 @@ func (c applicationsClient) updateResources(appName string, resources map[string
 	if err != nil {
 		return nil, err
 	}
-
 	filtered, err := utils.GetUpgradeResources(
 		charmID,
 		charmsAPIClient,
@@ -1594,8 +1590,9 @@ func addPendingResources(appName string, resourcesToBeAdded map[string]charmreso
 						Origin:   charmresources.OriginStore,
 						Revision: -1,
 					}
-					// If the resource is removed, revision does not exist
-					// Charm is deployed with default resources according to charm revision or channel
+					// if the resource is removed, providedRev is 0
+					// Then, Charm is deployed with default resources according to channel
+					// Otherwise, Charm is deployed with the provided revision
 					if providedRev != 0 {
 						resourceFromCharmhub.Revision = providedRev
 					}
@@ -1624,9 +1621,16 @@ func addPendingResources(appName string, resourcesToBeAdded map[string]charmreso
 					toReturn[resourceMeta.Name] = toRequestUpload
 				}
 			}
+		} else {
+			// If there is no resource revisions, Charm is deployed with default resources according to channel
+			resourceFromCharmhub := charmresources.Resource{
+				Meta:     resourceMeta,
+				Origin:   charmresources.OriginStore,
+				Revision: -1,
+			}
+			pendingResourcesforAdd = append(pendingResourcesforAdd, resourceFromCharmhub)
 		}
 	}
-
 	if len(pendingResourcesforAdd) != 0 {
 		resourcesReqforAdd := apiresources.AddPendingResourcesArgs{
 			ApplicationID: appName,
@@ -1645,7 +1649,6 @@ func addPendingResources(appName string, resourcesToBeAdded map[string]charmreso
 			toReturn[argsResource.Meta.Name] = toRequestAdd[i]
 		}
 	}
-
 	return toReturn, nil
 }
 
