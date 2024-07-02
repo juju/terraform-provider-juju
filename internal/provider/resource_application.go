@@ -5,11 +5,10 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"github.com/dustin/go-humanize"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -564,20 +563,6 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	// trace storage constraints
-	r.trace("create application storage constraints", map[string]interface{}{"storageConstraints": storageConstraints})
-
-	// write storage constraints to private state
-	var setStorageConstraintBytes []byte
-	if len(storageConstraints) > 0 {
-		setStorageConstraintBytes, err = json.Marshal(storageConstraints)
-		if err != nil {
-			resp.Diagnostics.AddError("Internal Error", fmt.Sprintf("Unable to marshal storage constraints, got error: %s", err))
-			return
-		}
-	}
-	resp.Private.SetKey(ctx, "storage", setStorageConstraintBytes)
-
 	r.trace(fmt.Sprintf("create application resource %q", createResp.AppName))
 
 	readResp, err := r.client.Applications.ReadApplicationWithRetryOnNotFound(ctx, &juju.ReadApplicationInput{
@@ -755,34 +740,16 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		}
 	}
 
-	var getPrivateStorageConstraintBytes []byte
-	getPrivateStorageConstraintBytes, dErr = req.Private.GetKey(ctx, "storage")
-	if dErr.HasError() {
-		resp.Diagnostics.Append(dErr...)
-		return
-	}
-	var privateStorageConstraints map[string]jujustorage.Constraints
-	if len(getPrivateStorageConstraintBytes) > 0 {
-		if err := json.Unmarshal(getPrivateStorageConstraintBytes, &privateStorageConstraints); err != nil {
-			resp.Diagnostics.AddError("Internal Error", fmt.Sprintf("Unable to unmarshal storage constraints, got error: %s", err))
-			return
-		}
-	}
-	// trace private storage constraints
-	r.trace("read private storage constraints", map[string]interface{}{"privateStorageConstraints": privateStorageConstraints})
-
 	// convert the storage map to a list of nestedStorage
 	nestedStorageSlice := make([]nestedStorage, 0, len(response.Storage))
 	for name, storage := range response.Storage {
-		if _, ok := privateStorageConstraints[name]; !ok {
-			humanizedSize := transformSizeToHumanizedFormat(storage.Size)
-			nestedStorageSlice = append(nestedStorageSlice, nestedStorage{
-				Label: types.StringValue(name),
-				Size:  types.StringValue(humanizedSize),
-				Pool:  types.StringValue(storage.Pool),
-				Count: types.Int64Value(int64(storage.Count)),
-			})
-		}
+		humanizedSize := transformSizeToHumanizedFormat(storage.Size)
+		nestedStorageSlice = append(nestedStorageSlice, nestedStorage{
+			Label: types.StringValue(name),
+			Size:  types.StringValue(humanizedSize),
+			Pool:  types.StringValue(storage.Pool),
+			Count: types.Int64Value(int64(storage.Count)),
+		})
 	}
 	storageType := req.State.Schema.GetAttributes()[StorageKey].(schema.SetNestedAttribute).NestedObject.Type()
 	if len(nestedStorageSlice) > 0 {
