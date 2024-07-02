@@ -20,6 +20,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -161,6 +162,55 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"storage": schema.SetNestedAttribute{
+				Description: "Configure storage constraints for the juju application.",
+				Optional:    true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"label": schema.StringAttribute{
+							Description: "The specific storage option defined in the charm.",
+							Required:    true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.RequiresReplaceIfConfigured(),
+								stringplanmodifier.UseStateForUnknown(),
+							},
+						},
+						"size": schema.StringAttribute{
+							Description: "The size of each volume. E.g. 100G.",
+							Optional:    true,
+							Computed:    true,
+							Default:     stringdefault.StaticString("1G"),
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.RequiresReplaceIfConfigured(),
+								stringplanmodifier.UseStateForUnknown(),
+							},
+						},
+						"pool": schema.StringAttribute{
+							Description: "Name of the storage pool to use. E.g. ebs on aws.",
+							Optional:    true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.RequiresReplaceIfConfigured(),
+								stringplanmodifier.UseStateForUnknown(),
+							},
+						},
+						"count": schema.Int64Attribute{
+							Description: "The number of volumes.",
+							Optional:    true,
+							Computed:    true,
+							Default:     int64default.StaticInt64(int64(1)),
+							PlanModifiers: []planmodifier.Int64{
+								int64planmodifier.RequiresReplaceIfConfigured(),
+								int64planmodifier.UseStateForUnknown(),
+							},
+						},
+					},
+				},
+				Validators: []validator.Set{
+					setNestedIsAttributeUniqueValidator{
+						PathExpressions: path.MatchRelative().AtAnySetValue().MergeExpressions(path.MatchRelative().AtName("label")),
+					},
 				},
 			},
 			"trust": schema.BoolAttribute{

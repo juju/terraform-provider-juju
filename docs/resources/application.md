@@ -78,6 +78,7 @@ resource "juju_application" "placement_example" {
 		  latest revision.
 	    * If the charm revision or channel are not updated, then no changes will take 
 		  place (juju does not have an "un-attach" command for resources).
+- `storage` (Attributes Set) Configure storage constraints for the juju application. (see [below for nested schema](#nestedatt--storage))
 - `trust` (Boolean) Set the trust for the application.
 - `units` (Number) The number of application units to deploy for the charm.
 
@@ -121,6 +122,20 @@ Optional:
 - `cidrs` (String) A comma-delimited list of CIDRs that should be able to access the application ports once exposed.
 - `endpoints` (String) Expose only the ports that charms have opened for this comma-delimited list of endpoints
 - `spaces` (String) A comma-delimited list of spaces that should be able to access the application ports once exposed.
+
+
+<a id="nestedatt--storage"></a>
+### Nested Schema for `storage`
+
+Required:
+
+- `label` (String) The specific storage option defined in the charm.
+
+Optional:
+
+- `count` (Number) The number of volumes.
+- `pool` (String) Name of the storage pool to use. E.g. ebs on aws.
+- `size` (String) The size of each volume. E.g. 100G.
 
 ## Import
 
