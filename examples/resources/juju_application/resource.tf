@@ -36,7 +36,7 @@ resource "juju_application" "placement_example" {
 }
 
 resource "juju_application" "custom_resources_example" {
-  name  = "placement-example"
+  name  = "custom-resource-example"
   model = juju_model.development.name
   charm {
     name     = "hello-kubecon"
