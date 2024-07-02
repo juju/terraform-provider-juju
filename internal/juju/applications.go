@@ -525,6 +525,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 				Config:           appConfig,
 				Cons:             transformedInput.constraints,
 				Resources:        resources,
+				Storage:          transformedInput.storage,
 				Placement:        transformedInput.placement,
 				EndpointBindings: transformedInput.endpointBindings,
 			}

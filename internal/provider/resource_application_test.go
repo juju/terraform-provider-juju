@@ -527,7 +527,7 @@ func TestAcc_ResourceApplication_Storage(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application-storage")
 	appName := "test-app-storage"
 
-	storageConstraints := map[string]string{"label": "runner", "size": "102M"}
+	storageConstraints := map[string]string{"label": "runner", "size": "2G"}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -537,8 +537,11 @@ func TestAcc_ResourceApplication_Storage(t *testing.T) {
 				Config: testAccResourceApplicationStorage(modelName, appName, storageConstraints),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
-					resource.TestCheckResourceAttr("juju_application."+appName, "storage.#", "1"),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "storage.*", storageConstraints),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage_directives.runner", "2G"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.label", "runner"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.count", "1"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.size", "2G"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.pool", "lxd"),
 				),
 			},
 		},
