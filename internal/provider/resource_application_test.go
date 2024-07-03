@@ -96,10 +96,6 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 		appName = "hello-kubecon"
 	}
 
-	// trace plan
-	t.Log(testAccResourceApplicationUpdates(modelName, 1, true, "machinename"))
-	t.Log(testAccResourceApplicationUpdates(modelName, 2, true, "machinename"))
-
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,

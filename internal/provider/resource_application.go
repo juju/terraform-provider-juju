@@ -170,9 +170,11 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				},
 			},
 			"storage_directives": schema.MapAttribute{
-				Description: "Storage directives (constraints) for the juju application. " +
-					"The map key is the label of the storage defined by the charm, " +
-					"the map value is the storage directive in the form <pool>,<count>,<size>.",
+				Description: "Storage directives (constraints) for the juju application." +
+					" The map key is the label of the storage defined by the charm," +
+					" the map value is the storage directive in the form <pool>,<count>,<size>." +
+					" Changing an existing key/value pair will cause the application to be replaced." +
+					" Adding a new key/value pair will add storage to the application on upgrade.",
 				ElementType: types.StringType,
 				Optional:    true,
 				Validators: []validator.Map{
@@ -197,7 +199,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Computed:    true,
 						},
 						"pool": schema.StringAttribute{
-							Description: "Name of the storage pool to use.",
+							Description: "Name of the storage pool.",
 							Computed:    true,
 						},
 						"count": schema.Int64Attribute{

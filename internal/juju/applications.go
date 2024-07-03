@@ -335,9 +335,6 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 		return nil, err
 	}
 
-	// print transformedInput.storage
-	c.Tracef("transformedInput.storage", map[string]interface{}{"transformedInput.storage": transformedInput.storage})
-
 	applicationAPIClient := apiapplication.NewClient(conn)
 	if applicationAPIClient.BestAPIVersion() >= 19 {
 		err = c.deployFromRepository(applicationAPIClient, transformedInput)
@@ -782,14 +779,14 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 				return fmt.Errorf("ReadApplicationWithRetryOnNotFound: need %d machines, have %d", output.Units, len(machines))
 			}
 
-			// NOTE: Application can always have storage. However, they
+			// NOTE: Applications can always have storage. However, they
 			// will not be listed right after the application is created. So
-			// we need to wait for the storages to be ready. And we need to
+			// we need to wait for the storage to be ready. And we need to
 			// check if all storage constraints have pool equal "" and size equal 0
 			// to drop the error.
 			for _, storage := range output.Storage {
 				if storage.Pool == "" || storage.Size == 0 {
-					return fmt.Errorf("ReadApplicationWithRetryOnNotFound: no storages found in output")
+					return fmt.Errorf("ReadApplicationWithRetryOnNotFound: no storage found in output")
 				}
 			}
 
@@ -832,8 +829,8 @@ func transformToStorageConstraints(
 		case "filesystem":
 			for _, fd := range filesystemDetailsSlice {
 				if fd.Storage.StorageTag == storageDetails.StorageTag {
-					// Cut 'storage-' prefix from the storage tag and `-NUMBER` suffix
-					storageLabel := getStorageLabel(storageDetails)
+					// Cut PrefixStorage from the storage tag and `-NUMBER` suffix
+					storageLabel := getStorageLabel(storageDetails.StorageTag)
 					storageCounters[storageLabel]++
 					storage[storageLabel] = jujustorage.Constraints{
 						Pool:  fd.Info.Pool,
@@ -845,7 +842,7 @@ func transformToStorageConstraints(
 		case "block":
 			for _, vd := range volumeDetailsSlice {
 				if vd.Storage.StorageTag == storageDetails.StorageTag {
-					storageLabel := getStorageLabel(storageDetails)
+					storageLabel := getStorageLabel(storageDetails.StorageTag)
 					storageCounters[storageLabel]++
 					storage[storageLabel] = jujustorage.Constraints{
 						Pool:  vd.Info.Pool,
@@ -859,8 +856,8 @@ func transformToStorageConstraints(
 	return storage
 }
 
-func getStorageLabel(storageDetails params.StorageDetails) string {
-	return strings.TrimSuffix(strings.TrimPrefix(storageDetails.StorageTag, "storage-"), "-0")
+func getStorageLabel(storageTag string) string {
+	return strings.TrimSuffix(strings.TrimPrefix(storageTag, PrefixStorage), "-0")
 }
 
 func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadApplicationResponse, error) {
@@ -916,10 +913,6 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	}
 
 	storages := transformToStorageConstraints(status.Storage, status.Filesystems, status.Volumes)
-	// Print storage to console
-	for k, v := range storages {
-		c.Tracef("StorageConstraints constraints", map[string]interface{}{"storage": k, "constraints": v})
-	}
 
 	allocatedMachines := set.NewStrings()
 	for _, v := range appStatus.Units {
