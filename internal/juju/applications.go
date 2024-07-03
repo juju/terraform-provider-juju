@@ -41,6 +41,7 @@ import (
 	"github.com/juju/juju/core/network"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
+	jujustorage "github.com/juju/juju/storage"
 	jujuversion "github.com/juju/juju/version"
 	"github.com/juju/names/v5"
 	"github.com/juju/retry"
@@ -57,6 +58,17 @@ type applicationNotFoundError struct {
 
 func (ae *applicationNotFoundError) Error() string {
 	return fmt.Sprintf("application %s not found", ae.appName)
+}
+
+var StorageNotFoundError = &storageNotFoundError{}
+
+// StorageNotFoundError
+type storageNotFoundError struct {
+	storageName string
+}
+
+func (se *storageNotFoundError) Error() string {
+	return fmt.Sprintf("storage %s not found", se.storageName)
 }
 
 type applicationsClient struct {
@@ -125,21 +137,22 @@ func ConfigEntryToString(input interface{}) string {
 }
 
 type CreateApplicationInput struct {
-	ApplicationName  string
-	ModelName        string
-	CharmName        string
-	CharmChannel     string
-	CharmBase        string
-	CharmSeries      string
-	CharmRevision    int
-	Units            int
-	Trust            bool
-	Expose           map[string]interface{}
-	Config           map[string]string
-	Placement        string
-	Constraints      constraints.Value
-	EndpointBindings map[string]string
-	Resources        map[string]int
+	ApplicationName    string
+	ModelName          string
+	CharmName          string
+	CharmChannel       string
+	CharmBase          string
+	CharmSeries        string
+	CharmRevision      int
+	Units              int
+	Trust              bool
+	Expose             map[string]interface{}
+	Config             map[string]string
+	Placement          string
+	Constraints        constraints.Value
+	EndpointBindings   map[string]string
+	Resources          map[string]int
+	StorageConstraints map[string]jujustorage.Constraints
 }
 
 // validateAndTransform returns transformedCreateApplicationInput which
@@ -156,6 +169,7 @@ func (input CreateApplicationInput) validateAndTransform(conn api.Connection) (p
 	parsed.trust = input.Trust
 	parsed.units = input.Units
 	parsed.resources = input.Resources
+	parsed.storage = input.StorageConstraints
 
 	appName := input.ApplicationName
 	if appName == "" {
@@ -241,6 +255,7 @@ type transformedCreateApplicationInput struct {
 	trust            bool
 	endpointBindings map[string]string
 	resources        map[string]int
+	storage          map[string]jujustorage.Constraints
 }
 
 type CreateApplicationResponse struct {
@@ -266,6 +281,7 @@ type ReadApplicationResponse struct {
 	Principal        bool
 	Placement        string
 	EndpointBindings map[string]string
+	Storage          map[string]jujustorage.Constraints
 	Resources        map[string]int
 }
 
@@ -282,10 +298,11 @@ type UpdateApplicationInput struct {
 	Unexpose []string
 	Config   map[string]string
 	//Series    string // Unsupported today
-	Placement        map[string]interface{}
-	Constraints      *constraints.Value
-	EndpointBindings map[string]string
-	Resources        map[string]int
+	Placement          map[string]interface{}
+	Constraints        *constraints.Value
+	EndpointBindings   map[string]string
+	StorageConstraints map[string]jujustorage.Constraints
+	Resources          map[string]int
 }
 
 type DestroyApplicationInput struct {
@@ -364,6 +381,7 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplic
 		Revision:         &transformedInput.charmRevision,
 		Trust:            transformedInput.trust,
 		Resources:        resources,
+		Storage:          transformedInput.storage,
 	})
 	return errors.Join(errs...)
 }
@@ -504,6 +522,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 				Config:           appConfig,
 				Cons:             transformedInput.constraints,
 				Resources:        resources,
+				Storage:          transformedInput.storage,
 				Placement:        transformedInput.placement,
 				EndpointBindings: transformedInput.endpointBindings,
 			}
@@ -734,7 +753,7 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 		Func: func() error {
 			var err error
 			output, err = c.ReadApplication(input)
-			if errors.As(err, &ApplicationNotFoundError) {
+			if errors.As(err, &ApplicationNotFoundError) || errors.As(err, &StorageNotFoundError) {
 				return err
 			} else if err != nil {
 				// Log the error to the terraform Diagnostics to be
@@ -759,6 +778,18 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 			if len(machines) != output.Units {
 				return fmt.Errorf("ReadApplicationWithRetryOnNotFound: need %d machines, have %d", output.Units, len(machines))
 			}
+
+			// NOTE: Applications can always have storage. However, they
+			// will not be listed right after the application is created. So
+			// we need to wait for the storage to be ready. And we need to
+			// check if all storage constraints have pool equal "" and size equal 0
+			// to drop the error.
+			for _, storage := range output.Storage {
+				if storage.Pool == "" || storage.Size == 0 {
+					return fmt.Errorf("ReadApplicationWithRetryOnNotFound: no storage found in output")
+				}
+			}
+
 			// NOTE: An IAAS subordinate should also have machines. However, they
 			// will not be listed until after the relation has been created.
 			// Those happen with the integration resource which will not be
@@ -783,6 +814,50 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 		Stop:        ctx.Done(),
 	})
 	return output, retryErr
+}
+
+func transformToStorageConstraints(
+	storageDetailsSlice []params.StorageDetails,
+	filesystemDetailsSlice []params.FilesystemDetails,
+	volumeDetailsSlice []params.VolumeDetails,
+) map[string]jujustorage.Constraints {
+	storage := make(map[string]jujustorage.Constraints)
+	for _, storageDetails := range storageDetailsSlice {
+		// switch base on storage kind
+		storageCounters := make(map[string]uint64)
+		switch storageDetails.Kind.String() {
+		case "filesystem":
+			for _, fd := range filesystemDetailsSlice {
+				if fd.Storage.StorageTag == storageDetails.StorageTag {
+					// Cut PrefixStorage from the storage tag and `-NUMBER` suffix
+					storageLabel := getStorageLabel(storageDetails.StorageTag)
+					storageCounters[storageLabel]++
+					storage[storageLabel] = jujustorage.Constraints{
+						Pool:  fd.Info.Pool,
+						Size:  fd.Info.Size,
+						Count: storageCounters[storageLabel],
+					}
+				}
+			}
+		case "block":
+			for _, vd := range volumeDetailsSlice {
+				if vd.Storage.StorageTag == storageDetails.StorageTag {
+					storageLabel := getStorageLabel(storageDetails.StorageTag)
+					storageCounters[storageLabel]++
+					storage[storageLabel] = jujustorage.Constraints{
+						Pool:  vd.Info.Pool,
+						Size:  vd.Info.Size,
+						Count: storageCounters[storageLabel],
+					}
+				}
+			}
+		}
+	}
+	return storage
+}
+
+func getStorageLabel(storageTag string) string {
+	return strings.TrimSuffix(strings.TrimPrefix(storageTag, PrefixStorage), "-0")
 }
 
 func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadApplicationResponse, error) {
@@ -815,10 +890,20 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	appInfo := apps[0].Result
 
-	// TODO: Investigate why we're getting the full status here when
-	// application status is needed.
-	status, err := clientAPIClient.Status(nil)
+	// We are currently retrieving the full status, which might be more information than necessary.
+	// The main focus is on the application status, particularly including the storage status.
+	// It might be more efficient to directly query for the application status and its associated storage status.
+	// TODO: Investigate if there's a way to optimize this by only fetching the required information.
+	status, err := clientAPIClient.Status(&apiclient.StatusArgs{
+		Patterns:       []string{},
+		IncludeStorage: true,
+	})
 	if err != nil {
+		if strings.Contains(err.Error(), "filesystem for storage instance") || strings.Contains(err.Error(), "volume for storage instance") {
+			// Retry if we get this error. It means the storage is not ready yet.
+			return nil, &storageNotFoundError{input.AppName}
+		}
+		c.Errorf(err, "failed to get status")
 		return nil, err
 	}
 	var appStatus params.ApplicationStatus
@@ -826,6 +911,8 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	if appStatus, exists = status.Applications[input.AppName]; !exists {
 		return nil, fmt.Errorf("no status returned for application: %s", input.AppName)
 	}
+
+	storages := transformToStorageConstraints(status.Storage, status.Filesystems, status.Volumes)
 
 	allocatedMachines := set.NewStrings()
 	for _, v := range appStatus.Units {
@@ -993,6 +1080,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		Principal:        appInfo.Principal,
 		Placement:        placement,
 		EndpointBindings: endpointBindings,
+		Storage:          storages,
 		Resources:        resourceRevisions,
 	}
 
@@ -1068,6 +1156,8 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		if err != nil {
 			return err
 		}
+
+		setCharmConfig.StorageConstraints = input.StorageConstraints
 
 		err = applicationAPIClient.SetCharm(model.GenerationMaster, *setCharmConfig)
 		if err != nil {

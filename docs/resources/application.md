@@ -19,31 +19,19 @@ resource "juju_application" "this" {
   model = juju_model.development.name
 
   charm {
-    name     = "hello-kubecon"
+    name     = "ubuntu"
     channel  = "edge"
-    revision = 14
+    revision = 24
     series   = "trusty"
   }
 
   units = 3
 
-  config = {
-    external-hostname = "..."
-  }
-}
-
-resource "juju_application" "placement_example" {
-  name  = "placement-example"
-  model = juju_model.development.name
-  charm {
-    name     = "hello-kubecon"
-    channel  = "edge"
-    revision = 14
-    series   = "trusty"
-  }
-
-  units     = 3
   placement = "0,1,2"
+
+  storage = {
+    files = "101M"
+  }
 
   config = {
     external-hostname = "..."
@@ -78,7 +66,8 @@ resource "juju_application" "placement_example" {
 		  latest revision.
 	    * If the charm revision or channel are not updated, then no changes will take 
 		  place (juju does not have an "un-attach" command for resources).
-- `storage` (Attributes Set) Configure storage constraints for the juju application. (see [below for nested schema](#nestedatt--storage))
+- `storage` (Attributes Set) Storage used by the application. (see [below for nested schema](#nestedatt--storage))
+- `storage_directives` (Map of String) Storage directives (constraints) for the juju application. The map key is the label of the storage defined by the charm, the map value is the storage directive in the form <pool>,<count>,<size>. Changing an existing key/value pair will cause the application to be replaced. Adding a new key/value pair will add storage to the application on upgrade.
 - `trust` (Boolean) Set the trust for the application.
 - `units` (Number) The number of application units to deploy for the charm.
 
@@ -127,15 +116,12 @@ Optional:
 <a id="nestedatt--storage"></a>
 ### Nested Schema for `storage`
 
-Required:
-
-- `label` (String) The specific storage option defined in the charm.
-
-Optional:
+Read-Only:
 
 - `count` (Number) The number of volumes.
-- `pool` (String) Name of the storage pool to use. E.g. ebs on aws.
-- `size` (String) The size of each volume. E.g. 100G.
+- `label` (String) The specific storage option defined in the charm.
+- `pool` (String) Name of the storage pool.
+- `size` (String) The size of each volume.
 
 ## Import
 

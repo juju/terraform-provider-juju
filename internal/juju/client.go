@@ -25,6 +25,7 @@ const (
 	PrefixUser          = "user-"
 	PrefixMachine       = "machine-"
 	PrefixApplication   = "application-"
+	PrefixStorage       = "storage-"
 	UnspecifiedRevision = -1
 	connectionTimeout   = 30 * time.Second
 )
