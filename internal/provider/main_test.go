@@ -7,7 +7,7 @@ package provider
 // in the testing phase.
 
 import (
-	"errors"
+	"fmt"
 	"net"
 	"os"
 	"strings"
@@ -59,7 +59,7 @@ func TypeTestingCloudFromString(from string) (CloudTesting, error) {
 	case string(MicroK8sTesting):
 		return MicroK8sTesting, nil
 	default:
-		return "", errors.New("unknown cloud type")
+		return "", fmt.Errorf("unknown cloud type %q", from)
 	}
 }
 

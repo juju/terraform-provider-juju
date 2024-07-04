@@ -15,6 +15,11 @@ func TestAcc_DataSourceMachine_Edge(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
+	if testing.Short() {
+		t.Skip()
+	}
+	t.Parallel()
+
 	modelName := acctest.RandomWithPrefix("tf-datasource-machine-test-model")
 
 	resource.Test(t, resource.TestCase{
@@ -35,6 +40,11 @@ func TestAcc_DataSourceMachine_Stable(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
+	if testing.Short() {
+		t.Skip()
+	}
+	t.Parallel()
+
 	modelName := acctest.RandomWithPrefix("tf-datasource-machine-test-model")
 
 	resource.Test(t, resource.TestCase{

@@ -17,6 +17,11 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
+	if testing.Short() {
+		t.Skip()
+	}
+	t.Parallel()
+
 	modelName := acctest.RandomWithPrefix("tf-test-integration")
 
 	resource.Test(t, resource.TestCase{
@@ -54,6 +59,11 @@ func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
+	if testing.Short() {
+		t.Skip()
+	}
+	t.Parallel()
+
 	srcModelName := acctest.RandomWithPrefix("tf-test-integration")
 	dstModelName := acctest.RandomWithPrefix("tf-test-integration-dst")
 	via := "127.0.0.1/32,127.0.0.3/32"
@@ -81,6 +91,11 @@ func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
+	if testing.Short() {
+		t.Skip()
+	}
+	t.Parallel()
+
 	modelName := acctest.RandomWithPrefix("tf-test-integration")
 
 	resource.Test(t, resource.TestCase{
@@ -216,6 +231,11 @@ func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
+	if testing.Short() {
+		t.Skip()
+	}
+	t.Parallel()
+
 	srcModelName := acctest.RandomWithPrefix("tf-test-integration")
 	dstModelName := acctest.RandomWithPrefix("tf-test-integration-dst")
 
