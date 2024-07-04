@@ -15,6 +15,11 @@ import (
 )
 
 func TestAcc_ResourceSecret_CreateWithoutName(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	t.Parallel()
+
 	agentVersion := os.Getenv(TestJujuAgentVersion)
 	if agentVersion == "" {
 		t.Errorf("%s is not set", TestJujuAgentVersion)
@@ -47,6 +52,11 @@ func TestAcc_ResourceSecret_CreateWithoutName(t *testing.T) {
 }
 
 func TestAcc_ResourceSecret_CreateWithInfo(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	t.Parallel()
+
 	agentVersion := os.Getenv(TestJujuAgentVersion)
 	if agentVersion == "" {
 		t.Errorf("%s is not set", TestJujuAgentVersion)
@@ -87,6 +97,11 @@ func TestAcc_ResourceSecret_CreateWithInfo(t *testing.T) {
 }
 
 func TestAcc_ResourceSecret_CreateWithNoInfo(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	t.Parallel()
+
 	agentVersion := os.Getenv(TestJujuAgentVersion)
 	if agentVersion == "" {
 		t.Errorf("%s is not set", TestJujuAgentVersion)
@@ -119,6 +134,11 @@ func TestAcc_ResourceSecret_CreateWithNoInfo(t *testing.T) {
 }
 
 func TestAcc_ResourceSecret_Update(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	t.Parallel()
+
 	agentVersion := os.Getenv(TestJujuAgentVersion)
 	if agentVersion == "" {
 		t.Errorf("%s is not set", TestJujuAgentVersion)

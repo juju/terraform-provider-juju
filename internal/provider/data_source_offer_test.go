@@ -12,6 +12,11 @@ import (
 )
 
 func TestAcc_DataSourceOffer(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	t.Parallel()
+
 	modelName := acctest.RandomWithPrefix("tf-datasource-offer-test-model")
 	// ...-test-[0-9]+ is not a valid offer name, need to remove the dash before numbers
 	offerName := fmt.Sprintf("tf-datasource-offer-test%d", acctest.RandInt())
@@ -32,6 +37,11 @@ func TestAcc_DataSourceOffer(t *testing.T) {
 }
 
 func TestAcc_DataSourceOffer_UpgradeProvider(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	t.Parallel()
+
 	modelName := acctest.RandomWithPrefix("tf-datasource-offer-test-model")
 	// ...-test-[0-9]+ is not a valid offer name, need to remove the dash before numbers
 	offerName := fmt.Sprintf("tf-datasource-offer-test%d", acctest.RandInt())
