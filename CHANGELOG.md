@@ -6,15 +6,14 @@ NOTES:
 
 ENHANCEMENTS:
 
-* Bug reports are enhanced to require more information, including the Juju controller version.
 * Support for application resources to use storage is added. You can now use `storage` and `storage_directives` fields in an application resource to utilize storage in your application.
+* Bug reports are enhanced to require more information, including the Juju controller version.
 * [Conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) are now required in contributions to the repository.
 * Provider test runs are improved to run faster.
 
 BUG FIXES:
 
 * Placement and constraints directives are allowed to co-exist in machine resources. Added by @hmlanigan in https://github.com/juju/terraform-provider-juju/pull/499
-* Auto discovery of data necessary to connect to the juju controller is fixed by @hmlanigan in https://github.com/juju/terraform-provider-juju/pull/503
 
 ## 0.12.0 (April 22, 2024)
 
