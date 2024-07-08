@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+
 	"github.com/juju/juju/core/base"
 )
 
