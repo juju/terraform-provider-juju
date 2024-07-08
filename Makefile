@@ -13,7 +13,7 @@ go-install:
 GOOS=$(shell go env GOOS)
 GOARCH=$(shell go env GOARCH)
 GOPATH=$(shell go env GOPATH)
-EDGEVERSION=0.12.0
+EDGEVERSION=0.13.0
 REGISTRY_DIR=~/.terraform.d/plugins/registry.terraform.io/juju/juju/${EDGEVERSION}/${GOOS}_${GOARCH}
 
 .PHONY: install
