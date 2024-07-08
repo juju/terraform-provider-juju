@@ -26,20 +26,20 @@ resource "juju_application" "this" {
   }
 
   units = 3
-
+	
   placement = "0,1,2"
 
   storage_directives = {
     files = "101M"
   }
-
+	
   config = {
     external-hostname = "..."
   }
 }
 
-resource "juju_application" "custom_resources_example" {
-  name  = "custom-resource-example"
+resource "juju_application" "placement_and_custom_resource_example" {
+  name  = "placement-example"
   model = juju_model.development.name
   charm {
     name     = "hello-kubecon"
@@ -54,6 +54,10 @@ resource "juju_application" "custom_resources_example" {
 
   units     = 3
   placement = "0,1,2"
+
+  config = {
+    external-hostname = "..."
+  }
 }
 ```
 
