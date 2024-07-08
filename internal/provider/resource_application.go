@@ -30,6 +30,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
 	"github.com/juju/juju/core/constraints"
+
 	jujustorage "github.com/juju/juju/storage"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
