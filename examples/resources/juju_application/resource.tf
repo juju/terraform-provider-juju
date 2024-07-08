@@ -12,19 +12,27 @@ resource "juju_application" "this" {
 
   units = 3
 
+<<<<<<< HEAD
   placement = "0,1,2"
 
   storage_directives = {
     files = "101M"
   }
 
+=======
+>>>>>>> 17accba (Removing additional example from resource.tf)
   config = {
     external-hostname = "..."
   }
 }
 
+<<<<<<< HEAD
 resource "juju_application" "custom_resources_example" {
   name  = "custom-resource-example"
+=======
+resource "juju_application" "placement_example" {
+  name  = "placement-example"
+>>>>>>> 17accba (Removing additional example from resource.tf)
   model = juju_model.development.name
   charm {
     name     = "hello-kubecon"
@@ -39,4 +47,8 @@ resource "juju_application" "custom_resources_example" {
 
   units     = 3
   placement = "0,1,2"
+
+  config = {
+    external-hostname = "..."
+  }
 }
