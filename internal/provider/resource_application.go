@@ -50,23 +50,14 @@ const (
 	resourceKeyMarkdownDescription = `
 Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
 There are a few scenarios that need to be considered:
-* Charms could be deployed with specifying the resources (from CharmHub or an OCI image repository). If the resources are not specified, the resources which are associated with the Charm in the CharmHub are used.
-  Resource inputs are provided in a string format.
-  - Resource revision number from CharmHub (string)
-  - OCI image information as a URL (string)
-  - A path of json or yaml file which includes OCI image repository information (string)
-* Changing resource input from a revision to a custom OCI resource is processed and updated smoothly according to the provided input.
-* Resources could be added to the Terraform plan after deployment.
-  - If the resources are added to the plan (as a revision number or a custom OCI image resource), specified resources are attached to the application (equivalent to juju attach-resource).
-* Charm which includes resources could be updated.
-  If the plan does specify resource revisions from CharmHub:
-  - if the charm channel is updated, resources get updated to the latest revision associated with the updated channel.
-  If the plan does specify custom OCI image resources:
-  - if the charm channel is updated, existing resources are kept. (Resources are not detached)
-* Resources could be removed from the Terraform plan.
-  If the plan does specify resource revisions from CharmHub or custom OCI images, then resources are removed from the plan:
-  - If the charm channel is updated, resources get updated to the latest revision associated with the updated charm channel.
-  - If the charm channel is not updated then the resources get updated to the latest revision associated with the existing charm channel.
+
+* Specify a resource other than the default for a charm. Note that not all charms have resources. A resource can be specified by a revision number or by URL to a OCI image repository. Resources of type 'file' can only be specified by revision number. Resources of type 'oci-image' can be specified by revision number or URL.
+
+* A resource can be added or changed at any time. If the charm has resources and none are specified in the plan, Juju will use the resource defined in the charm's specified channel. Juju does not allow resources to be removed from an application.
+
+* If a charm is refreshed, by changing the charm revision or channel, the resource is also refreshed to the current defined channel listed for the charm if the resource is specified by revision. This is normal behavior for juju but not typical behavior for terraform.
+
+* Resources specified by URL to an OCI image repository will never be refreshed (upgraded) by juju during a charm refresh unless explicitly changed in the plan.
 `
 )
 
