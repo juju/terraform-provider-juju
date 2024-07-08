@@ -21,7 +21,7 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-const TestProviderStableVersion = "0.12.0"
+const TestProviderStableVersion = "0.10.1"
 
 // providerFactories are used to instantiate the Framework provider during
 // acceptance testing.
