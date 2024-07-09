@@ -74,12 +74,12 @@ envtestlxd:
 .PHONY: testlxd
 testlxd:
 ## testlxd: Run acceptance tests against lxd
-	TF_ACC=1 TEST_CLOUD=lxd go test ./... -v $(TESTARGS) -timeout 120m
+	TF_ACC=1 TEST_CLOUD=lxd go test ./internal/provider/... -parallel 3 -v $(TESTARGS) -timeout 120m
 
 .PHONY: testmicrok8s
 testmicrok8s:
 ## testmicrok8s: Run acceptance tests against microk8s
-	TF_ACC=1 TEST_CLOUD=microk8s go test ./... -v $(TESTARGS) -timeout 120m
+	TF_ACC=1 TEST_CLOUD=microk8s go test ./internal/provider/... -parallel 3 -v $(TESTARGS) -timeout 120m
 
 PACKAGES=terraform golangci-lint go
 # Function to check if Snap packages are installed
