@@ -17,8 +17,8 @@ func TestAcc_ResourceAccessModel(t *testing.T) {
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 	userName2 := acctest.RandomWithPrefix("tfuser")
 	userPassword2 := acctest.RandomWithPrefix("tf-test-user")
-	modelName1 := "testing1"
-	modelName2 := "testing2"
+	modelName1 := acctest.RandomWithPrefix("tf-access-model-one")
+	modelName2 := acctest.RandomWithPrefix("tf-access-model-two")
 	accessSuccess := "write"
 	accessFail := "bogus"
 
@@ -73,7 +73,7 @@ func TestAcc_ResourceAccessModel_UpgradeProvider(t *testing.T) {
 
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
-	modelName := "testing"
+	modelName := acctest.RandomWithPrefix("tf-access-model")
 	access := "write"
 
 	resourceName := "juju_access_model.test"
