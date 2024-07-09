@@ -15,11 +15,6 @@ func TestAcc_ResourceOffer(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-offer")
 	modelName2 := acctest.RandomWithPrefix("tf-test-offer")
 	destModelName := acctest.RandomWithPrefix("tf-test-offer-dest")
@@ -113,11 +108,6 @@ func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-offer")
 
 	resource.Test(t, resource.TestCase{

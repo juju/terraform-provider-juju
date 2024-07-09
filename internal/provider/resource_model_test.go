@@ -15,11 +15,6 @@ import (
 )
 
 func TestAcc_ResourceModel(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	logLevelInfo := "INFO"
 	logLevelDebug := "DEBUG"
@@ -62,11 +57,6 @@ func TestAcc_ResourceModel(t *testing.T) {
 }
 
 func TestAcc_ResourceModel_UnsetConfig(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 
 	resourceName := "juju_model.this"
@@ -104,11 +94,6 @@ resource "juju_model" "this" {
 }
 
 func TestAcc_ResourceModel_Minimal(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -128,11 +113,6 @@ resource "juju_model" "testmodel" {
 }
 
 func TestAcc_ResourceModel_UpgradeProvider(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	logLevelDebug := "DEBUG"
 

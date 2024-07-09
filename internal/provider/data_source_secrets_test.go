@@ -18,11 +18,6 @@ import (
 // blocked on the lack of schema for secret access.
 
 func TestAcc_DataSourceSecret(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	version := os.Getenv("JUJU_AGENT_VERSION")
 	if version == "" || internaltesting.CompareVersions(version, "3.3.0") < 0 {
 		t.Skip("JUJU_AGENT_VERSION is not set or is below 3.3.0")

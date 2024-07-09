@@ -12,11 +12,6 @@ import (
 )
 
 func TestAcc_DataSourceModel_Edge(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-datasource-model-test")
 
 	resource.Test(t, resource.TestCase{
@@ -35,11 +30,6 @@ func TestAcc_DataSourceModel_Edge(t *testing.T) {
 }
 
 func TestAcc_DataSourceModel_Stable(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-datasource-model-test")
 
 	resource.Test(t, resource.TestCase{

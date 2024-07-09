@@ -9,7 +9,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-
 	"github.com/juju/terraform-provider-juju/internal/provider"
 )
 
