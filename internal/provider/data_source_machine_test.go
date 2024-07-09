@@ -31,7 +31,7 @@ func TestAcc_DataSourceMachine_Edge(t *testing.T) {
 	})
 }
 
-func TestAcc_DataSourceMachine_Stable(t *testing.T) {
+func TestAcc_DataSourceMachine_UpgradeProvider(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -39,18 +39,24 @@ func TestAcc_DataSourceMachine_Stable(t *testing.T) {
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
-		ExternalProviders: map[string]resource.ExternalProvider{
-			"juju": {
-				VersionConstraint: TestProviderStableVersion,
-				Source:            "juju/juju",
-			},
-		},
+
 		Steps: []resource.TestStep{
 			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderStableVersion,
+						Source:            "juju/juju",
+					},
+				},
 				Config: testAccDataSourceMachine(modelName, "series = \"jammy\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_machine.machine", "model", modelName),
 				),
+			},
+			{
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccDataSourceMachine(modelName, "series = \"jammy\""),
+				PlanOnly:                 true,
 			},
 		},
 	})
