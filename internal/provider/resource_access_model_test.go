@@ -23,7 +23,7 @@ func TestAcc_ResourceAccessModel(t *testing.T) {
 	accessFail := "bogus"
 
 	resourceName := "juju_access_model.test"
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -77,7 +77,7 @@ func TestAcc_ResourceAccessModel_UpgradeProvider(t *testing.T) {
 	access := "write"
 
 	resourceName := "juju_access_model.test"
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
 
 		Steps: []resource.TestStep{

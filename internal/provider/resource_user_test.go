@@ -16,7 +16,7 @@ func TestAcc_ResourceUser(t *testing.T) {
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 
 	resourceName := "juju_user.user"
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -53,7 +53,7 @@ func TestAcc_ResourceUser_UpgradeProvider(t *testing.T) {
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 
 	resourceName := "juju_user.user"
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
 		Steps: []resource.TestStep{
 			{

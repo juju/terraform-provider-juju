@@ -20,7 +20,7 @@ func TestAcc_ResourceCredential(t *testing.T) {
 	token := "123abc"
 
 	resourceName := "juju_credential.test-credential"
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -61,7 +61,7 @@ func TestAcc_ResourceCredential_UpgradeProvider(t *testing.T) {
 	authType := "certificate"
 
 	resourceName := "juju_credential.test-credential"
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
 
 		Steps: []resource.TestStep{

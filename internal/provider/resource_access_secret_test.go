@@ -27,7 +27,7 @@ func TestAcc_ResourceAccessSecret_GrantRevoke(t *testing.T) {
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -67,7 +67,7 @@ func TestAcc_ResourceAccessSecret_Import(t *testing.T) {
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{

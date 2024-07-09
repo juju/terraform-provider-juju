@@ -17,7 +17,7 @@ func TestAcc_ResourceMachine(t *testing.T) {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-machine")
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -45,7 +45,7 @@ func TestAcc_ResourceMachine_Minimal(t *testing.T) {
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-machine")
 	resourceName := "juju_machine.testmachine"
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -71,7 +71,7 @@ func TestAcc_ResourceMachine_WithPlacement(t *testing.T) {
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-machine")
 	resourceName := "juju_machine.this_machine_1"
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -109,7 +109,7 @@ func TestAcc_ResourceMachine_UpgradeProvider(t *testing.T) {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-machine")
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
 
 		Steps: []resource.TestStep{
@@ -162,7 +162,7 @@ func TestAcc_ResourceMachine_AddMachine_Edge(t *testing.T) {
 			TestSSHPublicKeyFileEnvKey, TestSSHPrivateKeyFileEnvKey)
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-machine-ssh-address")
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{

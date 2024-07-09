@@ -20,7 +20,7 @@ func TestAcc_ResourceModel(t *testing.T) {
 	logLevelDebug := "DEBUG"
 
 	resourceName := "juju_model.model"
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -60,7 +60,7 @@ func TestAcc_ResourceModel_UnsetConfig(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 
 	resourceName := "juju_model.this"
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -95,7 +95,7 @@ resource "juju_model" "this" {
 
 func TestAcc_ResourceModel_Minimal(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -117,7 +117,7 @@ func TestAcc_ResourceModel_UpgradeProvider(t *testing.T) {
 	logLevelDebug := "DEBUG"
 
 	resourceName := "juju_model.model"
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
 		Steps: []resource.TestStep{
 			{

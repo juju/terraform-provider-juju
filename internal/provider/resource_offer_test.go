@@ -19,7 +19,7 @@ func TestAcc_ResourceOffer(t *testing.T) {
 	modelName2 := acctest.RandomWithPrefix("tf-test-offer")
 	destModelName := acctest.RandomWithPrefix("tf-test-offer-dest")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -110,7 +110,7 @@ func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-offer")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
 
 		Steps: []resource.TestStep{

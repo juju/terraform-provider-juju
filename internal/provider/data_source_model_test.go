@@ -14,7 +14,7 @@ import (
 func TestAcc_DataSourceModel_Edge(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-datasource-model-test")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -32,7 +32,7 @@ func TestAcc_DataSourceModel_Edge(t *testing.T) {
 func TestAcc_DataSourceModel_Stable(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-datasource-model-test")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
 		ExternalProviders: map[string]resource.ExternalProvider{
 			"juju": {

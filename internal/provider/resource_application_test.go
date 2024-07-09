@@ -28,7 +28,7 @@ func TestAcc_ResourceApplication(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -96,7 +96,7 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 		appName = "hello-kubecon"
 	}
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -167,7 +167,7 @@ func TestAcc_ResourceApplication_UpdatesRevisionConfig(t *testing.T) {
 	appName := "github-runner"
 	configParamName := "runner-storage"
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -194,7 +194,7 @@ func TestAcc_ResourceApplication_UpdatesRevisionConfig(t *testing.T) {
 func TestAcc_CharmUpdates(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-charmupdates")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -228,7 +228,7 @@ func TestAcc_ResourceRevisionUpdatesLXD(t *testing.T) {
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-resource-revision-updates-lxd")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -262,7 +262,7 @@ func TestAcc_ResourceRevisionAddedToPlanLXD(t *testing.T) {
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-resource-revision-updates-lxd")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -288,7 +288,7 @@ func TestAcc_ResourceRevisionRemovedFromPlanLXD(t *testing.T) {
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-resource-revision-updates-lxd")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -316,7 +316,7 @@ func TestAcc_ResourceRevisionUpdatesMicrok8s(t *testing.T) {
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-resource-revision-updates-microk8s")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -363,7 +363,7 @@ func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 		// Microk8s doesn't have machine, thus no placement
 		checkResourceAttr = append(checkResourceAttr, resource.TestCheckResourceAttr(resourceName, "placement", "0"))
 	}
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -385,7 +385,7 @@ func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
 
 		Steps: []resource.TestStep{
@@ -426,7 +426,7 @@ func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 	defer cleanUp()
 
 	constraints := "arch=amd64 spaces=" + managementSpace + "," + publicSpace
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -461,7 +461,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 	defer cleanUp()
 	constraints := "arch=amd64 spaces=" + managementSpace + "," + publicSpace
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -525,7 +525,7 @@ func TestAcc_ResourceApplication_Storage(t *testing.T) {
 
 	storageConstraints := map[string]string{"label": "runner", "size": "2G"}
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{

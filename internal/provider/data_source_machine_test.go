@@ -17,7 +17,7 @@ func TestAcc_DataSourceMachine_Edge(t *testing.T) {
 	}
 	modelName := acctest.RandomWithPrefix("tf-datasource-machine-test-model")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -37,7 +37,7 @@ func TestAcc_DataSourceMachine_Stable(t *testing.T) {
 	}
 	modelName := acctest.RandomWithPrefix("tf-datasource-machine-test-model")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
 		ExternalProviders: map[string]resource.ExternalProvider{
 			"juju": {
