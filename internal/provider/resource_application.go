@@ -1230,10 +1230,11 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 		resp.Diagnostics.Append(dErr...)
 	}
 
-	if err := r.client.Applications.DestroyApplication(&juju.DestroyApplicationInput{
-		ApplicationName: appName,
-		ModelName:       modelName,
-	}); err != nil {
+	if err := r.client.Applications.DestroyApplication(ctx,
+		&juju.DestroyApplicationInput{
+			ApplicationName: appName,
+			ModelName:       modelName,
+		}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete application, got error: %s", err))
 	}
 	r.trace(fmt.Sprintf("deleted application resource %q", state.ID.ValueString()))

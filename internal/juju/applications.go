@@ -57,7 +57,7 @@ type applicationNotFoundError struct {
 }
 
 func (ae *applicationNotFoundError) Error() string {
-	return fmt.Sprintf("application %s not found", ae.appName)
+	return fmt.Sprintf("application %q not found", ae.appName)
 }
 
 var StorageNotFoundError = &storageNotFoundError{}
@@ -68,7 +68,20 @@ type storageNotFoundError struct {
 }
 
 func (se *storageNotFoundError) Error() string {
-	return fmt.Sprintf("storage %s not found", se.storageName)
+	return fmt.Sprintf("storage %q not found", se.storageName)
+}
+
+var KeepWaitingForDestroyError = &keepWaitingForDestroyError{}
+
+// keepWaitingForDestroyError
+type keepWaitingForDestroyError struct {
+	itemDestroying string
+	life           string
+}
+
+func (e *keepWaitingForDestroyError) Error() string {
+
+	return fmt.Sprintf("%q still alive, life = %s", e.itemDestroying, e.life)
 }
 
 type applicationsClient struct {
@@ -158,7 +171,7 @@ type CreateApplicationInput struct {
 // validateAndTransform returns transformedCreateApplicationInput which
 // validated and in the proper format for both the new and legacy deployment
 // methods. Select input is not transformed due to differences in the
-// 2 deployement methods, such as config.
+// 2 deployment methods, such as config.
 func (input CreateApplicationInput) validateAndTransform(conn api.Connection) (parsed transformedCreateApplicationInput, err error) {
 	parsed.charmChannel = input.CharmChannel
 	parsed.charmName = input.CharmName
@@ -1268,29 +1281,89 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	return nil
 }
 
-func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) error {
+func (c applicationsClient) DestroyApplication(ctx context.Context, input *DestroyApplicationInput) error {
 	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = conn.Close() }()
 
-	applicationAPIClient := apiapplication.NewClient(conn)
+	applicationAPIClient := c.getApplicationAPIClient(conn)
+	appName := input.ApplicationName
 
 	var destroyParams = apiapplication.DestroyApplicationsParams{
 		Applications: []string{
-			input.ApplicationName,
+			appName,
 		},
 		DestroyStorage: true,
 	}
 
-	_, err = applicationAPIClient.DestroyApplications(destroyParams)
-
+	results, err := applicationAPIClient.DestroyApplications(destroyParams)
 	if err != nil {
 		return err
 	}
+	if len(results) != 1 {
+		return errors.New(fmt.Sprintf("Unexpected number of results from DestroyApplication for %q", appName))
+	}
+	if results[0].Error != nil {
+		err := typedError(results[0].Error)
+		// No need to error if the application is not found. It may have been
+		// destroyed as part of a different destroy operation, e.g. machine.
+		// Only care that it's gone.
+		if jujuerrors.Is(err, jujuerrors.NotFound) {
+			return nil
+		}
+		return err
+	}
 
-	return nil
+	// Best effort wait for the application to be destroyed.
+	retryErr := retry.Call(retry.CallArgs{
+		Func: func() error {
+			apps, err := applicationAPIClient.ApplicationsInfo([]names.ApplicationTag{names.NewApplicationTag(appName)})
+			if err != nil {
+				return jujuerrors.Annotatef(err, fmt.Sprintf("querying the applications info after destroy on %q", appName))
+			}
+			if len(apps) != 1 {
+				c.Debugf(fmt.Sprintf("unexpected number of results (%d) for application %q info after destroy", len(apps), appName))
+				return nil
+			}
+			if apps[0].Error != nil {
+				typedErr := typedError(apps[0].Error)
+				if jujuerrors.Is(typedErr, jujuerrors.NotFound) {
+					c.Tracef(fmt.Sprintf("%q not found, application has been destroyed", appName))
+					return nil
+				}
+				return jujuerrors.Annotatef(typedErr, fmt.Sprintf("verifying application %q distruction", appName))
+			}
+
+			life := apps[0].Result.Life
+			return &keepWaitingForDestroyError{
+				itemDestroying: appName,
+				life:           life,
+			}
+		},
+		NotifyFunc: func(err error, attempt int) {
+			if attempt%4 == 0 {
+				message := fmt.Sprintf("waiting for application %q to be destroyed", appName)
+				if attempt != 4 {
+					message = "still " + message
+				}
+				c.Debugf(message, map[string]interface{}{"attempt": attempt, "err": err})
+			}
+		},
+		IsFatalError: func(err error) bool {
+			if errors.As(err, &KeepWaitingForDestroyError) {
+				return false
+			}
+			return true
+		},
+		BackoffFunc: retry.DoubleDelay,
+		Attempts:    30,
+		Delay:       time.Second,
+		Clock:       clock.WallClock,
+		Stop:        ctx.Done(),
+	})
+	return retryErr
 }
 
 // computeSetCharmConfig populates the corresponding configuration object
