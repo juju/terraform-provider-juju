@@ -49,41 +49,6 @@ import (
 	goyaml "gopkg.in/yaml.v2"
 )
 
-var ApplicationNotFoundError = &applicationNotFoundError{}
-
-// ApplicationNotFoundError
-type applicationNotFoundError struct {
-	appName string
-}
-
-func (ae *applicationNotFoundError) Error() string {
-	return fmt.Sprintf("application %q not found", ae.appName)
-}
-
-var StorageNotFoundError = &storageNotFoundError{}
-
-// StorageNotFoundError
-type storageNotFoundError struct {
-	storageName string
-}
-
-func (se *storageNotFoundError) Error() string {
-	return fmt.Sprintf("storage %q not found", se.storageName)
-}
-
-var KeepWaitingForDestroyError = &keepWaitingForDestroyError{}
-
-// keepWaitingForDestroyError
-type keepWaitingForDestroyError struct {
-	itemDestroying string
-	life           string
-}
-
-func (e *keepWaitingForDestroyError) Error() string {
-
-	return fmt.Sprintf("%q still alive, life = %s", e.itemDestroying, e.life)
-}
-
 type applicationsClient struct {
 	SharedClient
 	controllerVersion version.Number

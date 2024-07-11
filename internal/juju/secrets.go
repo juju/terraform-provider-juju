@@ -6,7 +6,6 @@ package juju
 import (
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"strings"
 
 	jujuerrors "github.com/juju/errors"
@@ -14,20 +13,6 @@ import (
 	apisecrets "github.com/juju/juju/api/client/secrets"
 	coresecrets "github.com/juju/juju/core/secrets"
 )
-
-var SecretNotFoundError = &secretNotFoundError{}
-
-type secretNotFoundError struct {
-	secretId string
-}
-
-func (se *secretNotFoundError) Error() string {
-	if se.secretId != "" {
-		return fmt.Sprintf("secret %q was not found", se.secretId)
-	} else {
-		return "secret was not found"
-	}
-}
 
 type secretsClient struct {
 	SharedClient
@@ -303,12 +288,7 @@ func (c *secretsClient) UpdateAccessSecret(input *GrantRevokeAccessSecretInput, 
 	if err != nil {
 		return typedError(err)
 	}
-	err = ProcessErrorResults(results)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return errors.Join(results...)
 }
 
 // getApplicationsFromAccessInfo returns a list of applications from the access info.
