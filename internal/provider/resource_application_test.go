@@ -25,15 +25,10 @@ import (
 )
 
 func TestAcc_ResourceApplication(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -95,18 +90,13 @@ func TestAcc_ResourceApplication(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_Updates(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "jameinel-ubuntu-lite"
 	if testingCloud != LXDCloudTesting {
 		appName = "hello-kubecon"
 	}
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -172,16 +162,12 @@ func TestAcc_ResourceApplication_UpdatesRevisionConfig(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
 
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "github-runner"
 	configParamName := "runner-storage"
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -206,14 +192,9 @@ func TestAcc_ResourceApplication_UpdatesRevisionConfig(t *testing.T) {
 }
 
 func TestAcc_CharmUpdates(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-charmupdates")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -245,14 +226,9 @@ func TestAcc_ResourceRevisionUpdatesLXD(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-resource-revision-updates-lxd")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -284,14 +260,9 @@ func TestAcc_ResourceRevisionAddedToPlanLXD(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-resource-revision-updates-lxd")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -315,14 +286,9 @@ func TestAcc_ResourceRevisionRemovedFromPlanLXD(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-resource-revision-updates-lxd")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -348,14 +314,9 @@ func TestAcc_ResourceRevisionUpdatesMicrok8s(t *testing.T) {
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-resource-revision-updates-microk8s")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -384,11 +345,6 @@ func TestAcc_ResourceRevisionUpdatesMicrok8s(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_Minimal(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	var charmName string
 	if testingCloud == LXDCloudTesting {
@@ -407,7 +363,7 @@ func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 		// Microk8s doesn't have machine, thus no placement
 		checkResourceAttr = append(checkResourceAttr, resource.TestCheckResourceAttr(resourceName, "placement", "0"))
 	}
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -426,15 +382,10 @@ func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
 
 		Steps: []resource.TestStep{
@@ -468,11 +419,6 @@ func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-application-bindings")
 	appName := "test-app"
 
@@ -480,7 +426,7 @@ func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 	defer cleanUp()
 
 	constraints := "arch=amd64 spaces=" + managementSpace + "," + publicSpace
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -508,11 +454,6 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-application-bindings-update")
 	appName := "test-app-update"
 
@@ -520,7 +461,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 	defer cleanUp()
 	constraints := "arch=amd64 spaces=" + managementSpace + "," + publicSpace
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -584,7 +525,7 @@ func TestAcc_ResourceApplication_Storage(t *testing.T) {
 
 	storageConstraints := map[string]string{"label": "runner", "size": "2G"}
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{

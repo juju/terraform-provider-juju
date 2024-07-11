@@ -17,14 +17,9 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-integration")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy:             testAccCheckIntegrationDestroy,
@@ -59,16 +54,11 @@ func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	srcModelName := acctest.RandomWithPrefix("tf-test-integration")
 	dstModelName := acctest.RandomWithPrefix("tf-test-integration-dst")
 	via := "127.0.0.1/32,127.0.0.3/32"
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy:             testAccCheckIntegrationDestroy,
@@ -91,14 +81,9 @@ func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-test-integration")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:     func() { testAccPreCheck(t) },
 		CheckDestroy: testAccCheckIntegrationDestroy,
 		Steps: []resource.TestStep{
@@ -231,15 +216,10 @@ func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	srcModelName := acctest.RandomWithPrefix("tf-test-integration")
 	dstModelName := acctest.RandomWithPrefix("tf-test-integration-dst")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy:             testAccCheckIntegrationDestroy,

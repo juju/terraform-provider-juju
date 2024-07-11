@@ -13,15 +13,16 @@ go-install:
 GOOS=$(shell go env GOOS)
 GOARCH=$(shell go env GOARCH)
 GOPATH=$(shell go env GOPATH)
-EDGEVERSION=0.14.0
-REGISTRY_DIR=~/.terraform.d/plugins/registry.terraform.io/juju/juju/${EDGEVERSION}/${GOOS}_${GOARCH}
+PARALLEL_TEST_COUNT ?= 3
+EDGE_VERSION ?= 0.14.0
+REGISTRY_DIR=~/.terraform.d/plugins/registry.terraform.io/juju/juju/${EDGE_VERSION}/${GOOS}_${GOARCH}
 
 .PHONY: install
 install: simplify docs go-install
 ## install: Build terraform-provider-juju and copy to ~/.terraform.d using EDGEVERSION
-	@echo "Copied to ~/.terraform.d/plugins/registry.terraform.io/juju/juju/${EDGEVERSION}/${GOOS}_${GOARCH}"
+	@echo "Copied to ~/.terraform.d/plugins/registry.terraform.io/juju/juju/${EDGE_VERSION}/${GOOS}_${GOARCH}"
 	@mkdir -p ${REGISTRY_DIR}
-	@cp ${GOPATH}/bin/terraform-provider-juju ${REGISTRY_DIR}/terraform-provider-juju_v${EDGEVERSION}
+	@cp ${GOPATH}/bin/terraform-provider-juju ${REGISTRY_DIR}/terraform-provider-juju_v${EDGE_VERSION}
 
 .PHONY: simplify
 # Reformat and simplify source files.
@@ -74,12 +75,12 @@ envtestlxd:
 .PHONY: testlxd
 testlxd:
 ## testlxd: Run acceptance tests against lxd
-	TF_ACC=1 TEST_CLOUD=lxd go test ./... -v $(TESTARGS) -timeout 120m
+	TF_ACC=1 TEST_CLOUD=lxd go test ./internal/provider/... -parallel ${PARALLEL_TEST_COUNT} -v $(TESTARGS) -timeout 120m
 
 .PHONY: testmicrok8s
 testmicrok8s:
 ## testmicrok8s: Run acceptance tests against microk8s
-	TF_ACC=1 TEST_CLOUD=microk8s go test ./... -v $(TESTARGS) -timeout 120m
+	TF_ACC=1 TEST_CLOUD=microk8s go test ./internal/provider/... -parallel ${PARALLEL_TEST_COUNT} -v $(TESTARGS) -timeout 120m
 
 PACKAGES=terraform golangci-lint go
 # Function to check if Snap packages are installed

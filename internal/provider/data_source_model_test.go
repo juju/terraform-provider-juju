@@ -12,14 +12,9 @@ import (
 )
 
 func TestAcc_DataSourceModel_Edge(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	modelName := acctest.RandomWithPrefix("tf-datasource-model-test")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -34,29 +29,30 @@ func TestAcc_DataSourceModel_Edge(t *testing.T) {
 	})
 }
 
-func TestAcc_DataSourceModel_Stable(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
+func TestAcc_DataSourceModel_UpgradeProvider(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-datasource-model-test")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
-		ExternalProviders: map[string]resource.ExternalProvider{
-			"juju": {
-				VersionConstraint: TestProviderStableVersion,
-				Source:            "juju/juju",
-			},
-		},
+
 		Steps: []resource.TestStep{
 			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderStableVersion,
+						Source:            "juju/juju",
+					},
+				},
 				Config: testAccFrameworkDataSourceModel(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_model.test-model", "name", modelName),
 					resource.TestCheckResourceAttrSet("data.juju_model.test-model", "uuid"),
 				),
+			},
+			{
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccFrameworkDataSourceModel(modelName),
+				PlanOnly:                 true,
 			},
 		},
 	})

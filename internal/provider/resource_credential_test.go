@@ -15,17 +15,12 @@ func TestAcc_ResourceCredential(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	credentialName := acctest.RandomWithPrefix("tf-test-credential")
 	authType := "certificate"
 	token := "123abc"
 
 	resourceName := "juju_credential.test-credential"
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -62,16 +57,11 @@ func TestAcc_ResourceCredential_UpgradeProvider(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	credentialName := acctest.RandomWithPrefix("tf-test-credential")
 	authType := "certificate"
 
 	resourceName := "juju_credential.test-credential"
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
 
 		Steps: []resource.TestStep{

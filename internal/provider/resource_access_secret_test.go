@@ -18,11 +18,6 @@ import (
 // the applications used don't actually require a user secret.
 // TODO(anvial): Add a test that uses a secret that is actually required by the application.
 func TestAcc_ResourceAccessSecret_GrantRevoke(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	agentVersion := os.Getenv(TestJujuAgentVersion)
 	if agentVersion == "" {
 		t.Errorf("%s is not set", TestJujuAgentVersion)
@@ -32,7 +27,7 @@ func TestAcc_ResourceAccessSecret_GrantRevoke(t *testing.T) {
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -63,11 +58,6 @@ func TestAcc_ResourceAccessSecret_GrantRevoke(t *testing.T) {
 }
 
 func TestAcc_ResourceAccessSecret_Import(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	agentVersion := os.Getenv(TestJujuAgentVersion)
 	if agentVersion == "" {
 		t.Errorf("%s is not set", TestJujuAgentVersion)
@@ -77,7 +67,7 @@ func TestAcc_ResourceAccessSecret_Import(t *testing.T) {
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{

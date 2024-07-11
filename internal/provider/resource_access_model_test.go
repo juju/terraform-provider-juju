@@ -13,22 +13,17 @@ import (
 )
 
 func TestAcc_ResourceAccessModel(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
-
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 	userName2 := acctest.RandomWithPrefix("tfuser")
 	userPassword2 := acctest.RandomWithPrefix("tf-test-user")
-	modelName1 := "testing1"
-	modelName2 := "testing2"
+	modelName1 := acctest.RandomWithPrefix("tf-access-model-one")
+	modelName2 := acctest.RandomWithPrefix("tf-access-model-two")
 	accessSuccess := "write"
 	accessFail := "bogus"
 
 	resourceName := "juju_access_model.test"
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -75,18 +70,14 @@ func TestAcc_ResourceAccessModel_UpgradeProvider(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	if testing.Short() {
-		t.Skip()
-	}
-	t.Parallel()
 
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
-	modelName := "testing"
+	modelName := acctest.RandomWithPrefix("tf-access-model")
 	access := "write"
 
 	resourceName := "juju_access_model.test"
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
 
 		Steps: []resource.TestStep{
