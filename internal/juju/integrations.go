@@ -27,17 +27,6 @@ const (
 	IntegrationAppAvailableTimeout = time.Second * 60
 )
 
-var NoIntegrationFoundError = &noIntegrationFoundError{}
-
-// NoIntegrationFoundError
-type noIntegrationFoundError struct {
-	ModelUUID string
-}
-
-func (ie *noIntegrationFoundError) Error() string {
-	return fmt.Sprintf("no integrations exist in model %v", ie.ModelUUID)
-}
-
 type integrationsClient struct {
 	SharedClient
 }

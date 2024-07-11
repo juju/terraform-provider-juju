@@ -7,28 +7,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/juju/errors"
+	jujuerrors "github.com/juju/errors"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
 )
-
-var ModelNotFoundError = &modelNotFoundError{}
-
-type modelNotFoundError struct {
-	uuid string
-	name string
-}
-
-func (me *modelNotFoundError) Error() string {
-	toReturn := "model %q was not found"
-	if me.name != "" {
-		return fmt.Sprintf(toReturn, me.name)
-	}
-	return fmt.Sprintf(toReturn, me.uuid)
-}
 
 type modelsClient struct {
 	SharedClient
@@ -209,7 +194,7 @@ func (c *modelsClient) ReadModel(name string) (*ReadModelResponse, error) {
 
 	modelconfigConn, err := c.GetConnection(&name)
 	if err != nil {
-		return nil, errors.Wrap(err, &modelNotFoundError{uuid: name})
+		return nil, jujuerrors.Wrap(err, &modelNotFoundError{uuid: name})
 	}
 	defer func() { _ = modelconfigConn.Close() }()
 
@@ -218,7 +203,7 @@ func (c *modelsClient) ReadModel(name string) (*ReadModelResponse, error) {
 
 	modelUUIDTag, modelOk := modelconfigConn.ModelTag()
 	if !modelOk {
-		return nil, errors.Errorf("Not connected to model %q", name)
+		return nil, jujuerrors.Errorf("Not connected to model %q", name)
 	}
 	models, err := modelmanagerClient.ModelInfo([]names.ModelTag{modelUUIDTag})
 	if err != nil {
@@ -304,7 +289,7 @@ func (c *modelsClient) UpdateModel(input UpdateModelInput) error {
 		defer func() { _ = conn.Close() }()
 		modelUUIDTag, modelOk := conn.ModelTag()
 		if !modelOk {
-			return errors.Errorf("Not connected to model %q", input.Name)
+			return jujuerrors.Errorf("Not connected to model %q", input.Name)
 		}
 		clientModelManager := modelmanager.NewClient(connModelManager)
 		if err := clientModelManager.ChangeModelCredential(modelUUIDTag, *cloudCredTag); err != nil {
@@ -334,7 +319,10 @@ func (c *modelsClient) DestroyModel(input DestroyModelInput) error {
 
 	err = client.DestroyModel(tag, &destroyStorage, &forceDestroy, &maxWait, &timeout)
 	if err != nil {
-		return err
+		typedErr := typedError(err)
+		if !jujuerrors.Is(typedErr, jujuerrors.NotFound) {
+			return err
+		}
 	}
 
 	c.RemoveModel(input.UUID)

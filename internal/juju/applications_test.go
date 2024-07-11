@@ -15,7 +15,7 @@ import (
 	"github.com/juju/juju/core/resources"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/names/v4"
+	"github.com/juju/names/v5"
 	"github.com/juju/utils/v3"
 	"github.com/juju/version/v2"
 	"github.com/stretchr/testify/suite"
@@ -362,6 +362,58 @@ func (s *ApplicationSuite) TestReadApplicationRetryNotFoundStorageNotFoundError(
 	s.Assert().Equal("stable", resp.Channel)
 	s.Assert().Equal(5, resp.Revision)
 	s.Assert().Equal("ubuntu@22.04", resp.Base)
+}
+
+func (s *ApplicationSuite) TestDestroyApplicationDoNotFailOnNotFound() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+
+	appName := "testapplication"
+	aExp := s.mockApplicationClient.EXPECT()
+
+	aExp.DestroyApplications(gomock.Any()).Return([]params.DestroyApplicationResult{{
+		Error: &params.Error{Message: `application "testapplication" not found`, Code: "not found"},
+	}}, nil)
+
+	client := s.getApplicationsClient()
+	err := client.DestroyApplication(context.Background(),
+		&DestroyApplicationInput{
+			ApplicationName: appName,
+			ModelName:       s.testModelName,
+		})
+	s.Require().NoError(err)
+}
+
+func (s *ApplicationSuite) TestDestroyApplicationRetry() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+
+	appName := "testapplication"
+	aExp := s.mockApplicationClient.EXPECT()
+
+	aExp.DestroyApplications(gomock.Any()).Return([]params.DestroyApplicationResult{{
+		Info: nil, Error: nil,
+	}}, nil)
+
+	infoResult := params.ApplicationInfoResult{
+		Result: &params.ApplicationResult{
+			Life: "dying",
+		},
+		Error: nil,
+	}
+	aExp.ApplicationsInfo(gomock.Any()).Return([]params.ApplicationInfoResult{infoResult}, nil)
+
+	aExp.ApplicationsInfo(gomock.Any()).Return([]params.ApplicationInfoResult{{
+		Error: &params.Error{Message: `application "testapplication" not found`, Code: "not found"},
+	}}, nil)
+
+	client := s.getApplicationsClient()
+	err := client.DestroyApplication(context.Background(),
+		&DestroyApplicationInput{
+			ApplicationName: appName,
+			ModelName:       s.testModelName,
+		})
+	s.Require().NoError(err)
 }
 
 // In order for 'go test' to run this suite, we need to create

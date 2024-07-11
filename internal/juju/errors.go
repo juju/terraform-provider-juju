@@ -4,6 +4,7 @@
 package juju
 
 import (
+	"fmt"
 	"strings"
 
 	jujuerrors "github.com/juju/errors"
@@ -28,5 +29,80 @@ func typedError(err error) error {
 		return jujuerrors.WithType(err, jujuerrors.NotYetAvailable)
 	default:
 		return err
+	}
+}
+
+var ApplicationNotFoundError = &applicationNotFoundError{}
+
+// ApplicationNotFoundError
+type applicationNotFoundError struct {
+	appName string
+}
+
+func (ae *applicationNotFoundError) Error() string {
+	return fmt.Sprintf("application %q not found", ae.appName)
+}
+
+var StorageNotFoundError = &storageNotFoundError{}
+
+// StorageNotFoundError
+type storageNotFoundError struct {
+	storageName string
+}
+
+func (se *storageNotFoundError) Error() string {
+	return fmt.Sprintf("storage %q not found", se.storageName)
+}
+
+var KeepWaitingForDestroyError = &keepWaitingForDestroyError{}
+
+// keepWaitingForDestroyError
+type keepWaitingForDestroyError struct {
+	itemDestroying string
+	life           string
+}
+
+func (e *keepWaitingForDestroyError) Error() string {
+
+	return fmt.Sprintf("%q still alive, life = %s", e.itemDestroying, e.life)
+}
+
+var NoIntegrationFoundError = &noIntegrationFoundError{}
+
+// NoIntegrationFoundError
+type noIntegrationFoundError struct {
+	ModelUUID string
+}
+
+func (ie *noIntegrationFoundError) Error() string {
+	return fmt.Sprintf("no integrations exist in model %v", ie.ModelUUID)
+}
+
+var ModelNotFoundError = &modelNotFoundError{}
+
+type modelNotFoundError struct {
+	uuid string
+	name string
+}
+
+func (me *modelNotFoundError) Error() string {
+	toReturn := "model %q was not found"
+	if me.name != "" {
+		return fmt.Sprintf(toReturn, me.name)
+	}
+	return fmt.Sprintf(toReturn, me.uuid)
+}
+
+var SecretNotFoundError = &secretNotFoundError{}
+
+type secretNotFoundError struct {
+	secretId string
+}
+
+func (se *secretNotFoundError) Error() string {
+	if se.secretId != "" {
+		return fmt.Sprintf("secret %q was not found", se.secretId)
+	} else {
+		return "secret was not found"
 	}
 }
