@@ -762,6 +762,18 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 				c.Errorf(err, fmt.Sprintf("ReadApplicationWithRetryOnNotFound %q", input.AppName))
 				return nil
 			}
+
+			// NOTE: Applications can always have storage. However, they
+			// will not be listed right after the application is created. So
+			// we need to wait for the storage to be ready. And we need to
+			// check if all storage constraints have pool equal "" and size equal 0
+			// to drop the error.
+			for _, storage := range output.Storage {
+				if storage.Pool == "" || storage.Size == 0 {
+					return fmt.Errorf("ReadApplicationWithRetryOnNotFound: no storage found in output")
+				}
+			}
+
 			// NOTE: An IAAS subordinate should also have machines. However, they
 			// will not be listed until after the relation has been created.
 			// Those happen with the integration resource which will not be
@@ -777,17 +789,6 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 			machines := strings.Split(output.Placement, ",")
 			if len(machines) != output.Units {
 				return fmt.Errorf("ReadApplicationWithRetryOnNotFound: need %d machines, have %d", output.Units, len(machines))
-			}
-
-			// NOTE: Applications can always have storage. However, they
-			// will not be listed right after the application is created. So
-			// we need to wait for the storage to be ready. And we need to
-			// check if all storage constraints have pool equal "" and size equal 0
-			// to drop the error.
-			for _, storage := range output.Storage {
-				if storage.Pool == "" || storage.Size == 0 {
-					return fmt.Errorf("ReadApplicationWithRetryOnNotFound: no storage found in output")
-				}
 			}
 
 			// NOTE: An IAAS subordinate should also have machines. However, they
@@ -899,7 +900,9 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		IncludeStorage: true,
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "filesystem for storage instance") || strings.Contains(err.Error(), "volume for storage instance") {
+		if strings.Contains(err.Error(), "filesystem for storage instance") ||
+			strings.Contains(err.Error(), "volume for storage instance") ||
+			strings.Contains(err.Error(), "cannot convert storage details") {
 			// Retry if we get this error. It means the storage is not ready yet.
 			return nil, &storageNotFoundError{input.AppName}
 		}
