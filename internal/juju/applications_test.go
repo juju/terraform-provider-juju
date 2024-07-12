@@ -6,6 +6,7 @@ package juju
 // Basic imports
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/juju/juju/api"
@@ -166,6 +167,24 @@ func (s *ApplicationSuite) TestReadApplicationRetry() {
 	s.Assert().Equal("stable", resp.Channel)
 	s.Assert().Equal(5, resp.Revision)
 	s.Assert().Equal("ubuntu@22.04", resp.Base)
+}
+
+func (s *ApplicationSuite) TestReadApplicationRetryDoNotPanic() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+
+	appName := "testapplication"
+	aExp := s.mockApplicationClient.EXPECT()
+
+	aExp.ApplicationsInfo(gomock.Any()).Return(nil, fmt.Errorf("don't panic"))
+
+	client := s.getApplicationsClient()
+	_, err := client.ReadApplicationWithRetryOnNotFound(context.Background(),
+		&ReadApplicationInput{
+			ModelName: s.testModelName,
+			AppName:   appName,
+		})
+	s.Require().Error(err, "don't panic")
 }
 
 func (s *ApplicationSuite) TestReadApplicationRetryWaitForMachines() {
