@@ -71,6 +71,17 @@ func (se *storageNotFoundError) Error() string {
 	return fmt.Sprintf("storage %s not found", se.storageName)
 }
 
+var RetryReadError = &retryReadError{}
+
+// retryReadError
+type retryReadError struct {
+	msg string
+}
+
+func (e *retryReadError) Error() string {
+	return fmt.Sprintf("retrying: %s", e.msg)
+}
+
 type applicationsClient struct {
 	SharedClient
 	controllerVersion version.Number
@@ -756,12 +767,20 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 			if errors.As(err, &ApplicationNotFoundError) || errors.As(err, &StorageNotFoundError) {
 				return err
 			} else if err != nil {
-				// Log the error to the terraform Diagnostics to be
-				// caught in the provider. Return nil so we stop
-				// retrying.
-				c.Errorf(err, fmt.Sprintf("ReadApplicationWithRetryOnNotFound %q", input.AppName))
-				return nil
+				return err
 			}
+
+			// NOTE: Applications can always have storage. However, they
+			// will not be listed right after the application is created. So
+			// we need to wait for the storage to be ready. And we need to
+			// check if all storage constraints have pool equal "" and size equal 0
+			// to drop the error.
+			for label, storage := range output.Storage {
+				if storage.Pool == "" || storage.Size == 0 {
+					return &retryReadError{msg: fmt.Sprintf("storage label %q missing detail", label)}
+				}
+			}
+
 			// NOTE: An IAAS subordinate should also have machines. However, they
 			// will not be listed until after the relation has been created.
 			// Those happen with the integration resource which will not be
@@ -772,31 +791,24 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 				return nil
 			}
 			if output.Placement == "" {
-				return fmt.Errorf("ReadApplicationWithRetryOnNotFound: no machines found in output")
+				return &retryReadError{msg: "no machines found in output"}
 			}
 			machines := strings.Split(output.Placement, ",")
 			if len(machines) != output.Units {
-				return fmt.Errorf("ReadApplicationWithRetryOnNotFound: need %d machines, have %d", output.Units, len(machines))
+				return &retryReadError{msg: fmt.Sprintf("need %d machines, have %d", output.Units, len(machines))}
 			}
 
-			// NOTE: Applications can always have storage. However, they
-			// will not be listed right after the application is created. So
-			// we need to wait for the storage to be ready. And we need to
-			// check if all storage constraints have pool equal "" and size equal 0
-			// to drop the error.
-			for _, storage := range output.Storage {
-				if storage.Pool == "" || storage.Size == 0 {
-					return fmt.Errorf("ReadApplicationWithRetryOnNotFound: no storage found in output")
-				}
-			}
-
-			// NOTE: An IAAS subordinate should also have machines. However, they
-			// will not be listed until after the relation has been created.
-			// Those happen with the integration resource which will not be
-			// run by terraform before the application resource finishes. Thus
-			// do not block here for subordinates.
 			c.Tracef("Have machines - returning", map[string]interface{}{"output": *output})
 			return nil
+		},
+		IsFatalError: func(err error) bool {
+			if errors.As(err, &ApplicationNotFoundError) ||
+				errors.As(err, &StorageNotFoundError) ||
+				errors.As(err, &RetryReadError) ||
+				strings.Contains(err.Error(), "connection refused") {
+				return false
+			}
+			return true
 		},
 		NotifyFunc: func(err error, attempt int) {
 			if attempt%4 == 0 {
@@ -873,8 +885,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	apps, err := applicationAPIClient.ApplicationsInfo([]names.ApplicationTag{names.NewApplicationTag(input.AppName)})
 	if err != nil {
-		c.Errorf(err, "found when querying the applications info")
-		return nil, err
+		return nil, jujuerrors.Annotate(err, "when querying the applications info")
 	}
 	if len(apps) > 1 {
 		return nil, fmt.Errorf("more than one result for application: %s", input.AppName)
@@ -899,7 +910,9 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		IncludeStorage: true,
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "filesystem for storage instance") || strings.Contains(err.Error(), "volume for storage instance") {
+		if strings.Contains(err.Error(), "filesystem for storage instance") ||
+			strings.Contains(err.Error(), "volume for storage instance") ||
+			strings.Contains(err.Error(), "cannot convert storage details") {
 			// Retry if we get this error. It means the storage is not ready yet.
 			return nil, &storageNotFoundError{input.AppName}
 		}

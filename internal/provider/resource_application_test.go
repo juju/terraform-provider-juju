@@ -516,7 +516,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceApplication_Storage(t *testing.T) {
+func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -530,7 +530,7 @@ func TestAcc_ResourceApplication_Storage(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationStorage(modelName, appName, storageConstraints),
+				Config: testAccResourceApplicationStorageLXD(modelName, appName, storageConstraints),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage_directives.runner", "2G"),
@@ -538,6 +538,34 @@ func TestAcc_ResourceApplication_Storage(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.count", "1"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.size", "2G"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.pool", "lxd"),
+				),
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceApplication_StorageK8s(t *testing.T) {
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with Microk8s")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-application-storage")
+	appName := "test-app-storage"
+
+	storageConstraints := map[string]string{"label": "pgdata", "size": "2G"}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationStorageK8s(modelName, appName, storageConstraints),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage_directives.pgdata", "2G"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.label", "pgdata"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.count", "1"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.size", "2G"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.pool", "kubernetes"),
 				),
 			},
 		},
@@ -891,7 +919,7 @@ resource "juju_application" "{{.AppName}}" {
 	})
 }
 
-func testAccResourceApplicationStorage(modelName, appName string, storageConstraints map[string]string) string {
+func testAccResourceApplicationStorageLXD(modelName, appName string, storageConstraints map[string]string) string {
 	return internaltesting.GetStringFromTemplateWithData("testAccResourceApplicationStorage", `
 resource "juju_model" "{{.ModelName}}" {
   name = "{{.ModelName}}"
@@ -904,6 +932,33 @@ resource "juju_application" "{{.AppName}}" {
     name = "github-runner"
     channel = "latest/stable"
     revision = 177
+  }
+
+  storage_directives = {
+    {{.StorageConstraints.label}} = "{{.StorageConstraints.size}}"
+  }
+
+  units = 1
+}
+`, internaltesting.TemplateData{
+		"ModelName":          modelName,
+		"AppName":            appName,
+		"StorageConstraints": storageConstraints,
+	})
+}
+
+func testAccResourceApplicationStorageK8s(modelName, appName string, storageConstraints map[string]string) string {
+	return internaltesting.GetStringFromTemplateWithData("testAccResourceApplicationStorage", `
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_application" "{{.AppName}}" {
+  model = juju_model.{{.ModelName}}.name
+  name = "{{.AppName}}"
+  charm {
+    name = "postgresql-k8s"
+    channel = "14/stable"
   }
 
   storage_directives = {
