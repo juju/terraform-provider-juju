@@ -1,4 +1,4 @@
-## 0.13.0 (July 08, 2024)
+## 0.13.0 (July 15, 2024)
 
 NOTES:
 * **This release requires juju controller version 2.9.49 or later juju.**
@@ -9,10 +9,11 @@ ENHANCEMENTS:
 * Support for application resources to use storage is added. You can now use `storage` and `storage_directives` fields in an application resource to utilize storage in your application.
 * Bug reports are enhanced to require more information, including the Juju controller version.
 * [Conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) are now required in contributions to the repository.
-* Provider test runs are improved to run faster.
+* Provider test runs are improved to run faster. A foundation for running tests in parallel has been laid out. More work is needed on GitHub runners to enable parallel testing.
 
 BUG FIXES:
 
+* Panic in handling storage conversion errors is fixed, by @anvial in https://github.com/juju/terraform-provider-juju/pull/525
 * Placement and constraints directives are allowed to co-exist in machine resources. Added by @hmlanigan in https://github.com/juju/terraform-provider-juju/pull/499
 
 ## 0.12.0 (April 22, 2024)
