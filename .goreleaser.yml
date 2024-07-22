@@ -23,13 +23,10 @@ builds:
     - darwin
   goarch:
     - amd64
-    # TODO: the following are disabled due to => juju/lru maxLRUSize (untyped int constant 4294967295) overflows int
-    # - '386'
-    # - arm
     - arm64
   ignore:
     - goos: darwin
-      goarch: '386'
+      goarch: 'arm64'
     # TODO: disabled => juju/utils symlink_windows.go:54:8: undefined: createSymbolicLink
     - goos: windows
       goarch: arm64
@@ -62,4 +59,5 @@ release:
   # If you want to manually examine the release before its live, uncomment this line:
   draft: true
 changelog:
-  skip: true
+  disable: true
+version: 2
