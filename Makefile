@@ -101,5 +101,4 @@ install-snap-dependencies: check-snap-package
 install-dependencies: install-snap-dependencies
 ## install-dependencies: Install all the dependencies
 
-
-
+check: juju-unit-test
