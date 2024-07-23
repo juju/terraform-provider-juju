@@ -6,7 +6,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
-	"unicode"
+	"strconv"
 
 	charmresources "github.com/juju/charm/v12/resource"
 	jujuerrors "github.com/juju/errors"
@@ -123,10 +123,9 @@ func (osFilesystem) Stat(name string) (os.FileInfo, error) {
 // isInt checks if strings consists from digits
 // Used to detect resources which are given with revision number
 func isInt(s string) bool {
-	for _, c := range s {
-		if !unicode.IsDigit(c) {
-			return false
-		}
+	_, err := strconv.Atoi(s)
+	if err != nil {
+		return false
 	}
 	return true
 }
