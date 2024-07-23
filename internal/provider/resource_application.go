@@ -982,7 +982,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 			for k, v := range updateApplicationInput.Resources {
 				if isInt(v) {
 					// Set resource revision to zero gets the latest resource revision from CharmHub
-					updateApplicationInput.Resources[k] = "0"
+					updateApplicationInput.Resources[k] = "-1"
 				}
 			}
 		}
@@ -1014,7 +1014,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 					// initialize the resources
 					updateApplicationInput.Resources = make(map[string]string)
 					// Set resource revision to zero gets the latest resource revision from CharmHub
-					updateApplicationInput.Resources[k] = "0"
+					updateApplicationInput.Resources[k] = "-1"
 				}
 			}
 		}
@@ -1028,7 +1028,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 						updateApplicationInput.Resources = make(map[string]string)
 					}
 					// Set resource revision to zero gets the latest resource revision from CharmHub
-					updateApplicationInput.Resources[k] = "0"
+					updateApplicationInput.Resources[k] = "-1"
 				}
 			}
 		}

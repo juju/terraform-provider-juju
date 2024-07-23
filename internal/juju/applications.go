@@ -1471,10 +1471,10 @@ func addPendingResources(appName string, resourcesToBeAdded map[string]charmreso
 						Origin:   charmresources.OriginStore,
 						Revision: -1,
 					}
-					// if the resource is removed, providedRev is 0
+					// if the resource is removed, providedRev is -1
 					// Then, Charm is deployed with default resources according to channel
 					// Otherwise, Charm is deployed with the provided revision
-					if providedRev != 0 {
+					if providedRev != -1 {
 						resourceFromCharmhub.Revision = providedRev
 					}
 					pendingResourcesforAdd = append(pendingResourcesforAdd, resourceFromCharmhub)
