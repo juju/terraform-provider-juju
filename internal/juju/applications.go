@@ -741,14 +741,14 @@ func splitCommaDelimitedList(list string) []string {
 
 // processResources is a helper function to process the charm
 // metadata and request the download of any additional resource.
-func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string, resources map[string]string) (map[string]string, error) {
+func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string, resourcesToUse map[string]string) (map[string]string, error) {
 	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL)
 	if err != nil {
 		return nil, typedError(err)
 	}
 
 	// check if we have resources to request
-	if len(charmInfo.Meta.Resources) == 0 && len(resources) == 0 {
+	if len(charmInfo.Meta.Resources) == 0 && len(resourcesToUse) == 0 {
 		return nil, nil
 	}
 
@@ -757,7 +757,7 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 		return nil, err
 	}
 
-	return addPendingResources(appName, charmInfo.Meta.Resources, resources, charmID, resourcesAPIClient)
+	return addPendingResources(appName, charmInfo.Meta.Resources, resourcesToUse, charmID, resourcesAPIClient)
 }
 
 // ReadApplicationWithRetryOnNotFound calls ReadApplication until
@@ -1452,14 +1452,14 @@ func (c applicationsClient) updateResources(appName string, resources map[string
 	return addPendingResources(appName, filtered, resources, charmID, resourcesAPIClient)
 }
 
-func addPendingResources(appName string, resourcesToBeAdded map[string]charmresources.Meta, resourcesRevisions map[string]string,
+func addPendingResources(appName string, charmResources map[string]charmresources.Meta, resourcesToUse map[string]string,
 	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient) (map[string]string, error) {
 	pendingResourcesforAdd := []charmresources.Resource{}
 	toReturn := map[string]string{}
 
-	for _, resourceMeta := range resourcesToBeAdded {
-		if resourcesRevisions != nil {
-			if deployValue, ok := resourcesRevisions[resourceMeta.Name]; ok {
+	for _, resourceMeta := range charmResources {
+		if resourcesToUse != nil {
+			if deployValue, ok := resourcesToUse[resourceMeta.Name]; ok {
 				if isInt(deployValue) {
 					// A resource revision is provided
 					providedRev, err := strconv.Atoi(deployValue)
