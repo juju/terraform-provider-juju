@@ -29,7 +29,7 @@ resource "juju_application" "this" {
 
   placement = "0,1,2"
 
-  storage = {
+  storage_directives = {
     files = "101M"
   }
 
