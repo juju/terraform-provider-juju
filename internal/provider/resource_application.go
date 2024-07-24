@@ -55,7 +55,7 @@ There are a few scenarios that need to be considered:
 
 * A resource can be added or changed at any time. If the charm has resources and none are specified in the plan, Juju will use the resource defined in the charm's specified channel. Juju does not allow resources to be removed from an application.
 
-* If a charm is refreshed, by changing the charm revision or channel, the resource is also refreshed to the current defined channel listed for the charm if the resource is specified by revision. This is normal behavior for juju but not typical behavior for terraform.
+* If a charm is refreshed, by changing the charm revision or channel, the resource is also refreshed to the current defined channel listed for the charm if the resource is specified by revision. Please note that this is normal behavior for Juju but not typical behavior for Terraform.
 
 * Resources specified by URL to an OCI image repository will never be refreshed (upgraded) by juju during a charm refresh unless explicitly changed in the plan.
 `
@@ -272,8 +272,11 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				},
 			},
 			ResourceKey: schema.MapAttribute{
-				Optional:            true,
-				ElementType:         types.StringType,
+				Optional:    true,
+				ElementType: types.StringType,
+				Validators: []validator.Map{
+					StringIsResourceKeyValidator{},
+				},
 				MarkdownDescription: resourceKeyMarkdownDescription,
 			},
 		},

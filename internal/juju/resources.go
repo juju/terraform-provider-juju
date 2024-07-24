@@ -124,10 +124,7 @@ func (osFilesystem) Stat(name string) (os.FileInfo, error) {
 // Used to detect resources which are given with revision number
 func isInt(s string) bool {
 	_, err := strconv.Atoi(s)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 // Upload sends the provided resource blob up to Juju.
