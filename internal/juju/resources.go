@@ -120,7 +120,7 @@ func (osFilesystem) Stat(name string) (os.FileInfo, error) {
 	return os.Stat(name)
 }
 
-// isInt checks if strings consists from digits
+// isInt checks if strings could be converted to an integer
 // Used to detect resources which are given with revision number
 func isInt(s string) bool {
 	_, err := strconv.Atoi(s)
