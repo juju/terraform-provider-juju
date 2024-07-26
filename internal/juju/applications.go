@@ -1081,10 +1081,10 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	if err != nil {
 		return nil, jujuerrors.Annotate(err, "failed to list application resources")
 	}
-	resourceRevisions := make(map[string]string)
+	usedResources := make(map[string]string)
 	for _, iResources := range resources {
 		for _, resource := range iResources.Resources {
-			resourceRevisions[resource.Name] = strconv.Itoa(resource.Revision)
+			usedResources[resource.Name] = strconv.Itoa(resource.Revision)
 		}
 	}
 
@@ -1103,7 +1103,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		Placement:        placement,
 		EndpointBindings: endpointBindings,
 		Storage:          storages,
-		Resources:        resourceRevisions,
+		Resources:        usedResources,
 	}
 
 	return response, nil
@@ -1133,6 +1133,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	charmsAPIClient := apicharms.NewClient(conn)
 	clientAPIClient := c.getClientAPIClient(conn)
 	modelconfigAPIClient := c.getModelConfigAPIClient(conn)
+
 	resourcesAPIClient, err := c.getResourceAPIClient(conn)
 	if err != nil {
 		return err
@@ -1452,12 +1453,12 @@ func (c applicationsClient) updateResources(appName string, resources map[string
 	return addPendingResources(appName, filtered, resources, charmID, resourcesAPIClient)
 }
 
-func addPendingResources(appName string, charmResources map[string]charmresources.Meta, resourcesToUse map[string]string,
+func addPendingResources(appName string, charmResourcesToAdd map[string]charmresources.Meta, resourcesToUse map[string]string,
 	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient) (map[string]string, error) {
 	pendingResourcesforAdd := []charmresources.Resource{}
 	toReturn := map[string]string{}
 
-	for _, resourceMeta := range charmResources {
+	for _, resourceMeta := range charmResourcesToAdd {
 		if resourcesToUse != nil {
 			if deployValue, ok := resourcesToUse[resourceMeta.Name]; ok {
 				if isInt(deployValue) {
@@ -1479,7 +1480,7 @@ func addPendingResources(appName string, charmResources map[string]charmresource
 					}
 					pendingResourcesforAdd = append(pendingResourcesforAdd, resourceFromCharmhub)
 				} else {
-					// A new resource to be uploaded by the client
+					// A new resource to be uploaded by the ResourceApi client
 					localResource := charmresources.Resource{
 						Meta:   resourceMeta,
 						Origin: charmresources.OriginUpload,
