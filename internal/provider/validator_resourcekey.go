@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -38,12 +39,32 @@ func (v StringIsResourceKeyValidator) ValidateMap(ctx context.Context, req valid
 	for name, value := range resourceKey {
 		if isInt(value) {
 			providedRev, err := strconv.Atoi(value)
-			if err != nil || providedRev <= 0 {
+			if err != nil {
 				resp.Diagnostics.AddAttributeError(
 					req.Path,
-					"Invalid Resource Revision",
-					fmt.Sprintf("value of %q is expected to be a valid revision number: %s", name, err),
+					"Invalid Resource revision",
+					fmt.Sprintf("value of %q should be a valid revision number or image URL: %s", name, err),
 				)
+			}
+			if providedRev <= 0 {
+				resp.Diagnostics.AddAttributeError(
+					req.Path,
+					"Invalid Resource revision",
+					fmt.Sprintf("value of %q should be a valid revision number or image URL: %s", name, "Negative revision number is invalid."),
+				)
+			}
+		} else {
+			imageUrlPattern := `(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]):[\w][\w.-]{0,127}`
+			urlRegex := regexp.MustCompile(imageUrlPattern)
+			if urlRegex.MatchString(value) {
+				return
+			} else {
+				resp.Diagnostics.AddAttributeError(
+					req.Path,
+					"Invalid image URL",
+					fmt.Sprintf("value of %q should be a valid revision number or image URL: %s", name, "The value format is invalid as a revision number or for an image URL."),
+				)
+				return
 			}
 		}
 	}
