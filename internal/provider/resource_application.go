@@ -6,8 +6,8 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/dustin/go-humanize"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
@@ -53,9 +53,9 @@ There are a few scenarios that need to be considered:
 
 * Specify a resource other than the default for a charm. Note that not all charms have resources. A resource can be specified by a revision number or by URL to a OCI image repository. Resources of type 'file' can only be specified by revision number. Resources of type 'oci-image' can be specified by revision number or URL.
 
-* A resource can be added or changed at any time. If the charm has resources and none are specified in the plan, Juju will use the resource defined in the charm's specified channel. Juju does not allow resources to be removed from an application.
+* A resource can be added or changed at any time. If the charm has resources and None is specified in the plan, Juju will use the resource defined in the charm's specified channel.
 
-* If a charm is refreshed, by changing the charm revision or channel, the resource is also refreshed to the current defined channel listed for the charm if the resource is specified by revision. Please note that this is normal behavior for Juju but not typical behavior for Terraform.
+* If a charm is refreshed, by changing the charm revision or channel, the resource is also refreshed to the current defined channel listed for the charm if the resource is specified by revision.
 
 * Resources specified by URL to an OCI image repository will never be refreshed (upgraded) by juju during a charm refresh unless explicitly changed in the plan.
 `
@@ -101,15 +101,11 @@ type applicationResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
-// isInt checks if strings consists from digits
+// isInt checks if strings could be converted to an integer
 // Used to detect resources which are given with revision number
 func isInt(s string) bool {
-	for _, c := range s {
-		if !unicode.IsDigit(c) {
-			return false
-		}
-	}
-	return true
+	_, err := strconv.Atoi(s)
+	return err == nil
 }
 
 func (r *applicationResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -979,16 +975,6 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		planResourceMap := make(map[string]string)
 		resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &planResourceMap, false)...)
 		updateApplicationInput.Resources = planResourceMap
-		// Resource revisions exists in the plan but channel is updated
-		// Then, the resources get updated to the latest resource revision according to charm channel
-		if len(updateApplicationInput.Resources) != 0 && updateApplicationInput.Channel != "" {
-			for k, v := range updateApplicationInput.Resources {
-				if isInt(v) {
-					// Set resource revision to zero gets the latest resource revision from CharmHub
-					updateApplicationInput.Resources[k] = "-1"
-				}
-			}
-		}
 	} else {
 		planResourceMap := make(map[string]string)
 		stateResourceMap := make(map[string]string)
@@ -1016,20 +1002,6 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 				if updateApplicationInput.Resources == nil {
 					// initialize the resources
 					updateApplicationInput.Resources = make(map[string]string)
-					// Set resource revision to zero gets the latest resource revision from CharmHub
-					updateApplicationInput.Resources[k] = "-1"
-				}
-			}
-		}
-		// Resource revisions exists in the plan but channel is updated
-		// Then, the resources get updated to the latest resource revision according to channel
-		if len(planResourceMap) != 0 && updateApplicationInput.Channel != "" {
-			for k, v := range planResourceMap {
-				if isInt(v) {
-					if updateApplicationInput.Resources == nil {
-						// initialize just in case
-						updateApplicationInput.Resources = make(map[string]string)
-					}
 					// Set resource revision to zero gets the latest resource revision from CharmHub
 					updateApplicationInput.Resources[k] = "-1"
 				}
