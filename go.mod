@@ -19,7 +19,7 @@ require (
 	github.com/hashicorp/terraform-plugin-testing v1.9.0
 	github.com/juju/charm/v12 v12.1.0
 	github.com/juju/clock v1.1.1
-	github.com/juju/cmd/v3 v3.0.14
+	github.com/juju/cmd/v3 v3.0.15
 	github.com/juju/collections v1.0.4
 	github.com/juju/errors v1.0.0
 	github.com/juju/names/v4 v4.0.0-20220207005702-9c6532a52823
