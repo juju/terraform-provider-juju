@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
-	"github.com/juju/juju/storage"
+	jujustorage "github.com/juju/juju/storage"
 )
 
 type stringIsStorageDirectiveValidator struct{}
@@ -30,6 +30,13 @@ func (v stringIsStorageDirectiveValidator) ValidateMap(ctx context.Context, req 
 		return
 	}
 
+	// If the value of any element is unknown or null, there is nothing to validate.
+	for _, element := range req.ConfigValue.Elements() {
+		if element.IsUnknown() || element.IsNull() {
+			return
+		}
+	}
+
 	var storageDirectives map[string]string
 	resp.Diagnostics.Append(req.ConfigValue.ElementsAs(ctx, &storageDirectives, false)...)
 	if resp.Diagnostics.HasError() {
@@ -37,7 +44,7 @@ func (v stringIsStorageDirectiveValidator) ValidateMap(ctx context.Context, req 
 	}
 
 	for label, directive := range storageDirectives {
-		_, err := storage.ParseConstraints(directive)
+		_, err := jujustorage.ParseConstraints(directive)
 		if err != nil {
 			resp.Diagnostics.AddAttributeError(
 				req.Path,
