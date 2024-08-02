@@ -30,7 +30,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
 	"github.com/juju/juju/core/constraints"
-
 	jujustorage "github.com/juju/juju/storage"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -969,7 +968,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 
 	// if resources in the plan are equal to resources stored in the state,
 	// we pass on the resources specified in the plan, which tells the provider
-	// NOT to update resources, because we want revisions fixed to those
+	// NOT to update resources, because we want resources fixed to those
 	// specified in the plan.
 	if plan.Resources.Equal(state.Resources) {
 		planResourceMap := make(map[string]string)
