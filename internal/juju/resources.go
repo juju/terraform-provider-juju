@@ -1,124 +1,23 @@
+// Copyright 2024 Canonical Ltd.
+// Licensed under the Apache License, Version 2.0, see LICENCE file for details.
+
 package juju
 
 import (
 	"fmt"
-	"io"
-	"mime"
-	"net/http"
-	"os"
 	"strconv"
 
+	"github.com/juju/charm/v12"
 	charmresources "github.com/juju/charm/v12/resource"
-	jujuerrors "github.com/juju/errors"
-	"github.com/juju/juju/api/base"
+	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
-	apiresources "github.com/juju/juju/api/client/resources"
-	jujuhttp "github.com/juju/juju/api/http"
+	apicharms "github.com/juju/juju/api/client/charms"
+	apimodelconfig "github.com/juju/juju/api/client/modelconfig"
+	apicommoncharm "github.com/juju/juju/api/common/charm"
+	"github.com/juju/juju/cmd/juju/application/utils"
 	resourcecmd "github.com/juju/juju/cmd/juju/resource"
-	"github.com/juju/juju/cmd/modelcmd"
-	"github.com/juju/juju/rpc/params"
+	corebase "github.com/juju/juju/core/base"
 )
-
-// newEndpointPath returns the API URL path for the identified resource.
-func newEndpointPath(application string, name string) string {
-	return fmt.Sprintf(HTTPEndpointPath, application, name)
-}
-
-// ResourceHttpClient returns a new Client for the given raw API caller.
-func ResourceHttpClient(apiCaller base.APICallCloser) *HttpRequestClient {
-	frontend, backend := base.NewClientFacade(apiCaller, "Resources")
-
-	httpClient, err := apiCaller.HTTPClient()
-	if err != nil {
-		return nil
-	}
-	return &HttpRequestClient{
-		ClientFacade: frontend,
-		facade:       backend,
-		httpClient:   httpClient,
-	}
-}
-
-const (
-	// ContentTypeRaw is the HTTP content-type value used for raw, unformatted content.
-	ContentTypeRaw = "application/octet-stream"
-)
-const (
-	// MediaTypeFormData is the media type for file uploads (see mime.FormatMediaType).
-	MediaTypeFormData = "form-data"
-	// QueryParamPendingID is the query parameter we use to send up the pending ID.
-	QueryParamPendingID = "pendingid"
-)
-
-const (
-	// HeaderContentType is the header name for the type of file upload.
-	HeaderContentType = "Content-Type"
-	// HeaderContentSha384 is the header name for the sha hash of a file upload.
-	HeaderContentSha384 = "Content-Sha384"
-	// HeaderContentLength is the header name for the length of a file upload.
-	HeaderContentLength = "Content-Length"
-	// HeaderContentDisposition is the header name for value that holds the filename.
-	HeaderContentDisposition = "Content-Disposition"
-)
-
-const (
-	// HTTPEndpointPath is the URL path, with substitutions, for a resource request.
-	HTTPEndpointPath = "/applications/%s/resources/%s"
-)
-
-const FilenameParamForContentDispositionHeader = "filename"
-
-// UploadRequest defines a single upload request.
-type UploadRequest struct {
-	// Application is the application ID.
-	Application string
-
-	// Name is the resource name.
-	Name string
-
-	// Filename is the name of the file as it exists on disk.
-	Filename string
-
-	// Size is the size of the uploaded data, in bytes.
-	Size int64
-
-	// Fingerprint is the fingerprint of the uploaded data.
-	Fingerprint charmresources.Fingerprint
-
-	// PendingID is the pending ID to associate with this upload, if any.
-	PendingID string
-
-	// Content is the content to upload.
-	Content io.ReadSeeker
-}
-
-type HttpRequestClient struct {
-	base.ClientFacade
-	facade     base.FacadeCaller
-	httpClient jujuhttp.HTTPDoer
-}
-
-type osFilesystem struct{}
-
-func (osFilesystem) Create(name string) (*os.File, error) {
-	return os.Create(name)
-}
-
-func (osFilesystem) RemoveAll(path string) error {
-	return os.RemoveAll(path)
-}
-
-func (osFilesystem) Open(name string) (modelcmd.ReadSeekCloser, error) {
-	return os.Open(name)
-}
-
-func (osFilesystem) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
-	return os.OpenFile(name, flag, perm)
-}
-
-func (osFilesystem) Stat(name string) (os.FileInfo, error) {
-	return os.Stat(name)
-}
 
 // isInt checks if strings could be converted to an integer
 // Used to detect resources which are given with revision number
@@ -127,93 +26,132 @@ func isInt(s string) bool {
 	return err == nil
 }
 
-// Upload sends the provided resource blob up to Juju.
-func upload(appName, name, filename, pendingID string, reader io.ReadSeeker, resourceHttpClient *HttpRequestClient) error {
-	uReq, err := apiresources.NewUploadRequest(appName, name, filename, reader)
+func (c applicationsClient) getResourceIDs(transformedInput transformedCreateApplicationInput, conn api.Connection, deployInfo apiapplication.DeployInfo, pendingResources []apiapplication.PendingResourceUpload) (map[string]string, error) {
+	resourceIDs := map[string]string{}
+	charmsAPIClient := apicharms.NewClient(conn)
+	modelconfigAPIClient := apimodelconfig.NewClient(conn)
+	resourcesAPIClient, err := c.getResourceAPIClient(conn)
 	if err != nil {
-		return jujuerrors.Trace(err)
+		return resourceIDs, err
 	}
-	if pendingID != "" {
-		uReq.PendingID = pendingID
-	}
-	req, err := uReq.HTTPRequest()
+	resolvedURL, resolvedOrigin, supportedBases, err := getCharmResolvedUrlAndOrigin(conn, transformedInput)
 	if err != nil {
-		return jujuerrors.Trace(err)
+		return resourceIDs, err
 	}
-	var response params.UploadResult
-	if err := resourceHttpClient.httpClient.Do(resourceHttpClient.facade.RawAPICaller().Context(), req, &response); err != nil {
-		return jujuerrors.Trace(err)
-	}
-
-	return nil
-}
-
-// setFilename sets a name to the file.
-func setFilename(filename string, req *http.Request) {
-	filename = mime.BEncoding.Encode("utf-8", filename)
-
-	disp := mime.FormatMediaType(
-		MediaTypeFormData,
-		map[string]string{FilenameParamForContentDispositionHeader: filename},
-	)
-
-	req.Header.Set(HeaderContentDisposition, disp)
-}
-
-// HTTPRequest generates a new HTTP request.
-func (ur UploadRequest) HTTPRequest() (*http.Request, error) {
-	urlStr := newEndpointPath(ur.Application, ur.Name)
-
-	req, err := http.NewRequest(http.MethodPut, urlStr, ur.Content)
+	userSuppliedBase := transformedInput.charmBase
+	baseToUse, err := c.baseToUse(modelconfigAPIClient, userSuppliedBase, resolvedOrigin.Base, supportedBases)
 	if err != nil {
-		return nil, jujuerrors.Trace(err)
+		return resourceIDs, err
 	}
 
-	req.Header.Set(HeaderContentType, ContentTypeRaw)
-	req.Header.Set(HeaderContentSha384, ur.Fingerprint.String())
-	req.Header.Set(HeaderContentLength, fmt.Sprint(ur.Size))
-	setFilename(ur.Filename, req)
+	resolvedOrigin.Base = baseToUse
 
-	req.ContentLength = ur.Size
+	// 3.3 version of ResolveCharm does not always include the series
+	// in the url. However, juju 2.9 requires it.
+	series, err := corebase.GetSeriesFromBase(baseToUse)
+	if err != nil {
+		return resourceIDs, err
+	}
+	resolvedURL = resolvedURL.WithSeries(series)
 
-	if ur.PendingID != "" {
-		query := req.URL.Query()
-		query.Set(QueryParamPendingID, ur.PendingID)
-		req.URL.RawQuery = query.Encode()
+	resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, resolvedOrigin, false)
+	if err != nil {
+		return resourceIDs, err
+	}
+	charmID := apiapplication.CharmID{
+		URL:    resolvedURL.String(),
+		Origin: resultOrigin,
 	}
 
-	return req, nil
-}
-
-// UploadExistingPendingResources uploads local resources. Used
-// after DeployFromRepository, where the resources have been added
-// to the controller.
-func uploadExistingPendingResources(
-	appName string,
-	pendingResources []apiapplication.PendingResourceUpload,
-	filesystem modelcmd.Filesystem,
-	resourceHttpClient *HttpRequestClient) error {
-	if pendingResources == nil {
-		return nil
+	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL)
+	if err != nil {
+		return resourceIDs, err
 	}
-	pendingID := ""
 
-	for _, pendingResUpload := range pendingResources {
-		t, typeParseErr := charmresources.ParseType(pendingResUpload.Type)
-		if typeParseErr != nil {
-			return jujuerrors.Annotatef(typeParseErr, "invalid type %v for pending resource %v",
-				pendingResUpload.Type, pendingResUpload.Name)
-		}
-
-		r, openResErr := resourcecmd.OpenResource(pendingResUpload.Filename, t, filesystem.Open)
-		if openResErr != nil {
-			return jujuerrors.Annotatef(openResErr, "unable to open resource %v", pendingResUpload.Name)
-		}
-		uploadErr := upload(appName, pendingResUpload.Name, pendingResUpload.Filename, pendingID, r, resourceHttpClient)
-
-		if uploadErr != nil {
-			return jujuerrors.Trace(uploadErr)
+	for _, resourceMeta := range charmInfo.Meta.Resources {
+		for _, pendingResource := range pendingResources {
+			if pendingResource.Name == resourceMeta.Name {
+				fileSystem := osFilesystem{}
+				localResource := charmresources.Resource{
+					Meta:   resourceMeta,
+					Origin: charmresources.OriginStore,
+				}
+				t, typeParseErr := charmresources.ParseType(resourceMeta.Type.String())
+				if typeParseErr != nil {
+					return resourceIDs, typeParseErr
+				}
+				r, openResErr := resourcecmd.OpenResource(pendingResource.Filename, t, fileSystem.Open)
+				if openResErr != nil {
+					return resourceIDs, openResErr
+				}
+				toRequestUpload, err := resourcesAPIClient.UploadPendingResource(deployInfo.Name, localResource, pendingResource.Filename, r)
+				if err != nil {
+					return resourceIDs, err
+				}
+				resourceIDs[resourceMeta.Name] = toRequestUpload
+			}
 		}
 	}
-	return nil
+	return resourceIDs, nil
+}
+
+func getCharmResolvedUrlAndOrigin(conn api.Connection, transformedInput transformedCreateApplicationInput) (*charm.URL, apicommoncharm.Origin, []corebase.Base, error) {
+	charmsAPIClient := apicharms.NewClient(conn)
+	modelconfigAPIClient := apimodelconfig.NewClient(conn)
+
+	channel, err := charm.ParseChannel(transformedInput.charmChannel)
+	if err != nil {
+		return nil, apicommoncharm.Origin{}, []corebase.Base{}, err
+	}
+
+	charmURL, err := resolveCharmURL(transformedInput.charmName)
+	if err != nil {
+		return nil, apicommoncharm.Origin{}, []corebase.Base{}, err
+	}
+
+	if charmURL.Revision != UnspecifiedRevision {
+		err := fmt.Errorf("cannot specify revision in a charm name")
+		return nil, apicommoncharm.Origin{}, []corebase.Base{}, err
+	}
+	if transformedInput.charmRevision != UnspecifiedRevision && channel.Empty() {
+		err = fmt.Errorf("specifying a revision requires a channel for future upgrades")
+		return nil, apicommoncharm.Origin{}, []corebase.Base{}, err
+	}
+
+	userSuppliedBase := transformedInput.charmBase
+	platformCons, err := modelconfigAPIClient.GetModelConstraints()
+	if err != nil {
+		return nil, apicommoncharm.Origin{}, []corebase.Base{}, err
+	}
+	platform := utils.MakePlatform(transformedInput.constraints, userSuppliedBase, platformCons)
+
+	urlForOrigin := charmURL
+	if transformedInput.charmRevision != UnspecifiedRevision {
+		urlForOrigin = urlForOrigin.WithRevision(transformedInput.charmRevision)
+	}
+
+	// Juju 2.9 cares that the series is in the origin. Juju 3.3 does not.
+	// We are supporting both now.
+	if !userSuppliedBase.Empty() {
+		userSuppliedSeries, err := corebase.GetSeriesFromBase(userSuppliedBase)
+		if err != nil {
+			return nil, apicommoncharm.Origin{}, []corebase.Base{}, err
+		}
+		urlForOrigin = urlForOrigin.WithSeries(userSuppliedSeries)
+	}
+
+	origin, err := utils.MakeOrigin(charm.Schema(urlForOrigin.Schema), transformedInput.charmRevision, channel, platform)
+	if err != nil {
+		return nil, apicommoncharm.Origin{}, []corebase.Base{}, err
+	}
+
+	// Charm or bundle has been supplied as a URL, so we resolve and
+	// deploy using the store but pass in the origin command line
+	// argument so users can target a specific origin.
+	resolvedURL, resolvedOrigin, supportedBases, err := resolveCharm(charmsAPIClient, charmURL, origin)
+	if err != nil {
+		return nil, apicommoncharm.Origin{}, []corebase.Base{}, err
+	}
+
+	return resolvedURL, resolvedOrigin, supportedBases, nil
 }
