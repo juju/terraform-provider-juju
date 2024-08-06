@@ -49,6 +49,7 @@ type Client struct {
 	SSHKeys      sshKeysClient
 	Users        usersClient
 	Secrets      secretsClient
+	Jaas         jaasClient
 
 	isJAAS func() bool
 }
@@ -57,6 +58,7 @@ type Client struct {
 // JAAS controllers offer additional functionality for permission management.
 func (c Client) IsJAAS() bool {
 	return c.isJAAS()
+
 }
 
 type jujuModel struct {
@@ -107,6 +109,7 @@ func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, er
 		SSHKeys:      *newSSHKeysClient(sc),
 		Users:        *newUsersClient(sc),
 		Secrets:      *newSecretsClient(sc),
+		Jaas:         *newJaasClient(sc),
 		isJAAS:       func() bool { return sc.IsJAAS(defaultJAASCheck) },
 	}, nil
 }
