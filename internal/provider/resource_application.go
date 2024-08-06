@@ -48,14 +48,12 @@ const (
 
 	resourceKeyMarkdownDescription = `
 Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
-There are a few scenarios that need to be considered:
+Specify a resource other than the default for a charm. Note that not all charms have resources.
 
-* Specify a resource other than the default for a charm. Note that not all charms have resources. A resource can be specified by a revision number or by URL to a OCI image repository. Resources of type 'file' can only be specified by revision number. Resources of type 'oci-image' can be specified by revision number or URL.
-
+Notes:
+* A resource can be specified by a revision number or by URL to a OCI image repository. Resources of type 'file' can only be specified by revision number. Resources of type 'oci-image' can be specified by revision number or URL.
 * A resource can be added or changed at any time. If the charm has resources and None is specified in the plan, Juju will use the resource defined in the charm's specified channel.
-
-* If a charm is refreshed, by changing the charm revision or channel, the resource is also refreshed to the current defined channel listed for the charm if the resource is specified by revision.
-
+* If a charm is refreshed, by changing the charm revision or channel and if the resource is specified by a revision in the plan, Juju will use the resource defined in the plan.
 * Resources specified by URL to an OCI image repository will never be refreshed (upgraded) by juju during a charm refresh unless explicitly changed in the plan.
 `
 )
