@@ -29,7 +29,7 @@ func (s *SecretSuite) SetupTest() {}
 func (s *SecretSuite) setupMocks(t *testing.T) *gomock.Controller {
 	s.testModelName = "test-secret-model"
 
-	ctlr := s.JujuSuite.setupMocks(t)
+	ctlr := s.JujuSuite.setupMocks(t, &s.testModelName)
 	s.mockSecretClient = NewMockSecretAPIClient(ctlr)
 
 	return ctlr

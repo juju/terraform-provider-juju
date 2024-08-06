@@ -13,14 +13,14 @@ import (
 type JujuSuite struct {
 	suite.Suite
 
-	testModelName string
+	testModelName *string
 
 	mockConnection   *MockConnection
 	mockSharedClient *MockSharedClient
 }
 
-func (s *JujuSuite) setupMocks(t *testing.T) *gomock.Controller {
-	s.testModelName = "test-secret-model"
+func (s *JujuSuite) setupMocks(t *testing.T, modelName *string) *gomock.Controller {
+	s.testModelName = modelName
 
 	ctlr := gomock.NewController(t)
 
@@ -35,7 +35,7 @@ func (s *JujuSuite) setupMocks(t *testing.T) *gomock.Controller {
 	s.mockSharedClient.EXPECT().Errorf(gomock.Any(), gomock.Any()).Do(log).AnyTimes()
 	s.mockSharedClient.EXPECT().Tracef(gomock.Any(), gomock.Any()).Do(log).AnyTimes()
 	s.mockSharedClient.EXPECT().JujuLogger().Return(&jujuLoggerShim{}).AnyTimes()
-	s.mockSharedClient.EXPECT().GetConnection(&s.testModelName).Return(s.mockConnection, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().GetConnection(s.testModelName).Return(s.mockConnection, nil).AnyTimes()
 
 	return ctlr
 }
