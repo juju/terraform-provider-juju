@@ -1,3 +1,6 @@
+// Copyright 2023 Canonical Ltd.
+// Licensed under the Apache License, Version 2.0, see LICENCE file for details.
+
 package juju
 
 import (
@@ -10,19 +13,19 @@ import (
 
 type jaasClient struct {
 	SharedClient
-	getJaasApiClient func(jujuapi.Connection) JaasApiClient
+	getJaasApiClient func(jujuapi.Connection) JaasAPIClient
 }
 
 func newJaasClient(sc SharedClient) *jaasClient {
 	return &jaasClient{
 		SharedClient: sc,
-		getJaasApiClient: func(conn jujuapi.Connection) JaasApiClient {
+		getJaasApiClient: func(conn jujuapi.Connection) JaasAPIClient {
 			return api.NewClient(conn)
 		},
 	}
 }
 
-func (jc *jaasClient) AddTuples(tuples []params.RelationshipTuple) error {
+func (jc *jaasClient) AddRelations(tuples []params.RelationshipTuple) error {
 	conn, err := jc.GetConnection(nil)
 	if err != nil {
 		return err
@@ -35,7 +38,7 @@ func (jc *jaasClient) AddTuples(tuples []params.RelationshipTuple) error {
 	return cl.AddRelation(&req)
 }
 
-func (jc *jaasClient) DeleteTuples(tuples []params.RelationshipTuple) error {
+func (jc *jaasClient) DeleteRelations(tuples []params.RelationshipTuple) error {
 	conn, err := jc.GetConnection(nil)
 	if err != nil {
 		return err
@@ -48,7 +51,7 @@ func (jc *jaasClient) DeleteTuples(tuples []params.RelationshipTuple) error {
 	return cl.RemoveRelation(&req)
 }
 
-func (jc *jaasClient) ReadRelation(tuple *params.RelationshipTuple) ([]params.RelationshipTuple, error) {
+func (jc *jaasClient) ReadRelations(tuple *params.RelationshipTuple) ([]params.RelationshipTuple, error) {
 	if tuple == nil {
 		return nil, errors.New("add relation request nil")
 	}
