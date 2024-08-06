@@ -1447,78 +1447,79 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 	toReturn := map[string]string{}
 
 	for _, resourceMeta := range charmResourcesToAdd {
-		if resourcesToUse != nil {
-			if deployValue, ok := resourcesToUse[resourceMeta.Name]; ok {
-				if isInt(deployValue) {
-					// A resource revision is provided
-					providedRev, err := strconv.Atoi(deployValue)
-					if err != nil {
-						return nil, typedError(err)
-					}
-					resourceFromCharmhub := charmresources.Resource{
-						Meta:     resourceMeta,
-						Origin:   charmresources.OriginStore,
-						Revision: -1,
-					}
-					// if the resource is removed, providedRev is -1
-					// Then, Charm is deployed with default resources according to channel
-					// Otherwise, Charm is deployed with the provided revision
-					if providedRev != -1 {
-						resourceFromCharmhub.Revision = providedRev
-					}
-					pendingResourcesforAdd = append(pendingResourcesforAdd, resourceFromCharmhub)
-				} else {
-					// A new resource to be uploaded by the ResourceApi client
-					localResource := charmresources.Resource{
-						Meta:   resourceMeta,
-						Origin: charmresources.OriginUpload,
-					}
-
-					fileSystem := osFilesystem{}
-					t, typeParseErr := charmresources.ParseType(resourceMeta.Type.String())
-					if typeParseErr != nil {
-						return nil, typedError(typeParseErr)
-					}
-					r, openResErr := resourcecmd.OpenResource(deployValue, t, fileSystem.Open)
-					if openResErr != nil {
-						return nil, typedError(openResErr)
-					}
-					toRequestUpload, err := resourcesAPIClient.UploadPendingResource(appName, localResource, deployValue, r)
-					if err != nil {
-						return nil, typedError(err)
-					}
-					// Add the resource name and the corresponding UUID to the resources map
-					toReturn[resourceMeta.Name] = toRequestUpload
-				}
-			}
-		} else {
-			// If there is no resource revisions, Charm is deployed with default resources according to channel
+		if resourcesToUse == nil {
+			// If there are no resource revisions, the Charm is deployed with
+			// default resources according to channel.
 			resourceFromCharmhub := charmresources.Resource{
 				Meta:     resourceMeta,
 				Origin:   charmresources.OriginStore,
 				Revision: -1,
 			}
 			pendingResourcesforAdd = append(pendingResourcesforAdd, resourceFromCharmhub)
+			continue
 		}
-	}
-	if len(pendingResourcesforAdd) != 0 {
-		resourcesReqforAdd := apiresources.AddPendingResourcesArgs{
-			ApplicationID: appName,
-			CharmID: apiresources.CharmID{
-				URL:    charmID.URL,
-				Origin: charmID.Origin,
-			},
-			Resources: pendingResourcesforAdd,
+
+		deployValue, ok := resourcesToUse[resourceMeta.Name]
+		if !ok {
+			continue
 		}
-		toRequestAdd, err := resourcesAPIClient.AddPendingResources(resourcesReqforAdd)
+		if providedRev, err := strconv.Atoi(deployValue); err == nil {
+			// A resource revision is provided
+			resourceFromCharmhub := charmresources.Resource{
+				Meta:   resourceMeta,
+				Origin: charmresources.OriginStore,
+				// If the resource is removed, providedRev is -1. Then, Charm
+				// is deployed with default resources according to channel.
+				// Otherwise, Charm is deployed with the provided revision.
+				Revision: providedRev,
+			}
+			pendingResourcesforAdd = append(pendingResourcesforAdd, resourceFromCharmhub)
+			continue
+		}
+
+		// A new resource to be uploaded by the ResourceApi client.
+		localResource := charmresources.Resource{
+			Meta:   resourceMeta,
+			Origin: charmresources.OriginUpload,
+		}
+		fileSystem := osFilesystem{}
+		t, typeParseErr := charmresources.ParseType(resourceMeta.Type.String())
+		if typeParseErr != nil {
+			return nil, typedError(typeParseErr)
+		}
+		r, openResErr := resourcecmd.OpenResource(deployValue, t, fileSystem.Open)
+		if openResErr != nil {
+			return nil, typedError(openResErr)
+		}
+		toRequestUpload, err := resourcesAPIClient.UploadPendingResource(appName, localResource, deployValue, r)
 		if err != nil {
 			return nil, typedError(err)
 		}
-		// Add the resource name and the corresponding UUID to the resources map
-		for i, argsResource := range pendingResourcesforAdd {
-			toReturn[argsResource.Meta.Name] = toRequestAdd[i]
-		}
+		// Add the resource name and the corresponding UUID to the resources map.
+		toReturn[resourceMeta.Name] = toRequestUpload
 	}
+
+	if len(pendingResourcesforAdd) == 0 {
+		return toReturn, nil
+	}
+
+	resourcesReqforAdd := apiresources.AddPendingResourcesArgs{
+		ApplicationID: appName,
+		CharmID: apiresources.CharmID{
+			URL:    charmID.URL,
+			Origin: charmID.Origin,
+		},
+		Resources: pendingResourcesforAdd,
+	}
+	toRequestAdd, err := resourcesAPIClient.AddPendingResources(resourcesReqforAdd)
+	if err != nil {
+		return nil, typedError(err)
+	}
+	// Add the resource name and the corresponding UUID to the resources map
+	for i, argsResource := range pendingResourcesforAdd {
+		toReturn[argsResource.Meta.Name] = toRequestAdd[i]
+	}
+
 	return toReturn, nil
 }
 
