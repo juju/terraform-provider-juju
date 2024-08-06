@@ -1,4 +1,4 @@
-// Copyright 2023 Canonical Ltd.
+// Copyright 2024 Canonical Ltd.
 // Licensed under the Apache License, Version 2.0, see LICENCE file for details.
 
 package juju
@@ -25,6 +25,7 @@ func newJaasClient(sc SharedClient) *jaasClient {
 	}
 }
 
+// AddRelations attempts to create the provided slice of relationship tuples.
 func (jc *jaasClient) AddRelations(tuples []params.RelationshipTuple) error {
 	conn, err := jc.GetConnection(nil)
 	if err != nil {
@@ -38,6 +39,7 @@ func (jc *jaasClient) AddRelations(tuples []params.RelationshipTuple) error {
 	return cl.AddRelation(&req)
 }
 
+// DeleteRelations attempts to delete the provided slice of relationship tuples.
 func (jc *jaasClient) DeleteRelations(tuples []params.RelationshipTuple) error {
 	conn, err := jc.GetConnection(nil)
 	if err != nil {
@@ -51,6 +53,7 @@ func (jc *jaasClient) DeleteRelations(tuples []params.RelationshipTuple) error {
 	return cl.RemoveRelation(&req)
 }
 
+// ReadRelations attempts to read relations that match the criteria defined by `tuple`.
 func (jc *jaasClient) ReadRelations(tuple *params.RelationshipTuple) ([]params.RelationshipTuple, error) {
 	if tuple == nil {
 		return nil, errors.New("add relation request nil")

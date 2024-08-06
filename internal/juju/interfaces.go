@@ -78,6 +78,7 @@ type SecretAPIClient interface {
 	RevokeSecret(uri *secrets.URI, name string, apps []string) ([]error, error)
 }
 
+// JaasAPIClient defines the set of methods that the JAAS API provides.
 type JaasAPIClient interface {
 	ListRelationshipTuples(req *jaasparams.ListRelationshipTuplesRequest) (*jaasparams.ListRelationshipTuplesResponse, error)
 	AddRelation(req *jaasparams.AddRelationRequest) error
