@@ -37,26 +37,27 @@ func (v StringIsResourceKeyValidator) ValidateMap(ctx context.Context, req valid
 		return
 	}
 	for name, value := range resourceKey {
-		if isInt(value) {
-			_, err := strconv.Atoi(value)
-			if err != nil {
-				resp.Diagnostics.AddAttributeError(
-					req.Path,
-					"Invalid Resource revision",
-					fmt.Sprintf("value of %q should be a valid revision number or image URL: %s", name, err),
-				)
+		providedRev, err := strconv.Atoi(value)
+		if err != nil {
+			imageUrlPattern := `(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]):[\w][\w.-]{0,127}`
+			urlRegex := regexp.MustCompile(imageUrlPattern)
+			if urlRegex.MatchString(value) {
+				continue
 			}
+			resp.Diagnostics.AddAttributeError(
+				req.Path,
+				"Invalid resource value",
+				fmt.Sprintf("value of %q should be a valid revision number or image URL.", name),
+			)
 			continue
 		}
-		imageUrlPattern := `(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]):[\w][\w.-]{0,127}`
-		urlRegex := regexp.MustCompile(imageUrlPattern)
-		if urlRegex.MatchString(value) {
+		if providedRev <= 0 {
+			resp.Diagnostics.AddAttributeError(
+				req.Path,
+				"Invalid resource value",
+				fmt.Sprintf("value of %q should be a valid revision number or image URL.", name),
+			)
 			continue
 		}
-		resp.Diagnostics.AddAttributeError(
-			req.Path,
-			"Invalid image URL",
-			fmt.Sprintf("value of %q should be a valid revision number or image URL.", name),
-		)
 	}
 }
