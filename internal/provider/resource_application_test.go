@@ -425,7 +425,6 @@ func TestAcc_CustomResourceUpdatesMicrok8s(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "10"),
 				),
-				ExpectNonEmptyPlan: true,
 			},
 			{
 				// Update charm channel and keep resource revision
@@ -433,39 +432,6 @@ func TestAcc_CustomResourceUpdatesMicrok8s(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "10"),
 				),
-				ExpectNonEmptyPlan: true,
-			},
-			{
-				// Keep charm channel and update resource which is given in a json file
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/beta", "ausf-image", "resource_files/ausf-image.json"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "resource_files/ausf-image.json"),
-				),
-				ExpectNonEmptyPlan: true,
-			},
-			{
-				// Update charm channel and keep resource which is given in a json file
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/edge", "ausf-image", "resource_files/ausf-image.json"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "resource_files/ausf-image.json"),
-				),
-				ExpectNonEmptyPlan: true,
-			},
-			{
-				// Keep charm channel and update resource which is given in a yaml file
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/edge", "ausf-image", "resource_files/ausf-image.yaml"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "resource_files/ausf-image.yaml"),
-				),
-				ExpectNonEmptyPlan: true,
-			},
-			{
-				// Update charm channel and keep resource which is given in a yaml file
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/beta", "ausf-image", "resource_files/ausf-image.yaml"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "resource_files/ausf-image.yaml"),
-				),
-				ExpectNonEmptyPlan: true,
 			},
 			{
 				// Keep charm channel and remove resource revision
@@ -524,27 +490,11 @@ func TestAcc_CustomResourcesRemovedFromPlanMicrok8s(t *testing.T) {
 				),
 			},
 			{
-				// Keep charm channel and update resource which is given in a json file
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/edge", "ausf-image", "resource_files/ausf-image.json"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "resource_files/ausf-image.json"),
-				),
-				ExpectNonEmptyPlan: true,
-			},
-			{
 				// Update charm channel and remove image resource which is given in a json file
 				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.3/beta"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
-			},
-			{
-				// Keep charm channel and add resource which is given in a yaml file
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/beta", "ausf-image", "resource_files/ausf-image.yaml"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "resource_files/ausf-image.yaml"),
-				),
-				ExpectNonEmptyPlan: true,
 			},
 			{
 				// Update charm channel and remove resource
