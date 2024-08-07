@@ -5,7 +5,6 @@ package juju
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/juju/charm/v12"
 	charmresources "github.com/juju/charm/v12/resource"
@@ -19,13 +18,8 @@ import (
 	corebase "github.com/juju/juju/core/base"
 )
 
-// isInt checks if strings could be converted to an integer
-// Used to detect resources which are given with revision number
-func isInt(s string) bool {
-	_, err := strconv.Atoi(s)
-	return err == nil
-}
-
+// getResourceIDs uploads pending resources and
+// returns the resource IDs of uploaded resources
 func (c applicationsClient) getResourceIDs(transformedInput transformedCreateApplicationInput, conn api.Connection, deployInfo apiapplication.DeployInfo, pendingResources []apiapplication.PendingResourceUpload) (map[string]string, error) {
 	resourceIDs := map[string]string{}
 	charmsAPIClient := apicharms.NewClient(conn)
@@ -38,14 +32,13 @@ func (c applicationsClient) getResourceIDs(transformedInput transformedCreateApp
 	if err != nil {
 		return resourceIDs, err
 	}
+
 	userSuppliedBase := transformedInput.charmBase
 	baseToUse, err := c.baseToUse(modelconfigAPIClient, userSuppliedBase, resolvedOrigin.Base, supportedBases)
 	if err != nil {
 		return resourceIDs, err
 	}
-
 	resolvedOrigin.Base = baseToUse
-
 	// 3.3 version of ResolveCharm does not always include the series
 	// in the url. However, juju 2.9 requires it.
 	series, err := corebase.GetSeriesFromBase(baseToUse)
@@ -95,6 +88,8 @@ func (c applicationsClient) getResourceIDs(transformedInput transformedCreateApp
 	return resourceIDs, nil
 }
 
+// getResourceIDs uploads pending resources and
+// returns the resource IDs of uploaded resources
 func getCharmResolvedUrlAndOrigin(conn api.Connection, transformedInput transformedCreateApplicationInput) (*charm.URL, apicommoncharm.Origin, []corebase.Base, error) {
 	charmsAPIClient := apicharms.NewClient(conn)
 	modelconfigAPIClient := apimodelconfig.NewClient(conn)
@@ -119,6 +114,9 @@ func getCharmResolvedUrlAndOrigin(conn api.Connection, transformedInput transfor
 	}
 
 	userSuppliedBase := transformedInput.charmBase
+	if err != nil {
+		return nil, apicommoncharm.Origin{}, []corebase.Base{}, err
+	}
 	platformCons, err := modelconfigAPIClient.GetModelConstraints()
 	if err != nil {
 		return nil, apicommoncharm.Origin{}, []corebase.Base{}, err

@@ -420,10 +420,27 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplic
 	}
 
 	charmsAPIClient := apicharms.NewClient(conn)
-	resolvedURL, resolvedOrigin, _, err := getCharmResolvedUrlAndOrigin(conn, transformedInput)
+	modelconfigAPIClient := apimodelconfig.NewClient(conn)
+	resolvedURL, resolvedOrigin, supportedBases, err := getCharmResolvedUrlAndOrigin(conn, transformedInput)
 	if err != nil {
 		return resourceIDs, apiCharmID, err
 	}
+	userSuppliedBase := transformedInput.charmBase
+	baseToUse, err := c.baseToUse(modelconfigAPIClient, userSuppliedBase, resolvedOrigin.Base, supportedBases)
+	if err != nil {
+		return resourceIDs, apiCharmID, err
+	}
+	if !userSuppliedBase.Empty() && !userSuppliedBase.IsCompatible(baseToUse) {
+		return resourceIDs, apiCharmID, err
+	}
+	resolvedOrigin.Base = baseToUse
+	series, err := corebase.GetSeriesFromBase(baseToUse)
+	if err != nil {
+		return resourceIDs, apiCharmID, err
+	}
+	resolvedURL = resolvedURL.WithSeries(series)
+
+	// Add charm expects base or series, one of them should exist.
 	resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, resolvedOrigin, false)
 	if err != nil {
 		return resourceIDs, apiCharmID, err
@@ -1444,7 +1461,7 @@ func (c applicationsClient) updateResources(appName string, resources map[string
 func addPendingResources(appName string, charmResourcesToAdd map[string]charmresources.Meta, resourcesToUse map[string]string,
 	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient) (map[string]string, error) {
 	pendingResourcesforAdd := []charmresources.Resource{}
-	toReturn := map[string]string{}
+	resourceIDs := map[string]string{}
 
 	for _, resourceMeta := range charmResourcesToAdd {
 		if resourcesToUse == nil {
@@ -1496,11 +1513,11 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 			return nil, typedError(err)
 		}
 		// Add the resource name and the corresponding UUID to the resources map.
-		toReturn[resourceMeta.Name] = toRequestUpload
+		resourceIDs[resourceMeta.Name] = toRequestUpload
 	}
 
 	if len(pendingResourcesforAdd) == 0 {
-		return toReturn, nil
+		return resourceIDs, nil
 	}
 
 	resourcesReqforAdd := apiresources.AddPendingResourcesArgs{
@@ -1517,10 +1534,10 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 	}
 	// Add the resource name and the corresponding UUID to the resources map
 	for i, argsResource := range pendingResourcesforAdd {
-		toReturn[argsResource.Meta.Name] = toRequestAdd[i]
+		resourceIDs[argsResource.Meta.Name] = toRequestAdd[i]
 	}
 
-	return toReturn, nil
+	return resourceIDs, nil
 }
 
 func computeUpdatedBindings(modelDefaultSpace string, currentBindings map[string]string, inputBindings map[string]string, appName string) (params.ApplicationMergeBindingsArgs, error) {
