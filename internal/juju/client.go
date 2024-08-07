@@ -128,6 +128,7 @@ func (sc *sharedClient) IsJAAS(defaultVal bool) bool {
 			isJAAS = defaultVal
 			return
 		}
+		defer conn.Close()
 		isJAAS = conn.BestFacadeVersion("JIMM") != 0
 	})
 	return isJAAS
