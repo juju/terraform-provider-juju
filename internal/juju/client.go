@@ -49,6 +49,14 @@ type Client struct {
 	SSHKeys      sshKeysClient
 	Users        usersClient
 	Secrets      secretsClient
+
+	isJAAS func() bool
+}
+
+// IsJAAS returns a boolean to indicate whether the controller configured is a JAAS controller.
+// JAAS controllers offer additional functionality for permission management.
+func (c Client) IsJAAS() bool {
+	return c.isJAAS()
 }
 
 type jujuModel struct {
@@ -82,6 +90,12 @@ func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, er
 		modelUUIDcache:   make(map[string]jujuModel),
 		subCtx:           tflog.NewSubsystem(ctx, LogJujuClient),
 	}
+	// Client ID and secret are only set when connecting to JAAS. Use this as a fallback
+	// value if connecting to the controller fails.
+	defaultJAASCheck := false
+	if config.ClientID != "" && config.ClientSecret != "" {
+		defaultJAASCheck = true
+	}
 
 	return &Client{
 		Applications: *newApplicationClient(sc),
@@ -93,7 +107,31 @@ func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, er
 		SSHKeys:      *newSSHKeysClient(sc),
 		Users:        *newUsersClient(sc),
 		Secrets:      *newSecretsClient(sc),
+		isJAAS:       func() bool { return sc.IsJAAS(defaultJAASCheck) },
 	}, nil
+}
+
+var checkJAASOnce sync.Once
+var isJAAS bool
+
+// IsJAAS checks if the controller is a JAAS controller.
+// It does this by checking whether it offers the "JIMM" facade which
+// will only ever be offered by JAAS. The method accepts a default value
+// and doesn't return an error because callers are not expected to fail if
+// they can't determine whether they are connecting to JAAS.
+//
+// IsJAAS uses a synchronisation object to only perform the check once and return the same result.
+func (sc *sharedClient) IsJAAS(defaultVal bool) bool {
+	checkJAASOnce.Do(func() {
+		conn, err := sc.GetConnection(nil)
+		if err != nil {
+			isJAAS = defaultVal
+			return
+		}
+		defer conn.Close()
+		isJAAS = conn.BestFacadeVersion("JIMM") != 0
+	})
+	return isJAAS
 }
 
 // GetConnection returns a juju connection for use creating juju
