@@ -6,9 +6,8 @@ package juju
 import (
 	"github.com/canonical/jimm-go-sdk/v3/api"
 	"github.com/canonical/jimm-go-sdk/v3/api/params"
-	jujuapi "github.com/juju/juju/api"
-
 	"github.com/juju/errors"
+	jujuapi "github.com/juju/juju/api"
 )
 
 type jaasClient struct {
@@ -25,8 +24,35 @@ func newJaasClient(sc SharedClient) *jaasClient {
 	}
 }
 
+// JaasTuple represents a tuple object of used by JAAS for permissions management.
+type JaasTuple struct {
+	// Object represents the source side of the relation.
+	Object string
+	// Relation represents the level of access
+	Relation string
+	// Target represents the resource that you want `object` to have access to.
+	Target string
+}
+
+func toAPITuples(tuples []JaasTuple) []params.RelationshipTuple {
+	out := make([]params.RelationshipTuple, 0, len(tuples))
+	for _, tuple := range tuples {
+		out = append(out, toAPITuple(tuple))
+	}
+	return out
+}
+
+func toAPITuple(tuple JaasTuple) params.RelationshipTuple {
+	return params.RelationshipTuple{
+		Object:       tuple.Object,
+		Relation:     tuple.Relation,
+		TargetObject: tuple.Target,
+	}
+}
+
 // AddRelations attempts to create the provided slice of relationship tuples.
-func (jc *jaasClient) AddRelations(tuples []params.RelationshipTuple) error {
+// The caller is expected to populate the slice so that `len(tuples) > 0`.
+func (jc *jaasClient) AddRelations(tuples []JaasTuple) error {
 	conn, err := jc.GetConnection(nil)
 	if err != nil {
 		return err
@@ -34,13 +60,14 @@ func (jc *jaasClient) AddRelations(tuples []params.RelationshipTuple) error {
 	defer func() { _ = conn.Close() }()
 	cl := jc.getJaasApiClient(conn)
 	req := params.AddRelationRequest{
-		Tuples: tuples,
+		Tuples: toAPITuples(tuples),
 	}
 	return cl.AddRelation(&req)
 }
 
 // DeleteRelations attempts to delete the provided slice of relationship tuples.
-func (jc *jaasClient) DeleteRelations(tuples []params.RelationshipTuple) error {
+// The caller is expected to populate the slice so that `len(tuples) > 0`.
+func (jc *jaasClient) DeleteRelations(tuples []JaasTuple) error {
 	conn, err := jc.GetConnection(nil)
 	if err != nil {
 		return err
@@ -48,13 +75,14 @@ func (jc *jaasClient) DeleteRelations(tuples []params.RelationshipTuple) error {
 	defer func() { _ = conn.Close() }()
 	cl := jc.getJaasApiClient(conn)
 	req := params.RemoveRelationRequest{
-		Tuples: tuples,
+		Tuples: toAPITuples(tuples),
 	}
 	return cl.RemoveRelation(&req)
 }
 
 // ReadRelations attempts to read relations that match the criteria defined by `tuple`.
-func (jc *jaasClient) ReadRelations(tuple *params.RelationshipTuple) ([]params.RelationshipTuple, error) {
+// The caller is expected to provide a non-nil tuple.
+func (jc *jaasClient) ReadRelations(tuple *JaasTuple) ([]params.RelationshipTuple, error) {
 	if tuple == nil {
 		return nil, errors.New("add relation request nil")
 	}
@@ -67,7 +95,7 @@ func (jc *jaasClient) ReadRelations(tuple *params.RelationshipTuple) ([]params.R
 
 	client := jc.getJaasApiClient(conn)
 	relations := make([]params.RelationshipTuple, 0)
-	req := &params.ListRelationshipTuplesRequest{Tuple: *tuple}
+	req := &params.ListRelationshipTuplesRequest{Tuple: toAPITuple(*tuple)}
 	for {
 		resp, err := client.ListRelationshipTuples(req)
 		if err != nil {
