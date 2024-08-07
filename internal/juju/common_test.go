@@ -19,9 +19,7 @@ type JujuSuite struct {
 	mockSharedClient *MockSharedClient
 }
 
-func (s *JujuSuite) setupMocks(t *testing.T, modelName *string) *gomock.Controller {
-	s.testModelName = modelName
-
+func (s *JujuSuite) setupMocks(t *testing.T) *gomock.Controller {
 	ctlr := gomock.NewController(t)
 
 	s.mockConnection = NewMockConnection(ctlr)

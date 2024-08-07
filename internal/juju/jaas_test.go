@@ -19,10 +19,8 @@ type JaasSuite struct {
 	mockJaasClient *MockJaasAPIClient
 }
 
-func (s *JaasSuite) SetupTest() {}
-
 func (s *JaasSuite) setupMocks(t *testing.T) *gomock.Controller {
-	ctlr := s.JujuSuite.setupMocks(t, nil)
+	ctlr := s.JujuSuite.setupMocks(t)
 	s.mockJaasClient = NewMockJaasAPIClient(ctlr)
 
 	return ctlr
@@ -41,17 +39,17 @@ func (s *JaasSuite) TestAddRelations() {
 	ctlr := s.setupMocks(s.T())
 	defer ctlr.Finish()
 
-	tuples := []params.RelationshipTuple{
-		{Object: "object-1", Relation: "relation", TargetObject: "target-1"},
-		{Object: "object-2", Relation: "relation", TargetObject: "target-2"},
+	tuples := []JaasTuple{
+		{Object: "object-1", Relation: "relation", Target: "target-1"},
+		{Object: "object-2", Relation: "relation", Target: "target-2"},
 	}
 	req := params.AddRelationRequest{
-		Tuples: tuples,
+		Tuples: toAPITuples(tuples),
 	}
 
 	s.mockJaasClient.EXPECT().AddRelation(
 		&req,
-	).Return(nil).Times(1)
+	).Return(nil)
 
 	client := s.getJaasClient()
 	err := client.AddRelations(tuples)
@@ -62,17 +60,17 @@ func (s *JaasSuite) TestDeleteRelations() {
 	ctlr := s.setupMocks(s.T())
 	defer ctlr.Finish()
 
-	tuples := []params.RelationshipTuple{
-		{Object: "object-1", Relation: "relation", TargetObject: "target-1"},
-		{Object: "object-2", Relation: "relation", TargetObject: "target-2"},
+	tuples := []JaasTuple{
+		{Object: "object-1", Relation: "relation", Target: "target-1"},
+		{Object: "object-2", Relation: "relation", Target: "target-2"},
 	}
 	req := params.RemoveRelationRequest{
-		Tuples: tuples,
+		Tuples: toAPITuples(tuples),
 	}
 
 	s.mockJaasClient.EXPECT().RemoveRelation(
 		&req,
-	).Return(nil).Times(1)
+	).Return(nil)
 
 	client := s.getJaasClient()
 	err := client.DeleteRelations(tuples)
@@ -83,25 +81,25 @@ func (s *JaasSuite) TestReadRelations() {
 	ctlr := s.setupMocks(s.T())
 	defer ctlr.Finish()
 
-	tuple := params.RelationshipTuple{Object: "object-1", Relation: "relation", TargetObject: "target-1"}
+	tuple := JaasTuple{Object: "object-1", Relation: "relation", Target: "target-1"}
 	// 1st request/response has no token in the request and a token in the response indicating another page is available.
-	req := &params.ListRelationshipTuplesRequest{Tuple: tuple}
+	req := &params.ListRelationshipTuplesRequest{Tuple: toAPITuple(tuple)}
 	respWithToken := &params.ListRelationshipTuplesResponse{
-		Tuples:            []params.RelationshipTuple{tuple},
+		Tuples:            []params.RelationshipTuple{toAPITuple(tuple)},
 		ContinuationToken: "token",
 	}
 	s.mockJaasClient.EXPECT().ListRelationshipTuples(
 		req,
-	).Return(respWithToken, nil).Times(1)
+	).Return(respWithToken, nil)
 	// 2nd request/response has the previous token in the request and no token in the response, indicating all pages have been consumed.
-	reqWithToken := &params.ListRelationshipTuplesRequest{Tuple: tuple, ContinuationToken: "token"}
+	reqWithToken := &params.ListRelationshipTuplesRequest{Tuple: toAPITuple(tuple), ContinuationToken: "token"}
 	respWithoutToken := &params.ListRelationshipTuplesResponse{
-		Tuples:            []params.RelationshipTuple{tuple},
+		Tuples:            []params.RelationshipTuple{toAPITuple(tuple)},
 		ContinuationToken: "",
 	}
 	s.mockJaasClient.EXPECT().ListRelationshipTuples(
 		reqWithToken,
-	).Return(respWithoutToken, nil).Times(1)
+	).Return(respWithoutToken, nil)
 
 	client := s.getJaasClient()
 	relations, err := client.ReadRelations(&tuple)
