@@ -4,7 +4,10 @@
 package juju
 
 import (
+	"io"
+
 	"github.com/juju/charm/v12"
+	charmresources "github.com/juju/charm/v12/resource"
 	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
@@ -63,6 +66,7 @@ type ModelConfigAPIClient interface {
 type ResourceAPIClient interface {
 	AddPendingResources(args apiresources.AddPendingResourcesArgs) ([]string, error)
 	ListResources(applications []string) ([]resources.ApplicationResources, error)
+	UploadPendingResource(applicationID string, resource charmresources.Resource, filename string, r io.ReadSeeker) (id string, err error)
 }
 
 type SecretAPIClient interface {
