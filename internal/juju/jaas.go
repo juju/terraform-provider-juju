@@ -4,9 +4,10 @@
 package juju
 
 import (
+	"errors"
+
 	"github.com/canonical/jimm-go-sdk/v3/api"
 	"github.com/canonical/jimm-go-sdk/v3/api/params"
-	"github.com/juju/errors"
 	jujuapi "github.com/juju/juju/api"
 )
 
@@ -53,6 +54,9 @@ func toAPITuple(tuple JaasTuple) params.RelationshipTuple {
 // AddRelations attempts to create the provided slice of relationship tuples.
 // The caller is expected to populate the slice so that `len(tuples) > 0`.
 func (jc *jaasClient) AddRelations(tuples []JaasTuple) error {
+	if len(tuples) == 0 {
+		return errors.New("empty slice of tuples")
+	}
 	conn, err := jc.GetConnection(nil)
 	if err != nil {
 		return err
@@ -68,6 +72,9 @@ func (jc *jaasClient) AddRelations(tuples []JaasTuple) error {
 // DeleteRelations attempts to delete the provided slice of relationship tuples.
 // The caller is expected to populate the slice so that `len(tuples) > 0`.
 func (jc *jaasClient) DeleteRelations(tuples []JaasTuple) error {
+	if len(tuples) == 0 {
+		return errors.New("empty slice of tuples")
+	}
 	conn, err := jc.GetConnection(nil)
 	if err != nil {
 		return err
@@ -84,7 +91,7 @@ func (jc *jaasClient) DeleteRelations(tuples []JaasTuple) error {
 // The caller is expected to provide a non-nil tuple.
 func (jc *jaasClient) ReadRelations(tuple *JaasTuple) ([]params.RelationshipTuple, error) {
 	if tuple == nil {
-		return nil, errors.New("add relation request nil")
+		return nil, errors.New("read relation tuple is nil")
 	}
 
 	conn, err := jc.GetConnection(nil)

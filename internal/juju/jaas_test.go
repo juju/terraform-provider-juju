@@ -4,6 +4,7 @@
 package juju
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/canonical/jimm-go-sdk/v3/api/params"
@@ -56,6 +57,14 @@ func (s *JaasSuite) TestAddRelations() {
 	s.Require().NoError(err)
 }
 
+func (s *JaasSuite) TestAddRelationsEmptySlice() {
+	expectedErr := errors.New("empty slice of tuples")
+	client := s.getJaasClient()
+	err := client.AddRelations([]JaasTuple{})
+	s.Require().Error(err)
+	s.Assert().Equal(expectedErr, err)
+}
+
 func (s *JaasSuite) TestDeleteRelations() {
 	ctlr := s.setupMocks(s.T())
 	defer ctlr.Finish()
@@ -75,6 +84,14 @@ func (s *JaasSuite) TestDeleteRelations() {
 	client := s.getJaasClient()
 	err := client.DeleteRelations(tuples)
 	s.Require().NoError(err)
+}
+
+func (s *JaasSuite) TestDeleteRelationsEmptySlice() {
+	expectedErr := errors.New("empty slice of tuples")
+	client := s.getJaasClient()
+	err := client.DeleteRelations([]JaasTuple{})
+	s.Require().Error(err)
+	s.Assert().Equal(expectedErr, err)
 }
 
 func (s *JaasSuite) TestReadRelations() {
@@ -105,6 +122,14 @@ func (s *JaasSuite) TestReadRelations() {
 	relations, err := client.ReadRelations(&tuple)
 	s.Require().NoError(err)
 	s.Require().Len(relations, 2)
+}
+
+func (s *JaasSuite) TestReadRelationsEmptyTuple() {
+	expectedErr := errors.New("read relation tuple is nil")
+	client := s.getJaasClient()
+	_, err := client.ReadRelations(nil)
+	s.Require().Error(err)
+	s.Assert().Equal(expectedErr, err)
 }
 
 // In order for 'go test' to run this suite, we need to create
