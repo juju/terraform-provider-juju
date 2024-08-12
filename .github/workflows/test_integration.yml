@@ -45,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        terraform: ["1.6.*", "1.7.*", "1.8.*"]
+        terraform: ["1.7.*", "1.8.*", "1.9.*"]
         action-operator:
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "5.21", juju: "2.9" }
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "5.21", juju: "3" }
