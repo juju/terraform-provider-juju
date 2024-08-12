@@ -1,3 +1,6 @@
+// Copyright 2024 Canonical Ltd.
+// Licensed under the Apache License, Version 2.0, see LICENCE file for details.
+
 package provider
 
 import (
@@ -24,10 +27,10 @@ func (v usernameValidator) Description(ctx context.Context) string {
 
 // MarkdownDescription returns a markdown formatted description of the validator's behavior, suitable for a practitioner to understand its impact.
 func (v usernameValidator) MarkdownDescription(context.Context) string {
-	return "Ensure value is a valid user name"
+	return "Ensure value is a valid user name."
 }
 
-// ValidateString performs the validation for string values.
+// ValidateString validates that the string is a valid user ID.
 func (v usernameValidator) ValidateString(ctx context.Context, request validator.StringRequest, response *validator.StringResponse) {
 	if request.ConfigValue.IsNull() || request.ConfigValue.IsUnknown() {
 		return

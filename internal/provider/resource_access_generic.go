@@ -1,4 +1,4 @@
-// Copyright 2023 Canonical Ltd.
+// Copyright 2024 Canonical Ltd.
 // Licensed under the Apache License, Version 2.0, see LICENCE file for details.
 
 package provider
@@ -25,8 +25,8 @@ import (
 )
 
 var (
-	withAtSymbolRe = regexp.MustCompile(".+@.+")
-	noAtSymbolRe   = regexp.MustCompile("^[^@]*$")
+	basicEmailValidationRe = regexp.MustCompile(".+@.+")
+	avoidAtSymbolRe        = regexp.MustCompile("^[^@]*$")
 )
 
 // Getter is used to get details from a plan or state object.
@@ -38,7 +38,7 @@ type Getter interface {
 // resourceInfo defines how the [genericJAASAccessResource] can query for information
 // on the target object.
 type resourceInfo interface {
-	Identity(ctx context.Context, plan Getter, diag *diag.Diagnostics) string
+	Identity(ctx context.Context, getter Getter, diag *diag.Diagnostics) string
 }
 
 // genericJAASAccessResource is a generic resource that can be used for creating access rules with JAAS.
@@ -46,8 +46,9 @@ type resourceInfo interface {
 // should build on top of [PartialAccessSchema].
 // The embedded struct requires a targetInfo interface to enable fetching the target object in the relation.
 type genericJAASAccessResource struct {
-	client     *juju.Client
-	targetInfo resourceInfo
+	client          *juju.Client
+	targetInfo      resourceInfo
+	resourceLogName string
 
 	// subCtx is the context created with the new tflog subsystem for applications.
 	subCtx context.Context
@@ -66,6 +67,7 @@ type genericJAASAccessModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
+// ConfigValidators sets validators for the resource.
 func (r *genericJAASAccessResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
 	return []resource.ConfigValidator{
 		// TODO(Kian) Add requires JAAS validator once that lands.
@@ -78,9 +80,9 @@ func (r *genericJAASAccessResource) ConfigValidators(ctx context.Context) []reso
 	}
 }
 
-// PartialAccessSchema returns a map of schema attributes for a JAAS access resource.
+// partialAccessSchema returns a map of schema attributes for a JAAS access resource.
 // Access resources should use this schema and add any additional attributes e.g. name or uuid.
-func PartialAccessSchema() map[string]schema.Attribute {
+func (r *genericJAASAccessResource) partialAccessSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"access": schema.StringAttribute{
 			Description: "Type of access to the model",
@@ -95,7 +97,7 @@ func PartialAccessSchema() map[string]schema.Attribute {
 			ElementType: types.StringType,
 			Validators: []validator.Set{
 				setvalidator.ValueStringsAre(UsernameStringIsValid()),
-				setvalidator.ValueStringsAre(stringvalidator.RegexMatches(withAtSymbolRe, "email must contain an @ symbol")),
+				setvalidator.ValueStringsAre(stringvalidator.RegexMatches(basicEmailValidationRe, "email must contain an @ symbol")),
 			},
 		},
 		"groups": schema.SetAttribute{
@@ -114,12 +116,8 @@ func PartialAccessSchema() map[string]schema.Attribute {
 			// for different validation and logic in the provider.
 			Validators: []validator.Set{
 				setvalidator.ValueStringsAre(UsernameStringIsValid()),
-				setvalidator.ValueStringsAre(stringvalidator.RegexMatches(noAtSymbolRe, "service accounts should not contain an @ symbol")),
+				setvalidator.ValueStringsAre(stringvalidator.RegexMatches(avoidAtSymbolRe, "service accounts should not contain an @ symbol")),
 			},
-		},
-		// ID required by the testing framework
-		"id": schema.StringAttribute{
-			Computed: true,
 		},
 	}
 }
@@ -143,7 +141,7 @@ func (a *genericJAASAccessResource) Configure(ctx context.Context, req resource.
 	}
 	a.client = client
 	// Create the local logging subsystem here, using the TF context when creating it.
-	a.subCtx = tflog.NewSubsystem(ctx, LogResourceAccessModel)
+	a.subCtx = tflog.NewSubsystem(ctx, a.resourceLogName)
 }
 
 // Create defines how tuples for access control will be created.

@@ -1,4 +1,4 @@
-// Copyright 2023 Canonical Ltd.
+// Copyright 2024 Canonical Ltd.
 // Licensed under the Apache License, Version 2.0, see LICENCE file for details.
 
 package provider
@@ -22,16 +22,19 @@ var _ resource.ResourceWithConfigure = &jaasAccessModelResource{}
 
 // NewJAASAccessModelResource returns a new resource for JAAS model access.
 func NewJAASAccessModelResource() resource.Resource {
-	return &jaasAccessModelResource{genericJAASAccessResource: genericJAASAccessResource{targetInfo: modelInfo{}}}
+	return &jaasAccessModelResource{genericJAASAccessResource: genericJAASAccessResource{
+		targetInfo:      modelInfo{},
+		resourceLogName: LogResourceJAASAccessModel,
+	}}
 }
 
 type modelInfo struct{}
 
 // Identity implements the [resourceInfo] interface, used to extract the model UUID from the Terraform plan/state.
 func (j modelInfo) Identity(ctx context.Context, plan Getter, diag *diag.Diagnostics) string {
-	p := jaasAccessModelResourceModel{}
-	diag.Append(plan.Get(ctx, &p)...)
-	return names.NewModelTag(p.ModelUUID.String()).String()
+	modelAccess := jaasAccessModelResourceModel{}
+	diag.Append(plan.Get(ctx, &modelAccess)...)
+	return names.NewModelTag(modelAccess.ModelUUID.String()).String()
 }
 
 type jaasAccessModelResource struct {
@@ -50,9 +53,9 @@ func (a *jaasAccessModelResource) Metadata(_ context.Context, req resource.Metad
 
 // Schema defines the schema for the JAAS model access resource.
 func (a *jaasAccessModelResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attributes := PartialAccessSchema()
+	attributes := a.partialAccessSchema()
 	attributes["model_uuid"] = schema.StringAttribute{
-		Description: "The uuid of the model for access management",
+		Description: "The uuid of the model for access management. If this is changed the resource will be deleted and a new resource will be created.",
 		Required:    true,
 		Validators: []validator.String{
 			ModelIDIsValid(),
