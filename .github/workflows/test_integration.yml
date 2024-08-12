@@ -47,10 +47,10 @@ jobs:
       matrix:
         terraform: ["1.6.*", "1.7.*", "1.8.*"]
         action-operator:
-          - { lxd-channel: "5.19/stable", cloud: "lxd", cloud-channel: "5.19", juju: "2.9" }
-          - { lxd-channel: "5.19/stable", cloud: "lxd", cloud-channel: "5.19", juju: "3" }
-          - { lxd-channel: "5.19/stable", cloud: "microk8s", cloud-channel: "1.28", juju: "2.9" }
-          - { lxd-channel: "5.19/stable", cloud: "microk8s", cloud-channel: "1.28-strict", juju: "3" }
+          - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "5.21", juju: "2.9" }
+          - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "5.21", juju: "3" }
+          - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.28-strict", juju: "3.1" }
+          - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.28-strict", juju: "3" }
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
