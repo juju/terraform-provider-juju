@@ -4,6 +4,7 @@
 package juju
 
 import (
+	"context"
 	"errors"
 
 	"github.com/canonical/jimm-go-sdk/v3/api"
@@ -52,7 +53,7 @@ func toAPITuple(tuple JaasTuple) params.RelationshipTuple {
 }
 
 // AddRelations attempts to create the provided slice of relationship tuples.
-// The caller is expected to populate the slice so that `len(tuples) > 0`.
+// An empty slice of tuples will return an error.
 func (jc *jaasClient) AddRelations(tuples []JaasTuple) error {
 	if len(tuples) == 0 {
 		return errors.New("empty slice of tuples")
@@ -70,7 +71,7 @@ func (jc *jaasClient) AddRelations(tuples []JaasTuple) error {
 }
 
 // DeleteRelations attempts to delete the provided slice of relationship tuples.
-// The caller is expected to populate the slice so that `len(tuples) > 0`.
+// An empty slice of tuples will return an error.
 func (jc *jaasClient) DeleteRelations(tuples []JaasTuple) error {
 	if len(tuples) == 0 {
 		return errors.New("empty slice of tuples")
@@ -88,8 +89,8 @@ func (jc *jaasClient) DeleteRelations(tuples []JaasTuple) error {
 }
 
 // ReadRelations attempts to read relations that match the criteria defined by `tuple`.
-// The caller is expected to provide a non-nil tuple.
-func (jc *jaasClient) ReadRelations(tuple *JaasTuple) ([]params.RelationshipTuple, error) {
+// An nil tuple pointer is invalid and will return an error.
+func (jc *jaasClient) ReadRelations(ctx context.Context, tuple *JaasTuple) ([]params.RelationshipTuple, error) {
 	if tuple == nil {
 		return nil, errors.New("read relation tuple is nil")
 	}
@@ -118,5 +119,10 @@ func (jc *jaasClient) ReadRelations(tuple *JaasTuple) ([]params.RelationshipTupl
 			return relations, nil
 		}
 		req.ContinuationToken = resp.ContinuationToken
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
 	}
 }
