@@ -28,7 +28,7 @@ func (v modelIDValidator) Description(ctx context.Context) string {
 
 // MarkdownDescription returns a markdown formatted description of the validator's behavior, suitable for a practitioner to understand its impact.
 func (v modelIDValidator) MarkdownDescription(context.Context) string {
-	return "Ensure value is a valid model UUID"
+	return "Ensure value is a valid model UUID."
 }
 
 // ValidateString validates that the string is a valid model UUID.

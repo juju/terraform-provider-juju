@@ -27,7 +27,7 @@ func (v groupIDValidator) Description(ctx context.Context) string {
 
 // MarkdownDescription returns a markdown formatted description of the validator's behavior, suitable for a practitioner to understand its impact.
 func (v groupIDValidator) MarkdownDescription(context.Context) string {
-	return "Ensure value is a valid group UUID"
+	return "Ensure value is a valid group UUID."
 }
 
 // ValidateString validates that the string is a valid group UUID.

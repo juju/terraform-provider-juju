@@ -85,14 +85,14 @@ func (r *genericJAASAccessResource) ConfigValidators(ctx context.Context) []reso
 func (r *genericJAASAccessResource) partialAccessSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"access": schema.StringAttribute{
-			Description: "Type of access to the model",
+			Description: "Level of access to grant. Changing this value will replace the Terraform resource.",
 			Required:    true,
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.RequiresReplace(),
 			},
 		},
 		"users": schema.SetAttribute{
-			Description: "List of users to grant access",
+			Description: "List of users to grant access.",
 			Optional:    true,
 			ElementType: types.StringType,
 			Validators: []validator.Set{
@@ -101,7 +101,7 @@ func (r *genericJAASAccessResource) partialAccessSchema() map[string]schema.Attr
 			},
 		},
 		"groups": schema.SetAttribute{
-			Description: "List of groups to grant access",
+			Description: "List of groups to grant access.",
 			Optional:    true,
 			ElementType: types.StringType,
 			Validators: []validator.Set{
@@ -109,7 +109,7 @@ func (r *genericJAASAccessResource) partialAccessSchema() map[string]schema.Attr
 			},
 		},
 		"service_accounts": schema.SetAttribute{
-			Description: "List of service account to grant access",
+			Description: "List of service accounts to grant access.",
 			Optional:    true,
 			ElementType: types.StringType,
 			// service accounts are treated as users but defined separately

@@ -27,7 +27,7 @@ func (v usernameValidator) Description(ctx context.Context) string {
 
 // MarkdownDescription returns a markdown formatted description of the validator's behavior, suitable for a practitioner to understand its impact.
 func (v usernameValidator) MarkdownDescription(context.Context) string {
-	return "Ensure value is a valid user name."
+	return "Ensure value is a valid username. Valid users may or may not be qualified with an @domain suffix. Examples of valid users include bob, bob@local, bob@somewhere-else."
 }
 
 // ValidateString validates that the string is a valid user ID.
