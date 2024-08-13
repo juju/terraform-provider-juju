@@ -70,8 +70,7 @@ type genericJAASAccessModel struct {
 // ConfigValidators sets validators for the resource.
 func (r *genericJAASAccessResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
 	return []resource.ConfigValidator{
-		// TODO(Kian) Add requires JAAS validator once that lands.
-		// RequiresJAASValidator{Client: r.client},
+		RequiresJAASValidator{Client: r.client},
 		resourcevalidator.AtLeastOneOf(
 			path.MatchRoot("users"),
 			path.MatchRoot("groups"),
