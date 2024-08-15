@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"regexp"
 
+	jimmnames "github.com/canonical/jimm-go-sdk/v3/names"
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -20,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/juju/names/v5"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -95,7 +97,7 @@ func (r *genericJAASAccessResource) partialAccessSchema() map[string]schema.Attr
 			Optional:    true,
 			ElementType: types.StringType,
 			Validators: []validator.Set{
-				setvalidator.ValueStringsAre(UsernameStringIsValid()),
+				setvalidator.ValueStringsAre(ValidatorMatchString(names.IsValidUser, "email must be a valid Juju username")),
 				setvalidator.ValueStringsAre(stringvalidator.RegexMatches(basicEmailValidationRe, "email must contain an @ symbol")),
 			},
 		},
@@ -104,7 +106,7 @@ func (r *genericJAASAccessResource) partialAccessSchema() map[string]schema.Attr
 			Optional:    true,
 			ElementType: types.StringType,
 			Validators: []validator.Set{
-				setvalidator.ValueStringsAre(GroupStringIsValid()),
+				setvalidator.ValueStringsAre(ValidatorMatchString(jimmnames.IsValidGroupId, "group ID must be valid")),
 			},
 		},
 		"service_accounts": schema.SetAttribute{
@@ -114,8 +116,8 @@ func (r *genericJAASAccessResource) partialAccessSchema() map[string]schema.Attr
 			// service accounts are treated as users but defined separately
 			// for different validation and logic in the provider.
 			Validators: []validator.Set{
-				setvalidator.ValueStringsAre(UsernameStringIsValid()),
-				setvalidator.ValueStringsAre(stringvalidator.RegexMatches(avoidAtSymbolRe, "service accounts should not contain an @ symbol")),
+				setvalidator.ValueStringsAre(ValidatorMatchString(names.IsValidUser, "service account must be valid Juju usernames")),
+				setvalidator.ValueStringsAre(stringvalidator.RegexMatches(avoidAtSymbolRe, "service account should not contain an @ symbol")),
 			},
 		},
 	}
