@@ -305,6 +305,22 @@ func (mr *MockApplicationAPIClientMockRecorder) Deploy(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Deploy", reflect.TypeOf((*MockApplicationAPIClient)(nil).Deploy), arg0)
 }
 
+// DeployFromRepository mocks base method.
+func (m *MockApplicationAPIClient) DeployFromRepository(arg0 application.DeployFromRepositoryArg) (application.DeployInfo, []application.PendingResourceUpload, []error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeployFromRepository", arg0)
+	ret0, _ := ret[0].(application.DeployInfo)
+	ret1, _ := ret[1].([]application.PendingResourceUpload)
+	ret2, _ := ret[2].([]error)
+	return ret0, ret1, ret2
+}
+
+// DeployFromRepository indicates an expected call of DeployFromRepository.
+func (mr *MockApplicationAPIClientMockRecorder) DeployFromRepository(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeployFromRepository", reflect.TypeOf((*MockApplicationAPIClient)(nil).DeployFromRepository), arg0)
+}
+
 // DestroyApplications mocks base method.
 func (m *MockApplicationAPIClient) DestroyApplications(arg0 application.DestroyApplicationsParams) ([]params0.DestroyApplicationResult, error) {
 	m.ctrl.T.Helper()
@@ -573,6 +589,20 @@ func (m *MockResourceAPIClient) ListResources(arg0 []string) ([]resources0.Appli
 func (mr *MockResourceAPIClientMockRecorder) ListResources(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListResources", reflect.TypeOf((*MockResourceAPIClient)(nil).ListResources), arg0)
+}
+
+// Upload mocks base method.
+func (m *MockResourceAPIClient) Upload(arg0, arg1, arg2, arg3 string, arg4 io.ReadSeeker) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Upload", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Upload indicates an expected call of Upload.
+func (mr *MockResourceAPIClientMockRecorder) Upload(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upload", reflect.TypeOf((*MockResourceAPIClient)(nil).Upload), arg0, arg1, arg2, arg3, arg4)
 }
 
 // UploadPendingResource mocks base method.

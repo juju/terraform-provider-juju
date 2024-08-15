@@ -348,6 +348,12 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Skipf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.0.3") < 0 {
+		t.Skipf("%s is not set or is below 3.0.3", TestJujuAgentVersion)
+	}
 	modelName := acctest.RandomWithPrefix("tf-test-custom-resource-updates-microk8s")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -355,37 +361,37 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// deploy charm without custom resource
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.3/edge"),
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.0/stable"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
 			},
 			{
 				// Add a custom resource
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/edge", "ausf-image", "gatici/sdcore-ausf:1.4"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/stable", "grafana-image", "gatici/grafana:10"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "gatici/sdcore-ausf:1.4"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:10"),
 				),
 				ExpectNonEmptyPlan: true,
 			},
 			{
 				// Add another custom resource
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/edge", "ausf-image", "gatici/sdcore-ausf:latest"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/stable", "grafana-image", "gatici/grafana:9"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "gatici/sdcore-ausf:latest"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:9"),
 				),
 				ExpectNonEmptyPlan: true,
 			},
 			{
 				// Add resource revision
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/edge", "ausf-image", "30"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/stable", "grafana-image", "61"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "30"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "61"),
 				),
 			},
 			{
 				// Remove resource revision
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.3/edge"),
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.0/stable"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
@@ -398,6 +404,12 @@ func TestAcc_CustomResourceUpdatesMicrok8s(t *testing.T) {
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Skipf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.0.3") < 0 {
+		t.Skipf("%s is not set or is below 3.0.3", TestJujuAgentVersion)
+	}
 	modelName := acctest.RandomWithPrefix("tf-test-custom-resource-updates-microk8s")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -405,37 +417,37 @@ func TestAcc_CustomResourceUpdatesMicrok8s(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// Deploy charm with a custom resource
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/beta", "ausf-image", "gatici/sdcore-ausf:latest"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/edge", "grafana-image", "gatici/grafana:9"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "gatici/sdcore-ausf:latest"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:9"),
 				),
 				ExpectNonEmptyPlan: true,
 			},
 			{
 				// Keep charm channel and update resource to another custom image
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/beta", "ausf-image", "gatici/sdcore-ausf:1.4"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/edge", "grafana-image", "gatici/grafana:10"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "gatici/sdcore-ausf:1.4"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:10"),
 				),
 				ExpectNonEmptyPlan: true,
 			},
 			{
 				// Update charm channel and update resource to a revision
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/edge", "ausf-image", "10"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/stable", "grafana-image", "59"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "10"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "59"),
 				),
 			},
 			{
 				// Update charm channel and keep resource revision
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/beta", "ausf-image", "10"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/beta", "grafana-image", "59"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "10"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "59"),
 				),
 			},
 			{
 				// Keep charm channel and remove resource revision
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.3/beta"),
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.0/beta"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
@@ -448,6 +460,12 @@ func TestAcc_CustomResourcesRemovedFromPlanMicrok8s(t *testing.T) {
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Skipf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.0.3") < 0 {
+		t.Skipf("%s is not set or is below 3.0.3", TestJujuAgentVersion)
+	}
 	modelName := acctest.RandomWithPrefix("tf-test-custom-resource-updates-microk8s")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -455,50 +473,36 @@ func TestAcc_CustomResourcesRemovedFromPlanMicrok8s(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// Deploy charm with a custom resource
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/edge", "ausf-image", "gatici/sdcore-ausf:latest"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/edge", "grafana-image", "gatici/grafana:9"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "gatici/sdcore-ausf:latest"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:9"),
 				),
 				ExpectNonEmptyPlan: true,
 			},
 			{
 				// Keep charm channel and remove custom resource
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.3/edge"),
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.0/edge"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
 			},
 			{
 				// Keep charm channel and add resource revision
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/edge", "ausf-image", "30"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/edge", "grafana-image", "60"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "30"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "60"),
 				),
 			},
 			{
 				// Update charm channel and keep resource revision
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.3/beta", "ausf-image", "30"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/stable", "grafana-image", "60"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.ausf-image", "30"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "60"),
 				),
 			},
 			{
 				// Update charm channel and remove resource revision
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.3/edge"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
-				),
-			},
-			{
-				// Update charm channel and remove image resource which is given in a json file
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.3/beta"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
-				),
-			},
-			{
-				// Update charm channel and remove resource
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.3/edge"),
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.0/beta"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
@@ -867,7 +871,7 @@ resource "juju_application" "this" {
   model = juju_model.this.name
   name = "test-app"
   charm {
-    name     = "sdcore-ausf-k8s"
+    name     = "grafana-k8s"
 	channel  = "%s"
   }
   trust = true

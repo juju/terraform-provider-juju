@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"reflect"
 	"sort"
 	"strconv"
@@ -36,7 +35,6 @@ import (
 	apicommoncharm "github.com/juju/juju/api/common/charm"
 	"github.com/juju/juju/cmd/juju/application/utils"
 	resourcecmd "github.com/juju/juju/cmd/juju/resource"
-	"github.com/juju/juju/cmd/modelcmd"
 	corebase "github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
@@ -324,12 +322,6 @@ type DestroyApplicationInput struct {
 	ModelName       string
 }
 
-type osFilesystem struct{}
-
-func (osFilesystem) Open(name string) (modelcmd.ReadSeekCloser, error) {
-	return os.Open(name)
-}
-
 func resolveCharmURL(charmName string) (*charm.URL, error) {
 	path, err := charm.EnsureSchema(charmName, charm.CharmHub)
 	if err != nil {
@@ -356,23 +348,14 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	}
 
 	applicationAPIClient := apiapplication.NewClient(conn)
+	resourceAPIClient, err := apiresources.NewClient(conn)
+	if err != nil {
+		return nil, err
+	}
 	if applicationAPIClient.BestAPIVersion() >= 19 {
-		resourceIDs, apiCharmID, err := c.deployFromRepository(applicationAPIClient, transformedInput, conn)
+		err := c.deployFromRepository(applicationAPIClient, resourceAPIClient, transformedInput)
 		if err != nil {
 			return nil, err
-		}
-		if len(resourceIDs) != 0 {
-			toReturn := apiapplication.SetCharmConfig{
-				ApplicationName: transformedInput.applicationName,
-				CharmID:         apiCharmID,
-				ResourceIDs:     resourceIDs,
-			}
-			setCharmConfig := &toReturn
-
-			err = applicationAPIClient.SetCharm(model.GenerationMaster, *setCharmConfig)
-			if err != nil {
-				return nil, err
-			}
 		}
 	} else {
 		err = c.legacyDeploy(ctx, conn, applicationAPIClient, transformedInput)
@@ -391,16 +374,14 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	}, err
 }
 
-func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplication.Client, transformedInput transformedCreateApplicationInput, conn api.Connection) (map[string]string, apiapplication.CharmID, error) {
+func (c applicationsClient) deployFromRepository(applicationAPIClient ApplicationAPIClient, resourceAPIClient ResourceAPIClient, transformedInput transformedCreateApplicationInput) error {
 	settingsForYaml := map[interface{}]interface{}{transformedInput.applicationName: transformedInput.config}
 	configYaml, err := goyaml.Marshal(settingsForYaml)
-	resourceIDs := map[string]string{}
-	apiCharmID := apiapplication.CharmID{}
 	if err != nil {
-		return resourceIDs, apiapplication.CharmID{}, jujuerrors.Trace(err)
+		return jujuerrors.Trace(err)
 	}
 	c.Tracef("Calling DeployFromRepository")
-	deployInfo, pendingResources, errs := applicationAPIClient.DeployFromRepository(apiapplication.DeployFromRepositoryArg{
+	deployInfo, localPendingResources, errs := applicationAPIClient.DeployFromRepository(apiapplication.DeployFromRepositoryArg{
 		CharmName:        transformedInput.charmName,
 		ApplicationName:  transformedInput.applicationName,
 		Base:             &transformedInput.charmBase,
@@ -415,47 +396,20 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplic
 		Resources:        transformedInput.resources,
 		Storage:          transformedInput.storage,
 	})
-	if errs != nil {
-		return resourceIDs, apiCharmID, errors.Join(errs...)
+
+	if len(errs) != 0 {
+		return errors.Join(errs...)
 	}
 
-	charmsAPIClient := apicharms.NewClient(conn)
-	modelconfigAPIClient := apimodelconfig.NewClient(conn)
-	resolvedURL, resolvedOrigin, supportedBases, err := getCharmResolvedUrlAndOrigin(conn, transformedInput)
-	if err != nil {
-		return resourceIDs, apiCharmID, err
-	}
-	userSuppliedBase := transformedInput.charmBase
-	baseToUse, err := c.baseToUse(modelconfigAPIClient, userSuppliedBase, resolvedOrigin.Base, supportedBases)
-	if err != nil {
-		return resourceIDs, apiCharmID, err
-	}
-	if !userSuppliedBase.Empty() && !userSuppliedBase.IsCompatible(baseToUse) {
-		return resourceIDs, apiCharmID, err
-	}
-	resolvedOrigin.Base = baseToUse
-	series, err := corebase.GetSeriesFromBase(baseToUse)
-	if err != nil {
-		return resourceIDs, apiCharmID, err
-	}
-	resolvedURL = resolvedURL.WithSeries(series)
+	fileSystem := osFilesystem{}
+	// Upload the provided local resources to Juju
+	uploadErr := uploadExistingPendingResources(deployInfo.Name, localPendingResources, fileSystem, resourceAPIClient)
 
-	// Add charm expects base or series, one of them should exist.
-	resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, resolvedOrigin, false)
-	if err != nil {
-		return resourceIDs, apiCharmID, err
+	if uploadErr != nil {
+		return uploadErr
 	}
-	resourceIDs, err = c.getResourceIDs(transformedInput, conn, deployInfo, pendingResources)
-	if err != nil {
-		return resourceIDs, apiCharmID, err
-	}
+	return nil
 
-	apiCharmID = apiapplication.CharmID{
-		URL:    resolvedURL.String(),
-		Origin: resultOrigin,
-	}
-
-	return resourceIDs, apiCharmID, nil
 }
 
 // TODO (hml) 23-Feb-2024
@@ -469,7 +423,54 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 	charmsAPIClient := apicharms.NewClient(conn)
 	modelconfigAPIClient := apimodelconfig.NewClient(conn)
 
-	resolvedURL, resolvedOrigin, supportedBases, err := getCharmResolvedUrlAndOrigin(conn, transformedInput)
+	channel, err := charm.ParseChannel(transformedInput.charmChannel)
+	if err != nil {
+		return err
+	}
+
+	charmURL, err := resolveCharmURL(transformedInput.charmName)
+	if err != nil {
+		return err
+	}
+
+	if charmURL.Revision != UnspecifiedRevision {
+		return fmt.Errorf("cannot specify revision in a charm name")
+	}
+	if transformedInput.charmRevision != UnspecifiedRevision && channel.Empty() {
+		return fmt.Errorf("specifying a revision requires a channel for future upgrades")
+	}
+
+	userSuppliedBase := transformedInput.charmBase
+	platformCons, err := modelconfigAPIClient.GetModelConstraints()
+	if err != nil {
+		return err
+	}
+	platform := utils.MakePlatform(transformedInput.constraints, userSuppliedBase, platformCons)
+
+	urlForOrigin := charmURL
+	if transformedInput.charmRevision != UnspecifiedRevision {
+		urlForOrigin = urlForOrigin.WithRevision(transformedInput.charmRevision)
+	}
+
+	// Juju 2.9 cares that the series is in the origin. Juju 3.3 does not.
+	// We are supporting both now.
+	if !userSuppliedBase.Empty() {
+		userSuppliedSeries, err := corebase.GetSeriesFromBase(userSuppliedBase)
+		if err != nil {
+			return err
+		}
+		urlForOrigin = urlForOrigin.WithSeries(userSuppliedSeries)
+	}
+
+	origin, err := utils.MakeOrigin(charm.Schema(urlForOrigin.Schema), transformedInput.charmRevision, channel, platform)
+	if err != nil {
+		return err
+	}
+
+	// Charm or bundle has been supplied as a URL so we resolve and
+	// deploy using the store but pass in the origin command line
+	// argument so users can target a specific origin.
+	resolvedURL, resolvedOrigin, supportedBases, err := resolveCharm(charmsAPIClient, charmURL, origin)
 	if err != nil {
 		return err
 	}
@@ -477,7 +478,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 		return jujuerrors.NotSupportedf("deploying bundles")
 	}
 	c.Tracef("resolveCharm returned", map[string]interface{}{"resolvedURL": resolvedURL, "resolvedOrigin": resolvedOrigin, "supportedBases": supportedBases})
-	userSuppliedBase := transformedInput.charmBase
+
 	baseToUse, err := c.baseToUse(modelconfigAPIClient, userSuppliedBase, resolvedOrigin.Base, supportedBases)
 	if err != nil {
 		c.Warnf("failed to get a suggested operating system from resolved charm response", map[string]interface{}{"err": err})
@@ -1459,7 +1460,7 @@ func (c applicationsClient) updateResources(appName string, resources map[string
 }
 
 func addPendingResources(appName string, charmResourcesToAdd map[string]charmresources.Meta, resourcesToUse map[string]string,
-	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient) (map[string]string, error) {
+	charmID apiapplication.CharmID, resourceAPIClient ResourceAPIClient) (map[string]string, error) {
 	pendingResourcesforAdd := []charmresources.Resource{}
 	resourceIDs := map[string]string{}
 
@@ -1508,7 +1509,7 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 		if openResErr != nil {
 			return nil, typedError(openResErr)
 		}
-		toRequestUpload, err := resourcesAPIClient.UploadPendingResource(appName, localResource, deployValue, r)
+		toRequestUpload, err := resourceAPIClient.UploadPendingResource(appName, localResource, deployValue, r)
 		if err != nil {
 			return nil, typedError(err)
 		}
@@ -1528,7 +1529,7 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 		},
 		Resources: pendingResourcesforAdd,
 	}
-	toRequestAdd, err := resourcesAPIClient.AddPendingResources(resourcesReqforAdd)
+	toRequestAdd, err := resourceAPIClient.AddPendingResources(resourcesReqforAdd)
 	if err != nil {
 		return nil, typedError(err)
 	}
