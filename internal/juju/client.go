@@ -58,7 +58,6 @@ type Client struct {
 // JAAS controllers offer additional functionality for permission management.
 func (c Client) IsJAAS() bool {
 	return c.isJAAS()
-
 }
 
 type jujuModel struct {

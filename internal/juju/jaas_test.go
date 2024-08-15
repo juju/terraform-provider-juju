@@ -4,6 +4,7 @@
 package juju
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -119,7 +120,7 @@ func (s *JaasSuite) TestReadRelations() {
 	).Return(respWithoutToken, nil)
 
 	client := s.getJaasClient()
-	relations, err := client.ReadRelations(&tuple)
+	relations, err := client.ReadRelations(context.Background(), &tuple)
 	s.Require().NoError(err)
 	s.Require().Len(relations, 2)
 }
@@ -127,7 +128,32 @@ func (s *JaasSuite) TestReadRelations() {
 func (s *JaasSuite) TestReadRelationsEmptyTuple() {
 	expectedErr := errors.New("read relation tuple is nil")
 	client := s.getJaasClient()
-	_, err := client.ReadRelations(nil)
+	_, err := client.ReadRelations(context.Background(), nil)
+	s.Require().Error(err)
+	s.Assert().Equal(expectedErr, err)
+}
+
+func (s *JaasSuite) TestReadRelationsCancelledContext() {
+	ctlr := s.setupMocks(s.T())
+	defer ctlr.Finish()
+
+	tuple := JaasTuple{Object: "object-1", Relation: "relation", Target: "target-1"}
+	req := &params.ListRelationshipTuplesRequest{Tuple: toAPITuple(tuple)}
+	respWithToken := &params.ListRelationshipTuplesResponse{
+		Tuples:            []params.RelationshipTuple{toAPITuple(tuple)},
+		ContinuationToken: "token",
+	}
+	s.mockJaasClient.EXPECT().ListRelationshipTuples(
+		req,
+	).Return(respWithToken, nil)
+
+	expectedErr := errors.New("context canceled")
+	ctx := context.Background()
+	ctx, cancelFunc := context.WithCancel(ctx)
+	cancelFunc()
+
+	client := s.getJaasClient()
+	_, err := client.ReadRelations(ctx, &tuple)
 	s.Require().Error(err)
 	s.Assert().Equal(expectedErr, err)
 }
