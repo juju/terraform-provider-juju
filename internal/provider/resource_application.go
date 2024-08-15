@@ -6,7 +6,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/dustin/go-humanize"
@@ -96,13 +95,6 @@ type applicationResourceModel struct {
 	UnitCount types.Int64 `tfsdk:"units"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
-}
-
-// isInt checks if strings could be converted to an integer
-// Used to detect resources which are given with revision number
-func isInt(s string) bool {
-	_, err := strconv.Atoi(s)
-	return err == nil
 }
 
 func (r *applicationResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -803,7 +795,7 @@ func (r *applicationResource) configureConfigData(ctx context.Context, configTyp
 		// Add if the value has changed from the previous state
 		if previousValue, found := previousConfig[k]; found {
 			if !juju.EqualConfigEntries(v, previousValue) {
-				// remember that this terraform schema type only accepts strings
+				// remember that this Terraform schema type only accepts strings
 				previousConfig[k] = v.String()
 				changes = true
 			}
@@ -920,7 +912,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 
 		if !planCharm.Series.Equal(stateCharm.Series) || !planCharm.Base.Equal(stateCharm.Base) {
-			// This violates terraform's declarative model. We could implement
+			// This violates Terraform's declarative model. We could implement
 			// `juju set-application-base`, usually used after `upgrade-machine`,
 			// which would change the operating system used for future units of
 			// the application provided the charm supported it, but not change
@@ -1136,8 +1128,7 @@ func (r *applicationResource) updateStorage(
 func (r *applicationResource) computeExposeDeltas(ctx context.Context, stateExpose types.List, planExpose types.List) (map[string]interface{}, []string, diag.Diagnostics) {
 	diags := diag.Diagnostics{}
 	if planExpose.IsNull() {
-		// if plan is nil we unexpose everything via
-		// an non empty list.
+		// if plan is nil we unexpose everything via a non-empty list.
 		return nil, []string{""}, diags
 	}
 	if stateExpose.IsNull() {
