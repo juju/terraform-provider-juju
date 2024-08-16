@@ -38,8 +38,7 @@ func (s *JaasSuite) getJaasClient() jaasClient {
 }
 
 func (s *JaasSuite) TestAddRelations() {
-	ctlr := s.setupMocks(s.T())
-	defer ctlr.Finish()
+	defer s.setupMocks(s.T()).Finish()
 
 	tuples := []JaasTuple{
 		{Object: "object-1", Relation: "relation", Target: "target-1"},
@@ -67,8 +66,7 @@ func (s *JaasSuite) TestAddRelationsEmptySlice() {
 }
 
 func (s *JaasSuite) TestDeleteRelations() {
-	ctlr := s.setupMocks(s.T())
-	defer ctlr.Finish()
+	defer s.setupMocks(s.T()).Finish()
 
 	tuples := []JaasTuple{
 		{Object: "object-1", Relation: "relation", Target: "target-1"},
@@ -96,8 +94,7 @@ func (s *JaasSuite) TestDeleteRelationsEmptySlice() {
 }
 
 func (s *JaasSuite) TestReadRelations() {
-	ctlr := s.setupMocks(s.T())
-	defer ctlr.Finish()
+	defer s.setupMocks(s.T()).Finish()
 
 	tuple := JaasTuple{Object: "object-1", Relation: "relation", Target: "target-1"}
 	// 1st request/response has no token in the request and a token in the response indicating another page is available.
@@ -134,8 +131,7 @@ func (s *JaasSuite) TestReadRelationsEmptyTuple() {
 }
 
 func (s *JaasSuite) TestReadRelationsCancelledContext() {
-	ctlr := s.setupMocks(s.T())
-	defer ctlr.Finish()
+	defer s.setupMocks(s.T()).Finish()
 
 	tuple := JaasTuple{Object: "object-1", Relation: "relation", Target: "target-1"}
 	req := &params.ListRelationshipTuplesRequest{Tuple: toAPITuple(tuple)}
