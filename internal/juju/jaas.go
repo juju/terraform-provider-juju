@@ -52,6 +52,22 @@ func toAPITuple(tuple JaasTuple) params.RelationshipTuple {
 	}
 }
 
+func toJaasTuples(tuples []params.RelationshipTuple) []JaasTuple {
+	out := make([]JaasTuple, 0, len(tuples))
+	for _, tuple := range tuples {
+		out = append(out, toJaasTuple(tuple))
+	}
+	return out
+}
+
+func toJaasTuple(tuple params.RelationshipTuple) JaasTuple {
+	return JaasTuple{
+		Object:   tuple.Object,
+		Relation: tuple.Relation,
+		Target:   tuple.TargetObject,
+	}
+}
+
 // AddRelations attempts to create the provided slice of relationship tuples.
 // An empty slice of tuples will return an error.
 func (jc *jaasClient) AddRelations(tuples []JaasTuple) error {
@@ -90,7 +106,7 @@ func (jc *jaasClient) DeleteRelations(tuples []JaasTuple) error {
 
 // ReadRelations attempts to read relations that match the criteria defined by `tuple`.
 // An nil tuple pointer is invalid and will return an error.
-func (jc *jaasClient) ReadRelations(ctx context.Context, tuple *JaasTuple) ([]params.RelationshipTuple, error) {
+func (jc *jaasClient) ReadRelations(ctx context.Context, tuple *JaasTuple) ([]JaasTuple, error) {
 	if tuple == nil {
 		return nil, errors.New("read relation tuple is nil")
 	}
@@ -102,7 +118,7 @@ func (jc *jaasClient) ReadRelations(ctx context.Context, tuple *JaasTuple) ([]pa
 	defer func() { _ = conn.Close() }()
 
 	client := jc.getJaasApiClient(conn)
-	relations := make([]params.RelationshipTuple, 0)
+	relations := make([]JaasTuple, 0)
 	req := &params.ListRelationshipTuplesRequest{Tuple: toAPITuple(*tuple)}
 	for {
 		resp, err := client.ListRelationshipTuples(req)
@@ -114,7 +130,7 @@ func (jc *jaasClient) ReadRelations(ctx context.Context, tuple *JaasTuple) ([]pa
 			jc.Errorf(err, "call to ListRelationshipTuples contained error(s)")
 			return nil, errors.New(resp.Errors[0])
 		}
-		relations = append(relations, resp.Tuples...)
+		relations = append(relations, toJaasTuples(resp.Tuples)...)
 		if resp.ContinuationToken == "" {
 			return relations, nil
 		}

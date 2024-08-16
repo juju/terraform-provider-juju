@@ -378,6 +378,7 @@ func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
 		func() resource.Resource { return NewUserResource() },
 		func() resource.Resource { return NewSecretResource() },
 		func() resource.Resource { return NewAccessSecretResource() },
+		func() resource.Resource { return NewJAASAccessModelResource() },
 	}
 }
 

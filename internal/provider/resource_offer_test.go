@@ -5,7 +5,6 @@ package provider
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -28,8 +27,8 @@ func TestAcc_ResourceOffer(t *testing.T) {
 				Config: testAccResourceOffer(modelName, "base = \"ubuntu@22.04\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedOfferUser(), modelName, "this")),
-					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedOfferUser(), modelName, "this")),
+					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
+					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 				),
 			},
 			{
@@ -41,7 +40,7 @@ func TestAcc_ResourceOffer(t *testing.T) {
 						map[string]string{"name": "apptwo", "endpoint": "db", "offer_url": ""}),
 
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.int", "application.*",
-						map[string]string{"name": "", "endpoint": "", "offer_url": fmt.Sprintf("%v/%v.%v", expectedOfferUser(),
+						map[string]string{"name": "", "endpoint": "", "offer_url": fmt.Sprintf("%v/%v.%v", expectedResourceOwner(),
 							modelName2, "appone")}),
 				),
 			},
@@ -125,8 +124,8 @@ func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
 				Config: testAccResourceOffer(modelName, "series = \"focal\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedOfferUser(), modelName, "this")),
-					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedOfferUser(), modelName, "this")),
+					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
+					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 				),
 			},
 			{
@@ -161,14 +160,4 @@ resource "juju_offer" "this" {
 	endpoint         = "db"
 }
 `, modelName, os)
-}
-
-func expectedOfferUser() string {
-	// Only 1 field is expected to be populated.
-	username := os.Getenv(JujuUsernameEnvKey)
-	clientId := os.Getenv(JujuClientIDEnvKey)
-	if clientId != "" {
-		clientId = clientId + "@serviceaccount"
-	}
-	return username + clientId
 }

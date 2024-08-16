@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	jaasApi "github.com/canonical/jimm-go-sdk/v3/api"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
 	"github.com/juju/juju/api"
@@ -125,13 +126,18 @@ var isJAAS bool
 // IsJAAS uses a synchronisation object to only perform the check once and return the same result.
 func (sc *sharedClient) IsJAAS(defaultVal bool) bool {
 	checkJAASOnce.Do(func() {
+		isJAAS = defaultVal
 		conn, err := sc.GetConnection(nil)
 		if err != nil {
-			isJAAS = defaultVal
 			return
 		}
 		defer conn.Close()
-		isJAAS = conn.BestFacadeVersion("JIMM") != 0
+		jc := jaasApi.NewClient(conn)
+		_, err = jc.ListControllers()
+		if err == nil {
+			isJAAS = true
+			return
+		}
 	})
 	return isJAAS
 }

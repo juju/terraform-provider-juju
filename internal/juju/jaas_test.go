@@ -120,6 +120,7 @@ func (s *JaasSuite) TestReadRelations() {
 	relations, err := client.ReadRelations(context.Background(), &tuple)
 	s.Require().NoError(err)
 	s.Require().Len(relations, 2)
+	s.Require().Equal(relations, []JaasTuple{tuple, tuple})
 }
 
 func (s *JaasSuite) TestReadRelationsEmptyTuple() {

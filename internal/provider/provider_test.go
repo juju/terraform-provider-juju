@@ -261,3 +261,13 @@ func TestFrameworkProviderSchema(t *testing.T) {
 	assert.Equal(t, resp.Diagnostics.HasError(), false)
 	assert.Len(t, resp.Schema.Attributes, 6)
 }
+
+func expectedResourceOwner() string {
+	// Only 1 field is expected to be populated.
+	username := os.Getenv(JujuUsernameEnvKey)
+	clientId := os.Getenv(JujuClientIDEnvKey)
+	if clientId != "" {
+		clientId = clientId + "@serviceaccount"
+	}
+	return username + clientId
+}
