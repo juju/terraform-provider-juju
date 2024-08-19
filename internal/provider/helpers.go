@@ -22,7 +22,7 @@ const (
 	LogDataSourceSecret  = "datasource-secret"
 
 	LogResourceApplication  = "resource-application"
-	LogResourceAccessModel  = "resource-assess-model"
+	LogResourceAccessModel  = "resource-access-model"
 	LogResourceCredential   = "resource-credential"
 	LogResourceMachine      = "resource-machine"
 	LogResourceModel        = "resource-model"
@@ -31,6 +31,8 @@ const (
 	LogResourceUser         = "resource-user"
 	LogResourceSecret       = "resource-secret"
 	LogResourceAccessSecret = "resource-access-secret"
+
+	LogResourceJAASAccessModel = "resource-jaas-access-model"
 )
 
 const LogResourceIntegration = "resource-integration"
