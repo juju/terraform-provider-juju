@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juju/juju/api/client/application"
 	apiapplication "github.com/juju/juju/api/client/application"
 	"github.com/juju/juju/api/client/applicationoffers"
 	apiclient "github.com/juju/juju/api/client/client"
@@ -103,7 +102,7 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 		return nil, append(errs, err)
 	}
 	defer func() { _ = modelConn.Close() }()
-	applicationClient := application.NewClient(modelConn)
+	applicationClient := apiapplication.NewClient(modelConn)
 
 	// wait for the app to be available
 	ctx, cancel := context.WithTimeout(context.Background(), OfferAppAvailableTimeout)
