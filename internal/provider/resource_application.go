@@ -578,6 +578,9 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	r.trace(fmt.Sprintf("read application resource %q", createResp.AppName))
 
 	// Save plan into Terraform state
+
+	// Constraints do not apply to subordinate applications. If the application
+	// is subordinate, the constraints will be set to the empty string.
 	plan.Constraints = types.StringValue(readResp.Constraints.String())
 	plan.Placement = types.StringValue(readResp.Placement)
 	plan.Principal = types.BoolNull()
@@ -688,6 +691,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 	state.ModelName = types.StringValue(modelName)
 
 	// Use the response to fill in state
+
 	state.Placement = types.StringValue(response.Placement)
 	state.Principal = types.BoolNull()
 	state.UnitCount = types.Int64Value(int64(response.Units))
@@ -708,10 +712,10 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	// constraints do not apply to subordinate applications.
-	if response.Principal {
-		state.Constraints = types.StringValue(response.Constraints.String())
-	}
+	// Constraints do not apply to subordinate applications. If the application
+	// is subordinate, the constraints will be set to the empty string.
+	state.Constraints = types.StringValue(response.Constraints.String())
+
 	exposeType := req.State.Schema.GetBlocks()[ExposeKey].(schema.ListNestedBlock).NestedObject.Type()
 	if response.Expose != nil {
 		exp := parseNestedExpose(response.Expose)
@@ -986,7 +990,11 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 	}
 
-	if !plan.Constraints.Equal(state.Constraints) {
+	// Do not use .Equal() here as we should consider null constraints the same
+	// as empty-string constraints. Terraform considers them different, so will
+	// incorrectly attempt to update the constraints, which can cause trouble
+	// for subordinate applications.
+	if plan.Constraints.ValueString() != state.Constraints.ValueString() {
 		appConstraints, err := constraints.Parse(plan.Constraints.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Conversion", fmt.Sprintf("Unable to parse plan constraints, got error: %s", err))

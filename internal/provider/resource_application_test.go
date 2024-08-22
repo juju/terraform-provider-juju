@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"regexp"
@@ -20,6 +21,7 @@ import (
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
 
+	"github.com/juju/terraform-provider-juju/internal/juju"
 	internaljuju "github.com/juju/terraform-provider-juju/internal/juju"
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
@@ -151,6 +153,58 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 				ImportStateVerify: true,
 				ImportState:       true,
 				ResourceName:      "juju_application.this",
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceApplication_UpdateImportedSubordinate(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	testAccPreCheck(t)
+
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+
+	ctx := context.Background()
+
+	_, err := TestClient.Models.CreateModel(juju.CreateModelInput{
+		Name: modelName,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = TestClient.Applications.CreateApplication(ctx, &juju.CreateApplicationInput{
+		ApplicationName: "telegraf",
+		ModelName:       modelName,
+		CharmName:       "telegraf",
+		CharmChannel:    "latest/stable",
+		CharmRevision:   73,
+		Units:           0,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:             testAccResourceApplicationSubordinate(modelName, 73),
+				ImportState:        true,
+				ImportStateId:      fmt.Sprintf("%s:telegraf", modelName),
+				ImportStatePersist: true,
+				ResourceName:       "juju_application.telegraf",
+			},
+			{
+				Config: testAccResourceApplicationSubordinate(modelName, 75),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.telegraf", "charm.0.name", "telegraf"),
+					resource.TestCheckResourceAttr("juju_application.telegraf", "charm.0.revision", "75"),
+				),
 			},
 		},
 	})
@@ -799,6 +853,22 @@ resource "juju_application" "this" {
 }
 `, modelName, constraints)
 	}
+}
+
+func testAccResourceApplicationSubordinate(modelName string, subordinateRevision int) string {
+	return fmt.Sprintf(`
+resource "juju_application" "telegraf" {
+  model = %q
+  name = "telegraf"
+
+  charm {
+    name = "telegraf"
+    revision = %d
+  }
+
+  units = 0
+}
+`, modelName, subordinateRevision)
 }
 
 func testAccResourceApplicationConstraintsSubordinate(modelName string, constraints string) string {
