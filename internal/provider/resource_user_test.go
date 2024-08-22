@@ -12,6 +12,7 @@ import (
 )
 
 func TestAcc_ResourceUser(t *testing.T) {
+	SkipJAAS(t)
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 
@@ -49,6 +50,7 @@ resource "juju_user" "user" {
 }
 
 func TestAcc_ResourceUser_UpgradeProvider(t *testing.T) {
+	SkipJAAS(t)
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 

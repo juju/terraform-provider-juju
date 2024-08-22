@@ -21,7 +21,10 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-const TestProviderStableVersion = "0.12.0"
+const (
+	TestProviderStableVersion = "0.12.0"
+	isJaasEnvKey              = "IS_JAAS"
+)
 
 // providerFactories are used to instantiate the Framework provider during
 // acceptance testing.
@@ -43,6 +46,24 @@ func init() {
 	}
 }
 
+// SkipJAAS should be called at the top of any tests that are not appropriate to
+// run against JAAS. These include things like Juju access related tests where a
+// JAAS specific resource is available.
+func SkipJAAS(t *testing.T) {
+	if _, ok := os.LookupEnv("IS_JAAS"); ok {
+		t.Skip("Skipping test when running against JAAS")
+	}
+}
+
+// OnlyTestAgainstJAAS should be called at the top of any tests that are not
+// appropriate to run against a Juju controller. This includes tests for all JAAS
+// specific resources where only JAAS implements the necessary API methods.
+func OnlyTestAgainstJAAS(t *testing.T) {
+	if _, ok := os.LookupEnv("IS_JAAS"); !ok {
+		t.Skip("Skipping JAAS specific test against Juju")
+	}
+}
+
 func TestProviderConfigure(t *testing.T) {
 	testAccPreCheck(t)
 	jujuProvider := NewJujuProvider("dev")
@@ -51,6 +72,7 @@ func TestProviderConfigure(t *testing.T) {
 }
 
 func TestProviderConfigureUsernameFromEnv(t *testing.T) {
+	SkipJAAS(t)
 	testAccPreCheck(t)
 	jujuProvider := NewJujuProvider("dev")
 	userNameValue := "the-username"
@@ -65,6 +87,7 @@ func TestProviderConfigureUsernameFromEnv(t *testing.T) {
 }
 
 func TestProviderConfigurePasswordFromEnv(t *testing.T) {
+	SkipJAAS(t)
 	testAccPreCheck(t)
 	jujuProvider := NewJujuProvider("dev")
 	passwordValue := "the-password"
@@ -78,6 +101,7 @@ func TestProviderConfigurePasswordFromEnv(t *testing.T) {
 }
 
 func TestProviderConfigureClientIDAndSecretFromEnv(t *testing.T) {
+	SkipJAAS(t)
 	testAccPreCheck(t)
 	jujuProvider := NewJujuProvider("dev")
 	emptyValue := ""
@@ -118,6 +142,7 @@ const (
 
 // TODO: find an alternative way of running test on Mac
 func TestProviderConfigurex509FromEnv(t *testing.T) {
+	SkipJAAS(t)
 	if runtime.GOOS == "darwin" {
 		//Due to a bug in Go this test does not work on darwin OS
 		//https://github.com/golang/go/issues/52010
@@ -135,6 +160,7 @@ func TestProviderConfigurex509FromEnv(t *testing.T) {
 }
 
 func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
+	SkipJAAS(t)
 	jujuProvider := NewJujuProvider("dev")
 	//Set the CA to the invalid one above
 	//Juju will ignore the system trust store if we set the CA property
@@ -153,6 +179,28 @@ func testAccPreCheck(t *testing.T) {
 	if TestClient != nil {
 		return
 	}
+	if val, ok := os.LookupEnv(isJaasEnvKey); ok && val == "true" {
+		validateJAASTestConfig(t)
+	} else {
+		validateJujuTestConfig(t)
+	}
+	confResp := configureProvider(t, Provider)
+	assert.Equal(t, confResp.Diagnostics.HasError(), false, confResp.Diagnostics.Errors())
+	testClient, ok := confResp.ResourceData.(*juju.Client)
+	assert.Truef(t, ok, "ResourceData, not of type juju client")
+	TestClient = testClient
+}
+
+func validateJAASTestConfig(t *testing.T) {
+	if v := os.Getenv(JujuClientIDEnvKey); v == "" {
+		t.Fatalf("%s must be set for acceptance tests", JujuClientIDEnvKey)
+	}
+	if v := os.Getenv(JujuClientSecretEnvKey); v == "" {
+		t.Fatalf("%s must be set for acceptance tests", JujuClientSecretEnvKey)
+	}
+}
+
+func validateJujuTestConfig(t *testing.T) {
 	if v := os.Getenv(JujuUsernameEnvKey); v == "" {
 		t.Fatalf("%s must be set for acceptance tests", JujuUsernameEnvKey)
 	}
@@ -171,11 +219,6 @@ func testAccPreCheck(t *testing.T) {
 			t.Fatalf("%s must be set for acceptance tests", JujuCACertEnvKey)
 		}
 	}
-	confResp := configureProvider(t, Provider)
-	assert.Equal(t, confResp.Diagnostics.HasError(), false)
-	testClient, ok := confResp.ResourceData.(*juju.Client)
-	assert.Truef(t, ok, "ResourceData, not of type juju client")
-	TestClient = testClient
 }
 
 func configureProvider(t *testing.T, p provider.Provider) provider.ConfigureResponse {
