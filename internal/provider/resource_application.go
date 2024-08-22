@@ -162,8 +162,6 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"constraints": schema.StringAttribute{
 				Description: "Constraints imposed on this application.",
 				Optional:    true,
-				// Set as "computed" to pre-populate and preserve any implicit constraints
-				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 					stringplanmodifier.UseStateForUnknown(),
