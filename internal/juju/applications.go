@@ -901,12 +901,12 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	appInfo := apps[0].Result
 
-	// We are currently retrieving the full status, which might be more information than necessary.
-	// The main focus is on the application status, particularly including the storage status.
-	// It might be more efficient to directly query for the application status and its associated storage status.
-	// TODO: Investigate if there's a way to optimize this by only fetching the required information.
+	// Fetch data only about the application being read. This helps to limit
+	// the data on storage to the specific application too. Storage is not
+	// provided by application, rather storage data buries a unit name deep
+	// in the structure.
 	status, err := clientAPIClient.Status(&apiclient.StatusArgs{
-		Patterns:       []string{},
+		Patterns:       []string{input.AppName},
 		IncludeStorage: true,
 	})
 	if err != nil {
