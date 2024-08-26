@@ -43,6 +43,7 @@ func TestAcc_ResourceApplication(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "jameinel-ubuntu-lite"),
 					resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
+					resource.TestCheckNoResourceAttr("juju_application.this", "storage"),
 				),
 			},
 			{
