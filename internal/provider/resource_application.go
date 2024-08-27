@@ -46,17 +46,14 @@ const (
 	StorageKey          = "storage"
 
 	resourceKeyMarkdownDescription = `
-Charm resource revisions. Must evaluate to an integer.
+Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
+Specify a resource other than the default for a charm. Note that not all charms have resources.
 
-	There are a few scenarios that need to be considered:
-	* If the plan does not specify resource revision and resources are added to the plan,
-	resources with specified revisions will be attached to the application (equivalent
-	to juju attach-resource).
-	* If the plan does specify resource revisions and:
-		* If the charm revision or channel is updated, then resources get updated to the 
-		  latest revision.
-	    * If the charm revision or channel are not updated, then no changes will take 
-		  place (juju does not have an "un-attach" command for resources).
+Notes:
+* A resource can be specified by a revision number or by URL to a OCI image repository. Resources of type 'file' can only be specified by revision number. Resources of type 'oci-image' can be specified by revision number or URL.
+* A resource can be added or changed at any time. If the charm has resources and None is specified in the plan, Juju will use the resource defined in the charm's specified channel.
+* If a charm is refreshed, by changing the charm revision or channel and if the resource is specified by a revision in the plan, Juju will use the resource defined in the plan.
+* Resources specified by URL to an OCI image repository will never be refreshed (upgraded) by juju during a charm refresh unless explicitly changed in the plan.
 `
 )
 
@@ -260,8 +257,11 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				},
 			},
 			ResourceKey: schema.MapAttribute{
-				Optional:            true,
-				ElementType:         types.Int64Type,
+				Optional:    true,
+				ElementType: types.StringType,
+				Validators: []validator.Map{
+					StringIsResourceKeyValidator{},
+				},
 				MarkdownDescription: resourceKeyMarkdownDescription,
 			},
 		},
@@ -470,7 +470,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	resourceRevisions := make(map[string]int)
+	resourceRevisions := make(map[string]string)
 	resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &resourceRevisions, false)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -795,7 +795,7 @@ func (r *applicationResource) configureConfigData(ctx context.Context, configTyp
 		// Add if the value has changed from the previous state
 		if previousValue, found := previousConfig[k]; found {
 			if !juju.EqualConfigEntries(v, previousValue) {
-				// remember that this terraform schema type only accepts strings
+				// remember that this Terraform schema type only accepts strings
 				previousConfig[k] = v.String()
 				changes = true
 			}
@@ -827,15 +827,15 @@ func (r *applicationResource) toEndpointBindingsSet(ctx context.Context, endpoin
 	return types.SetValueFrom(ctx, endpointBindingsType, endpointBindingsSlice)
 }
 
-func (r *applicationResource) configureResourceData(ctx context.Context, resourceType attr.Type, resources types.Map, respResources map[string]int) (types.Map, diag.Diagnostics) {
-	var previousResources map[string]int
+func (r *applicationResource) configureResourceData(ctx context.Context, resourceType attr.Type, resources types.Map, respResources map[string]string) (types.Map, diag.Diagnostics) {
+	var previousResources map[string]string
 	diagErr := resources.ElementsAs(ctx, &previousResources, false)
 	if diagErr.HasError() {
 		r.trace("configureResourceData exit A")
 		return types.Map{}, diagErr
 	}
 	if previousResources == nil {
-		previousResources = make(map[string]int)
+		previousResources = make(map[string]string)
 	}
 	// known previously
 	// update the values from the previous config
@@ -844,7 +844,7 @@ func (r *applicationResource) configureResourceData(ctx context.Context, resourc
 		// Add if the value has changed from the previous state
 		if previousValue, found := previousResources[k]; found {
 			if v != previousValue {
-				// remember that this terraform schema type only accepts strings
+				// remember that this Terraform schema type only accepts strings
 				previousResources[k] = v
 				changes = true
 			}
@@ -912,7 +912,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 
 		if !planCharm.Series.Equal(stateCharm.Series) || !planCharm.Base.Equal(stateCharm.Base) {
-			// This violates terraform's declarative model. We could implement
+			// This violates Terraform's declarative model. We could implement
 			// `juju set-application-base`, usually used after `upgrade-machine`,
 			// which would change the operating system used for future units of
 			// the application provided the charm supported it, but not change
@@ -958,15 +958,15 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 
 	// if resources in the plan are equal to resources stored in the state,
 	// we pass on the resources specified in the plan, which tells the provider
-	// NOT to update resources, because we want revisions fixed to those
+	// NOT to update resources, because we want resources fixed to those
 	// specified in the plan.
 	if plan.Resources.Equal(state.Resources) {
-		planResourceMap := make(map[string]int)
+		planResourceMap := make(map[string]string)
 		resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &planResourceMap, false)...)
 		updateApplicationInput.Resources = planResourceMap
 	} else {
-		planResourceMap := make(map[string]int)
-		stateResourceMap := make(map[string]int)
+		planResourceMap := make(map[string]string)
+		stateResourceMap := make(map[string]string)
 		resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &planResourceMap, false)...)
 		resp.Diagnostics.Append(state.Resources.ElementsAs(ctx, &stateResourceMap, false)...)
 		if resp.Diagnostics.HasError() {
@@ -974,14 +974,26 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 
 		// what happens when the plan suddenly does not specify resource
-		// revisions, but state does..
+		// revisions, but state does.
 		for k, v := range planResourceMap {
 			if stateResourceMap[k] != v {
 				if updateApplicationInput.Resources == nil {
 					// initialize just in case
-					updateApplicationInput.Resources = make(map[string]int)
+					updateApplicationInput.Resources = make(map[string]string)
 				}
 				updateApplicationInput.Resources[k] = v
+			}
+		}
+		// Resources are removed
+		// Then, the resources get updated to the latest resource revision according to channel
+		if len(planResourceMap) == 0 && len(stateResourceMap) != 0 {
+			for k := range stateResourceMap {
+				if updateApplicationInput.Resources == nil {
+					// initialize the resources
+					updateApplicationInput.Resources = make(map[string]string)
+					// Set resource revision to zero gets the latest resource revision from CharmHub
+					updateApplicationInput.Resources[k] = "-1"
+				}
 			}
 		}
 	}
@@ -1116,8 +1128,7 @@ func (r *applicationResource) updateStorage(
 func (r *applicationResource) computeExposeDeltas(ctx context.Context, stateExpose types.List, planExpose types.List) (map[string]interface{}, []string, diag.Diagnostics) {
 	diags := diag.Diagnostics{}
 	if planExpose.IsNull() {
-		// if plan is nil we unexpose everything via
-		// an non empty list.
+		// if plan is nil we unexpose everything via a non-empty list.
 		return nil, []string{""}, diags
 	}
 	if stateExpose.IsNull() {

@@ -4,7 +4,10 @@
 package juju
 
 import (
+	"io"
+
 	"github.com/juju/charm/v12"
+	charmresources "github.com/juju/charm/v12/resource"
 	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
@@ -43,6 +46,7 @@ type ApplicationAPIClient interface {
 	ApplicationsInfo(applications []names.ApplicationTag) ([]params.ApplicationInfoResult, error)
 	Deploy(args apiapplication.DeployArgs) error
 	DestroyUnits(in apiapplication.DestroyUnitsParams) ([]params.DestroyUnitResult, error)
+	DeployFromRepository(arg apiapplication.DeployFromRepositoryArg) (apiapplication.DeployInfo, []apiapplication.PendingResourceUpload, []error)
 	DestroyApplications(in apiapplication.DestroyApplicationsParams) ([]params.DestroyApplicationResult, error)
 	Expose(application string, exposedEndpoints map[string]params.ExposedEndpoint) error
 	Get(branchName, application string) (*params.ApplicationGetResults, error)
@@ -63,6 +67,8 @@ type ModelConfigAPIClient interface {
 type ResourceAPIClient interface {
 	AddPendingResources(args apiresources.AddPendingResourcesArgs) ([]string, error)
 	ListResources(applications []string) ([]resources.ApplicationResources, error)
+	Upload(application, name, filename, pendingID string, reader io.ReadSeeker) error
+	UploadPendingResource(applicationID string, resource charmresources.Resource, filename string, r io.ReadSeeker) (id string, err error)
 }
 
 type SecretAPIClient interface {

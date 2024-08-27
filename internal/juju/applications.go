@@ -34,6 +34,7 @@ import (
 	apispaces "github.com/juju/juju/api/client/spaces"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
 	"github.com/juju/juju/cmd/juju/application/utils"
+	resourcecmd "github.com/juju/juju/cmd/juju/resource"
 	corebase "github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
@@ -110,7 +111,7 @@ func newApplicationClient(sc SharedClient) *applicationsClient {
 	}
 }
 
-// ConfigEntry is an auxiliar struct to keep information about
+// ConfigEntry is an auxiliary struct to keep information about
 // juju application config entries. Specially, we want to know
 // if they have the default value.
 type ConfigEntry struct {
@@ -162,14 +163,14 @@ type CreateApplicationInput struct {
 	Placement          string
 	Constraints        constraints.Value
 	EndpointBindings   map[string]string
-	Resources          map[string]int
+	Resources          map[string]string
 	StorageConstraints map[string]jujustorage.Constraints
 }
 
 // validateAndTransform returns transformedCreateApplicationInput which
 // validated and in the proper format for both the new and legacy deployment
 // methods. Select input is not transformed due to differences in the
-// 2 deployement methods, such as config.
+// 2 deployment methods, such as config.
 func (input CreateApplicationInput) validateAndTransform(conn api.Connection) (parsed transformedCreateApplicationInput, err error) {
 	parsed.charmChannel = input.CharmChannel
 	parsed.charmName = input.CharmName
@@ -265,7 +266,7 @@ type transformedCreateApplicationInput struct {
 	units            int
 	trust            bool
 	endpointBindings map[string]string
-	resources        map[string]int
+	resources        map[string]string
 	storage          map[string]jujustorage.Constraints
 }
 
@@ -293,7 +294,7 @@ type ReadApplicationResponse struct {
 	Placement        string
 	EndpointBindings map[string]string
 	Storage          map[string]jujustorage.Constraints
-	Resources        map[string]int
+	Resources        map[string]string
 }
 
 type UpdateApplicationInput struct {
@@ -313,7 +314,7 @@ type UpdateApplicationInput struct {
 	Constraints        *constraints.Value
 	EndpointBindings   map[string]string
 	StorageConstraints map[string]jujustorage.Constraints
-	Resources          map[string]int
+	Resources          map[string]string
 }
 
 type DestroyApplicationInput struct {
@@ -347,8 +348,15 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	}
 
 	applicationAPIClient := apiapplication.NewClient(conn)
+	resourceAPIClient, err := apiresources.NewClient(conn)
+	if err != nil {
+		return nil, err
+	}
 	if applicationAPIClient.BestAPIVersion() >= 19 {
-		err = c.deployFromRepository(applicationAPIClient, transformedInput)
+		err := c.deployFromRepository(applicationAPIClient, resourceAPIClient, transformedInput)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		err = c.legacyDeploy(ctx, conn, applicationAPIClient, transformedInput)
 		err = jujuerrors.Annotate(err, "legacy deploy method")
@@ -366,20 +374,14 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	}, err
 }
 
-func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplication.Client, transformedInput transformedCreateApplicationInput) error {
+func (c applicationsClient) deployFromRepository(applicationAPIClient ApplicationAPIClient, resourceAPIClient ResourceAPIClient, transformedInput transformedCreateApplicationInput) error {
 	settingsForYaml := map[interface{}]interface{}{transformedInput.applicationName: transformedInput.config}
 	configYaml, err := goyaml.Marshal(settingsForYaml)
 	if err != nil {
 		return jujuerrors.Trace(err)
 	}
-
-	resources := make(map[string]string)
-	for k, v := range transformedInput.resources {
-		resources[k] = strconv.Itoa(v)
-	}
-
 	c.Tracef("Calling DeployFromRepository")
-	_, _, errs := applicationAPIClient.DeployFromRepository(apiapplication.DeployFromRepositoryArg{
+	deployInfo, localPendingResources, errs := applicationAPIClient.DeployFromRepository(apiapplication.DeployFromRepositoryArg{
 		CharmName:        transformedInput.charmName,
 		ApplicationName:  transformedInput.applicationName,
 		Base:             &transformedInput.charmBase,
@@ -391,14 +393,26 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient *apiapplic
 		Placement:        transformedInput.placement,
 		Revision:         &transformedInput.charmRevision,
 		Trust:            transformedInput.trust,
-		Resources:        resources,
+		Resources:        transformedInput.resources,
 		Storage:          transformedInput.storage,
 	})
-	return errors.Join(errs...)
+
+	if len(errs) != 0 {
+		return errors.Join(errs...)
+	}
+
+	fileSystem := osFilesystem{}
+	// Upload the provided local resources to Juju
+	uploadErr := uploadExistingPendingResources(deployInfo.Name, localPendingResources, fileSystem, resourceAPIClient)
+
+	if uploadErr != nil {
+		return uploadErr
+	}
+	return nil
 }
 
 // TODO (hml) 23-Feb-2024
-// Remove the funcationality associated with legacyDeploy
+// Remove the functionality associated with legacyDeploy
 // once the provider no longer supports a version of juju
 // before 3.3.
 func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connection, applicationAPIClient *apiapplication.Client, transformedInput transformedCreateApplicationInput) error {
@@ -669,9 +683,9 @@ func (c applicationsClient) baseToUse(modelconfigAPIClient *apimodelconfig.Clien
 	return supportedBases[0], nil
 }
 
-// processExpose is a local function that executes an expose request.
+// processExpose is a local function that executes an exposed request.
 // If the exposeConfig argument is nil it simply exits. If not,
-// an expose request is done populating the request arguments with
+// an exposed request is done populating the request arguments with
 // the endpoints, spaces, and cidrs contained in the exposeConfig
 // map.
 func (c applicationsClient) processExpose(applicationAPIClient ApplicationAPIClient, applicationName string, expose map[string]interface{}) error {
@@ -732,14 +746,14 @@ func splitCommaDelimitedList(list string) []string {
 
 // processResources is a helper function to process the charm
 // metadata and request the download of any additional resource.
-func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string, resources map[string]int) (map[string]string, error) {
+func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string, resourcesToUse map[string]string) (map[string]string, error) {
 	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL)
 	if err != nil {
 		return nil, typedError(err)
 	}
 
 	// check if we have resources to request
-	if len(charmInfo.Meta.Resources) == 0 && len(resources) == 0 {
+	if len(charmInfo.Meta.Resources) == 0 && len(resourcesToUse) == 0 {
 		return nil, nil
 	}
 
@@ -748,7 +762,7 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 		return nil, err
 	}
 
-	return addPendingResources(appName, charmInfo.Meta.Resources, resources, charmID, resourcesAPIClient)
+	return addPendingResources(appName, charmInfo.Meta.Resources, resourcesToUse, charmID, resourcesAPIClient)
 }
 
 // ReadApplicationWithRetryOnNotFound calls ReadApplication until
@@ -1072,10 +1086,10 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	if err != nil {
 		return nil, jujuerrors.Annotate(err, "failed to list application resources")
 	}
-	resourceRevisions := make(map[string]int)
+	usedResources := make(map[string]string)
 	for _, iResources := range resources {
 		for _, resource := range iResources.Resources {
-			resourceRevisions[resource.Name] = resource.Revision
+			usedResources[resource.Name] = strconv.Itoa(resource.Revision)
 		}
 	}
 
@@ -1094,7 +1108,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		Placement:        placement,
 		EndpointBindings: endpointBindings,
 		Storage:          storages,
-		Resources:        resourceRevisions,
+		Resources:        usedResources,
 	}
 
 	return response, nil
@@ -1402,7 +1416,7 @@ func (c applicationsClient) computeSetCharmConfig(
 }
 
 func resolveCharm(charmsAPIClient *apicharms.Client, curl *charm.URL, origin apicommoncharm.Origin) (*charm.URL, apicommoncharm.Origin, []corebase.Base, error) {
-	// Charm or bundle has been supplied as a URL so we resolve and
+	// Charm or bundle has been supplied as a URL, so we resolve and
 	// deploy using the store but pass in the origin command line
 	// argument so users can target a specific origin.
 	resolved, err := charmsAPIClient.ResolveCharms([]apicharms.CharmToResolve{{URL: curl, Origin: origin}})
@@ -1420,27 +1434,18 @@ func strPtr(in string) *string {
 	return &in
 }
 
-func (c applicationsClient) updateResources(appName string, resources map[string]int, charmsAPIClient *apicharms.Client,
+func (c applicationsClient) updateResources(appName string, resources map[string]string, charmsAPIClient *apicharms.Client,
 	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient) (map[string]string, error) {
 	meta, err := utils.GetMetaResources(charmID.URL, charmsAPIClient)
 	if err != nil {
 		return nil, err
 	}
-
-	resourceRevisions := make(map[string]string)
-	for k, v := range resources {
-		resourceRevisions[k] = strconv.Itoa(v)
-	}
-
-	// TODO (cderici): Provided resources for GetUpgradeResources are user inputs.
-	// It's a map[string]string that should come from the plan itself. We currently
-	// don't have a resources block in the charm.
 	filtered, err := utils.GetUpgradeResources(
 		charmID,
 		charmsAPIClient,
 		resourcesAPIClient,
 		appName,
-		resourceRevisions, // nil
+		resources,
 		meta,
 	)
 	if err != nil {
@@ -1453,45 +1458,86 @@ func (c applicationsClient) updateResources(appName string, resources map[string
 	return addPendingResources(appName, filtered, resources, charmID, resourcesAPIClient)
 }
 
-func addPendingResources(appName string, resourcesToBeAdded map[string]charmresources.Meta, resourceRevisions map[string]int,
-	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient) (map[string]string, error) {
-	pendingResources := []charmresources.Resource{}
-	for _, v := range resourcesToBeAdded {
-		aux := charmresources.Resource{
-			Meta:     v,
-			Origin:   charmresources.OriginStore,
-			Revision: -1,
-		}
-		if resourceRevisions != nil {
-			if revision, ok := resourceRevisions[v.Name]; ok {
-				aux.Revision = revision
+func addPendingResources(appName string, charmResourcesToAdd map[string]charmresources.Meta, resourcesToUse map[string]string,
+	charmID apiapplication.CharmID, resourceAPIClient ResourceAPIClient) (map[string]string, error) {
+	pendingResourcesforAdd := []charmresources.Resource{}
+	resourceIDs := map[string]string{}
+
+	for _, resourceMeta := range charmResourcesToAdd {
+		if resourcesToUse == nil {
+			// If there are no resource revisions, the Charm is deployed with
+			// default resources according to channel.
+			resourceFromCharmhub := charmresources.Resource{
+				Meta:     resourceMeta,
+				Origin:   charmresources.OriginStore,
+				Revision: -1,
 			}
+			pendingResourcesforAdd = append(pendingResourcesforAdd, resourceFromCharmhub)
+			continue
 		}
 
-		pendingResources = append(pendingResources, aux)
+		deployValue, ok := resourcesToUse[resourceMeta.Name]
+		if !ok {
+			continue
+		}
+		if providedRev, err := strconv.Atoi(deployValue); err == nil {
+			// A resource revision is provided
+			resourceFromCharmhub := charmresources.Resource{
+				Meta:   resourceMeta,
+				Origin: charmresources.OriginStore,
+				// If the resource is removed, providedRev is -1. Then, Charm
+				// is deployed with default resources according to channel.
+				// Otherwise, Charm is deployed with the provided revision.
+				Revision: providedRev,
+			}
+			pendingResourcesforAdd = append(pendingResourcesforAdd, resourceFromCharmhub)
+			continue
+		}
+
+		// A new resource to be uploaded by the ResourceApi client.
+		localResource := charmresources.Resource{
+			Meta:   resourceMeta,
+			Origin: charmresources.OriginUpload,
+		}
+		fileSystem := osFilesystem{}
+		t, typeParseErr := charmresources.ParseType(resourceMeta.Type.String())
+		if typeParseErr != nil {
+			return nil, typedError(typeParseErr)
+		}
+		r, openResErr := resourcecmd.OpenResource(deployValue, t, fileSystem.Open)
+		if openResErr != nil {
+			return nil, typedError(openResErr)
+		}
+		toRequestUpload, err := resourceAPIClient.UploadPendingResource(appName, localResource, deployValue, r)
+		if err != nil {
+			return nil, typedError(err)
+		}
+		// Add the resource name and the corresponding UUID to the resources map.
+		resourceIDs[resourceMeta.Name] = toRequestUpload
 	}
 
-	resourcesReq := apiresources.AddPendingResourcesArgs{
+	if len(pendingResourcesforAdd) == 0 {
+		return resourceIDs, nil
+	}
+
+	resourcesReqforAdd := apiresources.AddPendingResourcesArgs{
 		ApplicationID: appName,
 		CharmID: apiresources.CharmID{
 			URL:    charmID.URL,
 			Origin: charmID.Origin,
 		},
-		Resources: pendingResources,
+		Resources: pendingResourcesforAdd,
 	}
-
-	toRequest, err := resourcesAPIClient.AddPendingResources(resourcesReq)
+	toRequestAdd, err := resourceAPIClient.AddPendingResources(resourcesReqforAdd)
 	if err != nil {
 		return nil, typedError(err)
 	}
-
-	// now build a map with the resource name and the corresponding UUID
-	toReturn := map[string]string{}
-	for i, argsResource := range pendingResources {
-		toReturn[argsResource.Meta.Name] = toRequest[i]
+	// Add the resource name and the corresponding UUID to the resources map
+	for i, argsResource := range pendingResourcesforAdd {
+		resourceIDs[argsResource.Meta.Name] = toRequestAdd[i]
 	}
 
-	return toReturn, nil
+	return resourceIDs, nil
 }
 
 func computeUpdatedBindings(modelDefaultSpace string, currentBindings map[string]string, inputBindings map[string]string, appName string) (params.ApplicationMergeBindingsArgs, error) {

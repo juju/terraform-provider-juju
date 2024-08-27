@@ -172,7 +172,7 @@ func TestAcc_ResourceApplication_UpdatesRevisionConfig(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, appName, 88, "", "", -1),
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, appName, 88, "", "", ""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
 					resource.TestCheckResourceAttr("juju_application."+appName, "charm.#", "1"),
@@ -181,7 +181,7 @@ func TestAcc_ResourceApplication_UpdatesRevisionConfig(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, appName, 96, configParamName, "", -1),
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, appName, 96, configParamName, "", ""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application."+appName, "charm.0.revision", "96"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "config."+configParamName, configParamName+"-value"),
@@ -233,21 +233,21 @@ func TestAcc_ResourceRevisionUpdatesLXD(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "foo-file", 4),
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "foo-file", "4"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "4"),
 				),
 			},
 			{
 				// change resource revision to 3
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "foo-file", 3),
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "foo-file", "3"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "3"),
 				),
 			},
 			{
 				// change back to 4
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "foo-file", 4),
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "foo-file", "4"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "4"),
 				),
@@ -267,13 +267,13 @@ func TestAcc_ResourceRevisionAddedToPlanLXD(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 20, "", "", -1),
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 20, "", "", ""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.juju-qa-test", "resources"),
 				),
 			},
 			{
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "foo-file", 4),
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "foo-file", "4"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "4"),
 				),
@@ -294,14 +294,14 @@ func TestAcc_ResourceRevisionRemovedFromPlanLXD(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// we specify the resource revision 4
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 20, "", "foo-file", 4),
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 20, "", "foo-file", "4"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "4"),
 				),
 			},
 			{
 				// then remove the resource revision and update the charm revision
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "", -1),
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "juju-qa-test", 21, "", "", ""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.juju-qa-test", "resources"),
 				),
@@ -321,23 +321,190 @@ func TestAcc_ResourceRevisionUpdatesMicrok8s(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "postgresql-k8s", 20, "", "postgresql-image", 152),
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "postgresql-k8s", 20, "", "postgresql-image", "152"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.postgresql-k8s", "resources.postgresql-image", "152"),
 				),
 			},
 			{
 				// change resource revision to 151
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "postgresql-k8s", 20, "", "postgresql-image", 151),
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "postgresql-k8s", 20, "", "postgresql-image", "151"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.postgresql-k8s", "resources.postgresql-image", "151"),
 				),
 			},
 			{
 				// change back to 152
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "postgresql-k8s", 20, "", "postgresql-image", 152),
+				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "postgresql-k8s", 20, "", "postgresql-image", "152"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.postgresql-k8s", "resources.postgresql-image", "152"),
+				),
+			},
+		},
+	})
+}
+
+func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with Microk8s")
+	}
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Skipf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.0.3") < 0 {
+		t.Skipf("%s is not set or is below 3.0.3", TestJujuAgentVersion)
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-custom-resource-updates-microk8s")
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// deploy charm without custom resource
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.0/stable"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
+				),
+			},
+			{
+				// Add a custom resource
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/stable", "grafana-image", "gatici/grafana:10"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:10"),
+				),
+				ExpectNonEmptyPlan: true,
+			},
+			{
+				// Add another custom resource
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/stable", "grafana-image", "gatici/grafana:9"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:9"),
+				),
+				ExpectNonEmptyPlan: true,
+			},
+			{
+				// Add resource revision
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/stable", "grafana-image", "61"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "61"),
+				),
+			},
+			{
+				// Remove resource revision
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.0/stable"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
+				),
+			},
+		},
+	})
+}
+
+func TestAcc_CustomResourceUpdatesMicrok8s(t *testing.T) {
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with Microk8s")
+	}
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Skipf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.0.3") < 0 {
+		t.Skipf("%s is not set or is below 3.0.3", TestJujuAgentVersion)
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-custom-resource-updates-microk8s")
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// Deploy charm with a custom resource
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/edge", "grafana-image", "gatici/grafana:9"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:9"),
+				),
+				ExpectNonEmptyPlan: true,
+			},
+			{
+				// Keep charm channel and update resource to another custom image
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/edge", "grafana-image", "gatici/grafana:10"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:10"),
+				),
+				ExpectNonEmptyPlan: true,
+			},
+			{
+				// Update charm channel and update resource to a revision
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/stable", "grafana-image", "59"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "59"),
+				),
+			},
+			{
+				// Update charm channel and keep resource revision
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/beta", "grafana-image", "59"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "59"),
+				),
+			},
+			{
+				// Keep charm channel and remove resource revision
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.0/beta"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
+				),
+			},
+		},
+	})
+}
+
+func TestAcc_CustomResourcesRemovedFromPlanMicrok8s(t *testing.T) {
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with Microk8s")
+	}
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Skipf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.0.3") < 0 {
+		t.Skipf("%s is not set or is below 3.0.3", TestJujuAgentVersion)
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-custom-resource-updates-microk8s")
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// Deploy charm with a custom resource
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/edge", "grafana-image", "gatici/grafana:9"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:9"),
+				),
+				ExpectNonEmptyPlan: true,
+			},
+			{
+				// Keep charm channel and remove custom resource
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.0/edge"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
+				),
+			},
+			{
+				// Keep charm channel and add resource revision
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/edge", "grafana-image", "60"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "60"),
+				),
+			},
+			{
+				// Update charm channel and keep resource revision
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/stable", "grafana-image", "60"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "60"),
+				),
+			},
+			{
+				// Update charm channel and remove resource revision
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.0/beta"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
 			},
 		},
@@ -627,7 +794,7 @@ func testAccResourceApplicationBasic(modelName, appName string) string {
 	}
 }
 
-func testAccResourceApplicationWithRevisionAndConfig(modelName, appName string, revision int, configParamName string, resourceName string, resourceRevision int) string {
+func testAccResourceApplicationWithRevisionAndConfig(modelName, appName string, revision int, configParamName string, resourceName string, resourceRevision string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceApplicationWithRevisionAndConfig",
 		`
@@ -667,6 +834,53 @@ resource "juju_application" "{{.AppName}}" {
 			"ResourceParamName":     resourceName,
 			"ResourceParamRevision": resourceRevision,
 		})
+}
+
+func testAccResourceApplicationWithCustomResources(modelName, channel string, resourceName string, customResource string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model = juju_model.this.name
+  name = "test-app"
+  charm {
+    name     = "grafana-k8s"
+	channel  = "%s"
+  }
+  trust = true
+  expose{}
+  resources = {
+    "%s" = "%s"
+  }
+  config = {
+    juju-external-hostname="myhostname"
+  }
+}
+`, modelName, channel, resourceName, customResource)
+}
+
+func testAccResourceApplicationWithoutCustomResources(modelName, channel string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model = juju_model.this.name
+  name = "test-app"
+  charm {
+    name     = "grafana-k8s"
+	channel  = "%s"
+  }
+  trust = true
+  expose{}
+  config = {
+    juju-external-hostname="myhostname"
+  }
+}
+`, modelName, channel)
 }
 
 func testAccResourceApplicationUpdates(modelName string, units int, expose bool, hostname string) string {
