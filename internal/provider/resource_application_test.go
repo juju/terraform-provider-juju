@@ -846,7 +846,7 @@ resource "juju_application" "this" {
   model = juju_model.this.name
   name = "test-app"
   charm {
-    name     = "sdcore-ausf-k8s"
+    name     = "grafana-k8s"
 	channel  = "%s"
   }
   trust = true
