@@ -9,8 +9,12 @@ import (
 	"fmt"
 	"testing"
 
+	charmresources "github.com/juju/charm/v12/resource"
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
+	apiapplication "github.com/juju/juju/api/client/application"
+	apicharm "github.com/juju/juju/api/common/charm"
+	corebase "github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/resources"
@@ -381,6 +385,313 @@ func (s *ApplicationSuite) TestReadApplicationRetryNotFoundStorageNotFoundError(
 	s.Assert().Equal("stable", resp.Channel)
 	s.Assert().Equal(5, resp.Revision)
 	s.Assert().Equal("ubuntu@22.04", resp.Base)
+}
+
+// TestAddPendingResourceCustomImageResourceProvidedCharmResourcesToAddExistsUploadPendingResourceCalled
+// tests the case where charm has one image resources and one custom resource is provided.
+// ResourceAPIClient.UploadPendingResource are is called but ResourceAPIClient.AddPendingResource is not called
+// One resource ID is returned in the resource list.
+func (s *ApplicationSuite) TestAddPendingResourceCustomImageResourceProvidedCharmResourcesToAddExistsUploadPendingResourceCalled() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+
+	appName := "testapplication"
+	deployValue := "ausf-image"
+	path := "testrepo/udm/1:4"
+	meta := charmresources.Meta{
+		Name: deployValue,
+		Type: charmresources.TypeContainerImage,
+		Path: path,
+	}
+	ausfResourceID := "1111222"
+	charmResourcesToAdd := make(map[string]charmresources.Meta)
+	charmResourcesToAdd["ausf-image"] = meta
+	resourcesToUse := make(map[string]string)
+	resourcesToUse["ausf-image"] = "gatici/sdcore-ausf:1.4"
+	revision := 433
+	track := "1.5"
+	url := "ch:amd64/jammy/sdcore-ausf-k8s-433"
+	charmOrigin := apicharm.Origin{
+		Source:       "charm-hub",
+		ID:           "3V9Af7N3QcR4WdGiyF0fvZuJUSF7oMYe",
+		Hash:         "e7b3ff9d328738861b701cd61ea7dd3670e74f5419c3f48c4ac67b10b307b888",
+		Risk:         "edge",
+		Revision:     &revision,
+		Track:        &track,
+		Architecture: "amd64",
+		Base: corebase.Base{
+			OS: "ubuntu",
+			Channel: corebase.Channel{
+				Track: "22.04",
+				Risk:  "stable",
+			},
+		},
+		InstanceKey: "_JsD_6xYr5kYP-gBz6wJ6lt6N1L-zslpIkXAUS-bu4w",
+	}
+	charmID := apiapplication.CharmID{
+		URL:    url,
+		Origin: charmOrigin,
+	}
+
+	aExp := s.mockResourceAPIClient.EXPECT()
+	expectedResourceIDs := map[string]string{"ausf-image": ausfResourceID}
+
+	aExp.UploadPendingResource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ausfResourceID, nil)
+
+	resourceIDs, err := addPendingResources(appName, charmResourcesToAdd, resourcesToUse, charmID, s.mockResourceAPIClient)
+	s.Assert().Equal(resourceIDs, expectedResourceIDs, "Resource IDs does not match.")
+	s.Assert().Equal(nil, err, "Error is not expected.")
+}
+
+// TestAddPendingResourceCustomImageResourceProvidedNoCharmResourcesToAddEmptyResourceListReturned
+// tests the case where charm do not have image resources and one custom resource is provided.
+// ResourceAPIClient.AddPendingResource and ResourceAPIClient.UploadPendingResource are not called
+// Empty resource list is returned.
+func (s *ApplicationSuite) TestAddPendingResourceCustomImageResourceProvidedNoCharmResourcesToAddEmptyResourceListReturned() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+
+	appName := "testapplication"
+	charmResourcesToAdd := make(map[string]charmresources.Meta)
+	resourcesToUse := make(map[string]string)
+	resourcesToUse["ausf-image"] = "gatici/sdcore-ausf:1.4"
+	revision := 433
+	track := "1.5"
+	url := "ch:amd64/jammy/sdcore-ausf-k8s-433"
+	charmOrigin := apicharm.Origin{
+		Source:       "charm-hub",
+		ID:           "3V9Af7N3QcR4WdGiyF0fvZuJUSF7oMYe",
+		Hash:         "e7b3ff9d328738861b701cd61ea7dd3670e74f5419c3f48c4ac67b10b307b888",
+		Risk:         "edge",
+		Revision:     &revision,
+		Track:        &track,
+		Architecture: "amd64",
+		Base: corebase.Base{
+			OS: "ubuntu",
+			Channel: corebase.Channel{
+				Track: "22.04",
+				Risk:  "stable",
+			},
+		},
+		InstanceKey: "_JsD_6xYr5kYP-gBz6wJ6lt6N1L-zslpIkXAUS-bu4w",
+	}
+
+	charmID := apiapplication.CharmID{
+		URL:    url,
+		Origin: charmOrigin,
+	}
+
+	expectedResourceIDs := map[string]string{}
+	resourceIDs, err := addPendingResources(appName, charmResourcesToAdd, resourcesToUse, charmID, s.mockResourceAPIClient)
+	s.Assert().Equal(resourceIDs, expectedResourceIDs, "Resource IDs does not match.")
+	s.Assert().Equal(nil, err, "Error is not expected.")
+}
+
+// TestAddPendingResourceOneCustomResourceOneRevisionProvidedMultipleCharmResourcesToAddUploadPendingResourceAndAddPendingResourceCalled
+// tests the case where charm has multiple image resources and one revision number and one custom resource is provided for different charm resources.
+// ResourceAPIClient.AddPendingResource and ResourceAPIClient.UploadPendingResource is called.
+func (s *ApplicationSuite) TestAddPendingResourceOneCustomResourceOneRevisionProvidedMultipleCharmResourcesToAddUploadPendingResourceAndAddPendingResourceCalled() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+
+	appName := "testapplication"
+	ausfDeployValue := "ausf-image"
+	udmDeployValue := "udm-image"
+	pathAusf := "testrepo/ausf/1:4"
+	pathUdm := "testrepo/udm/1:4"
+	metaAusf := charmresources.Meta{
+		Name: ausfDeployValue,
+		Type: charmresources.TypeContainerImage,
+		Path: pathAusf,
+	}
+	metaUdm := charmresources.Meta{
+		Name: udmDeployValue,
+		Type: charmresources.TypeContainerImage,
+		Path: pathUdm,
+	}
+	ausfResourceID := "1111222"
+	udmResourceID := "1111444"
+	charmResourcesToAdd := make(map[string]charmresources.Meta)
+	charmResourcesToAdd["ausf-image"] = metaUdm
+	charmResourcesToAdd["udm-image"] = metaAusf
+	resourcesToUse := make(map[string]string)
+	resourcesToUse["ausf-image"] = "gatici/sdcore-ausf:1.4"
+	resourcesToUse["udm-image"] = "3"
+	revision := 433
+	track := "1.5"
+	url := "ch:amd64/jammy/sdcore-ausf-k8s-433"
+	charmOrigin := apicharm.Origin{
+		Source:       "charm-hub",
+		ID:           "3V9Af7N3QcR4WdGiyF0fvZuJUSF7oMYe",
+		Hash:         "e7b3ff9d328738861b701cd61ea7dd3670e74f5419c3f48c4ac67b10b307b888",
+		Risk:         "edge",
+		Revision:     &revision,
+		Track:        &track,
+		Architecture: "amd64",
+		Base: corebase.Base{
+			OS: "ubuntu",
+			Channel: corebase.Channel{
+				Track: "22.04",
+				Risk:  "stable",
+			},
+		},
+		InstanceKey: "_JsD_6xYr5kYP-gBz6wJ6lt6N1L-zslpIkXAUS-bu4w",
+	}
+	charmID := apiapplication.CharmID{
+		URL:    url,
+		Origin: charmOrigin,
+	}
+
+	aExp := s.mockResourceAPIClient.EXPECT()
+	expectedResourceIDs := map[string]string{"ausf-image": ausfResourceID, "udm-image": udmResourceID}
+
+	aExp.UploadPendingResource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(ausfResourceID, nil)
+	aExp.AddPendingResources(gomock.Any()).Return([]string{"1111444"}, nil)
+
+	resourceIDs, err := addPendingResources(appName, charmResourcesToAdd, resourcesToUse, charmID, s.mockResourceAPIClient)
+	s.Assert().Equal(resourceIDs, expectedResourceIDs, "Resource IDs does not match.")
+	s.Assert().Equal(nil, err, "Error is not expected.")
+}
+
+// TestAddPendingResourceOneRevisionProvidedMultipleCharmResourcesToAddOnlyAddPendingResourceCalled
+// tests the case where charm has multiple image resources and revision number is provided for one resource.
+// Only ResourceAPIClient.AddPendingResource called, ResourceAPIClient.UploadPendingResource is not called.
+func (s *ApplicationSuite) TestAddPendingResourceOneRevisionProvidedMultipleCharmResourcesToAddOnlyAddPendingResourceCalled() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+
+	appName := "testapplication"
+	ausfDeployValue := "ausf-image"
+	udmDeployValue := "udm-image"
+	pathAusf := "testrepo/ausf/1:4"
+	pathUdm := "testrepo/udm/1:4"
+	metaAusf := charmresources.Meta{
+		Name: ausfDeployValue,
+		Type: charmresources.TypeContainerImage,
+		Path: pathAusf,
+	}
+	metaUdm := charmresources.Meta{
+		Name: udmDeployValue,
+		Type: charmresources.TypeContainerImage,
+		Path: pathUdm,
+	}
+	udmResourceID := "1111444"
+	charmResourcesToAdd := make(map[string]charmresources.Meta)
+	charmResourcesToAdd["ausf-image"] = metaUdm
+	charmResourcesToAdd["udm-image"] = metaAusf
+	resourcesToUse := make(map[string]string)
+	resourcesToUse["udm-image"] = "3"
+	revision := 433
+	track := "1.5"
+	url := "ch:amd64/jammy/sdcore-ausf-k8s-433"
+	charmOrigin := apicharm.Origin{
+		Source:       "charm-hub",
+		ID:           "3V9Af7N3QcR4WdGiyF0fvZuJUSF7oMYe",
+		Hash:         "e7b3ff9d328738861b701cd61ea7dd3670e74f5419c3f48c4ac67b10b307b888",
+		Risk:         "edge",
+		Revision:     &revision,
+		Track:        &track,
+		Architecture: "amd64",
+		Base: corebase.Base{
+			OS: "ubuntu",
+			Channel: corebase.Channel{
+				Track: "22.04",
+				Risk:  "stable",
+			},
+		},
+		InstanceKey: "_JsD_6xYr5kYP-gBz6wJ6lt6N1L-zslpIkXAUS-bu4w",
+	}
+	charmID := apiapplication.CharmID{
+		URL:    url,
+		Origin: charmOrigin,
+	}
+
+	aExp := s.mockResourceAPIClient.EXPECT()
+	expectedResourceIDs := map[string]string{"udm-image": udmResourceID}
+	aExp.AddPendingResources(gomock.Any()).Return([]string{udmResourceID}, nil)
+
+	resourceIDs, err := addPendingResources(appName, charmResourcesToAdd, resourcesToUse, charmID, s.mockResourceAPIClient)
+	s.Assert().Equal(resourceIDs, expectedResourceIDs, "Resource IDs does not match.")
+	s.Assert().Equal(nil, err, "Error is not expected.")
+}
+
+// TestUploadExistingPendingResourcesUploadSuccessful tests the case where ResourceAPIClient.Upload is successful.
+// Error is not returned.
+func (s *ApplicationSuite) TestUploadExistingPendingResourcesUploadSuccessful() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	appName := "testapplication"
+	resource := apiapplication.PendingResourceUpload{
+		Name:     "custom-image",
+		Filename: "myimage",
+		Type:     "oci-image",
+	}
+	var pendingResources []apiapplication.PendingResourceUpload
+	pendingResources = append(pendingResources, resource)
+	fileSystem := osFilesystem{}
+	aExp := s.mockResourceAPIClient.EXPECT()
+	aExp.Upload(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+
+	err := uploadExistingPendingResources(appName, pendingResources, fileSystem, s.mockResourceAPIClient)
+	s.Assert().Equal(nil, err, "Error is not expected.")
+}
+
+// TestUploadExistingPendingResourcesUploadFailedReturnError tests the case where ResourceAPIClient.Upload failed.
+// Returns error that upload failed for provided file name.
+func (s *ApplicationSuite) TestUploadExistingPendingResourcesUploadFailedReturnError() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	appName := "testapplication"
+	fileName := "my-image"
+	resource := apiapplication.PendingResourceUpload{
+		Name:     "custom-image",
+		Filename: fileName,
+		Type:     "oci-image",
+	}
+	var pendingResources []apiapplication.PendingResourceUpload
+	pendingResources = append(pendingResources, resource)
+	fileSystem := osFilesystem{}
+	aExp := s.mockResourceAPIClient.EXPECT()
+	aExp.Upload(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("upload failed for %s", fileName))
+
+	err := uploadExistingPendingResources(appName, pendingResources, fileSystem, s.mockResourceAPIClient)
+	s.Assert().Equal("upload failed for my-image", err.Error(), "Error is expected.")
+}
+
+// TestUploadExistingPendingResourcesResourceTypeUnknownReturnError tests the case where resource type is unknown.
+// ResourceAPIClient.Upload is not called and returns error that resource type is invalid.
+func (s *ApplicationSuite) TestUploadExistingPendingResourcesResourceTypeUnknownReturnError() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	appName := "testapplication"
+	var pendingResources []apiapplication.PendingResourceUpload
+	resource := apiapplication.PendingResourceUpload{
+		Name:     "custom-image",
+		Filename: "my-image",
+		Type:     "unknown",
+	}
+	pendingResources = append(pendingResources, resource)
+	fileSystem := osFilesystem{}
+	err := uploadExistingPendingResources(appName, pendingResources, fileSystem, s.mockResourceAPIClient)
+	s.Assert().Equal("invalid type unknown for pending resource custom-image: unsupported resource type \"unknown\"", err.Error(), "Error is expected.")
+}
+
+// TestUploadExistingPendingResourcesInvalidFileNameReturnError tests the case where file path is not valid.
+// ResourceAPIClient.Upload is not called and returns error that unable to open resource.
+func (s *ApplicationSuite) TestUploadExistingPendingResourcesInvalidFileNameReturnError() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	appName := "testapplication"
+	var pendingResources []apiapplication.PendingResourceUpload
+	resource := apiapplication.PendingResourceUpload{
+		Name:     "custom-image",
+		Filename: "",
+		Type:     "oci-image",
+	}
+	pendingResources = append(pendingResources, resource)
+	fileSystem := osFilesystem{}
+	err := uploadExistingPendingResources(appName, pendingResources, fileSystem, s.mockResourceAPIClient)
+	s.Assert().Equal("unable to open resource custom-image: filepath or registry path:  not valid", err.Error(), "Error is expected.")
 }
 
 // In order for 'go test' to run this suite, we need to create

@@ -409,7 +409,6 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient Applicatio
 		return uploadErr
 	}
 	return nil
-
 }
 
 // TODO (hml) 23-Feb-2024
