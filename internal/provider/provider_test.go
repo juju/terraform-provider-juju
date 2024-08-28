@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"runtime"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -172,9 +174,9 @@ func testAccPreCheck(t *testing.T) {
 		}
 	}
 	confResp := configureProvider(t, Provider)
-	assert.Equal(t, confResp.Diagnostics.HasError(), false)
+	require.Equal(t, confResp.Diagnostics.HasError(), false, fmt.Sprintf("provider configuration failed: %v", confResp.Diagnostics.Errors()))
 	testClient, ok := confResp.ResourceData.(*juju.Client)
-	assert.Truef(t, ok, "ResourceData, not of type juju client")
+	require.Truef(t, ok, "ResourceData, not of type juju client")
 	TestClient = testClient
 }
 
