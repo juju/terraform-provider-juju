@@ -842,7 +842,7 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 	return output, retryErr
 }
 
-func transformToStorageConstraints(
+func (c *applicationsClient) transformToStorageConstraints(
 	storageDetailsSlice []params.StorageDetails,
 	filesystemDetailsSlice []params.FilesystemDetails,
 	volumeDetailsSlice []params.VolumeDetails,
@@ -854,6 +854,14 @@ func transformToStorageConstraints(
 		switch storageDetails.Kind.String() {
 		case "filesystem":
 			for _, fd := range filesystemDetailsSlice {
+				if fd.Storage == nil {
+					c.Debugf("nil storage pointer for filesystems",
+						map[string]interface{}{
+							storageDetails.StorageTag: storageDetails.Status.Status.String(),
+							fd.FilesystemTag:          fd.Status.Status.String(),
+						})
+					continue
+				}
 				if fd.Storage.StorageTag == storageDetails.StorageTag {
 					// Cut PrefixStorage from the storage tag and `-NUMBER` suffix
 					storageLabel := getStorageLabel(storageDetails.StorageTag)
@@ -867,6 +875,14 @@ func transformToStorageConstraints(
 			}
 		case "block":
 			for _, vd := range volumeDetailsSlice {
+				if vd.Storage == nil {
+					c.Debugf("nil storage pointer for volumes",
+						map[string]interface{}{
+							storageDetails.StorageTag: storageDetails.Status.Status.String(),
+							vd.VolumeTag:              vd.Status.Status.String(),
+						})
+					continue
+				}
 				if vd.Storage.StorageTag == storageDetails.StorageTag {
 					storageLabel := getStorageLabel(storageDetails.StorageTag)
 					storageCounters[storageLabel]++
@@ -939,7 +955,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("no status returned for application: %s", input.AppName)
 	}
 
-	storages := transformToStorageConstraints(status.Storage, status.Filesystems, status.Volumes)
+	storages := c.transformToStorageConstraints(status.Storage, status.Filesystems, status.Volumes)
 
 	allocatedMachines := set.NewStrings()
 	for _, v := range appStatus.Units {
