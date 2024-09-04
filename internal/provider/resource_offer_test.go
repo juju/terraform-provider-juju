@@ -37,7 +37,7 @@ func TestAcc_ResourceOffer(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_integration.int", "model", destModelName),
 
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.int", "application.*",
-						map[string]string{"name": "apptwo", "endpoint": "db", "offer_url": ""}),
+						map[string]string{"name": "apptwo", "endpoint": "source", "offer_url": ""}),
 
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.int", "application.*",
 						map[string]string{"name": "", "endpoint": "", "offer_url": fmt.Sprintf("%v/%v.%v", "admin",
@@ -65,7 +65,7 @@ resource "juju_application" "appone" {
 	name  = "appone"
 
 	charm {
-		name = "postgresql"
+		name = "juju-qa-dummy-source"
 		base = "ubuntu@22.04"
 	}
 }
@@ -73,7 +73,7 @@ resource "juju_application" "appone" {
 resource "juju_offer" "offerone" {
 	model            = juju_model.modelone.name
 	application_name = juju_application.appone.name
-	endpoint         = "db"
+	endpoint         = "sink"
 }
 
 resource "juju_model" "modeldest" {
@@ -85,8 +85,8 @@ resource "juju_application" "apptwo" {
 	name = "apptwo"
 
 	charm {
-		name = "hello-juju"
-		base = "ubuntu@20.04"
+		name = "juju-qa-dummy-sink"
+		base = "ubuntu@22.04"
 	}
 }
 
@@ -95,6 +95,7 @@ resource "juju_integration" "int" {
 
 	application {
 		name = juju_application.apptwo.name
+		endpoint = "source"
 	}
 
 	application {
