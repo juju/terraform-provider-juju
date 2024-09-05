@@ -13,6 +13,7 @@ import (
 )
 
 func TestAcc_ResourceAccessModel(t *testing.T) {
+	SkipJAAS(t)
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 	userName2 := acctest.RandomWithPrefix("tfuser")
@@ -67,6 +68,7 @@ func TestAcc_ResourceAccessModel(t *testing.T) {
 }
 
 func TestAcc_ResourceAccessModel_UpgradeProvider(t *testing.T) {
+	SkipJAAS(t)
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
