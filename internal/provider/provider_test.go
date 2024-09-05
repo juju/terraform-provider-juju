@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -23,7 +24,10 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-const TestProviderStableVersion = "0.13.0"
+const (
+	TestProviderStableVersion = "0.13.0"
+	FastDestroyEnvKey         = "FAST_DESTROY"
+)
 
 // providerFactories are used to instantiate the Framework provider during
 // acceptance testing.
@@ -43,6 +47,13 @@ func init() {
 	frameworkProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev")),
 	}
+	if _, ok := os.LookupEnv(FastDestroyEnvKey); ok {
+		setupFastDestroy()
+	}
+}
+
+func setupFastDestroy() {
+	juju.OfferWaitUntilForceDestroy = 30 * time.Second
 }
 
 func TestProviderConfigure(t *testing.T) {

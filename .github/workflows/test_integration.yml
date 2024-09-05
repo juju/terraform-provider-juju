@@ -79,6 +79,7 @@ jobs:
         run: |
           CONTROLLER=$(juju whoami --format yaml | yq .controller)
 
+          echo "FAST_DESTROY=true" >> $GITHUB_ENV
           echo "JUJU_AGENT_VERSION=$(juju show-controller | yq .$CONTROLLER.details.agent-version |tr -d '"')" >> $GITHUB_ENV
           echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq .$CONTROLLER.details.api-endpoints | yq -r '. | join(",")')" >> $GITHUB_ENV
           echo "JUJU_USERNAME=$(juju show-controller | yq .$CONTROLLER.account.user)"  >> $GITHUB_ENV

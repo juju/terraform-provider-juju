@@ -28,6 +28,13 @@ const (
 	OfferApiTickWait = time.Second * 5
 )
 
+var (
+	// OfferWaitUntilForceDestroy decides how long to wait for all connections
+	// on an offer to go away before destroying the offer with force.
+	// Override this from tests to speed things up.
+	OfferWaitUntilForceDestroy = 5 * time.Minute
+)
+
 type offersClient struct {
 	SharedClient
 }
@@ -197,9 +204,9 @@ func (c offersClient) DestroyOffer(input *DestroyOfferInput) error {
 	}
 
 	forceDestroy := false
-	//This code loops until it detects 0 connections in the offer or 3 minutes elapses
+	//This code loops until it detects 0 connections in the offer or a deadline elapses.
 	if len(offer.Connections) > 0 {
-		end := time.Now().Add(5 * time.Minute)
+		end := time.Now().Add(OfferWaitUntilForceDestroy)
 		for ok := true; ok; ok = len(offer.Connections) > 0 {
 			//if we have been failing to destroy offer for 5 minutes then force destroy
 			//TODO: investigate cleaner solution (acceptance tests fail even if timeout set to 20m)
