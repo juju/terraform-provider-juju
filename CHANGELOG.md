@@ -1,3 +1,21 @@
+## 0.14.0 (September 9, 2024)
+
+NOTES:
+* **This release requires juju controller version 2.9.49 or later juju.**
+* This release uses juju client api code from the juju 3.5.1 release.
+
+ENHANCEMENTS:
+
+* Allow applications to specify charm resources as oci-image urls, in addition to revisions.
+
+BUG FIXES:
+
+* fix: bugs 535 and 539 only find storage for application being read by @hmlanigan in #557
+* fix (application): do no panic on nil pointer by @hmlanigan in #563
+* fix(constraints): ensure constraints are non-null by @jack-w-shaw in #556
+* fix(storagedirective): fix storage directive validator by @anvial in #538
+* fix(application): update resource example to use correct charm storage by @anvial in #533
+
 ## 0.13.0 (July 15, 2024)
 
 NOTES:
