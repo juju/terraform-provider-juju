@@ -68,6 +68,12 @@ func toJaasTuple(tuple params.RelationshipTuple) JaasTuple {
 	}
 }
 
+// JaasGroup represents a JAAS group used for permissions management.
+type JaasGroup struct {
+	Name string
+	UUID string
+}
+
 // AddRelations attempts to create the provided slice of relationship tuples.
 // An empty slice of tuples will return an error.
 func (jc *jaasClient) AddRelations(tuples []JaasTuple) error {
@@ -141,4 +147,65 @@ func (jc *jaasClient) ReadRelations(ctx context.Context, tuple *JaasTuple) ([]Ja
 		default:
 		}
 	}
+}
+
+// AddGroup attempts to create a new group with the provided name.
+func (jc *jaasClient) AddGroup(ctx context.Context, name string) (string, error) {
+	conn, err := jc.GetConnection(nil)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := jc.getJaasApiClient(conn)
+	req := params.AddGroupRequest{Name: name}
+
+	resp, err := client.AddGroup(&req)
+	if err != nil {
+		return "", err
+	}
+	return resp.UUID, nil
+}
+
+// ReadGroup attempts to read a group that matches the provided UUID.
+func (jc *jaasClient) ReadGroup(ctx context.Context, uuid string) (*JaasGroup, error) {
+	conn, err := jc.GetConnection(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := jc.getJaasApiClient(conn)
+	req := params.GetGroupRequest{UUID: uuid}
+	resp, err := client.GetGroup(&req)
+	if err != nil {
+		return nil, err
+	}
+	return &JaasGroup{Name: resp.Name, UUID: resp.UUID}, nil
+}
+
+// RenameGroup attempts to rename a group that matches the provided name.
+func (jc *jaasClient) RenameGroup(ctx context.Context, name, newName string) error {
+	conn, err := jc.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := jc.getJaasApiClient(conn)
+	req := params.RenameGroupRequest{Name: name, NewName: newName}
+	return client.RenameGroup(&req)
+}
+
+// RemoveGroup attempts to remove a group that matches the provided name.
+func (jc *jaasClient) RemoveGroup(ctx context.Context, name string) error {
+	conn, err := jc.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := jc.getJaasApiClient(conn)
+	req := params.RemoveGroupRequest{Name: name}
+	return client.RemoveGroup(&req)
 }

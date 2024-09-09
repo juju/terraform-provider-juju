@@ -99,6 +99,8 @@ github.com/canonical/go-dqlite v1.21.0 h1:4gLDdV2GF+vg0yv9Ff+mfZZNQ1JGhnQ3GnS2Ge
 github.com/canonical/go-dqlite v1.21.0/go.mod h1:Uvy943N8R4CFUAs59A1NVaziWY9nJ686lScY7ywurfg=
 github.com/canonical/jimm-go-sdk/v3 v3.0.3 h1:m8pgboAIZ3NdT/SA1f4kgRq1XO9D2IzMD4gd+TejC8E=
 github.com/canonical/jimm-go-sdk/v3 v3.0.3/go.mod h1:xcJrWTpLHSw3Z16/1Zcvh31awlwIzjXdrYUYCVZhc5s=
+github.com/canonical/jimm-go-sdk/v3 v3.0.4 h1:cWNL6GIFbwB2W//PaOTjoVuRVloQ8P+3YIm26KiBs10=
+github.com/canonical/jimm-go-sdk/v3 v3.0.4/go.mod h1:xcJrWTpLHSw3Z16/1Zcvh31awlwIzjXdrYUYCVZhc5s=
 github.com/canonical/lxd v0.0.0-20231214113525-e676fc63c50a h1:Tfo/MzXK5GeG7gzSHqxGeY/669Mhh5ea43dn1mRDnk8=
 github.com/canonical/lxd v0.0.0-20231214113525-e676fc63c50a/go.mod h1:UxfHGKFoRjgu1NUA9EFiR++dKvyAiT0h9HT0ffMlzjc=
 github.com/cenkalti/backoff/v3 v3.0.0 h1:ske+9nBpD9qZsTBoF41nW5L+AIuFBKMeze18XQ3eG1c=

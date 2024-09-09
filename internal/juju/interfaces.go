@@ -83,4 +83,8 @@ type JaasAPIClient interface {
 	ListRelationshipTuples(req *jaasparams.ListRelationshipTuplesRequest) (*jaasparams.ListRelationshipTuplesResponse, error)
 	AddRelation(req *jaasparams.AddRelationRequest) error
 	RemoveRelation(req *jaasparams.RemoveRelationRequest) error
+	AddGroup(req *jaasparams.AddGroupRequest) (jaasparams.AddGroupResponse, error)
+	GetGroup(req *jaasparams.GetGroupRequest) (jaasparams.GetGroupResponse, error)
+	RenameGroup(req *jaasparams.RenameGroupRequest) error
+	RemoveGroup(req *jaasparams.RemoveGroupRequest) error
 }

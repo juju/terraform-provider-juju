@@ -707,6 +707,21 @@ func (m *MockJaasAPIClient) EXPECT() *MockJaasAPIClientMockRecorder {
 	return m.recorder
 }
 
+// AddGroup mocks base method.
+func (m *MockJaasAPIClient) AddGroup(arg0 *params.AddGroupRequest) (params.AddGroupResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddGroup", arg0)
+	ret0, _ := ret[0].(params.AddGroupResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddGroup indicates an expected call of AddGroup.
+func (mr *MockJaasAPIClientMockRecorder) AddGroup(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddGroup", reflect.TypeOf((*MockJaasAPIClient)(nil).AddGroup), arg0)
+}
+
 // AddRelation mocks base method.
 func (m *MockJaasAPIClient) AddRelation(arg0 *params.AddRelationRequest) error {
 	m.ctrl.T.Helper()
@@ -719,6 +734,21 @@ func (m *MockJaasAPIClient) AddRelation(arg0 *params.AddRelationRequest) error {
 func (mr *MockJaasAPIClientMockRecorder) AddRelation(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRelation", reflect.TypeOf((*MockJaasAPIClient)(nil).AddRelation), arg0)
+}
+
+// GetGroup mocks base method.
+func (m *MockJaasAPIClient) GetGroup(arg0 *params.GetGroupRequest) (params.GetGroupResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetGroup", arg0)
+	ret0, _ := ret[0].(params.GetGroupResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetGroup indicates an expected call of GetGroup.
+func (mr *MockJaasAPIClientMockRecorder) GetGroup(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroup", reflect.TypeOf((*MockJaasAPIClient)(nil).GetGroup), arg0)
 }
 
 // ListRelationshipTuples mocks base method.
@@ -736,6 +766,20 @@ func (mr *MockJaasAPIClientMockRecorder) ListRelationshipTuples(arg0 any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRelationshipTuples", reflect.TypeOf((*MockJaasAPIClient)(nil).ListRelationshipTuples), arg0)
 }
 
+// RemoveGroup mocks base method.
+func (m *MockJaasAPIClient) RemoveGroup(arg0 *params.RemoveGroupRequest) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveGroup", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveGroup indicates an expected call of RemoveGroup.
+func (mr *MockJaasAPIClientMockRecorder) RemoveGroup(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveGroup", reflect.TypeOf((*MockJaasAPIClient)(nil).RemoveGroup), arg0)
+}
+
 // RemoveRelation mocks base method.
 func (m *MockJaasAPIClient) RemoveRelation(arg0 *params.RemoveRelationRequest) error {
 	m.ctrl.T.Helper()
@@ -748,4 +792,18 @@ func (m *MockJaasAPIClient) RemoveRelation(arg0 *params.RemoveRelationRequest) e
 func (mr *MockJaasAPIClientMockRecorder) RemoveRelation(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveRelation", reflect.TypeOf((*MockJaasAPIClient)(nil).RemoveRelation), arg0)
+}
+
+// RenameGroup mocks base method.
+func (m *MockJaasAPIClient) RenameGroup(arg0 *params.RenameGroupRequest) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RenameGroup", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RenameGroup indicates an expected call of RenameGroup.
+func (mr *MockJaasAPIClientMockRecorder) RenameGroup(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RenameGroup", reflect.TypeOf((*MockJaasAPIClient)(nil).RenameGroup), arg0)
 }
