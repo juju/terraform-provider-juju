@@ -52,6 +52,13 @@ func (a *accessModelResource) Metadata(_ context.Context, req resource.MetadataR
 	resp.TypeName = req.ProviderTypeName + "_access_model"
 }
 
+// ConfigValidators sets validators for the resource.
+func (r *accessModelResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		NewAvoidJAASValidator(r.client, "juju_jaas_access_model"),
+	}
+}
+
 func (a *accessModelResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A resource that represent a Juju Access Model.",

@@ -106,6 +106,30 @@ func TestAcc_ResourceAccessModel_UpgradeProvider(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceAccessModel_ErrorWhenUsedWithJAAS(t *testing.T) {
+	OnlyTestAgainstJAAS(t)
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccResourceAccessModelFixedUser(),
+				ExpectError: regexp.MustCompile("This resource is not supported with JAAS"),
+			},
+		},
+	})
+}
+
+func testAccResourceAccessModelFixedUser() string {
+	return `
+resource "juju_access_model" "test" {
+  access = "write"
+  model = "foo"
+  users = ["bob"]
+}`
+}
+
 func testAccResourceAccessModel(userName, userPassword, modelName, access string) string {
 	return fmt.Sprintf(`
 resource "juju_user" "test-user" {

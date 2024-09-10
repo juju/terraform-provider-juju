@@ -51,6 +51,14 @@ func (r *userResource) Metadata(ctx context.Context, req resource.MetadataReques
 	resp.TypeName = req.ProviderTypeName + "_user"
 }
 
+// ConfigValidators sets validators for the resource.
+func (r *userResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		// There is no JAAS object that replaces the user resource since JAAS users come from an external identity provider.
+		NewAvoidJAASValidator(r.client, ""),
+	}
+}
+
 func (r *userResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	// The User resource maps to a juju user that is operated via
 	// `juju add-user`, `juju remove-user`

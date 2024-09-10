@@ -18,7 +18,13 @@ var _ resource.ConfigValidator = &RequiresJAASValidator{}
 
 // RequiresJAASValidator enforces that the resource can only be used with JAAS.
 type RequiresJAASValidator struct {
-	Client *juju.Client
+	client *juju.Client
+}
+
+func NewRequiresJAASValidator(client *juju.Client) RequiresJAASValidator {
+	return RequiresJAASValidator{
+		client: client,
+	}
 }
 
 // Description returns a plain text description of the validator's behavior, suitable for a practitioner to understand its impact.
@@ -47,7 +53,7 @@ func (v RequiresJAASValidator) validate() diag.Diagnostics {
 
 	// Return without error if a nil client is detected.
 	// This is possible since validation is called at various points throughout resource creation.
-	if v.Client != nil && !v.Client.IsJAAS() {
+	if v.client != nil && !v.client.IsJAAS() {
 		diags.AddError("Attempted use of resource without JAAS.",
 			"This resource can only be used with JAAS, which offers additional enterprise features - see https://jaas.ai/ for more details.")
 	}
