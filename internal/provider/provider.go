@@ -393,8 +393,9 @@ func checkClientErr(err error, config juju.ControllerConfiguration) diag.Diagnos
 	var diags diag.Diagnostics
 
 	x509error := &x509.UnknownAuthorityError{}
+	x509HostError := &x509.HostnameError{}
 	netOpError := &net.OpError{}
-	if errors.As(err, x509error) {
+	if errors.As(err, x509error) || errors.As(err, x509HostError) {
 		errDetail = "Verify the ca_certificate property set on the provider"
 
 		if config.CACert == "" {
