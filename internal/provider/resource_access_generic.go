@@ -51,6 +51,7 @@ type Setter interface {
 type resourcer interface {
 	Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessModel, names.Tag)
 	Save(ctx context.Context, setter Setter, info genericJAASAccessModel, tag names.Tag) diag.Diagnostics
+	ImportHint() string
 }
 
 // genericJAASAccessResource is a generic resource that can be used for creating access rules with JAAS.
@@ -74,6 +75,9 @@ type genericJAASAccessModel struct {
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
 	Access          types.String `tfsdk:"access"`
+
+	// ID required for imports
+	ID types.String `tfsdk:"id"`
 }
 
 // ConfigValidators sets validators for the resource.
@@ -135,6 +139,13 @@ func (r *genericJAASAccessResource) partialAccessSchema() map[string]schema.Attr
 				setvalidator.ValueStringsAre(stringvalidator.RegexMatches(avoidAtSymbolRe, "service account should not contain an @ symbol")),
 			},
 		},
+		// ID required for imports
+		"id": schema.StringAttribute{
+			Computed: true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseStateForUnknown(),
+			},
+		},
 	}
 }
 
@@ -185,6 +196,7 @@ func (resource *genericJAASAccessResource) Create(ctx context.Context, req resou
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access relationships for %s, got error: %s", targetTag.String(), err))
 		return
 	}
+	plan.ID = types.StringValue(newJaasAccessID(targetTag, plan.Access.ValueString()))
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resource.targetResource.Save(ctx, &resp.State, plan, targetTag)...)
 }
@@ -196,30 +208,41 @@ func (resource *genericJAASAccessResource) Read(ctx context.Context, req resourc
 		addClientNotConfiguredError(&resp.Diagnostics, resource.resourceLogName, "read")
 		return
 	}
+
 	// Read Terraform configuration from the request into the resource model
-	state, targetTag := resource.info(ctx, req.State, &resp.Diagnostics)
+	// Ignore the target tag as it will come from the ID
+	state, _ := resource.info(ctx, req.State, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Create a tuple that defines what relations we are interested in
+	// Retrieve information necessary for reads from the ID to handle imports
+	targetTag, access := retrieveJaasAccessFromID(state.ID, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Perform read request for relations
 	readTuple := juju.JaasTuple{
 		Target:   targetTag.String(),
-		Relation: state.Access.ValueString(),
+		Relation: access,
 	}
 	tuples, err := resource.client.Jaas.ReadRelations(ctx, &readTuple)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read access rules for %s, got error: %s", targetTag.String(), err))
 		return
 	}
+
 	// Transform the tuples into an access model
 	newModel := tuplesToModel(ctx, tuples, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
 	state.Users = newModel.Users
 	state.Groups = newModel.Groups
 	state.ServiceAccounts = newModel.ServiceAccounts
+	state.Access = basetypes.NewStringValue(access)
 	resp.Diagnostics.Append(resource.targetResource.Save(ctx, &resp.State, state, targetTag)...)
 }
 
@@ -233,6 +256,8 @@ func (resource *genericJAASAccessResource) Update(ctx context.Context, req resou
 
 	// Note: We only need to read the targetID from either the plan or the state.
 	// If it changed, the resource should be replaced rather than updated.
+	// The same also applies to the access level.
+	// For this reason we don't need to update the ID as a new ID implies a different resource.
 
 	// Read Terraform configuration from the state
 	state, targetTag := resource.info(ctx, req.State, &resp.Diagnostics)
@@ -442,4 +467,46 @@ func (a *genericJAASAccessResource) info(ctx context.Context, getter Getter, dia
 
 func (a *genericJAASAccessResource) save(ctx context.Context, setter Setter, info genericJAASAccessModel, tag names.Tag) diag.Diagnostics {
 	return a.targetResource.Save(ctx, setter, info, tag)
+}
+
+func newJaasAccessID(targetTag names.Tag, accessStr string) string {
+	return fmt.Sprintf("%s:%s", targetTag.String(), accessStr)
+}
+
+func retrieveJaasAccessFromID(ID types.String, diag *diag.Diagnostics) (resourceTag names.Tag, access string) {
+	resID := strings.Split(ID.ValueString(), ":")
+	if len(resID) != 2 {
+		diag.AddError("Malformed ID", fmt.Sprintf("Access ID %q is malformed, "+
+			"please use the format '<resourceTag>:<access>:'", resID))
+		return nil, ""
+	}
+	tag, err := jimmnames.ParseTag(resID[0])
+	if err != nil {
+		diag.AddError("ID Error", fmt.Sprintf("Tag %s from ID is not valid: %s", tag, err))
+		return nil, ""
+	}
+	return tag, resID[1]
+}
+
+func (a *genericJAASAccessResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	IDstr := req.ID
+	resID := strings.Split(IDstr, ":")
+	if len(resID) != 2 {
+		resp.Diagnostics.AddError(
+			"ImportState Failure",
+			fmt.Sprintf("Malformed Import ID %q, "+
+				"please use format '<resourceTag>:<access>' e.g. %s", IDstr, a.targetResource.ImportHint()),
+		)
+		return
+	}
+	_, err := jimmnames.ParseTag(resID[0])
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"ImportState Failure",
+			fmt.Sprintf("Malformed Import ID %q, "+
+				"%s is not a valid tag", IDstr, resID[0]),
+		)
+		return
+	}
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
