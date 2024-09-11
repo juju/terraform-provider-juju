@@ -78,6 +78,9 @@ type sharedClient struct {
 
 	// subCtx is the context created with the new tflog subsystem for applications.
 	subCtx context.Context
+
+	checkJAASOnce sync.Once
+	isJAAS        bool
 }
 
 // NewClient returns a client which can talk to the juju controller
@@ -114,19 +117,16 @@ func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, er
 	}, nil
 }
 
-var checkJAASOnce sync.Once
-var isJAAS bool
-
 // IsJAAS checks if the controller is a JAAS controller.
-// It does this by checking whether it offers the "JIMM" facade which
-// will only ever be offered by JAAS. The method accepts a default value
-// and doesn't return an error because callers are not expected to fail if
-// they can't determine whether they are connecting to JAAS.
+// It does this by checking whether a JIMM specific call can be made.
+// The method accepts a default value and doesn't return an error
+// because callers are not expected to fail if they can't determine
+// whether they are connecting to JAAS.
 //
 // IsJAAS uses a synchronisation object to only perform the check once and return the same result.
 func (sc *sharedClient) IsJAAS(defaultVal bool) bool {
-	checkJAASOnce.Do(func() {
-		isJAAS = defaultVal
+	sc.checkJAASOnce.Do(func() {
+		sc.isJAAS = defaultVal
 		conn, err := sc.GetConnection(nil)
 		if err != nil {
 			return
@@ -135,11 +135,11 @@ func (sc *sharedClient) IsJAAS(defaultVal bool) bool {
 		jc := jaasApi.NewClient(conn)
 		_, err = jc.ListControllers()
 		if err == nil {
-			isJAAS = true
+			sc.isJAAS = true
 			return
 		}
 	})
-	return isJAAS
+	return sc.isJAAS
 }
 
 // GetConnection returns a juju connection for use creating juju

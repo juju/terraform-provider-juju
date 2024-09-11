@@ -1,4 +1,4 @@
-// Copyright 2023 Canonical Ltd.
+// Copyright 2024 Canonical Ltd.
 // Licensed under the Apache License, Version 2.0, see LICENCE file for details.
 
 package provider
@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/juju/names/v5"
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
 func TestAcc_ResourceJaasAccessModel(t *testing.T) {
@@ -255,56 +256,87 @@ func TestAcc_ResourceJaasAccessModelServiceAccountAndUsers(t *testing.T) {
 // }
 
 func testAccResourceJaasAccessModelTwoUsers(modelName, access, userOne, userTwo string) string {
-	return fmt.Sprintf(`
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceJaasAccessModelTwoUsers",
+		`
 resource "juju_model" "test-model" {
-  name = %q
-}
-
-resource "juju_jaas_access_model" "test" {
-  model_uuid   = juju_model.test-model.id
-  access       = %q
-  users        = [%q, %q]
-}`, modelName, access, userOne, userTwo)
-}
-
-func testAccResourceJaasAccessModelOneUser(modelName, access, userOne string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "test-model" {
-  name = %q
-}
-
-resource "juju_jaas_access_model" "test" {
-  model_uuid   = juju_model.test-model.id
-  access       = %q
-  users        = [%q]
-}`, modelName, access, userOne)
-}
-
-func testAccResourceJaasAccessModelOneSvcAccount(modelName, access, svcAccOne string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "test-model" {
-  name = %q
+  name = "{{.ModelName}}"
 }
 
 resource "juju_jaas_access_model" "test" {
   model_uuid          = juju_model.test-model.id
-  access              = %q
-  service_accounts    = [%q]
-}`, modelName, access, svcAccOne)
+  access              = "{{.Access}}"
+  users               = ["{{.UserOne}}", "{{.UserTwo}}"]
+}
+`, internaltesting.TemplateData{
+			"ModelName": modelName,
+			"Access":    access,
+			"UserOne":   userOne,
+			"UserTwo":   userTwo,
+		})
+}
+
+func testAccResourceJaasAccessModelOneUser(modelName, access, user string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceJaasAccessModelOneUser",
+		`
+resource "juju_model" "test-model" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_jaas_access_model" "test" {
+  model_uuid          = juju_model.test-model.id
+  access              = "{{.Access}}"
+  users               = ["{{.User}}"]
+}
+`, internaltesting.TemplateData{
+			"ModelName": modelName,
+			"Access":    access,
+			"User":      user,
+		})
+}
+
+func testAccResourceJaasAccessModelOneSvcAccount(modelName, access, svcAcc string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceJaasAccessModelOneSvcAccount",
+		`
+resource "juju_model" "test-model" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_jaas_access_model" "test" {
+  model_uuid          = juju_model.test-model.id
+  access              = "{{.Access}}"
+  service_accounts    = ["{{.SvcAcc}}"]
+}
+`, internaltesting.TemplateData{
+			"ModelName": modelName,
+			"Access":    access,
+			"SvcAcc":    svcAcc,
+		})
 }
 
 func testAccResourceJaasAccessModelSvcAccsAndUser(modelName, access, user, svcAccOne, svcAccTwo string) string {
-	return fmt.Sprintf(`
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceJaasAccessModelSvcAccsAndUser",
+		`
 resource "juju_model" "test-model" {
-  name = %q
+  name = "{{.ModelName}}"
 }
 
 resource "juju_jaas_access_model" "test" {
   model_uuid          = juju_model.test-model.id
-  access              = %q
-  users               = [%q]
-  service_accounts    = [%q, %q]
-}`, modelName, access, user, svcAccOne, svcAccTwo)
+  access              = "{{.Access}}"
+  users               = ["{{.User}}"]
+  service_accounts    = ["{{.SvcAccOne}}", "{{.SvcAccTwo}}"]
+}
+`, internaltesting.TemplateData{
+			"ModelName": modelName,
+			"Access":    access,
+			"User":      user,
+			"SvcAccOne": svcAccOne,
+			"SvcAccTwo": svcAccTwo,
+		})
 }
 
 func testAccCheckModelUUIDNotEmpty(resourceName string, modelUUID *string) resource.TestCheckFunc {

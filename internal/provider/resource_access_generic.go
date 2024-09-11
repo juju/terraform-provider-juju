@@ -24,8 +24,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-
 	"github.com/juju/names/v5"
+
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -182,7 +182,7 @@ func (resource *genericJAASAccessResource) Create(ctx context.Context, req resou
 	// Make a call to create relations
 	err := resource.client.Jaas.AddRelations(tuples)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access relationships, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access relationships for %s, got error: %s", targetTag.String(), err))
 		return
 	}
 	// Set the plan onto the Terraform state
@@ -196,7 +196,7 @@ func (resource *genericJAASAccessResource) Read(ctx context.Context, req resourc
 		addClientNotConfiguredError(&resp.Diagnostics, resource.resourceLogName, "read")
 		return
 	}
-	// Read Terraform configuration from the request into the plan
+	// Read Terraform configuration from the request into the resource model
 	state, targetTag := resource.info(ctx, req.State, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -209,7 +209,7 @@ func (resource *genericJAASAccessResource) Read(ctx context.Context, req resourc
 	}
 	tuples, err := resource.client.Jaas.ReadRelations(ctx, &readTuple)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read access rules, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read access rules for %s, got error: %s", targetTag.String(), err))
 		return
 	}
 	// Transform the tuples into an access model
@@ -266,7 +266,7 @@ func (resource *genericJAASAccessResource) Update(ctx context.Context, req resou
 	if len(addTuples) > 0 {
 		err := resource.client.Jaas.AddRelations(addTuples)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to add access rules, got error: %s", err))
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to add access rules for %s, got error: %s", targetTag.String(), err))
 			return
 		}
 	}
@@ -278,7 +278,7 @@ func (resource *genericJAASAccessResource) Update(ctx context.Context, req resou
 	if len(removeTuples) > 0 {
 		err := resource.client.Jaas.DeleteRelations(removeTuples)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to remove access rules, got error: %s", err))
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to remove access rules for %s, got error: %s", targetTag.String(), err))
 			return
 		}
 	}
@@ -307,11 +307,12 @@ func diffModels(plan, state genericJAASAccessModel, diag *diag.Diagnostics) (toA
 	return
 }
 
-func diffSet(current, desired basetypes.SetValue, diag *diag.Diagnostics) basetypes.SetValue {
+// diffSet returns the elements in the target set that are not present in the current set.
+func diffSet(current, target basetypes.SetValue, diag *diag.Diagnostics) basetypes.SetValue {
 	var diff []attr.Value
 	for _, source := range current.Elements() {
 		found := false
-		for _, target := range desired.Elements() {
+		for _, target := range target.Elements() {
 			if source.Equal(target) {
 				found = true
 			}
@@ -325,7 +326,7 @@ func diffSet(current, desired basetypes.SetValue, diag *diag.Diagnostics) basety
 	return newSet
 }
 
-// Delete defines how tuples for access control will be updated.
+// Delete defines how tuples for access control will be deleted.
 func (resource *genericJAASAccessResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Check first if the client is configured
 	if resource.client == nil {
@@ -347,7 +348,7 @@ func (resource *genericJAASAccessResource) Delete(ctx context.Context, req resou
 	// Delete the tuples
 	err := resource.client.Jaas.DeleteRelations(tuples)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete access rules, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete access rules for %s, got error: %s", targetTag.String(), err))
 		return
 	}
 }

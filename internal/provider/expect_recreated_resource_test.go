@@ -38,7 +38,7 @@ func (e expectRecreatedResource) CheckPlan(ctx context.Context, req plancheck.Ch
 	resp.Error = errors.Join(result...)
 }
 
-// expectRecreatedResource returns a plan check that asserts is a delete and create change present.
+// expectRecreatedResource returns a plan check that asserts a delete and create change are present.
 // All output and resource changes found will be aggregated and returned in a plan check error.
 func ExpectRecreatedResource(resourceName string) plancheck.PlanCheck {
 	return expectRecreatedResource{
