@@ -476,8 +476,7 @@ func newJaasAccessID(targetTag names.Tag, accessStr string) string {
 func retrieveJaasAccessFromID(ID types.String, diag *diag.Diagnostics) (resourceTag names.Tag, access string) {
 	resID := strings.Split(ID.ValueString(), ":")
 	if len(resID) != 2 {
-		diag.AddError("Malformed ID", fmt.Sprintf("Access ID %q is malformed, "+
-			"please use the format '<resourceTag>:<access>:'", resID))
+		diag.AddError("Malformed ID", fmt.Sprintf("Access ID %q is malformed", resID))
 		return nil, ""
 	}
 	tag, err := jimmnames.ParseTag(resID[0])
@@ -488,6 +487,8 @@ func retrieveJaasAccessFromID(ID types.String, diag *diag.Diagnostics) (resource
 	return tag, resID[1]
 }
 
+// Importstate validates the user provided ID and attempts to create a resource by
+// reading and importing the object referred to by the provided ID.
 func (a *genericJAASAccessResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	IDstr := req.ID
 	resID := strings.Split(IDstr, ":")
@@ -495,7 +496,7 @@ func (a *genericJAASAccessResource) ImportState(ctx context.Context, req resourc
 		resp.Diagnostics.AddError(
 			"ImportState Failure",
 			fmt.Sprintf("Malformed Import ID %q, "+
-				"please use format '<resourceTag>:<access>' e.g. %s", IDstr, a.targetResource.ImportHint()),
+				"please use format %q", IDstr, a.targetResource.ImportHint()),
 		)
 		return
 	}

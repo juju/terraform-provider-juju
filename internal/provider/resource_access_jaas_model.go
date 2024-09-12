@@ -62,7 +62,7 @@ func (j modelInfo) Save(ctx context.Context, setter Setter, info genericJAASAcce
 
 // ImportHint implements [resourceInfo] and provides a hint to users on the import string format.
 func (j modelInfo) ImportHint() string {
-	return "model-<UUID>:writer"
+	return "model-<UUID>:<access-level>"
 }
 
 type jaasAccessModelResource struct {
