@@ -27,6 +27,7 @@ import (
 var _ resource.Resource = &accessModelResource{}
 var _ resource.ResourceWithConfigure = &accessModelResource{}
 var _ resource.ResourceWithImportState = &accessModelResource{}
+var _ resource.ResourceWithConfigValidators = &accessModelResource{}
 
 func NewAccessModelResource() resource.Resource {
 	return &accessModelResource{}

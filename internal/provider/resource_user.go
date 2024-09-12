@@ -24,6 +24,7 @@ import (
 var _ resource.Resource = &userResource{}
 var _ resource.ResourceWithConfigure = &userResource{}
 var _ resource.ResourceWithImportState = &userResource{}
+var _ resource.ResourceWithConfigValidators = &userResource{}
 
 func NewUserResource() resource.Resource {
 	return &userResource{}

@@ -21,6 +21,8 @@ type RequiresJAASValidator struct {
 	client *juju.Client
 }
 
+// NewRequiresJAASValidator returns a new validator that enforces a resource can
+// only be created against JAAS.
 func NewRequiresJAASValidator(client *juju.Client) RequiresJAASValidator {
 	return RequiresJAASValidator{
 		client: client,
