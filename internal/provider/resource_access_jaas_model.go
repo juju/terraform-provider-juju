@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/juju/names/v5"
 )
 
@@ -23,18 +24,36 @@ var _ resource.ResourceWithConfigure = &jaasAccessModelResource{}
 // NewJAASAccessModelResource returns a new resource for JAAS model access.
 func NewJAASAccessModelResource() resource.Resource {
 	return &jaasAccessModelResource{genericJAASAccessResource: genericJAASAccessResource{
-		targetInfo:      modelInfo{},
+		targetResource:  modelInfo{},
 		resourceLogName: LogResourceJAASAccessModel,
 	}}
 }
 
 type modelInfo struct{}
 
-// Identity implements the [resourceInfo] interface, used to extract the model UUID from the Terraform plan/state.
-func (j modelInfo) Identity(ctx context.Context, plan Getter, diag *diag.Diagnostics) string {
+// Info implements the [resourceInfo] interface, used to extract the info from a Terraform plan/state.
+func (j modelInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessModel, names.Tag) {
 	modelAccess := jaasAccessModelResourceModel{}
-	diag.Append(plan.Get(ctx, &modelAccess)...)
-	return names.NewModelTag(modelAccess.ModelUUID.String()).String()
+	diag.Append(getter.Get(ctx, &modelAccess)...)
+	accessModel := genericJAASAccessModel{
+		Users:           modelAccess.Users,
+		Groups:          modelAccess.Groups,
+		ServiceAccounts: modelAccess.ServiceAccounts,
+		Access:          modelAccess.Access,
+	}
+	return accessModel, names.NewModelTag(modelAccess.ModelUUID.ValueString())
+}
+
+// Save implements the [resourceInfo] interface, used to save info on Terraform's state.
+func (j modelInfo) Save(ctx context.Context, setter Setter, info genericJAASAccessModel, tag names.Tag) diag.Diagnostics {
+	modelAccess := jaasAccessModelResourceModel{
+		ModelUUID:       basetypes.NewStringValue(tag.Id()),
+		Users:           info.Users,
+		Groups:          info.Groups,
+		ServiceAccounts: info.ServiceAccounts,
+		Access:          info.Access,
+	}
+	return setter.Set(ctx, modelAccess)
 }
 
 type jaasAccessModelResource struct {
@@ -42,8 +61,11 @@ type jaasAccessModelResource struct {
 }
 
 type jaasAccessModelResourceModel struct {
-	ModelUUID types.String `tfsdk:"model_uuid"`
-	genericJAASAccessModel
+	ModelUUID       types.String `tfsdk:"model_uuid"`
+	Users           types.Set    `tfsdk:"users"`
+	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
+	Groups          types.Set    `tfsdk:"groups"`
+	Access          types.String `tfsdk:"access"`
 }
 
 // Metadata returns metadata about the JAAS model access resource.

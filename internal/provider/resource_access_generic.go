@@ -7,11 +7,13 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 
 	jimmnames "github.com/canonical/jimm-go-sdk/v3/names"
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -20,6 +22,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/names/v5"
 
@@ -37,10 +40,17 @@ type Getter interface {
 	Get(ctx context.Context, target interface{}) diag.Diagnostics
 }
 
-// resourceInfo defines how the [genericJAASAccessResource] can query for information
+// Setter is used to set details on a state object.
+// Implemented by Terraform's [State] type.
+type Setter interface {
+	Set(ctx context.Context, target interface{}) diag.Diagnostics
+}
+
+// resourcer defines how the [genericJAASAccessResource] can query/save for information
 // on the target object.
-type resourceInfo interface {
-	Identity(ctx context.Context, getter Getter, diag *diag.Diagnostics) string
+type resourcer interface {
+	Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessModel, names.Tag)
+	Save(ctx context.Context, setter Setter, info genericJAASAccessModel, tag names.Tag) diag.Diagnostics
 }
 
 // genericJAASAccessResource is a generic resource that can be used for creating access rules with JAAS.
@@ -49,7 +59,7 @@ type resourceInfo interface {
 // The embedded struct requires a targetInfo interface to enable fetching the target object in the relation.
 type genericJAASAccessResource struct {
 	client          *juju.Client
-	targetInfo      resourceInfo
+	targetResource  resourcer
 	resourceLogName string
 
 	// subCtx is the context created with the new tflog subsystem for applications.
@@ -64,9 +74,6 @@ type genericJAASAccessModel struct {
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
 	Access          types.String `tfsdk:"access"`
-
-	// ID required by the testing framework
-	ID types.String `tfsdk:"id"`
 }
 
 // ConfigValidators sets validators for the resource.
@@ -116,7 +123,15 @@ func (r *genericJAASAccessResource) partialAccessSchema() map[string]schema.Attr
 			// service accounts are treated as users but defined separately
 			// for different validation and logic in the provider.
 			Validators: []validator.Set{
-				setvalidator.ValueStringsAre(ValidatorMatchString(names.IsValidUser, "service account must be valid Juju usernames")),
+				setvalidator.ValueStringsAre(ValidatorMatchString(
+					func(s string) bool {
+						// Use EnsureValidServiceAccountId instead of IsValidServiceAccountId
+						// because we avoid requiring the user to add @serviceaccount for service accounts
+						// and opt to add that in the provide code. EnsureValidServiceAccountId adds the
+						// @serviceaccount domain before verifying the string is a valid service account ID.
+						_, err := jimmnames.EnsureValidServiceAccountId(s)
+						return err == nil
+					}, "service account ID must be a valid Juju username")),
 				setvalidator.ValueStringsAre(stringvalidator.RegexMatches(avoidAtSymbolRe, "service account should not contain an @ symbol")),
 			},
 		},
@@ -126,7 +141,7 @@ func (r *genericJAASAccessResource) partialAccessSchema() map[string]schema.Attr
 // Configure enables provider-level data or clients to be set in the
 // provider-defined DataSource type. It is separately executed for each
 // ReadDataSource RPC.
-func (a *genericJAASAccessResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (resource *genericJAASAccessResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -140,27 +155,291 @@ func (a *genericJAASAccessResource) Configure(ctx context.Context, req resource.
 		)
 		return
 	}
-	a.client = client
+	resource.client = client
 	// Create the local logging subsystem here, using the TF context when creating it.
-	a.subCtx = tflog.NewSubsystem(ctx, a.resourceLogName)
+	resource.subCtx = tflog.NewSubsystem(ctx, resource.resourceLogName)
 }
 
 // Create defines how tuples for access control will be created.
-func (a *genericJAASAccessResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (resource *genericJAASAccessResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	// Check first if the client is configured
+	if resource.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, resource.resourceLogName, "create")
+		return
+	}
 
+	// Read Terraform configuration from the request into the model
+	plan, targetTag := resource.info(ctx, req.Plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Create tuples to create from the plan
+	tuples := modelToTuples(ctx, targetTag, plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	// Make a call to create relations
+	err := resource.client.Jaas.AddRelations(tuples)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access relationships for %s, got error: %s", targetTag.String(), err))
+		return
+	}
+	// Set the plan onto the Terraform state
+	resp.Diagnostics.Append(resource.targetResource.Save(ctx, &resp.State, plan, targetTag)...)
 }
 
 // Read defines how tuples for access control will be read.
-func (a *genericJAASAccessResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (resource *genericJAASAccessResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	// Check first if the client is configured
+	if resource.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, resource.resourceLogName, "read")
+		return
+	}
+	// Read Terraform configuration from the request into the resource model
+	state, targetTag := resource.info(ctx, req.State, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
+	// Create a tuple that defines what relations we are interested in
+	readTuple := juju.JaasTuple{
+		Target:   targetTag.String(),
+		Relation: state.Access.ValueString(),
+	}
+	tuples, err := resource.client.Jaas.ReadRelations(ctx, &readTuple)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read access rules for %s, got error: %s", targetTag.String(), err))
+		return
+	}
+	// Transform the tuples into an access model
+	newModel := tuplesToModel(ctx, tuples, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	state.Users = newModel.Users
+	state.Groups = newModel.Groups
+	state.ServiceAccounts = newModel.ServiceAccounts
+	resp.Diagnostics.Append(resource.targetResource.Save(ctx, &resp.State, state, targetTag)...)
 }
 
 // Update defines how tuples for access control will be updated.
-func (a *genericJAASAccessResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (resource *genericJAASAccessResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	// Check first if the client is configured
+	if resource.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, resource.resourceLogName, "update")
+		return
+	}
 
+	// Note: We only need to read the targetID from either the plan or the state.
+	// If it changed, the resource should be replaced rather than updated.
+
+	// Read Terraform configuration from the state
+	state, targetTag := resource.info(ctx, req.State, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Read Terraform configuration from the plan
+	plan, _ := resource.info(ctx, req.Plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get a diff of the plan vs. state to know what relations to add/remove
+	modelAdd, modelRemove := diffModels(plan, state, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Create a list of tuples to add and tuples to remove
+	addTuples := modelToTuples(ctx, targetTag, modelAdd, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	removeTuples := modelToTuples(ctx, targetTag, modelRemove, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Add new relations
+	if len(addTuples) > 0 {
+		err := resource.client.Jaas.AddRelations(addTuples)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to add access rules for %s, got error: %s", targetTag.String(), err))
+			return
+		}
+	}
+
+	// TODO: Consider updating the state here to reflect the newly added tuples before removing tuples in case the next removal fails.
+	// Would require an intermediate state.
+
+	// Delete removed relations
+	if len(removeTuples) > 0 {
+		err := resource.client.Jaas.DeleteRelations(removeTuples)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to remove access rules for %s, got error: %s", targetTag.String(), err))
+			return
+		}
+	}
+
+	// Set the desired plan onto the Terraform state after all updates have taken place.
+	resp.Diagnostics.Append(resource.save(ctx, &resp.State, plan, targetTag)...)
 }
 
-// Delete defines how tuples for access control will be updated.
-func (a *genericJAASAccessResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func diffModels(plan, state genericJAASAccessModel, diag *diag.Diagnostics) (toAdd, toRemove genericJAASAccessModel) {
+	newUsers := diffSet(plan.Users, state.Users, diag)
+	newGroups := diffSet(plan.Groups, state.Groups, diag)
+	newServiceAccounts := diffSet(plan.ServiceAccounts, state.ServiceAccounts, diag)
+	toAdd.Users = newUsers
+	toAdd.Groups = newGroups
+	toAdd.ServiceAccounts = newServiceAccounts
+	toAdd.Access = plan.Access
 
+	removedUsers := diffSet(state.Users, plan.Users, diag)
+	removedGroups := diffSet(state.Groups, plan.Groups, diag)
+	removedServiceAccounts := diffSet(state.ServiceAccounts, plan.ServiceAccounts, diag)
+	toRemove.Users = removedUsers
+	toRemove.Groups = removedGroups
+	toRemove.ServiceAccounts = removedServiceAccounts
+	toRemove.Access = plan.Access
+
+	return
+}
+
+// diffSet returns the elements in the target set that are not present in the current set.
+func diffSet(current, target basetypes.SetValue, diag *diag.Diagnostics) basetypes.SetValue {
+	var diff []attr.Value
+	for _, source := range current.Elements() {
+		found := false
+		for _, target := range target.Elements() {
+			if source.Equal(target) {
+				found = true
+			}
+		}
+		if !found {
+			diff = append(diff, source)
+		}
+	}
+	newSet, diags := basetypes.NewSetValue(current.ElementType(context.Background()), diff)
+	diag.Append(diags...)
+	return newSet
+}
+
+// Delete defines how tuples for access control will be deleted.
+func (resource *genericJAASAccessResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Check first if the client is configured
+	if resource.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "access model", "delete")
+		return
+	}
+
+	// Read Terraform configuration from the state
+	state, targetTag := resource.info(ctx, req.State, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Create the tuples to delete
+	tuples := modelToTuples(ctx, targetTag, state, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	// Delete the tuples
+	err := resource.client.Jaas.DeleteRelations(tuples)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete access rules for %s, got error: %s", targetTag.String(), err))
+		return
+	}
+}
+
+// modelToTuples return a list of tuples based on the access model provided.
+func modelToTuples(ctx context.Context, targetTag names.Tag, model genericJAASAccessModel, diag *diag.Diagnostics) []juju.JaasTuple {
+	var users []string
+	var groups []string
+	var serviceAccounts []string
+	diag.Append(model.Users.ElementsAs(ctx, &users, false)...)
+	diag.Append(model.Groups.ElementsAs(ctx, &groups, false)...)
+	diag.Append(model.ServiceAccounts.ElementsAs(ctx, &serviceAccounts, false)...)
+	if diag.HasError() {
+		return []juju.JaasTuple{}
+	}
+	baseTuple := juju.JaasTuple{
+		Target:   targetTag.String(),
+		Relation: model.Access.ValueString(),
+	}
+	var tuples []juju.JaasTuple
+	userNameToTagf := func(s string) string { return names.NewUserTag(s).String() }
+	groupIDToTagf := func(s string) string { return jimmnames.NewGroupTag(s).String() }
+	// Note that service accounts are treated as users but with an @serviceaccount domain.
+	// We add the @serviceaccount domain by calling `EnsureValidServiceAccountId` so that the user writing the plan doesn't have to.
+	// We can ignore the error below because the inputs have already gone through validation.
+	serviceAccIDToTagf := func(s string) string {
+		r, _ := jimmnames.EnsureValidServiceAccountId(s)
+		return names.NewUserTag(r).String()
+	}
+	tuples = append(tuples, assignTupleObject(baseTuple, users, userNameToTagf)...)
+	tuples = append(tuples, assignTupleObject(baseTuple, groups, groupIDToTagf)...)
+	tuples = append(tuples, assignTupleObject(baseTuple, serviceAccounts, serviceAccIDToTagf)...)
+	return tuples
+}
+
+// tuplesToModel does the reverse of planToTuples converting a slice of tuples to an access model.
+func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diagnostics) genericJAASAccessModel {
+	var users []string
+	var groups []string
+	var serviceAccounts []string
+	for _, tuple := range tuples {
+		tag, err := jimmnames.ParseTag(tuple.Object)
+		if err != nil {
+			diag.AddError("failed to parse relation tag", fmt.Sprintf("error parsing %s:%s", tuple.Object, err.Error()))
+			continue
+		}
+		switch tag.Kind() {
+		case names.UserTagKind:
+			userTag := tag.(names.UserTag)
+			if jimmnames.IsValidServiceAccountId(userTag.Id()) {
+				// Remove the domain so it matches the plan.
+				svcAccount := userTag.Id()
+				domainStart := strings.IndexRune(userTag.Id(), '@')
+				if domainStart != -1 {
+					svcAccount = svcAccount[:domainStart]
+				}
+				serviceAccounts = append(serviceAccounts, svcAccount)
+			} else {
+				users = append(users, userTag.Id())
+			}
+		case jimmnames.GroupTagKind:
+			groups = append(groups, tag.Id())
+		}
+	}
+	userSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users)
+	diag.Append(errDiag...)
+	groupSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, groups)
+	diag.Append(errDiag...)
+	serviceAccountSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, serviceAccounts)
+	diag.Append(errDiag...)
+	var model genericJAASAccessModel
+	model.Users = userSet
+	model.Groups = groupSet
+	model.ServiceAccounts = serviceAccountSet
+	return model
+}
+
+func assignTupleObject(baseTuple juju.JaasTuple, items []string, idToTag func(string) string) []juju.JaasTuple {
+	tuples := make([]juju.JaasTuple, 0, len(items))
+	for _, item := range items {
+		t := baseTuple
+		t.Object = idToTag(item)
+		tuples = append(tuples, t)
+	}
+	return tuples
+}
+
+func (a *genericJAASAccessResource) info(ctx context.Context, getter Getter, diags *diag.Diagnostics) (genericJAASAccessModel, names.Tag) {
+	return a.targetResource.Info(ctx, getter, diags)
+}
+
+func (a *genericJAASAccessResource) save(ctx context.Context, setter Setter, info genericJAASAccessModel, tag names.Tag) diag.Diagnostics {
+	return a.targetResource.Save(ctx, setter, info, tag)
 }

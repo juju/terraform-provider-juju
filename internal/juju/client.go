@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	jaasApi "github.com/canonical/jimm-go-sdk/v3/api"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
 	"github.com/juju/juju/api"
@@ -77,6 +78,9 @@ type sharedClient struct {
 
 	// subCtx is the context created with the new tflog subsystem for applications.
 	subCtx context.Context
+
+	checkJAASOnce sync.Once
+	isJAAS        bool
 }
 
 // NewClient returns a client which can talk to the juju controller
@@ -113,27 +117,29 @@ func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, er
 	}, nil
 }
 
-var checkJAASOnce sync.Once
-var isJAAS bool
-
 // IsJAAS checks if the controller is a JAAS controller.
-// It does this by checking whether it offers the "JIMM" facade which
-// will only ever be offered by JAAS. The method accepts a default value
-// and doesn't return an error because callers are not expected to fail if
-// they can't determine whether they are connecting to JAAS.
+// It does this by checking whether a JIMM specific call can be made.
+// The method accepts a default value and doesn't return an error
+// because callers are not expected to fail if they can't determine
+// whether they are connecting to JAAS.
 //
 // IsJAAS uses a synchronisation object to only perform the check once and return the same result.
 func (sc *sharedClient) IsJAAS(defaultVal bool) bool {
-	checkJAASOnce.Do(func() {
+	sc.checkJAASOnce.Do(func() {
+		sc.isJAAS = defaultVal
 		conn, err := sc.GetConnection(nil)
 		if err != nil {
-			isJAAS = defaultVal
 			return
 		}
 		defer conn.Close()
-		isJAAS = conn.BestFacadeVersion("JIMM") != 0
+		jc := jaasApi.NewClient(conn)
+		_, err = jc.ListControllers()
+		if err == nil {
+			sc.isJAAS = true
+			return
+		}
 	})
-	return isJAAS
+	return sc.isJAAS
 }
 
 // GetConnection returns a juju connection for use creating juju
