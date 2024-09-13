@@ -20,6 +20,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &jaasAccessModelResource{}
 var _ resource.ResourceWithConfigure = &jaasAccessModelResource{}
+var _ resource.ResourceWithConfigValidators = &jaasAccessModelResource{}
 
 // NewJAASAccessModelResource returns a new resource for JAAS model access.
 func NewJAASAccessModelResource() resource.Resource {

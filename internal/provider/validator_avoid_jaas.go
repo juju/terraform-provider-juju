@@ -19,8 +19,19 @@ var _ resource.ConfigValidator = &AvoidJAASValidator{}
 // AvoidJAASValidator enforces that the resource is not used with JAAS.
 // Useful to direct users to more capable resources.
 type AvoidJAASValidator struct {
-	Client          *juju.Client
-	PreferredObject string
+	client          *juju.Client
+	preferredObject string
+}
+
+// NewAvoidJAASValidator creates a new validator that can be used with resources or
+// data sources to enforce that the resource cannot be used with JAAS.
+// Provide a non-empty string for preferredObject to point users to an alternate object in the error messsage.
+// If preferredObject is empty, no hint on an alternate object will be offered in the error message.
+func NewAvoidJAASValidator(client *juju.Client, preferredObject string) AvoidJAASValidator {
+	return AvoidJAASValidator{
+		client:          client,
+		preferredObject: preferredObject,
+	}
 }
 
 // Description returns a plain text description of the validator's behavior, suitable for a practitioner to understand its impact.
@@ -49,15 +60,15 @@ func (v AvoidJAASValidator) validate() diag.Diagnostics {
 
 	// Return without error if a nil client is detected.
 	// This is possible since validation is called at various points throughout resource creation.
-	if v.Client != nil && v.Client.IsJAAS() {
+	if v.client != nil && v.client.IsJAAS() {
 		hint := ""
-		if v.PreferredObject != "" {
-			hint = "Try the " + v.PreferredObject + " resource instead."
+		if v.preferredObject != "" {
+			hint = "Try the " + v.preferredObject + " resource instead."
 		}
 		diags.AddError("Invalid use of resource with JAAS.",
 			"This resource is not supported with JAAS. "+
 				hint+
-				"JAAS offers additional enterprise features through the use of dedicated resources. "+
+				`JAAS offers additional enterprise features through the use of dedicated resources (those with "jaas" in the name). `+
 				"See https://jaas.ai/ for more details.")
 	}
 	return diags

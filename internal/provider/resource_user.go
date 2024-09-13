@@ -24,6 +24,7 @@ import (
 var _ resource.Resource = &userResource{}
 var _ resource.ResourceWithConfigure = &userResource{}
 var _ resource.ResourceWithImportState = &userResource{}
+var _ resource.ResourceWithConfigValidators = &userResource{}
 
 func NewUserResource() resource.Resource {
 	return &userResource{}
@@ -49,6 +50,14 @@ type userResourceModel struct {
 
 func (r *userResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_user"
+}
+
+// ConfigValidators sets validators for the resource.
+func (r *userResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		// There is no JAAS object that replaces the user resource since JAAS users come from an external identity provider.
+		NewAvoidJAASValidator(r.client, ""),
+	}
 }
 
 func (r *userResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
