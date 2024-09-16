@@ -1,3 +1,7 @@
+// Copyright 2024 Canonical Ltd.
+// Licensed under the Apache License, Version 2.0, see LICENCE file for details.
+
+// modelcache provides a means of caching Juju model information.
 package modelcache
 
 import (

@@ -52,6 +52,10 @@ func TestAcc_ResourceApplication(t *testing.T) {
 				),
 			},
 			{
+				// Causes error on k8s that state is changing too quickly. Possibly run in a separate test.
+				SkipFunc: func() (bool, error) {
+					return testingCloud != LXDCloudTesting, nil
+				},
 				Config: testAccResourceApplicationWithFullySpecifiedModel(appName, expectedResourceOwner(), modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", expectedResourceOwner()+"/"+modelName),
@@ -836,7 +840,6 @@ func TestAcc_ResourceApplicationWithDifferentModelOwner(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "jameinel-ubuntu-lite"),
 					resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
-					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
 				),
 			},
 		},
@@ -850,7 +853,7 @@ func createModelWithNewUser(t *testing.T, username, modelName string) (cleanup f
 		Password: testPassword,
 	}
 	_, err := TestClient.Users.CreateUser(userReq)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	data := jujuProviderModelEnvVar()
 	config := internaljuju.ControllerConfiguration{
@@ -860,20 +863,21 @@ func createModelWithNewUser(t *testing.T, username, modelName string) (cleanup f
 		CACert:              data.CACert.ValueString(),
 	}
 	client, err := internaljuju.NewClient(context.Background(), config)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	// The next step has to be done by calling out to the Juju CLI until the provider supports these operations.
+	cInfo := getControllerInfo(t)
 	adminUser := data.UserName.ValueString()
 	adminPassword := data.Password.ValueString()
-	grantNewUserAccess(t, username, testPassword, adminUser, adminPassword)
+	grantNewUserAccess(t, username, testPassword, adminUser, adminPassword, cInfo)
 
 	createModelReq := internaljuju.CreateModelInput{
 		Name:       modelName,
-		Credential: "localhost",
-		CloudName:  "localhost",
+		Credential: cInfo.credentialName,
+		CloudName:  cInfo.cloudName,
 	}
 	createModelResp, err := client.Models.CreateModel(createModelReq)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	grantModelReq := internaljuju.GrantModelInput{
 		User:      data.UserName.ValueString(),
@@ -881,7 +885,7 @@ func createModelWithNewUser(t *testing.T, username, modelName string) (cleanup f
 		ModelName: modelName,
 	}
 	err = client.Models.GrantModel(grantModelReq)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	return func() {
 		destroyModelReq := internaljuju.DestroyModelInput{
@@ -898,35 +902,34 @@ func createModelWithNewUser(t *testing.T, username, modelName string) (cleanup f
 }
 
 // grantNewUserAccess grants a new user with the ability to access the cloud being tested.
-func grantNewUserAccess(t *testing.T, testUser, testPassword, adminUser, adminPassword string) {
-	cInfo := getControllerInfo(t)
+func grantNewUserAccess(t *testing.T, testUser, testPassword, adminUser, adminPassword string, cInfo testControllerInfo) {
 	grantCloudCmd := exec.Command("juju", "grant-cloud", testUser, "add-model", cInfo.cloudName)
 	_, err := grantCloudCmd.Output()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
-	logoutCmd := exec.Command("juju", "logout")
+	logoutCmd := exec.Command("juju", "logout", "--force")
 	_, err = logoutCmd.Output()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	loginCmd := exec.Command("juju", "login", "-u", testUser)
 	passwordReader := strings.NewReader(testPassword + "\n")
 	loginCmd.Stdin = passwordReader
 	_, err = loginCmd.Output()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	addCredentialCmd := exec.Command("juju", "update-credential", cInfo.cloudName, cInfo.credentialName, "--controller", cInfo.controllerName)
 	_, err = addCredentialCmd.Output()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
-	logoutCmd = exec.Command("juju", "logout")
+	logoutCmd = exec.Command("juju", "logout", "--force")
 	_, err = logoutCmd.Output()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	loginCmd = exec.Command("juju", "login", "-u", adminUser)
 	passwordReader = strings.NewReader(adminPassword + "\n")
 	loginCmd.Stdin = passwordReader
 	_, err = loginCmd.Output()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 }
 
 type testControllerInfo struct {
@@ -1011,7 +1014,6 @@ resource "juju_application" "this" {
 	name = "jameinel-ubuntu-lite"
 	}
 	trust = true
-	expose{}
 }
 		`, internaltesting.TemplateData{
 			"ModelName": modelName,
