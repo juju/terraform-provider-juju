@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -151,33 +152,34 @@ func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
 	assert.Equal(t, "x509: certificate signed by unknown authority", err.Summary())
 }
 
+var preCheckOnce sync.Once
+
 func testAccPreCheck(t *testing.T) {
-	if TestClient != nil {
-		return
-	}
-	if v := os.Getenv(JujuUsernameEnvKey); v == "" {
-		t.Fatalf("%s must be set for acceptance tests", JujuUsernameEnvKey)
-	}
-	if v := os.Getenv(JujuPasswordEnvKey); v == "" {
-		t.Fatalf("%s must be set for acceptance tests", JujuPasswordEnvKey)
-	}
-	if v := os.Getenv(JujuCACertEnvKey); v == "" {
-		if v := os.Getenv("JUJU_CA_CERT_FILE"); v != "" {
-			t.Logf("reading certificate from: %s", v)
-			cert, err := os.ReadFile(v)
-			if err != nil {
-				t.Fatalf("cannot read file specified by JUJU_CA_CERT_FILE for acceptance tests: %s", err)
-			}
-			os.Setenv(JujuCACertEnvKey, string(cert))
-		} else {
-			t.Fatalf("%s must be set for acceptance tests", JujuCACertEnvKey)
+	preCheckOnce.Do(func() {
+		if v := os.Getenv(JujuUsernameEnvKey); v == "" {
+			t.Fatalf("%s must be set for acceptance tests", JujuUsernameEnvKey)
 		}
-	}
-	confResp := configureProvider(t, Provider)
-	require.Equal(t, confResp.Diagnostics.HasError(), false, fmt.Sprintf("provider configuration failed: %v", confResp.Diagnostics.Errors()))
-	testClient, ok := confResp.ResourceData.(*juju.Client)
-	require.Truef(t, ok, "ResourceData, not of type juju client")
-	TestClient = testClient
+		if v := os.Getenv(JujuPasswordEnvKey); v == "" {
+			t.Fatalf("%s must be set for acceptance tests", JujuPasswordEnvKey)
+		}
+		if v := os.Getenv(JujuCACertEnvKey); v == "" {
+			if v := os.Getenv("JUJU_CA_CERT_FILE"); v != "" {
+				t.Logf("reading certificate from: %s", v)
+				cert, err := os.ReadFile(v)
+				if err != nil {
+					t.Fatalf("cannot read file specified by JUJU_CA_CERT_FILE for acceptance tests: %s", err)
+				}
+				os.Setenv(JujuCACertEnvKey, string(cert))
+			} else {
+				t.Fatalf("%s must be set for acceptance tests", JujuCACertEnvKey)
+			}
+		}
+		confResp := configureProvider(t, Provider)
+		require.Equal(t, confResp.Diagnostics.HasError(), false, fmt.Sprintf("provider configuration failed: %v", confResp.Diagnostics.Errors()))
+		testClient, ok := confResp.ResourceData.(*juju.Client)
+		require.Truef(t, ok, "ResourceData, not of type juju client")
+		TestClient = testClient
+	})
 }
 
 func configureProvider(t *testing.T, p provider.Provider) provider.ConfigureResponse {
@@ -219,4 +221,14 @@ func TestFrameworkProviderSchema(t *testing.T) {
 	jujuProvider.Schema(context.Background(), req, &resp)
 	assert.Equal(t, resp.Diagnostics.HasError(), false)
 	assert.Len(t, resp.Schema.Attributes, 6)
+}
+
+func expectedResourceOwner() string {
+	// Only 1 field is expected to be populated.
+	username := os.Getenv(JujuUsernameEnvKey)
+	clientId := os.Getenv(JujuClientIDEnvKey)
+	if clientId != "" {
+		clientId = clientId + "@serviceaccount"
+	}
+	return username + clientId
 }

@@ -5,15 +5,20 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
@@ -44,6 +49,17 @@ func TestAcc_ResourceApplication(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
 					resource.TestCheckNoResourceAttr("juju_application.this", "storage"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationWithFullySpecifiedModel(appName, expectedResourceOwner(), modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "model", expectedResourceOwner()+"/"+modelName),
+					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "jameinel-ubuntu-lite"),
+					resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
+					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
 				),
 			},
 			{
@@ -794,6 +810,181 @@ func TestAcc_ResourceApplication_StorageK8s(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceApplicationWithDifferentModelOwner(t *testing.T) {
+	appName := "test-app"
+	modelName := "test"
+	username := acctest.RandomWithPrefix("bob")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			// Create a model owned by a separate user.
+			// We do this outside of Terraform because we don't currently support
+			// creating a model owned by a different user than the one making the connection.
+			cleanup := createModelWithNewUser(t, username, modelName)
+			t.Cleanup(func() {
+				cleanup()
+			})
+		},
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationWithExistingModel(appName, username, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "model", username+"/test"),
+					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "jameinel-ubuntu-lite"),
+					resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
+					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
+				),
+			},
+		},
+	})
+}
+
+func createModelWithNewUser(t *testing.T, username, modelName string) (cleanup func()) {
+	testPassword := "test"
+	userReq := internaljuju.CreateUserInput{
+		Name:     username,
+		Password: testPassword,
+	}
+	_, err := TestClient.Users.CreateUser(userReq)
+	assert.Nil(t, err)
+
+	data := jujuProviderModelEnvVar()
+	config := internaljuju.ControllerConfiguration{
+		ControllerAddresses: strings.Split(data.ControllerAddrs.ValueString(), ","),
+		Username:            username,
+		Password:            testPassword,
+		CACert:              data.CACert.ValueString(),
+	}
+	client, err := internaljuju.NewClient(context.Background(), config)
+	assert.Nil(t, err)
+
+	// The next step has to be done by calling out to the Juju CLI until the provider supports these operations.
+	adminUser := data.UserName.ValueString()
+	adminPassword := data.Password.ValueString()
+	grantNewUserAccess(t, username, testPassword, adminUser, adminPassword)
+
+	createModelReq := internaljuju.CreateModelInput{
+		Name:       modelName,
+		Credential: "localhost",
+		CloudName:  "localhost",
+	}
+	createModelResp, err := client.Models.CreateModel(createModelReq)
+	assert.Nil(t, err)
+
+	grantModelReq := internaljuju.GrantModelInput{
+		User:      data.UserName.ValueString(),
+		Access:    "admin",
+		ModelName: modelName,
+	}
+	err = client.Models.GrantModel(grantModelReq)
+	assert.Nil(t, err)
+
+	return func() {
+		destroyModelReq := internaljuju.DestroyModelInput{
+			UUID: createModelResp.UUID,
+		}
+		err := TestClient.Models.DestroyModel(destroyModelReq)
+		assert.Nil(t, err)
+		destroyUserReq := internaljuju.DestroyUserInput{
+			Name: username,
+		}
+		err = TestClient.Users.DestroyUser(destroyUserReq)
+		assert.Nil(t, err)
+	}
+}
+
+// grantNewUserAccess grants a new user with the ability to access the cloud being tested.
+func grantNewUserAccess(t *testing.T, testUser, testPassword, adminUser, adminPassword string) {
+	cInfo := getControllerInfo(t)
+	grantCloudCmd := exec.Command("juju", "grant-cloud", testUser, "add-model", cInfo.cloudName)
+	_, err := grantCloudCmd.Output()
+	assert.Nil(t, err)
+
+	logoutCmd := exec.Command("juju", "logout")
+	_, err = logoutCmd.Output()
+	assert.Nil(t, err)
+
+	loginCmd := exec.Command("juju", "login", "-u", testUser)
+	passwordReader := strings.NewReader(testPassword + "\n")
+	loginCmd.Stdin = passwordReader
+	_, err = loginCmd.Output()
+	assert.Nil(t, err)
+
+	addCredentialCmd := exec.Command("juju", "update-credential", cInfo.cloudName, cInfo.credentialName, "--controller", cInfo.controllerName)
+	_, err = addCredentialCmd.Output()
+	assert.Nil(t, err)
+
+	logoutCmd = exec.Command("juju", "logout")
+	_, err = logoutCmd.Output()
+	assert.Nil(t, err)
+
+	loginCmd = exec.Command("juju", "login", "-u", adminUser)
+	passwordReader = strings.NewReader(adminPassword + "\n")
+	loginCmd.Stdin = passwordReader
+	_, err = loginCmd.Output()
+	assert.Nil(t, err)
+}
+
+type testControllerInfo struct {
+	controllerName string
+	cloudName      string
+	credentialName string
+}
+
+func getControllerInfo(t *testing.T) testControllerInfo {
+	whoamiCmd := exec.Command("juju", "whoami", "--format=json")
+	out, err := whoamiCmd.Output()
+	assert.Nil(t, err)
+	whoamiInfo := make(map[string]any)
+	require.Nil(t, json.Unmarshal(out, &whoamiInfo))
+	controller, ok := whoamiInfo["controller"]
+	require.True(t, ok)
+	controllerName, ok := controller.(string)
+	require.True(t, ok)
+
+	cloudsCmd := exec.Command("juju", "clouds", "--controller", controllerName, "--format=json")
+	out, err = cloudsCmd.Output()
+	assert.Nil(t, err)
+	cloudsInfo := make(map[string]any)
+	require.Nil(t, json.Unmarshal(out, &cloudsInfo))
+	require.Greater(t, len(cloudsInfo), 0)
+	if len(cloudsInfo) > 1 {
+		t.Logf("Multiple clouds found for test, choosing the first")
+	}
+	var cloudName string
+	for key := range cloudsInfo {
+		cloudName = key
+		break
+	}
+
+	credentialsCmd := exec.Command("juju", "credentials", cloudName, "--client", "--format=json")
+	out, err = credentialsCmd.Output()
+	assert.Nil(t, err)
+	credentials := make(map[string]any)
+	require.Nil(t, json.Unmarshal(out, &credentials))
+	credentialInfo, ok := credentials["client-credentials"].(map[string]any)
+	assert.True(t, ok)
+	require.Greater(t, len(credentialInfo), 0)
+	if len(credentialInfo) > 1 {
+		t.Logf("Multiple credentials found for test, choosing the first")
+	}
+	var credentialName string
+	for key := range credentialInfo {
+		credentialName = key
+		break
+	}
+
+	return testControllerInfo{
+		controllerName: controllerName,
+		cloudName:      cloudName,
+		credentialName: credentialName,
+	}
+}
+
 func testAccResourceApplicationBasic_Minimal(modelName, charmName string) string {
 	return fmt.Sprintf(`
 		resource "juju_model" "testmodel" {
@@ -807,6 +998,50 @@ func testAccResourceApplicationBasic_Minimal(modelName, charmName string) string
 		  }
 		}
 		`, modelName, charmName)
+}
+
+func testAccResourceApplicationWithExistingModel(appName, username, modelName string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceApplicationWithSharedModel",
+		`	
+resource "juju_application" "this" {
+	name = "{{.AppName}}"
+	model = "{{.Username}}/{{.ModelName}}"
+	charm {
+	name = "jameinel-ubuntu-lite"
+	}
+	trust = true
+	expose{}
+}
+		`, internaltesting.TemplateData{
+			"ModelName": modelName,
+			"AppName":   appName,
+			"Username":  username,
+		})
+}
+
+func testAccResourceApplicationWithFullySpecifiedModel(appName, username, modelName string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceApplicationWithFullySpecifiedModel",
+		`
+resource "juju_model" "this" {
+	name = "{{.ModelName}}"
+}
+	
+resource "juju_application" "this" {
+	name = "{{.AppName}}"
+	model = "{{.Username}}/${juju_model.this.name}"
+	charm {
+	name = "jameinel-ubuntu-lite"
+	}
+	trust = true
+	expose{}
+}
+		`, internaltesting.TemplateData{
+			"ModelName": modelName,
+			"AppName":   appName,
+			"Username":  username,
+		})
 }
 
 func testAccResourceApplicationBasic(modelName, appName string) string {

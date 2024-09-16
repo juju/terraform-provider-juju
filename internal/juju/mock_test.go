@@ -54,15 +54,15 @@ func (m *MockSharedClient) EXPECT() *MockSharedClientMockRecorder {
 }
 
 // AddModel mocks base method.
-func (m *MockSharedClient) AddModel(arg0, arg1 string, arg2 model.ModelType) {
+func (m *MockSharedClient) AddModel(arg0, arg1, arg2 string, arg3 model.ModelType) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddModel", arg0, arg1, arg2)
+	m.ctrl.Call(m, "AddModel", arg0, arg1, arg2, arg3)
 }
 
 // AddModel indicates an expected call of AddModel.
-func (mr *MockSharedClientMockRecorder) AddModel(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockSharedClientMockRecorder) AddModel(arg0, arg1, arg2, arg3 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddModel", reflect.TypeOf((*MockSharedClient)(nil).AddModel), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddModel", reflect.TypeOf((*MockSharedClient)(nil).AddModel), arg0, arg1, arg2, arg3)
 }
 
 // Debugf mocks base method.

@@ -176,7 +176,7 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 	resp.UUID = modelInfo.UUID
 
 	// Add a model object on the client internal to the provider
-	c.AddModel(modelInfo.Name, modelInfo.UUID, modelInfo.Type)
+	c.AddModel(modelInfo.Name, modelInfo.Owner, modelInfo.UUID, modelInfo.Type)
 
 	// set constraints when required
 	if input.Constraints.String() == "" {

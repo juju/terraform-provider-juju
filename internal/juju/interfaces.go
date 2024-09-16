@@ -23,7 +23,7 @@ import (
 )
 
 type SharedClient interface {
-	AddModel(modelName, modelUUID string, modelType model.ModelType)
+	AddModel(modelName, modelOwner, modelUUID string, modelType model.ModelType)
 	GetConnection(modelName *string) (api.Connection, error)
 	ModelType(modelName string) (model.ModelType, error)
 	ModelUUID(modelName string) (string, error)

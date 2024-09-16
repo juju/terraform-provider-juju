@@ -5,9 +5,7 @@ package juju
 
 import (
 	"context"
-	"fmt"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -16,6 +14,7 @@ import (
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/api/connector"
 	"github.com/juju/juju/core/model"
+	"github.com/juju/terraform-provider-juju/internal/juju/modelcache"
 )
 
 const (
@@ -51,20 +50,10 @@ type Client struct {
 	Secrets      secretsClient
 }
 
-type jujuModel struct {
-	uuid      string
-	modelType model.ModelType
-}
-
-func (j jujuModel) String() string {
-	return fmt.Sprintf("uuid(%s) type(%s)", j.uuid, j.modelType.String())
-}
-
 type sharedClient struct {
 	controllerConfig ControllerConfiguration
 
-	modelUUIDcache map[string]jujuModel
-	modelUUIDmu    sync.Mutex
+	modelCache modelcache.Cache
 
 	// subCtx is the context created with the new tflog subsystem for applications.
 	subCtx context.Context
@@ -79,7 +68,7 @@ func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, er
 	}
 	sc := &sharedClient{
 		controllerConfig: config,
-		modelUUIDcache:   make(map[string]jujuModel),
+		modelCache:       modelcache.NewModelCache(),
 		subCtx:           tflog.NewSubsystem(ctx, LogJujuClient),
 	}
 
@@ -137,26 +126,18 @@ func (sc *sharedClient) GetConnection(modelName *string) (api.Connection, error)
 }
 
 func (sc *sharedClient) ModelUUID(modelName string) (string, error) {
-	sc.modelUUIDmu.Lock()
-	defer sc.modelUUIDmu.Unlock()
-	dataMap := make(map[string]interface{})
-	// How to tell if logging level is Trace?
-	for k, v := range sc.modelUUIDcache {
-		dataMap[k] = v.String()
-	}
-	sc.Tracef(fmt.Sprintf("ModelUUID cache looking for %q", modelName), dataMap)
-	if modelWithName, ok := sc.modelUUIDcache[modelName]; ok {
-		sc.Tracef(fmt.Sprintf("Found uuid for %q in cache", modelName))
-		return modelWithName.uuid, nil
+	modelLookup := modelcache.NewModelLookup(modelName)
+	if model, err := sc.modelCache.Lookup(modelLookup); err == nil {
+		return model.UUID, nil
 	}
 	if err := sc.fillModelCache(); err != nil {
 		return "", err
 	}
-	if modelWithName, ok := sc.modelUUIDcache[modelName]; ok {
-		sc.Tracef(fmt.Sprintf("Found uuid for %q in cache on 2nd attempt", modelName))
-		return modelWithName.uuid, nil
+	model, err := sc.modelCache.Lookup(modelLookup)
+	if err != nil {
+		return "", err
 	}
-	return "", errors.NotFoundf("model %q", modelName)
+	return model.UUID, nil
 }
 
 // fillModelCache checks with the juju controller for all
@@ -177,48 +158,24 @@ func (sc *sharedClient) fillModelCache() error {
 	if err != nil {
 		return err
 	}
-	for _, modelSummary := range modelSummaries {
-		modelWithName := jujuModel{
-			uuid:      modelSummary.UUID,
-			modelType: modelSummary.Type,
-		}
-		sc.modelUUIDcache[modelSummary.Name] = modelWithName
-	}
+	sc.modelCache.FillCache(modelSummaries)
 	return nil
 }
 
 func (sc *sharedClient) ModelType(modelName string) (model.ModelType, error) {
-	sc.modelUUIDmu.Lock()
-	defer sc.modelUUIDmu.Unlock()
-	if modelWithName, ok := sc.modelUUIDcache[modelName]; ok {
-		return modelWithName.modelType, nil
+	model, err := sc.modelCache.Lookup(modelcache.NewModelLookup(modelName))
+	if err != nil {
+		return "", err
 	}
-
-	return model.ModelType(""), errors.NotFoundf("type for model %q", modelName)
+	return model.ModelType, nil
 }
 
 func (sc *sharedClient) RemoveModel(modelUUID string) {
-	sc.modelUUIDmu.Lock()
-	var modelName string
-	for k, v := range sc.modelUUIDcache {
-		if v.uuid == modelUUID {
-			modelName = k
-			break
-		}
-	}
-	if modelName != "" {
-		delete(sc.modelUUIDcache, modelName)
-	}
-	sc.modelUUIDmu.Unlock()
+	sc.modelCache.RemoveModel(modelUUID)
 }
 
-func (sc *sharedClient) AddModel(modelName, modelUUID string, modelType model.ModelType) {
-	sc.modelUUIDmu.Lock()
-	sc.modelUUIDcache[modelName] = jujuModel{
-		uuid:      modelUUID,
-		modelType: modelType,
-	}
-	sc.modelUUIDmu.Unlock()
+func (sc *sharedClient) AddModel(modelName, modelOwner, modelUUID string, modelType model.ModelType) {
+	sc.modelCache.AddModel(modelName, modelOwner, modelUUID, modelType)
 }
 
 // module names for logging
