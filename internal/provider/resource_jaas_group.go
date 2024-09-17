@@ -141,9 +141,7 @@ func (resource *jaasGroupResource) Read(ctx context.Context, req resource.ReadRe
 
 	// Set the group name in the state
 	state.Name = types.StringValue(group.Name)
-	resp.Diagnostics.Append(
-		resp.State.Set(ctx, state)...,
-	)
+	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
 }
 
 // Update attempts to rename the group represented by the resource in JAAS.
@@ -182,9 +180,7 @@ func (resource *jaasGroupResource) Update(ctx context.Context, req resource.Upda
 
 	// Update the state with the new name
 	state.Name = plan.Name
-	resp.Diagnostics.Append(
-		resp.State.Set(ctx, state)...,
-	)
+	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
 }
 
 // Delete attempts to remove the group represented by the resource from JAAS.
