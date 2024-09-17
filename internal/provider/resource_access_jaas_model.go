@@ -20,6 +20,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &jaasAccessModelResource{}
 var _ resource.ResourceWithConfigure = &jaasAccessModelResource{}
+var _ resource.ResourceWithImportState = &jaasAccessModelResource{}
 var _ resource.ResourceWithConfigValidators = &jaasAccessModelResource{}
 
 // NewJAASAccessModelResource returns a new resource for JAAS model access.
@@ -37,6 +38,7 @@ func (j modelInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnosti
 	modelAccess := jaasAccessModelResourceModel{}
 	diag.Append(getter.Get(ctx, &modelAccess)...)
 	accessModel := genericJAASAccessModel{
+		ID:              modelAccess.ID,
 		Users:           modelAccess.Users,
 		Groups:          modelAccess.Groups,
 		ServiceAccounts: modelAccess.ServiceAccounts,
@@ -49,12 +51,18 @@ func (j modelInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnosti
 func (j modelInfo) Save(ctx context.Context, setter Setter, info genericJAASAccessModel, tag names.Tag) diag.Diagnostics {
 	modelAccess := jaasAccessModelResourceModel{
 		ModelUUID:       basetypes.NewStringValue(tag.Id()),
+		ID:              info.ID,
 		Users:           info.Users,
 		Groups:          info.Groups,
 		ServiceAccounts: info.ServiceAccounts,
 		Access:          info.Access,
 	}
 	return setter.Set(ctx, modelAccess)
+}
+
+// ImportHint implements [resourceInfo] and provides a hint to users on the import string format.
+func (j modelInfo) ImportHint() string {
+	return "model-<UUID>:<access-level>"
 }
 
 type jaasAccessModelResource struct {
@@ -67,6 +75,9 @@ type jaasAccessModelResourceModel struct {
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
 	Access          types.String `tfsdk:"access"`
+
+	// ID required for imports
+	ID types.String `tfsdk:"id"`
 }
 
 // Metadata returns metadata about the JAAS model access resource.

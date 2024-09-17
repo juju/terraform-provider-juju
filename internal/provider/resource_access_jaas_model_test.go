@@ -31,7 +31,8 @@ func TestAcc_ResourceJaasAccessModel(t *testing.T) {
 
 	// Test 0: Test an invalid access string.
 	// Test 1: Test adding a valid set of users.
-	// Test 2: Test updating the users to remove 1 user.
+	// Test 2: Test importing works
+	// Test 3: Test updating the users to remove 1 user.
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
@@ -54,6 +55,12 @@ func TestAcc_ResourceJaasAccessModel(t *testing.T) {
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "bar@domain.com"),
 					resource.TestCheckResourceAttr(resourceName, "users.#", "2"),
 				),
+			},
+			{
+				Destroy:           false,
+				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      resourceName,
 			},
 			{
 				Config: testAccResourceJaasAccessModelOneUser(modelName, accessSuccess, userOne),
