@@ -60,7 +60,7 @@ jobs:
         uses: canonical/jimm/.github/actions/test-server@v3
         id: jaas
         with:
-          jimm-version: v3.1.8
+          jimm-version: v3.1.10
           juju-channel: 3/stable
           ghcr-pat: ${{ secrets.GITHUB_TOKEN }}
       - name: Create additional networks when testing with LXD

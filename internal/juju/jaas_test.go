@@ -140,9 +140,7 @@ func (s *JaasSuite) TestReadRelationsCancelledContext() {
 		Tuples:            []params.RelationshipTuple{toAPITuple(tuple)},
 		ContinuationToken: "token",
 	}
-	s.mockJaasClient.EXPECT().ListRelationshipTuples(
-		req,
-	).Return(respWithToken, nil)
+	s.mockJaasClient.EXPECT().ListRelationshipTuples(req).Return(respWithToken, nil)
 
 	expectedErr := errors.New("context canceled")
 	ctx := context.Background()
@@ -153,6 +151,76 @@ func (s *JaasSuite) TestReadRelationsCancelledContext() {
 	_, err := client.ReadRelations(ctx, &tuple)
 	s.Require().Error(err)
 	s.Assert().Equal(expectedErr, err)
+}
+
+func (s *JaasSuite) TestAddGroup() {
+	defer s.setupMocks(s.T()).Finish()
+
+	name := "group"
+	req := &params.AddGroupRequest{Name: name}
+	resp := params.AddGroupResponse{Group: params.Group{UUID: "uuid", Name: name}}
+
+	s.mockJaasClient.EXPECT().AddGroup(req).Return(resp, nil)
+
+	client := s.getJaasClient()
+	uuid, err := client.AddGroup(context.Background(), name)
+	s.Require().NoError(err)
+	s.Require().Equal(resp.UUID, uuid)
+}
+
+func (s *JaasSuite) TestGetGroup() {
+	defer s.setupMocks(s.T()).Finish()
+
+	uuid := "uuid"
+	name := "group"
+
+	req := &params.GetGroupRequest{UUID: uuid}
+	resp := params.GetGroupResponse{Group: params.Group{UUID: uuid, Name: name}}
+	s.mockJaasClient.EXPECT().GetGroup(req).Return(resp, nil)
+
+	client := s.getJaasClient()
+	gotGroup, err := client.ReadGroup(context.Background(), uuid)
+	s.Require().NoError(err)
+	s.Require().Equal(*gotGroup, JaasGroup{UUID: uuid, Name: name})
+}
+
+func (s *JaasSuite) TestGetGroupNotFound() {
+	defer s.setupMocks(s.T()).Finish()
+
+	uuid := "uuid"
+
+	req := &params.GetGroupRequest{UUID: uuid}
+	s.mockJaasClient.EXPECT().GetGroup(req).Return(params.GetGroupResponse{}, errors.New("group not found"))
+
+	client := s.getJaasClient()
+	gotGroup, err := client.ReadGroup(context.Background(), uuid)
+	s.Require().Error(err)
+	s.Require().Nil(gotGroup)
+}
+
+func (s *JaasSuite) TestRenameGroup() {
+	defer s.setupMocks(s.T()).Finish()
+
+	name := "name"
+	newName := "new-name"
+	req := &params.RenameGroupRequest{Name: name, NewName: newName}
+	s.mockJaasClient.EXPECT().RenameGroup(req).Return(nil)
+
+	client := s.getJaasClient()
+	err := client.RenameGroup(context.Background(), name, newName)
+	s.Require().NoError(err)
+}
+
+func (s *JaasSuite) TestRemoveGroup() {
+	defer s.setupMocks(s.T()).Finish()
+
+	name := "group"
+	req := &params.RemoveGroupRequest{Name: name}
+	s.mockJaasClient.EXPECT().RemoveGroup(req).Return(nil)
+
+	client := s.getJaasClient()
+	err := client.RemoveGroup(context.Background(), name)
+	s.Require().NoError(err)
 }
 
 // In order for 'go test' to run this suite, we need to create
