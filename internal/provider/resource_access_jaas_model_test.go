@@ -8,9 +8,11 @@ import (
 	"regexp"
 	"testing"
 
+	jimmnames "github.com/canonical/jimm-go-sdk/v3/names"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/juju/names/v5"
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
@@ -79,6 +81,63 @@ func TestAcc_ResourceJaasAccessModel(t *testing.T) {
 						plancheck.ExpectEmptyPlan(),
 					},
 				},
+			},
+		},
+	})
+}
+
+// TestAcc_ResourceJaasAccessModelAllTypes tests that all types
+// i.e. users, groups and services accounts can successfully
+// receive access to a model.
+func TestAcc_ResourceJaasAccessModelAllTypes(t *testing.T) {
+	OnlyTestAgainstJAAS(t)
+
+	// Resource names
+	modelResourceName := "juju_jaas_access_model.test"
+	groupResourcename := "juju_jaas_group.test"
+	modelName := acctest.RandomWithPrefix("tf-jaas-access-model")
+	access := "writer"
+	user := "foo@domain.com"
+	svcAcc := "test"
+	svcAccWithDomain := svcAcc + "@serviceaccount"
+	group := acctest.RandomWithPrefix("myGroup")
+
+	// Objects for checking access
+	newModelTagF := func(s string) string { return names.NewModelTag(s).String() }
+	modelCheck := newCheckAttribute(modelResourceName, "model_uuid", newModelTagF)
+	groupRelationF := func(s string) string { return jimmnames.NewGroupTag(s).String() + "#member" }
+	groupCheck := newCheckAttribute(groupResourcename, "uuid", groupRelationF)
+	userTag := names.NewUserTag(user).String()
+	svcAccTag := names.NewUserTag(svcAccWithDomain).String()
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		CheckDestroy: resource.ComposeTestCheckFunc(
+			testAccCheckJaasResourceAccess(access, &userTag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(access, &svcAccTag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(access, groupCheck.tag, modelCheck.tag, false),
+		),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceJaasAccessModelAllTypes(modelName, access, user, group, svcAcc),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAttributeNotEmpty(modelCheck),
+					testAccCheckAttributeNotEmpty(groupCheck),
+					testAccCheckJaasResourceAccess(access, &userTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(access, &svcAccTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(access, groupCheck.tag, modelCheck.tag, true),
+					resource.TestCheckResourceAttr(modelResourceName, "access", access),
+					resource.TestCheckTypeSetElemAttr(modelResourceName, "users.*", user),
+					resource.TestCheckResourceAttr(modelResourceName, "users.#", "1"),
+					// Wrap this check so that the pointer has deferred evaluation.
+					func(s *terraform.State) error {
+						return resource.TestCheckTypeSetElemAttr(modelResourceName, "groups.*", *groupCheck.resourceID)(s)
+					},
+					resource.TestCheckResourceAttr(modelResourceName, "groups.#", "1"),
+					resource.TestCheckTypeSetElemAttr(modelResourceName, "service_accounts.*", svcAcc),
+					resource.TestCheckResourceAttr(modelResourceName, "service_accounts.#", "1"),
+				),
 			},
 		},
 	})
@@ -196,8 +255,8 @@ func TestAcc_ResourceJaasAccessModelServiceAccountAndUsers(t *testing.T) {
 	svcAccTwoTag := names.NewUserTag(svcAccountTwo + "@serviceaccount").String()
 
 	// Test 0: Test adding an invalid service account tag
-	// Test 0: Test adding a valid service account.
-	// Test 1: Test adding an additional service account and user.
+	// Test 1: Test adding a valid service account.
+	// Test 2: Test adding an additional service account and user.
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
@@ -319,6 +378,34 @@ resource "juju_jaas_access_model" "test" {
 			"ModelName": modelName,
 			"Access":    access,
 			"User":      user,
+		})
+}
+
+func testAccResourceJaasAccessModelAllTypes(modelName, access, user, group, svcAcc string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceJaasAccessModelTwoUsers",
+		`
+resource "juju_model" "test-model" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_jaas_group" "test" {
+  name = "{{ .Group }}"
+}
+
+resource "juju_jaas_access_model" "test" {
+  model_uuid          = juju_model.test-model.id
+  access              = "{{.Access}}"
+  users               = ["{{.User}}"]
+  groups              = [juju_jaas_group.test.uuid]
+  service_accounts    = ["{{.SvcAcc}}"]
+}
+`, internaltesting.TemplateData{
+			"ModelName": modelName,
+			"Access":    access,
+			"Group":     group,
+			"User":      user,
+			"SvcAcc":    svcAcc,
 		})
 }
 

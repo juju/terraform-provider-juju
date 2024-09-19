@@ -17,6 +17,12 @@ import (
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
+// This file has bare minimum tests for cloud access
+// verifying that users, service accounts and groups
+// can access a cloud. More extensive tests for
+// generic jaas access are available in
+// resource_access_jaas_model_test.go
+
 func TestAcc_ResourceJaasAccessCloud(t *testing.T) {
 	OnlyTestAgainstJAAS(t)
 	if testingCloud != LXDCloudTesting {
