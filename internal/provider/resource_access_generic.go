@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	jimmnames "github.com/canonical/jimm-go-sdk/v3/names"
-	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -49,8 +48,8 @@ type Setter interface {
 // resourcer defines how the [genericJAASAccessResource] can query/save for information
 // on the target object.
 type resourcer interface {
-	Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessModel, names.Tag)
-	Save(ctx context.Context, setter Setter, info genericJAASAccessModel, tag names.Tag) diag.Diagnostics
+	Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessData, names.Tag)
+	Save(ctx context.Context, setter Setter, info genericJAASAccessData, tag names.Tag) diag.Diagnostics
 	ImportHint() string
 }
 
@@ -67,10 +66,10 @@ type genericJAASAccessResource struct {
 	subCtx context.Context
 }
 
-// genericJAASAccessModel represents a partial generic object for access management.
+// genericJAASAccessData represents a partial generic object for access management.
 // This struct should be embedded into a struct that contains a field for a target object (normally a name or UUID).
 // Note that service accounts are treated as users but kept as a separate field for improved validation.
-type genericJAASAccessModel struct {
+type genericJAASAccessData struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
@@ -84,11 +83,6 @@ type genericJAASAccessModel struct {
 func (r *genericJAASAccessResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
 	return []resource.ConfigValidator{
 		NewRequiresJAASValidator(r.client),
-		resourcevalidator.AtLeastOneOf(
-			path.MatchRoot("users"),
-			path.MatchRoot("groups"),
-			path.MatchRoot("service_accounts"),
-		),
 	}
 }
 
@@ -312,7 +306,7 @@ func (resource *genericJAASAccessResource) Update(ctx context.Context, req resou
 	resp.Diagnostics.Append(resource.save(ctx, &resp.State, plan, targetTag)...)
 }
 
-func diffModels(plan, state genericJAASAccessModel, diag *diag.Diagnostics) (toAdd, toRemove genericJAASAccessModel) {
+func diffModels(plan, state genericJAASAccessData, diag *diag.Diagnostics) (toAdd, toRemove genericJAASAccessData) {
 	newUsers := diffSet(plan.Users, state.Users, diag)
 	newGroups := diffSet(plan.Groups, state.Groups, diag)
 	newServiceAccounts := diffSet(plan.ServiceAccounts, state.ServiceAccounts, diag)
@@ -379,7 +373,7 @@ func (resource *genericJAASAccessResource) Delete(ctx context.Context, req resou
 }
 
 // modelToTuples return a list of tuples based on the access model provided.
-func modelToTuples(ctx context.Context, targetTag names.Tag, model genericJAASAccessModel, diag *diag.Diagnostics) []juju.JaasTuple {
+func modelToTuples(ctx context.Context, targetTag names.Tag, model genericJAASAccessData, diag *diag.Diagnostics) []juju.JaasTuple {
 	var users []string
 	var groups []string
 	var serviceAccounts []string
@@ -395,7 +389,7 @@ func modelToTuples(ctx context.Context, targetTag names.Tag, model genericJAASAc
 	}
 	var tuples []juju.JaasTuple
 	userNameToTagf := func(s string) string { return names.NewUserTag(s).String() }
-	groupIDToTagf := func(s string) string { return jimmnames.NewGroupTag(s).String() }
+	groupIDToTagf := func(s string) string { return jimmnames.NewGroupTag(s).String() + "#member" }
 	// Note that service accounts are treated as users but with an @serviceaccount domain.
 	// We add the @serviceaccount domain by calling `EnsureValidServiceAccountId` so that the user writing the plan doesn't have to.
 	// We can ignore the error below because the inputs have already gone through validation.
@@ -410,7 +404,7 @@ func modelToTuples(ctx context.Context, targetTag names.Tag, model genericJAASAc
 }
 
 // tuplesToModel does the reverse of planToTuples converting a slice of tuples to an access model.
-func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diagnostics) genericJAASAccessModel {
+func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diagnostics) genericJAASAccessData {
 	var users []string
 	var groups []string
 	var serviceAccounts []string
@@ -435,7 +429,7 @@ func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diag
 				users = append(users, userTag.Id())
 			}
 		case jimmnames.GroupTagKind:
-			groups = append(groups, tag.Id())
+			groups = append(groups, strings.ReplaceAll(tag.Id(), "#member", ""))
 		}
 	}
 	userSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users)
@@ -444,7 +438,7 @@ func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diag
 	diag.Append(errDiag...)
 	serviceAccountSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, serviceAccounts)
 	diag.Append(errDiag...)
-	var model genericJAASAccessModel
+	var model genericJAASAccessData
 	model.Users = userSet
 	model.Groups = groupSet
 	model.ServiceAccounts = serviceAccountSet
@@ -461,11 +455,11 @@ func assignTupleObject(baseTuple juju.JaasTuple, items []string, idToTag func(st
 	return tuples
 }
 
-func (a *genericJAASAccessResource) info(ctx context.Context, getter Getter, diags *diag.Diagnostics) (genericJAASAccessModel, names.Tag) {
+func (a *genericJAASAccessResource) info(ctx context.Context, getter Getter, diags *diag.Diagnostics) (genericJAASAccessData, names.Tag) {
 	return a.targetResource.Info(ctx, getter, diags)
 }
 
-func (a *genericJAASAccessResource) save(ctx context.Context, setter Setter, info genericJAASAccessModel, tag names.Tag) diag.Diagnostics {
+func (a *genericJAASAccessResource) save(ctx context.Context, setter Setter, info genericJAASAccessData, tag names.Tag) diag.Diagnostics {
 	return a.targetResource.Save(ctx, setter, info, tag)
 }
 
@@ -505,7 +499,7 @@ func (a *genericJAASAccessResource) ImportState(ctx context.Context, req resourc
 		resp.Diagnostics.AddError(
 			"ImportState Failure",
 			fmt.Sprintf("Malformed Import ID %q, "+
-				"%s is not a valid tag", IDstr, resID[0]),
+				"%s is not a valid tag, expected %q", IDstr, resID[0], a.targetResource.ImportHint()),
 		)
 		return
 	}

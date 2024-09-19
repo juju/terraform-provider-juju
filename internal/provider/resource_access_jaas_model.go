@@ -34,10 +34,10 @@ func NewJAASAccessModelResource() resource.Resource {
 type modelInfo struct{}
 
 // Info implements the [resourceInfo] interface, used to extract the info from a Terraform plan/state.
-func (j modelInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessModel, names.Tag) {
+func (j modelInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessData, names.Tag) {
 	modelAccess := jaasAccessModelResourceModel{}
 	diag.Append(getter.Get(ctx, &modelAccess)...)
-	accessModel := genericJAASAccessModel{
+	accessModel := genericJAASAccessData{
 		ID:              modelAccess.ID,
 		Users:           modelAccess.Users,
 		Groups:          modelAccess.Groups,
@@ -48,7 +48,7 @@ func (j modelInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnosti
 }
 
 // Save implements the [resourceInfo] interface, used to save info on Terraform's state.
-func (j modelInfo) Save(ctx context.Context, setter Setter, info genericJAASAccessModel, tag names.Tag) diag.Diagnostics {
+func (j modelInfo) Save(ctx context.Context, setter Setter, info genericJAASAccessData, tag names.Tag) diag.Diagnostics {
 	modelAccess := jaasAccessModelResourceModel{
 		ModelUUID:       basetypes.NewStringValue(tag.Id()),
 		ID:              info.ID,

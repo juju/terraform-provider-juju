@@ -33,6 +33,7 @@ const (
 	LogResourceAccessSecret = "resource-access-secret"
 
 	LogResourceJAASAccessModel = "resource-jaas-access-model"
+	LogResourceJAASAccessCloud = "resource-jaas-access-cloud"
 	LogResourceJAASGroup       = "resource-jaas-group"
 )
 
