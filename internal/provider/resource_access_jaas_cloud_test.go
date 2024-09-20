@@ -108,7 +108,8 @@ func TestAcc_ResourceJaasAccessCloudImportState(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config:            testAccResourceJaasAccessCloudEmpty(cloudName, access),
+				Config:            testAccResourceJaasAccessCloudEveryone(cloudName, access),
+				PlanOnly:          true,
 				ImportStateVerify: false,
 				ImportStateCheck: func(is []*terraform.InstanceState) error {
 					if len(is) != 1 {
@@ -160,13 +161,14 @@ resource "juju_jaas_access_cloud" "test" {
 		})
 }
 
-func testAccResourceJaasAccessCloudEmpty(cloudName, access string) string {
+func testAccResourceJaasAccessCloudEveryone(cloudName, access string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceJaasAccessCloudEmpty",
 		`
 resource "juju_jaas_access_cloud" "test" {
   cloud_name          = "{{.Cloud}}"
   access              = "{{.Access}}"
+  users               = ["everyone@external"]
 }
 `, internaltesting.TemplateData{
 			"Cloud":  cloudName,

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	jimmnames "github.com/canonical/jimm-go-sdk/v3/names"
+	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -83,6 +84,11 @@ type genericJAASAccessData struct {
 func (r *genericJAASAccessResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
 	return []resource.ConfigValidator{
 		NewRequiresJAASValidator(r.client),
+		resourcevalidator.AtLeastOneOf(
+			path.MatchRoot("users"),
+			path.MatchRoot("groups"),
+			path.MatchRoot("service_accounts"),
+		),
 	}
 }
 

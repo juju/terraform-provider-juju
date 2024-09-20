@@ -104,7 +104,7 @@ func (a *jaasAccessCloudResource) Schema(ctx context.Context, req resource.Schem
 		},
 	}
 	schema := schema.Schema{
-		Description: "A resource that represent access to a cloud when using JAAS.",
+		Description: "A resource that represents access to a cloud when using JAAS.",
 		Attributes:  attributes,
 	}
 	resp.Schema = schema
