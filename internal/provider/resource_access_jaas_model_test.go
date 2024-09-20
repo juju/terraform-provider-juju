@@ -8,8 +8,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/canonical/jimm-go-sdk/v3/api"
-	"github.com/canonical/jimm-go-sdk/v3/api/params"
+	jimmnames "github.com/canonical/jimm-go-sdk/v3/names"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
@@ -20,14 +19,20 @@ import (
 
 func TestAcc_ResourceJaasAccessModel(t *testing.T) {
 	OnlyTestAgainstJAAS(t)
+
+	// Resource names
+	resourceName := "juju_jaas_access_model.test"
 	modelName := acctest.RandomWithPrefix("tf-jaas-access-model")
 	accessSuccess := "writer"
 	accessFail := "bogus"
 	userOne := "foo@domain.com"
 	userTwo := "bar@domain.com"
-	var modelUUID string
 
-	resourceName := "juju_jaas_access_model.test"
+	// Objects for checking access
+	newModelTagF := func(s string) string { return names.NewModelTag(s).String() }
+	modelCheck := newCheckAttribute(resourceName, "model_uuid", newModelTagF)
+	userOneTag := names.NewUserTag(userOne).String()
+	userTwoTag := names.NewUserTag(userTwo).String()
 
 	// Test 0: Test an invalid access string.
 	// Test 1: Test adding a valid set of users.
@@ -37,7 +42,7 @@ func TestAcc_ResourceJaasAccessModel(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
-			testAccCheckJaasModelAccess(userOne, accessSuccess, &modelUUID, false),
+			testAccCheckJaasResourceAccess(accessSuccess, &userOneTag, modelCheck.tag, false),
 		),
 		Steps: []resource.TestStep{
 			{
@@ -47,9 +52,9 @@ func TestAcc_ResourceJaasAccessModel(t *testing.T) {
 			{
 				Config: testAccResourceJaasAccessModelTwoUsers(modelName, accessSuccess, userOne, userTwo),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckModelUUIDNotEmpty(resourceName, &modelUUID),
-					testAccCheckJaasModelAccess(userOne, accessSuccess, &modelUUID, true),
-					testAccCheckJaasModelAccess(userTwo, accessSuccess, &modelUUID, true),
+					testAccCheckAttributeNotEmpty(modelCheck),
+					testAccCheckJaasResourceAccess(accessSuccess, &userOneTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(accessSuccess, &userTwoTag, modelCheck.tag, true),
 					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "foo@domain.com"),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "bar@domain.com"),
@@ -65,8 +70,8 @@ func TestAcc_ResourceJaasAccessModel(t *testing.T) {
 			{
 				Config: testAccResourceJaasAccessModelOneUser(modelName, accessSuccess, userOne),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckJaasModelAccess(userOne, accessSuccess, &modelUUID, true),
-					testAccCheckJaasModelAccess(userTwo, accessSuccess, &modelUUID, false),
+					testAccCheckJaasResourceAccess(accessSuccess, &userOneTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(accessSuccess, &userTwoTag, modelCheck.tag, false),
 					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "foo@domain.com"),
 					resource.TestCheckResourceAttr(resourceName, "users.#", "1"),
@@ -81,6 +86,63 @@ func TestAcc_ResourceJaasAccessModel(t *testing.T) {
 	})
 }
 
+// TestAcc_ResourceJaasAccessModelAllTypes tests that all types
+// i.e. users, groups and services accounts can successfully
+// receive access to a model.
+func TestAcc_ResourceJaasAccessModelAllTypes(t *testing.T) {
+	OnlyTestAgainstJAAS(t)
+
+	// Resource names
+	modelResourceName := "juju_jaas_access_model.test"
+	groupResourcename := "juju_jaas_group.test"
+	modelName := acctest.RandomWithPrefix("tf-jaas-access-model")
+	access := "writer"
+	user := "foo@domain.com"
+	svcAcc := "test"
+	svcAccWithDomain := svcAcc + "@serviceaccount"
+	group := acctest.RandomWithPrefix("myGroup")
+
+	// Objects for checking access
+	newModelTagF := func(s string) string { return names.NewModelTag(s).String() }
+	modelCheck := newCheckAttribute(modelResourceName, "model_uuid", newModelTagF)
+	groupRelationF := func(s string) string { return jimmnames.NewGroupTag(s).String() + "#member" }
+	groupCheck := newCheckAttribute(groupResourcename, "uuid", groupRelationF)
+	userTag := names.NewUserTag(user).String()
+	svcAccTag := names.NewUserTag(svcAccWithDomain).String()
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		CheckDestroy: resource.ComposeTestCheckFunc(
+			testAccCheckJaasResourceAccess(access, &userTag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(access, &svcAccTag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(access, groupCheck.tag, modelCheck.tag, false),
+		),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceJaasAccessModelAllTypes(modelName, access, user, group, svcAcc),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAttributeNotEmpty(modelCheck),
+					testAccCheckAttributeNotEmpty(groupCheck),
+					testAccCheckJaasResourceAccess(access, &userTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(access, &svcAccTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(access, groupCheck.tag, modelCheck.tag, true),
+					resource.TestCheckResourceAttr(modelResourceName, "access", access),
+					resource.TestCheckTypeSetElemAttr(modelResourceName, "users.*", user),
+					resource.TestCheckResourceAttr(modelResourceName, "users.#", "1"),
+					// Wrap this check so that the pointer has deferred evaluation.
+					func(s *terraform.State) error {
+						return resource.TestCheckTypeSetElemAttr(modelResourceName, "groups.*", *groupCheck.resourceID)(s)
+					},
+					resource.TestCheckResourceAttr(modelResourceName, "groups.#", "1"),
+					resource.TestCheckTypeSetElemAttr(modelResourceName, "service_accounts.*", svcAcc),
+					resource.TestCheckResourceAttr(modelResourceName, "service_accounts.#", "1"),
+				),
+			},
+		},
+	})
+}
+
 // TestAcc_ResourceJaasAccessModelAdmin verifies behaviour when setting admin access.
 // When a model is created, it is expected that the model owner is also a model admin.
 // Test that the refresh plan is not empty if the model owner is not included and verify
@@ -88,18 +150,24 @@ func TestAcc_ResourceJaasAccessModel(t *testing.T) {
 func TestAcc_ResourceJaasAccessModelAdmin(t *testing.T) {
 	OnlyTestAgainstJAAS(t)
 	expectedResourceOwner()
+
+	// Resource names
+	resourceName := "juju_jaas_access_model.test"
 	modelName := acctest.RandomWithPrefix("tf-jaas-access-model")
 	accessAdmin := "administrator"
 	userOne := "foo@domain.com"
-	var modelUUID string
 
-	resourceName := "juju_jaas_access_model.test"
+	// Objects for checking access
+	resourceOwnerTag := names.NewUserTag(expectedResourceOwner()).String()
+	newModelTagF := func(s string) string { return names.NewModelTag(s).String() }
+	modelCheck := newCheckAttribute(resourceName, "model_uuid", newModelTagF)
+	userOneTag := names.NewUserTag(userOne).String()
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
-			testAccCheckJaasModelAccess(userOne, accessAdmin, &modelUUID, false),
+			testAccCheckJaasResourceAccess(accessAdmin, &userOneTag, modelCheck.tag, false),
 			// TODO(Kian): The owner keeps access to the model after the destroy model command is
 			// issued so that they can monitor the progress. Determine if there is a way to ensure
 			// that relation is also eventually removed.
@@ -109,9 +177,9 @@ func TestAcc_ResourceJaasAccessModelAdmin(t *testing.T) {
 			{
 				Config: testAccResourceJaasAccessModelOneUser(modelName, accessAdmin, userOne),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckModelUUIDNotEmpty(resourceName, &modelUUID),
-					testAccCheckJaasModelAccess(userOne, accessAdmin, &modelUUID, true),
-					testAccCheckJaasModelAccess(expectedResourceOwner(), accessAdmin, &modelUUID, true),
+					testAccCheckAttributeNotEmpty(modelCheck),
+					testAccCheckJaasResourceAccess(accessAdmin, &userOneTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(accessAdmin, &resourceOwnerTag, modelCheck.tag, true),
 					resource.TestCheckResourceAttr(resourceName, "access", accessAdmin),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "foo@domain.com"),
 					resource.TestCheckResourceAttr(resourceName, "users.#", "1"),
@@ -124,13 +192,18 @@ func TestAcc_ResourceJaasAccessModelAdmin(t *testing.T) {
 
 func TestAcc_ResourceJaasAccessModelChangingAccessReplacesResource(t *testing.T) {
 	OnlyTestAgainstJAAS(t)
+
+	// Resource names
+	resourceName := "juju_jaas_access_model.test"
 	modelName := acctest.RandomWithPrefix("tf-jaas-access-model")
 	accessWriter := "writer"
 	accessReader := "reader"
 	userOne := "foo@domain.com"
-	var modelUUID string
 
-	resourceName := "juju_jaas_access_model.test"
+	// Objects for checking access
+	newModelTagF := func(s string) string { return names.NewModelTag(s).String() }
+	modelCheck := newCheckAttribute(resourceName, "model_uuid", newModelTagF)
+	userOneTag := names.NewUserTag(userOne).String()
 
 	// Test 1: Test adding a valid user.
 	// Test 2: Test updating model access string and see the resource will be replaced.
@@ -138,14 +211,14 @@ func TestAcc_ResourceJaasAccessModelChangingAccessReplacesResource(t *testing.T)
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
-			testAccCheckJaasModelAccess(userOne, accessWriter, &modelUUID, false),
+			testAccCheckJaasResourceAccess(accessWriter, &userOneTag, modelCheck.tag, false),
 		),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccResourceJaasAccessModelOneUser(modelName, accessWriter, userOne),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckModelUUIDNotEmpty(resourceName, &modelUUID),
-					testAccCheckJaasModelAccess(userOne, accessWriter, &modelUUID, true),
+					testAccCheckAttributeNotEmpty(modelCheck),
+					testAccCheckJaasResourceAccess(accessWriter, &userOneTag, modelCheck.tag, true),
 					resource.TestCheckResourceAttr(resourceName, "access", accessWriter),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "foo@domain.com"),
 					resource.TestCheckResourceAttr(resourceName, "users.#", "1"),
@@ -165,27 +238,32 @@ func TestAcc_ResourceJaasAccessModelChangingAccessReplacesResource(t *testing.T)
 
 func TestAcc_ResourceJaasAccessModelServiceAccountAndUsers(t *testing.T) {
 	OnlyTestAgainstJAAS(t)
+
+	// Resource names
+	resourceName := "juju_jaas_access_model.test"
 	modelName := acctest.RandomWithPrefix("tf-jaas-access-model")
 	accessSuccess := "writer"
 	svcAccountOne := "foo-1"
 	svcAccountTwo := "foo-2"
 	user := "bob@domain.com"
-	svcAccountOneWithDomain := svcAccountOne + "@serviceaccount"
-	svcAccountTwoWithDomain := svcAccountTwo + "@serviceaccount"
-	var modelUUID string
 
-	resourceName := "juju_jaas_access_model.test"
+	// Objects for checking access
+	newModelTagF := func(s string) string { return names.NewModelTag(s).String() }
+	modelCheck := newCheckAttribute(resourceName, "model_uuid", newModelTagF)
+	userTag := names.NewUserTag(user).String()
+	svcAccOneTag := names.NewUserTag(svcAccountOne + "@serviceaccount").String()
+	svcAccTwoTag := names.NewUserTag(svcAccountTwo + "@serviceaccount").String()
 
 	// Test 0: Test adding an invalid service account tag
-	// Test 0: Test adding a valid service account.
-	// Test 1: Test adding an additional service account and user.
+	// Test 1: Test adding a valid service account.
+	// Test 2: Test adding an additional service account and user.
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
-			testAccCheckJaasModelAccess(svcAccountOneWithDomain, accessSuccess, &modelUUID, false),
-			testAccCheckJaasModelAccess(svcAccountTwoWithDomain, accessSuccess, &modelUUID, false),
-			testAccCheckJaasModelAccess(user, accessSuccess, &modelUUID, false),
+			testAccCheckJaasResourceAccess(accessSuccess, &svcAccOneTag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(accessSuccess, &svcAccTwoTag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(accessSuccess, &userTag, modelCheck.tag, false),
 		),
 		Steps: []resource.TestStep{
 			{
@@ -196,8 +274,8 @@ func TestAcc_ResourceJaasAccessModelServiceAccountAndUsers(t *testing.T) {
 			{
 				Config: testAccResourceJaasAccessModelOneSvcAccount(modelName, accessSuccess, svcAccountOne),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckModelUUIDNotEmpty(resourceName, &modelUUID),
-					testAccCheckJaasModelAccess(svcAccountOneWithDomain, accessSuccess, &modelUUID, true),
+					testAccCheckAttributeNotEmpty(modelCheck),
+					testAccCheckJaasResourceAccess(accessSuccess, &svcAccOneTag, modelCheck.tag, true),
 					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(resourceName, "service_accounts.*", svcAccountOne),
 					resource.TestCheckResourceAttr(resourceName, "service_accounts.#", "1"),
@@ -206,10 +284,10 @@ func TestAcc_ResourceJaasAccessModelServiceAccountAndUsers(t *testing.T) {
 			{
 				Config: testAccResourceJaasAccessModelSvcAccsAndUser(modelName, accessSuccess, user, svcAccountOne, svcAccountTwo),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckModelUUIDNotEmpty(resourceName, &modelUUID),
-					testAccCheckJaasModelAccess(user, accessSuccess, &modelUUID, true),
-					testAccCheckJaasModelAccess(svcAccountOneWithDomain, accessSuccess, &modelUUID, true),
-					testAccCheckJaasModelAccess(svcAccountTwoWithDomain, accessSuccess, &modelUUID, true),
+					testAccCheckAttributeNotEmpty(modelCheck),
+					testAccCheckJaasResourceAccess(accessSuccess, &userTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(accessSuccess, &svcAccOneTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(accessSuccess, &svcAccTwoTag, modelCheck.tag, true),
 					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", user),
 					resource.TestCheckTypeSetElemAttr(resourceName, "service_accounts.*", svcAccountOne),
@@ -303,6 +381,34 @@ resource "juju_jaas_access_model" "test" {
 		})
 }
 
+func testAccResourceJaasAccessModelAllTypes(modelName, access, user, group, svcAcc string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceJaasAccessModelTwoUsers",
+		`
+resource "juju_model" "test-model" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_jaas_group" "test" {
+  name = "{{ .Group }}"
+}
+
+resource "juju_jaas_access_model" "test" {
+  model_uuid          = juju_model.test-model.id
+  access              = "{{.Access}}"
+  users               = ["{{.User}}"]
+  groups              = [juju_jaas_group.test.uuid]
+  service_accounts    = ["{{.SvcAcc}}"]
+}
+`, internaltesting.TemplateData{
+			"ModelName": modelName,
+			"Access":    access,
+			"Group":     group,
+			"User":      user,
+			"SvcAcc":    svcAcc,
+		})
+}
+
 func testAccResourceJaasAccessModelOneSvcAccount(modelName, access, svcAcc string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceJaasAccessModelOneSvcAccount",
@@ -344,62 +450,4 @@ resource "juju_jaas_access_model" "test" {
 			"SvcAccOne": svcAccOne,
 			"SvcAccTwo": svcAccTwo,
 		})
-}
-
-func testAccCheckModelUUIDNotEmpty(resourceName string, modelUUID *string) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		// retrieve the resource by name from state
-		rs, ok := s.RootModule().Resources[resourceName]
-		if !ok {
-			return fmt.Errorf("Not found: %s", resourceName)
-		}
-
-		val, ok := rs.Primary.Attributes["model_uuid"]
-		if !ok {
-			return fmt.Errorf("Model UUID is not set")
-		}
-		if val == "" {
-			return fmt.Errorf("Model UUID is empty")
-		}
-		if modelUUID == nil {
-			return fmt.Errorf("cannot set model UUID, nil poiner")
-		}
-		*modelUUID = val
-		return nil
-	}
-}
-
-func testAccCheckJaasModelAccess(user, relation string, modelUUID *string, expectedAccess bool) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		if modelUUID == nil {
-			return fmt.Errorf("no model UUID set")
-		}
-		conn, err := TestClient.Models.GetConnection(nil)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = conn.Close() }()
-		jc := api.NewClient(conn)
-		req := params.CheckRelationRequest{
-			Tuple: params.RelationshipTuple{
-				Object:       names.NewUserTag(user).String(),
-				Relation:     relation,
-				TargetObject: names.NewModelTag(*modelUUID).String(),
-			},
-		}
-		resp, err := jc.CheckRelation(&req)
-		if err != nil {
-			return err
-		}
-		if resp.Allowed != expectedAccess {
-			var access string
-			if expectedAccess {
-				access = "access"
-			} else {
-				access = "no access"
-			}
-			return fmt.Errorf("expected %s for user %s as %s to model (%s), but access is %t", access, user, relation, *modelUUID, resp.Allowed)
-		}
-		return nil
-	}
 }
