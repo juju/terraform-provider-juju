@@ -151,6 +151,20 @@ func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
 	assert.Equal(t, "x509: certificate signed by unknown authority", err.Summary())
 }
 
+func TestProviderAllowsEmptyCACert(t *testing.T) {
+	jujuProvider := NewJujuProvider("dev")
+	//Set the CA cert to be empty and check that the provider still tries to connect.
+	t.Setenv(JujuCACertEnvKey, "")
+	t.Setenv("JUJU_CA_CERT_FILE", "")
+	confResp := configureProvider(t, jujuProvider)
+	// This is a live test, expect that the client connection will fail.
+	assert.Equal(t, confResp.Diagnostics.HasError(), true)
+	err := confResp.Diagnostics.Errors()[0]
+	assert.Equal(t, diag.SeverityError, err.Severity())
+	assert.Equal(t, "The ca_certificate provider property is not set and the Juju certificate authority is not trusted by your system", err.Detail())
+	assert.Equal(t, "x509: certificate signed by unknown authority", err.Summary())
+}
+
 func testAccPreCheck(t *testing.T) {
 	if TestClient != nil {
 		return
