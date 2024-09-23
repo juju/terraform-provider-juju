@@ -108,7 +108,7 @@ func (a *jaasAccessServiceAccountResource) Schema(ctx context.Context, req resou
 		Validators: []validator.String{
 			ValidatorMatchString(func(s string) bool {
 				return jimmnames.IsValidServiceAccountId(s + "@serviceaccount")
-			}, "serviceAccount must be a valid ID"),
+			}, "serviceAccount must be a valid user ID i.e. a string starting/ending with an alphanumeric and containing alphanumerics and/or limited special characters."),
 		},
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
