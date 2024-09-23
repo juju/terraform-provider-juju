@@ -25,7 +25,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/names/v5"
-	namesv4 "github.com/juju/names/v5"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -520,7 +519,7 @@ func (a *genericJAASAccessResource) ImportState(ctx context.Context, req resourc
 func parseTag(input string) (names.Tag, error) {
 	switch {
 	case strings.HasPrefix(input, names.ApplicationOfferTagKind):
-		return namesv4.NewApplicationOfferTag(strings.TrimPrefix(input, "applicationoffer-")), nil
+		return names.NewApplicationOfferTag(strings.TrimPrefix(input, "applicationoffer-")), nil
 	default:
 		tag, err := jimmnames.ParseTag(input)
 		if err != nil {

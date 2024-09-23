@@ -14,7 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	namesv4 "github.com/juju/names/v4"
+	"github.com/juju/juju/core/crossmodel"
 	"github.com/juju/names/v5"
 )
 
@@ -48,9 +48,7 @@ func (j offerInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnosti
 	// When importing, the offer url will be empty
 	var tag names.Tag
 	if offerResource.OfferUrl.ValueString() != "" {
-		// Create v4 tag but return v5 tag required by the interface.
-		// The v5 NewApplicationOfferTag expects a UUID.
-		tag = namesv4.NewApplicationOfferTag(offerResource.OfferUrl.ValueString())
+		tag = names.NewApplicationOfferTag(offerResource.OfferUrl.ValueString())
 	}
 	return genericInfo, tag
 }
@@ -99,10 +97,11 @@ func (a *jaasAccessOfferResource) Schema(ctx context.Context, req resource.Schem
 	attributes["offer_url"] = schema.StringAttribute{
 		Description: "The url of the offer for access management. If this is changed the resource will be deleted and a new resource will be created.",
 		Required:    true,
-		Validators:  []validator.String{
-			// No validator exists for offer URLs
-			// The names/v4 IsValidApplicationOffer is too restrictive
-			// and is not used by recent Juju 3 versions anyway.
+		Validators: []validator.String{
+			ValidatorMatchString(func(s string) bool {
+				_, err := crossmodel.ParseOfferURL(s)
+				return err == nil
+			}, "offer_url must be a valid offer string."),
 		},
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
