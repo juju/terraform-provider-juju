@@ -98,7 +98,7 @@ func (a *jaasAccessGroupResource) Schema(ctx context.Context, req resource.Schem
 		Description: "The ID of the group for access management. If this is changed the resource will be deleted and a new resource will be created.",
 		Required:    true,
 		Validators: []validator.String{
-			ValidatorMatchString(jimmnames.IsValidGroupId, "group must be a valid ID"),
+			ValidatorMatchString(jimmnames.IsValidGroupId, "group must be a valid UUID"),
 		},
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
