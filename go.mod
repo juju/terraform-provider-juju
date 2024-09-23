@@ -14,14 +14,14 @@ require (
 	github.com/canonical/jimm-go-sdk/v3 v3.0.4
 	github.com/dustin/go-humanize v1.0.1
 	github.com/hashicorp/terraform-json v0.22.1
-	github.com/hashicorp/terraform-plugin-framework v1.9.0
-	github.com/hashicorp/terraform-plugin-framework-validators v0.12.0
+	github.com/hashicorp/terraform-plugin-framework v1.10.0
+	github.com/hashicorp/terraform-plugin-framework-validators v0.13.0
 	github.com/hashicorp/terraform-plugin-go v0.23.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-testing v1.9.0
 	github.com/juju/charm/v12 v12.1.0
 	github.com/juju/clock v1.1.1
-	github.com/juju/cmd/v3 v3.0.15
+	github.com/juju/cmd/v3 v3.0.16
 	github.com/juju/collections v1.0.4
 	github.com/juju/errors v1.0.0
 	github.com/juju/names/v4 v4.0.0-20220207005702-9c6532a52823

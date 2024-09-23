@@ -10,11 +10,15 @@ resource "juju_application" "this" {
     series   = "trusty"
   }
 
+  resources = {
+    gosherve-image = "gatici/gosherve:1.0"
+  }
+
   units = 3
 
   placement = "0,1,2"
 
-  storage = {
+  storage_directives = {
     files = "101M"
   }
 

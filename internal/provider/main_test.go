@@ -37,7 +37,7 @@ func (ct CloudTesting) String() string {
 
 // CloudName returns the cloud name as displayed
 // when using `juju list-clouds`. For example,
-// a controller can be bootstrapped with an lxd type.
+// a controller can be bootstrapped with an LXD type.
 // However, that's the controller type, the cloud name
 // would be localhost
 func (ct CloudTesting) CloudName() string {

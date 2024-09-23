@@ -73,7 +73,7 @@ resource "juju_application" "this" {
 	name  = "this"
 
 	charm {
-		name = "postgresql"
+		name = "juju-qa-dummy-source"
 		%s
 	}
 }
@@ -81,7 +81,7 @@ resource "juju_application" "this" {
 resource "juju_offer" "this" {
 	model            = juju_model.this.name
 	application_name = juju_application.this.name
-	endpoint         = "db"
+	endpoint         = "sink"
 	name             = %q
 }
 
