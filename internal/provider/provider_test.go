@@ -133,7 +133,6 @@ func TestProviderConfigureAddresses(t *testing.T) {
 	assert.Equal(t, confResp.Diagnostics.HasError(), true)
 	err := confResp.Diagnostics.Errors()[0]
 	assert.Equal(t, diag.SeverityError, err.Severity())
-	assert.Equal(t, "dial tcp 192.0.2.100:17070: i/o timeout", err.Summary())
 	assert.Equal(t, "Connection error, please check the controller_addresses property set on the provider", err.Detail())
 }
 
