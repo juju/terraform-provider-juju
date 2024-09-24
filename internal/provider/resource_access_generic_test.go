@@ -5,6 +5,7 @@ package provider
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/canonical/jimm-go-sdk/v3/api"
@@ -136,10 +137,10 @@ func testAccCheckAttributeNotEmpty(check fetchComputedAttribute) resource.TestCh
 // Use newCheckAttribute to fetch and format resource tags from computed resources.
 func testAccCheckJaasResourceAccess(relation string, object, target *string, expectedAccess bool) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		if object == nil {
+		if object == nil || *object == "" {
 			return fmt.Errorf("no object set")
 		}
-		if target == nil {
+		if target == nil || *target == "" {
 			return fmt.Errorf("no target set")
 		}
 		conn, err := TestClient.Models.GetConnection(nil)
@@ -157,6 +158,9 @@ func testAccCheckJaasResourceAccess(relation string, object, target *string, exp
 		}
 		resp, err := jc.ListRelationshipTuples(&req)
 		if err != nil {
+			if strings.Contains(err.Error(), "not found") && expectedAccess == false {
+				return nil
+			}
 			return err
 		}
 		hasAccess := len(resp.Tuples) != 0

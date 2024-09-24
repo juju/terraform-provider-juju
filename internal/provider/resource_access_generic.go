@@ -415,7 +415,7 @@ func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diag
 	var groups []string
 	var serviceAccounts []string
 	for _, tuple := range tuples {
-		tag, err := jimmnames.ParseTag(tuple.Object)
+		tag, err := parseTag(tuple.Object)
 		if err != nil {
 			diag.AddError("failed to parse relation tag", fmt.Sprintf("error parsing %s:%s", tuple.Object, err.Error()))
 			continue
@@ -479,9 +479,9 @@ func retrieveJaasAccessFromID(ID types.String, diag *diag.Diagnostics) (resource
 		diag.AddError("Malformed ID", fmt.Sprintf("Access ID %q is malformed", resID))
 		return nil, ""
 	}
-	tag, err := jimmnames.ParseTag(resID[0])
+	tag, err := parseTag(resID[0])
 	if err != nil {
-		diag.AddError("ID Error", fmt.Sprintf("Tag %s from ID is not valid: %s", tag, err))
+		diag.AddError("ID Error", fmt.Sprintf("Tag %s from ID is not valid: %s", resID[0], err))
 		return nil, ""
 	}
 	return tag, resID[1]
@@ -500,7 +500,7 @@ func (a *genericJAASAccessResource) ImportState(ctx context.Context, req resourc
 		)
 		return
 	}
-	_, err := jimmnames.ParseTag(resID[0])
+	_, err := parseTag(resID[0])
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"ImportState Failure",
@@ -510,4 +510,21 @@ func (a *genericJAASAccessResource) ImportState(ctx context.Context, req resourc
 		return
 	}
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+// parseTag wraps the normal use of parsing Juju/JIMM tags to special case
+// application offers. App offers in the Juju names package changed in v4->v5
+// from accepting an offer URL to accept an offer UUID.
+// Currently the provider is not aware/storing the offer UUID.
+func parseTag(input string) (names.Tag, error) {
+	switch {
+	case strings.HasPrefix(input, names.ApplicationOfferTagKind):
+		return names.NewApplicationOfferTag(strings.TrimPrefix(input, "applicationoffer-")), nil
+	default:
+		tag, err := jimmnames.ParseTag(input)
+		if err != nil {
+			return nil, fmt.Errorf("Tag %s from ID is not valid: %s", input, err)
+		}
+		return tag, nil
+	}
 }
