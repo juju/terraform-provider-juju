@@ -52,6 +52,7 @@ type resourcer interface {
 	Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessData, names.Tag)
 	Save(ctx context.Context, setter Setter, info genericJAASAccessData, tag names.Tag) diag.Diagnostics
 	ImportHint() string
+	TagFromID(id string) (names.Tag, error)
 }
 
 // genericJAASAccessResource is a generic resource that can be used for creating access rules with JAAS.
@@ -97,7 +98,7 @@ func (r *genericJAASAccessResource) ConfigValidators(ctx context.Context) []reso
 func (r *genericJAASAccessResource) partialAccessSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"access": schema.StringAttribute{
-			Description: "Level of access to grant. Changing this value will replace the Terraform resource.",
+			Description: "Level of access to grant. Changing this value will replace the Terraform resource. Valid access levels are described at https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/authorisation_model/#valid-relations",
 			Required:    true,
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.RequiresReplace(),
@@ -217,7 +218,7 @@ func (resource *genericJAASAccessResource) Read(ctx context.Context, req resourc
 	}
 
 	// Retrieve information necessary for reads from the ID to handle imports
-	targetTag, access := retrieveJaasAccessFromID(state.ID, &resp.Diagnostics)
+	targetTag, access := resource.retrieveJaasAccessFromID(state.ID, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -415,7 +416,7 @@ func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diag
 	var groups []string
 	var serviceAccounts []string
 	for _, tuple := range tuples {
-		tag, err := parseTag(tuple.Object)
+		tag, err := jimmnames.ParseTag(tuple.Object)
 		if err != nil {
 			diag.AddError("failed to parse relation tag", fmt.Sprintf("error parsing %s:%s", tuple.Object, err.Error()))
 			continue
@@ -470,16 +471,16 @@ func (a *genericJAASAccessResource) save(ctx context.Context, setter Setter, inf
 }
 
 func newJaasAccessID(targetTag names.Tag, accessStr string) string {
-	return fmt.Sprintf("%s:%s", targetTag.String(), accessStr)
+	return fmt.Sprintf("%s:%s", targetTag.Id(), accessStr)
 }
 
-func retrieveJaasAccessFromID(ID types.String, diag *diag.Diagnostics) (resourceTag names.Tag, access string) {
+func (a *genericJAASAccessResource) retrieveJaasAccessFromID(ID types.String, diag *diag.Diagnostics) (resourceTag names.Tag, access string) {
 	resID := strings.Split(ID.ValueString(), ":")
 	if len(resID) != 2 {
 		diag.AddError("Malformed ID", fmt.Sprintf("Access ID %q is malformed", resID))
 		return nil, ""
 	}
-	tag, err := parseTag(resID[0])
+	tag, err := a.targetResource.TagFromID(resID[0])
 	if err != nil {
 		diag.AddError("ID Error", fmt.Sprintf("Tag %s from ID is not valid: %s", resID[0], err))
 		return nil, ""
@@ -500,7 +501,7 @@ func (a *genericJAASAccessResource) ImportState(ctx context.Context, req resourc
 		)
 		return
 	}
-	_, err := parseTag(resID[0])
+	_, err := a.targetResource.TagFromID(resID[0])
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"ImportState Failure",
@@ -510,23 +511,4 @@ func (a *genericJAASAccessResource) ImportState(ctx context.Context, req resourc
 		return
 	}
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
-}
-
-// parseTag wraps the normal use of parsing Juju/JIMM tags to special case
-// application offers. App offers in the Juju names package changed in v4->v5
-// from accepting an offer URL to accept an offer UUID.
-// Currently the provider is not aware/storing the offer UUID.
-func parseTag(input string) (names.Tag, error) {
-	switch {
-	case input == "controller-jimm":
-		return names.NewControllerTag("jimm"), nil
-	case strings.HasPrefix(input, names.ApplicationOfferTagKind):
-		return names.NewApplicationOfferTag(strings.TrimPrefix(input, "applicationoffer-")), nil
-	default:
-		tag, err := jimmnames.ParseTag(input)
-		if err != nil {
-			return nil, fmt.Errorf("Tag %s from ID is not valid: %s", input, err)
-		}
-		return tag, nil
-	}
 }

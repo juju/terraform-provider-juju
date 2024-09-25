@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	jimmnames "github.com/canonical/jimm-go-sdk/v3/names"
@@ -76,7 +77,16 @@ func (j serviceAccountInfo) Save(ctx context.Context, setter Setter, info generi
 
 // ImportHint implements [resourceInfo] and provides a hint to users on the import string format.
 func (j serviceAccountInfo) ImportHint() string {
-	return "serviceaccount-<name>:<access-level>"
+	return "<service-account-id>:<access-level>"
+}
+
+// TagFromID validates the id to be a valid service account ID
+// and returns a service account tag.
+func (j serviceAccountInfo) TagFromID(id string) (names.Tag, error) {
+	if !jimmnames.IsValidServiceAccountId(id) {
+		return nil, errors.New("invalid model ID")
+	}
+	return jimmnames.NewServiceAccountTag(id), nil
 }
 
 type jaasAccessServiceAccountResource struct {

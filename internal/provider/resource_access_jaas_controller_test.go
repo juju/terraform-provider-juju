@@ -124,7 +124,7 @@ func TestAcc_ResourceJaasAccessControllerImportState(t *testing.T) {
 					return errors.Join(errs...)
 				},
 				ImportState:   true,
-				ImportStateId: fmt.Sprintf("controller-jimm:%s", access),
+				ImportStateId: fmt.Sprintf("jimm:%s", access),
 				ResourceName:  resourceName,
 			},
 		},
