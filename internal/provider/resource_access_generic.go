@@ -518,6 +518,8 @@ func (a *genericJAASAccessResource) ImportState(ctx context.Context, req resourc
 // Currently the provider is not aware/storing the offer UUID.
 func parseTag(input string) (names.Tag, error) {
 	switch {
+	case input == "controller-jimm":
+		return names.NewControllerTag("jimm"), nil
 	case strings.HasPrefix(input, names.ApplicationOfferTagKind):
 		return names.NewApplicationOfferTag(strings.TrimPrefix(input, "applicationoffer-")), nil
 	default:
