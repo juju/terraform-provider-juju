@@ -51,7 +51,7 @@ body:
       required: true
 
   - type: textarea
-    id: Example terraform plan
+    id: Example-Terraform-Plan
     attributes:
       label: Example terraform plan
       description: |
