@@ -178,6 +178,7 @@ func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
 }
 
 func TestProviderAllowsEmptyCACert(t *testing.T) {
+	SkipJAAS(t)
 	jujuProvider := NewJujuProvider("dev")
 	//Set the CA cert to be empty and check that the provider still tries to connect.
 	t.Setenv(JujuCACertEnvKey, "")
