@@ -22,7 +22,7 @@ const (
 	LogDataSourceSecret  = "datasource-secret"
 
 	LogResourceApplication  = "resource-application"
-	LogResourceAccessModel  = "resource-assess-model"
+	LogResourceAccessModel  = "resource-access-model"
 	LogResourceCredential   = "resource-credential"
 	LogResourceMachine      = "resource-machine"
 	LogResourceModel        = "resource-model"
@@ -31,6 +31,14 @@ const (
 	LogResourceUser         = "resource-user"
 	LogResourceSecret       = "resource-secret"
 	LogResourceAccessSecret = "resource-access-secret"
+
+	LogResourceJAASAccessModel      = "resource-jaas-access-model"
+	LogResourceJAASAccessCloud      = "resource-jaas-access-cloud"
+	LogResourceJAASAccessGroup      = "resource-jaas-access-group"
+	LogResourceJAASAccessOffer      = "resource-jaas-access-offer"
+	LogResourceJAASAccessController = "resource-jaas-access-controller"
+	LogResourceJAASAccessSvcAcc     = "resource-jaas-access-service-account"
+	LogResourceJAASGroup            = "resource-jaas-group"
 )
 
 const LogResourceIntegration = "resource-integration"

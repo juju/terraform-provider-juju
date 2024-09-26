@@ -27,8 +27,8 @@ func TestAcc_ResourceOffer(t *testing.T) {
 				Config: testAccResourceOffer(modelName, "base = \"ubuntu@22.04\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", "admin", modelName, "this")),
-					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", "admin", modelName, "this")),
+					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
+					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 				),
 			},
 			{
@@ -40,7 +40,7 @@ func TestAcc_ResourceOffer(t *testing.T) {
 						map[string]string{"name": "apptwo", "endpoint": "source", "offer_url": ""}),
 
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.int", "application.*",
-						map[string]string{"name": "", "endpoint": "", "offer_url": fmt.Sprintf("%v/%v.%v", "admin",
+						map[string]string{"name": "", "endpoint": "", "offer_url": fmt.Sprintf("%v/%v.%v", expectedResourceOwner(),
 							modelName2, "appone")}),
 				),
 			},
@@ -125,8 +125,8 @@ func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
 				Config: testAccResourceOffer(modelName, "series = \"focal\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", "admin", modelName, "this")),
-					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", "admin", modelName, "this")),
+					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
+					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 				),
 			},
 			{

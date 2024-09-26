@@ -6,6 +6,7 @@ package juju
 import (
 	"io"
 
+	jaasparams "github.com/canonical/jimm-go-sdk/v3/api/params"
 	"github.com/juju/charm/v12"
 	charmresources "github.com/juju/charm/v12/resource"
 	"github.com/juju/juju/api"
@@ -81,4 +82,15 @@ type SecretAPIClient interface {
 	RemoveSecret(uri *secrets.URI, name string, revision *int) error
 	GrantSecret(uri *secrets.URI, name string, apps []string) ([]error, error)
 	RevokeSecret(uri *secrets.URI, name string, apps []string) ([]error, error)
+}
+
+// JaasAPIClient defines the set of methods that the JAAS API provides.
+type JaasAPIClient interface {
+	ListRelationshipTuples(req *jaasparams.ListRelationshipTuplesRequest) (*jaasparams.ListRelationshipTuplesResponse, error)
+	AddRelation(req *jaasparams.AddRelationRequest) error
+	RemoveRelation(req *jaasparams.RemoveRelationRequest) error
+	AddGroup(req *jaasparams.AddGroupRequest) (jaasparams.AddGroupResponse, error)
+	GetGroup(req *jaasparams.GetGroupRequest) (jaasparams.GetGroupResponse, error)
+	RenameGroup(req *jaasparams.RenameGroupRequest) error
+	RemoveGroup(req *jaasparams.RemoveGroupRequest) error
 }

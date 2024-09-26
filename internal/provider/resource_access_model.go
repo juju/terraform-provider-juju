@@ -27,6 +27,7 @@ import (
 var _ resource.Resource = &accessModelResource{}
 var _ resource.ResourceWithConfigure = &accessModelResource{}
 var _ resource.ResourceWithImportState = &accessModelResource{}
+var _ resource.ResourceWithConfigValidators = &accessModelResource{}
 
 func NewAccessModelResource() resource.Resource {
 	return &accessModelResource{}
@@ -50,6 +51,13 @@ type accessModelResourceModel struct {
 
 func (a *accessModelResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_access_model"
+}
+
+// ConfigValidators sets validators for the resource.
+func (r *accessModelResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		NewAvoidJAASValidator(r.client, "juju_jaas_access_model"),
+	}
 }
 
 func (a *accessModelResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {

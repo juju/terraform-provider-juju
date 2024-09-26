@@ -13,6 +13,7 @@ import (
 )
 
 func TestAcc_ResourceAccessModel(t *testing.T) {
+	SkipJAAS(t)
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 	userName2 := acctest.RandomWithPrefix("tfuser")
@@ -67,6 +68,7 @@ func TestAcc_ResourceAccessModel(t *testing.T) {
 }
 
 func TestAcc_ResourceAccessModel_UpgradeProvider(t *testing.T) {
+	SkipJAAS(t)
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -102,6 +104,30 @@ func TestAcc_ResourceAccessModel_UpgradeProvider(t *testing.T) {
 			},
 		},
 	})
+}
+
+func TestAcc_ResourceAccessModel_ErrorWhenUsedWithJAAS(t *testing.T) {
+	OnlyTestAgainstJAAS(t)
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccResourceAccessModelFixedUser(),
+				ExpectError: regexp.MustCompile("This resource is not supported with JAAS"),
+			},
+		},
+	})
+}
+
+func testAccResourceAccessModelFixedUser() string {
+	return `
+resource "juju_access_model" "test" {
+  access = "write"
+  model = "foo"
+  users = ["bob"]
+}`
 }
 
 func testAccResourceAccessModel(userName, userPassword, modelName, access string) string {

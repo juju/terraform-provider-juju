@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	jaasApi "github.com/canonical/jimm-go-sdk/v3/api"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
 	"github.com/juju/juju/api"
@@ -49,6 +50,15 @@ type Client struct {
 	SSHKeys      sshKeysClient
 	Users        usersClient
 	Secrets      secretsClient
+	Jaas         jaasClient
+
+	isJAAS func() bool
+}
+
+// IsJAAS returns a boolean to indicate whether the controller configured is a JAAS controller.
+// JAAS controllers offer additional functionality for permission management.
+func (c Client) IsJAAS() bool {
+	return c.isJAAS()
 }
 
 type jujuModel struct {
@@ -68,6 +78,9 @@ type sharedClient struct {
 
 	// subCtx is the context created with the new tflog subsystem for applications.
 	subCtx context.Context
+
+	checkJAASOnce sync.Once
+	isJAAS        bool
 }
 
 // NewClient returns a client which can talk to the juju controller
@@ -82,6 +95,12 @@ func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, er
 		modelUUIDcache:   make(map[string]jujuModel),
 		subCtx:           tflog.NewSubsystem(ctx, LogJujuClient),
 	}
+	// Client ID and secret are only set when connecting to JAAS. Use this as a fallback
+	// value if connecting to the controller fails.
+	defaultJAASCheck := false
+	if config.ClientID != "" && config.ClientSecret != "" {
+		defaultJAASCheck = true
+	}
 
 	return &Client{
 		Applications: *newApplicationClient(sc),
@@ -93,7 +112,34 @@ func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, er
 		SSHKeys:      *newSSHKeysClient(sc),
 		Users:        *newUsersClient(sc),
 		Secrets:      *newSecretsClient(sc),
+		Jaas:         *newJaasClient(sc),
+		isJAAS:       func() bool { return sc.IsJAAS(defaultJAASCheck) },
 	}, nil
+}
+
+// IsJAAS checks if the controller is a JAAS controller.
+// It does this by checking whether a JIMM specific call can be made.
+// The method accepts a default value and doesn't return an error
+// because callers are not expected to fail if they can't determine
+// whether they are connecting to JAAS.
+//
+// IsJAAS uses a synchronisation object to only perform the check once and return the same result.
+func (sc *sharedClient) IsJAAS(defaultVal bool) bool {
+	sc.checkJAASOnce.Do(func() {
+		sc.isJAAS = defaultVal
+		conn, err := sc.GetConnection(nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		jc := jaasApi.NewClient(conn)
+		_, err = jc.ListControllers()
+		if err == nil {
+			sc.isJAAS = true
+			return
+		}
+	})
+	return sc.isJAAS
 }
 
 // GetConnection returns a juju connection for use creating juju

@@ -5,6 +5,7 @@ package provider
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -12,6 +13,7 @@ import (
 )
 
 func TestAcc_ResourceUser(t *testing.T) {
+	SkipJAAS(t)
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 
@@ -25,7 +27,6 @@ func TestAcc_ResourceUser(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", userName),
 				),
-				PreConfig: func() { testAccPreCheck(t) },
 			},
 			{
 				Destroy:                 true,
@@ -49,6 +50,7 @@ resource "juju_user" "user" {
 }
 
 func TestAcc_ResourceUser_UpgradeProvider(t *testing.T) {
+	SkipJAAS(t)
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 
@@ -72,6 +74,23 @@ func TestAcc_ResourceUser_UpgradeProvider(t *testing.T) {
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccResourceUser(userName, userPassword),
 				PlanOnly:                 true,
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceUser_ErrorWhenUsedWithJAAS(t *testing.T) {
+	OnlyTestAgainstJAAS(t)
+	userName := acctest.RandomWithPrefix("tfuser")
+	userPassword := acctest.RandomWithPrefix("tf-test-user")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccResourceUser(userName, userPassword),
+				ExpectError: regexp.MustCompile("This resource is not supported with JAAS"),
 			},
 		},
 	})
