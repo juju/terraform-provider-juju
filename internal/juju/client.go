@@ -42,7 +42,7 @@ type ControllerConfiguration struct {
 type Client struct {
 	Applications applicationsClient
 	Machines     machinesClient
-	Clouds       cloudsClient
+	Clouds       kubernetesCloudsClient
 	Credentials  credentialsClient
 	Integrations integrationsClient
 	Models       modelsClient
@@ -86,7 +86,7 @@ func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, er
 
 	return &Client{
 		Applications: *newApplicationClient(sc),
-		Clouds:       *newCloudsClient(sc),
+		Clouds:       *newKubernetesCloudsClient(sc),
 		Credentials:  *newCredentialsClient(sc),
 		Integrations: *newIntegrationsClient(sc),
 		Machines:     *newMachinesClient(sc),

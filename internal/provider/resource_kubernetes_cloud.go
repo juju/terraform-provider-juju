@@ -39,6 +39,13 @@ type kubernetesCloudResourceModel struct {
 	ParentCloudRegion types.String `tfsdk:"parentcloudregion"`
 }
 
+func (o *kubernetesCloudResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+}
+
+func (o *kubernetesCloudResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
 func (o *kubernetesCloudResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_kubernetes_cloud"
 }
@@ -48,7 +55,7 @@ func (o *kubernetesCloudResource) Schema(_ context.Context, req resource.SchemaR
 		Description: "A resource that represent a Juju Cloud for existing controller.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
-				Description: "The name of the cloud.",
+				Description: "The name of the cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform.",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -62,38 +69,41 @@ func (o *kubernetesCloudResource) Schema(_ context.Context, req resource.SchemaR
 				},
 			},
 			"parentcloudname": schema.StringAttribute{
-				Description: "The parent cloud name in case adding k8s cluster from existed cloud.",
+				Description: "The parent cloud name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform.",
 				Optional:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"parentcloudregion": schema.StringAttribute{
-				Description: "The parent cloud region name in case adding k8s cluster from existed cloud.",
+				Description: "The parent cloud region name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform.",
 				Optional:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"id": schema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 		},
 	}
 }
 
+// Create adds a new kubernetes cloud to controllers used now by Terraform provider.
 func (o *kubernetesCloudResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 }
 
+// Read reads the current state of the kubernetes cloud.
 func (o *kubernetesCloudResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 }
 
+// Update updates the kubernetes cloud on the controller used by Terraform provider.
 func (o *kubernetesCloudResource) Update(context.Context, resource.UpdateRequest, *resource.UpdateResponse) {
 }
 
+// Delete removes the kubernetes cloud from the controller used by Terraform provider.
 func (o *kubernetesCloudResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-}
-
-func (o *kubernetesCloudResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-}
-
-func (o *kubernetesCloudResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
