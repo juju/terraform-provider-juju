@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -47,7 +48,15 @@ func (j controllerInfo) Save(ctx context.Context, setter Setter, info genericJAA
 
 // ImportHint implements [resourceInfo] and provides a hint to users on the import string format.
 func (j controllerInfo) ImportHint() string {
-	return "controller-jimm:<access-level>"
+	return "jimm:<access-level>"
+}
+
+// TagFromID verifies the id can only be "jimm" and returns a controller tag.
+func (j controllerInfo) TagFromID(id string) (names.Tag, error) {
+	if id != "jimm" {
+		return nil, fmt.Errorf("invalid controller name, got %s, expected jimm", id)
+	}
+	return names.NewControllerTag(id), nil
 }
 
 type jaasAccessControllerResource struct {

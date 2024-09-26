@@ -130,7 +130,7 @@ func TestAcc_ResourceJaasAccessCloudImportState(t *testing.T) {
 					return errors.Join(errs...)
 				},
 				ImportState:   true,
-				ImportStateId: fmt.Sprintf("%s:%s", "cloud-"+cloudName, access),
+				ImportStateId: fmt.Sprintf("%s:%s", cloudName, access),
 				ResourceName:  resourceName,
 			},
 		},

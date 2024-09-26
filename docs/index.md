@@ -9,6 +9,7 @@ description: |-
 # Juju Provider
 
 The provider can be used to interact with [Juju][0] - an open source orchestration engine by Canonical.
+Additionally, the provider supports interactions with [JAAS][1] - an orchestrator of Juju controllers.
 
 The provider only interacts with a single controller at a time.
 
@@ -54,6 +55,8 @@ provider "juju" {
 ```
 
 ### Client credentials
+
+Note: Authentication with client credentials is only supported when communicating with JAAS.
 
 Define the client credentials in the provider definition in your terraform plan.
 
@@ -282,3 +285,4 @@ resource "juju_integration" "wp_to_percona" {
 
 
 [0]: https://juju.is "Juju | An open source application orchestration engine"
+[1]: https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/ "JAAS | An enterprise gateway into your Juju estate"

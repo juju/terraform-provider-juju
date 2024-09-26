@@ -68,7 +68,13 @@ func (j offerInfo) Save(ctx context.Context, setter Setter, info genericJAASAcce
 
 // ImportHint implements [resourceInfo] and provides a hint to users on the import string format.
 func (j offerInfo) ImportHint() string {
-	return "offer-<url>:<access-level>"
+	return "<offer-url>:<access-level>"
+}
+
+// TagFromID returns an application offer tag.
+// The ID is not validated. It is expected to be an offer URL (also validated elsewhere).
+func (j offerInfo) TagFromID(id string) (names.Tag, error) {
+	return names.NewApplicationOfferTag(id), nil
 }
 
 type jaasAccessOfferResource struct {

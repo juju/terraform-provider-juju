@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -62,7 +63,16 @@ func (j modelInfo) Save(ctx context.Context, setter Setter, info genericJAASAcce
 
 // ImportHint implements [resourceInfo] and provides a hint to users on the import string format.
 func (j modelInfo) ImportHint() string {
-	return "model-<UUID>:<access-level>"
+	return "<model-UUID>:<access-level>"
+}
+
+// TagFromID validates the id to be a valid model ID
+// and returns a model tag.
+func (j modelInfo) TagFromID(id string) (names.Tag, error) {
+	if !names.IsValidModelName(id) {
+		return nil, errors.New("invalid model ID")
+	}
+	return names.NewModelTag(id), nil
 }
 
 type jaasAccessModelResource struct {

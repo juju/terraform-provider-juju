@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 
 	jimmnames "github.com/canonical/jimm-go-sdk/v3/names"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -68,7 +69,16 @@ func (j groupInfo) Save(ctx context.Context, setter Setter, info genericJAASAcce
 
 // ImportHint implements [resourceInfo] and provides a hint to users on the import string format.
 func (j groupInfo) ImportHint() string {
-	return "group-<id>:<access-level>"
+	return "<group-uuid>:<access-level>"
+}
+
+// TagFromID validates the id to be a valid group ID
+// and returns a group tag.
+func (j groupInfo) TagFromID(id string) (names.Tag, error) {
+	if !jimmnames.IsValidGroupId(id) {
+		return nil, errors.New("invalid group ID")
+	}
+	return jimmnames.NewGroupTag(id), nil
 }
 
 type jaasAccessGroupResource struct {

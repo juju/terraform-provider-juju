@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -67,7 +68,16 @@ func (j cloudInfo) Save(ctx context.Context, setter Setter, info genericJAASAcce
 
 // ImportHint implements [resourceInfo] and provides a hint to users on the import string format.
 func (j cloudInfo) ImportHint() string {
-	return "cloud-<name>:<access-level>"
+	return "<cloud-name>:<access-level>"
+}
+
+// TagFromID validates the id to be a valid cloud ID
+// and returns a cloud tag.
+func (j cloudInfo) TagFromID(id string) (names.Tag, error) {
+	if !names.IsValidCloud(id) {
+		return nil, errors.New("invalid cloud ID")
+	}
+	return names.NewCloudTag(id), nil
 }
 
 type jaasAccessCloudResource struct {
