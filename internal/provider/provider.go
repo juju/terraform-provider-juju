@@ -123,7 +123,6 @@ func (j jujuProviderModel) valid() bool {
 	validClientCredentials := j.loginViaClientCredentials()
 
 	return j.ControllerAddrs.ValueString() != "" &&
-		j.CACert.ValueString() != "" &&
 		(validUserPass || validClientCredentials) &&
 		!(validUserPass && validClientCredentials)
 }
@@ -316,9 +315,6 @@ func getJujuProviderModel(ctx context.Context, req provider.ConfigureRequest) (j
 		if planEnvVarDataModel.ControllerAddrs.ValueString() == "" {
 			diags.AddError("Controller address required", "The provider must know which juju controller to use. Please add to plan or use the JUJU_CONTROLLER_ADDRESSES environment variable.")
 		}
-		if planEnvVarDataModel.CACert.ValueString() == "" {
-			diags.AddError("Controller CACert required", "For the Juju certificate authority to be trusted by your system. Please add to plan or use the JUJU_CA_CERT environment variable.")
-		}
 	}
 	if diags.HasError() {
 		return planEnvVarDataModel, diags
@@ -348,9 +344,6 @@ func getJujuProviderModel(ctx context.Context, req provider.ConfigureRequest) (j
 	}
 	if errMsgDataModel.ControllerAddrs.ValueString() == "" {
 		diags.AddError("Controller address required", "The provider must know which juju controller to use.")
-	}
-	if errMsgDataModel.CACert.ValueString() == "" {
-		diags.AddError("Controller CACert required", "For the Juju certificate authority to be trusted by your system.")
 	}
 	if diags.HasError() {
 		tflog.Debug(ctx, "Current login values.",
@@ -407,8 +400,9 @@ func checkClientErr(err error, config juju.ControllerConfiguration) diag.Diagnos
 	var diags diag.Diagnostics
 
 	x509error := &x509.UnknownAuthorityError{}
+	x509HostError := &x509.HostnameError{}
 	netOpError := &net.OpError{}
-	if errors.As(err, x509error) {
+	if errors.As(err, x509error) || errors.As(err, x509HostError) {
 		errDetail = "Verify the ca_certificate property set on the provider"
 
 		if config.CACert == "" {
