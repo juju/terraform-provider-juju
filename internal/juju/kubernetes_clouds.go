@@ -9,6 +9,7 @@ import (
 	k8s "github.com/juju/juju/caas/kubernetes"
 	k8scloud "github.com/juju/juju/caas/kubernetes/cloud"
 	"k8s.io/client-go/tools/clientcmd"
+	"strings"
 )
 
 type kubernetesCloudsClient struct {
@@ -24,15 +25,19 @@ type CreateKubernetesCloudInput struct {
 }
 
 type ReadKubernetesCloudInput struct {
+	Name             string
+	KubernetesConfig string
 }
 
 type ReadKubernetesCloudOutput struct {
-}
-
-type UpdateKubernetesCloudInput struct {
+	Name              string
+	KubernetesConfig  string
+	ParentCloudName   string
+	ParentCloudRegion string
 }
 
 type DestroyKubernetesCloudInput struct {
+	Name string
 }
 
 func newKubernetesCloudsClient(sc SharedClient) *kubernetesCloudsClient {
@@ -90,15 +95,58 @@ func (c *kubernetesCloudsClient) CreateKubernetesCloud(input *CreateKubernetesCl
 
 // ReadKubernetesCloud reads a Kubernetes cloud with juju cloud facade.
 func (c *kubernetesCloudsClient) ReadKubernetesCloud(input *ReadKubernetesCloudInput) (*ReadKubernetesCloudOutput, error) {
-	return nil, nil
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := cloud.NewClient(conn)
+
+	clouds, err := client.Clouds()
+	if err != nil {
+		return nil, errors.Annotate(err, "getting clouds")
+	}
+
+	for _, cloud := range clouds {
+		if cloud.Name == input.Name {
+			parentCloudName, parentCloudRegion := getParentCloudNameAndRegionFromHostCloudRegion(cloud.HostCloudRegion)
+			return &ReadKubernetesCloudOutput{
+				Name:              input.Name,
+				ParentCloudName:   parentCloudName,
+				ParentCloudRegion: parentCloudRegion,
+				KubernetesConfig:  input.KubernetesConfig,
+			}, nil
+		}
+	}
+
+	return nil, errors.NotFoundf("kubernetes cloud %q", input.Name)
 }
 
-// UpdateKubernetesCloud updates a Kubernetes cloud with juju cloud facade.
-func (c *kubernetesCloudsClient) UpdateKubernetesCloud(input *UpdateKubernetesCloudInput) error {
-	return nil
+// getParentCloudNameAndRegionFromHostCloudRegion returns the parent cloud name and region from the host cloud region.
+// HostCloudRegion represents the k8s host cloud. The format is <cloudName>/<region>.
+func getParentCloudNameAndRegionFromHostCloudRegion(hostCloudRegion string) (string, string) {
+	parts := strings.Split(hostCloudRegion, "/")
+	if len(parts) != 2 {
+		return "", ""
+	}
+	return parts[0], parts[1]
 }
 
-// DestroyKubernetesCloud destroys a Kubernetes cloud with juju cloud facade.
-func (c *kubernetesCloudsClient) DestroyKubernetesCloud(input *DestroyKubernetesCloudInput) error {
+// RemoveKubernetesCloud removes a Kubernetes cloud with juju cloud facade.
+func (c *kubernetesCloudsClient) RemoveKubernetesCloud(input *DestroyKubernetesCloudInput) error {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := cloud.NewClient(conn)
+
+	err = client.RemoveCloud(input.Name)
+	if err != nil {
+		return errors.Annotate(err, "removing kubernetes cloud")
+	}
+
 	return nil
 }

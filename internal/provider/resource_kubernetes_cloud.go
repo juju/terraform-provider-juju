@@ -137,10 +137,52 @@ func (o *kubernetesCloudResource) Create(ctx context.Context, req resource.Creat
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create kubernetes cloud, got error %s", err))
 		return
 	}
+
+	o.trace(fmt.Sprintf("Created kubernetes cloud %s", plan.CloudName.ValueString()))
+
+	plan.ID = types.StringValue(newKubernetesCloudID(plan.CloudName.ValueString()))
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func newKubernetesCloudID(name string) string {
+	return fmt.Sprintf("kubernetes-cloud:%s", name)
 }
 
 // Read reads the current state of the kubernetes cloud.
 func (o *kubernetesCloudResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	// Prevent panic if the provider has not been configured.
+	if o.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "ssh_key", "read")
+		return
+	}
+
+	var plan kubernetesCloudResourceModel
+
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Read the kubernetes cloud.
+	cloud, err := o.client.Clouds.ReadKubernetesCloud(
+		&juju.ReadKubernetesCloudInput{
+			Name:             plan.CloudName.ValueString(),
+			KubernetesConfig: plan.KubernetesConfig.ValueString(),
+		},
+	)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read kubernetes cloud, got error %s", err))
+		return
+	}
+
+	plan.ParentCloudName = types.StringValue(cloud.ParentCloudName)
+	plan.ParentCloudRegion = types.StringValue(cloud.ParentCloudRegion)
+	plan.CloudName = types.StringValue(cloud.Name)
+	plan.KubernetesConfig = types.StringValue(cloud.KubernetesConfig)
+
+	// Set the plan onto the Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 // Update updates the kubernetes cloud on the controller used by Terraform provider.
@@ -149,4 +191,41 @@ func (o *kubernetesCloudResource) Update(context.Context, resource.UpdateRequest
 
 // Delete removes the kubernetes cloud from the controller used by Terraform provider.
 func (o *kubernetesCloudResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// Prevent panic if the provider has not been configured.
+	if o.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "kubernetes_cloud", "delete")
+		return
+	}
+
+	var plan kubernetesCloudResourceModel
+
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Remove the kubernetes cloud.
+	err := o.client.Clouds.RemoveKubernetesCloud(
+		&juju.DestroyKubernetesCloudInput{
+			Name: plan.CloudName.ValueString(),
+		},
+	)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to remove kubernetes cloud, got error %s", err))
+		return
+	}
+
+	o.trace(fmt.Sprintf("Removed kubernetes cloud %s", plan.CloudName.ValueString()))
+}
+
+func (o *kubernetesCloudResource) trace(msg string, additionalFields ...map[string]interface{}) {
+	if o.subCtx == nil {
+		return
+	}
+
+	//SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
+	// Output:
+	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
+	tflog.SubsystemTrace(o.subCtx, LogResourceKubernetesCloud, msg, additionalFields...)
 }
