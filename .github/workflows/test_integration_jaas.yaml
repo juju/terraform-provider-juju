@@ -27,8 +27,8 @@ permissions:
 jobs:
   # Ensure project builds before running test
   build:
-    name: Build
-    runs-on: [self-hosted, jammy]
+    name: Build-JAAS
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -39,9 +39,9 @@ jobs:
       - run: go build -v .
 
   test:
-    name: Integration
+    name: Integration-JAAS
     needs: build
-    runs-on: [self-hosted, jammy]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
     timeout-minutes: 60
