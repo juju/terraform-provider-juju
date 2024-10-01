@@ -34,7 +34,7 @@ resource "juju_model" "this" {
 
 ### Required
 
-- `name` (String) The name to be assigned to the model
+- `name` (String) The name to be assigned to the model. Changing this value will require the model to be destroyed and recreated by terraform.
 
 ### Optional
 
@@ -47,6 +47,7 @@ resource "juju_model" "this" {
 
 - `id` (String) The ID of this resource.
 - `type` (String) Type of the model. Set by the Juju's API server
+- `uuid` (String) The uuid of the model
 
 <a id="nestedblock--cloud"></a>
 ### Nested Schema for `cloud`

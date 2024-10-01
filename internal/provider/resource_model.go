@@ -52,6 +52,7 @@ type modelResourceModel struct {
 	Constraints types.String `tfsdk:"constraints"`
 	Credential  types.String `tfsdk:"credential"`
 	Type        types.String `tfsdk:"type"`
+	UUID        types.String `tfsdk:"uuid"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -67,10 +68,18 @@ func (r *modelResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 		Description: "A resource that represent a Juju Model.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
-				Description: "The name to be assigned to the model",
-				Required:    true,
+				Description: "The name to be assigned to the model. Changing this value will" +
+					" require the model to be destroyed and recreated by terraform.",
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"uuid": schema.StringAttribute{
+				Description: "The uuid of the model",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"config": schema.MapAttribute{
@@ -224,7 +233,7 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 		Credential:  credential,
 	})
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create model, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create model %q, got error: %s", plan.Name, err))
 		return
 	}
 	r.trace(fmt.Sprintf("model created : %q", modelName))
@@ -246,6 +255,7 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	plan.Credential = types.StringValue(response.CloudCredentialName)
 	plan.Type = types.StringValue(response.Type)
+	plan.UUID = types.StringValue(response.UUID)
 	plan.ID = types.StringValue(response.UUID)
 
 	r.trace(fmt.Sprintf("model resource created: %q", modelName))
@@ -366,6 +376,7 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	state.Name = types.StringValue(modelName)
 	state.Type = types.StringValue(response.ModelInfo.Type)
 	state.Credential = types.StringValue(credential)
+	state.UUID = types.StringValue(response.ModelInfo.UUID)
 	state.ID = types.StringValue(response.ModelInfo.UUID)
 
 	r.trace(fmt.Sprintf("Read model resource for: %v", modelName))
@@ -455,7 +466,7 @@ func (r *modelResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 
 	err = r.client.Models.UpdateModel(juju.UpdateModelInput{
-		Name:        plan.Name.ValueString(),
+		UUID:        plan.UUID.ValueString(),
 		CloudName:   cloudNameInput,
 		Config:      configMap,
 		Unset:       unsetConfigKeys,
@@ -486,9 +497,14 @@ func (r *modelResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 
-	err := r.client.Models.DestroyModel(juju.DestroyModelInput{
-		UUID: state.ID.ValueString(),
-	})
+	modelUUID := state.UUID.ValueString()
+	if modelUUID == "" {
+		modelUUID = state.ID.ValueString()
+	}
+	arg := juju.DestroyModelInput{
+		UUID: modelUUID,
+	}
+	err := r.client.Models.DestroyModel(arg)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete model, got error: %s", err))
 		return

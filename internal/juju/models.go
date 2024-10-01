@@ -11,6 +11,7 @@ import (
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/core/constraints"
+	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
 )
@@ -32,12 +33,6 @@ func (me *modelNotFoundError) Error() string {
 
 type modelsClient struct {
 	SharedClient
-}
-
-type GrantModelInput struct {
-	User      string
-	Access    string
-	ModelName string
 }
 
 type CreateModelInput struct {
@@ -65,6 +60,7 @@ type ReadModelResponse struct {
 
 type UpdateModelInput struct {
 	Name        string
+	UUID        string
 	CloudName   string
 	Config      map[string]string
 	Unset       []string
@@ -72,22 +68,28 @@ type UpdateModelInput struct {
 	Credential  string
 }
 
-type UpdateAccessModelInput struct {
-	ModelName string
-	OldAccess string
-	Grant     []string
-	Revoke    []string
-	Access    string
-}
-
 type DestroyModelInput struct {
 	UUID string
 }
 
+type GrantModelInput struct {
+	User            string
+	Access          string
+	ModelIdentifier string
+}
+
+type UpdateAccessModelInput struct {
+	ModelIdentifier string
+	OldAccess       string
+	Grant           []string
+	Revoke          []string
+	Access          string
+}
+
 type DestroyAccessModelInput struct {
-	ModelName string
-	Revoke    []string
-	Access    string
+	ModelIdentifier string
+	Revoke          []string
+	Access          string
 }
 
 func newModelsClient(sc SharedClient) *modelsClient {
@@ -123,6 +125,8 @@ func (c *modelsClient) GetModelByName(name string) (*params.ModelInfo, error) {
 	}
 
 	modelInfo := results[0].Result
+
+	c.AddModel(modelInfo.Name, modelUUID, model.ModelType(modelInfo.Type))
 
 	c.Tracef(fmt.Sprintf("Retrieved model info: %s, %+v", name, modelInfo))
 	return modelInfo, nil
@@ -256,7 +260,7 @@ func (c *modelsClient) ReadModel(name string) (*ReadModelResponse, error) {
 }
 
 func (c *modelsClient) UpdateModel(input UpdateModelInput) error {
-	conn, err := c.GetConnection(&input.Name)
+	conn, err := c.GetConnection(&input.UUID)
 	if err != nil {
 		return err
 	}
@@ -350,7 +354,7 @@ func (c *modelsClient) GrantModel(input GrantModelInput) error {
 
 	client := modelmanager.NewClient(conn)
 
-	modelUUID, err := c.ModelUUID(input.ModelName)
+	modelUUID, err := c.ModelUUID(input.ModelIdentifier)
 	if err != nil {
 		return err
 	}
@@ -367,7 +371,7 @@ func (c *modelsClient) GrantModel(input GrantModelInput) error {
 // If a user has had `write`, then removing that access would decrease their
 // access to `read` and the user will remain part of the model access.
 func (c *modelsClient) UpdateAccessModel(input UpdateAccessModelInput) error {
-	model := input.ModelName
+	model := input.ModelIdentifier
 	access := input.OldAccess
 
 	uuid, err := c.ModelUUID(model)
@@ -412,7 +416,7 @@ func (c *modelsClient) DestroyAccessModel(input DestroyAccessModelInput) error {
 
 	client := modelmanager.NewClient(conn)
 
-	uuid, err := c.ModelUUID(input.ModelName)
+	uuid, err := c.ModelUUID(input.ModelIdentifier)
 	if err != nil {
 		return err
 	}

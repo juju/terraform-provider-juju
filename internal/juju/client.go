@@ -17,6 +17,7 @@ import (
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/api/connector"
 	"github.com/juju/juju/core/model"
+	"github.com/juju/names/v5"
 )
 
 const (
@@ -62,12 +63,12 @@ func (c Client) IsJAAS() bool {
 }
 
 type jujuModel struct {
-	uuid      string
+	name      string
 	modelType model.ModelType
 }
 
 func (j jujuModel) String() string {
-	return fmt.Sprintf("uuid(%s) type(%s)", j.uuid, j.modelType.String())
+	return fmt.Sprintf("uuid(%s) type(%s)", j.name, j.modelType.String())
 }
 
 type sharedClient struct {
@@ -143,12 +144,14 @@ func (sc *sharedClient) IsJAAS(defaultVal bool) bool {
 }
 
 // GetConnection returns a juju connection for use creating juju
-// api clients given the provided model name.
-func (sc *sharedClient) GetConnection(modelName *string) (api.Connection, error) {
+// api clients given the provided model uuid, name, or neither.
+// Allowing a model name is a fallback behavior until the name
+// used by most resources has been removed in favor of the UUID.
+func (sc *sharedClient) GetConnection(modelIdentifier *string) (api.Connection, error) {
 	var modelUUID string
-	if modelName != nil {
+	if modelIdentifier != nil {
 		var err error
-		modelUUID, err = sc.ModelUUID(*modelName)
+		modelUUID, err = sc.ModelUUID(*modelIdentifier)
 		if err != nil {
 			return nil, err
 		}
@@ -182,7 +185,16 @@ func (sc *sharedClient) GetConnection(modelName *string) (api.Connection, error)
 	return conn, nil
 }
 
-func (sc *sharedClient) ModelUUID(modelName string) (string, error) {
+// ModelUUID returns the model uuid for the provided modelIdentifier.
+// The modelIdentifier can be a model name or model uuid. If a name
+// is provided, first search the modelUUIDCache for the uuid. If it's
+// not found, fill the model cache and try again. If the modelIdentifier
+// is a uuid, return that without verification.
+func (sc *sharedClient) ModelUUID(modelIdentifier string) (string, error) {
+	if names.IsValidModel(modelIdentifier) {
+		return modelIdentifier, nil
+	}
+	modelName := modelIdentifier
 	sc.modelUUIDmu.Lock()
 	defer sc.modelUUIDmu.Unlock()
 	dataMap := make(map[string]interface{})
@@ -191,16 +203,20 @@ func (sc *sharedClient) ModelUUID(modelName string) (string, error) {
 		dataMap[k] = v.String()
 	}
 	sc.Tracef(fmt.Sprintf("ModelUUID cache looking for %q", modelName), dataMap)
-	if modelWithName, ok := sc.modelUUIDcache[modelName]; ok {
-		sc.Tracef(fmt.Sprintf("Found uuid for %q in cache", modelName))
-		return modelWithName.uuid, nil
+	for uuid, m := range sc.modelUUIDcache {
+		if m.name == modelName {
+			sc.Tracef(fmt.Sprintf("Found uuid for %q in cache", modelName))
+			return uuid, nil
+		}
 	}
 	if err := sc.fillModelCache(); err != nil {
 		return "", err
 	}
-	if modelWithName, ok := sc.modelUUIDcache[modelName]; ok {
-		sc.Tracef(fmt.Sprintf("Found uuid for %q in cache on 2nd attempt", modelName))
-		return modelWithName.uuid, nil
+	for uuid, m := range sc.modelUUIDcache {
+		if m.name == modelName {
+			sc.Tracef(fmt.Sprintf("Found uuid for %q in cache on 2nd attempt", modelName))
+			return uuid, nil
+		}
 	}
 	return "", errors.NotFoundf("model %q", modelName)
 }
@@ -224,44 +240,64 @@ func (sc *sharedClient) fillModelCache() error {
 		return err
 	}
 	for _, modelSummary := range modelSummaries {
-		modelWithName := jujuModel{
-			uuid:      modelSummary.UUID,
+		modelWithUUID := jujuModel{
+			name:      modelSummary.Name,
 			modelType: modelSummary.Type,
 		}
-		sc.modelUUIDcache[modelSummary.Name] = modelWithName
+		sc.modelUUIDcache[modelSummary.UUID] = modelWithUUID
 	}
 	return nil
 }
 
-func (sc *sharedClient) ModelType(modelName string) (model.ModelType, error) {
+func (sc *sharedClient) ModelName(modelIdentifier string) (string, error) {
+	if !names.IsValidModel(modelIdentifier) {
+		return modelIdentifier, nil
+	}
 	sc.modelUUIDmu.Lock()
 	defer sc.modelUUIDmu.Unlock()
-	if modelWithName, ok := sc.modelUUIDcache[modelName]; ok {
-		return modelWithName.modelType, nil
+	jModel, ok := sc.modelUUIDcache[modelIdentifier]
+	if ok {
+		return jModel.name, nil
+	}
+	if err := sc.fillModelCache(); err != nil {
+		return "", err
+	}
+	jModel, ok = sc.modelUUIDcache[modelIdentifier]
+	var err error
+	if !ok {
+		err = fmt.Errorf("unable to find model name for %q", modelIdentifier)
+	}
+	return jModel.name, err
+}
+
+func (sc *sharedClient) ModelType(modelIdentifier string) (model.ModelType, error) {
+	sc.modelUUIDmu.Lock()
+	defer sc.modelUUIDmu.Unlock()
+	if names.IsValidModel(modelIdentifier) {
+		if modelWithUUID, ok := sc.modelUUIDcache[modelIdentifier]; ok {
+			return modelWithUUID.modelType, nil
+		}
 	}
 
-	return model.ModelType(""), errors.NotFoundf("type for model %q", modelName)
+	for _, m := range sc.modelUUIDcache {
+		if m.name == modelIdentifier {
+			return m.modelType, nil
+		}
+	}
+
+	return model.ModelType(""), errors.NotFoundf("type for model %q", modelIdentifier)
 }
 
 func (sc *sharedClient) RemoveModel(modelUUID string) {
 	sc.modelUUIDmu.Lock()
-	var modelName string
-	for k, v := range sc.modelUUIDcache {
-		if v.uuid == modelUUID {
-			modelName = k
-			break
-		}
-	}
-	if modelName != "" {
-		delete(sc.modelUUIDcache, modelName)
-	}
+	delete(sc.modelUUIDcache, modelUUID)
 	sc.modelUUIDmu.Unlock()
 }
 
 func (sc *sharedClient) AddModel(modelName, modelUUID string, modelType model.ModelType) {
 	sc.modelUUIDmu.Lock()
-	sc.modelUUIDcache[modelName] = jujuModel{
-		uuid:      modelUUID,
+	sc.modelUUIDcache[modelUUID] = jujuModel{
+		name:      modelName,
 		modelType: modelType,
 	}
 	sc.modelUUIDmu.Unlock()
