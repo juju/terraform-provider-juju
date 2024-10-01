@@ -27,7 +27,7 @@ jobs:
   # Ensure project builds before running testing matrix
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, jammy]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +41,7 @@ jobs:
   test:
     name: Integration
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, jammy]
     strategy:
       fail-fast: false
       matrix:

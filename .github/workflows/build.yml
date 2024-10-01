@@ -21,7 +21,7 @@ jobs:
   # Ensure project builds before running testing matrix
   go-install:
     name: install
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, jammy]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -34,13 +34,17 @@ jobs:
 
   # Ensure the generated docs are up todate
   generate:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, jammy]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
           cache: true
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.*"
+          terraform_wrapper: false
       - run: go generate ./...
       - name: git diff
         run: |
@@ -49,7 +53,7 @@ jobs:
 
   # Ensure the go code is formatted properly
   format:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, jammy]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -66,7 +70,7 @@ jobs:
   # This runs golangci-lint against the codebase
   lint:
     name: golangci-lint
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, jammy]
     steps:
       - uses: actions/checkout@v4
       - name: Determine which tests to run
@@ -90,7 +94,7 @@ jobs:
   # This runs golangci-lint against the codebase
   copyright-check:
     name: copyright-check
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, jammy]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

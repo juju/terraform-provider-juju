@@ -28,18 +28,21 @@ jobs:
   # Ensure project builds before running testing matrix
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, jammy]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
       - run: go build -v .
 
   # Run acceptance tests in a matrix with Terraform CLI versions
   add-machine-test:
     name: Add Machine
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, jammy]
     env:
       ACTIONS_ALLOW_IPV6: false
     strategy:
