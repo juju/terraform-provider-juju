@@ -166,9 +166,8 @@ func (r *kubernetesCloudResource) Read(ctx context.Context, req resource.ReadReq
 
 	// Read the kubernetes cloud.
 	cloud, err := r.client.Clouds.ReadKubernetesCloud(
-		&juju.ReadKubernetesCloudInput{
-			Name:             plan.CloudName.ValueString(),
-			KubernetesConfig: plan.KubernetesConfig.ValueString(),
+		juju.ReadKubernetesCloudInput{
+			Name: plan.CloudName.ValueString(),
 		},
 	)
 	if err != nil {
@@ -179,7 +178,6 @@ func (r *kubernetesCloudResource) Read(ctx context.Context, req resource.ReadReq
 	plan.ParentCloudName = types.StringValue(cloud.ParentCloudName)
 	plan.ParentCloudRegion = types.StringValue(cloud.ParentCloudRegion)
 	plan.CloudName = types.StringValue(cloud.Name)
-	plan.KubernetesConfig = types.StringValue(cloud.KubernetesConfig)
 	plan.ID = types.StringValue(newKubernetesCloudID(cloud.Name))
 
 	// Set the plan onto the Terraform state
@@ -204,7 +202,7 @@ func (r *kubernetesCloudResource) Update(ctx context.Context, req resource.Updat
 
 	// Update the kubernetes cloud.
 	err := r.client.Clouds.UpdateKubernetesCloud(
-		&juju.UpdateKubernetesCloudInput{
+		juju.UpdateKubernetesCloudInput{
 			Name:             plan.CloudName.ValueString(),
 			KubernetesConfig: plan.KubernetesConfig.ValueString(),
 		},
@@ -235,7 +233,7 @@ func (r *kubernetesCloudResource) Delete(ctx context.Context, req resource.Delet
 
 	// Remove the kubernetes cloud.
 	err := r.client.Clouds.RemoveKubernetesCloud(
-		&juju.DestroyKubernetesCloudInput{
+		juju.DestroyKubernetesCloudInput{
 			Name: plan.CloudName.ValueString(),
 		},
 	)

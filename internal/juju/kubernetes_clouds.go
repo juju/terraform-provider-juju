@@ -26,13 +26,11 @@ type CreateKubernetesCloudInput struct {
 }
 
 type ReadKubernetesCloudInput struct {
-	Name             string
-	KubernetesConfig string
+	Name string
 }
 
 type ReadKubernetesCloudOutput struct {
 	Name              string
-	KubernetesConfig  string
 	ParentCloudName   string
 	ParentCloudRegion string
 }
@@ -124,7 +122,6 @@ func (c *kubernetesCloudsClient) ReadKubernetesCloud(input ReadKubernetesCloudIn
 				Name:              input.Name,
 				ParentCloudName:   parentCloudName,
 				ParentCloudRegion: parentCloudRegion,
-				KubernetesConfig:  input.KubernetesConfig,
 			}, nil
 		}
 	}
