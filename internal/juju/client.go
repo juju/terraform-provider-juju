@@ -186,10 +186,10 @@ func (sc *sharedClient) GetConnection(modelIdentifier *string) (api.Connection, 
 }
 
 // ModelUUID returns the model uuid for the provided modelIdentifier.
-// The modelIdentifier can be a model name or model uuid. If a name
-// is provided, first search the modelUUIDCache for the uuid. If it's
-// not found, fill the model cache and try again. If the modelIdentifier
-// is a uuid, return that without verification.
+// The modelIdentifier can be a model name or model uuid. If the modelIdentifier
+// is a uuid, return that without verification. If a name is provided, first
+// search the modelUUIDCache for the uuid. If it's not found, fill the model
+// cache and try again.
 func (sc *sharedClient) ModelUUID(modelIdentifier string) (string, error) {
 	if names.IsValidModel(modelIdentifier) {
 		return modelIdentifier, nil
@@ -249,27 +249,8 @@ func (sc *sharedClient) fillModelCache() error {
 	return nil
 }
 
-func (sc *sharedClient) ModelName(modelIdentifier string) (string, error) {
-	if !names.IsValidModel(modelIdentifier) {
-		return modelIdentifier, nil
-	}
-	sc.modelUUIDmu.Lock()
-	defer sc.modelUUIDmu.Unlock()
-	jModel, ok := sc.modelUUIDcache[modelIdentifier]
-	if ok {
-		return jModel.name, nil
-	}
-	if err := sc.fillModelCache(); err != nil {
-		return "", err
-	}
-	jModel, ok = sc.modelUUIDcache[modelIdentifier]
-	var err error
-	if !ok {
-		err = fmt.Errorf("unable to find model name for %q", modelIdentifier)
-	}
-	return jModel.name, err
-}
-
+// ModelType returns the model type for the provided modelIdentifier from
+// the cache of model data. The modelIdentifier can be a name or UUID.
 func (sc *sharedClient) ModelType(modelIdentifier string) (model.ModelType, error) {
 	sc.modelUUIDmu.Lock()
 	defer sc.modelUUIDmu.Unlock()
@@ -285,22 +266,39 @@ func (sc *sharedClient) ModelType(modelIdentifier string) (model.ModelType, erro
 		}
 	}
 
-	return model.ModelType(""), errors.NotFoundf("type for model %q", modelIdentifier)
+	return "", errors.NotFoundf("type for model %q", modelIdentifier)
 }
 
+// RemoveModel deletes the model with the given UUID from the cache of
+// model data.
 func (sc *sharedClient) RemoveModel(modelUUID string) {
 	sc.modelUUIDmu.Lock()
 	delete(sc.modelUUIDcache, modelUUID)
 	sc.modelUUIDmu.Unlock()
 }
 
+// AddModel adds a model to the cache of model data. If any of the three required
+// pieces of data are empty, nothing is added to the cache of model data. If the UUID
+// already exists in the cache, do nothing.
 func (sc *sharedClient) AddModel(modelName, modelUUID string, modelType model.ModelType) {
+	if modelName == "" || !names.IsValidModel(modelUUID) || modelType.String() == "" {
+		sc.Tracef("Missing data, failed to add to the cache.", map[string]interface{}{
+			"modelName": modelName, "modelUUID": modelUUID, "modelType": modelType.String()})
+		return
+	}
+
 	sc.modelUUIDmu.Lock()
+	defer sc.modelUUIDmu.Unlock()
+	if m, ok := sc.modelUUIDcache[modelUUID]; ok {
+		sc.Warnf("Attempting to add an existing model to the cache.", map[string]interface{}{
+			"existing model in cache": m, "new modelName": modelName, "new modelUUID": modelUUID,
+			"new modelType": modelType.String()})
+		return
+	}
 	sc.modelUUIDcache[modelUUID] = jujuModel{
 		name:      modelName,
 		modelType: modelType,
 	}
-	sc.modelUUIDmu.Unlock()
 }
 
 // module names for logging
