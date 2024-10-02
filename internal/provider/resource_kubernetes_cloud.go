@@ -11,8 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/types"
-
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -26,17 +24,10 @@ func NewKubernetesCloudResource() resource.Resource {
 }
 
 type kubernetesCloudResource struct {
-	client *juju.Client
+	*juju.Client
 
 	// subCtx is the context created with the new tflog subsystem for applications.
-	subCtx context.Context
-}
-
-type kubernetesCloudResourceModel struct {
-	CloudName         types.String `tfsdk:"name"`
-	KubeConfig        types.String `tfsdk:"kubeconfig"`
-	ParentCloudName   types.String `tfsdk:"parentcloudname"`
-	ParentCloudRegion types.String `tfsdk:"parentcloudregion"`
+	context.Context
 }
 
 func (o *kubernetesCloudResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -64,9 +55,7 @@ func (o *kubernetesCloudResource) Schema(_ context.Context, req resource.SchemaR
 			"kubeconfig": schema.StringAttribute{
 				Description: "The kubeconfig file path for the cloud.",
 				Optional:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
+				Sensitive:   true,
 			},
 			"parentcloudname": schema.StringAttribute{
 				Description: "The parent cloud name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform.",
