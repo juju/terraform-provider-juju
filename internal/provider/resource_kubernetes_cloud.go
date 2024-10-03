@@ -81,19 +81,19 @@ func (r *kubernetesCloudResource) Schema(_ context.Context, req resource.SchemaR
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"kubernetesconfig": schema.StringAttribute{
+			"kubernetes_config": schema.StringAttribute{
 				Description: "The kubernetes config file path for the cloud.",
 				Optional:    true,
 				Sensitive:   true,
 			},
-			"parentcloudname": schema.StringAttribute{
+			"parent_cloud_name": schema.StringAttribute{
 				Description: "The parent cloud name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform.",
 				Optional:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"parentcloudregion": schema.StringAttribute{
+			"parent_cloud_region": schema.StringAttribute{
 				Description: "The parent cloud region name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform.",
 				Optional:    true,
 				PlanModifiers: []planmodifier.String{

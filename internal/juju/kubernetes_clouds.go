@@ -167,12 +167,19 @@ func (c *kubernetesCloudsClient) UpdateKubernetesCloud(input UpdateKubernetesClo
 		k8sContextName = input.KubernetesContextName
 	}
 
+	var hostCloudRegion string
+	if input.ParentCloudName != "" || input.ParentCloudRegion != "" {
+		hostCloudRegion = input.ParentCloudName + "/" + input.ParentCloudRegion
+	} else {
+		hostCloudRegion = k8s.K8sCloudOther
+	}
+
 	newCloud, err := k8scloud.CloudFromKubeConfigContext(
 		k8sContextName,
 		&apiConf,
 		k8scloud.CloudParamaters{
 			Name:            input.Name,
-			HostCloudRegion: k8s.K8sCloudOther,
+			HostCloudRegion: hostCloudRegion,
 		},
 	)
 	if err != nil {
