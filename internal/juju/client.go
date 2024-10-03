@@ -17,6 +17,7 @@ import (
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/api/connector"
 	"github.com/juju/juju/core/model"
+	"github.com/juju/names/v5"
 )
 
 const (
@@ -63,12 +64,12 @@ func (c Client) IsJAAS() bool {
 }
 
 type jujuModel struct {
-	uuid      string
+	name      string
 	modelType model.ModelType
 }
 
 func (j jujuModel) String() string {
-	return fmt.Sprintf("uuid(%s) type(%s)", j.uuid, j.modelType.String())
+	return fmt.Sprintf("uuid(%s) type(%s)", j.name, j.modelType.String())
 }
 
 type sharedClient struct {
@@ -145,12 +146,14 @@ func (sc *sharedClient) IsJAAS(defaultVal bool) bool {
 }
 
 // GetConnection returns a juju connection for use creating juju
-// api clients given the provided model name.
-func (sc *sharedClient) GetConnection(modelName *string) (api.Connection, error) {
+// api clients given the provided model uuid, name, or neither.
+// Allowing a model name is a fallback behavior until the name
+// used by most resources has been removed in favor of the UUID.
+func (sc *sharedClient) GetConnection(modelIdentifier *string) (api.Connection, error) {
 	var modelUUID string
-	if modelName != nil {
+	if modelIdentifier != nil {
 		var err error
-		modelUUID, err = sc.ModelUUID(*modelName)
+		modelUUID, err = sc.ModelUUID(*modelIdentifier)
 		if err != nil {
 			return nil, err
 		}
@@ -184,7 +187,16 @@ func (sc *sharedClient) GetConnection(modelName *string) (api.Connection, error)
 	return conn, nil
 }
 
-func (sc *sharedClient) ModelUUID(modelName string) (string, error) {
+// ModelUUID returns the model uuid for the provided modelIdentifier.
+// The modelIdentifier can be a model name or model uuid. If the modelIdentifier
+// is a uuid, return that without verification. If a name is provided, first
+// search the modelUUIDCache for the uuid. If it's not found, fill the model
+// cache and try again.
+func (sc *sharedClient) ModelUUID(modelIdentifier string) (string, error) {
+	if names.IsValidModel(modelIdentifier) {
+		return modelIdentifier, nil
+	}
+	modelName := modelIdentifier
 	sc.modelUUIDmu.Lock()
 	defer sc.modelUUIDmu.Unlock()
 	dataMap := make(map[string]interface{})
@@ -193,16 +205,20 @@ func (sc *sharedClient) ModelUUID(modelName string) (string, error) {
 		dataMap[k] = v.String()
 	}
 	sc.Tracef(fmt.Sprintf("ModelUUID cache looking for %q", modelName), dataMap)
-	if modelWithName, ok := sc.modelUUIDcache[modelName]; ok {
-		sc.Tracef(fmt.Sprintf("Found uuid for %q in cache", modelName))
-		return modelWithName.uuid, nil
+	for uuid, m := range sc.modelUUIDcache {
+		if m.name == modelName {
+			sc.Tracef(fmt.Sprintf("Found uuid for %q in cache", modelName))
+			return uuid, nil
+		}
 	}
 	if err := sc.fillModelCache(); err != nil {
 		return "", err
 	}
-	if modelWithName, ok := sc.modelUUIDcache[modelName]; ok {
-		sc.Tracef(fmt.Sprintf("Found uuid for %q in cache on 2nd attempt", modelName))
-		return modelWithName.uuid, nil
+	for uuid, m := range sc.modelUUIDcache {
+		if m.name == modelName {
+			sc.Tracef(fmt.Sprintf("Found uuid for %q in cache on 2nd attempt", modelName))
+			return uuid, nil
+		}
 	}
 	return "", errors.NotFoundf("model %q", modelName)
 }
@@ -226,47 +242,65 @@ func (sc *sharedClient) fillModelCache() error {
 		return err
 	}
 	for _, modelSummary := range modelSummaries {
-		modelWithName := jujuModel{
-			uuid:      modelSummary.UUID,
+		modelWithUUID := jujuModel{
+			name:      modelSummary.Name,
 			modelType: modelSummary.Type,
 		}
-		sc.modelUUIDcache[modelSummary.Name] = modelWithName
+		sc.modelUUIDcache[modelSummary.UUID] = modelWithUUID
 	}
 	return nil
 }
 
-func (sc *sharedClient) ModelType(modelName string) (model.ModelType, error) {
+// ModelType returns the model type for the provided modelIdentifier from
+// the cache of model data. The modelIdentifier can be a name or UUID.
+func (sc *sharedClient) ModelType(modelIdentifier string) (model.ModelType, error) {
 	sc.modelUUIDmu.Lock()
 	defer sc.modelUUIDmu.Unlock()
-	if modelWithName, ok := sc.modelUUIDcache[modelName]; ok {
-		return modelWithName.modelType, nil
-	}
-
-	return model.ModelType(""), errors.NotFoundf("type for model %q", modelName)
-}
-
-func (sc *sharedClient) RemoveModel(modelUUID string) {
-	sc.modelUUIDmu.Lock()
-	var modelName string
-	for k, v := range sc.modelUUIDcache {
-		if v.uuid == modelUUID {
-			modelName = k
-			break
+	if names.IsValidModel(modelIdentifier) {
+		if modelWithUUID, ok := sc.modelUUIDcache[modelIdentifier]; ok {
+			return modelWithUUID.modelType, nil
 		}
 	}
-	if modelName != "" {
-		delete(sc.modelUUIDcache, modelName)
+
+	for _, m := range sc.modelUUIDcache {
+		if m.name == modelIdentifier {
+			return m.modelType, nil
+		}
 	}
+
+	return "", errors.NotFoundf("type for model %q", modelIdentifier)
+}
+
+// RemoveModel deletes the model with the given UUID from the cache of
+// model data.
+func (sc *sharedClient) RemoveModel(modelUUID string) {
+	sc.modelUUIDmu.Lock()
+	delete(sc.modelUUIDcache, modelUUID)
 	sc.modelUUIDmu.Unlock()
 }
 
+// AddModel adds a model to the cache of model data. If any of the three required
+// pieces of data are empty, nothing is added to the cache of model data. If the UUID
+// already exists in the cache, do nothing.
 func (sc *sharedClient) AddModel(modelName, modelUUID string, modelType model.ModelType) {
+	if modelName == "" || !names.IsValidModel(modelUUID) || modelType.String() == "" {
+		sc.Tracef("Missing data, failed to add to the cache.", map[string]interface{}{
+			"modelName": modelName, "modelUUID": modelUUID, "modelType": modelType.String()})
+		return
+	}
+
 	sc.modelUUIDmu.Lock()
-	sc.modelUUIDcache[modelName] = jujuModel{
-		uuid:      modelUUID,
+	defer sc.modelUUIDmu.Unlock()
+	if m, ok := sc.modelUUIDcache[modelUUID]; ok {
+		sc.Warnf("Attempting to add an existing model to the cache.", map[string]interface{}{
+			"existing model in cache": m, "new modelName": modelName, "new modelUUID": modelUUID,
+			"new modelType": modelType.String()})
+		return
+	}
+	sc.modelUUIDcache[modelUUID] = jujuModel{
+		name:      modelName,
 		modelType: modelType,
 	}
-	sc.modelUUIDmu.Unlock()
 }
 
 // module names for logging

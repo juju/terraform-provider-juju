@@ -142,9 +142,9 @@ func (a *accessModelResource) Create(ctx context.Context, req resource.CreateReq
 	// Call Models.GrantModel
 	for _, user := range users {
 		err := a.client.Models.GrantModel(juju.GrantModelInput{
-			User:      user,
-			Access:    accessStr,
-			ModelName: modelNameStr,
+			User:            user,
+			Access:          accessStr,
+			ModelIdentifier: modelNameStr,
 		})
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access model resource, got error: %s", err))
@@ -281,11 +281,11 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	err := a.client.Models.UpdateAccessModel(juju.UpdateAccessModelInput{
-		ModelName: modelName,
-		OldAccess: oldAccess,
-		Grant:     addedUserList,
-		Revoke:    missingUserList,
-		Access:    access,
+		ModelIdentifier: modelName,
+		OldAccess:       oldAccess,
+		Grant:           addedUserList,
+		Revoke:          missingUserList,
+		Access:          access,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access model resource, got error: %s", err))
@@ -321,9 +321,9 @@ func (a *accessModelResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	err := a.client.Models.DestroyAccessModel(juju.DestroyAccessModelInput{
-		ModelName: plan.Model.ValueString(),
-		Revoke:    stateUsers,
-		Access:    plan.Access.ValueString(),
+		ModelIdentifier: plan.Model.ValueString(),
+		Revoke:          stateUsers,
+		Access:          plan.Access.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete access model resource, got error: %s", err))

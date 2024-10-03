@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/juju/names/v5"
+
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
@@ -349,7 +350,7 @@ resource "juju_model" "test-model" {
 }
 
 resource "juju_jaas_access_model" "test" {
-  model_uuid          = juju_model.test-model.id
+  model_uuid          = juju_model.test-model.uuid
   access              = "{{.Access}}"
   users               = ["{{.UserOne}}", "{{.UserTwo}}"]
 }
@@ -370,7 +371,7 @@ resource "juju_model" "test-model" {
 }
 
 resource "juju_jaas_access_model" "test" {
-  model_uuid          = juju_model.test-model.id
+  model_uuid          = juju_model.test-model.uuid
   access              = "{{.Access}}"
   users               = ["{{.User}}"]
 }
@@ -394,7 +395,7 @@ resource "juju_jaas_group" "test" {
 }
 
 resource "juju_jaas_access_model" "test" {
-  model_uuid          = juju_model.test-model.id
+  model_uuid          = juju_model.test-model.uuid
   access              = "{{.Access}}"
   users               = ["{{.User}}"]
   groups              = [juju_jaas_group.test.uuid]
@@ -418,7 +419,7 @@ resource "juju_model" "test-model" {
 }
 
 resource "juju_jaas_access_model" "test" {
-  model_uuid          = juju_model.test-model.id
+  model_uuid          = juju_model.test-model.uuid
   access              = "{{.Access}}"
   service_accounts    = ["{{.SvcAcc}}"]
 }
@@ -438,7 +439,7 @@ resource "juju_model" "test-model" {
 }
 
 resource "juju_jaas_access_model" "test" {
-  model_uuid          = juju_model.test-model.id
+  model_uuid          = juju_model.test-model.uuid
   access              = "{{.Access}}"
   users               = ["{{.User}}"]
   service_accounts    = ["{{.SvcAccOne}}", "{{.SvcAccTwo}}"]
