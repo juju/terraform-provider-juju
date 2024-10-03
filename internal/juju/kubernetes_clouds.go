@@ -10,6 +10,7 @@ import (
 	"github.com/juju/juju/api/client/cloud"
 	k8s "github.com/juju/juju/caas/kubernetes"
 	k8scloud "github.com/juju/juju/caas/kubernetes/cloud"
+	"github.com/juju/names/v5"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -110,29 +111,23 @@ func (c *kubernetesCloudsClient) ReadKubernetesCloud(input ReadKubernetesCloudIn
 
 	client := cloud.NewClient(conn)
 
-	clouds, err := client.Clouds()
+	cld, err := client.Cloud(names.NewCloudTag(input.Name))
 	if err != nil {
 		return nil, errors.Annotate(err, "getting clouds")
 	}
 
-	for _, cloud := range clouds {
-		if cloud.Name == input.Name {
-			parentCloudName, parentCloudRegion := getParentCloudNameAndRegionFromHostCloudRegion(cloud.HostCloudRegion)
-			return &ReadKubernetesCloudOutput{
-				Name:              input.Name,
-				ParentCloudName:   parentCloudName,
-				ParentCloudRegion: parentCloudRegion,
-			}, nil
-		}
-	}
-
-	return nil, errors.NotFoundf("kubernetes cloud %q", input.Name)
+	parentCloudName, parentCloudRegion := getParentCloudNameAndRegion(cld.HostCloudRegion)
+	return &ReadKubernetesCloudOutput{
+		Name:              input.Name,
+		ParentCloudName:   parentCloudName,
+		ParentCloudRegion: parentCloudRegion,
+	}, nil
 }
 
-// getParentCloudNameAndRegionFromHostCloudRegion returns the parent cloud name
+// getParentCloudNameAndRegion returns the parent cloud name
 // and region from the host cloud region. HostCloudRegion represents the k8s
 // host cloud. The format is <cloudName>/<region>.
-func getParentCloudNameAndRegionFromHostCloudRegion(hostCloudRegion string) (string, string) {
+func getParentCloudNameAndRegion(hostCloudRegion string) (string, string) {
 	parts := strings.Split(hostCloudRegion, "/")
 	if len(parts) != 2 {
 		return "", ""

@@ -250,8 +250,5 @@ func (r *kubernetesCloudResource) trace(msg string, additionalFields ...map[stri
 		return
 	}
 
-	//SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
-	// Output:
-	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
 	tflog.SubsystemTrace(r.subCtx, LogResourceKubernetesCloud, msg, additionalFields...)
 }
