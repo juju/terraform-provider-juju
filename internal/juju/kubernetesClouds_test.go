@@ -1,14 +1,17 @@
+// Copyright 2024 Canonical Ltd.
+// Licensed under the Apache License, Version 2.0, see LICENCE file for details.
+
 package juju
 
 import (
+	"testing"
+
 	"github.com/juju/juju/api"
 	k8s "github.com/juju/juju/caas/kubernetes"
 	k8scloud "github.com/juju/juju/caas/kubernetes/cloud"
-	"k8s.io/client-go/tools/clientcmd"
-	"testing"
-
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/mock/gomock"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type KubernetesCloudSuite struct {

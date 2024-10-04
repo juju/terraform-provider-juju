@@ -6,7 +6,6 @@ package provider
 import (
 	"context"
 	"fmt"
-
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -44,6 +43,7 @@ type kubernetesCloudResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
+// Configure is used to configure the kubernetes cloud resource.
 func (r *kubernetesCloudResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
@@ -63,14 +63,17 @@ func (r *kubernetesCloudResource) Configure(ctx context.Context, req resource.Co
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceKubernetesCloud)
 }
 
+// ImportState is used to import kubernetes cloud into Terraform.
 func (r *kubernetesCloudResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
+// Metadata returns the metadata for the kubernetes cloud resource.
 func (r *kubernetesCloudResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_kubernetes_cloud"
 }
 
+// Schema returns the schema for the kubernetes cloud resource.
 func (r *kubernetesCloudResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A resource that represent a Juju Cloud for existing controller.",
@@ -83,7 +86,7 @@ func (r *kubernetesCloudResource) Schema(_ context.Context, req resource.SchemaR
 				},
 			},
 			"credential": schema.StringAttribute{
-				Description: "The credential name for the cloud.",
+				Description: "The name of the credential created for this cloud.",
 				Computed:    true,
 			},
 			"kubernetes_config": schema.StringAttribute{
@@ -145,13 +148,9 @@ func (r *kubernetesCloudResource) Create(ctx context.Context, req resource.Creat
 
 	r.trace(fmt.Sprintf("Created kubernetes cloud %s", plan.CloudName.ValueString()))
 
-	plan.ID = types.StringValue(newKubernetesCloudID(plan.CloudName.ValueString()))
 	plan.CloudCredential = types.StringValue(cloudCredentialName)
+	plan.ID = types.StringValue(newKubernetesCloudID(plan.CloudName.ValueString(), plan.CloudCredential.ValueString()))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
-}
-
-func newKubernetesCloudID(name string) string {
-	return fmt.Sprintf("kubernetes-cloud:%s", name)
 }
 
 // Read reads the current state of the kubernetes cloud.
@@ -162,33 +161,33 @@ func (r *kubernetesCloudResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	var plan kubernetesCloudResourceModel
+	var state kubernetesCloudResourceModel
 
 	// Read Terraform configuration from the request into the model
-	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Read the kubernetes cloud.
-	cloud, err := r.client.Clouds.ReadKubernetesCloud(
+	// Read the kubernetes readKubernetesCloudOutput.
+	readKubernetesCloudOutput, err := r.client.Clouds.ReadKubernetesCloud(
 		juju.ReadKubernetesCloudInput{
-			Name: plan.CloudName.ValueString(),
+			Name: state.CloudName.ValueString(),
 		},
 	)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read kubernetes cloud, got error %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read kubernetes readKubernetesCloudOutput, got error %s", err))
 		return
 	}
 
-	plan.ParentCloudName = types.StringValue(cloud.ParentCloudName)
-	plan.ParentCloudRegion = types.StringValue(cloud.ParentCloudRegion)
-	plan.CloudName = types.StringValue(cloud.Name)
-	plan.CloudCredential = types.StringValue(cloud.CredentialName)
-	plan.ID = types.StringValue(newKubernetesCloudID(cloud.Name))
+	state.ParentCloudName = types.StringValue(readKubernetesCloudOutput.ParentCloudName)
+	state.ParentCloudRegion = types.StringValue(readKubernetesCloudOutput.ParentCloudRegion)
+	state.CloudName = types.StringValue(readKubernetesCloudOutput.Name)
+	state.CloudCredential = types.StringValue(readKubernetesCloudOutput.CredentialName)
+	state.ID = types.StringValue(newKubernetesCloudID(readKubernetesCloudOutput.Name, readKubernetesCloudOutput.CredentialName))
 
-	// Set the plan onto the Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	// Set the state onto the Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 // Update updates the kubernetes cloud on the controller used by Terraform provider.
@@ -256,6 +255,9 @@ func (r *kubernetesCloudResource) trace(msg string, additionalFields ...map[stri
 	if r.subCtx == nil {
 		return
 	}
-
 	tflog.SubsystemTrace(r.subCtx, LogResourceKubernetesCloud, msg, additionalFields...)
+}
+
+func newKubernetesCloudID(kubernetesCloudName string, cloudCredentialName string) string {
+	return fmt.Sprintf("%s:%s", kubernetesCloudName, cloudCredentialName)
 }

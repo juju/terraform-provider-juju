@@ -4,9 +4,9 @@ resource "juju_kubernetes_cloud" "my-k8s-cloud" {
 }
 
 resource "juju_model" "my-model" {
-  name = "my-model"
+  name       = "my-model"
   credential = juju_kubernetes_cloud.my-k8s-cloud.credential
   cloud {
-    name   = juju_kubernetes_cloud.my-k8s-cloud.name
+    name = juju_kubernetes_cloud.my-k8s-cloud.name
   }
 }
