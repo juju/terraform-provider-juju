@@ -4,6 +4,7 @@
 package juju
 
 import (
+	jujucloud "github.com/juju/juju/cloud"
 	"io"
 
 	jaasparams "github.com/canonical/jimm-go-sdk/v3/api/params"
@@ -93,4 +94,12 @@ type JaasAPIClient interface {
 	GetGroup(req *jaasparams.GetGroupRequest) (jaasparams.GetGroupResponse, error)
 	RenameGroup(req *jaasparams.RenameGroupRequest) error
 	RemoveGroup(req *jaasparams.RemoveGroupRequest) error
+}
+
+// KubernetesCloudAPIClient defines the set of methods that the Kubernetes cloud API provides.
+type KubernetesCloudAPIClient interface {
+	AddCloud(cloud jujucloud.Cloud, force bool) error
+	Cloud(tag names.CloudTag) (jujucloud.Cloud, error)
+	UpdateCloud(cloud jujucloud.Cloud) error
+	RemoveCloud(cloud string) error
 }
