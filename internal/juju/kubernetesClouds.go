@@ -4,12 +4,16 @@
 package juju
 
 import (
+	"encoding/hex"
+	"math/rand"
 	"strings"
 
+	jujuclock "github.com/juju/clock"
 	"github.com/juju/errors"
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/client/cloud"
 	k8s "github.com/juju/juju/caas/kubernetes"
+	"github.com/juju/juju/caas/kubernetes/clientconfig"
 	k8scloud "github.com/juju/juju/caas/kubernetes/cloud"
 	"github.com/juju/names/v5"
 	"k8s.io/client-go/tools/clientcmd"
@@ -35,6 +39,7 @@ type ReadKubernetesCloudInput struct {
 
 type ReadKubernetesCloudOutput struct {
 	Name              string
+	CredentialName    string
 	ParentCloudName   string
 	ParentCloudRegion string
 }
@@ -60,29 +65,42 @@ func newKubernetesCloudsClient(sc SharedClient) *kubernetesCloudsClient {
 	}
 }
 
+func getNewCredentialUID() (string, error) {
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		return "", errors.Trace(err)
+	}
+	return hex.EncodeToString(b), nil
+}
+
 // CreateKubernetesCloud creates a new Kubernetes cloud with juju cloud facade.
-func (c *kubernetesCloudsClient) CreateKubernetesCloud(input *CreateKubernetesCloudInput) error {
+func (c *kubernetesCloudsClient) CreateKubernetesCloud(input *CreateKubernetesCloudInput) (string, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer func() { _ = conn.Close() }()
 
 	kubernetesAPIClient := c.getKubernetesCloudAPIClient(conn)
 
-	conf, err := clientcmd.NewClientConfigFromBytes([]byte(input.KubernetesConfig))
+	credentialUID, err := getNewCredentialUID()
 	if err != nil {
-		return errors.Annotate(err, "parsing kubernetes configuration data")
+		return "", errors.Annotate(err, "generating new credential UID")
 	}
 
-	apiConf, err := conf.RawConfig()
+	conf, err := clientcmd.NewClientConfigFromBytes([]byte(input.KubernetesConfig))
 	if err != nil {
-		return errors.Annotate(err, "fetching kubernetes configuration")
+		return "", errors.Annotate(err, "parsing kubernetes configuration data")
+	}
+
+	k8sConf, err := conf.RawConfig()
+	if err != nil {
+		return "", errors.Annotate(err, "fetching kubernetes configuration")
 	}
 
 	var k8sContextName string
 	if input.KubernetesContextName == "" {
-		k8sContextName = apiConf.CurrentContext
+		k8sContextName = k8sConf.CurrentContext
 	} else {
 		k8sContextName = input.KubernetesContextName
 	}
@@ -94,24 +112,51 @@ func (c *kubernetesCloudsClient) CreateKubernetesCloud(input *CreateKubernetesCl
 		hostCloudRegion = k8s.K8sCloudOther
 	}
 
+	credResolver := clientconfig.GetJujuAdminServiceAccountResolver(jujuclock.WallClock)
+
+	k8sConfWithCreds, err := credResolver(credentialUID, &k8sConf, k8sContextName)
+	if err != nil {
+		return "", errors.Annotate(err, "resolving k8s credential")
+	}
+
 	newCloud, err := k8scloud.CloudFromKubeConfigContext(
 		k8sContextName,
-		&apiConf,
+		k8sConfWithCreds,
 		k8scloud.CloudParamaters{
 			Name:            input.Name,
 			HostCloudRegion: hostCloudRegion,
 		},
 	)
 	if err != nil {
-		return errors.Trace(err)
+		return "", errors.Trace(err)
+	}
+
+	newCredential, err := k8scloud.CredentialFromKubeConfigContext(k8sContextName, k8sConfWithCreds)
+	if err != nil {
+		return "", errors.Trace(err)
 	}
 
 	err = kubernetesAPIClient.AddCloud(newCloud, false)
 	if err != nil {
-		return errors.Annotate(err, "adding kubernetes cloud")
+		return "", errors.Annotate(err, "adding kubernetes cloud")
 	}
 
-	return nil
+	credentialName := input.Name
+	cloudName := input.Name
+
+	currentUser := getCurrentJujuUser(conn)
+
+	cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
+	if err != nil {
+		return "", errors.Annotate(err, "getting cloud credential tag")
+	}
+
+	err = kubernetesAPIClient.AddCredential(cloudCredTag.String(), newCredential)
+	if err != nil {
+		return "", errors.Annotate(err, "adding kubernetes cloud credential")
+	}
+
+	return credentialName, nil
 }
 
 // ReadKubernetesCloud reads a Kubernetes cloud with juju cloud facade.
@@ -129,9 +174,22 @@ func (c *kubernetesCloudsClient) ReadKubernetesCloud(input ReadKubernetesCloudIn
 		return nil, errors.Annotate(err, "getting clouds")
 	}
 
+	userName := getCurrentJujuUser(conn)
+
+	cloudCredentialTags, err := kubernetesAPIClient.UserCredentials(names.NewUserTag(userName), names.NewCloudTag(input.Name))
+	if err != nil {
+		return nil, errors.Annotate(err, "getting user credentials")
+	}
+	if len(cloudCredentialTags) == 0 {
+		return nil, errors.NotFoundf("cloud credentials for user %q", userName)
+	}
+
+	credentialName := cloudCredentialTags[0].Name()
+
 	parentCloudName, parentCloudRegion := getParentCloudNameAndRegion(cld.HostCloudRegion)
 	return &ReadKubernetesCloudOutput{
 		Name:              input.Name,
+		CredentialName:    credentialName,
 		ParentCloudName:   parentCloudName,
 		ParentCloudRegion: parentCloudRegion,
 	}, nil

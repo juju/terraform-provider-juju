@@ -28,12 +28,13 @@ resource "juju_kubernetes_cloud" "my-k8s-cloud" {
 
 ### Optional
 
-- `kubernetes_config` (String, Sensitive) The kubernetes config file path for the cloud.
+- `kubernetes_config` (String, Sensitive) The kubernetes config file path for the cloud. Cloud credentials will be added to the Juju controller for you.
 - `parent_cloud_name` (String) The parent cloud name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform.
 - `parent_cloud_region` (String) The parent cloud region name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform.
 
 ### Read-Only
 
+- `credential` (String) The credential name for the cloud.
 - `id` (String) The ID of this resource.
 
 ## Import

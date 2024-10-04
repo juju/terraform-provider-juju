@@ -893,6 +893,20 @@ func (mr *MockKubernetesCloudAPIClientMockRecorder) AddCloud(arg0, arg1 any) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddCloud", reflect.TypeOf((*MockKubernetesCloudAPIClient)(nil).AddCloud), arg0, arg1)
 }
 
+// AddCredential mocks base method.
+func (m *MockKubernetesCloudAPIClient) AddCredential(arg0 string, arg1 cloud.Credential) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddCredential", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddCredential indicates an expected call of AddCredential.
+func (mr *MockKubernetesCloudAPIClientMockRecorder) AddCredential(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddCredential", reflect.TypeOf((*MockKubernetesCloudAPIClient)(nil).AddCredential), arg0, arg1)
+}
+
 // Cloud mocks base method.
 func (m *MockKubernetesCloudAPIClient) Cloud(arg0 names.CloudTag) (cloud.Cloud, error) {
 	m.ctrl.T.Helper()
@@ -934,4 +948,19 @@ func (m *MockKubernetesCloudAPIClient) UpdateCloud(arg0 cloud.Cloud) error {
 func (mr *MockKubernetesCloudAPIClientMockRecorder) UpdateCloud(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateCloud", reflect.TypeOf((*MockKubernetesCloudAPIClient)(nil).UpdateCloud), arg0)
+}
+
+// UserCredentials mocks base method.
+func (m *MockKubernetesCloudAPIClient) UserCredentials(arg0 names.UserTag, arg1 names.CloudTag) ([]names.CloudCredentialTag, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UserCredentials", arg0, arg1)
+	ret0, _ := ret[0].([]names.CloudCredentialTag)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UserCredentials indicates an expected call of UserCredentials.
+func (mr *MockKubernetesCloudAPIClientMockRecorder) UserCredentials(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UserCredentials", reflect.TypeOf((*MockKubernetesCloudAPIClient)(nil).UserCredentials), arg0, arg1)
 }

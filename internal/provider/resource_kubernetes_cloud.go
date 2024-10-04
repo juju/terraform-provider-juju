@@ -36,6 +36,7 @@ type kubernetesCloudResource struct {
 
 type kubernetesCloudResourceModel struct {
 	CloudName         types.String `tfsdk:"name"`
+	CloudCredential   types.String `tfsdk:"credential"`
 	KubernetesConfig  types.String `tfsdk:"kubernetes_config"`
 	ParentCloudName   types.String `tfsdk:"parent_cloud_name"`
 	ParentCloudRegion types.String `tfsdk:"parent_cloud_region"`
@@ -81,8 +82,12 @@ func (r *kubernetesCloudResource) Schema(_ context.Context, req resource.SchemaR
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"credential": schema.StringAttribute{
+				Description: "The credential name for the cloud.",
+				Computed:    true,
+			},
 			"kubernetes_config": schema.StringAttribute{
-				Description: "The kubernetes config file path for the cloud.",
+				Description: "The kubernetes config file path for the cloud. Cloud credentials will be added to the Juju controller for you.",
 				Optional:    true,
 				Sensitive:   true,
 			},
@@ -127,7 +132,7 @@ func (r *kubernetesCloudResource) Create(ctx context.Context, req resource.Creat
 	}
 
 	// Create the kubernetes cloud.
-	err := r.client.Clouds.CreateKubernetesCloud(
+	cloudCredentialName, err := r.client.Clouds.CreateKubernetesCloud(
 		&juju.CreateKubernetesCloudInput{
 			Name:             plan.CloudName.ValueString(),
 			KubernetesConfig: plan.KubernetesConfig.ValueString(),
@@ -141,6 +146,7 @@ func (r *kubernetesCloudResource) Create(ctx context.Context, req resource.Creat
 	r.trace(fmt.Sprintf("Created kubernetes cloud %s", plan.CloudName.ValueString()))
 
 	plan.ID = types.StringValue(newKubernetesCloudID(plan.CloudName.ValueString()))
+	plan.CloudCredential = types.StringValue(cloudCredentialName)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -178,6 +184,7 @@ func (r *kubernetesCloudResource) Read(ctx context.Context, req resource.ReadReq
 	plan.ParentCloudName = types.StringValue(cloud.ParentCloudName)
 	plan.ParentCloudRegion = types.StringValue(cloud.ParentCloudRegion)
 	plan.CloudName = types.StringValue(cloud.Name)
+	plan.CloudCredential = types.StringValue(cloud.CredentialName)
 	plan.ID = types.StringValue(newKubernetesCloudID(cloud.Name))
 
 	// Set the plan onto the Terraform state
