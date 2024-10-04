@@ -43,22 +43,22 @@ func getFakeCloudConfig() string {
 apiVersion: v1
 clusters:
 - cluster:
-    certificate-authority-data: fake-cert==
+    certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YQ==
     server: https://10.172.195.202:16443
   name: microk8s-cluster
 contexts:
 - context:
     cluster: microk8s-cluster
     user: admin
-  name: microk8s
-current-context: microk8s
+  name: fake-cloud-context
+current-context: fake-cloud-context
 kind: Config
 preferences: {}
 users:
 - name: admin
   user:
-    client-certificate-data: fake-cert==
-    client-key-data: fake-key=
+    client-certificate-data: ZmFrZS1jbGllbnQtY2VydGlmaWNhdGUtZGF0YQ==
+    client-key-data: ZmFrZS1jbGllbnQta2V5LWRhdGE=
 `
 }
 
@@ -122,4 +122,10 @@ func (s *KubernetesCloudSuite) TestRemoveKubernetesCloud() {
 
 	err := s.mockKubernetesCloudClient.RemoveCloud("fake-cloud")
 	s.Require().NoError(err)
+}
+
+// In order for 'go test' to run this suite, we need to create
+// a normal test function and pass our suite to suite.Run
+func TestKubernetesCloudSuite(t *testing.T) {
+	suite.Run(t, new(KubernetesCloudSuite))
 }
