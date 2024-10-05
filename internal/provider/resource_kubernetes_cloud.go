@@ -123,6 +123,9 @@ func (r *kubernetesCloudResource) Schema(_ context.Context, req resource.SchemaR
 			"credential": schema.StringAttribute{
 				Description: "The name of the credential created for this cloud.",
 				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"kubernetes_config": schema.StringAttribute{
 				Description: "The kubernetes config file path for the cloud. Cloud credentials will be added to the Juju controller for you.",
@@ -175,11 +178,12 @@ func (r *kubernetesCloudResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	r.trace(fmt.Sprintf("Created kubernetes cloud %s", plan.CloudName.ValueString()))
-
 	plan.CloudCredential = types.StringValue(cloudCredentialName)
-	plan.ID = types.StringValue(newKubernetesCloudID(plan.CloudName.ValueString(), plan.CloudCredential.ValueString()))
+	plan.ID = types.StringValue(newKubernetesCloudID(plan.CloudName.ValueString(), cloudCredentialName))
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+
+	r.trace(fmt.Sprintf("Created kubernetes cloud %s", plan.CloudName.ValueString()))
 }
 
 // Read reads the current state of the kubernetes cloud.
@@ -209,11 +213,11 @@ func (r *kubernetesCloudResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	state.ParentCloudName = types.StringValue(readKubernetesCloudOutput.ParentCloudName)
-	state.ParentCloudRegion = types.StringValue(readKubernetesCloudOutput.ParentCloudRegion)
 	state.CloudName = types.StringValue(readKubernetesCloudOutput.Name)
 	state.CloudCredential = types.StringValue(readKubernetesCloudOutput.CredentialName)
 	state.ID = types.StringValue(newKubernetesCloudID(readKubernetesCloudOutput.Name, readKubernetesCloudOutput.CredentialName))
+
+	r.trace(fmt.Sprintf("Read kubernetes cloud %s", state.CloudName))
 
 	// Set the state onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
