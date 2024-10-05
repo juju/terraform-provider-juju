@@ -6,13 +6,13 @@ package provider
 import (
 	"context"
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"strings"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -65,7 +65,42 @@ func (r *kubernetesCloudResource) Configure(ctx context.Context, req resource.Co
 
 // ImportState is used to import kubernetes cloud into Terraform.
 func (r *kubernetesCloudResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	// Prevent panic if the provider has not been configured.
+	if r.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "kubernetes-cloud", "import")
+		return
+	}
+
+	// cloud-name:cloud-credential-name
+	parts := strings.Split(req.ID, ":")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		resp.Diagnostics.AddError("Invalid ID", fmt.Sprintf("Invalid ID %q, expected format cloud-name:cloud-credential-name", req.ID))
+		return
+	}
+	cloudName := parts[0]
+
+	readKubernetesCloudOutput, err := r.client.Clouds.ReadKubernetesCloud(
+		juju.ReadKubernetesCloudInput{
+			Name: cloudName,
+		},
+	)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read kubernetes readKubernetesCloudOutput, got error %s", err))
+		return
+	}
+
+	// Set the state onto the Terraform state
+	state := kubernetesCloudResourceModel{
+		CloudName:         types.StringValue(readKubernetesCloudOutput.Name),
+		CloudCredential:   types.StringValue(readKubernetesCloudOutput.CredentialName),
+		ParentCloudName:   types.StringValue(readKubernetesCloudOutput.ParentCloudName),
+		ParentCloudRegion: types.StringValue(readKubernetesCloudOutput.ParentCloudRegion),
+	}
+
+	// Save the state to the Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+
+	r.trace(fmt.Sprintf("Imported kubernetes cloud %s", cloudName))
 }
 
 // Metadata returns the metadata for the kubernetes cloud resource.
@@ -97,16 +132,10 @@ func (r *kubernetesCloudResource) Schema(_ context.Context, req resource.SchemaR
 			"parent_cloud_name": schema.StringAttribute{
 				Description: "The parent cloud name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform.",
 				Optional:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 			"parent_cloud_region": schema.StringAttribute{
 				Description: "The parent cloud region name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform.",
 				Optional:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 			"id": schema.StringAttribute{
 				Computed: true,
