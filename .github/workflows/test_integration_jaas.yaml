@@ -63,14 +63,16 @@ jobs:
           jimm-version: v3.1.10
           juju-channel: 3/stable
           ghcr-pat: ${{ secrets.GITHUB_TOKEN }}
-      - name: In case of LXD setup also microk8s
-        if: ${{ matrix.action-operator.cloud == 'lxd' }}
+      - name: Setup microk8s for juju_kubernetes_cloud test
         run: |
           sudo snap install microk8s --channel=1.28-strict/stable
           sudo usermod -a -G microk8s ubuntu
           sudo microk8s.enable dns storage
           sudo microk8s.enable dns local-storage
           sudo -g microk8s -E microk8s status --wait-ready --timeout=600
+          echo "MICROK8S_CONFIG<<-EOT" >> $GITHUB_ENV
+          microk8s.config view >> $GITHUB_ENV
+          echo "EOT" >> $GITHUB_ENV
       - name: Create additional networks when testing with LXD
         run: |
           sudo lxc network create management-br ipv4.address=10.150.40.1/24 ipv4.nat=true ipv6.address=none ipv6.nat=false
@@ -90,12 +92,6 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
           echo "TEST_MANAGEMENT_BR=10.150.40.0/24" >> $GITHUB_ENV
           echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
-      - name: "Set additional environment for LXD"
-        if: ${{ matrix.action-operator.cloud == 'lxd' }}
-        run: |
-          echo "MICROK8S_CONFIG<<-EOT" >> $GITHUB_ENV
-          microk8s.config view >> $GITHUB_ENV
-          echo "EOT" >> $GITHUB_ENV
       - run: go mod download
       - env:
           TF_ACC: "1"
