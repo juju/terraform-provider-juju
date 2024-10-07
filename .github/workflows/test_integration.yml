@@ -73,10 +73,11 @@ jobs:
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
         run: |
           sudo snap install microk8s --channel=1.28-strict/stable
-          sudo usermod -a -G microk8s ubuntu
+          sudo usermod -a -G snap_microk8s $USER
+          sudo chown -R $USER ~/.kube
           sudo microk8s.enable dns storage
           sudo microk8s.enable dns local-storage
-          sudo -g microk8s -E microk8s status --wait-ready --timeout=600
+          sudo -g snap_microk8s -E microk8s status --wait-ready --timeout=600
       - name: Create additional networks when testing with LXD
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
         run: |
@@ -99,9 +100,9 @@ jobs:
       - name: "Set additional environment for LXD"
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
         run: |
-          echo "MICROK8S_CONFIG<<-EOT" >> $GITHUB_ENV
-          microk8s.config view >> $GITHUB_ENV
-          echo "EOT" >> $GITHUB_ENV
+          echo "MICROK8S_CONFIG<<EOF" >> $GITHUB_ENV
+          sudo microk8s.config view >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
       - run: go mod download
       - env:
           TF_ACC: "1"
