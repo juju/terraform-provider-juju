@@ -28,6 +28,7 @@ func TestAcc_ResourceKubernetesCloud(t *testing.T) {
 				Config: testAccResourceKubernetesCloud(cloudName, modelName, cloudConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
+					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "model", modelName),
 				),
 			},
 		},
