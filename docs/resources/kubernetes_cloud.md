@@ -44,12 +44,3 @@ resource "juju_model" "my-model" {
 
 - `credential` (String) The name of the credential created for this cloud.
 - `id` (String) The ID of this resource.
-
-## Import
-
-Import is supported using the following syntax:
-
-```shell
-# Kubernetes clouds can be imported by using kubernetes cloud name.
-$ terraform import  juju_kubernetes_cloud.kubernetes-cloud-name
-```
