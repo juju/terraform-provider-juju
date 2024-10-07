@@ -31,15 +31,6 @@ func (s *KubernetesCloudSuite) setupMocks(t *testing.T) *gomock.Controller {
 	return ctlr
 }
 
-//func (s *KubernetesCloudSuite) getKubernetesCloudClient() kubernetesCloudsClient {
-//	return kubernetesCloudsClient{
-//		SharedClient: s.JujuSuite.mockSharedClient,
-//		getKubernetesCloudAPIClient: func(connection api.Connection) KubernetesCloudAPIClient {
-//			return s.mockKubernetesCloudClient
-//		},
-//	}
-//}
-
 func getFakeCloudConfig() string {
 	return `
 apiVersion: v1
