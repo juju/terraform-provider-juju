@@ -10,29 +10,50 @@ import (
 )
 
 func TestAcc_ResourceKubernetesCloud(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with MicroK8s")
 	}
 	cloudName := acctest.RandomWithPrefix("tf-test-k8scloud")
 	cloudConfig := os.Getenv("MICROK8S_CONFIG")
-
-	//Debug print plan
-	t.Logf("Plan: %s", testAccResourceKubernetesCloud(cloudName, cloudConfig))
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceKubernetesCloud(cloudName, cloudConfig),
+				Config: testAccResourceKubernetesCloudWithoutModel(cloudName, cloudConfig),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName)),
+					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
+				),
 			},
 		},
 	})
 }
 
-func testAccResourceKubernetesCloud(cloudName string, config string) string {
+//func testAccResourceKubernetesCloud(cloudName string, modelName string, config string) string {
+//	return internaltesting.GetStringFromTemplateWithData(
+//		"testAccResourceSecret",
+//		`
+//resource "juju_kubernetes_cloud" {{.CloudName}} {
+//  name = "{{.CloudName}}"
+//  kubernetes_config = {{.Config}}
+//}
+//
+//resource "juju_model" {{.ModelName}} {
+//  name = "{{.ModelName}}"
+//  credential = juju_kubernetes_cloud.{{.CloudName}}.credential
+//  cloud {
+//    name   = juju_kubernetes_cloud.{{.CloudName}}.name
+//  }
+//}
+//`, internaltesting.TemplateData{
+//			"CloudName": cloudName,
+//			"ModelName": modelName,
+//			"Config":    config,
+//		})
+//}
+
+func testAccResourceKubernetesCloudWithoutModel(cloudName string, config string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceSecret",
 		`

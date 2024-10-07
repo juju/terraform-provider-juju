@@ -6,7 +6,6 @@ package juju
 import (
 	"testing"
 
-	"github.com/juju/juju/api"
 	k8s "github.com/juju/juju/caas/kubernetes"
 	k8scloud "github.com/juju/juju/caas/kubernetes/cloud"
 	"github.com/stretchr/testify/suite"
@@ -32,14 +31,14 @@ func (s *KubernetesCloudSuite) setupMocks(t *testing.T) *gomock.Controller {
 	return ctlr
 }
 
-func (s *KubernetesCloudSuite) getKubernetesCloudClient() kubernetesCloudsClient {
-	return kubernetesCloudsClient{
-		SharedClient: s.JujuSuite.mockSharedClient,
-		getKubernetesCloudAPIClient: func(connection api.Connection) KubernetesCloudAPIClient {
-			return s.mockKubernetesCloudClient
-		},
-	}
-}
+//func (s *KubernetesCloudSuite) getKubernetesCloudClient() kubernetesCloudsClient {
+//	return kubernetesCloudsClient{
+//		SharedClient: s.JujuSuite.mockSharedClient,
+//		getKubernetesCloudAPIClient: func(connection api.Connection) KubernetesCloudAPIClient {
+//			return s.mockKubernetesCloudClient
+//		},
+//	}
+//}
 
 func getFakeCloudConfig() string {
 	return `

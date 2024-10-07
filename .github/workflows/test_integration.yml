@@ -88,6 +88,9 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
           echo "TEST_MANAGEMENT_BR=10.150.40.0/24" >> $GITHUB_ENV
           echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
+      - name: "Set additional enviroment for microk8s"
+        if: ${{ matrix.action-operator.cloud == 'microk8s' }}
+        run: |
           echo "MICROK8S_CONFIG<<-EOT" >> $GITHUB_ENV
           microk8s.config view >> $GITHUB_ENV
           echo "EOT" >> $GITHUB_ENV

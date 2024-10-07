@@ -4,8 +4,8 @@
 package juju
 
 import (
+	"crypto/rand"
 	"encoding/hex"
-	"math/rand"
 	"strings"
 
 	jujuclock "github.com/juju/clock"
