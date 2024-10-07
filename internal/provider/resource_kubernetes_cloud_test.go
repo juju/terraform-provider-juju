@@ -1,3 +1,6 @@
+// Copyright 2023 Canonical Ltd.
+// Licensed under the Apache License, Version 2.0, see LICENCE file for details.
+
 package provider
 
 import (
@@ -10,8 +13,8 @@ import (
 )
 
 func TestAcc_ResourceKubernetesCloud(t *testing.T) {
-	if testingCloud != MicroK8sTesting {
-		t.Skip(t.Name() + " only runs with MicroK8s")
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
 	}
 	cloudName := acctest.RandomWithPrefix("tf-test-k8scloud")
 	cloudConfig := os.Getenv("MICROK8S_CONFIG")
