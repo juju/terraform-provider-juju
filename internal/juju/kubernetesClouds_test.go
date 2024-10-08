@@ -60,6 +60,7 @@ func (s *KubernetesCloudSuite) TestCreateKubernetesCloud() {
 	defer ctlr.Finish()
 
 	s.mockKubernetesCloudClient.EXPECT().AddCloud(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	s.mockKubernetesCloudClient.EXPECT().AddCredential(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	fakeCloudConfig, err := clientcmd.NewClientConfigFromBytes([]byte(getFakeCloudConfig()))
 	s.Require().NoError(err)
@@ -67,17 +68,29 @@ func (s *KubernetesCloudSuite) TestCreateKubernetesCloud() {
 	fakeApiConfig, err := fakeCloudConfig.RawConfig()
 	s.Require().NoError(err)
 
+	fakeContextName := "fake-cloud-context"
+
+	fakeCloudRegion := k8s.K8sCloudOther
+
 	fakeCloud, err := k8scloud.CloudFromKubeConfigContext(
-		"fake-cloud-context",
+		fakeContextName,
 		&fakeApiConfig,
 		k8scloud.CloudParamaters{
 			Name:            "fake-cloud",
-			HostCloudRegion: k8s.K8sCloudOther,
+			HostCloudRegion: fakeCloudRegion,
 		},
 	)
 	s.Require().NoError(err)
 
 	err = s.mockKubernetesCloudClient.AddCloud(fakeCloud, false)
+	s.Require().NoError(err)
+
+	fakeCredential, err := k8scloud.CredentialFromKubeConfigContext(fakeContextName, &fakeApiConfig)
+	s.Require().NoError(err)
+
+	fakeCloudCredTag := "fake-cloud-cred"
+
+	err = s.mockKubernetesCloudClient.AddCredential(fakeCloudCredTag, fakeCredential)
 	s.Require().NoError(err)
 }
 
