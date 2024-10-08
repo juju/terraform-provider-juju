@@ -13,6 +13,10 @@ import (
 )
 
 func TestAcc_ResourceKubernetesCloud(t *testing.T) {
+	// TODO: Skip this ACC test until we have a way to run correctly with kubernetes_config
+	// attribute set to a correct k8s config in github action environment
+	t.Skip(t.Name() + " is skipped until we have a way to run correctly with kubernetes_config attribute set to a correct k8s config in github action environment")
+
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
