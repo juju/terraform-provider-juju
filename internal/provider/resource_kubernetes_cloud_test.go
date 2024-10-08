@@ -43,7 +43,7 @@ func testAccResourceKubernetesCloud(cloudName string, modelName string, config s
 
 resource "juju_kubernetes_cloud" "tf-test-k8scloud" {
  name = "{{.CloudName}}"
- kubernetes_config = {{.Config}}
+ kubernetes_config = file("~/microk8s-config.yaml")
 }
 
 resource "juju_model" {{.ModelName}} {

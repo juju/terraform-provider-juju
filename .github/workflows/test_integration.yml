@@ -101,11 +101,7 @@ jobs:
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
         # language=bash
         run: |
-          {
-            echo "MICROK8S_CONFIG<<EOF"
-            sudo microk8s.config view
-            echo EOF
-          } >> "$GITHUB_ENV"
+          sudo microk8s.config > /home/$USER/microk8s-config.yaml
       - run: go mod download
       - env:
           TF_ACC: "1"
