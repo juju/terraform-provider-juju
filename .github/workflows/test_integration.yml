@@ -99,10 +99,13 @@ jobs:
           echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
       - name: "Set additional environment for LXD"
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
+        # language=bash
         run: |
-          echo "MICROK8S_CONFIG<<EOF" >> $GITHUB_ENV
-          sudo microk8s.config view >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          {
+            echo "MICROK8S_CONFIG<<EOF"
+            sudo microk8s.config view
+            echo EOF
+          } >> "$GITHUB_ENV"
       - run: go mod download
       - env:
           TF_ACC: "1"
