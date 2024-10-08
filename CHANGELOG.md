@@ -1,3 +1,28 @@
+## 0.15.0 (October 14, 2024)
+
+NOTES:
+* **This release requires Juju controller version 2.9.49 or higher juju.**
+* **If using JAAS, this release requires Juju controller version 3.5.0 or higher.**
+* This release uses juju client api code from the juju 3.5.1 release.
+
+ENHANCEMENTS:
+
+* Support for JAAS access settings via the following new resources:
+    *  `juju_jaas_access_cloud`
+    *  `juju_jaas_access_controller`
+    *  `juju_jaas_access_group`
+    *  `juju_jaas_access_model`
+    *  `juju_jaas_access_offer`
+    *  `juju_jaas_access_service_account`
+    *  `juju_jaas_group`
+* Support for adding kubernetes clouds to existing controllers with the new
+`juju_kubernetes_cloud` resource.
+
+BUG FIXES:
+
+* feat: add computed uuid to model resource by @hmlanigan in #599
+* fix: remove requirement on ca cert by @kian99 in #567
+
 ## 0.14.0 (September 9, 2024)
 
 NOTES:
