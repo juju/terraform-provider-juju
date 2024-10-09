@@ -63,6 +63,17 @@ jobs:
           jimm-version: v3.1.10
           juju-channel: 3/stable
           ghcr-pat: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup microk8s for juju_kubernetes_cloud test
+        run: |
+          sudo snap install microk8s --channel=1.28-strict/stable
+          sudo usermod -a -G snap_microk8s $USER
+          sudo chown -R $USER ~/.kube
+          sudo microk8s.enable dns storage
+          sudo microk8s.enable dns local-storage
+          sudo -g snap_microk8s -E microk8s status --wait-ready --timeout=600
+          echo "MICROK8S_CONFIG<<EOF" >> $GITHUB_ENV
+          sudo microk8s.config view >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
       - name: Create additional networks when testing with LXD
         run: |
           sudo lxc network create management-br ipv4.address=10.150.40.1/24 ipv4.nat=true ipv6.address=none ipv6.nat=false

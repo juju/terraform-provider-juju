@@ -35,6 +35,7 @@ require (
 	gopkg.in/httprequest.v1 v1.2.1
 	gopkg.in/macaroon.v2 v2.1.0
 	gopkg.in/yaml.v2 v2.4.0
+	k8s.io/client-go v0.29.0
 )
 
 require (
@@ -224,7 +225,6 @@ require (
 	k8s.io/api v0.29.0 // indirect
 	k8s.io/apiextensions-apiserver v0.29.0 // indirect
 	k8s.io/apimachinery v0.29.0 // indirect
-	k8s.io/client-go v0.29.0 // indirect
 	k8s.io/klog/v2 v2.110.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00 // indirect
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661 // indirect

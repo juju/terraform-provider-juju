@@ -15,6 +15,7 @@ import (
 	apiresources "github.com/juju/juju/api/client/resources"
 	apisecrets "github.com/juju/juju/api/client/secrets"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
+	jujucloud "github.com/juju/juju/cloud"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/resources"
@@ -93,4 +94,14 @@ type JaasAPIClient interface {
 	GetGroup(req *jaasparams.GetGroupRequest) (jaasparams.GetGroupResponse, error)
 	RenameGroup(req *jaasparams.RenameGroupRequest) error
 	RemoveGroup(req *jaasparams.RemoveGroupRequest) error
+}
+
+// KubernetesCloudAPIClient defines the set of methods that the Kubernetes cloud API provides.
+type KubernetesCloudAPIClient interface {
+	AddCloud(cloud jujucloud.Cloud, force bool) error
+	Cloud(tag names.CloudTag) (jujucloud.Cloud, error)
+	UpdateCloud(cloud jujucloud.Cloud) error
+	RemoveCloud(cloud string) error
+	AddCredential(cloud string, credential jujucloud.Credential) error
+	UserCredentials(user names.UserTag, cloud names.CloudTag) ([]names.CloudCredentialTag, error)
 }
