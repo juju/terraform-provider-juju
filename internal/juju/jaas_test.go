@@ -163,7 +163,7 @@ func (s *JaasSuite) TestAddGroup() {
 	s.mockJaasClient.EXPECT().AddGroup(req).Return(resp, nil)
 
 	client := s.getJaasClient()
-	uuid, err := client.AddGroup(context.Background(), name)
+	uuid, err := client.AddGroup(name)
 	s.Require().NoError(err)
 	s.Require().Equal(resp.UUID, uuid)
 }
@@ -179,7 +179,7 @@ func (s *JaasSuite) TestGetGroup() {
 	s.mockJaasClient.EXPECT().GetGroup(req).Return(resp, nil)
 
 	client := s.getJaasClient()
-	gotGroup, err := client.ReadGroup(context.Background(), uuid)
+	gotGroup, err := client.ReadGroupByUUID(uuid)
 	s.Require().NoError(err)
 	s.Require().Equal(*gotGroup, JaasGroup{UUID: uuid, Name: name})
 }
@@ -193,7 +193,7 @@ func (s *JaasSuite) TestGetGroupNotFound() {
 	s.mockJaasClient.EXPECT().GetGroup(req).Return(params.GetGroupResponse{}, errors.New("group not found"))
 
 	client := s.getJaasClient()
-	gotGroup, err := client.ReadGroup(context.Background(), uuid)
+	gotGroup, err := client.ReadGroupByUUID(uuid)
 	s.Require().Error(err)
 	s.Require().Nil(gotGroup)
 }
@@ -207,7 +207,7 @@ func (s *JaasSuite) TestRenameGroup() {
 	s.mockJaasClient.EXPECT().RenameGroup(req).Return(nil)
 
 	client := s.getJaasClient()
-	err := client.RenameGroup(context.Background(), name, newName)
+	err := client.RenameGroup(name, newName)
 	s.Require().NoError(err)
 }
 
@@ -219,7 +219,7 @@ func (s *JaasSuite) TestRemoveGroup() {
 	s.mockJaasClient.EXPECT().RemoveGroup(req).Return(nil)
 
 	client := s.getJaasClient()
-	err := client.RemoveGroup(context.Background(), name)
+	err := client.RemoveGroup(name)
 	s.Require().NoError(err)
 }
 

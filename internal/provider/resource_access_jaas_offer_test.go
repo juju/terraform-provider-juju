@@ -38,7 +38,7 @@ func TestAcc_ResourceJaasAccessOffer(t *testing.T) {
 	// Objects for checking access
 	groupRelationF := func(s string) string { return jimmnames.NewGroupTag(s).String() + "#member" }
 	groupCheck := newCheckAttribute(groupResourcename, "uuid", groupRelationF)
-	offerRelationF := func(s string) string { return jimmnames.NewApplicationOfferTag(s).String() }
+	offerRelationF := func(s string) string { return names.NewApplicationOfferTag(s).String() }
 	offerCheck := newCheckAttribute(offerAccessResourceName, "offer_url", offerRelationF)
 	userTag := names.NewUserTag(user).String()
 	svcAccTag := names.NewUserTag(svcAccWithDomain).String()
