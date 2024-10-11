@@ -504,7 +504,7 @@ func (r *modelResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	arg := juju.DestroyModelInput{
 		UUID: modelUUID,
 	}
-	err := r.client.Models.DestroyModel(arg)
+	err := r.client.Models.DestroyModel(ctx, arg)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete model, got error: %s", err))
 		return

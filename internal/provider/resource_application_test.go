@@ -1133,7 +1133,7 @@ func setupModelAndSpaces(t *testing.T, modelName string) (string, string, func()
 		t.Fatal(err)
 	}
 	cleanUp := func() {
-		_ = TestClient.Models.DestroyModel(internaljuju.DestroyModelInput{UUID: model.UUID})
+		_ = TestClient.Models.DestroyModel(context.Background(), internaljuju.DestroyModelInput{UUID: model.UUID})
 		_ = conn.Close()
 	}
 

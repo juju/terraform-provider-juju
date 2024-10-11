@@ -4,9 +4,12 @@
 package juju
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/juju/clock"
 	"github.com/juju/errors"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/client/modelmanager"
@@ -14,6 +17,7 @@ import (
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
+	"github.com/juju/retry"
 )
 
 var ModelNotFoundError = &modelNotFoundError{}
@@ -319,7 +323,7 @@ func (c *modelsClient) UpdateModel(input UpdateModelInput) error {
 	return nil
 }
 
-func (c *modelsClient) DestroyModel(input DestroyModelInput) error {
+func (c *modelsClient) DestroyModel(ctx context.Context, input DestroyModelInput) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return err
@@ -341,8 +345,36 @@ func (c *modelsClient) DestroyModel(input DestroyModelInput) error {
 		return err
 	}
 
+	retryErr := retry.Call(retry.CallArgs{
+		Func: func() error {
+			output, err := client.ModelInfo([]names.ModelTag{tag})
+			if err != nil {
+				return err
+			}
+
+			if output[0].Error != nil {
+				// TODO: We get permission denied error instead ModelNotFound. Looks like this is a bug
+				// in the modelmanager facade. So until that is fixed, we will check for permission denied
+				// error and return nil if that is the case.
+				if strings.Contains(output[0].Error.Error(), "permission denied") {
+					return nil
+				}
+			}
+
+			c.Tracef("Model still exists:", map[string]interface{}{"output": output})
+
+			return errors.Errorf("model %q still exists", input.UUID)
+		},
+		BackoffFunc: retry.DoubleDelay,
+		Attempts:    -1,
+		Delay:       time.Second,
+		Clock:       clock.WallClock,
+		Stop:        ctx.Done(),
+		MaxDuration: timeout,
+	})
+
 	c.RemoveModel(input.UUID)
-	return nil
+	return retryErr
 }
 
 func (c *modelsClient) GrantModel(input GrantModelInput) error {

@@ -13,53 +13,47 @@ import (
 )
 
 func TestAcc_ResourceKubernetesCloud(t *testing.T) {
-	// TODO: Skip this ACC test until we have a way to run correctly with kubernetes_config
-	// attribute set to a correct k8s config in github action environment
-	t.Skip(t.Name() + " is skipped until we have a way to run correctly with kubernetes_config attribute set to a correct k8s config in github action environment")
-
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	cloudName := acctest.RandomWithPrefix("tf-test-k8scloud")
-	modelName := acctest.RandomWithPrefix("tf-test-model")
-	cloudConfig := os.Getenv("MICROK8S_CONFIG")
+	cloudName := acctest.RandomWithPrefix("test-k8scloud")
+	modelName := "test-model"
+	userName := os.Getenv("USER")
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceKubernetesCloud(cloudName, modelName, cloudConfig),
+				Config: testAccResourceKubernetesCloud(cloudName, modelName, userName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
-					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "model", modelName),
+					resource.TestCheckResourceAttr("juju_kubernetes_cloud.test-k8scloud", "name", cloudName),
+					resource.TestCheckResourceAttr("juju_model.test-model", "name", modelName),
 				),
 			},
 		},
 	})
 }
 
-func testAccResourceKubernetesCloud(cloudName string, modelName string, config string) string {
+func testAccResourceKubernetesCloud(cloudName string, modelName string, userName string) string {
 	return internaltesting.GetStringFromTemplateWithData(
-		"testAccResourceSecret",
+		"testAccResourceKubernetesCloud",
 		`
-
-
-resource "juju_kubernetes_cloud" "tf-test-k8scloud" {
+resource "juju_kubernetes_cloud" "test-k8scloud" {
  name = "{{.CloudName}}"
- kubernetes_config = file("~/microk8s-config.yaml")
+ kubernetes_config = file("/home/{{.UserName}}/microk8s-config.yaml")
 }
 
-resource "juju_model" {{.ModelName}} {
+resource "juju_model" "test-model" {
  name = "{{.ModelName}}"
- credential = juju_kubernetes_cloud.tf-test-k8scloud.credential
+ credential = juju_kubernetes_cloud.test-k8scloud.credential
  cloud {
-   name   = juju_kubernetes_cloud.tf-test-k8scloud.name
+   name   = juju_kubernetes_cloud.test-k8scloud.name
  }
 }
 `, internaltesting.TemplateData{
 			"CloudName": cloudName,
 			"ModelName": modelName,
-			"Config":    config,
+			"UserName":  userName,
 		})
 }
