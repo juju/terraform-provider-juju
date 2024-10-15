@@ -14,7 +14,7 @@ A resource that represents access to a group when using JAAS.
 
 ```terraform
 resource "juju_jaas_access_group" "development" {
-  group_uuid       = juju_jaas_group.target-group.uuid
+  group_id         = juju_jaas_group.target-group.uuid
   access           = "member"
   users            = ["foo@domain.com"]
   groups           = [juju_jaas_group.development.uuid]
