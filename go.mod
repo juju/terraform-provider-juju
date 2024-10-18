@@ -1,6 +1,7 @@
 module github.com/juju/terraform-provider-juju
 
 go 1.21
+toolchain go1.22.5
 
 require (
 	github.com/bflad/tfproviderlint v0.30.0
@@ -31,7 +32,7 @@ require (
 	github.com/juju/version/v2 v2.0.1
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.9.0
-	go.uber.org/mock v0.4.0
+	go.uber.org/mock v0.5.0
 	gopkg.in/httprequest.v1 v1.2.1
 	gopkg.in/macaroon.v2 v2.1.0
 	gopkg.in/yaml.v2 v2.4.0
