@@ -79,12 +79,12 @@ jobs:
         run: |
           CONTROLLER=$(juju whoami --format yaml | yq .controller)
 
-          echo "JUJU_AGENT_VERSION=$(juju show-controller | yq .$CONTROLLER.details.agent-version |tr -d '"')" >> $GITHUB_ENV
+          echo "JUJU_AGENT_VERSION=$(juju show-controller | yq -r .$CONTROLLER.details.agent-version)" >> $GITHUB_ENV
           echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq .$CONTROLLER.details.api-endpoints | yq -r '. | join(",")')" >> $GITHUB_ENV
-          echo "JUJU_USERNAME=$(juju show-controller | yq .$CONTROLLER.account.user)"  >> $GITHUB_ENV
-          echo "JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password)"  >> $GITHUB_ENV
+          echo "JUJU_USERNAME=$(juju show-controller | yq -r .$CONTROLLER.account.user)"  >> $GITHUB_ENV
+          echo "JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq -r .controllers.$CONTROLLER.password)"  >> $GITHUB_ENV
           echo "JUJU_CA_CERT<<EOF" >> $GITHUB_ENV
-          juju show-controller | yq .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
+          juju show-controller | yq -r .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
       - run: go mod download
       - name: Create a new machine on lxd
