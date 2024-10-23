@@ -35,15 +35,15 @@ resource "juju_credential" "this" {
 
 ### Required
 
-- `auth_type` (String) Credential authorization type
-- `name` (String) The name to be assigned to the credential
+- `auth_type` (String) Credential authorization type.
+- `name` (String) The name to be assigned to the credential. Changing this value will cause the credential to be destroyed and recreated by terraform.
 
 ### Optional
 
 - `attributes` (Map of String, Sensitive) Credential attributes accordingly to the cloud
-- `client_credential` (Boolean) Add credentials to the client
-- `cloud` (Block List) JuJu Cloud where the credentials will be used to access (see [below for nested schema](#nestedblock--cloud))
-- `controller_credential` (Boolean) Add credentials to the controller
+- `client_credential` (Boolean) Add credentials to the client.
+- `cloud` (Block List) Juju Cloud where the credentials will be used to access. (see [below for nested schema](#nestedblock--cloud))
+- `controller_credential` (Boolean) Add credentials to the controller.
 
 ### Read-Only
 

@@ -39,13 +39,13 @@ resource "juju_integration" "this" {
 
 ### Required
 
-- `application_name` (String) The name of the application.
-- `endpoint` (String) The endpoint name.
-- `model` (String) The name of the model to operate in.
+- `application_name` (String) The name of the application. Changing this value will cause the offer to be destroyed and recreated by terraform.
+- `endpoint` (String) The endpoint name. Changing this value will cause the offer to be destroyed and recreated by terraform.
+- `model` (String) The name of the model to operate in. Changing this value will cause the offer to be destroyed and recreated by terraform.
 
 ### Optional
 
-- `name` (String) The name of the offer.
+- `name` (String) The name of the offer. Changing this value will cause the offer to be destroyed and recreated by terraform.
 
 ### Read-Only
 

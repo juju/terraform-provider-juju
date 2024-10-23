@@ -17,12 +17,12 @@ A resource that represents a Juju User.
 
 ### Required
 
-- `name` (String) The name to be assigned to the user
-- `password` (String, Sensitive) The password to be assigned to the user
+- `name` (String) The username to be assigned to the user. Changing this value will cause the user to be destroyed and recreated by terraform.
+- `password` (String, Sensitive) The password to be assigned to the user.
 
 ### Optional
 
-- `display_name` (String) The display name to be assigned to the user (optional)
+- `display_name` (String) The display name to be assigned to the user (optional).
 
 ### Read-Only
 

@@ -26,19 +26,19 @@ resource "juju_machine" "this_machine" {
 
 ### Required
 
-- `model` (String) The Juju model in which to add a new machine.
+- `model` (String) The Juju model in which to add a new machine. Changing this value will cause the machine to be destroyed and recreated by terraform.
 
 ### Optional
 
-- `base` (String) The operating system to install on the new machine(s). E.g. ubuntu@22.04.
-- `constraints` (String) Machine constraints that overwrite those available from 'juju get-model-constraints' and provider's defaults.
-- `disks` (String) Storage constraints for disks to attach to the machine(s).
+- `base` (String) The operating system to install on the new machine(s). E.g. ubuntu@22.04. Changing this value will cause the machine to be destroyed and recreated by terraform.
+- `constraints` (String) Machine constraints that overwrite those available from 'juju get-model-constraints' and provider's defaults. Changing this value will cause the application to be destroyed and recreated by terraform.
+- `disks` (String) Storage constraints for disks to attach to the machine(s). Changing this value will cause the machine to be destroyed and recreated by terraform.
 - `name` (String) A name for the machine resource in Terraform.
-- `placement` (String) Additional information about how to allocate the machine in the cloud.
+- `placement` (String) Additional information about how to allocate the machine in the cloud. Changing this value will cause the application to be destroyed and recreated by terraform.
 - `private_key_file` (String) The file path to read the private key from.
 - `public_key_file` (String) The file path to read the public key from.
-- `series` (String, Deprecated) The operating system series to install on the new machine(s).
-- `ssh_address` (String) The user@host directive for manual provisioning an existing machine via ssh. Requires public_key_file & private_key_file arguments.
+- `series` (String, Deprecated) The operating system series to install on the new machine(s). Changing this value will cause the machine to be destroyed and recreated by terraform.
+- `ssh_address` (String) The user@host directive for manual provisioning an existing machine via ssh. Requires public_key_file & private_key_file arguments. Changing this value will cause the machine to be destroyed and recreated by terraform.
 
 ### Read-Only
 

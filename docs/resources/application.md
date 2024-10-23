@@ -48,17 +48,17 @@ resource "juju_application" "this" {
 
 ### Required
 
-- `model` (String) The name of the model where the application is to be deployed.
+- `model` (String) The name of the model where the application is to be deployed. Changing this value will cause the application to be destroyed and recreated by terraform.
 
 ### Optional
 
-- `charm` (Block List) The name of the charm to be installed from Charmhub. (see [below for nested schema](#nestedblock--charm))
+- `charm` (Block List) The charm installed from Charmhub. (see [below for nested schema](#nestedblock--charm))
 - `config` (Map of String) Application specific configuration. Must evaluate to a string, integer or boolean.
-- `constraints` (String) Constraints imposed on this application.
+- `constraints` (String) Constraints imposed on this application. Changing this value will cause the application to be destroyed and recreated by terraform.
 - `endpoint_bindings` (Attributes Set) Configure endpoint bindings (see [below for nested schema](#nestedatt--endpoint_bindings))
 - `expose` (Block List) Makes an application publicly available over the network (see [below for nested schema](#nestedblock--expose))
-- `name` (String) A custom name for the application deployment. If empty, uses the charm's name.
-- `placement` (String) Specify the target location for the application's units
+- `name` (String) A custom name for the application deployment. If empty, uses the charm's name.Changing this value will cause the application to be destroyed and recreated by terraform.
+- `placement` (String) Specify the target location for the application's units. Changing this value will cause the application to be destroyed and recreated by terraform.
 - `resources` (Map of String) Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
 Specify a resource other than the default for a charm. Note that not all charms have resources.
 
@@ -82,7 +82,7 @@ Notes:
 
 Required:
 
-- `name` (String) The name of the charm
+- `name` (String) The name of the charm to be deployed.  Changing this value will cause the application to be destroyed and recreated by terraform.
 
 Optional:
 
