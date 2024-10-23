@@ -68,13 +68,14 @@ resource "juju_integration" "this" {
 
 Optional:
 
-- `endpoint` (String) The endpoint name.
-- `name` (String) The name of the application.
-- `offer_url` (String) The URL of a remote application.
+- `endpoint` (String) The endpoint name. This attribute may not be used at the same time as the offer_url.
+- `name` (String) The name of the application. This attribute may not be used at the same time as the offer_url.
+- `offer_url` (String) The URL of a remote application. This attribute may not be used at the same time as name and endpoint.
 
 
 ### Notes
-When creating this resource the `offer_url` property will show `(known after apply)` as below:
+When creating this resource the `offer_url` property will show `(known after apply)` if a `name` or
+ `name` and `endpoint` are supplied as below:
 ```
   + resource "juju_integration" "this" {
       + id    = (known after apply)
@@ -88,7 +89,8 @@ When creating this resource the `offer_url` property will show `(known after app
         }
     }
 ```
-This is due to a bug in the sdk this provider uses - this property will never be computed and can only be provided by the user.
+This is due to an integration requiring a name/endpoint combination or an offer_url, but not both
+bits of data together.
 
 ## Import
 
