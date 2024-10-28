@@ -2,7 +2,10 @@ name: Schema Change
 description: |
   You want to contribute functionality to Terraform Juju Provider,
   requiring a schema change? Proceed with this one.
-labels: [schema changes]
+labels:
+  - area/schema
+  - kind/feature
+  - state/untriaged
 body:
   - type: markdown
     attributes:
