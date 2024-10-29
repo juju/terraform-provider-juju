@@ -1,7 +1,9 @@
 name: Bug Report
 description: Something's not working right in Terraform Juju Provider? Use this 
   template.
-labels: [bug]
+labels:
+  - kind/bug
+  - state/untriaged
 body:
   - type: markdown
     attributes:

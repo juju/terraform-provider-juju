@@ -1,6 +1,8 @@
 name: Feature Request
 description: You want something to be added to Terraform Juju Provider? Proceed with this one.
-labels: [wishlisted]
+labels:
+  - kind/feature
+  - state/untriaged
 body:
   - type: markdown
     attributes:
