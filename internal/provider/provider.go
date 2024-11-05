@@ -389,6 +389,7 @@ func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
 // the Metadata method. All data sources must have unique names.
 func (p *jujuProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
+		func() datasource.DataSource { return NewApplicationDataSource() },
 		func() datasource.DataSource { return NewMachineDataSource() },
 		func() datasource.DataSource { return NewModelDataSource() },
 		func() datasource.DataSource { return NewOfferDataSource() },

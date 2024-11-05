@@ -46,7 +46,7 @@ func (d *applicationDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 		Description: "A data source that represents a single Juju application deployment from a charm.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
-				Description: "Name of the application deployment.",
+				Description: "Name of the application.",
 				Required:    true,
 			},
 			"model": schema.StringAttribute{
@@ -130,9 +130,6 @@ func (d *applicationDataSource) trace(msg string, additionalFields ...map[string
 		return
 	}
 
-	//SubsystemTrace(subCtx, "datasource-model", "hello, world", map[string]interface{}{"foo": 123})
-	// Output:
-	// {"@level":"trace","@message":"hello, world","@module":"juju.datasource-model","foo":123}
 	tflog.SubsystemTrace(d.subCtx, LogDataSourceApplication, msg, additionalFields...)
 }
 
