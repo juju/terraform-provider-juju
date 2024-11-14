@@ -14,7 +14,7 @@ jobs:
   # Ensure project builds before running testing matrix
   build:
     name: Build
-    runs-on: [self-hosted, jammy]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -85,4 +85,4 @@ jobs:
       - env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.cloud }}
-        run: go test -timeout 40m -v -cover ./internal/provider/
+        run: go test -parallel 10 -timeout 40m -v -cover ./internal/provider/

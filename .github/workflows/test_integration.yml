@@ -5,19 +5,12 @@ name: Integration tests
 # This GitHub action runs your tests for each pull request.
 on:
   pull_request:
-    paths-ignore:
-      - "README.md"
-      - "project-docs/**"
-      - ".github/ISSUE_TEMPLATE/**"
-      - ".github/PULL_REQUEST_TEMPLATE.md"
+    types: [opened, synchronize, reopened, ready_for_review]
+  #    paths-ignore:
+  #     DON'T SET - these are "required" so they need to run on every PR
   push:
     branches:
       - "main"
-    paths-ignore:
-      - "README.md"
-      - "project-docs/**"
-      - ".github/ISSUE_TEMPLATE/**"
-      - ".github/PULL_REQUEST_TEMPLATE.md"
 
 # Testing only needs permissions to read the repository contents.
 permissions:
@@ -25,9 +18,11 @@ permissions:
 
 jobs:
   # Ensure project builds before running testing matrix
+  # This is a small job better suited to github runners, due to
+  # turn around time for self-hosted PS6 runners.
   build:
     name: Build
-    runs-on: [self-hosted, jammy]
+    runs-on: [ubuntu-latest]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +30,23 @@ jobs:
         with:
           go-version-file: "go.mod"
           cache: true
-      - run: go build -v .
+      - run: go mod tidy
+      - run: go install
+
+  # Run internal/juju unit tests
+  # This is a small job better suited to github runners, due to
+  # turn around time for self-hosted PS6 runners.
+  unittest:
+    name: Juju unit tests
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - run: make juju-unit-test
 
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
@@ -45,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        terraform: ["1.7.*", "1.8.*", "1.9.*"]
+        terraform: ["1.9.*"]
         action-operator:
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "5.21", juju: "2.9" }
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "5.21", juju: "3" }
@@ -106,5 +117,92 @@ jobs:
       - env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.action-operator.cloud }}
-        run: go test -parallel 1 -timeout 40m -v -cover ./internal/provider/
+        run: go test -parallel 10 -timeout 40m -v -cover ./internal/provider/
+        timeout-minutes: 40
+
+  # Run acceptance tests in a matrix with Terraform CLI versions
+  add-machine-test:
+    name: Add Machine
+    needs: build
+    runs-on: [self-hosted, jammy]
+    env:
+      ACTIONS_ALLOW_IPV6: false
+    strategy:
+      fail-fast: false
+      matrix:
+        # Only on lxd
+        cloud:
+          - "lxd"
+        terraform:
+          - "1.9.*"
+        juju:
+          - "2.9/stable"
+          - "3/stable"
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      # set up terraform
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ matrix.terraform }}
+          terraform_wrapper: false
+      # set up snap, lxd, tox, Juju, bootstrap a controller, etc.
+      - name: Setup operator environment
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: ${{ matrix.cloud }}
+          juju-channel: ${{ matrix.juju }}
+      - name: "Set environment to configure provider"
+        # language=bash
+        run: |
+          CONTROLLER=$(juju whoami --format yaml | yq .controller)
+
+          echo "JUJU_AGENT_VERSION=$(juju show-controller | yq .$CONTROLLER.details.agent-version |tr -d '"')" >> $GITHUB_ENV
+          echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq .$CONTROLLER.details.api-endpoints | yq -r '. | join(",")')" >> $GITHUB_ENV
+          echo "JUJU_USERNAME=$(juju show-controller | yq .$CONTROLLER.account.user)"  >> $GITHUB_ENV
+          echo "JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password)"  >> $GITHUB_ENV
+          echo "JUJU_CA_CERT<<EOF" >> $GITHUB_ENV
+          juju show-controller | yq .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+      - run: go mod download
+      - name: Create a new machine on lxd
+        run: |
+          /snap/bin/lxc launch ubuntu:22.04 mtest
+          echo "Waiting on the container to be up and ready"
+          while [[ -z $(lxc list --format=json | jq -r '.[] | select(.state.status == "Running") | .name' | grep mtest) ]]; do sleep 1; done
+          # Running status doesn't mean the network interface is up, so wait another 10 seconds
+          sleep 10
+          echo "Container for test is ready"
+      - name: Final setup and test
+        env:
+          TF_ACC: "1"
+          TEST_CLOUD: ${{ matrix.cloud }}
+        run: |
+          # generate a new key pair and add it to the agent
+          ssh-keygen -t rsa -N "" -f ./test-add-machine
+          eval "$(ssh-agent -s)"
+          ssh-add ./test-add-machine
+
+          # set the env variables
+          echo $(/snap/bin/lxc list mtest --format=json | jq -r '.[0].state.network.eth0.addresses[]')
+          export TEST_ADD_MACHINE_IP=$(/snap/bin/lxc list mtest --format=json | jq -r '.[0].state.network.eth0.addresses[] | select(.family == "inet").address')
+          export TEST_SSH_PUB_KEY_PATH=$(pwd)/test-add-machine.pub
+          export TEST_SSH_PRIV_KEY_PATH=$(pwd)/test-add-machine
+          echo "Testing with machine at $TEST_ADD_MACHINE_IP with keys $TEST_SSH_PUB_KEY_PATH and $TEST_SSH_PRIV_KEY_PATH"
+
+          echo "Pushing the ssh public key at $TEST_SSH_PUB_KEY_PATH into the container"
+          /snap/bin/lxc file push $TEST_SSH_PUB_KEY_PATH mtest/home/ubuntu/.ssh/authorized_keys
+
+          # to avoid the host key verification prompt
+          echo "adding the host fingerprint to known_hosts"
+          mkdir -p ~/.ssh
+          ssh-keyscan $TEST_ADD_MACHINE_IP >> ~/.ssh/known_hosts
+
+          echo "Running the test"
+          cd ./internal/provider/
+          go test ./... -timeout 30m -v -test.run TestAcc_ResourceMachine_AddMachine
         timeout-minutes: 40
