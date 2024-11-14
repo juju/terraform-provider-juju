@@ -109,15 +109,18 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 				},
 			},
 			ModelKey: schema.StringAttribute{
-				Description: "The Juju model in which to add a new machine.",
-				Required:    true,
+				Description: "The Juju model in which to add a new machine. Changing this value will cause the machine" +
+					" to be destroyed and recreated by terraform.",
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			ConstraintsKey: schema.StringAttribute{
-				Description: "Machine constraints that overwrite those available from 'juju get-model-constraints' and provider's defaults.",
-				Optional:    true,
+				Description: "Machine constraints that overwrite those available from 'juju get-model-constraints' " +
+					"and provider's defaults. Changing this value will cause the application to be destroyed and" +
+					" recreated by terraform.",
+				Optional: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 				},
@@ -128,8 +131,9 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 				},
 			},
 			DisksKey: schema.StringAttribute{
-				Description: "Storage constraints for disks to attach to the machine(s).",
-				Optional:    true,
+				Description: "Storage constraints for disks to attach to the machine(s). Changing this" +
+					" value will cause the machine to be destroyed and recreated by terraform.",
+				Optional: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 				},
@@ -140,9 +144,10 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 				},
 			},
 			BaseKey: schema.StringAttribute{
-				Description: "The operating system to install on the new machine(s). E.g. ubuntu@22.04.",
-				Optional:    true,
-				Computed:    true,
+				Description: "The operating system to install on the new machine(s). E.g. ubuntu@22.04. Changing this" +
+					" value will cause the machine to be destroyed and recreated by terraform.",
+				Optional: true,
+				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 					stringplanmodifier.UseStateForUnknown(),
@@ -156,9 +161,10 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 				},
 			},
 			SeriesKey: schema.StringAttribute{
-				Description: "The operating system series to install on the new machine(s).",
-				Optional:    true,
-				Computed:    true,
+				Description: "The operating system series to install on the new machine(s). Changing this value" +
+					" will cause the machine to be destroyed and recreated by terraform.",
+				Optional: true,
+				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 					stringplanmodifier.UseStateForUnknown(),
@@ -169,11 +175,13 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 						path.MatchRoot(BaseKey),
 					}...),
 				},
-				DeprecationMessage: "Configure base instead. This attribute will be removed in the next major version of the provider.",
+				DeprecationMessage: "Configure base instead. This attribute will be removed in the next" +
+					" major version of the provider.",
 			},
 			PlacementKey: schema.StringAttribute{
-				Description: "Additional information about how to allocate the machine in the cloud.",
-				Optional:    true,
+				Description: "Additional information about how to allocate the machine in the cloud. Changing" +
+					" this value will cause the application to be destroyed and recreated by terraform.",
+				Optional: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 					stringplanmodifier.UseStateForUnknown(),
@@ -192,7 +200,8 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 			},
 			SSHAddressKey: schema.StringAttribute{
 				Description: "The user@host directive for manual provisioning an existing machine via ssh. " +
-					"Requires public_key_file & private_key_file arguments.",
+					"Requires public_key_file & private_key_file arguments. Changing this value will cause the" +
+					" machine to be destroyed and recreated by terraform.",
 				Optional: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),

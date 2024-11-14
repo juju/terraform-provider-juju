@@ -73,18 +73,19 @@ func (r *userResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			// terraform method to say the items are immutable.
 			// Juju has no way to update a username today.
 			"name": schema.StringAttribute{
-				Description: "The name to be assigned to the user",
-				Required:    true,
+				Description: "The username to be assigned to the user. Changing this value will cause the" +
+					" user to be destroyed and recreated by terraform.",
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"display_name": schema.StringAttribute{
-				Description: "The display name to be assigned to the user (optional)",
+				Description: "The display name to be assigned to the user (optional).",
 				Optional:    true,
 			},
 			"password": schema.StringAttribute{
-				Description: "The password to be assigned to the user",
+				Description: "The password to be assigned to the user.",
 				Required:    true,
 				Sensitive:   true,
 			},

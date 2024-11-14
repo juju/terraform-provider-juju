@@ -130,17 +130,19 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 			" is not supported.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
-				Description: "A custom name for the application deployment. If empty, uses the charm's name.",
-				Optional:    true,
-				Computed:    true,
+				Description: "A custom name for the application deployment. If empty, uses the charm's name." +
+					"Changing this value will cause the application to be destroyed and recreated by terraform.",
+				Optional: true,
+				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"model": schema.StringAttribute{
-				Description: "The name of the model where the application is to be deployed.",
-				Required:    true,
+				Description: "The name of the model where the application is to be deployed. Changing this value" +
+					" will cause the application to be destroyed and recreated by terraform.",
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 				},
@@ -157,8 +159,9 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				ElementType: types.StringType,
 			},
 			"constraints": schema.StringAttribute{
-				Description: "Constraints imposed on this application.",
-				Optional:    true,
+				Description: "Constraints imposed on this application. Changing this value will cause the" +
+					" application to be destroyed and recreated by terraform.",
+				Optional: true,
 				// Set as "computed" to pre-populate and preserve any implicit constraints
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
@@ -213,9 +216,10 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Default:     booldefault.StaticBool(false),
 			},
 			"placement": schema.StringAttribute{
-				Description: "Specify the target location for the application's units",
-				Optional:    true,
-				Computed:    true,
+				Description: "Specify the target location for the application's units. Changing this value" +
+					" will cause the application to be destroyed and recreated by terraform.",
+				Optional: true,
+				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 					stringplanmodifier.UseStateForUnknown(),
@@ -267,12 +271,13 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 		},
 		Blocks: map[string]schema.Block{
 			CharmKey: schema.ListNestedBlock{
-				Description: "The name of the charm to be installed from Charmhub.",
+				Description: "The charm installed from Charmhub.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
-							Required:    true,
-							Description: "The name of the charm",
+							Required: true,
+							Description: "The name of the charm to be deployed.  Changing this value will cause" +
+								" the application to be destroyed and recreated by terraform.",
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.RequiresReplaceIfConfigured(),
 							},

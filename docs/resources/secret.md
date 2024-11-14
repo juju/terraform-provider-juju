@@ -38,7 +38,7 @@ resource "juju_application" "my-application" {
 
 ### Required
 
-- `model` (String) The model in which the secret belongs.
+- `model` (String) The model in which the secret belongs. Changing this value will cause the secret to be destroyed and recreated by terraform.
 - `value` (Map of String, Sensitive) The value map of the secret. There can be more than one key-value pair.
 
 ### Optional

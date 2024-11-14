@@ -113,8 +113,9 @@ func (s *secretResource) Schema(_ context.Context, req resource.SchemaRequest, r
 		Description: "A resource that represents a Juju secret.",
 		Attributes: map[string]schema.Attribute{
 			"model": schema.StringAttribute{
-				Description: "The model in which the secret belongs.",
-				Required:    true,
+				Description: "The model in which the secret belongs. Changing this value will cause the secret" +
+					" to be destroyed and recreated by terraform.",
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

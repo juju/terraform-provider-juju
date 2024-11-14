@@ -121,7 +121,8 @@ func (r *modelResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 		},
 		Blocks: map[string]schema.Block{
 			"cloud": schema.ListNestedBlock{
-				Description: "JuJu Cloud where the model will operate",
+				Description: "Juju Cloud where the model will operate. Changing this value will cause the" +
+					" model to be destroyed and recreated by terraform.",
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.RequiresReplace(),
 				},

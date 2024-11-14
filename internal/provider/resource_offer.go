@@ -56,16 +56,18 @@ func (o *offerResource) Schema(_ context.Context, req resource.SchemaRequest, re
 		Description: "A resource that represent a Juju Offer.",
 		Attributes: map[string]schema.Attribute{
 			"model": schema.StringAttribute{
-				Description: "The name of the model to operate in.",
-				Required:    true,
+				Description: "The name of the model to operate in. Changing this value will cause the" +
+					" offer to be destroyed and recreated by terraform.",
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"name": schema.StringAttribute{
-				Description: "The name of the offer.",
-				Optional:    true,
-				Computed:    true,
+				Description: "The name of the offer. Changing this value will cause the offer" +
+					" to be destroyed and recreated by terraform.",
+				Optional: true,
+				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.RequiresReplaceIfConfigured(),
@@ -73,15 +75,17 @@ func (o *offerResource) Schema(_ context.Context, req resource.SchemaRequest, re
 				},
 			},
 			"application_name": schema.StringAttribute{
-				Description: "The name of the application.",
-				Required:    true,
+				Description: "The name of the application. Changing this value will cause the offer" +
+					" to be destroyed and recreated by terraform.",
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"endpoint": schema.StringAttribute{
-				Description: "The endpoint name.",
-				Required:    true,
+				Description: "The endpoint name. Changing this value will cause the offer" +
+					" to be destroyed and recreated by terraform.",
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

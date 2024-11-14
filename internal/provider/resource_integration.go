@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -138,19 +139,38 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
-							Description: "The name of the application.",
-							Optional:    true,
+							Description: "The name of the application. This attribute may not be used at the" +
+								" same time as the offer_url.",
+							Optional: true,
+							Validators: []validator.String{
+								stringvalidator.ConflictsWith(path.Expressions{
+									path.MatchRelative().AtParent().AtName("offer_url"),
+								}...),
+							},
 						},
 						"endpoint": schema.StringAttribute{
-							Description: "The endpoint name.",
-							Optional:    true,
-							Computed:    true,
+							Description: "The endpoint name. This attribute may not be used at the" +
+								" same time as the offer_url.",
+							Optional: true,
+							Computed: true,
+							Validators: []validator.String{
+								stringvalidator.ConflictsWith(path.Expressions{
+									path.MatchRelative().AtParent().AtName("offer_url"),
+								}...),
+							},
 						},
 						"offer_url": schema.StringAttribute{
-							Description: "The URL of a remote application.",
-							Optional:    true,
+							Description: "The URL of a remote application. This attribute may not be used at the" +
+								" same time as name and endpoint.",
+							Optional: true,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
+							},
+							Validators: []validator.String{
+								stringvalidator.ConflictsWith(path.Expressions{
+									path.MatchRelative().AtParent().AtName("name"),
+									path.MatchRelative().AtParent().AtName("endpoint"),
+								}...),
 							},
 						},
 					},

@@ -13,23 +13,22 @@ A resource that represent a Juju Offer.
 ## Example Usage
 
 ```terraform
-resource "juju_offer" "this" {
+resource "juju_offer" "myoffer" {
   model            = juju_model.development.name
   application_name = juju_application.percona-cluster.name
   endpoint         = server
 }
 
-// an offer can then be used in an integration as below:
-resource "juju_integration" "this" {
+// an offer can then be used in an cross model integration as below:
+resource "juju_integration" "myintegration" {
   model = juju_model.development-destination.name
 
   application {
     name     = juju_application.wordpress.name
     endpoint = "db"
   }
-
   application {
-    offer_url = juju_offer.this.url
+    offer_url = juju_offer.myoffer.url
   }
 }
 ```
@@ -39,13 +38,13 @@ resource "juju_integration" "this" {
 
 ### Required
 
-- `application_name` (String) The name of the application.
-- `endpoint` (String) The endpoint name.
-- `model` (String) The name of the model to operate in.
+- `application_name` (String) The name of the application. Changing this value will cause the offer to be destroyed and recreated by terraform.
+- `endpoint` (String) The endpoint name. Changing this value will cause the offer to be destroyed and recreated by terraform.
+- `model` (String) The name of the model to operate in. Changing this value will cause the offer to be destroyed and recreated by terraform.
 
 ### Optional
 
-- `name` (String) The name of the offer.
+- `name` (String) The name of the offer. Changing this value will cause the offer to be destroyed and recreated by terraform.
 
 ### Read-Only
 
