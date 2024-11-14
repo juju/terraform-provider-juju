@@ -33,21 +33,6 @@ jobs:
       - run: go mod tidy
       - run: go install
 
-  # Run internal/juju unit tests
-  # This is a small job better suited to github runners, due to
-  # turn around time for self-hosted PS6 runners.
-  unittest:
-    name: Juju unit tests
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: "go.mod"
-          cache: true
-      - run: make juju-unit-test
-
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
     name: Integration
