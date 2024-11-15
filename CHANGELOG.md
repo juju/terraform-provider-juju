@@ -1,6 +1,7 @@
 ## 0.15.0 (October 14, 2024)
 
 NOTES:
+
 * **This release requires Juju controller version 2.9.49 or higher juju.**
 * **If using JAAS, this release requires Juju controller version 3.5.0 or higher.**
 * This release uses juju client api code from the juju 3.5.1 release.
@@ -26,6 +27,7 @@ BUG FIXES:
 ## 0.14.0 (September 9, 2024)
 
 NOTES:
+
 * **This release requires juju controller version 2.9.49 or later juju.**
 * This release uses juju client api code from the juju 3.5.1 release.
 
@@ -44,6 +46,7 @@ BUG FIXES:
 ## 0.13.0 (July 15, 2024)
 
 NOTES:
+
 * **This release requires juju controller version 2.9.49 or later juju.**
 * This release uses juju client api code from the juju 3.5.1 release.
 
@@ -62,12 +65,14 @@ BUG FIXES:
 ## 0.12.0 (April 22, 2024)
 
 NOTES:
+
 * **This release requires juju controller version 2.9.49 or later juju.**
 * This release uses juju client api code from the juju 3.5-beta1 candidate release.
 * The added JAAS login enhancements requires Juju controller version 3.5.0 or higher.
 * The added Juju secrets support requires Juju controller version 3.4.0 or higher.
 
 ENHANCEMENTS:
+
 * Support for user secret management is added. You can now use `juju_secret` and `juju_access_secret` resources to create and manage secrets, as well as grant/revoke access to the applications in your plan. You can also use `juju_secret` data source in your configuration to access a secret.
 * Provider config is enhanced with support for Client ID and secret to enable logging in to JAAS using client credentials.
 
@@ -79,6 +84,7 @@ BUG FIXES:
 ## 0.11.0 (March 18, 2024)
 
 NOTES:
+
 * **This release requires juju controller version 2.9.47 or later juju.**
 * This release uses juju client api code from the juju 3.3.0 release. 
 
@@ -93,6 +99,7 @@ ENHANCEMENTS:
 applications. This is similar to `juju deploy --bind` and `juju bind` commands.
 
 BUG FIXES:
+
 * Fix upgrade charm revision for application resources by @hmlanigan in https://github.com/juju/terraform-provider-juju/pull/414
 * Fixes Config/Revision update ordering. by @anvial in https://github.com/juju/terraform-provider-juju/pull/407
 * Adds error check to ReadModel function by @anvial in https://github.com/juju/terraform-provider-juju/pull/416
