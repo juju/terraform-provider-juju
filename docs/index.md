@@ -26,6 +26,7 @@ Today this provider allows you to manage the following via resources:
 
 and refer to the following via data sources:
 
+* Applications
 * Machines
 * Models
 * Offers
