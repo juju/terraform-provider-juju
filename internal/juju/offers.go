@@ -74,6 +74,12 @@ type RemoveRemoteOfferInput struct {
 	OfferURL  string
 }
 
+type GrantOfferInput struct {
+	User     string
+	Access   string
+	OfferURL string
+}
+
 func newOffersClient(sc SharedClient) *offersClient {
 	return &offersClient{
 		SharedClient: sc,
@@ -386,6 +392,28 @@ func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 
 	if len(errors) > 0 {
 		return errors
+	}
+
+	return nil
+}
+
+// This function adds access to an offer
+func (c offersClient) GrantOffer(input GrantOfferInput) error {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := applicationoffers.NewClient(conn)
+	_, err = client.ApplicationOffer(input.OfferURL)
+	if err != nil {
+		return err
+	}
+
+	err = client.GrantOffer(input.User, input.Access, input.OfferURL)
+	if err != nil {
+		return err
 	}
 
 	return nil
