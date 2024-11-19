@@ -54,6 +54,7 @@ type ReadOfferResponse struct {
 	ModelName       string
 	Name            string
 	OfferURL        string
+	Users           []crossmodel.OfferUserDetails
 }
 
 type DestroyOfferInput struct {
@@ -74,12 +75,20 @@ type RemoveRemoteOfferInput struct {
 	OfferURL  string
 }
 
+// GrantRevokeOfferInput represents input for granting or revoking access to an offer.
+type GrantRevokeOfferInput struct {
+	Users    []string
+	Access   string
+	OfferURL string
+}
+
 func newOffersClient(sc SharedClient) *offersClient {
 	return &offersClient{
 		SharedClient: sc,
 	}
 }
 
+// CreateOffer creates offer managed by the offer resource.
 func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse, []error) {
 	var errs []error
 
@@ -152,6 +161,7 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 	return &resp, nil
 }
 
+// ReadOffer reads offer managed by the offer resource.
 func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
@@ -170,6 +180,7 @@ func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, erro
 	response.ApplicationName = result.ApplicationName
 	response.OfferURL = result.OfferURL
 	response.Endpoint = result.Endpoints[0].Name
+	response.Users = result.Users
 
 	//no model name is returned but it can be parsed from the resulting offer URL to ensure parity
 	//TODO: verify if we can fetch information another way
@@ -182,6 +193,7 @@ func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, erro
 	return &response, nil
 }
 
+// DestroyOffer destroys offer managed by the offer resource.
 func (c offersClient) DestroyOffer(input *DestroyOfferInput) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
@@ -249,7 +261,7 @@ func parseModelFromURL(url string) (result string, success bool) {
 	return result, true
 }
 
-// This function allows the integration resource to consume the offers managed by the offer resource
+// ConsumeRemoteOffer allows the integration resource to consume the offers managed by the offer resource.
 func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*ConsumeRemoteOfferResponse, error) {
 	modelConn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
@@ -330,7 +342,7 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 	return &response, nil
 }
 
-// This function allows the integration resource to destroy the offers managed by the offer resource
+// RemoveRemoteOffer allows the integration resource to destroy the offers managed by the offer resource.
 func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 	var errors []error
 	conn, err := c.GetConnection(&input.ModelName)
@@ -386,6 +398,56 @@ func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 
 	if len(errors) > 0 {
 		return errors
+	}
+
+	return nil
+}
+
+// GrantOffer adds access to an offer managed by the access offer resource.
+// No action or error is returned if the access was already granted to the user.
+func (c offersClient) GrantOffer(input *GrantRevokeOfferInput) error {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := applicationoffers.NewClient(conn)
+
+	for _, user := range input.Users {
+		err = client.GrantOffer(user, input.Access, input.OfferURL)
+		if err != nil {
+			// ignore if user was already granted
+			if strings.Contains(err.Error(), "user already has") {
+				continue
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+// RevokeOffer revokes access to an offer managed by the access offer resource.
+// No action or error if the access was already revoked for the user.
+func (c offersClient) RevokeOffer(input *GrantRevokeOfferInput) error {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := applicationoffers.NewClient(conn)
+
+	for _, user := range input.Users {
+		err = client.RevokeOffer(user, input.Access, input.OfferURL)
+		if err != nil {
+			// ignore if user was already revoked
+			if strings.Contains(err.Error(), "not found") {
+				continue
+			}
+			return err
+		}
 	}
 
 	return nil
