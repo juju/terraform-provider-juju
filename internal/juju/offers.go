@@ -54,6 +54,7 @@ type ReadOfferResponse struct {
 	ModelName       string
 	Name            string
 	OfferURL        string
+	Users           []crossmodel.OfferUserDetails
 }
 
 type DestroyOfferInput struct {
@@ -176,6 +177,7 @@ func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, erro
 	response.ApplicationName = result.ApplicationName
 	response.OfferURL = result.OfferURL
 	response.Endpoint = result.Endpoints[0].Name
+	response.Users = result.Users
 
 	//no model name is returned but it can be parsed from the resulting offer URL to ensure parity
 	//TODO: verify if we can fetch information another way

@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -17,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/juju/juju/core/crossmodel"
@@ -43,7 +45,7 @@ type accessOfferResource struct {
 
 type accessOfferResourceOffer struct {
 	OfferURL types.String `tfsdk:"offer_url"`
-	Users    types.List   `tfsdk:"users"`
+	Users    types.Set    `tfsdk:"users"`
 	Access   types.String `tfsdk:"access"`
 
 	// ID required by the testing framework
@@ -154,7 +156,55 @@ func (a *accessOfferResource) Create(ctx context.Context, req resource.CreateReq
 }
 
 func (a *accessOfferResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	// Read
+	// Check first if the client is configured
+	if a.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "access offer", "read")
+		return
+	}
+	var plan accessOfferResourceOffer
+
+	// Get the Terraform state from the request into the plan
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Retrieve information from the plan
+	offerURL, access, stateUsers := retrieveAccessOfferDataFromID(ctx, plan.ID, plan.Users, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get user/access info from Offer
+	response, err := a.client.Offers.ReadOffer(&juju.ReadOfferInput{
+		OfferURL: offerURL,
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read offer, got error: %s", err))
+		return
+	}
+	a.trace(fmt.Sprintf("read juju offer %q", offerURL))
+
+	// Add to state the ones in the state and set in the offer
+	plan.OfferURL = types.StringValue(offerURL)
+	plan.Access = types.StringValue(access)
+	var users []string
+	for _, user := range stateUsers {
+		for _, offerUserDetail := range response.Users {
+			if user == offerUserDetail.UserName && string(offerUserDetail.Access) == access {
+				users = append(users, offerUserDetail.UserName)
+			}
+		}
+	}
+	uss, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users)
+	plan.Users = uss
+	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Set the plan onto the Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -166,13 +216,30 @@ func (a *accessOfferResource) Delete(ctx context.Context, req resource.DeleteReq
 }
 
 func (a *accessOfferResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	// Configure
+	// Prevent panic if the provider has not been configured.
+	if req.ProviderData == nil {
+		return
+	}
+
+	client, ok := req.ProviderData.(*juju.Client)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *juju.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
+	a.client = client
+	// Create the local logging subsystem here, using the TF context when creating it.
+	a.subCtx = tflog.NewSubsystem(ctx, LogResourceAccessOffer)
 }
 
 // ConfigValidators sets validators for the resource.
 func (r *accessOfferResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
-	// ConfigValidators
-	return nil
+	// JAAS users should use juju_jaas_access_offer instead.
+	return []resource.ConfigValidator{
+		NewAvoidJAASValidator(r.client, "juju_jaas_access_offer"),
+	}
 }
 
 func (a *accessOfferResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -198,4 +265,31 @@ func (a *accessOfferResource) trace(msg string, additionalFields ...map[string]i
 
 func newAccessOfferIDFrom(offerURLStr string, accessStr string, users []string) string {
 	return fmt.Sprintf("%s:%s:%s", offerURLStr, accessStr, strings.Join(users, ","))
+}
+
+func retrieveAccessOfferDataFromID(ctx context.Context, ID types.String, users types.Set, diag *diag.Diagnostics) (string, string,
+	[]string) {
+	resID := strings.Split(ID.ValueString(), ":")
+	if len(resID) < 2 {
+		diag.AddError("Malformed ID", fmt.Sprintf("AccessOffer ID %q is malformed, "+
+			"please use the format '<offerURL>:<access>:<user1,user2>'", resID))
+		return "", "", nil
+	}
+	stateUsers := []string{}
+	if len(resID) == 3 {
+		stateUsers = strings.Split(resID[2], ",")
+	} else {
+		// Note: Is this still valid?
+		// In 0.8.0 sdk2 version of the provider, the implementation of the access model
+		// resource had a bug where it didn't contain the users. So we accommodate upgrades
+		// from that by attempting to get the users from the state if the ID doesn't contain
+		// any users (which happens only when coming from the previous version because the
+		// ID is a computed field).
+		diag.Append(users.ElementsAs(ctx, &stateUsers, false)...)
+		if diag.HasError() {
+			return "", "", nil
+		}
+	}
+
+	return resID[0], resID[1], stateUsers
 }
