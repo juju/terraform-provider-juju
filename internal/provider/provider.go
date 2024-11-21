@@ -361,6 +361,7 @@ func getJujuProviderModel(ctx context.Context, req provider.ConfigureRequest) (j
 func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		func() resource.Resource { return NewAccessModelResource() },
+		func() resource.Resource { return NewAccessOfferResource() },
 		func() resource.Resource { return NewApplicationResource() },
 		func() resource.Resource { return NewCredentialResource() },
 		func() resource.Resource { return NewIntegrationResource() },
