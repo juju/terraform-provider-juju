@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
@@ -65,9 +66,6 @@ func (a *accessOfferResource) Schema(_ context.Context, req resource.SchemaReque
 			"access": schema.StringAttribute{
 				Description: "Level of access to grant. Changing this value will replace the Terraform resource. Valid access levels are described at https://juju.is/docs/juju/manage-offers#control-access-to-an-offer",
 				Required:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 				Validators: []validator.String{
 					stringvalidator.OneOf("admin", "read", "consume"),
 				},
@@ -208,7 +206,89 @@ func (a *accessOfferResource) Read(ctx context.Context, req resource.ReadRequest
 }
 
 func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// Update
+	// Check first if the client is configured
+	if a.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "access offer", "read")
+		return
+	}
+	var plan accessOfferResourceOffer
+
+	// Get the Terraform state from the request into the plan
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Retrieve information from the plan
+	offerURL, access, stateUsers := retrieveAccessOfferDataFromID(ctx, plan.ID, plan.Users, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get user/access info from Offer
+	response, err := a.client.Offers.ReadOffer(&juju.ReadOfferInput{
+		OfferURL: offerURL,
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read offer, got error: %s", err))
+		return
+	}
+	a.trace(fmt.Sprintf("read juju offer %q", offerURL))
+	offerUsers := response.Users
+	// Check if a user was removed and delete access (revoke read)
+	// Create map to be used in the next step for adding new users
+	offerUserNames := make(map[string]struct{})
+	for _, offerUser := range offerUsers {
+		offerUserNames[offerUser.UserName] = struct{}{}
+		if !slices.Contains(stateUsers, offerUser.UserName) {
+			err := a.client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				User:     offerUser.UserName,
+				Access:   "read",
+				OfferURL: offerURL,
+			})
+			if err != nil {
+				resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
+				return
+			}
+		}
+	}
+	// Check if is a new user and grant access
+	// If not, revoke all access and grant the right one
+	for _, stateUser := range stateUsers {
+		if _, ok := offerUserNames[stateUser]; !ok {
+			// user has no access yet so we need to grant
+			err := a.client.Offers.GrantOffer(&juju.GrantRevokeOfferInput{
+				User:     stateUser,
+				Access:   access,
+				OfferURL: offerURL,
+			})
+			if err != nil {
+				resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access offer resource, got error: %s", err))
+				return
+			}
+			continue
+		}
+		// revoke read (remove all)
+		err := a.client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+			User:     stateUser,
+			Access:   "read",
+			OfferURL: offerURL,
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
+			return
+		}
+		// grant the right permission
+		err = a.client.Offers.GrantOffer(&juju.GrantRevokeOfferInput{
+			User:     stateUser,
+			Access:   access,
+			OfferURL: offerURL,
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
+			return
+		}
+	}
 }
 
 func (a *accessOfferResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
