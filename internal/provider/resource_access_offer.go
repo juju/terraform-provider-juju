@@ -139,7 +139,7 @@ func (a *accessOfferResource) Create(ctx context.Context, req resource.CreateReq
 	accessStr := plan.Access.ValueString()
 	// Call Offers.GrantOffer
 	for _, user := range users {
-		err := a.client.Offers.GrantOffer(juju.GrantOfferInput{
+		err := a.client.Offers.GrantOffer(&juju.GrantRevokeOfferInput{
 			User:     user,
 			Access:   accessStr,
 			OfferURL: offerURLStr,
@@ -212,7 +212,39 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 }
 
 func (a *accessOfferResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	// Delete
+	// Check first if the client is configured
+	if a.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "access offer", "read")
+		return
+	}
+	var plan accessOfferResourceOffer
+
+	// Get the Terraform state from the request into the plan
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get the users
+	var users []string
+	resp.Diagnostics.Append(plan.Users.ElementsAs(ctx, &users, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Revoking against "read" guarantees that the entire access will be removed
+	// instead of only decreasing the access level.
+	for _, user := range users {
+		err := a.client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+			User:     user,
+			Access:   "read",
+			OfferURL: plan.OfferURL.ValueString(),
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to destroy access offer resource, got error: %s", err))
+			return
+		}
+	}
 }
 
 func (a *accessOfferResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
