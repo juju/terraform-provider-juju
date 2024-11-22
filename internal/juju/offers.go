@@ -75,7 +75,7 @@ type RemoveRemoteOfferInput struct {
 	OfferURL  string
 }
 
-type GrantOfferInput struct {
+type GrantRevokeOfferInput struct {
 	User     string
 	Access   string
 	OfferURL string
@@ -400,7 +400,7 @@ func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 }
 
 // This function adds access to an offer
-func (c offersClient) GrantOffer(input GrantOfferInput) error {
+func (c offersClient) GrantOffer(input *GrantRevokeOfferInput) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return err
@@ -414,6 +414,28 @@ func (c offersClient) GrantOffer(input GrantOfferInput) error {
 	}
 
 	err = client.GrantOffer(input.User, input.Access, input.OfferURL)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// This function revokes access to an offer.
+func (c offersClient) RevokeOffer(input *GrantRevokeOfferInput) error {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := applicationoffers.NewClient(conn)
+	_, err = client.ApplicationOffer(input.OfferURL)
+	if err != nil {
+		return err
+	}
+
+	err = client.RevokeOffer(input.User, input.Access, input.OfferURL)
 	if err != nil {
 		return err
 	}
