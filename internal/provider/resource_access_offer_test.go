@@ -77,8 +77,8 @@ func TestAcc_ResourceAccessOffer_ErrorWhenUsedWithJAAS(t *testing.T) {
 func testAccResourceAccessOfferFixedUser() string {
 	return `
 resource "juju_access_offer" "test" {
-  access = "write"
-  offer_url = "foo"
+  access = "consume"
+  offer_url = "admin/db.mysql"
   users = ["bob"]
 }`
 }
