@@ -96,26 +96,24 @@ resource "juju_user" "operator" {
   password = "{{.UserPassword}}"
 }
 
-resource "juju_application" "prometheus" {
-name  = "prometheus-k8s"
-model = juju_model.{{.ModelName}}.name
+resource "juju_application" "appone" {
+  name  = "appone"
+  model = juju_model.{{.ModelName}}.name
 
-charm {
-name     = "prometheus-k8s"
-channel  = "latest/stable"
+  charm {
+    name = "juju-qa-dummy-source"
+    base = "ubuntu@22.04"
+  }
 }
 
-units = 1
-}
-
-resource "juju_offer" "prometheus_endpoint" {
+resource "juju_offer" "appone_endpoint" {
   model            = juju_model.{{.ModelName}}.name
-  application_name = juju_application.prometheus.name
-  endpoint         = "receive-remote-write"
+  application_name = juju_application.appone.name
+  endpoint         = "sink"
 }
 
-resource "juju_access_offer" "access_prometheus_endpoint" {
-    offer_url = juju_offer.prometheus_endpoint.url
+resource "juju_access_offer" "access_appone_endpoint" {
+    offer_url = juju_offer.appone_endpoint.url
     users = [
 		juju_user.operator.name,
 	]
