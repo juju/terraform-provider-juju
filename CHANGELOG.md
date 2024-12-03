@@ -1,3 +1,13 @@
+## 0.15.1 (December 3, 2024)
+
+NOTES:
+
+ENHANCEMENTS:
+* Various documentation updates
+  * add text to attributes where changing them will replace the resource
+  * add warning requested in an issue Deleting config from plan does not reset it #393
+  * reword note on offer_url in integration resources
+
 ## 0.15.0 (October 14, 2024)
 
 NOTES:
