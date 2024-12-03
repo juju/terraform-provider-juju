@@ -18,12 +18,12 @@ func TestAcc_ResourceAccessOffer(t *testing.T) {
 	userName := acctest.RandomWithPrefix("tfuser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 	modelName := acctest.RandomWithPrefix("tf-access-model")
-	offerURL := fmt.Sprintf("admin/%s.prometheus-k8s", modelName)
+	offerURL := fmt.Sprintf("admin/%s.appone", modelName)
 	access := "consume"
 	newAccess := "admin"
 	accessFail := "bogus"
 
-	resourceName := "juju_access_offer.access_prometheus_endpoint"
+	resourceName := "juju_access_offer.access_appone_endpoint"
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
