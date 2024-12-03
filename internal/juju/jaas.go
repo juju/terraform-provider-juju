@@ -150,7 +150,7 @@ func (jc *jaasClient) ReadRelations(ctx context.Context, tuple *JaasTuple) ([]Ja
 }
 
 // AddGroup attempts to create a new group with the provided name.
-func (jc *jaasClient) AddGroup(ctx context.Context, name string) (string, error) {
+func (jc *jaasClient) AddGroup(name string) (string, error) {
 	conn, err := jc.GetConnection(nil)
 	if err != nil {
 		return "", err
@@ -167,8 +167,17 @@ func (jc *jaasClient) AddGroup(ctx context.Context, name string) (string, error)
 	return resp.UUID, nil
 }
 
-// ReadGroup attempts to read a group that matches the provided UUID.
-func (jc *jaasClient) ReadGroup(ctx context.Context, uuid string) (*JaasGroup, error) {
+// ReadGroupByUUID attempts to read a group that matches the provided UUID.
+func (jc *jaasClient) ReadGroupByUUID(uuid string) (*JaasGroup, error) {
+	return jc.readGroup(&params.GetGroupRequest{UUID: uuid})
+}
+
+// ReadGroupByName attempts to read a group that matches the provided name.
+func (jc *jaasClient) ReadGroupByName(name string) (*JaasGroup, error) {
+	return jc.readGroup(&params.GetGroupRequest{Name: name})
+}
+
+func (jc *jaasClient) readGroup(req *params.GetGroupRequest) (*JaasGroup, error) {
 	conn, err := jc.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -176,8 +185,7 @@ func (jc *jaasClient) ReadGroup(ctx context.Context, uuid string) (*JaasGroup, e
 	defer func() { _ = conn.Close() }()
 
 	client := jc.getJaasApiClient(conn)
-	req := params.GetGroupRequest{UUID: uuid}
-	resp, err := client.GetGroup(&req)
+	resp, err := client.GetGroup(req)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +193,7 @@ func (jc *jaasClient) ReadGroup(ctx context.Context, uuid string) (*JaasGroup, e
 }
 
 // RenameGroup attempts to rename a group that matches the provided name.
-func (jc *jaasClient) RenameGroup(ctx context.Context, name, newName string) error {
+func (jc *jaasClient) RenameGroup(name, newName string) error {
 	conn, err := jc.GetConnection(nil)
 	if err != nil {
 		return err
@@ -198,7 +206,7 @@ func (jc *jaasClient) RenameGroup(ctx context.Context, name, newName string) err
 }
 
 // RemoveGroup attempts to remove a group that matches the provided name.
-func (jc *jaasClient) RemoveGroup(ctx context.Context, name string) error {
+func (jc *jaasClient) RemoveGroup(name string) error {
 	conn, err := jc.GetConnection(nil)
 	if err != nil {
 		return err
