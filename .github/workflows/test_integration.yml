@@ -37,7 +37,7 @@ jobs:
   test:
     name: Integration
     needs: build
-    runs-on: [self-hosted, jammy]
+    runs-on: [self-hosted, jammy, x64]
     strategy:
       fail-fast: false
       matrix:
@@ -109,7 +109,7 @@ jobs:
   add-machine-test:
     name: Add Machine
     needs: build
-    runs-on: [self-hosted, jammy]
+    runs-on: [self-hosted, jammy, x64]
     env:
       ACTIONS_ALLOW_IPV6: false
     strategy:
