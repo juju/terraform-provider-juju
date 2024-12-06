@@ -98,6 +98,7 @@ jobs:
           echo "TEST_MANAGEMENT_BR=10.150.40.0/24" >> $GITHUB_ENV
           echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
       - name: "Set additional environment for LXD"
+        # setup the microk8s config to be used by the tests.
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
         # language=bash
         run: |

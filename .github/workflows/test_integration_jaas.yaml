@@ -71,9 +71,6 @@ jobs:
           sudo microk8s.enable dns storage
           sudo microk8s.enable dns local-storage
           sudo -g snap_microk8s -E microk8s status --wait-ready --timeout=600
-          echo "MICROK8S_CONFIG<<EOF" >> $GITHUB_ENV
-          sudo microk8s.config view >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
       - name: Create additional networks when testing with LXD
         run: |
           sudo lxc network create management-br ipv4.address=10.150.40.1/24 ipv4.nat=true ipv6.address=none ipv6.nat=false
@@ -93,6 +90,12 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
           echo "TEST_MANAGEMENT_BR=10.150.40.0/24" >> $GITHUB_ENV
           echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
+      - name: "Set additional environment for LXD"
+        # Setup the microk8s config to be used by the tests.
+        if: ${{ matrix.action-operator.cloud == 'lxd' }}
+        # language=bash
+        run: |
+          sudo microk8s.config > /home/$USER/microk8s-config.yaml
       - run: go mod download
       - env:
           TF_ACC: "1"
