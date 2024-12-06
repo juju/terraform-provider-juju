@@ -74,12 +74,14 @@ export TF_LOG_PROVIDER=TRACE ; export TF_LOG_PATH=./terraform.log
 Run your terraform commands.
 
 To find logs specific to the juju provider code:
+
 ```shell
 grep "@module=juju.resource" ./terraform.log
 grep "@module=juju.datasource" ./terraform.log
 ```
 
 To find logs specific to the juju client talking to juju itself:
+
 ```shell
 grep "@module=juju.client" ./terraform.log
 ```
