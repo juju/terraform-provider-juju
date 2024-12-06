@@ -54,6 +54,7 @@ type ReadOfferResponse struct {
 	ModelName       string
 	Name            string
 	OfferURL        string
+	Users           []crossmodel.OfferUserDetails
 }
 
 type DestroyOfferInput struct {
@@ -72,6 +73,12 @@ type ConsumeRemoteOfferResponse struct {
 type RemoveRemoteOfferInput struct {
 	ModelName string
 	OfferURL  string
+}
+
+type GrantRevokeOfferInput struct {
+	User     string
+	Access   string
+	OfferURL string
 }
 
 func newOffersClient(sc SharedClient) *offersClient {
@@ -170,6 +177,7 @@ func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, erro
 	response.ApplicationName = result.ApplicationName
 	response.OfferURL = result.OfferURL
 	response.Endpoint = result.Endpoints[0].Name
+	response.Users = result.Users
 
 	//no model name is returned but it can be parsed from the resulting offer URL to ensure parity
 	//TODO: verify if we can fetch information another way
@@ -386,6 +394,50 @@ func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 
 	if len(errors) > 0 {
 		return errors
+	}
+
+	return nil
+}
+
+// This function adds access to an offer
+func (c offersClient) GrantOffer(input *GrantRevokeOfferInput) error {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := applicationoffers.NewClient(conn)
+	_, err = client.ApplicationOffer(input.OfferURL)
+	if err != nil {
+		return err
+	}
+
+	err = client.GrantOffer(input.User, input.Access, input.OfferURL)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// This function revokes access to an offer.
+func (c offersClient) RevokeOffer(input *GrantRevokeOfferInput) error {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := applicationoffers.NewClient(conn)
+	_, err = client.ApplicationOffer(input.OfferURL)
+	if err != nil {
+		return err
+	}
+
+	err = client.RevokeOffer(input.User, input.Access, input.OfferURL)
+	if err != nil {
+		return err
 	}
 
 	return nil
