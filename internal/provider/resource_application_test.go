@@ -132,7 +132,7 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 					return testingCloud != LXDCloudTesting, nil
 				},
 				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
-				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "10"),
+				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "2"),
 			},
 			{
 				SkipFunc: func() (bool, error) {
@@ -1037,7 +1037,7 @@ resource "juju_application" "this" {
   name = "test-app"
   charm {
     name     = "ubuntu-lite"
-    revision = 10
+    revision = 2
   }
   
   trust = true 
@@ -1056,7 +1056,7 @@ resource "juju_application" "this" {
   name = "test-app"
   charm {
     name     = "ubuntu-lite"
-	revision = 10
+	revision = 2
   }
   trust = true
   expose{}
@@ -1097,7 +1097,7 @@ resource "juju_application" "this" {
   name = "test-app"
   charm {
     name     = "ubuntu-lite"
-    revision = 10
+    revision = 2
   }
   trust = true
   expose{}
@@ -1191,7 +1191,7 @@ resource "juju_application" "{{.AppName}}" {
   constraints = "{{.Constraints}}"
   charm {
     name     = "ubuntu-lite"
-    revision = 10
+    revision = 2
   }
   endpoint_bindings = {{.EndpointBindings}}
 }

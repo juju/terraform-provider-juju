@@ -102,7 +102,7 @@ jobs:
       - env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.action-operator.cloud }}
-        run: go test -parallel 10 -timeout 40m -v -cover ./internal/provider/
+        run: go test -parallel 1 -timeout 60m -v -cover ./internal/provider/
         timeout-minutes: 40
 
   # Run acceptance tests in a matrix with Terraform CLI versions
