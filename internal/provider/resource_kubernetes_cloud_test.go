@@ -14,6 +14,12 @@ import (
 )
 
 func TestAcc_ResourceKubernetesCloud(t *testing.T) {
+	// Note (alesstimec): Skipping this test, because the default
+	// hosted cloud tf provider adds is "other", which cannot
+	// be parsed by JIMM - it needs a valid cloud/region to determine
+	// which controller to add the cloud to.
+	SkipJAAS(t)
+
 	// TODO: This test is not adding model as a resource, which is required.
 	// The reason in the race that we (potentially) have in the Juju side.
 	// Once the problem is fixed (https://bugs.launchpad.net/juju/+bug/2084448),
