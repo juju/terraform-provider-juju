@@ -1037,7 +1037,7 @@ resource "juju_application" "this" {
   name = "test-app"
   charm {
     name     = "ubuntu-lite"
-    revision = 10
+    revision = 2
   }
   
   trust = true 
@@ -1056,7 +1056,7 @@ resource "juju_application" "this" {
   name = "test-app"
   charm {
     name     = "ubuntu-lite"
-	revision = 10
+	revision = 2
   }
   trust = true
   expose{}
@@ -1097,7 +1097,7 @@ resource "juju_application" "this" {
   name = "test-app"
   charm {
     name     = "ubuntu-lite"
-    revision = 10
+    revision = 2
   }
   trust = true
   expose{}
@@ -1191,7 +1191,7 @@ resource "juju_application" "{{.AppName}}" {
   constraints = "{{.Constraints}}"
   charm {
     name     = "ubuntu-lite"
-    revision = 10
+    revision = 2
   }
   endpoint_bindings = {{.EndpointBindings}}
 }
