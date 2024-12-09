@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
-
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
 	apispaces "github.com/juju/juju/api/client/spaces"
@@ -40,7 +39,7 @@ func TestAcc_ResourceApplication(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "jameinel-ubuntu-lite"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
 					resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
 					resource.TestCheckNoResourceAttr("juju_application.this", "storage"),
@@ -94,7 +93,7 @@ func TestAcc_ResourceApplication(t *testing.T) {
 
 func TestAcc_ResourceApplication_Updates(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
-	appName := "jameinel-ubuntu-lite"
+	appName := "ubuntu-lite"
 	if testingCloud != LXDCloudTesting {
 		appName = "hello-kubecon"
 	}
@@ -623,7 +622,7 @@ func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "jameinel-ubuntu-lite"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
 					resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 					resource.TestCheckResourceAttr("juju_application.this", "expose.#", "1"),
 				),
@@ -820,7 +819,7 @@ func testAccResourceApplicationBasic(modelName, appName string) string {
 		  model = juju_model.this.name
 		  name = %q
 		  charm {
-			name = "jameinel-ubuntu-lite"
+			name = "ubuntu-lite"
 		  }
 		  trust = true
 		  expose{}
@@ -837,7 +836,7 @@ func testAccResourceApplicationBasic(modelName, appName string) string {
 		  model = juju_model.this.name
 		  name = %q
 		  charm {
-			name = "jameinel-ubuntu-lite"
+			name = "ubuntu-lite"
 		  }
 		  trust = true
 		  expose{}
@@ -955,7 +954,7 @@ func testAccResourceApplicationUpdates(modelName string, units int, expose bool,
 		  units = %d
 		  name = "test-app"
 		  charm {
-			name     = "jameinel-ubuntu-lite"
+			name     = "ubuntu-lite"
 		  }
 		  trust = true
 		  %s
@@ -1037,7 +1036,7 @@ resource "juju_application" "this" {
   units = 0
   name = "test-app"
   charm {
-    name     = "jameinel-ubuntu-lite"
+    name     = "ubuntu-lite"
     revision = 10
   }
   
@@ -1056,7 +1055,7 @@ resource "juju_application" "this" {
   model = juju_model.this.name
   name = "test-app"
   charm {
-    name     = "jameinel-ubuntu-lite"
+    name     = "ubuntu-lite"
 	revision = 10
   }
   trust = true
@@ -1097,7 +1096,7 @@ resource "juju_application" "this" {
   units = 0
   name = "test-app"
   charm {
-    name     = "jameinel-ubuntu-lite"
+    name     = "ubuntu-lite"
     revision = 10
   }
   trust = true
@@ -1191,7 +1190,7 @@ resource "juju_application" "{{.AppName}}" {
   name        = "{{.AppName}}"
   constraints = "{{.Constraints}}"
   charm {
-    name     = "jameinel-ubuntu-lite"
+    name     = "ubuntu-lite"
     revision = 10
   }
   endpoint_bindings = {{.EndpointBindings}}
