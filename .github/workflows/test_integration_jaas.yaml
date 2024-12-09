@@ -68,11 +68,13 @@ jobs:
           sudo snap install microk8s --channel=1.28-strict/stable
           sudo usermod -a -G snap_microk8s $USER
           sudo chown -R $USER ~/.kube
-          sudo microk8s.enable dns storage
-          sudo microk8s.enable dns local-storage
+          sudo microk8s.enable dns
+          sudo microk8s.enable storage
+          sudo microk8s.enable hostpath-storage
           sudo -g snap_microk8s -E microk8s status --wait-ready --timeout=600
+          sudo microk8s.config view | tee /home/$USER/microk8s-config.yaml
           echo "MICROK8S_CONFIG<<EOF" >> $GITHUB_ENV
-          sudo microk8s.config view >> $GITHUB_ENV
+          echo "$(cat microk8s-config.yaml)" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
       - name: Create additional networks when testing with LXD
         run: |
