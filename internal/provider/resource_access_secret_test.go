@@ -101,7 +101,7 @@ resource "juju_application" "jul" {
   model = juju_model.{{.ModelName}}.name
 
   charm {
-    name     = "jameinel-ubuntu-lite"
+    name     = "ubuntu-lite"
     channel  = "latest/stable"
   }
 
@@ -113,7 +113,7 @@ resource "juju_application" "jul2" {
   model = juju_model.{{.ModelName}}.name
 
   charm {
-    name     = "jameinel-ubuntu-lite"
+    name     = "ubuntu-lite"
     channel  = "latest/stable"
   }
 

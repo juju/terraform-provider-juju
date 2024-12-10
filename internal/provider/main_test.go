@@ -90,6 +90,6 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	} else {
-		m.Run()
+		os.Exit(m.Run())
 	}
 }
