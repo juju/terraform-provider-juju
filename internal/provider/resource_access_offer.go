@@ -33,6 +33,7 @@ var _ resource.ResourceWithConfigure = &accessOfferResource{}
 var _ resource.ResourceWithImportState = &accessOfferResource{}
 var _ resource.ResourceWithConfigValidators = &accessOfferResource{}
 
+// NewAccessOfferResource returns a new instance of the Access Offer resource.
 func NewAccessOfferResource() resource.Resource {
 	return &accessOfferResource{}
 }
@@ -105,6 +106,7 @@ func (a *accessOfferResource) Schema(_ context.Context, req resource.SchemaReque
 	}
 }
 
+// Create attempts to grant access to the offer.
 func (a *accessOfferResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Check first if the client is configured
 	if a.client == nil {
@@ -156,6 +158,7 @@ func (a *accessOfferResource) Create(ctx context.Context, req resource.CreateReq
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read reads users and permissions granted to the offer
 func (a *accessOfferResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	// Check first if the client is configured
 	if a.client == nil {
@@ -214,6 +217,7 @@ func (a *accessOfferResource) Read(ctx context.Context, req resource.ReadRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update attempts to update the access to the offer.
 func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	// Check first if the client is configured
 	if a.client == nil {
@@ -320,6 +324,7 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete remove access to the offer according to the resource.
 func (a *accessOfferResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Check first if the client is configured
 	if a.client == nil {
@@ -356,6 +361,7 @@ func (a *accessOfferResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 }
 
+// Configure sets the access offer resource with provider data.
 func (a *accessOfferResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
@@ -383,6 +389,7 @@ func (r *accessOfferResource) ConfigValidators(ctx context.Context) []resource.C
 	}
 }
 
+// ImportState import existing resource to the state.
 func (a *accessOfferResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	IDstr := req.ID
 	if len(strings.Split(IDstr, ":")) != 3 {

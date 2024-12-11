@@ -87,6 +87,7 @@ func newOffersClient(sc SharedClient) *offersClient {
 	}
 }
 
+// CreateOffer creates offer managed by the offer resource.
 func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse, []error) {
 	var errs []error
 
@@ -159,6 +160,7 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 	return &resp, nil
 }
 
+// ReadOffer reads offer managed by the offer resource.
 func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
@@ -190,6 +192,7 @@ func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, erro
 	return &response, nil
 }
 
+// DestroyOffer destroys offer managed by the offer resource.
 func (c offersClient) DestroyOffer(input *DestroyOfferInput) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
@@ -257,7 +260,7 @@ func parseModelFromURL(url string) (result string, success bool) {
 	return result, true
 }
 
-// This function allows the integration resource to consume the offers managed by the offer resource
+// ConsumeRemoteOffer allows the integration resource to consume the offers managed by the offer resource.
 func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*ConsumeRemoteOfferResponse, error) {
 	modelConn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
@@ -338,7 +341,7 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 	return &response, nil
 }
 
-// This function allows the integration resource to destroy the offers managed by the offer resource
+// RemoveRemoteOffer allows the integration resource to destroy the offers managed by the offer resource.
 func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 	var errors []error
 	conn, err := c.GetConnection(&input.ModelName)
@@ -399,7 +402,7 @@ func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 	return nil
 }
 
-// This function adds access to an offer
+// GrantOffer adds access to an offer managed by the access offer resource.
 func (c offersClient) GrantOffer(input *GrantRevokeOfferInput) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
@@ -421,7 +424,7 @@ func (c offersClient) GrantOffer(input *GrantRevokeOfferInput) error {
 	return nil
 }
 
-// This function revokes access to an offer.
+// RevokeOffer revokes access to an offer managed by the access offer resource.
 func (c offersClient) RevokeOffer(input *GrantRevokeOfferInput) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
