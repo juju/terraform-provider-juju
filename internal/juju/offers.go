@@ -76,7 +76,7 @@ type RemoveRemoteOfferInput struct {
 }
 
 type GrantRevokeOfferInput struct {
-	User     string
+	Users    []string
 	Access   string
 	OfferURL string
 }
@@ -416,9 +416,11 @@ func (c offersClient) GrantOffer(input *GrantRevokeOfferInput) error {
 		return err
 	}
 
-	err = client.GrantOffer(input.User, input.Access, input.OfferURL)
-	if err != nil {
-		return err
+	for _, user := range input.Users {
+		err = client.GrantOffer(user, input.Access, input.OfferURL)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -438,9 +440,11 @@ func (c offersClient) RevokeOffer(input *GrantRevokeOfferInput) error {
 		return err
 	}
 
-	err = client.RevokeOffer(input.User, input.Access, input.OfferURL)
-	if err != nil {
-		return err
+	for _, user := range input.Users {
+		err = client.RevokeOffer(user, input.Access, input.OfferURL)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

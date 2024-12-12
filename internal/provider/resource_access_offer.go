@@ -7,11 +7,9 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -23,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/juju/juju/core/crossmodel"
+	"github.com/juju/juju/core/permission"
 	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -46,9 +45,10 @@ type accessOfferResource struct {
 }
 
 type accessOfferResourceOffer struct {
-	OfferURL types.String `tfsdk:"offer_url"`
-	Users    types.Set    `tfsdk:"users"`
-	Access   types.String `tfsdk:"access"`
+	OfferURL     types.String `tfsdk:"offer_url"`
+	AdminUsers   types.Set    `tfsdk:"admin"`
+	ConsumeUsers types.Set    `tfsdk:"consume"`
+	ReadUsers    types.Set    `tfsdk:"read"`
 
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
@@ -62,20 +62,26 @@ func (a *accessOfferResource) Metadata(_ context.Context, req resource.MetadataR
 // Schema defines the schema for the access offer resource.
 func (a *accessOfferResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A resource that represent a Juju Access Offer.",
+		Description: "A resource that represent a Juju Access Offer. Warning: Do not repeat users across different access levels.",
 		Attributes: map[string]schema.Attribute{
-			"access": schema.StringAttribute{
-				Description: "Level of access to grant. Changing this value will replace the Terraform resource. Valid access levels are described at https://juju.is/docs/juju/manage-offers#control-access-to-an-offer",
-				Required:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-				Validators: []validator.String{
-					stringvalidator.OneOf("admin", "read", "consume"),
+			string(permission.AdminAccess): schema.SetAttribute{
+				Description: "List of users to grant admin access.",
+				Optional:    true,
+				ElementType: types.StringType,
+				Validators: []validator.Set{
+					setvalidator.ValueStringsAre(ValidatorMatchString(names.IsValidUser, "user must be a valid Juju username")),
 				},
 			},
-			"users": schema.SetAttribute{
-				Description: "List of users to grant access.",
+			string(permission.ConsumeAccess): schema.SetAttribute{
+				Description: "List of users to grant consume access.",
+				Optional:    true,
+				ElementType: types.StringType,
+				Validators: []validator.Set{
+					setvalidator.ValueStringsAre(ValidatorMatchString(names.IsValidUser, "user must be a valid Juju username")),
+				},
+			},
+			string(permission.ReadAccess): schema.SetAttribute{
+				Description: "List of users to grant read access.",
 				Optional:    true,
 				ElementType: types.StringType,
 				Validators: []validator.Set{
@@ -121,10 +127,35 @@ func (a *accessOfferResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	// Get the users
-	var users []string
-	resp.Diagnostics.Append(plan.Users.ElementsAs(ctx, &users, false)...)
+	// Get the users to grant admin
+	var adminUsers []string
+	resp.Diagnostics.Append(plan.AdminUsers.ElementsAs(ctx, &adminUsers, false)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get the users to grant consume
+	var consumeUsers []string
+	resp.Diagnostics.Append(plan.ConsumeUsers.ElementsAs(ctx, &consumeUsers, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get the users to grant read
+	var readUsers []string
+	resp.Diagnostics.Append(plan.ReadUsers.ElementsAs(ctx, &readUsers, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Validate if there are repeated user
+	combinedUsers := append(append(adminUsers, consumeUsers...), readUsers...)
+	slices.Sort(combinedUsers)
+	originalCount := len(combinedUsers)
+	compactedUsers := slices.Compact(combinedUsers)
+	compactedCount := len(compactedUsers)
+	if originalCount != compactedCount {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access offer resource, got same user in different access."))
 		return
 	}
 
@@ -139,12 +170,16 @@ func (a *accessOfferResource) Create(ctx context.Context, req resource.CreateReq
 	}
 	a.trace(fmt.Sprintf("read offer %q at %q", response.Name, response.OfferURL))
 
-	accessStr := plan.Access.ValueString()
 	// Call Offers.GrantOffer
-	for _, user := range users {
+	users := make(map[permission.Access][]string)
+	users[permission.ConsumeAccess] = consumeUsers
+	users[permission.ReadAccess] = readUsers
+	users[permission.AdminAccess] = adminUsers
+
+	for access, users := range users {
 		err := a.client.Offers.GrantOffer(&juju.GrantRevokeOfferInput{
-			User:     user,
-			Access:   accessStr,
+			Users:    users,
+			Access:   string(access),
 			OfferURL: offerURLStr,
 		})
 		if err != nil {
@@ -152,7 +187,7 @@ func (a *accessOfferResource) Create(ctx context.Context, req resource.CreateReq
 			return
 		}
 	}
-	plan.ID = types.StringValue(newAccessOfferIDFrom(offerURLStr, accessStr, users))
+	plan.ID = types.StringValue(response.OfferURL)
 
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -174,10 +209,7 @@ func (a *accessOfferResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 
 	// Get information from ID
-	offerURL, _, _ := retrieveAccessOfferDataFromID(ctx, state.ID, state.Users, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	offerURL := state.ID.ValueString()
 
 	// Get user/access info from Offer
 	response, err := a.client.Offers.ReadOffer(&juju.ReadOfferInput{
@@ -189,176 +221,47 @@ func (a *accessOfferResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 	a.trace(fmt.Sprintf("read juju offer %q", offerURL))
 
-	// Add to state the ones in the state and set in the offer
-	users := []string{}
-	var access string
+	// Create the map
+	users := make(map[permission.Access][]string)
+	users[permission.ConsumeAccess] = []string{}
+	users[permission.ReadAccess] = []string{}
+	users[permission.AdminAccess] = []string{}
 	for _, offerUserDetail := range response.Users {
 		if offerUserDetail.UserName == "everyone@external" || offerUserDetail.UserName == "admin" {
 			continue
 		}
-		users = append(users, offerUserDetail.UserName)
-		if access != "" && access != string(offerUserDetail.Access) {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("User %s has different access %s", offerUserDetail.UserName, offerUserDetail.Access))
+
+		if _, ok := users[offerUserDetail.Access]; !ok {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("User %s has unexpected access %s", offerUserDetail.UserName, offerUserDetail.Access))
 			return
 		}
-		access = string(offerUserDetail.Access)
+
+		users[offerUserDetail.Access] = append(users[offerUserDetail.Access], offerUserDetail.UserName)
 	}
-	newStateUsers, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users)
-	state.Users = newStateUsers
-	resp.Diagnostics.Append(errDiag...)
-	if resp.Diagnostics.HasError() {
-		return
+
+	// Save found users to state
+	for access, user := range users {
+		stateUsers, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users)
+		resp.Diagnostics.Append(errDiag...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		state.Users = newStateUsers
 	}
 
 	// Set the plan onto the Terraform state
-	state.ID = types.StringValue(newAccessOfferIDFrom(offerURL, access, users))
-	state.Access = types.StringValue(access)
 	state.OfferURL = types.StringValue(offerURL)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 // Update attempts to update the access to the offer.
 func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// Check first if the client is configured
-	if a.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "access offer", "read")
-		return
-	}
-	var plan accessOfferResourceOffer
-
-	// Get the plan
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Retrieve information from the plan
-	offerURL := plan.OfferURL.ValueString()
-	access := plan.Access.ValueString()
-	var planUsers []string
-	if err := plan.Users.ElementsAs(ctx, &planUsers, false); err != nil {
-		resp.Diagnostics.AddError("Plan error", fmt.Sprintf("Unable to read users from the plan, got error: %s", err))
-		return
-	}
-
-	// Get user/access info from Offer
-	response, err := a.client.Offers.ReadOffer(&juju.ReadOfferInput{
-		OfferURL: offerURL,
-	})
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read offer, got error: %s", err))
-		return
-	}
-	a.trace(fmt.Sprintf("read juju offer %q", offerURL))
-	offerUsers := response.Users
-
-	// Check if a user was removed and delete access (revoke read)
-	// Create map to be used in the next step for adding new users
-	offerUserNames := make(map[string]struct{})
-	for _, offerUser := range offerUsers {
-		if offerUser.UserName == "everyone@external" || offerUser.UserName == "admin" {
-			continue
-		}
-		offerUserNames[offerUser.UserName] = struct{}{}
-		if !slices.Contains(planUsers, offerUser.UserName) {
-			a.trace(fmt.Sprintf("revoke user %q for offer %q", offerUser.UserName, offerURL))
-			err := a.client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
-				User:     offerUser.UserName,
-				Access:   "read",
-				OfferURL: offerURL,
-			})
-			if err != nil {
-				resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
-				return
-			}
-		}
-	}
-	// Check if is a new user and grant access
-	// If not, revoke all access and grant the right one
-	for _, planUser := range planUsers {
-		if _, ok := offerUserNames[planUser]; !ok {
-			// user has no access yet so we need to grant
-			a.trace(fmt.Sprintf("grant permission %q to user %q for offer %q", access, planUser, offerURL))
-			err := a.client.Offers.GrantOffer(&juju.GrantRevokeOfferInput{
-				User:     planUser,
-				Access:   access,
-				OfferURL: offerURL,
-			})
-			if err != nil {
-				resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access offer resource, got error: %s", err))
-				return
-			}
-			continue
-		}
-		// revoke read (remove all)
-		a.trace(fmt.Sprintf("revoke user %q for offer %q", planUser, offerURL))
-		err := a.client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
-			User:     planUser,
-			Access:   "read",
-			OfferURL: offerURL,
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
-			return
-		}
-		// grant the right permission
-		a.trace(fmt.Sprintf("grant permission %q to user %q for offer %q", access, planUser, offerURL))
-		err = a.client.Offers.GrantOffer(&juju.GrantRevokeOfferInput{
-			User:     planUser,
-			Access:   access,
-			OfferURL: offerURL,
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
-			return
-		}
-	}
-	plan.ID = types.StringValue(newAccessOfferIDFrom(offerURL, access, planUsers))
-	plan.Access = types.StringValue(access)
-	newStateUsers, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, planUsers)
-	plan.Users = newStateUsers
-	resp.Diagnostics.Append(errDiag...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	// todo
 }
 
 // Delete remove access to the offer according to the resource.
 func (a *accessOfferResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	// Check first if the client is configured
-	if a.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "access offer", "read")
-		return
-	}
-	var plan accessOfferResourceOffer
-
-	// Get the Terraform state from the request into the plan
-	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Get the users
-	var users []string
-	resp.Diagnostics.Append(plan.Users.ElementsAs(ctx, &users, false)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Revoking against "read" guarantees that the entire access will be removed
-	// instead of only decreasing the access level.
-	for _, user := range users {
-		err := a.client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
-			User:     user,
-			Access:   "read",
-			OfferURL: plan.OfferURL.ValueString(),
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to destroy access offer resource, got error: %s", err))
-			return
-		}
-	}
+	// todo
 }
 
 // Configure sets the access offer resource with provider data.
@@ -386,20 +289,16 @@ func (r *accessOfferResource) ConfigValidators(ctx context.Context) []resource.C
 	// JAAS users should use juju_jaas_access_offer instead.
 	return []resource.ConfigValidator{
 		NewAvoidJAASValidator(r.client, "juju_jaas_access_offer"),
+		resourcevalidator.AtLeastOneOf(
+			path.MatchRoot(string(permission.AdminAccess)),
+			path.MatchRoot(string(permission.ConsumeAccess)),
+			path.MatchRoot(string(permission.ReadAccess)),
+		),
 	}
 }
 
 // ImportState import existing resource to the state.
 func (a *accessOfferResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	IDstr := req.ID
-	if len(strings.Split(IDstr, ":")) != 3 {
-		resp.Diagnostics.AddError(
-			"ImportState Failure",
-			fmt.Sprintf("Malformed AccessOffer ID %q, "+
-				"please use format '<offer URL>:<access>:<user1,user1>'", IDstr),
-		)
-		return
-	}
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
@@ -409,35 +308,4 @@ func (a *accessOfferResource) trace(msg string, additionalFields ...map[string]i
 	}
 
 	tflog.SubsystemTrace(a.subCtx, LogResourceAccessOffer, msg, additionalFields...)
-}
-
-func newAccessOfferIDFrom(offerURLStr string, accessStr string, users []string) string {
-	return fmt.Sprintf("%s:%s:%s", offerURLStr, accessStr, strings.Join(users, ","))
-}
-
-func retrieveAccessOfferDataFromID(ctx context.Context, ID types.String, users types.Set, diag *diag.Diagnostics) (string, string,
-	[]string) {
-	resID := strings.Split(ID.ValueString(), ":")
-	if len(resID) < 2 {
-		diag.AddError("Malformed ID", fmt.Sprintf("AccessOffer ID %q is malformed, "+
-			"please use the format '<offerURL>:<access>:<user1,user2>'", resID))
-		return "", "", nil
-	}
-	stateUsers := []string{}
-	if len(resID) == 3 {
-		stateUsers = strings.Split(resID[2], ",")
-	} else {
-		// Note: Is this still valid?
-		// In 0.8.0 sdk2 version of the provider, the implementation of the access model
-		// resource had a bug where it didn't contain the users. So we accommodate upgrades
-		// from that by attempting to get the users from the state if the ID doesn't contain
-		// any users (which happens only when coming from the previous version because the
-		// ID is a computed field).
-		diag.Append(users.ElementsAs(ctx, &stateUsers, false)...)
-		if diag.HasError() {
-			return "", "", nil
-		}
-	}
-
-	return resID[0], resID[1], stateUsers
 }
