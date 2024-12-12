@@ -282,15 +282,16 @@ func manualProvision(client manual.ProvisioningClientAPI,
 	}
 	// Find out about the series of the machine just provisioned
 	// (because ProvisionMachine only returns machineId)
-	_, machineSeries, err := sshprovisioner.DetectSeriesAndHardwareCharacteristics(host)
+	_, machineBase, err := sshprovisioner.DetectBaseAndHardwareCharacteristics(host)
 	if err != nil {
 		return nil, errors.Annotatef(err, "error detecting hardware characteristics")
 	}
 
-	machineBase, err := base.GetBaseFromSeries(machineSeries)
+	machineSeries, err := base.GetSeriesFromBase(machineBase)
 	if err != nil {
 		return nil, err
 	}
+
 	// This might cause problems later, but today, no one except for juju internals
 	// uses the channel risk. Using the risk makes the base appear to have changed
 	// with terraform.

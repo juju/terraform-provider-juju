@@ -4,12 +4,13 @@
 package provider
 
 import (
-	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
 func TestAcc_ResourceKubernetesCloud(t *testing.T) {
