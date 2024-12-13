@@ -31,6 +31,7 @@ var _ resource.Resource = &accessOfferResource{}
 var _ resource.ResourceWithConfigure = &accessOfferResource{}
 var _ resource.ResourceWithImportState = &accessOfferResource{}
 var _ resource.ResourceWithConfigValidators = &accessOfferResource{}
+var _ resource.ResourceWithValidateConfig = &accessOfferResource{}
 
 // NewAccessOfferResource returns a new instance of the Access Offer resource.
 func NewAccessOfferResource() resource.Resource {
@@ -65,7 +66,7 @@ func (a *accessOfferResource) Schema(_ context.Context, req resource.SchemaReque
 		Description: "A resource that represent a Juju Access Offer. Warning: Do not repeat users across different access levels.",
 		Attributes: map[string]schema.Attribute{
 			string(permission.AdminAccess): schema.SetAttribute{
-				Description: "List of users to grant admin access.",
+				Description: "List of users to grant admin access. \"admin\" user is not allowed.",
 				Optional:    true,
 				ElementType: types.StringType,
 				Validators: []validator.Set{
@@ -73,7 +74,7 @@ func (a *accessOfferResource) Schema(_ context.Context, req resource.SchemaReque
 				},
 			},
 			string(permission.ConsumeAccess): schema.SetAttribute{
-				Description: "List of users to grant consume access.",
+				Description: "List of users to grant consume access. \"admin\" user is not allowed.",
 				Optional:    true,
 				ElementType: types.StringType,
 				Validators: []validator.Set{
@@ -81,7 +82,7 @@ func (a *accessOfferResource) Schema(_ context.Context, req resource.SchemaReque
 				},
 			},
 			string(permission.ReadAccess): schema.SetAttribute{
-				Description: "List of users to grant read access.",
+				Description: "List of users to grant read access. \"admin\" user is not allowed.",
 				Optional:    true,
 				ElementType: types.StringType,
 				Validators: []validator.Set{
@@ -129,46 +130,30 @@ func (a *accessOfferResource) Create(ctx context.Context, req resource.CreateReq
 
 	// Get the users to grant admin
 	var adminUsers []string
-	resp.Diagnostics.Append(plan.AdminUsers.ElementsAs(ctx, &adminUsers, false)...)
-	if resp.Diagnostics.HasError() {
-		return
+	if !plan.AdminUsers.IsNull() {
+		resp.Diagnostics.Append(plan.AdminUsers.ElementsAs(ctx, &adminUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
 	// Get the users to grant consume
 	var consumeUsers []string
-	resp.Diagnostics.Append(plan.ConsumeUsers.ElementsAs(ctx, &consumeUsers, false)...)
-	if resp.Diagnostics.HasError() {
-		return
+	if !plan.ConsumeUsers.IsNull() {
+		resp.Diagnostics.Append(plan.ConsumeUsers.ElementsAs(ctx, &consumeUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
 	// Get the users to grant read
 	var readUsers []string
-	resp.Diagnostics.Append(plan.ReadUsers.ElementsAs(ctx, &readUsers, false)...)
-	if resp.Diagnostics.HasError() {
-		return
+	if !plan.ReadUsers.IsNull() {
+		resp.Diagnostics.Append(plan.ReadUsers.ElementsAs(ctx, &readUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
-
-	// Validate if there are repeated user
-	combinedUsers := append(append(adminUsers, consumeUsers...), readUsers...)
-	slices.Sort(combinedUsers)
-	originalCount := len(combinedUsers)
-	compactedUsers := slices.Compact(combinedUsers)
-	compactedCount := len(compactedUsers)
-	if originalCount != compactedCount {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access offer resource, got same user in different access."))
-		return
-	}
-
-	// Get the offer
-	offerURLStr := plan.OfferURL.ValueString()
-	response, err := a.client.Offers.ReadOffer(&juju.ReadOfferInput{
-		OfferURL: offerURLStr,
-	})
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access offer resource, got error: %s", err))
-		return
-	}
-	a.trace(fmt.Sprintf("read offer %q at %q", response.Name, response.OfferURL))
 
 	// Call Offers.GrantOffer
 	users := make(map[permission.Access][]string)
@@ -180,14 +165,16 @@ func (a *accessOfferResource) Create(ctx context.Context, req resource.CreateReq
 		err := a.client.Offers.GrantOffer(&juju.GrantRevokeOfferInput{
 			Users:    users,
 			Access:   string(access),
-			OfferURL: offerURLStr,
+			OfferURL: plan.OfferURL.ValueString(),
 		})
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access offer resource, got error: %s", err))
 			return
 		}
 	}
-	plan.ID = types.StringValue(response.OfferURL)
+
+	// Set ID as the offer URL
+	plan.ID = plan.OfferURL
 
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -239,16 +226,27 @@ func (a *accessOfferResource) Read(ctx context.Context, req resource.ReadRequest
 		users[offerUserDetail.Access] = append(users[offerUserDetail.Access], offerUserDetail.UserName)
 	}
 
-	// Save found users to state
-	for access, user := range users {
-		stateUsers, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users)
-		resp.Diagnostics.Append(errDiag...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		state.Users = newStateUsers
+	// Save admin users to state
+	adminUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users[permission.AdminAccess])
+	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-
+	state.AdminUsers = adminUsersSet
+	// Save consume users to state
+	consumeUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users[permission.ConsumeAccess])
+	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	state.ConsumeUsers = consumeUsersSet
+	// Save read users to state
+	readUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users[permission.ReadAccess])
+	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	state.ReadUsers = readUsersSet
 	// Set the plan onto the Terraform state
 	state.OfferURL = types.StringValue(offerURL)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -285,16 +283,69 @@ func (a *accessOfferResource) Configure(ctx context.Context, req resource.Config
 }
 
 // ConfigValidators sets validators for the resource.
-func (r *accessOfferResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
+func (a *accessOfferResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
 	// JAAS users should use juju_jaas_access_offer instead.
 	return []resource.ConfigValidator{
-		NewAvoidJAASValidator(r.client, "juju_jaas_access_offer"),
+		NewAvoidJAASValidator(a.client, "juju_jaas_access_offer"),
 		resourcevalidator.AtLeastOneOf(
 			path.MatchRoot(string(permission.AdminAccess)),
 			path.MatchRoot(string(permission.ConsumeAccess)),
 			path.MatchRoot(string(permission.ReadAccess)),
 		),
 	}
+}
+
+func (a *accessOfferResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	// TODO this validation does not work in case user name depends on the output of other resource
+	var configData accessOfferResourceOffer
+
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.Config.Get(ctx, &configData)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get the users to grant admin
+	var adminUsers []string
+	if !configData.AdminUsers.IsNull() {
+		resp.Diagnostics.Append(configData.AdminUsers.ElementsAs(ctx, &adminUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	// Get the users to grant consume
+	var consumeUsers []string
+	if !configData.ConsumeUsers.IsNull() {
+		resp.Diagnostics.Append(configData.ConsumeUsers.ElementsAs(ctx, &consumeUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	// Get the users to grant read
+	var readUsers []string
+	if !configData.ReadUsers.IsNull() {
+		resp.Diagnostics.Append(configData.ReadUsers.ElementsAs(ctx, &readUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	combinedUsers := append(append(adminUsers, consumeUsers...), readUsers...)
+	// Validate if there are repeated user
+	if slices.Contains(combinedUsers, "admin") {
+		resp.Diagnostics.AddAttributeError(path.Root("offer_url"), "Attribute Error", "\"admin\" user is not allowed")
+	}
+	// Validate if there are repeated user
+	slices.Sort(combinedUsers)
+	originalCount := len(combinedUsers)
+	compactedUsers := slices.Compact(combinedUsers)
+	compactedCount := len(compactedUsers)
+	if originalCount != compactedCount {
+		resp.Diagnostics.AddAttributeError(path.Root("offer_url"), "Attribute Error", "do not repeat users across different access levels")
+	}
+
 }
 
 // ImportState import existing resource to the state.

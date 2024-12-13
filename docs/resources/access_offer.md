@@ -3,12 +3,12 @@
 page_title: "juju_access_offer Resource - terraform-provider-juju"
 subcategory: ""
 description: |-
-  A resource that represent a Juju Access Offer.
+  A resource that represent a Juju Access Offer. Warning: Do not repeat users across different access levels.
 ---
 
 # juju_access_offer (Resource)
 
-A resource that represent a Juju Access Offer.
+A resource that represent a Juju Access Offer. Warning: Do not repeat users across different access levels.
 
 
 
@@ -17,12 +17,13 @@ A resource that represent a Juju Access Offer.
 
 ### Required
 
-- `access` (String) Level of access to grant. Changing this value will replace the Terraform resource. Valid access levels are described at https://juju.is/docs/juju/manage-offers#control-access-to-an-offer
 - `offer_url` (String) The url of the offer for access management. If this is changed the resource will be deleted and a new resource will be created.
 
 ### Optional
 
-- `users` (Set of String) List of users to grant access.
+- `admin` (Set of String) List of users to grant admin access. "admin" user is not allowed.
+- `consume` (Set of String) List of users to grant consume access. "admin" user is not allowed.
+- `read` (Set of String) List of users to grant read access. "admin" user is not allowed.
 
 ### Read-Only
 
