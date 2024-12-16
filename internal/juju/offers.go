@@ -419,6 +419,10 @@ func (c offersClient) GrantOffer(input *GrantRevokeOfferInput) error {
 	for _, user := range input.Users {
 		err = client.GrantOffer(user, input.Access, input.OfferURL)
 		if err != nil {
+			// ignore if user was already granted
+			if strings.Contains(err.Error(), "user already has") {
+				continue
+			}
 			return err
 		}
 	}
@@ -443,6 +447,10 @@ func (c offersClient) RevokeOffer(input *GrantRevokeOfferInput) error {
 	for _, user := range input.Users {
 		err = client.RevokeOffer(user, input.Access, input.OfferURL)
 		if err != nil {
+			// ignorer if user was already revoked
+			if strings.Contains(err.Error(), "not found") {
+				continue
+			}
 			return err
 		}
 	}

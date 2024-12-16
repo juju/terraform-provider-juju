@@ -6,7 +6,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
@@ -31,7 +30,6 @@ var _ resource.Resource = &accessOfferResource{}
 var _ resource.ResourceWithConfigure = &accessOfferResource{}
 var _ resource.ResourceWithImportState = &accessOfferResource{}
 var _ resource.ResourceWithConfigValidators = &accessOfferResource{}
-var _ resource.ResourceWithValidateConfig = &accessOfferResource{}
 
 // NewAccessOfferResource returns a new instance of the Access Offer resource.
 func NewAccessOfferResource() resource.Resource {
@@ -155,6 +153,14 @@ func (a *accessOfferResource) Create(ctx context.Context, req resource.CreateReq
 		}
 	}
 
+	// validate if there are overlaps
+	// validation is done here considering dynamic (juju_user resource) and static values for users
+	err := validateNoOverlaps(adminUsers, consumeUsers, readUsers)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access offer resource, got error: %s", err))
+		return
+	}
+
 	// Call Offers.GrantOffer
 	users := make(map[permission.Access][]string)
 	users[permission.ConsumeAccess] = consumeUsers
@@ -254,7 +260,142 @@ func (a *accessOfferResource) Read(ctx context.Context, req resource.ReadRequest
 
 // Update attempts to update the access to the offer.
 func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// todo
+	// Check first if the client is configured
+	if a.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "access offer", "update")
+		return
+	}
+	var plan, state accessOfferResourceOffer
+
+	// Read Terraform configuration from the request into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get the users to grant admin
+	var adminUsers []string
+	if !plan.AdminUsers.IsNull() {
+		resp.Diagnostics.Append(plan.AdminUsers.ElementsAs(ctx, &adminUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	// Get the users to grant consume
+	var consumeUsers []string
+	if !plan.ConsumeUsers.IsNull() {
+		resp.Diagnostics.Append(plan.ConsumeUsers.ElementsAs(ctx, &consumeUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	// Get the users to grant read
+	var readUsers []string
+	if !plan.ReadUsers.IsNull() {
+		resp.Diagnostics.Append(plan.ReadUsers.ElementsAs(ctx, &readUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	// validate if there are overlaps
+	// validation is done here considering dynamic (juju_user resource) and static values for users
+	err := validateNoOverlaps(adminUsers, consumeUsers, readUsers)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access offer resource, got error: %s", err))
+		return
+	}
+
+	// If bob is in the plan but not in state = grant
+	// if bob is in the state but not in the plan = revoke
+	//    scenario 1 (users added/moved): bob was moved from admin to consume
+	//                bob will be 're-granted' consume permission in further steps
+	//    scenario 2 (users removed): bob was removed from the resource (user was in state but not in the plan anymore)
+	//                bob's permission will be revoked (revoke read) in the last update step
+
+	// scenario 1 - check for users added or moved
+	var adminStateUsers []string
+	if !state.AdminUsers.IsNull() {
+		resp.Diagnostics.Append(state.AdminUsers.ElementsAs(ctx, &adminStateUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+	err = processPermissionChanges(plan.OfferURL.ValueString(), string(permission.AdminAccess), adminUsers, adminStateUsers, a.client)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update offer access %s, got error: %s", state.ID.ValueString(), err))
+		return
+	}
+
+	var consumeStateUsers []string
+	if !state.ConsumeUsers.IsNull() {
+		resp.Diagnostics.Append(state.ConsumeUsers.ElementsAs(ctx, &consumeStateUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+	err = processPermissionChanges(plan.OfferURL.ValueString(), string(permission.ConsumeAccess), consumeUsers, consumeStateUsers, a.client)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update offer access %s, got error: %s", state.ID.ValueString(), err))
+		return
+	}
+
+	var readStateUsers []string
+	if !state.ReadUsers.IsNull() {
+		resp.Diagnostics.Append(state.ReadUsers.ElementsAs(ctx, &readStateUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+	err = processPermissionChanges(plan.OfferURL.ValueString(), string(permission.ReadAccess), readUsers, readStateUsers, a.client)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update offer access %s, got error: %s", state.ID.ValueString(), err))
+		return
+	}
+
+	// scenario 2 - check for users removed from the resource (they are in state but not in plan anymore)
+	totalStateUsers := append(adminStateUsers, consumeStateUsers...)
+	totalStateUsers = append(totalStateUsers, readStateUsers...)
+	totalPlanUsers := append(adminUsers, consumeUsers...)
+	totalPlanUsers = append(totalPlanUsers, readUsers...)
+	removeUsers := diffUsers(totalStateUsers, totalPlanUsers)
+	if len(removeUsers) > 0 {
+		err := a.client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+			Users:    removeUsers,
+			Access:   string(permission.ReadAccess),
+			OfferURL: plan.OfferURL.ValueString(),
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to destroy access offer resource, got error: %s", err))
+			return
+		}
+	}
+
+	// Save admin users to state
+	adminUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, adminUsers)
+	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.AdminUsers = adminUsersSet
+	// Save consume users to state
+	consumeUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, consumeUsers)
+	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.ConsumeUsers = consumeUsersSet
+	// Save read users to state
+	readUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, readUsers)
+	resp.Diagnostics.Append(errDiag...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.ReadUsers = readUsersSet
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 // Delete remove access to the offer according to the resource.
@@ -295,59 +436,6 @@ func (a *accessOfferResource) ConfigValidators(ctx context.Context) []resource.C
 	}
 }
 
-func (a *accessOfferResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	// TODO this validation does not work in case user name depends on the output of other resource
-	var configData accessOfferResourceOffer
-
-	// Read Terraform configuration from the request into the model
-	resp.Diagnostics.Append(req.Config.Get(ctx, &configData)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Get the users to grant admin
-	var adminUsers []string
-	if !configData.AdminUsers.IsNull() {
-		resp.Diagnostics.Append(configData.AdminUsers.ElementsAs(ctx, &adminUsers, false)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-	}
-
-	// Get the users to grant consume
-	var consumeUsers []string
-	if !configData.ConsumeUsers.IsNull() {
-		resp.Diagnostics.Append(configData.ConsumeUsers.ElementsAs(ctx, &consumeUsers, false)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-	}
-
-	// Get the users to grant read
-	var readUsers []string
-	if !configData.ReadUsers.IsNull() {
-		resp.Diagnostics.Append(configData.ReadUsers.ElementsAs(ctx, &readUsers, false)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-	}
-
-	combinedUsers := append(append(adminUsers, consumeUsers...), readUsers...)
-	// Validate if there are repeated user
-	if slices.Contains(combinedUsers, "admin") {
-		resp.Diagnostics.AddAttributeError(path.Root("offer_url"), "Attribute Error", "\"admin\" user is not allowed")
-	}
-	// Validate if there are repeated user
-	slices.Sort(combinedUsers)
-	originalCount := len(combinedUsers)
-	compactedUsers := slices.Compact(combinedUsers)
-	compactedCount := len(compactedUsers)
-	if originalCount != compactedCount {
-		resp.Diagnostics.AddAttributeError(path.Root("offer_url"), "Attribute Error", "do not repeat users across different access levels")
-	}
-
-}
-
 // ImportState import existing resource to the state.
 func (a *accessOfferResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
@@ -359,4 +447,62 @@ func (a *accessOfferResource) trace(msg string, additionalFields ...map[string]i
 	}
 
 	tflog.SubsystemTrace(a.subCtx, LogResourceAccessOffer, msg, additionalFields...)
+}
+
+func validateNoOverlaps(admin, consume, read []string) error {
+	sets := map[string]struct{}{}
+	for _, v := range consume {
+		sets[v] = struct{}{}
+	}
+	for _, v := range read {
+		if _, exists := sets[v]; exists {
+			return fmt.Errorf("user '%s' appears in both 'consume' and 'read'", v)
+		}
+		sets[v] = struct{}{}
+	}
+	for _, v := range admin {
+		if _, exists := sets[v]; exists {
+			return fmt.Errorf("user '%s' appears in multiple roles (e.g., 'consume', 'read', 'admin')", v)
+		}
+	}
+
+	return nil
+}
+
+func processPermissionChanges(offerURL, permissionType string, planUsers, stateUsers []string, jujuClient *juju.Client) error {
+	toGrant := diffUsers(planUsers, stateUsers)
+	toRevoke := diffUsers(stateUsers, planUsers)
+	err := jujuClient.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+		Users:    toRevoke,
+		Access:   permissionType,
+		OfferURL: offerURL,
+	})
+	if err != nil {
+		return err
+	}
+
+	err = jujuClient.Offers.GrantOffer(&juju.GrantRevokeOfferInput{
+		Users:    toGrant,
+		Access:   permissionType,
+		OfferURL: offerURL,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func diffUsers(a, b []string) []string {
+	set := make(map[string]struct{})
+	for _, v := range b {
+		set[v] = struct{}{}
+	}
+
+	var diff []string
+	for _, v := range a {
+		if _, found := set[v]; !found {
+			diff = append(diff, v)
+		}
+	}
+	return diff
 }
