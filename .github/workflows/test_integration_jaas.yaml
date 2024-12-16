@@ -28,7 +28,7 @@ jobs:
   # Ensure project builds before running test
   build:
     name: Build-JAAS
-    runs-on: [self-hosted, jammy, x64]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -103,5 +103,6 @@ jobs:
       - env:
           TF_ACC: "1"
           TEST_CLOUD: "lxd"
-        run: go test -parallel 1 -timeout 40m -v -cover ./internal/provider/
-        timeout-minutes: 40
+        run: go test -parallel 1 -timeout 60m -v -cover ./internal/provider/
+        timeout-minutes: 60
+

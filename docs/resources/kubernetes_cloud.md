@@ -37,8 +37,8 @@ resource "juju_model" "my-model" {
 ### Optional
 
 - `kubernetes_config` (String, Sensitive) The kubernetes config file path for the cloud. Cloud credentials will be added to the Juju controller for you.
-- `parent_cloud_name` (String) The parent cloud name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform.
-- `parent_cloud_region` (String) The parent cloud region name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform.
+- `parent_cloud_name` (String) The parent cloud name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.
+- `parent_cloud_region` (String) The parent cloud region name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.
 
 ### Read-Only
 

@@ -20,6 +20,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &kubernetesCloudResource{}
 var _ resource.ResourceWithConfigure = &kubernetesCloudResource{}
+var _ resource.ResourceWithConfigValidators = &kubernetesCloudResource{}
 
 func NewKubernetesCloudResource() resource.Resource {
 	return &kubernetesCloudResource{}
@@ -62,6 +63,13 @@ func (r *kubernetesCloudResource) Configure(ctx context.Context, req resource.Co
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceKubernetesCloud)
 }
 
+// ConfigValidators returns a list of functions which will all be performed during validation.
+func (r *kubernetesCloudResource) ConfigValidators(context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		&kuberenetesCloudJAASValidator{r.client},
+	}
+}
+
 // Metadata returns the metadata for the kubernetes cloud resource.
 func (r *kubernetesCloudResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_kubernetes_cloud"
@@ -92,11 +100,11 @@ func (r *kubernetesCloudResource) Schema(_ context.Context, req resource.SchemaR
 				Sensitive:   true,
 			},
 			"parent_cloud_name": schema.StringAttribute{
-				Description: "The parent cloud name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform.",
+				Description: "The parent cloud name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.",
 				Optional:    true,
 			},
 			"parent_cloud_region": schema.StringAttribute{
-				Description: "The parent cloud region name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform.",
+				Description: "The parent cloud region name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.",
 				Optional:    true,
 			},
 			"id": schema.StringAttribute{
@@ -128,8 +136,10 @@ func (r *kubernetesCloudResource) Create(ctx context.Context, req resource.Creat
 	// Create the kubernetes cloud.
 	cloudCredentialName, err := r.client.Clouds.CreateKubernetesCloud(
 		&juju.CreateKubernetesCloudInput{
-			Name:             plan.CloudName.ValueString(),
-			KubernetesConfig: plan.KubernetesConfig.ValueString(),
+			Name:              plan.CloudName.ValueString(),
+			KubernetesConfig:  plan.KubernetesConfig.ValueString(),
+			ParentCloudName:   plan.ParentCloudName.ValueString(),
+			ParentCloudRegion: plan.ParentCloudRegion.ValueString(),
 		},
 	)
 	if err != nil {
@@ -201,8 +211,10 @@ func (r *kubernetesCloudResource) Update(ctx context.Context, req resource.Updat
 	// Update the kubernetes cloud.
 	err := r.client.Clouds.UpdateKubernetesCloud(
 		juju.UpdateKubernetesCloudInput{
-			Name:             plan.CloudName.ValueString(),
-			KubernetesConfig: plan.KubernetesConfig.ValueString(),
+			Name:              plan.CloudName.ValueString(),
+			KubernetesConfig:  plan.KubernetesConfig.ValueString(),
+			ParentCloudName:   plan.ParentCloudName.ValueString(),
+			ParentCloudRegion: plan.ParentCloudRegion.ValueString(),
 		},
 	)
 	if err != nil {
@@ -248,6 +260,45 @@ func (r *kubernetesCloudResource) trace(msg string, additionalFields ...map[stri
 		return
 	}
 	tflog.SubsystemTrace(r.subCtx, LogResourceKubernetesCloud, msg, additionalFields...)
+}
+
+type kuberenetesCloudJAASValidator struct {
+	client *juju.Client
+}
+
+// Description implements the Description method of the resource.ConfigValidator interface.
+func (v *kuberenetesCloudJAASValidator) Description(ctx context.Context) string {
+	return v.MarkdownDescription(ctx)
+}
+
+// MarkdownDescription implements the MarkdownDescription method of the resource.ConfigValidator interface.
+func (v *kuberenetesCloudJAASValidator) MarkdownDescription(_ context.Context) string {
+	return "Enforces that this resource can only be used with JAAS"
+}
+
+// ValidateResource implements the ValidateResource method of the resource.ConfigValidator interface.
+func (v *kuberenetesCloudJAASValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	if v.client == nil {
+		return
+	}
+
+	if !v.client.IsJAAS() {
+		return
+	}
+
+	var data kubernetesCloudResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if data.ParentCloudName.ValueString() == "" {
+		resp.Diagnostics.AddError("Plan Error", "parent_cloud_name must be specified when applying to a JAAS controller")
+	}
+
+	if data.ParentCloudRegion.ValueString() == "" {
+		resp.Diagnostics.AddError("Plan Error", "parent_cloud_region must be specified when applying to a JAAS controller")
+	}
 }
 
 func newKubernetesCloudID(kubernetesCloudName string, cloudCredentialName string) string {
