@@ -35,14 +35,14 @@ func NewJAASAccessControllerResource() resource.Resource {
 type controllerInfo struct{}
 
 // Info implements the [resourceInfo] interface, used to extract the info from a Terraform plan/state.
-func (j controllerInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessData, names.Tag) {
+func (j controllerInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (objectsWithAccess, names.Tag) {
 	controllerAccess := jaasAccessControllerResourceController{}
 	diag.Append(getter.Get(ctx, &controllerAccess)...)
-	return genericJAASAccessData(controllerAccess), names.NewControllerTag("jimm")
+	return objectsWithAccess(controllerAccess), names.NewControllerTag("jimm")
 }
 
 // Save implements the [resourceInfo] interface, used to save info on Terraform's state.
-func (j controllerInfo) Save(ctx context.Context, setter Setter, info genericJAASAccessData, _ names.Tag) diag.Diagnostics {
+func (j controllerInfo) Save(ctx context.Context, setter Setter, info objectsWithAccess, _ names.Tag) diag.Diagnostics {
 	return setter.Set(ctx, jaasAccessControllerResourceController(info))
 }
 
@@ -67,6 +67,7 @@ type jaasAccessControllerResourceController struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
+	Roles           types.Set    `tfsdk:"roles"`
 	Access          types.String `tfsdk:"access"`
 
 	// ID required for imports
@@ -80,7 +81,8 @@ func (a *jaasAccessControllerResource) Metadata(_ context.Context, req resource.
 
 // Schema defines the schema for the JAAS controller access resource.
 func (a *jaasAccessControllerResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attributes := a.partialAccessSchema()
+	attributes := baseAccessSchema()
+	attributes = attributes.WithRoles()
 	// The controller access schema has no target object.
 	// The only target is the JAAS controller so we don't need user input.
 	schema := schema.Schema{

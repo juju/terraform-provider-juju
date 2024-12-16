@@ -28,16 +28,20 @@ func TestAcc_ResourceJaasAccessServiceAccount(t *testing.T) {
 	// Resource names
 	svcAccAccessResourceName := "juju_jaas_access_service_account.test"
 	groupResourcename := "juju_jaas_group.test"
+	roleResourcename := "juju_jaas_role.test"
 	accessSuccess := "administrator"
 	accessFail := "bogus"
 	user := "foo@domain.com"
 	group := acctest.RandomWithPrefix("myGroup")
+	role := acctest.RandomWithPrefix("role1")
 	svcAcc := "test"
 	svcAccWithDomain := svcAcc + "@serviceaccount"
 
 	// Objects for checking access
 	groupRelationF := func(s string) string { return jimmnames.NewGroupTag(s).String() + "#member" }
 	groupCheck := newCheckAttribute(groupResourcename, "uuid", groupRelationF)
+	roleRelationF := func(s string) string { return jimmnames.NewRoleTag(s).String() + "#assignee" }
+	roleCheck := newCheckAttribute(roleResourcename, "uuid", roleRelationF)
 	userTag := names.NewUserTag(user).String()
 	svcAccTag := names.NewUserTag(svcAccWithDomain).String()
 	targetSvcAccTag := jimmnames.NewServiceAccountTag("foo@serviceaccount").String()
@@ -52,17 +56,19 @@ func TestAcc_ResourceJaasAccessServiceAccount(t *testing.T) {
 		CheckDestroy: resource.ComposeAggregateTestCheckFunc(
 			testAccCheckJaasResourceAccess(accessSuccess, &userTag, &targetSvcAccTag, false),
 			testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, &targetSvcAccTag, false),
+			testAccCheckJaasResourceAccess(accessSuccess, roleCheck.tag, &targetSvcAccTag, false),
 			testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, &targetSvcAccTag, false),
 		),
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccResourceJaasAccessServiceAccount(accessFail, user, group, svcAcc),
+				Config:      testAccResourceJaasAccessServiceAccount(accessFail, user, group, svcAcc, role),
 				ExpectError: regexp.MustCompile(fmt.Sprintf("(?s)unknown.*relation %s", accessFail)),
 			},
 			{
-				Config: testAccResourceJaasAccessServiceAccount(accessSuccess, user, group, svcAcc),
+				Config: testAccResourceJaasAccessServiceAccount(accessSuccess, user, group, svcAcc, role),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(groupCheck),
+					testAccCheckAttributeNotEmpty(roleCheck),
 					testAccCheckJaasResourceAccess(accessSuccess, &userTag, &targetSvcAccTag, true),
 					testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, &targetSvcAccTag, true),
 					testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, &targetSvcAccTag, true),
@@ -87,10 +93,14 @@ func TestAcc_ResourceJaasAccessServiceAccount(t *testing.T) {
 	})
 }
 
-func testAccResourceJaasAccessServiceAccount(access, user, group, svcAcc string) string {
+func testAccResourceJaasAccessServiceAccount(access, user, group, svcAcc, role string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceJaasAccessServiceAccount",
 		`
+resource "juju_jaas_role" "test" {
+  name = "{{ .Role }}"
+}
+
 resource "juju_jaas_group" "test" {
   name = "{{ .Group }}"
 }
@@ -100,6 +110,7 @@ resource "juju_jaas_access_service_account" "test" {
   access              = "{{.Access}}"
   users               = ["{{.User}}"]
   groups              = [juju_jaas_group.test.uuid]
+  roles              = [juju_jaas_role.test.uuid]
   service_accounts    = ["{{.SvcAcc}}"]
 }
 `, internaltesting.TemplateData{
@@ -107,5 +118,6 @@ resource "juju_jaas_access_service_account" "test" {
 			"User":   user,
 			"Group":  group,
 			"SvcAcc": svcAcc,
+			"Role":   role,
 		})
 }

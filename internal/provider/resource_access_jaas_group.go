@@ -8,7 +8,9 @@ import (
 	"errors"
 
 	jimmnames "github.com/canonical/jimm-go-sdk/v3/names"
+	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -36,10 +38,10 @@ func NewJAASAccessGroupResource() resource.Resource {
 type groupInfo struct{}
 
 // Info implements the [resourceInfo] interface, used to extract the info from a Terraform plan/state.
-func (j groupInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessData, names.Tag) {
+func (j groupInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (objectsWithAccess, names.Tag) {
 	groupAccess := jaasAccessModelResourceGroup{}
 	diag.Append(getter.Get(ctx, &groupAccess)...)
-	accessGroup := genericJAASAccessData{
+	accessGroup := objectsWithAccess{
 		ID:              groupAccess.ID,
 		Users:           groupAccess.Users,
 		Groups:          groupAccess.Groups,
@@ -55,7 +57,7 @@ func (j groupInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnosti
 }
 
 // Save implements the [resourceInfo] interface, used to save info on Terraform's state.
-func (j groupInfo) Save(ctx context.Context, setter Setter, info genericJAASAccessData, tag names.Tag) diag.Diagnostics {
+func (j groupInfo) Save(ctx context.Context, setter Setter, info objectsWithAccess, tag names.Tag) diag.Diagnostics {
 	groupAccess := jaasAccessModelResourceGroup{
 		GroupID:         basetypes.NewStringValue(tag.Id()),
 		ID:              info.ID,
@@ -101,9 +103,21 @@ func (a *jaasAccessGroupResource) Metadata(_ context.Context, req resource.Metad
 	resp.TypeName = req.ProviderTypeName + "_jaas_access_group"
 }
 
+// ConfigValidators sets validators for the group resource.
+func (r *jaasAccessGroupResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		NewRequiresJAASValidator(r.client),
+		resourcevalidator.AtLeastOneOf(
+			path.MatchRoot("users"),
+			path.MatchRoot("groups"),
+			path.MatchRoot("service_accounts"),
+		),
+	}
+}
+
 // Schema defines the schema for the JAAS group access resource.
 func (a *jaasAccessGroupResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attributes := a.partialAccessSchema()
+	attributes := baseAccessSchema()
 	attributes["group_id"] = schema.StringAttribute{
 		Description: "The ID of the group for access management. If this is changed the resource will be deleted and a new resource will be created.",
 		Required:    true,

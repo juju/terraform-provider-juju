@@ -94,6 +94,10 @@ type JaasAPIClient interface {
 	GetGroup(req *jaasparams.GetGroupRequest) (jaasparams.GetGroupResponse, error)
 	RenameGroup(req *jaasparams.RenameGroupRequest) error
 	RemoveGroup(req *jaasparams.RemoveGroupRequest) error
+	AddRole(req *jaasparams.AddRoleRequest) (jaasparams.AddRoleResponse, error)
+	GetRole(req *jaasparams.GetRoleRequest) (jaasparams.GetRoleResponse, error)
+	RenameRole(req *jaasparams.RenameRoleRequest) error
+	RemoveRole(req *jaasparams.RemoveRoleRequest) error
 }
 
 // KubernetesCloudAPIClient defines the set of methods that the Kubernetes cloud API provides.

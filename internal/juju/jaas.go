@@ -217,3 +217,78 @@ func (jc *jaasClient) RemoveGroup(name string) error {
 	req := params.RemoveGroupRequest{Name: name}
 	return client.RemoveGroup(&req)
 }
+
+// JaasRole represents a JAAS role used for permissions management.
+type JaasRole struct {
+	Name string
+	UUID string
+}
+
+// AddRole attempts to create a new role with the provided name.
+func (jc *jaasClient) AddRole(name string) (string, error) {
+	conn, err := jc.GetConnection(nil)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := jc.getJaasApiClient(conn)
+	req := params.AddRoleRequest{Name: name}
+
+	resp, err := client.AddRole(&req)
+	if err != nil {
+		return "", err
+	}
+	return resp.UUID, nil
+}
+
+// ReadRoleByUUID attempts to read a role that matches the provided UUID.
+func (jc *jaasClient) ReadRoleByUUID(uuid string) (*JaasRole, error) {
+	return jc.readRole(&params.GetRoleRequest{UUID: uuid})
+}
+
+// ReadRoleByName attempts to read a role that matches the provided name.
+func (jc *jaasClient) ReadRoleByName(name string) (*JaasRole, error) {
+	return jc.readRole(&params.GetRoleRequest{Name: name})
+}
+
+func (jc *jaasClient) readRole(req *params.GetRoleRequest) (*JaasRole, error) {
+	conn, err := jc.GetConnection(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := jc.getJaasApiClient(conn)
+	resp, err := client.GetRole(req)
+	if err != nil {
+		return nil, err
+	}
+	return &JaasRole{Name: resp.Name, UUID: resp.UUID}, nil
+}
+
+// RenameRole attempts to rename a role that matches the provided name.
+func (jc *jaasClient) RenameRole(name, newName string) error {
+	conn, err := jc.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := jc.getJaasApiClient(conn)
+	req := params.RenameRoleRequest{Name: name, NewName: newName}
+	return client.RenameRole(&req)
+}
+
+// RemoveRole attempts to remove a role that matches the provided name.
+func (jc *jaasClient) RemoveRole(name string) error {
+	conn, err := jc.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := jc.getJaasApiClient(conn)
+	req := params.RemoveRoleRequest{Name: name}
+	return client.RemoveRole(&req)
+}

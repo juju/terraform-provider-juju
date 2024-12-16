@@ -11,16 +11,10 @@ import (
 
 	jimmnames "github.com/canonical/jimm-go-sdk/v3/names"
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
-	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -49,8 +43,8 @@ type Setter interface {
 // resourcer defines how the [genericJAASAccessResource] can query/save for information
 // on the target object.
 type resourcer interface {
-	Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessData, names.Tag)
-	Save(ctx context.Context, setter Setter, info genericJAASAccessData, tag names.Tag) diag.Diagnostics
+	Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (objectsWithAccess, names.Tag)
+	Save(ctx context.Context, setter Setter, info objectsWithAccess, tag names.Tag) diag.Diagnostics
 	ImportHint() string
 	TagFromID(id string) (names.Tag, error)
 }
@@ -68,13 +62,12 @@ type genericJAASAccessResource struct {
 	subCtx context.Context
 }
 
-// genericJAASAccessData represents a partial generic object for access management.
-// This struct should be embedded into a struct that contains a field for a target object (normally a name or UUID).
-// Note that service accounts are treated as users but kept as a separate field for improved validation.
-type genericJAASAccessData struct {
+// objectsWithAccess holds all the objects that can have an access to a JAAS Resource.
+type objectsWithAccess struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
+	Roles           types.Set    `tfsdk:"roles"`
 	Access          types.String `tfsdk:"access"`
 
 	// ID required for imports
@@ -88,65 +81,9 @@ func (r *genericJAASAccessResource) ConfigValidators(ctx context.Context) []reso
 		resourcevalidator.AtLeastOneOf(
 			path.MatchRoot("users"),
 			path.MatchRoot("groups"),
+			path.MatchRoot("roles"),
 			path.MatchRoot("service_accounts"),
 		),
-	}
-}
-
-// partialAccessSchema returns a map of schema attributes for a JAAS access resource.
-// Access resources should use this schema and add any additional attributes e.g. name or uuid.
-func (r *genericJAASAccessResource) partialAccessSchema() map[string]schema.Attribute {
-	return map[string]schema.Attribute{
-		"access": schema.StringAttribute{
-			Description: "Level of access to grant. Changing this value will replace the Terraform resource. Valid access levels are described at https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/authorisation_model/#valid-relations",
-			Required:    true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.RequiresReplace(),
-			},
-		},
-		"users": schema.SetAttribute{
-			Description: "List of users to grant access.",
-			Optional:    true,
-			ElementType: types.StringType,
-			Validators: []validator.Set{
-				setvalidator.ValueStringsAre(ValidatorMatchString(names.IsValidUser, "email must be a valid Juju username")),
-				setvalidator.ValueStringsAre(stringvalidator.RegexMatches(basicEmailValidationRe, "email must contain an @ symbol")),
-			},
-		},
-		"groups": schema.SetAttribute{
-			Description: "List of groups to grant access.",
-			Optional:    true,
-			ElementType: types.StringType,
-			Validators: []validator.Set{
-				setvalidator.ValueStringsAre(ValidatorMatchString(jimmnames.IsValidGroupId, "group ID must be valid")),
-			},
-		},
-		"service_accounts": schema.SetAttribute{
-			Description: "List of service accounts to grant access.",
-			Optional:    true,
-			ElementType: types.StringType,
-			// service accounts are treated as users but defined separately
-			// for different validation and logic in the provider.
-			Validators: []validator.Set{
-				setvalidator.ValueStringsAre(ValidatorMatchString(
-					func(s string) bool {
-						// Use EnsureValidServiceAccountId instead of IsValidServiceAccountId
-						// because we avoid requiring the user to add @serviceaccount for service accounts
-						// and opt to add that in the provide code. EnsureValidServiceAccountId adds the
-						// @serviceaccount domain before verifying the string is a valid service account ID.
-						_, err := jimmnames.EnsureValidServiceAccountId(s)
-						return err == nil
-					}, "service account ID must be a valid Juju username")),
-				setvalidator.ValueStringsAre(stringvalidator.RegexMatches(avoidAtSymbolRe, "service account should not contain an @ symbol")),
-			},
-		},
-		// ID required for imports
-		"id": schema.StringAttribute{
-			Computed: true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
-			},
-		},
 	}
 }
 
@@ -242,6 +179,7 @@ func (resource *genericJAASAccessResource) Read(ctx context.Context, req resourc
 
 	state.Users = newModel.Users
 	state.Groups = newModel.Groups
+	state.Roles = newModel.Roles
 	state.ServiceAccounts = newModel.ServiceAccounts
 	state.Access = basetypes.NewStringValue(access)
 	resp.Diagnostics.Append(resource.targetResource.Save(ctx, &resp.State, state, targetTag)...)
@@ -313,20 +251,24 @@ func (resource *genericJAASAccessResource) Update(ctx context.Context, req resou
 	resp.Diagnostics.Append(resource.save(ctx, &resp.State, plan, targetTag)...)
 }
 
-func diffModels(plan, state genericJAASAccessData, diag *diag.Diagnostics) (toAdd, toRemove genericJAASAccessData) {
+func diffModels(plan, state objectsWithAccess, diag *diag.Diagnostics) (toAdd, toRemove objectsWithAccess) {
 	newUsers := diffSet(plan.Users, state.Users, diag)
 	newGroups := diffSet(plan.Groups, state.Groups, diag)
+	newRoles := diffSet(plan.Roles, state.Roles, diag)
 	newServiceAccounts := diffSet(plan.ServiceAccounts, state.ServiceAccounts, diag)
 	toAdd.Users = newUsers
 	toAdd.Groups = newGroups
+	toAdd.Roles = newRoles
 	toAdd.ServiceAccounts = newServiceAccounts
 	toAdd.Access = plan.Access
 
 	removedUsers := diffSet(state.Users, plan.Users, diag)
 	removedGroups := diffSet(state.Groups, plan.Groups, diag)
+	removedRoles := diffSet(state.Roles, plan.Roles, diag)
 	removedServiceAccounts := diffSet(state.ServiceAccounts, plan.ServiceAccounts, diag)
 	toRemove.Users = removedUsers
 	toRemove.Groups = removedGroups
+	toRemove.Roles = removedRoles
 	toRemove.ServiceAccounts = removedServiceAccounts
 	toRemove.Access = plan.Access
 
@@ -380,13 +322,17 @@ func (resource *genericJAASAccessResource) Delete(ctx context.Context, req resou
 }
 
 // modelToTuples return a list of tuples based on the access model provided.
-func modelToTuples(ctx context.Context, targetTag names.Tag, model genericJAASAccessData, diag *diag.Diagnostics) []juju.JaasTuple {
-	var users []string
-	var groups []string
-	var serviceAccounts []string
-	diag.Append(model.Users.ElementsAs(ctx, &users, false)...)
-	diag.Append(model.Groups.ElementsAs(ctx, &groups, false)...)
-	diag.Append(model.ServiceAccounts.ElementsAs(ctx, &serviceAccounts, false)...)
+func modelToTuples(ctx context.Context, targetTag names.Tag, model objectsWithAccess, diag *diag.Diagnostics) []juju.JaasTuple {
+	var (
+		users           []string
+		groups          []string
+		roles           []string
+		serviceAccounts []string
+	)
+	diag.Append(getSetIfKnown(ctx, model.Users, &users)...)
+	diag.Append(getSetIfKnown(ctx, model.Groups, &groups)...)
+	diag.Append(getSetIfKnown(ctx, model.Roles, &roles)...)
+	diag.Append(getSetIfKnown(ctx, model.ServiceAccounts, &serviceAccounts)...)
 	if diag.HasError() {
 		return []juju.JaasTuple{}
 	}
@@ -397,6 +343,7 @@ func modelToTuples(ctx context.Context, targetTag names.Tag, model genericJAASAc
 	var tuples []juju.JaasTuple
 	userNameToTagf := func(s string) string { return names.NewUserTag(s).String() }
 	groupIDToTagf := func(s string) string { return jimmnames.NewGroupTag(s).String() + "#member" }
+	roleIDToTagf := func(s string) string { return jimmnames.NewRoleTag(s).String() + "#assignee" }
 	// Note that service accounts are treated as users but with an @serviceaccount domain.
 	// We add the @serviceaccount domain by calling `EnsureValidServiceAccountId` so that the user writing the plan doesn't have to.
 	// We can ignore the error below because the inputs have already gone through validation.
@@ -406,15 +353,19 @@ func modelToTuples(ctx context.Context, targetTag names.Tag, model genericJAASAc
 	}
 	tuples = append(tuples, assignTupleObject(baseTuple, users, userNameToTagf)...)
 	tuples = append(tuples, assignTupleObject(baseTuple, groups, groupIDToTagf)...)
+	tuples = append(tuples, assignTupleObject(baseTuple, roles, roleIDToTagf)...)
 	tuples = append(tuples, assignTupleObject(baseTuple, serviceAccounts, serviceAccIDToTagf)...)
 	return tuples
 }
 
 // tuplesToModel does the reverse of planToTuples converting a slice of tuples to an access model.
-func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diagnostics) genericJAASAccessData {
-	var users []string
-	var groups []string
-	var serviceAccounts []string
+func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diagnostics) objectsWithAccess {
+	var (
+		users           []string
+		groups          []string
+		roles           []string
+		serviceAccounts []string
+	)
 	for _, tuple := range tuples {
 		tag, err := jimmnames.ParseTag(tuple.Object)
 		if err != nil {
@@ -437,17 +388,22 @@ func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diag
 			}
 		case jimmnames.GroupTagKind:
 			groups = append(groups, strings.ReplaceAll(tag.Id(), "#member", ""))
+		case jimmnames.RoleTagKind:
+			roles = append(roles, strings.ReplaceAll(tag.Id(), "#assignee", ""))
 		}
 	}
 	userSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users)
 	diag.Append(errDiag...)
 	groupSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, groups)
 	diag.Append(errDiag...)
+	roleSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, roles)
+	diag.Append(errDiag...)
 	serviceAccountSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, serviceAccounts)
 	diag.Append(errDiag...)
-	var model genericJAASAccessData
+	var model objectsWithAccess
 	model.Users = userSet
 	model.Groups = groupSet
+	model.Roles = roleSet
 	model.ServiceAccounts = serviceAccountSet
 	return model
 }
@@ -462,11 +418,19 @@ func assignTupleObject(baseTuple juju.JaasTuple, items []string, idToTag func(st
 	return tuples
 }
 
-func (a *genericJAASAccessResource) info(ctx context.Context, getter Getter, diags *diag.Diagnostics) (genericJAASAccessData, names.Tag) {
+// getSetIfKnown populates the targetSlice if set is not null or unknown.
+func getSetIfKnown(ctx context.Context, set types.Set, targetSlice *[]string) diag.Diagnostics {
+	if set.IsNull() || set.IsUnknown() {
+		return nil
+	}
+	return set.ElementsAs(ctx, targetSlice, false)
+}
+
+func (a *genericJAASAccessResource) info(ctx context.Context, getter Getter, diags *diag.Diagnostics) (objectsWithAccess, names.Tag) {
 	return a.targetResource.Info(ctx, getter, diags)
 }
 
-func (a *genericJAASAccessResource) save(ctx context.Context, setter Setter, info genericJAASAccessData, tag names.Tag) diag.Diagnostics {
+func (a *genericJAASAccessResource) save(ctx context.Context, setter Setter, info objectsWithAccess, tag names.Tag) diag.Diagnostics {
 	return a.targetResource.Save(ctx, setter, info, tag)
 }
 
