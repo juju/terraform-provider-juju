@@ -55,7 +55,7 @@ endif
 
 JUJU=juju
 CONTROLLER=$(shell ${JUJU} whoami | yq .Controller)
-CONTROLLER_ADDRESSES="$(shell ${JUJU} show-controller | yq '.${CONTROLLER}.details."api-endpoints"' | tr -d "[]' "|tr -d '"'|tr -d '\n')"
+CONTROLLER_ADDRESSES="$(shell juju show-controller | yq .${CONTROLLER}.details.api-endpoints | yq -r '. | join(",")')"
 USERNAME="$(shell cat ~/.local/share/juju/accounts.yaml | yq '.controllers.${CONTROLLER}.user'|tr -d '"')"
 PASSWORD="$(shell cat ~/.local/share/juju/accounts.yaml | yq '.controllers.${CONTROLLER}.password'|tr -d '"')"
 CA_CERT="$(shell ${JUJU} show-controller $(echo ${CONTROLLER}|tr -d '"')| yq '.${CONTROLLER}.details."ca-cert"'|tr -d '"'|sed 's/\\n/\n/g')"

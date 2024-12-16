@@ -47,7 +47,7 @@ Define the Juju controller credentials in the provider definition in your terraf
 
 ``` terraform
 provider "juju" {
-  controller_addresses = "10.225.205.241:17070,10.225.205.242:17070"
+  controller_addresses = "10.225.205.241:17070,10.225.205.242:17070,[fd42:791:fa5e:6834:216:3eff:fe7a:8e6a]:17070"
   username = "jujuuser"
   password = "password1"
   ca_certificate = file("~/ca-cert.pem")
@@ -62,7 +62,7 @@ Define the client credentials in the provider definition in your terraform plan.
 
 ``` terraform
 provider "juju" {
-  controller_addresses = "10.225.205.241:17070,10.225.205.242:17070"
+  controller_addresses = "10.225.205.241:17070,10.225.205.242:17070,[fd42:791:fa5e:6834:216:3eff:fe7a:8e6a]:17070"
   client_id = "jujuclientid"
   client_secret = "jujuclientsecret"
   ca_certificate = file("~/ca-cert.pem")
@@ -75,7 +75,7 @@ Define the Juju controller credentials in the provider definition via environmen
 
 ```shell
 export CONTROLLER=$(juju whoami | yq .Controller)
-export JUJU_CONTROLLER_ADDRESSES="$(juju show-controller | yq '.[$CONTROLLER]'.details.\"api-endpoints\" | tr -d "[]' "|tr -d '"'|tr -d '\n')"
+export JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq .$CONTROLLER.details.api-endpoints | yq -r '. | join(",")')
 export JUJU_USERNAME="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.user|tr -d '"')"
 export JUJU_PASSWORD="$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password|tr -d '"')"
 export JUJU_CA_CERT="$(juju show-controller $(echo $CONTROLLER|tr -d '"') | yq '.[$CONTROLLER]'.details.\"ca-cert\"|tr -d '"'|sed 's/\\n/\n/g')"
