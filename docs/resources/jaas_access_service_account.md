@@ -33,6 +33,7 @@ resource "juju_jaas_access_service_account" "development" {
 ### Optional
 
 - `groups` (Set of String) List of groups to grant access.
+- `roles` (Set of String) List of roles to grant access.
 - `service_accounts` (Set of String) List of service accounts to grant access.
 - `users` (Set of String) List of users to grant access.
 
