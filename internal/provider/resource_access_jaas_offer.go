@@ -42,6 +42,7 @@ func (j offerInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnosti
 		ID:              offerResource.ID,
 		Users:           offerResource.Users,
 		Groups:          offerResource.Groups,
+		Roles:           offerResource.Roles,
 		ServiceAccounts: offerResource.ServiceAccounts,
 		Access:          offerResource.Access,
 	}
@@ -60,6 +61,7 @@ func (j offerInfo) Save(ctx context.Context, setter Setter, info genericJAASAcce
 		ID:              info.ID,
 		Users:           info.Users,
 		Groups:          info.Groups,
+		Roles:           info.Roles,
 		ServiceAccounts: info.ServiceAccounts,
 		Access:          info.Access,
 	}
@@ -86,6 +88,7 @@ type jaasAccessOfferResourceOffer struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
+	Roles           types.Set    `tfsdk:"roles"`
 	Access          types.String `tfsdk:"access"`
 
 	// ID required for imports
@@ -99,7 +102,7 @@ func (a *jaasAccessOfferResource) Metadata(_ context.Context, req resource.Metad
 
 // Schema defines the schema for the JAAS offer access resource.
 func (a *jaasAccessOfferResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attributes := a.partialAccessSchema()
+	attributes := a.baseAccessSchema()
 	attributes["offer_url"] = schema.StringAttribute{
 		Description: "The url of the offer for access management. If this is changed the resource will be deleted and a new resource will be created.",
 		Required:    true,

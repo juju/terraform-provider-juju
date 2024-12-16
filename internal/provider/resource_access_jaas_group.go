@@ -8,7 +8,9 @@ import (
 	"errors"
 
 	jimmnames "github.com/canonical/jimm-go-sdk/v3/names"
+	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -39,10 +41,14 @@ type groupInfo struct{}
 func (j groupInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessData, names.Tag) {
 	groupAccess := jaasAccessModelResourceGroup{}
 	diag.Append(getter.Get(ctx, &groupAccess)...)
+	// set roles to empty set because we don't support assign roles to group
+	emptyRoleSet, diagEmptySet := types.SetValue(types.StringType, nil)
+	diag.Append(diagEmptySet...)
 	accessGroup := genericJAASAccessData{
 		ID:              groupAccess.ID,
 		Users:           groupAccess.Users,
 		Groups:          groupAccess.Groups,
+		Roles:           emptyRoleSet,
 		ServiceAccounts: groupAccess.ServiceAccounts,
 		Access:          groupAccess.Access,
 	}
@@ -101,9 +107,22 @@ func (a *jaasAccessGroupResource) Metadata(_ context.Context, req resource.Metad
 	resp.TypeName = req.ProviderTypeName + "_jaas_access_group"
 }
 
+func (r *jaasAccessGroupResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		NewRequiresJAASValidator(r.client),
+		resourcevalidator.AtLeastOneOf(
+			path.MatchRoot("users"),
+			path.MatchRoot("groups"),
+			path.MatchRoot("service_accounts"),
+		),
+	}
+}
+
 // Schema defines the schema for the JAAS group access resource.
 func (a *jaasAccessGroupResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attributes := a.partialAccessSchema()
+	attributes := a.baseAccessSchema()
+	// roles cannot be member of a group
+	delete(attributes, "roles")
 	attributes["group_id"] = schema.StringAttribute{
 		Description: "The ID of the group for access management. If this is changed the resource will be deleted and a new resource will be created.",
 		Required:    true,
