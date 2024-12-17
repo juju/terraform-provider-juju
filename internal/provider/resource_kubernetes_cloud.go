@@ -100,11 +100,11 @@ func (r *kubernetesCloudResource) Schema(_ context.Context, req resource.SchemaR
 				Sensitive:   true,
 			},
 			"parent_cloud_name": schema.StringAttribute{
-				Description: "The parent cloud name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.",
+				Description: "The parent cloud name, for adding a k8s cluster from an existing cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.",
 				Optional:    true,
 			},
 			"parent_cloud_region": schema.StringAttribute{
-				Description: "The parent cloud region name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.",
+				Description: "The parent cloud region name, for adding a k8s cluster from an existing cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.",
 				Optional:    true,
 			},
 			"id": schema.StringAttribute{
@@ -273,7 +273,7 @@ func (v *kuberenetesCloudJAASValidator) Description(ctx context.Context) string 
 
 // MarkdownDescription implements the MarkdownDescription method of the resource.ConfigValidator interface.
 func (v *kuberenetesCloudJAASValidator) MarkdownDescription(_ context.Context) string {
-	return "Enforces that this resource can only be used with JAAS"
+	return "Enforces that the parent_cloud_name is specified when applying to a JAAS controller."
 }
 
 // ValidateResource implements the ValidateResource method of the resource.ConfigValidator interface.
@@ -293,11 +293,7 @@ func (v *kuberenetesCloudJAASValidator) ValidateResource(ctx context.Context, re
 	}
 
 	if data.ParentCloudName.ValueString() == "" {
-		resp.Diagnostics.AddError("Plan Error", "parent_cloud_name must be specified when applying to a JAAS controller")
-	}
-
-	if data.ParentCloudRegion.ValueString() == "" {
-		resp.Diagnostics.AddError("Plan Error", "parent_cloud_region must be specified when applying to a JAAS controller")
+		resp.Diagnostics.AddError("Plan Error", "Field `parent_cloud_name` must be specified when applying to a JAAS controller.")
 	}
 }
 

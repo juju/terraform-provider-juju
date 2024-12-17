@@ -59,12 +59,10 @@ func TestAcc_ResourceKubernetesCloudWithJAASIncompleteConfig(t *testing.T) {
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
-		Steps: []resource.TestStep{
-			{
-				Config:      testAccResourceKubernetesCloudWithoutParentCloud(cloudName, cloudConfig),
-				ExpectError: regexp.MustCompile("parent_cloud_region must be specified when applying to a JAAS controller"),
-			},
-		},
+		Steps: []resource.TestStep{{
+			Config:      testAccResourceKubernetesCloudWithoutParentCloudName(cloudName, cloudConfig),
+			ExpectError: regexp.MustCompile("Field `parent_cloud_name` must be specified when applying to a JAAS.*"),
+		}},
 	})
 }
 
@@ -87,7 +85,7 @@ resource "juju_kubernetes_cloud" "{{.CloudName}}" {
 		})
 }
 
-func testAccResourceKubernetesCloudWithoutParentCloud(cloudName string, config string) string {
+func testAccResourceKubernetesCloudWithoutParentCloudName(cloudName string, config string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceSecret",
 		`
