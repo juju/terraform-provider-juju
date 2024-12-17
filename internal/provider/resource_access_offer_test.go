@@ -15,44 +15,54 @@ import (
 
 func TestAcc_ResourceAccessOffer(t *testing.T) {
 	SkipJAAS(t)
-	userName := acctest.RandomWithPrefix("tfuser")
+	AdminUserName := acctest.RandomWithPrefix("tfadminuser")
+	ConsumeUserName := acctest.RandomWithPrefix("tfconsumeuser")
+	ReadUserName := acctest.RandomWithPrefix("tfreaduser")
 	userPassword := acctest.RandomWithPrefix("tf-test-user")
 	modelName := acctest.RandomWithPrefix("tf-access-model")
 	offerURL := fmt.Sprintf("admin/%s.appone", modelName)
-	access := "consume"
-	newAccess := "admin"
-	accessFail := "bogus"
 
 	resourceName := "juju_access_offer.access_appone_endpoint"
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
-			{ // Test access name validation
-				Config:      testAccResourceAccessOffer(userName, userPassword, modelName, accessFail),
-				ExpectError: regexp.MustCompile("Invalid Attribute Value Match.*"),
+			{ // Test username overlap validation
+				Config:      testAccResourceAccessOffer(AdminUserName, ConsumeUserName, ReadUserName, "admin", "admin", "", userPassword, modelName),
+				ExpectError: regexp.MustCompile("appears in.*"),
 			},
-			{ // Create the resource
-				Config: testAccResourceAccessOffer(userName, userPassword, modelName, access),
+			{ // Create the resource with user as admin
+				Config: testAccResourceAccessOffer(AdminUserName, ConsumeUserName, ReadUserName, "admin", "consume", "read", userPassword, modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "offer_url", offerURL),
-					resource.TestCheckResourceAttr(resourceName, "access", access),
-					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", userName),
+					resource.TestCheckTypeSetElemAttr(resourceName, "admin.*", AdminUserName),
+					resource.TestCheckTypeSetElemAttr(resourceName, "consume.*", ConsumeUserName),
+					resource.TestCheckTypeSetElemAttr(resourceName, "read.*", ReadUserName),
 				),
 			},
-			{ // Change access from consume to admin
-				Config: testAccResourceAccessOffer(userName, userPassword, modelName, newAccess),
+			{ // Change Admin to Consume and Consume to Admin
+				Config: testAccResourceAccessOffer(AdminUserName, ConsumeUserName, ReadUserName, "consume", "admin", "read", userPassword, modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "offer_url", offerURL),
-					resource.TestCheckResourceAttr(resourceName, "access", newAccess),
-					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", userName),
+					resource.TestCheckTypeSetElemAttr(resourceName, "admin.*", ConsumeUserName),
+					resource.TestCheckTypeSetElemAttr(resourceName, "consume.*", AdminUserName),
+					resource.TestCheckTypeSetElemAttr(resourceName, "read.*", ReadUserName),
+				),
+			},
+			{ // Remove user from read permission
+				Config: testAccResourceAccessOffer(AdminUserName, ConsumeUserName, ReadUserName, "consume", "admin", "", userPassword, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "offer_url", offerURL),
+					resource.TestCheckTypeSetElemAttr(resourceName, "admin.*", ConsumeUserName),
+					resource.TestCheckTypeSetElemAttr(resourceName, "consume.*", AdminUserName),
+					resource.TestCheckNoResourceAttr(resourceName, "read.*"),
 				),
 			},
 			{ // Destroy the resource and validate it can be imported correctly
 				Destroy:           true,
 				ImportStateVerify: true,
 				ImportState:       true,
-				ImportStateId:     fmt.Sprintf("%s:%s:%s", offerURL, newAccess, userName),
+				ImportStateId:     fmt.Sprintf("%s", offerURL),
 				ResourceName:      resourceName,
 			},
 		},
@@ -77,13 +87,12 @@ func TestAcc_ResourceAccessOffer_ErrorWhenUsedWithJAAS(t *testing.T) {
 func testAccResourceAccessOfferFixedUser() string {
 	return `
 resource "juju_access_offer" "test" {
-  access = "consume"
   offer_url = "admin/db.mysql"
-  users = ["bob"]
+  admin = ["bob"]
 }`
 }
 
-func testAccResourceAccessOffer(userName, userPassword, modelName, access string) string {
+func testAccResourceAccessOffer(AdminUserName, ConsumeUserName, ReadUserName, OfferAdmin, OfferConsume, OfferRead, userPassword, modelName string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceAccessOffer",
 		`
@@ -91,10 +100,26 @@ resource "juju_model" "{{.ModelName}}" {
 name = "{{.ModelName}}"
 }
 
-resource "juju_user" "operator" {
-  name = "{{.UserName}}"
+{{- if ne .AdminUserName "" }}
+resource "juju_user" "admin_operator" {
+  name = "{{.AdminUserName}}"
   password = "{{.UserPassword}}"
 }
+{{- end }}
+
+{{- if ne .ConsumeUserName "" }}
+resource "juju_user" "consume_operator" {
+  name = "{{.ConsumeUserName}}"
+  password = "{{.UserPassword}}"
+}
+{{- end }}
+
+{{- if ne .ReadUserName "" }}
+resource "juju_user" "read_operator" {
+  name = "{{.ReadUserName}}"
+  password = "{{.UserPassword}}"
+}
+{{- end }}
 
 resource "juju_application" "appone" {
   name  = "appone"
@@ -114,15 +139,30 @@ resource "juju_offer" "appone_endpoint" {
 
 resource "juju_access_offer" "access_appone_endpoint" {
     offer_url = juju_offer.appone_endpoint.url
-    users = [
-		juju_user.operator.name,
+	{{- if ne .OfferAdmin "" }}
+    admin = [
+		juju_user.{{.OfferAdmin}}_operator.name,
 	]
-    access = "{{.Access}}"
+	{{- end }}
+	{{- if ne .OfferConsume "" }}
+	consume = [
+		juju_user.{{.OfferConsume}}_operator.name,
+	]
+	{{- end }}
+	{{- if ne .OfferRead "" }}
+	read = [
+		juju_user.{{.OfferRead}}_operator.name,
+	]
+	{{- end }}
 }
 `, internaltesting.TemplateData{
-			"ModelName":    modelName,
-			"Access":       access,
-			"UserName":     userName,
-			"UserPassword": userPassword,
+			"ModelName":       modelName,
+			"AdminUserName":   AdminUserName,
+			"ConsumeUserName": ConsumeUserName,
+			"ReadUserName":    ReadUserName,
+			"OfferAdmin":      OfferAdmin,
+			"OfferConsume":    OfferConsume,
+			"OfferRead":       OfferRead,
+			"UserPassword":    userPassword,
 		})
 }

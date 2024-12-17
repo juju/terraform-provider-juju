@@ -403,6 +403,7 @@ func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 }
 
 // GrantOffer adds access to an offer managed by the access offer resource.
+// No action or error if the access was already granted to the user.
 func (c offersClient) GrantOffer(input *GrantRevokeOfferInput) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
@@ -431,6 +432,7 @@ func (c offersClient) GrantOffer(input *GrantRevokeOfferInput) error {
 }
 
 // RevokeOffer revokes access to an offer managed by the access offer resource.
+// No action or error if the access was already revoked for the user.
 func (c offersClient) RevokeOffer(input *GrantRevokeOfferInput) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {

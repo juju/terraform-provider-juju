@@ -162,12 +162,12 @@ func (a *accessOfferResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	// Call Offers.GrantOffer
-	users := make(map[permission.Access][]string)
-	users[permission.ConsumeAccess] = consumeUsers
-	users[permission.ReadAccess] = readUsers
-	users[permission.AdminAccess] = adminUsers
+	totalUsers := make(map[permission.Access][]string)
+	totalUsers[permission.ConsumeAccess] = consumeUsers
+	totalUsers[permission.ReadAccess] = readUsers
+	totalUsers[permission.AdminAccess] = adminUsers
 
-	for access, users := range users {
+	for access, users := range totalUsers {
 		err := a.client.Offers.GrantOffer(&juju.GrantRevokeOfferInput{
 			Users:    users,
 			Access:   string(access),
@@ -231,28 +231,34 @@ func (a *accessOfferResource) Read(ctx context.Context, req resource.ReadRequest
 
 		users[offerUserDetail.Access] = append(users[offerUserDetail.Access], offerUserDetail.UserName)
 	}
-
+	a.trace(fmt.Sprintf("read juju offer response %q", response))
 	// Save admin users to state
-	adminUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users[permission.AdminAccess])
-	resp.Diagnostics.Append(errDiag...)
-	if resp.Diagnostics.HasError() {
-		return
+	if len(users[permission.AdminAccess]) > 0 {
+		adminUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users[permission.AdminAccess])
+		resp.Diagnostics.Append(errDiag...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		state.AdminUsers = adminUsersSet
 	}
-	state.AdminUsers = adminUsersSet
 	// Save consume users to state
-	consumeUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users[permission.ConsumeAccess])
-	resp.Diagnostics.Append(errDiag...)
-	if resp.Diagnostics.HasError() {
-		return
+	if len(users[permission.ConsumeAccess]) > 0 {
+		consumeUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users[permission.ConsumeAccess])
+		resp.Diagnostics.Append(errDiag...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		state.ConsumeUsers = consumeUsersSet
 	}
-	state.ConsumeUsers = consumeUsersSet
 	// Save read users to state
-	readUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users[permission.ReadAccess])
-	resp.Diagnostics.Append(errDiag...)
-	if resp.Diagnostics.HasError() {
-		return
+	if len(users[permission.ReadAccess]) > 0 {
+		readUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users[permission.ReadAccess])
+		resp.Diagnostics.Append(errDiag...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		state.ReadUsers = readUsersSet
 	}
-	state.ReadUsers = readUsersSet
 	// Set the plan onto the Terraform state
 	state.OfferURL = types.StringValue(offerURL)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -317,14 +323,14 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 	//                bob's permission will be revoked (revoke read) in the last update step
 
 	// scenario 1 - check for users added or moved
-	var adminStateUsers []string
-	if !state.AdminUsers.IsNull() {
-		resp.Diagnostics.Append(state.AdminUsers.ElementsAs(ctx, &adminStateUsers, false)...)
+	var readStateUsers []string
+	if !state.ReadUsers.IsNull() {
+		resp.Diagnostics.Append(state.ReadUsers.ElementsAs(ctx, &readStateUsers, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 	}
-	err = processPermissionChanges(plan.OfferURL.ValueString(), string(permission.AdminAccess), adminUsers, adminStateUsers, a.client)
+	err = processPermissionChanges(plan.OfferURL.ValueString(), string(permission.ReadAccess), readUsers, readStateUsers, a.client)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update offer access %s, got error: %s", state.ID.ValueString(), err))
 		return
@@ -343,14 +349,14 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	var readStateUsers []string
-	if !state.ReadUsers.IsNull() {
-		resp.Diagnostics.Append(state.ReadUsers.ElementsAs(ctx, &readStateUsers, false)...)
+	var adminStateUsers []string
+	if !state.AdminUsers.IsNull() {
+		resp.Diagnostics.Append(state.AdminUsers.ElementsAs(ctx, &adminStateUsers, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 	}
-	err = processPermissionChanges(plan.OfferURL.ValueString(), string(permission.ReadAccess), readUsers, readStateUsers, a.client)
+	err = processPermissionChanges(plan.OfferURL.ValueString(), string(permission.AdminAccess), adminUsers, adminStateUsers, a.client)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update offer access %s, got error: %s", state.ID.ValueString(), err))
 		return
@@ -400,7 +406,60 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 
 // Delete remove access to the offer according to the resource.
 func (a *accessOfferResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	// todo
+	// Check first if the client is configured
+	if a.client == nil {
+		addClientNotConfiguredError(&resp.Diagnostics, "access offer", "read")
+		return
+	}
+	var plan accessOfferResourceOffer
+
+	// Get the Terraform state from the request into the plan
+	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get the users to grant admin
+	var adminUsers []string
+	if !plan.AdminUsers.IsNull() {
+		resp.Diagnostics.Append(plan.AdminUsers.ElementsAs(ctx, &adminUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	// Get the users to grant consume
+	var consumeUsers []string
+	if !plan.ConsumeUsers.IsNull() {
+		resp.Diagnostics.Append(plan.ConsumeUsers.ElementsAs(ctx, &consumeUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	// Get the users to grant read
+	var readUsers []string
+	if !plan.ReadUsers.IsNull() {
+		resp.Diagnostics.Append(plan.ReadUsers.ElementsAs(ctx, &readUsers, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	totalPlanUsers := append(adminUsers, consumeUsers...)
+	totalPlanUsers = append(totalPlanUsers, readUsers...)
+
+	// Revoking against "read" guarantees that the entire access will be removed
+	// instead of only decreasing the access level.
+	err := a.client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+		Users:    totalPlanUsers,
+		Access:   string(permission.ReadAccess),
+		OfferURL: plan.OfferURL.ValueString(),
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to destroy access offer resource, got error: %s", err))
+		return
+	}
 }
 
 // Configure sets the access offer resource with provider data.
@@ -449,6 +508,7 @@ func (a *accessOfferResource) trace(msg string, additionalFields ...map[string]i
 	tflog.SubsystemTrace(a.subCtx, LogResourceAccessOffer, msg, additionalFields...)
 }
 
+// Helpers
 func validateNoOverlaps(admin, consume, read []string) error {
 	sets := map[string]struct{}{}
 	for _, v := range consume {
