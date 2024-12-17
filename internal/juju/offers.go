@@ -412,10 +412,6 @@ func (c offersClient) GrantOffer(input *GrantRevokeOfferInput) error {
 	defer func() { _ = conn.Close() }()
 
 	client := applicationoffers.NewClient(conn)
-	_, err = client.ApplicationOffer(input.OfferURL)
-	if err != nil {
-		return err
-	}
 
 	for _, user := range input.Users {
 		err = client.GrantOffer(user, input.Access, input.OfferURL)
@@ -441,10 +437,6 @@ func (c offersClient) RevokeOffer(input *GrantRevokeOfferInput) error {
 	defer func() { _ = conn.Close() }()
 
 	client := applicationoffers.NewClient(conn)
-	_, err = client.ApplicationOffer(input.OfferURL)
-	if err != nil {
-		return err
-	}
 
 	for _, user := range input.Users {
 		err = client.RevokeOffer(user, input.Access, input.OfferURL)
