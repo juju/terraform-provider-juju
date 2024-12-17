@@ -84,12 +84,58 @@ func TestAcc_ResourceAccessOffer_ErrorWhenUsedWithJAAS(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceAccessOffer_ErrorWhenUsedWithAdmin(t *testing.T) {
+	SkipJAAS(t)
+
+	modelNameAdminTest := acctest.RandomWithPrefix("tf-access-admin-model")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{ // Test username admin validation
+				Config:      testAccResourceAccessOfferAdminUser(modelNameAdminTest),
+				ExpectError: regexp.MustCompile("user admin is not allowed.*"),
+			},
+		},
+	})
+}
+
 func testAccResourceAccessOfferFixedUser() string {
 	return `
 resource "juju_access_offer" "test" {
   offer_url = "admin/db.mysql"
   admin = ["bob"]
 }`
+}
+
+func testAccResourceAccessOfferAdminUser(modelName string) string {
+	return internaltesting.GetStringFromTemplateWithData("testAccResourceAccessOfferAdminUser", `
+resource "juju_model" "{{.ModelName}}" {
+name = "{{.ModelName}}"
+}
+
+resource "juju_application" "appone" {
+  name  = "appone"
+  model = juju_model.{{.ModelName}}.name
+
+  charm {
+    name = "juju-qa-dummy-source"
+    base = "ubuntu@22.04"
+  }
+}
+
+resource "juju_offer" "appone_endpoint" {
+  model            = juju_model.{{.ModelName}}.name
+  application_name = juju_application.appone.name
+  endpoint         = "sink"
+}
+
+resource "juju_access_offer" "test" {
+  offer_url = juju_offer.appone_endpoint.url
+  admin = ["admin"]
+}`, internaltesting.TemplateData{
+		"ModelName": modelName})
 }
 
 func testAccResourceAccessOffer(AdminUserName, ConsumeUserName, ReadUserName, OfferAdmin, OfferConsume, OfferRead, userPassword, modelName string) string {

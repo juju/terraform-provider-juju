@@ -153,9 +153,9 @@ func (a *accessOfferResource) Create(ctx context.Context, req resource.CreateReq
 		}
 	}
 
-	// validate if there are overlaps
+	// validate if there are overlaps or admin user
 	// validation is done here considering dynamic (juju_user resource) and static values for users
-	err := validateNoOverlaps(adminUsers, consumeUsers, readUsers)
+	err := validateNoOverlapsNoAdmin(adminUsers, consumeUsers, readUsers)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access offer resource, got error: %s", err))
 		return
@@ -307,9 +307,9 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 	}
 
-	// validate if there are overlaps
+	// validate if there are overlaps or admin user
 	// validation is done here considering dynamic (juju_user resource) and static values for users
-	err := validateNoOverlaps(adminUsers, consumeUsers, readUsers)
+	err := validateNoOverlapsNoAdmin(adminUsers, consumeUsers, readUsers)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access offer resource, got error: %s", err))
 		return
@@ -509,18 +509,27 @@ func (a *accessOfferResource) trace(msg string, additionalFields ...map[string]i
 }
 
 // Helpers
-func validateNoOverlaps(admin, consume, read []string) error {
+func validateNoOverlapsNoAdmin(admin, consume, read []string) error {
 	sets := map[string]struct{}{}
 	for _, v := range consume {
+		if v == "admin" {
+			return fmt.Errorf("user admin is not allowed")
+		}
 		sets[v] = struct{}{}
 	}
 	for _, v := range read {
+		if v == "admin" {
+			return fmt.Errorf("user admin is not allowed")
+		}
 		if _, exists := sets[v]; exists {
 			return fmt.Errorf("user '%s' appears in both 'consume' and 'read'", v)
 		}
 		sets[v] = struct{}{}
 	}
 	for _, v := range admin {
+		if v == "admin" {
+			return fmt.Errorf("user admin is not allowed")
+		}
 		if _, exists := sets[v]; exists {
 			return fmt.Errorf("user '%s' appears in multiple roles (e.g., 'consume', 'read', 'admin')", v)
 		}
