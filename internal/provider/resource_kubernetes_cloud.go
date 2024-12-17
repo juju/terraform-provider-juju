@@ -100,11 +100,11 @@ func (r *kubernetesCloudResource) Schema(_ context.Context, req resource.SchemaR
 				Sensitive:   true,
 			},
 			"parent_cloud_name": schema.StringAttribute{
-				Description: "The parent cloud name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.",
+				Description: "The parent cloud name, for adding a k8s cluster from an existing cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.",
 				Optional:    true,
 			},
 			"parent_cloud_region": schema.StringAttribute{
-				Description: "The parent cloud region name in case adding k8s cluster from existed cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.",
+				Description: "The parent cloud region name, for adding a k8s cluster from an existing cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.",
 				Optional:    true,
 			},
 			"id": schema.StringAttribute{
