@@ -62,7 +62,7 @@ func TestAcc_ResourceAccessOffer(t *testing.T) {
 				Destroy:           true,
 				ImportStateVerify: true,
 				ImportState:       true,
-				ImportStateId:     fmt.Sprintf("%s", offerURL),
+				ImportStateId:     offerURL,
 				ResourceName:      resourceName,
 			},
 		},
