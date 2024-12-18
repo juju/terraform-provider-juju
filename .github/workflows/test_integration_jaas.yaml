@@ -41,7 +41,7 @@ jobs:
   test:
     name: Integration-JAAS
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, jammy, x64]
     strategy:
       fail-fast: false
     timeout-minutes: 60
@@ -55,6 +55,10 @@ jobs:
         with:
           terraform_version: "1.9.*"
           terraform_wrapper: false
+      - name: Install docker compose plugin
+        run: |
+          for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove -y $pkg; done
+          sudo snap install docker --channel latest/stable
       # Starting JAAS will start the JIMM controller and dependencies and create a Juju controller on LXD and connect it to JIMM.
       - name: Setup JAAS
         uses: canonical/jimm/.github/actions/test-server@v3
@@ -68,11 +72,13 @@ jobs:
           sudo snap install microk8s --channel=1.28-strict/stable
           sudo usermod -a -G snap_microk8s $USER
           sudo chown -R $USER ~/.kube
-          sudo microk8s.enable dns storage
-          sudo microk8s.enable dns local-storage
+          sudo microk8s.enable dns
+          sudo microk8s.enable storage
+          sudo microk8s.enable hostpath-storage
           sudo -g snap_microk8s -E microk8s status --wait-ready --timeout=600
+          sudo microk8s.config view | tee /home/$USER/microk8s-config.yaml
           echo "MICROK8S_CONFIG<<EOF" >> $GITHUB_ENV
-          sudo microk8s.config view >> $GITHUB_ENV
+          echo "$(cat /home/${USER}/microk8s-config.yaml)" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
       - name: Create additional networks when testing with LXD
         run: |
@@ -97,5 +103,6 @@ jobs:
       - env:
           TF_ACC: "1"
           TEST_CLOUD: "lxd"
-        run: go test -parallel 10 -timeout 40m -v -cover ./internal/provider/
-        timeout-minutes: 40
+        run: go test -parallel 1 -timeout 60m -v -cover ./internal/provider/
+        timeout-minutes: 60
+

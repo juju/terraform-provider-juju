@@ -6,10 +6,14 @@ package provider
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
@@ -83,6 +87,37 @@ func TestAcc_ResourceSecret_CreateWithInfo(t *testing.T) {
 				ResourceName:      "juju_secret." + secretName,
 			},
 		},
+	})
+}
+
+func TestAcc_ResourceSecret_CheckSecretID(t *testing.T) {
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
+		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+	secretName := "tf-test-secret"
+	secretValue := map[string]string{
+		"key1": "value1",
+		"key2": "value2",
+	}
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: testAccResourceSecret(modelName, secretName, secretValue, ""),
+			ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue(
+					"juju_secret."+secretName,
+					tfjsonpath.New("secret_id"),
+					knownvalue.StringRegexp(regexp.MustCompile("secret:.*")),
+				),
+			},
+		}},
 	})
 }
 
