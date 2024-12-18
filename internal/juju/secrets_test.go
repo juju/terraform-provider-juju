@@ -66,7 +66,7 @@ func (s *SecretSuite) TestCreateSecret() {
 	s.Require().NoError(err)
 
 	s.Assert().NotNil(output)
-	s.Assert().Equal(secretURI.ID, output.SecretId)
+	s.Assert().Equal(secretURI.String(), output.SecretURI)
 }
 
 func (s *SecretSuite) TestCreateSecretError() {
@@ -130,7 +130,7 @@ func (s *SecretSuite) TestReadSecret() {
 
 	client := s.getSecretsClient()
 	output, err := client.ReadSecret(&ReadSecretInput{
-		SecretId:  secretId,
+		SecretURI: secretId,
 		ModelName: *s.testModelName,
 		Name:      &secretName,
 		Revision:  &secretRevision,
@@ -162,7 +162,7 @@ func (s *SecretSuite) TestReadSecretError() {
 
 	client := s.getSecretsClient()
 	output, err := client.ReadSecret(&ReadSecretInput{
-		SecretId:  secretId,
+		SecretURI: secretId,
 		ModelName: *s.testModelName,
 	})
 	s.Require().Error(err)
@@ -192,7 +192,7 @@ func (s *SecretSuite) TestUpdateSecretWithRenaming() {
 
 	client := s.getSecretsClient()
 	err = client.UpdateSecret(&UpdateSecretInput{
-		SecretId:  secretId,
+		SecretURI: secretId,
 		ModelName: *s.testModelName,
 		Name:      &newSecretName,
 		Value:     &decodedValue,
@@ -221,7 +221,7 @@ func (s *SecretSuite) TestUpdateSecretWithRenaming() {
 
 	// read secret and check if value is updated
 	output, err := client.ReadSecret(&ReadSecretInput{
-		SecretId:  secretId,
+		SecretURI: secretId,
 		ModelName: *s.testModelName,
 	})
 	s.Require().NoError(err)
@@ -249,7 +249,7 @@ func (s *SecretSuite) TestUpdateSecret() {
 
 	client := s.getSecretsClient()
 	err = client.UpdateSecret(&UpdateSecretInput{
-		SecretId:  secretId,
+		SecretURI: secretId,
 		ModelName: *s.testModelName,
 		Value:     &decodedValue,
 		AutoPrune: &autoPrune,
@@ -278,7 +278,7 @@ func (s *SecretSuite) TestUpdateSecret() {
 
 	// read secret and check if secret info is updated
 	output, err := client.ReadSecret(&ReadSecretInput{
-		SecretId:  secretId,
+		SecretURI: secretId,
 		ModelName: *s.testModelName,
 	})
 	s.Require().NoError(err)
@@ -299,7 +299,7 @@ func (s *SecretSuite) TestDeleteSecret() {
 
 	client := s.getSecretsClient()
 	err = client.DeleteSecret(&DeleteSecretInput{
-		SecretId:  secretId,
+		SecretURI: secretId,
 		ModelName: *s.testModelName,
 	})
 	s.Assert().NoError(err)
@@ -320,14 +320,14 @@ func (s *SecretSuite) TestUpdateAccessSecret() {
 
 	client := s.getSecretsClient()
 	err = client.UpdateAccessSecret(&GrantRevokeAccessSecretInput{
-		SecretId:     secretId,
+		SecretURI:    secretId,
 		ModelName:    *s.testModelName,
 		Applications: applications,
 	}, GrantAccess)
 	s.Require().NoError(err)
 
 	err = client.UpdateAccessSecret(&GrantRevokeAccessSecretInput{
-		SecretId:     secretId,
+		SecretURI:    secretId,
 		ModelName:    *s.testModelName,
 		Applications: applications,
 	}, RevokeAccess)
