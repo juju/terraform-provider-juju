@@ -195,16 +195,17 @@ func (c offersClient) DestroyOffer(input *DestroyOfferInput) error {
 		return err
 	}
 
-	forceDestroy := false
-	//This code loops until it detects 0 connections in the offer or 3 minutes elapses
+	//This code loops until it detects 0 connections in the offer or 5 minutes elapses
 	if len(offer.Connections) > 0 {
 		end := time.Now().Add(5 * time.Minute)
 		for ok := true; ok; ok = len(offer.Connections) > 0 {
-			//if we have been failing to destroy offer for 5 minutes then force destroy
-			//TODO: investigate cleaner solution (acceptance tests fail even if timeout set to 20m)
+			//if we have been failing to destroy offer for 5 minutes then fail on destroy
 			if time.Now().After(end) {
-				forceDestroy = true
-				break
+				connections := make([]string, len(offer.Connections))
+				for i, connection := range offer.Connections {
+					connections[i] = fmt.Sprintf("%s:%s", connection.SourceModelUUID, connection.Endpoint)
+				}
+				return fmt.Errorf("offer %q has remaining integrations: %s", input.OfferURL, strings.Join(connections, ", "))
 			}
 			time.Sleep(10 * time.Second)
 			offer, err = client.ApplicationOffer(input.OfferURL)
@@ -214,7 +215,7 @@ func (c offersClient) DestroyOffer(input *DestroyOfferInput) error {
 		}
 	}
 
-	err = client.DestroyOffers(forceDestroy, input.OfferURL)
+	err = client.DestroyOffers(false, input.OfferURL)
 	if err != nil {
 		return err
 	}
