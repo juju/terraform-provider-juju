@@ -67,6 +67,7 @@ type jaasAccessControllerResourceController struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
+	Roles           types.Set    `tfsdk:"roles"`
 	Access          types.String `tfsdk:"access"`
 
 	// ID required for imports
@@ -80,7 +81,7 @@ func (a *jaasAccessControllerResource) Metadata(_ context.Context, req resource.
 
 // Schema defines the schema for the JAAS controller access resource.
 func (a *jaasAccessControllerResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attributes := a.partialAccessSchema()
+	attributes := a.baseAccessSchema()
 	// The controller access schema has no target object.
 	// The only target is the JAAS controller so we don't need user input.
 	schema := schema.Schema{

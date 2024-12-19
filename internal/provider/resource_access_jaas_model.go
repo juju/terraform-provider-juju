@@ -42,6 +42,7 @@ func (j modelInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnosti
 		ID:              modelAccess.ID,
 		Users:           modelAccess.Users,
 		Groups:          modelAccess.Groups,
+		Roles:           modelAccess.Roles,
 		ServiceAccounts: modelAccess.ServiceAccounts,
 		Access:          modelAccess.Access,
 	}
@@ -55,6 +56,7 @@ func (j modelInfo) Save(ctx context.Context, setter Setter, info genericJAASAcce
 		ID:              info.ID,
 		Users:           info.Users,
 		Groups:          info.Groups,
+		Roles:           info.Roles,
 		ServiceAccounts: info.ServiceAccounts,
 		Access:          info.Access,
 	}
@@ -84,6 +86,7 @@ type jaasAccessModelResourceModel struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
+	Roles           types.Set    `tfsdk:"roles"`
 	Access          types.String `tfsdk:"access"`
 
 	// ID required for imports
@@ -97,7 +100,7 @@ func (a *jaasAccessModelResource) Metadata(_ context.Context, req resource.Metad
 
 // Schema defines the schema for the JAAS model access resource.
 func (a *jaasAccessModelResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attributes := a.partialAccessSchema()
+	attributes := a.baseAccessSchema()
 	attributes["model_uuid"] = schema.StringAttribute{
 		Description: "The uuid of the model for access management. If this is changed the resource will be deleted and a new resource will be created.",
 		Required:    true,

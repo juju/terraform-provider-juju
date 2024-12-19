@@ -96,18 +96,22 @@ func TestAcc_ResourceJaasAccessModelAllTypes(t *testing.T) {
 	// Resource names
 	modelResourceName := "juju_jaas_access_model.test"
 	groupResourcename := "juju_jaas_group.test"
+	roleResourcename := "juju_jaas_role.test"
 	modelName := acctest.RandomWithPrefix("tf-jaas-access-model")
 	access := "writer"
 	user := "foo@domain.com"
 	svcAcc := "test"
 	svcAccWithDomain := svcAcc + "@serviceaccount"
 	group := acctest.RandomWithPrefix("myGroup")
+	role := acctest.RandomWithPrefix("role1")
 
 	// Objects for checking access
 	newModelTagF := func(s string) string { return names.NewModelTag(s).String() }
 	modelCheck := newCheckAttribute(modelResourceName, "model_uuid", newModelTagF)
 	groupRelationF := func(s string) string { return jimmnames.NewGroupTag(s).String() + "#member" }
 	groupCheck := newCheckAttribute(groupResourcename, "uuid", groupRelationF)
+	roleRelationF := func(s string) string { return jimmnames.NewRoleTag(s).String() + "#assignee" }
+	roleCheck := newCheckAttribute(roleResourcename, "uuid", roleRelationF)
 	userTag := names.NewUserTag(user).String()
 	svcAccTag := names.NewUserTag(svcAccWithDomain).String()
 
@@ -117,17 +121,20 @@ func TestAcc_ResourceJaasAccessModelAllTypes(t *testing.T) {
 		CheckDestroy: resource.ComposeTestCheckFunc(
 			testAccCheckJaasResourceAccess(access, &userTag, modelCheck.tag, false),
 			testAccCheckJaasResourceAccess(access, &svcAccTag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(access, roleCheck.tag, modelCheck.tag, false),
 			testAccCheckJaasResourceAccess(access, groupCheck.tag, modelCheck.tag, false),
 		),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceJaasAccessModelAllTypes(modelName, access, user, group, svcAcc),
+				Config: testAccResourceJaasAccessModelAllTypes(modelName, access, user, group, svcAcc, role),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(modelCheck),
+					testAccCheckAttributeNotEmpty(roleCheck),
 					testAccCheckAttributeNotEmpty(groupCheck),
 					testAccCheckJaasResourceAccess(access, &userTag, modelCheck.tag, true),
 					testAccCheckJaasResourceAccess(access, &svcAccTag, modelCheck.tag, true),
 					testAccCheckJaasResourceAccess(access, groupCheck.tag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(access, roleCheck.tag, modelCheck.tag, true),
 					resource.TestCheckResourceAttr(modelResourceName, "access", access),
 					resource.TestCheckTypeSetElemAttr(modelResourceName, "users.*", user),
 					resource.TestCheckResourceAttr(modelResourceName, "users.#", "1"),
@@ -382,10 +389,14 @@ resource "juju_jaas_access_model" "test" {
 		})
 }
 
-func testAccResourceJaasAccessModelAllTypes(modelName, access, user, group, svcAcc string) string {
+func testAccResourceJaasAccessModelAllTypes(modelName, access, user, group, svcAcc, role string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceJaasAccessModelTwoUsers",
 		`
+resource "juju_jaas_role" "test" {
+  name = "{{ .Role }}"
+}
+
 resource "juju_model" "test-model" {
   name = "{{.ModelName}}"
 }
@@ -399,6 +410,7 @@ resource "juju_jaas_access_model" "test" {
   access              = "{{.Access}}"
   users               = ["{{.User}}"]
   groups              = [juju_jaas_group.test.uuid]
+  roles              = [juju_jaas_role.test.uuid]
   service_accounts    = ["{{.SvcAcc}}"]
 }
 `, internaltesting.TemplateData{
@@ -407,6 +419,7 @@ resource "juju_jaas_access_model" "test" {
 			"Group":     group,
 			"User":      user,
 			"SvcAcc":    svcAcc,
+			"Role":      role,
 		})
 }
 

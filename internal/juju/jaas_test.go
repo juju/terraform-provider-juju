@@ -223,6 +223,76 @@ func (s *JaasSuite) TestRemoveGroup() {
 	s.Require().NoError(err)
 }
 
+func (s *JaasSuite) TestAddRole() {
+	defer s.setupMocks(s.T()).Finish()
+
+	name := "role"
+	req := &params.AddRoleRequest{Name: name}
+	resp := params.AddRoleResponse{Role: params.Role{UUID: "uuid", Name: name}}
+
+	s.mockJaasClient.EXPECT().AddRole(req).Return(resp, nil)
+
+	client := s.getJaasClient()
+	uuid, err := client.AddRole(name)
+	s.Require().NoError(err)
+	s.Require().Equal(resp.UUID, uuid)
+}
+
+func (s *JaasSuite) TestGetRole() {
+	defer s.setupMocks(s.T()).Finish()
+
+	uuid := "uuid"
+	name := "role"
+
+	req := &params.GetRoleRequest{UUID: uuid}
+	resp := params.GetRoleResponse{Role: params.Role{UUID: uuid, Name: name}}
+	s.mockJaasClient.EXPECT().GetRole(req).Return(resp, nil)
+
+	client := s.getJaasClient()
+	gotRole, err := client.ReadRoleByUUID(uuid)
+	s.Require().NoError(err)
+	s.Require().Equal(*gotRole, JaasRole{UUID: uuid, Name: name})
+}
+
+func (s *JaasSuite) TestGetRoleNotFound() {
+	defer s.setupMocks(s.T()).Finish()
+
+	uuid := "uuid"
+
+	req := &params.GetRoleRequest{UUID: uuid}
+	s.mockJaasClient.EXPECT().GetRole(req).Return(params.GetRoleResponse{}, errors.New("role not found"))
+
+	client := s.getJaasClient()
+	gotRole, err := client.ReadRoleByUUID(uuid)
+	s.Require().Error(err)
+	s.Require().Nil(gotRole)
+}
+
+func (s *JaasSuite) TestRenameRole() {
+	defer s.setupMocks(s.T()).Finish()
+
+	name := "name"
+	newName := "new-name"
+	req := &params.RenameRoleRequest{Name: name, NewName: newName}
+	s.mockJaasClient.EXPECT().RenameRole(req).Return(nil)
+
+	client := s.getJaasClient()
+	err := client.RenameRole(name, newName)
+	s.Require().NoError(err)
+}
+
+func (s *JaasSuite) TestRemoveRole() {
+	defer s.setupMocks(s.T()).Finish()
+
+	name := "role"
+	req := &params.RemoveRoleRequest{Name: name}
+	s.mockJaasClient.EXPECT().RemoveRole(req).Return(nil)
+
+	client := s.getJaasClient()
+	err := client.RemoveRole(name)
+	s.Require().NoError(err)
+}
+
 // In order for 'go test' to run this suite, we need to create
 // a normal test function and pass our suite to suite.Run
 func TestJaasSuite(t *testing.T) {

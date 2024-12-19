@@ -34,6 +34,7 @@ const (
 	LogResourceAccessSecret    = "resource-access-secret"
 
 	LogDataSourceJAASGroup = "datasource-jaas-group"
+	LogDataSourceJAASRole  = "datasource-jaas-role"
 
 	LogResourceJAASAccessModel      = "resource-jaas-access-model"
 	LogResourceJAASAccessCloud      = "resource-jaas-access-cloud"
@@ -42,6 +43,7 @@ const (
 	LogResourceJAASAccessController = "resource-jaas-access-controller"
 	LogResourceJAASAccessSvcAcc     = "resource-jaas-access-service-account"
 	LogResourceJAASGroup            = "resource-jaas-group"
+	LogResourceJAASRole             = "resource-jaas-role"
 )
 
 const LogResourceIntegration = "resource-integration"

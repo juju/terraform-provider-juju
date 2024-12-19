@@ -13,7 +13,7 @@ require (
 )
 
 require (
-	github.com/canonical/jimm-go-sdk/v3 v3.0.5
+	github.com/canonical/jimm-go-sdk/v3 v3.0.6
 	github.com/dustin/go-humanize v1.0.1
 	github.com/hashicorp/terraform-json v0.22.1
 	github.com/hashicorp/terraform-plugin-framework v1.11.0

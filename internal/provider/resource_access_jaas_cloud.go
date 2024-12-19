@@ -42,6 +42,7 @@ func (j cloudInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnosti
 		ID:              cloudAccess.ID,
 		Users:           cloudAccess.Users,
 		Groups:          cloudAccess.Groups,
+		Roles:           cloudAccess.Roles,
 		ServiceAccounts: cloudAccess.ServiceAccounts,
 		Access:          cloudAccess.Access,
 	}
@@ -60,6 +61,7 @@ func (j cloudInfo) Save(ctx context.Context, setter Setter, info genericJAASAcce
 		ID:              info.ID,
 		Users:           info.Users,
 		Groups:          info.Groups,
+		Roles:           info.Roles,
 		ServiceAccounts: info.ServiceAccounts,
 		Access:          info.Access,
 	}
@@ -89,6 +91,7 @@ type jaasAccessCloudResourceCloud struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
+	Roles           types.Set    `tfsdk:"roles"`
 	Access          types.String `tfsdk:"access"`
 
 	// ID required for imports
@@ -102,7 +105,7 @@ func (a *jaasAccessCloudResource) Metadata(_ context.Context, req resource.Metad
 
 // Schema defines the schema for the JAAS cloud access resource.
 func (a *jaasAccessCloudResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attributes := a.partialAccessSchema()
+	attributes := a.baseAccessSchema()
 	attributes["cloud_name"] = schema.StringAttribute{
 		Description: "The name of the cloud for access management. If this is changed the resource will be deleted and a new resource will be created.",
 		Required:    true,

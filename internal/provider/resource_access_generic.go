@@ -75,6 +75,7 @@ type genericJAASAccessData struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
+	Roles           types.Set    `tfsdk:"roles"`
 	Access          types.String `tfsdk:"access"`
 
 	// ID required for imports
@@ -88,14 +89,15 @@ func (r *genericJAASAccessResource) ConfigValidators(ctx context.Context) []reso
 		resourcevalidator.AtLeastOneOf(
 			path.MatchRoot("users"),
 			path.MatchRoot("groups"),
+			path.MatchRoot("roles"),
 			path.MatchRoot("service_accounts"),
 		),
 	}
 }
 
-// partialAccessSchema returns a map of schema attributes for a JAAS access resource.
+// baseAccessSchema returns a map of schema attributes for a JAAS access resource.
 // Access resources should use this schema and add any additional attributes e.g. name or uuid.
-func (r *genericJAASAccessResource) partialAccessSchema() map[string]schema.Attribute {
+func (r *genericJAASAccessResource) baseAccessSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"access": schema.StringAttribute{
 			Description: "Level of access to grant. Changing this value will replace the Terraform resource. Valid access levels are described at https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/authorisation_model/#valid-relations",
@@ -119,6 +121,14 @@ func (r *genericJAASAccessResource) partialAccessSchema() map[string]schema.Attr
 			ElementType: types.StringType,
 			Validators: []validator.Set{
 				setvalidator.ValueStringsAre(ValidatorMatchString(jimmnames.IsValidGroupId, "group ID must be valid")),
+			},
+		},
+		"roles": schema.SetAttribute{
+			Description: "List of roles to grant access.",
+			Optional:    true,
+			ElementType: types.StringType,
+			Validators: []validator.Set{
+				setvalidator.ValueStringsAre(ValidatorMatchString(jimmnames.IsValidRoleId, "role ID must be valid")),
 			},
 		},
 		"service_accounts": schema.SetAttribute{
@@ -242,6 +252,7 @@ func (resource *genericJAASAccessResource) Read(ctx context.Context, req resourc
 
 	state.Users = newModel.Users
 	state.Groups = newModel.Groups
+	state.Roles = newModel.Roles
 	state.ServiceAccounts = newModel.ServiceAccounts
 	state.Access = basetypes.NewStringValue(access)
 	resp.Diagnostics.Append(resource.targetResource.Save(ctx, &resp.State, state, targetTag)...)
@@ -316,17 +327,21 @@ func (resource *genericJAASAccessResource) Update(ctx context.Context, req resou
 func diffModels(plan, state genericJAASAccessData, diag *diag.Diagnostics) (toAdd, toRemove genericJAASAccessData) {
 	newUsers := diffSet(plan.Users, state.Users, diag)
 	newGroups := diffSet(plan.Groups, state.Groups, diag)
+	newRoles := diffSet(plan.Roles, state.Roles, diag)
 	newServiceAccounts := diffSet(plan.ServiceAccounts, state.ServiceAccounts, diag)
 	toAdd.Users = newUsers
 	toAdd.Groups = newGroups
+	toAdd.Roles = newRoles
 	toAdd.ServiceAccounts = newServiceAccounts
 	toAdd.Access = plan.Access
 
 	removedUsers := diffSet(state.Users, plan.Users, diag)
 	removedGroups := diffSet(state.Groups, plan.Groups, diag)
+	removedRoles := diffSet(state.Roles, plan.Roles, diag)
 	removedServiceAccounts := diffSet(state.ServiceAccounts, plan.ServiceAccounts, diag)
 	toRemove.Users = removedUsers
 	toRemove.Groups = removedGroups
+	toRemove.Roles = removedRoles
 	toRemove.ServiceAccounts = removedServiceAccounts
 	toRemove.Access = plan.Access
 
@@ -381,11 +396,15 @@ func (resource *genericJAASAccessResource) Delete(ctx context.Context, req resou
 
 // modelToTuples return a list of tuples based on the access model provided.
 func modelToTuples(ctx context.Context, targetTag names.Tag, model genericJAASAccessData, diag *diag.Diagnostics) []juju.JaasTuple {
-	var users []string
-	var groups []string
-	var serviceAccounts []string
+	var (
+		users           []string
+		groups          []string
+		roles           []string
+		serviceAccounts []string
+	)
 	diag.Append(model.Users.ElementsAs(ctx, &users, false)...)
 	diag.Append(model.Groups.ElementsAs(ctx, &groups, false)...)
+	diag.Append(model.Roles.ElementsAs(ctx, &roles, false)...)
 	diag.Append(model.ServiceAccounts.ElementsAs(ctx, &serviceAccounts, false)...)
 	if diag.HasError() {
 		return []juju.JaasTuple{}
@@ -397,6 +416,7 @@ func modelToTuples(ctx context.Context, targetTag names.Tag, model genericJAASAc
 	var tuples []juju.JaasTuple
 	userNameToTagf := func(s string) string { return names.NewUserTag(s).String() }
 	groupIDToTagf := func(s string) string { return jimmnames.NewGroupTag(s).String() + "#member" }
+	roleIDToTagf := func(s string) string { return jimmnames.NewRoleTag(s).String() + "#assignee" }
 	// Note that service accounts are treated as users but with an @serviceaccount domain.
 	// We add the @serviceaccount domain by calling `EnsureValidServiceAccountId` so that the user writing the plan doesn't have to.
 	// We can ignore the error below because the inputs have already gone through validation.
@@ -406,15 +426,19 @@ func modelToTuples(ctx context.Context, targetTag names.Tag, model genericJAASAc
 	}
 	tuples = append(tuples, assignTupleObject(baseTuple, users, userNameToTagf)...)
 	tuples = append(tuples, assignTupleObject(baseTuple, groups, groupIDToTagf)...)
+	tuples = append(tuples, assignTupleObject(baseTuple, roles, roleIDToTagf)...)
 	tuples = append(tuples, assignTupleObject(baseTuple, serviceAccounts, serviceAccIDToTagf)...)
 	return tuples
 }
 
 // tuplesToModel does the reverse of planToTuples converting a slice of tuples to an access model.
 func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diagnostics) genericJAASAccessData {
-	var users []string
-	var groups []string
-	var serviceAccounts []string
+	var (
+		users           []string
+		groups          []string
+		roles           []string
+		serviceAccounts []string
+	)
 	for _, tuple := range tuples {
 		tag, err := jimmnames.ParseTag(tuple.Object)
 		if err != nil {
@@ -437,17 +461,22 @@ func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diag
 			}
 		case jimmnames.GroupTagKind:
 			groups = append(groups, strings.ReplaceAll(tag.Id(), "#member", ""))
+		case jimmnames.RoleTagKind:
+			roles = append(roles, strings.ReplaceAll(tag.Id(), "#assignee", ""))
 		}
 	}
 	userSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users)
 	diag.Append(errDiag...)
 	groupSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, groups)
 	diag.Append(errDiag...)
+	roleSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, roles)
+	diag.Append(errDiag...)
 	serviceAccountSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, serviceAccounts)
 	diag.Append(errDiag...)
 	var model genericJAASAccessData
 	model.Users = userSet
 	model.Groups = groupSet
+	model.Roles = roleSet
 	model.ServiceAccounts = serviceAccountSet
 	return model
 }
