@@ -195,26 +195,30 @@ func (c offersClient) DestroyOffer(input *DestroyOfferInput) error {
 		return err
 	}
 
-	forceDestroy := false
-	//This code loops until it detects 0 connections in the offer or 3 minutes elapses
-	if len(offer.Connections) > 0 {
-		end := time.Now().Add(5 * time.Minute)
-		for ok := true; ok; ok = len(offer.Connections) > 0 {
-			//if we have been failing to destroy offer for 5 minutes then force destroy
-			//TODO: investigate cleaner solution (acceptance tests fail even if timeout set to 20m)
-			if time.Now().After(end) {
-				forceDestroy = true
-				break
-			}
-			time.Sleep(10 * time.Second)
-			offer, err = client.ApplicationOffer(input.OfferURL)
-			if err != nil {
-				return err
+	checkConnections := func() error {
+		//This code loops until it detects 0 connections in the offer or 3 minutes elapses
+		if len(offer.Connections) > 0 {
+			end := time.Now().Add(5 * time.Minute)
+			for ok := true; ok; ok = len(offer.Connections) > 0 {
+				//if we have been failing to destroy offer for 5 minutes then fail on destroy
+				if time.Now().After(end) {
+					return fmt.Errorf("offer %q has remaining connections", input.OfferURL)
+				}
+				time.Sleep(10 * time.Second)
+				offer, err = client.ApplicationOffer(input.OfferURL)
+				if err != nil {
+					return err
+				}
 			}
 		}
+		return nil
 	}
 
-	err = client.DestroyOffers(forceDestroy, input.OfferURL)
+	if err = checkConnections(); err != nil {
+		return err
+	}
+
+	err = client.DestroyOffers(false, input.OfferURL)
 	if err != nil {
 		return err
 	}
