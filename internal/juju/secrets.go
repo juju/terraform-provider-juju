@@ -50,18 +50,18 @@ type CreateSecretInput struct {
 }
 
 type CreateSecretOutput struct {
-	SecretId string
+	SecretURI string
 }
 
 type ReadSecretInput struct {
-	SecretId  string
+	SecretURI string
 	ModelName string
 	Name      *string
 	Revision  *int
 }
 
 type ReadSecretOutput struct {
-	SecretId     string
+	SecretURI    string
 	Name         string
 	Value        map[string]string
 	Applications []string
@@ -69,7 +69,7 @@ type ReadSecretOutput struct {
 }
 
 type UpdateSecretInput struct {
-	SecretId  string
+	SecretURI string
 	ModelName string
 	Name      *string
 	Value     *map[string]string
@@ -78,12 +78,12 @@ type UpdateSecretInput struct {
 }
 
 type DeleteSecretInput struct {
-	SecretId  string
+	SecretURI string
 	ModelName string
 }
 
 type GrantRevokeAccessSecretInput struct {
-	SecretId     string
+	SecretURI    string
 	ModelName    string
 	Applications []string
 }
@@ -126,16 +126,16 @@ func (c *secretsClient) CreateSecret(input *CreateSecretInput) (CreateSecretOutp
 		encodedValue[k] = base64.StdEncoding.EncodeToString([]byte(v))
 	}
 
-	secretId, err := secretAPIClient.CreateSecret(input.Name, input.Info, encodedValue)
+	secretURIString, err := secretAPIClient.CreateSecret(input.Name, input.Info, encodedValue)
 	if err != nil {
 		return CreateSecretOutput{}, typedError(err)
 	}
-	secretURI, err := coresecrets.ParseURI(secretId)
+	secretURI, err := coresecrets.ParseURI(secretURIString)
 	if err != nil {
 		return CreateSecretOutput{}, typedError(err)
 	}
 	return CreateSecretOutput{
-		SecretId: secretURI.ID,
+		SecretURI: secretURI.String(),
 	}, nil
 }
 
@@ -150,8 +150,8 @@ func (c *secretsClient) ReadSecret(input *ReadSecretInput) (ReadSecretOutput, er
 	secretAPIClient := c.getSecretAPIClient(conn)
 
 	var secretURI *coresecrets.URI
-	if input.SecretId != "" {
-		secretURI, err = coresecrets.ParseURI(input.SecretId)
+	if input.SecretURI != "" {
+		secretURI, err = coresecrets.ParseURI(input.SecretURI)
 		if err != nil {
 			return ReadSecretOutput{}, err
 		}
@@ -169,7 +169,7 @@ func (c *secretsClient) ReadSecret(input *ReadSecretInput) (ReadSecretOutput, er
 		return ReadSecretOutput{}, typedError(err)
 	}
 	if len(results) < 1 {
-		return ReadSecretOutput{}, &secretNotFoundError{secretId: input.SecretId}
+		return ReadSecretOutput{}, &secretNotFoundError{secretId: input.SecretURI}
 	}
 	if results[0].Error != "" {
 		return ReadSecretOutput{}, errors.New(results[0].Error)
@@ -185,7 +185,7 @@ func (c *secretsClient) ReadSecret(input *ReadSecretInput) (ReadSecretOutput, er
 	applications := getApplicationsFromAccessInfo(results[0].Access)
 
 	return ReadSecretOutput{
-		SecretId:     results[0].Metadata.URI.ID,
+		SecretURI:    results[0].Metadata.URI.String(),
 		Name:         results[0].Metadata.Label,
 		Value:        decodedValue,
 		Applications: applications,
@@ -204,7 +204,7 @@ func (c *secretsClient) UpdateSecret(input *UpdateSecretInput) error {
 	secretAPIClient := c.getSecretAPIClient(conn)
 
 	// Specify by ID or Name
-	if input.SecretId == "" && input.Name == nil {
+	if input.SecretURI == "" && input.Name == nil {
 		return errors.New("must specify either secret ID or name")
 	}
 
@@ -228,9 +228,9 @@ func (c *secretsClient) UpdateSecret(input *UpdateSecretInput) error {
 		value = map[string]string{}
 	}
 
-	if input.SecretId != "" {
+	if input.SecretURI != "" {
 		// Specify by ID
-		secretURI, err := coresecrets.ParseURI(input.SecretId)
+		secretURI, err := coresecrets.ParseURI(input.SecretURI)
 		if err != nil {
 			return err
 		}
@@ -262,7 +262,7 @@ func (c *secretsClient) DeleteSecret(input *DeleteSecretInput) error {
 	}
 
 	secretAPIClient := c.getSecretAPIClient(conn)
-	secretURI, err := coresecrets.ParseURI(input.SecretId)
+	secretURI, err := coresecrets.ParseURI(input.SecretURI)
 	if err != nil {
 		return err
 	}
@@ -285,7 +285,7 @@ func (c *secretsClient) UpdateAccessSecret(input *GrantRevokeAccessSecretInput, 
 
 	secretAPIClient := c.getSecretAPIClient(conn)
 
-	secretURI, err := coresecrets.ParseURI(input.SecretId)
+	secretURI, err := coresecrets.ParseURI(input.SecretURI)
 	if err != nil {
 		return err
 	}
