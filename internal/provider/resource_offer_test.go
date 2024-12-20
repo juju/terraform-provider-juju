@@ -101,6 +101,8 @@ resource "juju_integration" "int" {
 	application {
 		offer_url = juju_offer.offerone.url
 	}
+
+	depends_on = [juju_offer.offerone]
 }
 `, srcModelName, destModelName)
 }

@@ -208,6 +208,8 @@ resource "juju_integration" "a" {
 	application {
 		offer_url = juju_offer.b.url
 	}
+
+	depends_on = [juju_offer.b]
 }
 `, srcModelName, aOS, dstModelName, bOS, viaCIDRs)
 }
@@ -315,6 +317,8 @@ resource "juju_integration" "b1" {
         application {
                 offer_url = juju_offer.a.url
         }
+
+		depends_on = [juju_offer.a]
 }
 
 resource "juju_application" "b2" {
@@ -339,6 +343,8 @@ resource "juju_integration" "b2" {
         application {
                 offer_url = juju_offer.a.url
         }
+		
+		depends_on = [juju_offer.a]
 }
 
 variable "enable-b1-consumer" {
