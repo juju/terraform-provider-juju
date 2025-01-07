@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,15 +22,16 @@ import (
 )
 
 const (
-	PrefixCloud         = "cloud-"
-	PrefixModel         = "model-"
-	PrefixCharm         = "charm-"
-	PrefixUser          = "user-"
-	PrefixMachine       = "machine-"
-	PrefixApplication   = "application-"
-	PrefixStorage       = "storage-"
-	UnspecifiedRevision = -1
-	connectionTimeout   = 30 * time.Second
+	PrefixCloud          = "cloud-"
+	PrefixModel          = "model-"
+	PrefixCharm          = "charm-"
+	PrefixUser           = "user-"
+	PrefixMachine        = "machine-"
+	PrefixApplication    = "application-"
+	PrefixStorage        = "storage-"
+	UnspecifiedRevision  = -1
+	connectionTimeout    = 30 * time.Second
+	serviceAccountSuffix = "@serviceaccount"
 )
 
 type ControllerConfiguration struct {
@@ -54,13 +56,20 @@ type Client struct {
 	Secrets      secretsClient
 	Jaas         jaasClient
 
-	isJAAS func() bool
+	isJAAS   func() bool
+	username string
 }
 
 // IsJAAS returns a boolean to indicate whether the controller configured is a JAAS controller.
 // JAAS controllers offer additional functionality for permission management.
 func (c Client) IsJAAS() bool {
 	return c.isJAAS()
+}
+
+// Username returns the username specified in the Juju provider or, if specified, the
+// service account username.
+func (c Client) Username() string {
+	return c.username
 }
 
 type jujuModel struct {
@@ -104,6 +113,11 @@ func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, er
 		defaultJAASCheck = true
 	}
 
+	user := config.Username
+	if config.ClientID != "" && !strings.HasSuffix(config.ClientID, serviceAccountSuffix) {
+		user = fmt.Sprintf("%s%s", config.ClientID, serviceAccountSuffix)
+	}
+
 	return &Client{
 		Applications: *newApplicationClient(sc),
 		Clouds:       *newKubernetesCloudsClient(sc),
@@ -117,6 +131,7 @@ func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, er
 		Secrets:      *newSecretsClient(sc),
 		Jaas:         *newJaasClient(sc),
 		isJAAS:       func() bool { return sc.IsJAAS(defaultJAASCheck) },
+		username:     user,
 	}, nil
 }
 

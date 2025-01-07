@@ -122,6 +122,7 @@ func (s *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 	modelName := plan.ModelName.ValueString()
 
 	if err := s.client.SSHKeys.CreateSSHKey(&juju.CreateSSHKeyInput{
+		Username:  s.client.Username(),
 		ModelName: modelName,
 		Payload:   payload,
 	}); err != nil {
@@ -173,6 +174,7 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 	}
 
 	result, err := s.client.SSHKeys.ReadSSHKey(&juju.ReadSSHKeyInput{
+		Username:      s.client.Username(),
 		ModelName:     modelName,
 		KeyIdentifier: keyIdentifier,
 	})
@@ -221,6 +223,7 @@ func (s *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	// Delete the key
 	if err := s.client.SSHKeys.DeleteSSHKey(&juju.DeleteSSHKeyInput{
+		Username:      s.client.Username(),
 		ModelName:     modelName,
 		KeyIdentifier: keyIdentifier,
 	}); err != nil {
@@ -231,6 +234,7 @@ func (s *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	// Create a new key
 	if err := s.client.SSHKeys.CreateSSHKey(&juju.CreateSSHKeyInput{
+		Username:  s.client.Username(),
 		ModelName: plan.ModelName.ValueString(),
 		Payload:   plan.Payload.ValueString(),
 	}); err != nil {
@@ -274,6 +278,7 @@ func (s *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 
 	// Delete the key
 	if err := s.client.SSHKeys.DeleteSSHKey(&juju.DeleteSSHKeyInput{
+		Username:      s.client.Username(),
 		ModelName:     modelName,
 		KeyIdentifier: keyIdentifier,
 	}); err != nil {

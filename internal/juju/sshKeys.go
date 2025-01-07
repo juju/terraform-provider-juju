@@ -17,11 +17,13 @@ type sshKeysClient struct {
 }
 
 type CreateSSHKeyInput struct {
+	Username  string
 	ModelName string
 	Payload   string
 }
 
 type ReadSSHKeyInput struct {
+	Username      string
 	ModelName     string
 	KeyIdentifier string
 }
@@ -32,6 +34,7 @@ type ReadSSHKeyOutput struct {
 }
 
 type DeleteSSHKeyInput struct {
+	Username      string
 	ModelName     string
 	KeyIdentifier string
 }
@@ -51,9 +54,9 @@ func (c *sshKeysClient) CreateSSHKey(input *CreateSSHKeyInput) error {
 
 	client := keymanager.NewClient(conn)
 
-	// NOTE
-	// Juju only stores ssh keys at a global level.
-	params, err := client.AddKeys("admin", input.Payload)
+	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
+	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.<
+	params, err := client.AddKeys(input.Username, input.Payload)
 	if err != nil {
 		return err
 	}
@@ -83,9 +86,9 @@ func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, e
 
 	client := keymanager.NewClient(conn)
 
-	// NOTE: At this moment Juju only uses global ssh keys.
-	// We hardcode the user to be admin.
-	returnedKeys, err := client.ListKeys(ssh.FullKeys, "admin")
+	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
+	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.<
+	returnedKeys, err := client.ListKeys(ssh.FullKeys, input.Username)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +121,7 @@ func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	// that impacts the current Juju logic. As a temporal workaround
 	// we will check if this is the latest SSH key of this model and
 	// skip the delete.
-	returnedKeys, err := client.ListKeys(ssh.FullKeys, "admin")
+	returnedKeys, err := client.ListKeys(ssh.FullKeys, input.Username)
 	if err != nil {
 		return err
 	}
@@ -132,8 +135,9 @@ func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 		}
 	}
 
-	// NOTE: Right now Juju uses global users for keys
-	params, err := client.DeleteKeys("admin", input.KeyIdentifier)
+	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
+	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.<
+	params, err := client.DeleteKeys(input.Username, input.KeyIdentifier)
 	if len(params) != 0 {
 		messages := make([]string, 0)
 		for _, e := range params {
