@@ -271,7 +271,8 @@ type transformedCreateApplicationInput struct {
 }
 
 type CreateApplicationResponse struct {
-	AppName string
+	AppName   string
+	ModelType string
 }
 
 type ReadApplicationInput struct {
@@ -284,6 +285,7 @@ type ReadApplicationResponse struct {
 	Channel          string
 	Revision         int
 	Base             string
+	ModelType        string
 	Series           string
 	Units            int
 	Trust            bool
@@ -307,9 +309,9 @@ type UpdateApplicationInput struct {
 	Trust     *bool
 	Expose    map[string]interface{}
 	// Unexpose indicates what endpoints to unexpose
-	Unexpose []string
-	Config   map[string]string
-	//Series    string // Unsupported today
+	Unexpose           []string
+	Config             map[string]string
+	Base               string
 	Placement          map[string]interface{}
 	Constraints        *constraints.Value
 	EndpointBindings   map[string]string
@@ -368,9 +370,16 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	// If we have managed to deploy something, now we have
 	// to check if we have to expose something
 	err = c.processExpose(applicationAPIClient, transformedInput.applicationName, transformedInput.expose)
-
+	if err != nil {
+		return nil, err
+	}
+	modelType, err := c.ModelType(input.ModelName)
+	if err != nil {
+		return nil, err
+	}
 	return &CreateApplicationResponse{
-		AppName: transformedInput.applicationName,
+		AppName:   transformedInput.applicationName,
+		ModelType: modelType.String(),
 	}, err
 }
 
@@ -1114,6 +1123,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		Channel:          appInfo.Channel,
 		Revision:         charmURL.Revision,
 		Base:             fmt.Sprintf("%s@%s", appInfo.Base.Name, baseChannel.Track),
+		ModelType:        modelType.String(),
 		Series:           seriesString,
 		Units:            unitCount,
 		Trust:            trustValue,
@@ -1194,7 +1204,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	// before the operations with config. Because the config params
 	// can be changed from one revision to another. So "Revision-Config"
 	// ordering will help to prevent issues with the configuration parsing.
-	if input.Revision != nil || input.Channel != "" || len(input.Resources) != 0 {
+	if input.Revision != nil || input.Channel != "" || len(input.Resources) != 0 || input.Base != "" {
 		setCharmConfig, err := c.computeSetCharmConfig(input, applicationAPIClient, charmsAPIClient, resourcesAPIClient)
 		if err != nil {
 			return err
@@ -1379,20 +1389,22 @@ func (c applicationsClient) computeSetCharmConfig(
 			newOrigin.Branch = strPtr(parsedChannel.Branch)
 		}
 	}
+	if input.Base != "" {
+		base, err := corebase.ParseBaseFromString(input.Base)
+		if err != nil {
+			return nil, err
+		}
+		newOrigin.Base = base
+	}
 
 	resolvedURL, resolvedOrigin, supportedBases, err := resolveCharm(charmsAPIClient, newURL, newOrigin)
 	if err != nil {
 		return nil, err
 	}
 
-	// Ensure that the new charm supports the architecture and
-	// operating system currently used by the deployed application.
+	// Ensure that the new charm supports the architecture used by the deployed application.
 	if oldOrigin.Architecture != resolvedOrigin.Architecture {
 		msg := fmt.Sprintf("the new charm does not support the current architecture %q", oldOrigin.Architecture)
-		return nil, errors.New(msg)
-	}
-	if !basesContain(oldOrigin.Base, supportedBases) {
-		msg := fmt.Sprintf("the new charm does not support the current operating system %q", oldOrigin.Base.String())
 		return nil, errors.New(msg)
 	}
 
@@ -1405,6 +1417,14 @@ func (c applicationsClient) computeSetCharmConfig(
 		oldOrigin.Track = newOrigin.Track
 		oldOrigin.Risk = newOrigin.Risk
 		oldOrigin.Branch = newOrigin.Branch
+	}
+	if input.Base != "" {
+		oldOrigin.Base = newOrigin.Base
+	}
+
+	if !basesContain(oldOrigin.Base, supportedBases) {
+		msg := fmt.Sprintf("the new charm does not support the current operating system %q", oldOrigin.Base.String())
+		return nil, errors.New(msg)
 	}
 
 	resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, oldOrigin, false)

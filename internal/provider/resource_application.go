@@ -82,6 +82,7 @@ type applicationResourceModel struct {
 	Constraints       types.String `tfsdk:"constraints"`
 	Expose            types.List   `tfsdk:"expose"`
 	ModelName         types.String `tfsdk:"model"`
+	ModelType         types.String `tfsdk:"model_type"`
 	Placement         types.String `tfsdk:"placement"`
 	EndpointBindings  types.Set    `tfsdk:"endpoint_bindings"`
 	Resources         types.Map    `tfsdk:"resources"`
@@ -145,6 +146,14 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
+				},
+			},
+			"model_type": schema.StringAttribute{
+				Description: "The type of the model where the application is deployed. It is a computed field and " +
+					"is needed to determine if the application should be replaced or updated in case of base updates.",
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"units": schema.Int64Attribute{
@@ -316,11 +325,12 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							DeprecationMessage: "Configure base instead. This attribute will be removed in the next major version of the provider.",
 						},
 						BaseKey: schema.StringAttribute{
-							Description: "The operating system on which to deploy. E.g. ubuntu@22.04.",
+							Description: "The operating system on which to deploy. E.g. ubuntu@22.04. Changing this value for machine charms will trigger a replace by terraform.",
 							Optional:    true,
 							Computed:    true,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
+								stringplanmodifier.RequiresReplaceIf(baseApplicationRequiresReplaceIf, "", ""),
 							},
 							Validators: []validator.String{
 								stringvalidator.ConflictsWith(path.Expressions{
@@ -581,7 +591,6 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	r.trace(fmt.Sprintf("read application resource %q", createResp.AppName))
-
 	// Save plan into Terraform state
 
 	// Constraints do not apply to subordinate applications. If the application
@@ -590,6 +599,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	plan.Placement = types.StringValue(readResp.Placement)
 	plan.Principal = types.BoolNull()
 	plan.ApplicationName = types.StringValue(createResp.AppName)
+	plan.ModelType = types.StringValue(readResp.ModelType)
 	planCharm.Revision = types.Int64Value(int64(readResp.Revision))
 	planCharm.Base = types.StringValue(readResp.Base)
 	planCharm.Series = types.StringValue(readResp.Series)
@@ -692,6 +702,12 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 	r.trace("read application", map[string]interface{}{"resource": appName, "response": response})
 
+	modelType, err := r.client.Applications.ModelType(modelName)
+	if err != nil {
+		resp.Diagnostics.Append(handleApplicationNotFoundError(ctx, err, &resp.State)...)
+		return
+	}
+
 	state.ApplicationName = types.StringValue(appName)
 	state.ModelName = types.StringValue(modelName)
 
@@ -700,6 +716,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 	state.Placement = types.StringValue(response.Placement)
 	state.Principal = types.BoolNull()
 	state.UnitCount = types.Int64Value(int64(response.Units))
+	state.ModelType = types.StringValue(modelType.String())
 	state.Trust = types.BoolValue(response.Trust)
 
 	// state requiring transformation
@@ -919,8 +936,10 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		} else if !planCharm.Revision.Equal(stateCharm.Revision) {
 			updateApplicationInput.Revision = intPtr(planCharm.Revision)
 		}
-
-		if !planCharm.Series.Equal(stateCharm.Series) || !planCharm.Base.Equal(stateCharm.Base) {
+		if !planCharm.Base.Equal(stateCharm.Base) {
+			updateApplicationInput.Base = planCharm.Base.ValueString()
+		}
+		if !planCharm.Series.Equal(stateCharm.Series) {
 			// This violates Terraform's declarative model. We could implement
 			// `juju set-application-base`, usually used after `upgrade-machine`,
 			// which would change the operating system used for future units of
@@ -928,7 +947,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 			// the current. This provider does not implement an equivalent to
 			// `upgrade-machine`. There is also a question of how to handle a
 			// change to series, revision and channel at the same time.
-			resp.Diagnostics.AddWarning("Not Supported", "Changing an application's operating system after deploy.")
+			resp.Diagnostics.AddWarning("Not Supported", "Changing operating system's series after deploy.")
 		}
 	}
 
@@ -1051,7 +1070,8 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	if updateApplicationInput.Channel != "" ||
 		updateApplicationInput.Revision != nil ||
 		updateApplicationInput.Placement != nil ||
-		updateApplicationInput.Units != nil {
+		updateApplicationInput.Units != nil ||
+		updateApplicationInput.Base != "" {
 		readResp, err := r.client.Applications.ReadApplicationWithRetryOnNotFound(ctx, &juju.ReadApplicationInput{
 			ModelName: updateApplicationInput.ModelName,
 			AppName:   updateApplicationInput.AppName,
@@ -1090,6 +1110,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 	}
 
+	plan.ModelType = state.ModelType
 	plan.ID = types.StringValue(newAppID(plan.ModelName.ValueString(), plan.ApplicationName.ValueString()))
 	plan.Principal = types.BoolNull()
 	r.trace("Updated", applicationResourceModelForLogging(ctx, &plan))
