@@ -24,6 +24,7 @@ const (
 
 	LogResourceApplication     = "resource-application"
 	LogResourceAccessModel     = "resource-access-model"
+	LogResourceAccessOffer     = "resource-access-offer"
 	LogResourceCredential      = "resource-credential"
 	LogResourceKubernetesCloud = "resource-kubernetes-cloud"
 	LogResourceMachine         = "resource-machine"
