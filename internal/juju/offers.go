@@ -36,6 +36,7 @@ type CreateOfferInput struct {
 	Endpoint        string
 	ModelName       string
 	ModelOwner      string
+	OfferOwner      string
 	Name            string
 }
 
@@ -126,7 +127,8 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 	if err != nil {
 		return nil, append(errs, err)
 	}
-	result, err := client.Offer(modelUUID, input.ApplicationName, []string{input.Endpoint}, "admin", offerName, "")
+
+	result, err := client.Offer(modelUUID, input.ApplicationName, []string{input.Endpoint}, input.OfferOwner, offerName, "")
 	if err != nil {
 		return nil, append(errs, err)
 	}

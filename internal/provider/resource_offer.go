@@ -143,6 +143,7 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 		Name:            offerName,
 		ApplicationName: plan.ApplicationName.ValueString(),
 		Endpoint:        plan.EndpointName.ValueString(),
+		OfferOwner:      o.client.Username(),
 	})
 	if errs != nil {
 		// TODO 10-Aug-2023
