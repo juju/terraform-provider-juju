@@ -1,3 +1,21 @@
+## 0.16.0 (January 20, 2025)
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher juju.**
+* **If using JAAS, this release requires Juju controller version 3.5.0 or higher.**
+* This release uses juju client api code from the juju 3.6.0 release.
+
+ENHANCEMENTS:
+
+* The new `juju_application` data source allows you to incorporate already existing applications. (Thanks @shipperizer).
+* The new `juju_access_offer` resource allows you to manage access to application offers (Tanks @amandahla).
+* The new `juju_jaas_group` data source allows you to incorporate already existing groups (Thanks @pkulik0).
+
+BUG FIXES:
+
+* fix: fix the use of a hardcoded admin user #653
+
 ## 0.15.1 (December 3, 2024)
 
 NOTES:
