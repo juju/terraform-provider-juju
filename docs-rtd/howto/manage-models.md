@@ -1,5 +1,5 @@
 (manage-models)=
-# How to manage models
+# Manage models
 
 > See also: [Juju | Model](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/model/)
 
@@ -86,8 +86,43 @@ resource "juju_model" "this" {
 > See more: [`juju_model` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/model)
 
 
+(manage-access-to-a-model)=
+## Manage access to a model
+
+When using Juju alone, you can grant model access only to a user. When using Juju with JAAS, you can grant model access to a user, a group, or a service account.
+
+### Using Juju alone
+When using Juju alone, to grant a user access to a model, in your Terraform plan add a `juju_access_model` resource, specifying the model, the Juju access level, and the user(s) to which you want to grant access. For example:
+
+```terraform
+resource "juju_access_model" "this" {
+  model  = juju_model.dev.name
+  access = "write"
+  users  = [juju_user.dev.name, juju_user.qa.name]
+}
+```
+
+> See more: [`juju_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/access_model), [Juju | Model access levels](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/user/#valid-access-levels-for-models)
+
+
+### Using Juju + JAAS
+When using Juju with JAAS, to grant one or more users, groups, and/or service accounts access to a model, in your Terraform plan add a resource type `juju_jaas_access_model`, specifying the model UUID, the JAAS model access level, and the desired list of users, groups, and/or service accounts. For example:
+
+```terraform
+resource "juju_jaas_access_model" "development" {
+  model_uuid       = juju_model.development.uuid
+  access           = "administrator"
+  users            = ["foo@domain.com"]
+  groups           = [juju_jaas_group.development.uuid]
+  service_accounts = ["Client-ID-1", "Client-ID-2"]
+}
+
+```
+
+> See more: [`juju_jaas_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_model), [JAAS | Model access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/authorisation_model/#model)
+
 ## Upgrade a model
-> See also: [`juju` | Upgrading things](https://juju.is/docs/juju/upgrading)
+> See also: [Juju | Upgrading things](https://juju.is/docs/juju/upgrading)
 
 To migrate a model to another controller, use the `juju` CLI to perform the migration, then, in your Terraform plan, reconfigure the `juju` provider to point to the destination controller (we recommend the method where you configure the provider using static credentials). You can verify your configuration changes by running `terraform plan` and noticing no change: Terraform merely compares the plan to what it finds in your deployment -- if model migration with `juju` has been successful, it should detect no change.
 
@@ -101,7 +136,3 @@ To destroy a model, remove its resource definition from your Terraform plan.
 
 > See more: [`juju_model` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/model)
 
-
-<br>
-
-<small>**Contributors:** @aflynn, @awnns, @barrettj12, @cderici, @hmlanigan,  @pedroleaoc, @pmatulis, @serdarvural80, @timclicks, @tmihoc</small>

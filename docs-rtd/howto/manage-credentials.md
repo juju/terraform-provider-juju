@@ -1,5 +1,5 @@
 (manage-credentials)=
-# How to manage credentials
+# Manage credentials
 
 > See also: [Credential](https://juju.is/docs/juju/credential)
 
@@ -59,9 +59,4 @@ To update a credential, in your Terraform plan, update its resource definition.
 
 To remove a credential, remove its resource definition from your Terraform plan.
 
-> See more: [Resource `juju_credential`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/credential)
-
-
-<br>
-
-> <small>**Contributors:** @cderici, @erik-lonroth , @pedroleaoc, @pmatulis, @timclicks, @tmihoc, @wallyworld </small>
+> See more: [`juju_credential`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/credential)

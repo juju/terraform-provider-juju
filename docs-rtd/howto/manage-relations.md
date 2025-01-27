@@ -1,5 +1,5 @@
 (manage-relations)=
-# How to manage relations
+# Manage relations
 
 > See also: [Juju | Relation](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/relation/)
 

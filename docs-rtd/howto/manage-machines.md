@@ -1,5 +1,5 @@
 (manage-machines)=
-# How to manage machines
+# Manage machines
 
 <!--FIGURE OUT A GOOD PLACE FOR THIS:
 An interactive pseudo-terminal (pty) is enabled by default. For the OpenSSH client, this corresponds to the `-t` option ("force pseudo-terminal allocation").
@@ -56,13 +56,8 @@ resource "juju_machine" "machine_0" {
 
 
 ## Remove a machine
-> See also: [`juju` | Removing things](https://juju.is/docs/juju/removing-things)
+> See also: [Juju | Removing things](https://juju.is/docs/juju/removing-things)
 
 To remove a machine, remove its resource definition from your Terraform plan.
 
 > See more: [`juju_machine` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/machine)
-
-
-<br>
-
-> <small>**Contributors:** @alhama7a, @cderici, @tmihoc </small>

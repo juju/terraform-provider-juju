@@ -1,5 +1,5 @@
 (manage-charms)=
-# How to manage charms
+# Manage charms
 
 (deploy-a-charm)=
 ## Deploy a charm 
@@ -50,8 +50,3 @@ resource "juju_application" "this" {
 As a charm is just the *means* by which (an) application(s) are deployed, there is no way to remove the *charm* / *bundle*. What you *can* do, however, is remove the *application* / *model*.
 
 > See more: {ref}`remove-an-application`, {ref}`destroy-a-model`
-
-
-<br>
-
-> <small>**Contributors:** @aflynn, @hmlanigan, @tmihoc </small>

@@ -1,7 +1,7 @@
 (manage-units)=
-# How to manage units
+# Manage units
 
-> See also: [`juju` | Unit](https://juju.is/docs/juju/unit)
+> See also: [Juju | Unit](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/unit/)
 
 (control-the-number-of-units)=
 ## Control the number of units

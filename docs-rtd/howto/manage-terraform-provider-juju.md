@@ -1,5 +1,5 @@
-(install-and-manage-terraform-provider-juju)=
-# How to install and manage `terraform-provider-juju`
+(manage-terraform-provider-juju)=
+# Manage `terraform-provider-juju`
 
 ## Install `terraform-provider-juju`
 

@@ -1,5 +1,5 @@
 (manage-offers)=
-# How to manage offers
+# Manage offers
 
 > See also: [Juju | Offer](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/offer/)
 
@@ -18,7 +18,7 @@ data "juju_offer" "myoffer" {
 
 ## Create an offer
 
-> Who: User with [offer `admin` access](https://juju.is/docs/juju/user-permissions#heading--offer-admin).
+> Who: User with [offer `admin` access](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/user/#user-access-offer-admin).
 
 To create an offer, in your Terraform plan, create a resource of the `juju_offer` type, specifying the offering model and the name of the application and application endpoint from which the offer is created:
 
@@ -36,7 +36,7 @@ resource "juju_offer" "percona-cluster" {
 (integrate-with-an-offer)=
 ## Integrate with an offer
 
-> Who: User with [offer `consume` access](https://juju.is/docs/juju/user-permissions#heading--offer-consume).
+> Who: User with [offer `consume` access](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/user/#user-access-offer-consume).
 
 To integrate with an offer, in your Terraform plan create a `juju_integration` resource as usual by specifying two application blocks and a `lifecycle > replace_triggered_by` block, but for the application representing the offer specify the `offer_url`, and in the `lifecycle` block list triggers only for the regular application (not the offer). For example:
 
@@ -70,7 +70,7 @@ resource "juju_integration" "wordpress-db" {
 > See more: [`juju_integration` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/integration)
 
 ## Allow traffic from an integrated offer
-> Who: User with [offer `admin` access](https://juju.is/docs/juju/user-permissions#heading--offer-admin).
+> Who: User with [offer `admin` access](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/user/#user-access-offer-admin).
 
 To allow traffic from an integrated offer, in your Terraform plan, in the resource definition where you define the integration with an offer, use the `via` attribute to specify the list of CIDRs for outbound traffic. For example:
 
@@ -90,14 +90,44 @@ resource "juju_integration" "this" {
 > See more: [`juju_integration` > `via`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/integration#via)
 
 
+(manage-access-to-an-offer)=
+## Manage access to an offer
+
+When using Juju alone, you can grant offer access only to a user. When using Juju with JAAS, you can grant offer access to a user, a group, or a service account.
+
+### Using Juju alone
+When using Juju alone, to grant a user access to an offer, in your Terraform plan add a `juju_access_offer` resource, specifying the offer URL and setting the Juju access level to the list of users you want to grant that level. For example:
+
+```terraform
+resource "juju_access_offer" "this" {
+  offer_url = juju_offer.my_application_offer.url
+  consume   = [juju_user.dev.name]
+}
+```
+
+> See more: [`juju_access_offer`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/access_offer), [Juju | Offer access levels](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/user/#valid-access-levels-for-application-offers)
+
+
+### Using Juju + JAAS
+When using Juju with JAAS, to grant one or more users, groups, and/or service accounts access to a model, in your Terraform plan add a resource type `juju_jaas_access_offer`, specifying the offer URL, the access level, and the desired list desired users, groups, and/or service accounts. For example:
+
+```terraform
+resource "juju_jaas_access_offer" "development" {
+  offer_url        = juju_offer.myoffer.url
+  access           = "consumer"
+  users            = ["foo@domain.com"]
+  groups           = [juju_jaas_group.development.uuid]
+  service_accounts = ["Client-ID-1", "Client-ID-2"]
+}
+```
+
+> See more: [`juju_jaas_access_offer`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_offer), [JAAS | Offer access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/authorisation_model/#application-offer)
+
+
+
 ## Remove an offer
-> Who: User with [offer `admin` access](https://juju.is/docs/juju/user-permissions#heading--offer-admin).
+> Who: User with [offer `admin` access](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/user/#user-access-offer-admin).
 
 To remove an offer, in your Terraform plan, remove its resource definition.
 
 > See more: [`juju_offer`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/offer)
-
-
-<br>
-
-> <small>**Contributors:** @anvial, @cderici, @hmlanigan, @manadart, @simonrichardson, @tmihoc </small>

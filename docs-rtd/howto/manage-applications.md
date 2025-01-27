@@ -1,5 +1,5 @@
 (manage-applications)=
-# How to manage applications
+# Manage applications
 
 > See also: [Juju | Application](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/application/)
 
@@ -8,13 +8,13 @@
 To reference an application that you've already deployed with Juju tools other than the Terraform Provider for Juju, in your Terraform plan add a data source of the `juju_application` type, specifying the name of the application and of the model it is deployed to. For example:
 
 ```terraform
-data "juju_application" "myapplication" {
+data "juju_application" "my-application" {
   model      = juju_model.development.name
   application = "mattermost"
 }
 ```
 
-> See more: [`juju_application` (data source)(https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/application)
+> See more: [`juju_application` (data source)](https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/application)
 
 ## Deploy an application
 
@@ -223,6 +223,3 @@ To upgrade an application, update its charm.
 To remove an application, remove its resource definition from your Terraform plan.
 
 > See more: [`juju_application` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#schema)
-
-
-> <small>Contributors: @achilleasa , @cderici, @james-garner, @hmlanigan , @nvinuesa , @pedroleaoc , @pmatulis , @stephanpampel , @timClicks , @tmihoc </small>

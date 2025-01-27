@@ -1,5 +1,5 @@
 (manage-secrets)=
-# How to manage secrets
+# Manage secrets
 
 > See also: [`juju` | Secret](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/secret/)
 
@@ -43,7 +43,7 @@ resource "juju_secret" "my-secret" {
 
 > See more: [`juju_secret` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/secret)
 
-## Grant access to a secret
+## Manage access to a secret
 
 
 Given a model that contains both your (user) secret and the application(s) that you want to grant access to, to grant the application(s) access to the secret, in your Terraform plan create a resource of the `juju_access_secret` type, specifying the model, the secret ID, and the application(s) that you wish to grant access to. For example:
@@ -62,7 +62,7 @@ resource "juju_access_secret" "my-secret-access" {
 
 ```
 
-> See more: [`juju_access_secret` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/access_secret)
+> See more: [`juju_access_secret`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/access_secret)
 
 
 ## Update a secret

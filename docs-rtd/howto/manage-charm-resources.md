@@ -1,5 +1,5 @@
 (manage-charm-resources)=
-# How to manage charm resources
+# Manage charm resources
 
 > See also: [`juju` | Resource (charm)](https://juju.is/docs/juju/charm-resource)
 
@@ -37,11 +37,3 @@ About `charm > revision` and `resources`:
 ```
 
 > See more: [`juju_application > resources`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#resources)
-
-
-
-
-
-<br>
-
-> <small>**Contributors:** @cderici, @hmlanigan, @tmihoc </small>
