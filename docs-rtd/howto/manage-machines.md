@@ -7,7 +7,20 @@ An interactive pseudo-terminal (pty) is enabled by default. For the OpenSSH clie
 Remote commands can be run as expected. For example: `juju ssh 1 lsb_release -c`. For complex commands the recommended method is by way of the `run` command.
 -->
 
-> See also: [`juju` | Machine](https://juju.is/docs/juju/machine)
+> See also: [`juju` | Machine](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/machine/)
+
+## Reference an externally managed machine
+
+To reference a machine that you've already provisioned with Juju tools other than the Terraform Provider for Juju, in your Terraform plan add a data source of the `juju_machine` type, specifying the machine ID and the name of its hosting model. For example:
+
+```terraform
+data "juju_machine" "this" {
+  model      = juju_model.development.name
+  machine_id = "2"
+}
+```
+
+> See more: [`juju_machine` (data source)](https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/machine)
 
 
 ## Add a machine

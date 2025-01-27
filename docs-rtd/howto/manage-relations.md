@@ -1,7 +1,7 @@
 (manage-relations)=
 # How to manage relations
 
-> See also: [`juju` | Relation](https://juju.is/docs/juju/relation)
+> See also: [Juju | Relation](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/relation/)
 
 ## Add a relation
 

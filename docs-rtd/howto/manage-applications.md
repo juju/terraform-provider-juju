@@ -1,7 +1,20 @@
 (manage-applications)=
 # How to manage applications
 
-> See also: [`juju` | Application](https://juju.is/docs/juju/application)
+> See also: [Juju | Application](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/application/)
+
+## Reference an externally managed application
+
+To reference an application that you've already deployed with Juju tools other than the Terraform Provider for Juju, in your Terraform plan add a data source of the `juju_application` type, specifying the name of the application and of the model it is deployed to. For example:
+
+```terraform
+data "juju_application" "myapplication" {
+  model      = juju_model.development.name
+  application = "mattermost"
+}
+```
+
+> See more: [`juju_application` (data source)(https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/application)
 
 ## Deploy an application
 

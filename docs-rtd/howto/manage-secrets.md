@@ -1,7 +1,7 @@
 (manage-secrets)=
 # How to manage secrets
 
-> See also: [`juju` | Secret](https://juju.is/docs/juju/secret)
+> See also: [`juju` | Secret](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/secret/)
 
 Charms can use relations to share secrets, such as API keys, a database’s address, credentials and so on. This document demonstrates how to interact with them as a Juju user. 
 
@@ -9,6 +9,20 @@ Charms can use relations to share secrets, such as API keys, a database’s addr
 
 The write operations are only available (a) starting with Juju 3.3 and (b) to model admin users looking to manage user-owned secrets. 
 ```
+
+## Reference an externally managed secret
+
+To reference a user secret you've created with Juju tools other than the Terraform Provider for Juju, in your Terraform plan add a data source of the `juju_secret` type, specifying the name of the secret and its host model. For example:
+
+```terraform
+data "juju_secret" "my_secret_data_source" {
+  name  = "my_secret"
+  model = data.juju_model.my_model.name
+}
+```
+
+> See more: [`juju_offer` (data source)](https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/offer)
+
 
 ## Add a secret
 
@@ -42,7 +56,7 @@ resource "juju_access_secret" "my-secret-access" {
   secret_id = juju_secret.my-secret.secret_id
 
   applications = [
-    juju_application.app.name, juju_application.app2.name
+    juju_application.app1.name, juju_application.app2.name
   ]
 }
 

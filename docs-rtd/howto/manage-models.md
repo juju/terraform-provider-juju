@@ -1,7 +1,20 @@
 (manage-models)=
 # How to manage models
 
-> See also: [`juju` | Model](https://juju.is/docs/juju/model)
+> See also: [Juju | Model](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/model/)
+
+
+## Reference an externally managed model
+
+To reference a model that you've created with Juju tools other than the Terraform Provider for Juju, in your Terraform plan add a data source of the `juju_model` type, specifying the name of the model. For example:
+
+```terraform
+data "juju_model" "mymodel" {
+  name = "development"
+}
+```
+
+> See more: [`juju_model` (data source)](https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/model)
 
 ## Add a model
 

@@ -1,8 +1,20 @@
 (manage-offers)=
 # How to manage offers
 
-> See also: [`juju` | Offer](https://juju.is/docs/juju/offer)
+> See also: [Juju | Offer](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/offer/)
 
+
+## Reference an externally managed offer
+
+To reference an offer you've created with Juju tools other than the Terraform Provider for Juju, in your Terraform plan add a data source of the `juju_offer` type, specifying the offer's URL. For example:
+
+```terraform
+data "juju_offer" "myoffer" {
+  url = "admin/development.mysql"
+}
+```
+
+> See more: [`juju_offer` (data source)](https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/offer)
 
 ## Create an offer
 
