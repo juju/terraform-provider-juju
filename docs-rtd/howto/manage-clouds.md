@@ -8,7 +8,22 @@
 (add-a-kubernetes-cloud)=
 ## Add a Kubernetes cloud
 
-TBA
+To add a Kubernetes cloud to the controller that your Terraform plan is connected to, in your Terraform plan add a resource of the `juju_kubernetes_cloud` type, specifying a name and the path to the kubeconfig file. The example below does this and also creates a model associated with the new cloud:
+
+```terraform
+resource "juju_kubernetes_cloud" "my-k8s-cloud" {
+  name              = "my-k8s-cloud"
+  kubernetes_config = file("<path-to-my-kubennetes-cloud-config>.yaml")
+}
+
+resource "juju_model" "my-model" {
+  name       = "my-model"
+  credential = juju_kubernetes_cloud.my-k8s-cloud.credential
+  cloud {
+    name = juju_kubernetes_cloud.my-k8s-cloud.name
+  }
+}
+```
 
 > See more: [`juju_kubernetes_cloud`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/kubernetes_cloud)
 

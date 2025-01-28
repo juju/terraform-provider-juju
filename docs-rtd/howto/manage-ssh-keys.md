@@ -22,6 +22,3 @@ To remove an SSH key, remove its resource definition from your Terraform plan.
 
 > See more: [`juju_ssh_key` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/ssh_key)
 
-<br>
-
-> <small>**Contributors:** @cderici, @hmlanigan, @tmihoc </small>

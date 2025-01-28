@@ -23,8 +23,3 @@ resource "juju_application" "this" {
 
 > See more: [`juju_application` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#schema)
 
-
-
-<br>
-
-> <small>**Contributors:** @cderici, @hmlanigan, @skourta, @tmihoc </small>

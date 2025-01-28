@@ -1,7 +1,7 @@
 (manage-charm-resources)=
 # Manage charm resources
 
-> See also: [`juju` | Resource (charm)](https://juju.is/docs/juju/charm-resource)
+> See also: [Juju | Resource (charm)](https://juju.is/docs/juju/charm-resource)
 
 When you deploy / update an application from a charm, that automatically deploys / updates any charm resources, using the defaults specified by the charm author. However, you can also specify resources manually (e.g., to try a resource released only to `edge` or to specify a non-Charmhub resource). This document shows you how.
 

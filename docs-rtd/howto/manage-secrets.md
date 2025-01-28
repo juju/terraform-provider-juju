@@ -1,18 +1,18 @@
 (manage-secrets)=
 # Manage secrets
 
-> See also: [`juju` | Secret](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/secret/)
+> See also: [Juju | Secret](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/secret/)
 
-Charms can use relations to share secrets, such as API keys, a database’s address, credentials and so on. This document demonstrates how to interact with them as a Juju user. 
+Charms can use relations to share secrets, such as API keys, a database’s address, credentials and so on. This document demonstrates how to interact with them as a Juju user.
 
 ```{caution}
 
-The write operations are only available (a) starting with Juju 3.3 and (b) to model admin users looking to manage user-owned secrets. 
+The write operations are only available (a) starting with Juju 3.3 and (b) to model admin users looking to manage user-owned secrets.
 ```
 
 ## Reference an externally managed secret
 
-To reference a user secret you've created with Juju tools other than the Terraform Provider for Juju, in your Terraform plan add a data source of the `juju_secret` type, specifying the name of the secret and its host model. For example:
+To reference a user secret you've created outside of the current Terraform plan, in your Terraform plan add a data source of the `juju_secret` type, specifying the name of the secret and its host model. For example:
 
 ```terraform
 data "juju_secret" "my_secret_data_source" {
@@ -44,7 +44,6 @@ resource "juju_secret" "my-secret" {
 > See more: [`juju_secret` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/secret)
 
 ## Manage access to a secret
-
 
 Given a model that contains both your (user) secret and the application(s) that you want to grant access to, to grant the application(s) access to the secret, in your Terraform plan create a resource of the `juju_access_secret` type, specifying the model, the secret ID, and the application(s) that you wish to grant access to. For example:
 
@@ -78,6 +77,3 @@ To remove a secret, remove its resource definition from your Terraform plan.
 
 > See more: [`juju_secret` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/secret)
 
-<br>
-
-> <small>Contributors: @anvial, @cderici, @kelvin.liu , @tmihoc, @tony-meyer , @wallyworld </small>

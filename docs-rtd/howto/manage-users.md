@@ -13,16 +13,14 @@ resource "juju_user" "alex" {
   password = "alexsupersecretpassword"
 
 }
-``` 
+```
 
 > See more: [`juju_user` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/user)
 
 
-## Manage a user's access level
-> See also: [Juju | User access levels](https://juju.is/docs/juju/user-permissions)
+## Manage a user's access to a controller, cloud, model, offer, or group
 
-> See more: 
-> - 
+> See more: {ref}`manage-access-to-a-controller`, {ref}`manage-access-to-a-cloud`, {ref}`manage-access-to-a-model`, {ref}`manage-access-to-an-offer`, {ref}`manage-access-to-a-group`
 
 ## Manager a user's login details
 
@@ -34,7 +32,7 @@ resource "juju_user" "alex" {
   password = "alexnewsupersecretpassword"
 
 }
-``` 
+```
 
 > See more: [`juju_user`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/user#password)
 

@@ -6,7 +6,7 @@
 
 ## Reference an externally managed offer
 
-To reference an offer you've created with Juju tools other than the Terraform Provider for Juju, in your Terraform plan add a data source of the `juju_offer` type, specifying the offer's URL. For example:
+To reference an offer you've created outside of the current Terraform plan, in your Terraform plan add a data source of the `juju_offer` type, specifying the offer's URL. For example:
 
 ```terraform
 data "juju_offer" "myoffer" {
@@ -93,10 +93,11 @@ resource "juju_integration" "this" {
 (manage-access-to-an-offer)=
 ## Manage access to an offer
 
-When using Juju alone, you can grant offer access only to a user. When using Juju with JAAS, you can grant offer access to a user, a group, or a service account.
+Your offer access management options depend on whether the controller you are applying the Terraform plan to is a regular Juju controller or rather a JAAS controller -- for a Juju controller you can grant access only to a user, but for a JAAS controller you can grant access to a user, a group, or a service account.
 
-### Using Juju alone
-When using Juju alone, to grant a user access to an offer, in your Terraform plan add a `juju_access_offer` resource, specifying the offer URL and setting the Juju access level to the list of users you want to grant that level. For example:
+
+### For a Juju controller
+To grant a user access to an offer, in your Terraform plan add a `juju_access_offer` resource, specifying the offer URL and setting the Juju access level to the list of users you want to grant that level. For example:
 
 ```terraform
 resource "juju_access_offer" "this" {
@@ -108,8 +109,8 @@ resource "juju_access_offer" "this" {
 > See more: [`juju_access_offer`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/access_offer), [Juju | Offer access levels](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/user/#valid-access-levels-for-application-offers)
 
 
-### Using Juju + JAAS
-When using Juju with JAAS, to grant one or more users, groups, and/or service accounts access to a model, in your Terraform plan add a resource type `juju_jaas_access_offer`, specifying the offer URL, the access level, and the desired list desired users, groups, and/or service accounts. For example:
+### For a JAAS controller
+To grant one or more users, groups, and/or service accounts access to a model, in your Terraform plan add a resource type `juju_jaas_access_offer`, specifying the offer URL, the access level, and the desired list desired users, groups, and/or service accounts. For example:
 
 ```terraform
 resource "juju_jaas_access_offer" "development" {

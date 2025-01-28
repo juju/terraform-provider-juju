@@ -79,10 +79,3 @@ In a cross-model relation there is also an 'offering' model and a 'consuming' mo
 To remove a relation, in your Terraform plan, remove its resource definition.
 
 > See more: [`juju_integration` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/integration)
-
-
-
-
-<br>
-
-> <small>**Contributors:** @amandahla, @aurelien-lourot , @cderici, @danieleprocida, @evilnick , @hmlanigan, @nottrobin , @pedroleaoc, @pmatulis, @tmihoc </small>

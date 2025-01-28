@@ -7,6 +7,7 @@
 :maxdepth: 2
 
 manage-terraform-provider-juju
+manage-clouds
 manage-credentials
 manage-controllers
 manage-models
