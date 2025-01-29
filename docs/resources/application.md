@@ -74,6 +74,7 @@ Notes:
 ### Read-Only
 
 - `id` (String) The ID of this resource.
+- `model_type` (String) The type of the model where the application is deployed. It is a computed field and is needed to determine if the application should be replaced or updated in case of base updates.
 - `principal` (Boolean, Deprecated) Whether this is a Principal application
 
 <a id="nestedblock--charm"></a>
@@ -85,7 +86,7 @@ Required:
 
 Optional:
 
-- `base` (String) The operating system on which to deploy. E.g. ubuntu@22.04.
+- `base` (String) The operating system on which to deploy. E.g. ubuntu@22.04. Changing this value for machine charms will trigger a replace by terraform.
 - `channel` (String) The channel to use when deploying a charm. Specified as \<track>/\<risk>/\<branch>.
 - `revision` (Number) The revision of the charm to deploy. During the update phase, the charm revision should be update before config update, to avoid issues with config parameters parsing.
 - `series` (String, Deprecated) The series on which to deploy.

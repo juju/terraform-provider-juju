@@ -276,6 +276,37 @@ func TestAcc_CharmUpdates(t *testing.T) {
 	})
 }
 
+func TestAcc_CharmUpdateBase(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-charmbaseupdates")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccApplicationUpdateBaseCharm(modelName, "ubuntu@22.04"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.base", "ubuntu@22.04"),
+				),
+			},
+			{
+				// move to base ubuntu 20.04
+				Config: testAccApplicationUpdateBaseCharm(modelName, "ubuntu@20.04"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.base", "ubuntu@20.04"),
+				),
+			},
+			{
+				// move back to ubuntu 22.04
+				Config: testAccApplicationUpdateBaseCharm(modelName, "ubuntu@22.04"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.base", "ubuntu@22.04"),
+				),
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceRevisionUpdatesLXD(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
@@ -1018,6 +1049,41 @@ func testAccResourceApplicationUpdatesCharm(modelName string, channel string) st
 		  }
 		}
 		`, modelName, channel)
+	}
+}
+
+func testAccApplicationUpdateBaseCharm(modelName string, base string) string {
+	if testingCloud == LXDCloudTesting {
+		return fmt.Sprintf(`
+		resource "juju_model" "this" {
+		  name = %q
+		}
+		
+		resource "juju_application" "this" {
+		  model = juju_model.this.name
+		  name = "test-app"
+		  charm {
+			name     = "ubuntu"
+			base = %q
+		  }
+		}
+		`, modelName, base)
+	} else {
+		return fmt.Sprintf(`
+		resource "juju_model" "this" {
+		  name = %q
+		}
+		
+		resource "juju_application" "this" {
+		  model = juju_model.this.name
+		  name = "test-app"
+		  charm {
+			name     = "coredns"
+			channel = "1.25/stable"
+			base = %q
+		  }
+		}
+		`, modelName, base)
 	}
 }
 
