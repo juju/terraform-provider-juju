@@ -410,6 +410,13 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient Applicatio
 		return errors.Join(errs...)
 	}
 
+	// publishing to a closed channel automatically upgrade the channel. And this could
+	// lead to an inconsistent terraform state. This check is to error out to the user,
+	// so they can purposely select the track.
+	if deployInfo.Channel != transformedInput.charmChannel {
+		return fmt.Errorf("you are trying to publish to a closed channel. Check the channel for the %s", transformedInput.applicationName)
+	}
+
 	fileSystem := osFilesystem{}
 	// Upload the provided local resources to Juju
 	uploadErr := uploadExistingPendingResources(deployInfo.Name, localPendingResources, fileSystem, resourceAPIClient)
@@ -1407,13 +1414,16 @@ func (c applicationsClient) computeSetCharmConfig(
 		msg := fmt.Sprintf("the new charm does not support the current architecture %q", oldOrigin.Architecture)
 		return nil, errors.New(msg)
 	}
-
 	// Ensure the new revision or channel is contained
 	// in the origin to be saved by juju when AddCharm
 	// is called.
 	if input.Revision != nil {
 		oldOrigin.Revision = input.Revision
 	} else if input.Channel != "" {
+		if newOrigin.Risk != resolvedOrigin.Risk {
+			msg := "you've requested a risk different from the one resolved. Probably the channel was close"
+			return nil, errors.New(msg)
+		}
 		oldOrigin.Track = newOrigin.Track
 		oldOrigin.Risk = newOrigin.Risk
 		oldOrigin.Branch = newOrigin.Branch

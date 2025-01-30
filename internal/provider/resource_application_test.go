@@ -307,6 +307,34 @@ func TestAcc_CharmUpdateBase(t *testing.T) {
 	})
 }
 
+func TestClosedChannel(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-charmbaseupdates")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+				resource "juju_model" "this" {
+				  name = %q
+				}
+				
+				resource "juju_application" "k8s" {
+					name  = "k8s"
+					model = juju_model.this.name
+					charm {
+						name    = "k8s"
+						channel = "1.31/beta"
+						base    = "ubuntu@24.04"
+					}
+				}
+				`, modelName),
+				ExpectError: regexp.MustCompile(".*closed channel.*")},
+		},
+	})
+}
+
 func TestAcc_ResourceRevisionUpdatesLXD(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
