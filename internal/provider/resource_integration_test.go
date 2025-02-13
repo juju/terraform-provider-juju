@@ -300,7 +300,7 @@ resource "juju_application" "b1" {
         charm {
                 name   = "pgbouncer"
                 base = "ubuntu@20.04"
-				channel = "latest/stable"
+                channel = "latest/stable"
         }
 }
 
@@ -325,7 +325,7 @@ resource "juju_application" "b2" {
         charm {
                 name   = "pgbouncer"
                 base = "ubuntu@20.04"
-				channel = "latest/stable"
+                channel = "latest/stable"
         }
 }
 
