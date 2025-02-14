@@ -194,6 +194,10 @@ func (r *kubernetesCloudResource) Read(ctx context.Context, req resource.ReadReq
 
 // Update updates the kubernetes cloud on the controller used by Terraform provider.
 func (r *kubernetesCloudResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client.IsJAAS() {
+		resp.Diagnostics.AddError("Not Supported", "Cloud Update is not supported in JAAS.")
+		return
+	}
 	// Prevent panic if the provider has not been configured.
 	if r.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "kubernetes_cloud", "update")
@@ -203,7 +207,7 @@ func (r *kubernetesCloudResource) Update(ctx context.Context, req resource.Updat
 	var plan kubernetesCloudResourceModel
 
 	// Read Terraform configuration from the request into the model
-	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -222,6 +226,7 @@ func (r *kubernetesCloudResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	r.trace(fmt.Sprintf("Updated kubernetes cloud %s", plan.CloudName.ValueString()))
 }
 
