@@ -1413,6 +1413,10 @@ func (c applicationsClient) computeSetCharmConfig(
 	// is called.
 	if input.Revision != nil {
 		oldOrigin.Revision = input.Revision
+		// This code is coupled with the previous `if input.Revision != nil`.
+		// The idea is that deploying with ID and Hash set to "" will force Juju to find the revision set by the user.
+		oldOrigin.ID = newOrigin.ID
+		oldOrigin.Hash = newOrigin.Hash
 	} else if input.Channel != "" {
 		oldOrigin.Track = newOrigin.Track
 		oldOrigin.Risk = newOrigin.Risk
