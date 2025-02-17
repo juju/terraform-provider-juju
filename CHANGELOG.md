@@ -1,3 +1,21 @@
+## 0.17.0 (February 18, 2025)
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher juju.**
+* **If using JAAS, this release requires Juju controller version 3.5.0 or higher.**
+* This release uses juju client api code from the juju 3.6.0 release.
+
+ENHANCEMENTS:
+
+* Improvements to documentaton (Thanks @thihoc).
+* `make install` now generates the schema and copies it to the provider's folder, which provides language server's features for editors, IDEs (Thanks @SimoneDutto).
+
+BUG FIXES:
+
+* fix for the update of the juju_kubernetes_cloud resource [#665](https://github.com/juju/terraform-provider-juju/pull/665) which addresses issue [#664](https://github.com/juju/terraform-provider-juju/issues/664).
+* fix for the update of the juju_application resource to a specific charm revision [#669](https://github.com/juju/terraform-provider-juju/pull/669).
+
 ## 0.16.0 (January 20, 2025)
 
 NOTES:

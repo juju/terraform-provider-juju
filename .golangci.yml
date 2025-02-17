@@ -7,4 +7,5 @@ linters:
     - whitespace
 output:
   print-issued-lines: true
-  out-format: github-actions
+  formats:
+    - format: github-actions
