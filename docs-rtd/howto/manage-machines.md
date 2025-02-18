@@ -7,7 +7,7 @@ An interactive pseudo-terminal (pty) is enabled by default. For the OpenSSH clie
 Remote commands can be run as expected. For example: `juju ssh 1 lsb_release -c`. For complex commands the recommended method is by way of the `run` command.
 -->
 
-> See also: [Juju | Machine](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/machine/)
+> See also: {external+juju:ref}`Juju | Machine <machine>`
 
 ## Reference an externally managed machine
 
@@ -39,7 +39,7 @@ You can optionally specify a base, a name, regular constraints, storage constrai
 > See more: [`juju_machine` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/machine)
 
 ## Manage constraints for a machine
-> See also: [`juju` | Constraint](https://juju.is/docs/juju/constraint)
+> See also: {external+juju:ref}`Juju | Constraint <constraint>`
 
 To set constraints for a machine, in your Terraform plan, in the machine resource definition, set the constraints attribute to the desired quotes-enclosed, space separated list of key=value pairs. For example:
 
@@ -56,7 +56,7 @@ resource "juju_machine" "machine_0" {
 
 
 ## Remove a machine
-> See also: [Juju | Removing things](https://juju.is/docs/juju/removing-things)
+> See also: {external+juju:ref}`Juju | Removing things <removing-things>`
 
 To remove a machine, remove its resource definition from your Terraform plan.
 

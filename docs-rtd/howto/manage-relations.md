@@ -1,7 +1,7 @@
 (manage-relations)=
 # Manage relations
 
-> See also: [Juju | Relation](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/relation/)
+> See also: {external+juju:ref}`Juju | Relation <relation>`
 
 ## Add a relation
 
@@ -9,16 +9,16 @@
 
 ### Add a same-model relation
 
-To add a same-model relation, create a resource of the `juju_integration` type, give it a label (below, `this`), and in its body add: 
-- a `model` attribute specifying the name of the model where you want to create the relation; 
+To add a same-model relation, create a resource of the `juju_integration` type, give it a label (below, `this`), and in its body add:
+- a `model` attribute specifying the name of the model where you want to create the relation;
 - two `application` blocks, specifying the names of the applications that you want to integrate (and, if necessary, their endpoints_;
 - a `lifecycle` block with the `replace_triggered_by` argument specifying the list of application attributes (always the name, model, constraints, placement, and charm name) for which, if they are changed = destroyed and recreated, the relation must be recreated as well.
 
 ```{caution}
 
-**To avoid complications (e.g., race conditions) related to how Terraform works:** 
+**To avoid complications (e.g., race conditions) related to how Terraform works:**
 
-Make sure to always specify resources and data sources by reference rather than directly by name. 
+Make sure to always specify resources and data sources by reference rather than directly by name.
 
 For example, for a resource / data source of type `juju_model` with label `development` and name `mymodel`, do not specify it as `mymodel` but rather as `juju_model.development.name` / `data.juju_model.development.name`.
 

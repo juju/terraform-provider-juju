@@ -1,6 +1,7 @@
 (manage-controllers)=
 # Manage controllers
 
+> See also: {external+juju:ref}`Juju | Controller <controller>`
 
 (manage-access-to-a-controller)=
 ## Manage access to a controller

@@ -1,8 +1,10 @@
 (manage-charms)=
 # Manage charms
 
+> See also: {external+juju:ref}`Juju | Charm <charm>`
+
 (deploy-a-charm)=
-## Deploy a charm 
+## Deploy a charm
 
 ```{important}
 
@@ -45,7 +47,7 @@ resource "juju_application" "this" {
 
 > See more: [`juju_application` > `charm` > nested schema ](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#nested-schema-for-charm)
 
-## Remove a charm 
+## Remove a charm
 
 As a charm is just the *means* by which (an) application(s) are deployed, there is no way to remove the *charm* / *bundle*. What you *can* do, however, is remove the *application* / *model*.
 

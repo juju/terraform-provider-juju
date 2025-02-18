@@ -1,7 +1,7 @@
 (manage-offers)=
 # Manage offers
 
-> See also: [Juju | Offer](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/offer/)
+> See also: {external+juju:ref}`Juju | Offer <offer>`
 
 
 ## Reference an externally managed offer

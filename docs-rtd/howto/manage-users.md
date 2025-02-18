@@ -1,7 +1,7 @@
 (manage-users)=
 # Manage users
 
-> See also: [Juju | User](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/user/)
+> See also: {external+juju:ref}`Juju | User <user>`
 
 ## Add a user
 

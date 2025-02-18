@@ -1,7 +1,7 @@
 (manage-secrets)=
 # Manage secrets
 
-> See also: [Juju | Secret](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/secret/)
+> See also: {external+juju:ref}`Juju | Secret <secret>`
 
 Charms can use relations to share secrets, such as API keys, a database’s address, credentials and so on. This document demonstrates how to interact with them as a Juju user.
 

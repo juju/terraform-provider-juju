@@ -1,7 +1,7 @@
 (manage-ssh-keys)=
 # Manage SSH keys
 
-> See also: [Juju | SSH key](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/ssh-key/)
+> See also: {external+juju:ref}`Juju | SSH key <ssh-key>`
 
 ## Add an SSH key
 

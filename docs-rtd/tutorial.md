@@ -49,11 +49,11 @@ In this tutorial your goal is to set up a chat service on a cloud.
 
 First, decide which cloud (i.e., anything that provides storage, compute, and networking) you want to use. Juju supports a long list of clouds; in this tutorial we will use a low-ops, minimal production Kubernetes called 'MicroK8s'. In a terminal, open a shell into your VM and verify that you already have MicroK8s installed (`microk8s version`).
 
-> See more: [`juju` | Cloud](https://juju.is/docs/juju/cloud), [`juju` | List of supported clouds](https://juju.is/docs/juju/juju-supported-clouds), [The MicroK8s cloud and Juju](https://juju.is/docs/juju/microk8s), [How to set up your test environment automatically > steps 3-4](https://juju.is/docs/juju/set-up--tear-down-your-test-environment#set-up-tear-down-automatically)
+> See more: {external+juju:ref}`Juju | Cloud <cloud>`, {external+juju:ref}`Juju | List of supported clouds <list-of-supported-clouds>`, {external+juju:ref}`Juju | The MicroK8s cloud and Juju <cloud-kubernetes-microk8s>`, {external+juju:ref}`Juju | Set things up automatically <set-things-up>`
 
 Next, decide which charms (i.e., software operators) you want to use. Charmhub provides a large collection. For this tutorial we will use `mattermost-k8s`  for the chat service,  `postgresql-k8s` for its backing database, and `self-signed-certificates` to TLS-encrypt traffic from PostgreSQL.
 
-> See more: [`juju` | Charm](https://juju.is/docs/juju/charmed-operator), [Charmhub](https://charmhub.io/), Charmhub | [`mattermost-k8s`](https://charmhub.io/mattermost-k8s), [`postgresql-k8s`](https://charmhub.io/postgresql-k8s), [`self-signed-certificates`](https://charmhub.io/self-signed-certificates)
+> See more: {external+juju:ref}`Juju | Charm <charm>`, [Charmhub](https://charmhub.io/), Charmhub | [`mattermost-k8s`](https://charmhub.io/mattermost-k8s), [`postgresql-k8s`](https://charmhub.io/postgresql-k8s), [`self-signed-certificates`](https://charmhub.io/self-signed-certificates)
 
 
 ## Deploy, configure, integrate
@@ -62,7 +62,7 @@ You will need to install a Juju client; on the client, add your cloud and cloud 
 
 `terraform-provider-juju` is not self-sufficient -- follow the instructions for the `juju` CLI all the way up to and including the step where you create the  `34microk8s` controller. Also get the details of that controller: `juju show-controller --show-password 34microk8s`.
 
-> See more: [`juju` | Tutorial > Deploy](https://juju.is/docs/juju/tutorial#deploy)
+> See more: {external+juju:ref}`Juju | Tutorial: Deploy <tutorial>`
 
 Then, on your VM, install the `terraform` CLI:
 
@@ -234,7 +234,7 @@ ubuntu@my-juju-vm:~$ curl 10.1.170.150:8065/api/v4/system/ping
 
 Congratulations, your chat service is up and running!
 
-> See more: [`juju` | How to set up your test environment automatically > steps 3-4](https://juju.is/docs/juju/set-up--tear-down-your-test-environment), {ref}`install-and-manage-terraform-provider-juju`, [`juju` | How to manage clouds](https://juju.is/docs/juju/manage-clouds), {ref}`manage-credentials`, [`juju` | How to manage controllers](https://juju.is/docs/juju/manage-controllers), {ref}`manage-models`, {ref}`manage-applications`
+> See more: {external+juju:ref}`Juju | Set things up <set-things-up>`, {ref}`manage-terraform-provider-juju`, {external+juju:ref}`Juju | Manage clouds <manage-clouds>`, {external+juju:ref}`Juju | Manage credentials <manage-credentials>`, {external+juju:ref}`Juju | Manage controllers <manage-controllers>`, {external+juju:ref}`Juju | Manage models <manage-models>`, {external+juju:ref}`Juju | Manage applications <manage-applications>`
 
 
 ## Scale

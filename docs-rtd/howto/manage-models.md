@@ -1,7 +1,7 @@
 (manage-models)=
 # Manage models
 
-> See also: [Juju | Model](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/model/)
+> See also: {external+juju:ref}`Juju | Model <model>`
 
 
 ## Reference an externally managed model
@@ -34,9 +34,9 @@ In the case of a multi-cloud controller, you can specify which cloud you want th
 
 ## Configure a model
 
-> See also: [`juju` | Model configuration](https://juju.is/docs/juju/configuration#heading--model-configuration), [`juju` | List of model configuration keys](https://juju.is/docs/juju/list-of-model-configuration-keys)
+> See also: {external+juju:ref}`Juju | Model configuration <model-configuration>`, {external+juju:ref}`Juju | List of model configuration keys <list-of-model-configuration-keys>`
 >
-> See related: [`juju` | How to configure a controller](https://juju.is/docs/juju/manage-controllers#heading--configure-a-controller)
+> See related: {external+juju:ref}`Juju | Configure a controller <configure-a-controller>`
 
 With `terraform-provider-juju` you can only set configuration values, only for a specific model, and only a workload model; for anything else, please use the `juju`  CLI.
 
@@ -64,7 +64,7 @@ resource "juju_model" "this" {
 
 
 ## Manage constraints for a model
-> See also: [`juju` | Constraint](https://juju.is/docs/juju/constraint)
+> See also: {external+juju:ref}`Juju | Constraint <constraint>`
 
 With `terraform-provider-juju` you can only set constraints -- to view them, please use the `juju` CLI.
 
@@ -123,7 +123,7 @@ resource "juju_jaas_access_model" "development" {
 > See more: [`juju_jaas_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_model), [JAAS | Model access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/authorisation_model/#model)
 
 ## Upgrade a model
-> See also: [Juju | Upgrading things](https://juju.is/docs/juju/upgrading)
+> See also: {external+juju:ref}`Juju | Upgrading things <upgrading-things>`
 
 To migrate a model to another controller, use the `juju` CLI to perform the migration, then, in your Terraform plan, reconfigure the `juju` provider to point to the destination controller (we recommend the method where you configure the provider using static credentials). You can verify your configuration changes by running `terraform plan` and noticing no change: Terraform merely compares the plan to what it finds in your deployment -- if model migration with `juju` has been successful, it should detect no change.
 

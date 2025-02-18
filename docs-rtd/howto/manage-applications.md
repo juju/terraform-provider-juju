@@ -1,7 +1,7 @@
 (manage-applications)=
 # Manage applications
 
-> See also: [Juju | Application](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/application/)
+> See also: {external+juju:ref}`Juju | Application <application>`
 
 ## Reference an externally managed application
 
@@ -53,7 +53,7 @@ resource "juju_application" "this" {
 
 
 ## Configure an application
-> See also: [`juju` | Application configuration](https://juju.is/docs/juju/configuration#heading--application-configuration)
+> See also: {external+juju:ref}`Juju | Application configuration <application-configuration>`
 
 To configure an application, in its resource definition add a configuration map with the `key=value` pairs you want (from the list of configurations available for the charm).
 
@@ -76,7 +76,7 @@ resource "juju_application" "this" {
 (scale-an-application)=
 ## Scale an application
 
-> See also: [`juju`| Scaling](https://juju.is/docs/juju/scaling)
+> See also: {external+juju:ref}`Juju | Scaling <scaling>`
 
 ### Scale an application vertically
 
@@ -93,7 +93,7 @@ To scale an application horizontally, control the number of units.
 
 
 ## Make an application highly available
-> See also: [`juju` | High availability (HA)](https://juju.is/docs/juju/high-availability)
+> See also: {external+juju:ref}`Juju | High availability (HA) <high-availability>`
 
 1. Find out if the charm delivering the application supports high availability natively or not. If the latter, find out what you need to do. This could mean integrating with a load balancing reverse proxy, configuring storage etc.
 
@@ -156,7 +156,7 @@ resource "juju_application" "this" {
 (manage-constraints-for-an-application)=
 ## Manage constraints for an application
 
-> See also: [`juju` | Constraint](https://juju.is/docs/juju/constraint)
+> See also: {external+juju:ref}`Juju | Constraint <constraint>`
 
 
 To set constraints for an application, in its resource definition specify a `constraints` attribute followed by a quotes-enclosed, space-separated list of key=value pairs. For example:
@@ -180,8 +180,7 @@ resource "juju_application" "this" {
 
 ## Change space bindings for an application
 
-> See also: [`juju` | Binding](https://juju.is/docs/juju/binding)
-
+> See also: {external+juju:ref}`Juju | Space <space>`
 
 To set space bindings for an application, in its resource definition specify an `endpoint_bindings` with a `space` key, to set a default for the entire application, and/or a `space` and an `endpoint` key, to set the space binding for a particular application endpoint. For example, below all the application's endpoints are bound to the `public` space except for the `juju-info` endpoint, which will be bound to the `private` space:
 
@@ -217,7 +216,7 @@ To upgrade an application, update its charm.
 (remove-an-application)=
 ## Remove an application
 
-> See also: [Juju | Removing things](https://juju.is/docs/juju/removing-things)
+> See also: {external+juju:ref}`Juju | Removing things <removing-things>`
 
 To remove an application, remove its resource definition from your Terraform plan.
 

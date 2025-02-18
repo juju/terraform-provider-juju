@@ -1,7 +1,7 @@
 (manage-credentials)=
 # Manage credentials
 
-> See also: [Juju | Credential](https://juju.is/docs/juju/credential)
+> See also: {external+juju:ref}`Juju | Credential <credential>`
 
 
 ## Define a credential

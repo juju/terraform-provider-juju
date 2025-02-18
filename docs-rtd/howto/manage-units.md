@@ -1,7 +1,7 @@
 (manage-units)=
 # Manage units
 
-> See also: [Juju | Unit](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/unit/)
+> See also: {external+juju:ref}`Juju | Unit <unit>`
 
 (control-the-number-of-units)=
 ## Control the number of units
@@ -17,7 +17,7 @@ resource "juju_application" "this" {
     name = "hello-kubecon"
   }
 
-  units = 3    
+  units = 3
 }
 ```
 
