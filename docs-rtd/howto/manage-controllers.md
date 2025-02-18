@@ -6,10 +6,10 @@
 ## Manage access to a controller
 
 ```{note}
-At present the Terraform Provider for Juju supports controller access management only for JAAS controllers.
+At present the Terraform Provider for Juju supports controller access management only for Juju controllers added to JIMM.
 ```
 
-When using Juju with JAAS, to grant one or more users, groups, and/or service accounts access to a JAAS controller, in your Terraform plan add a resource type `juju_jaas_access_controller`, specifying the model UUID, the JAAS controller access level, and the desired list of users, groups, and/or service accounts. For example:
+When using Juju with JAAS, to grant one or more users, groups, and/or service accounts access to a Juju controller added to JIMM, in your Terraform plan add a resource type `juju_jaas_access_controller`, specifying the model UUID, the JAAS controller access level, and the desired list of users, groups, and/or service accounts. For example:
 
 ```terraform
 resource "juju_jaas_access_controller" "development" {
