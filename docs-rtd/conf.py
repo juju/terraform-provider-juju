@@ -236,8 +236,23 @@ myst_enable_extensions = {
 extensions = [
     "canonical_sphinx",
     "sphinxcontrib.cairosvgconverter",
+    # Make it possible to link to related RTD projects using their internal anchors
+    # with, e.g., {external+ops:ref}`manage-configurations`:
+    'sphinx.ext.intersphinx',
 ]
 
+
+##################################
+# sphinx.ext.intersphinx options #
+##################################
+
+intersphinx_mapping = {
+    'juju': ('https://canonical-juju.readthedocs-hosted.com/en/latest/', None),
+    'pyjuju': ('https://pythonlibjuju.readthedocs.io/en/latest/', None),
+    'jaas': ('https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/', None),
+    'charmcraft': ('https://canonical-charmcraft.readthedocs-hosted.com/en/latest/', None),
+    'ops': ('https://ops.readthedocs.io/en/latest/', None),
+}
 
 # Excludes files or directories from processing
 
