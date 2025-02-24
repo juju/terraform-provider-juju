@@ -18,11 +18,18 @@ EDGE_VERSION ?= 0.15.0
 REGISTRY_DIR=~/.terraform.d/plugins/registry.terraform.io/juju/juju/${EDGE_VERSION}/${GOOS}_${GOARCH}
 
 .PHONY: install
-install: simplify docs go-install
+install: simplify docs schema go-install
 ## install: Build terraform-provider-juju and copy to ~/.terraform.d using EDGEVERSION
 	@echo "Copied to ~/.terraform.d/plugins/registry.terraform.io/juju/juju/${EDGE_VERSION}/${GOOS}_${GOARCH}"
 	@mkdir -p ${REGISTRY_DIR}
 	@cp ${GOPATH}/bin/terraform-provider-juju ${REGISTRY_DIR}/terraform-provider-juju_v${EDGE_VERSION}
+
+.PHONY: schema
+schema:
+## schema: add provider's schema to terraform provider folder to enable language server features (ex. autocomplete).
+	@mkdir -p ${REGISTRY_DIR}
+	@terraform providers schema -json > ${REGISTRY_DIR}/schema.json
+	@echo "Provider schema generated."
 
 .PHONY: simplify
 # Reformat and simplify source files.
