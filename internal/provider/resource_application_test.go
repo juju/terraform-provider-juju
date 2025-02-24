@@ -1393,3 +1393,68 @@ func testCheckEndpointsAreSetToCorrectSpace(modelName, appName, defaultSpace str
 		return nil
 	}
 }
+
+func TestAcc_ResourceApplication_ParallelDeploy(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-application-parallel-deploy")
+	appName1 := "test-app-a"
+	appName2 := "test-app-b"
+
+	var charm, channel string
+	switch testingCloud {
+	case MicroK8sTesting:
+		charm = "traefik-k8s"
+		channel = "1.0/candidate"
+	case LXDCloudTesting:
+		charm = "github-runner"
+		channel = "latest/stable"
+	default:
+		t.Fatalf("unknown test cloud")
+	}
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationParallelDeploy(modelName, appName1, appName2, charm, channel),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application."+appName1, "model", modelName),
+					resource.TestCheckResourceAttr("juju_application."+appName2, "model", modelName),
+				),
+			},
+		},
+	})
+}
+
+func testAccResourceApplicationParallelDeploy(modelName, appName1, appName2, charm, channel string) string {
+	return internaltesting.GetStringFromTemplateWithData("testAccResourceApplicationStorage", `
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_application" "{{.AppName1}}" {
+  model = juju_model.{{.ModelName}}.name
+  name = "{{.AppName1}}"
+  charm {
+    name = "{{.CharmName}}"
+    channel = "{{.CharmChannel}}"
+  }
+  units = 1
+}
+
+resource "juju_application" "{{.AppName2}}" {
+  model = juju_model.{{.ModelName}}.name
+  name = "{{.AppName2}}"
+  charm {
+    name = "{{.CharmName}}"
+    channel = "{{.CharmChannel}}"
+  }
+  units = 1
+}
+`, internaltesting.TemplateData{
+		"ModelName":    modelName,
+		"AppName1":     appName1,
+		"AppName2":     appName2,
+		"CharmName":    charm,
+		"CharmChannel": channel,
+	})
+}
