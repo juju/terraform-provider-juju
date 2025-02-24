@@ -1,7 +1,7 @@
 (manage-units)=
-# How to manage units
+# Manage units
 
-> See also: [`juju` | Unit](https://juju.is/docs/juju/unit)
+> See also: {external+juju:ref}`Juju | Unit <unit>`
 
 (control-the-number-of-units)=
 ## Control the number of units
@@ -17,14 +17,9 @@ resource "juju_application" "this" {
     name = "hello-kubecon"
   }
 
-  units = 3    
+  units = 3
 }
 ```
 
 > See more: [`juju_application` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#schema)
 
-
-
-<br>
-
-> <small>**Contributors:** @cderici, @hmlanigan, @skourta, @tmihoc </small>

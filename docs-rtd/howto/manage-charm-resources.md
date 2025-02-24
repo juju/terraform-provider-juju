@@ -1,7 +1,7 @@
 (manage-charm-resources)=
-# How to manage charm resources
+# Manage charm resources
 
-> See also: [`juju` | Resource (charm)](https://juju.is/docs/juju/charm-resource)
+> See also: {external+juju:ref}`Juju | Resource (charm) <charm-resource>`
 
 When you deploy / update an application from a charm, that automatically deploys / updates any charm resources, using the defaults specified by the charm author. However, you can also specify resources manually (e.g., to try a resource released only to `edge` or to specify a non-Charmhub resource). This document shows you how.
 
@@ -14,7 +14,7 @@ To specify the resource(s) to be deployed with your charm, in your Terraform pla
 resource "juju_application" "application_one" {
   name = "my-application"
   model = juju_model.testmodel.name
-  
+
   charm {
     name = "juju-qa-test"
     channel = "2.0/edge"
@@ -37,11 +37,3 @@ About `charm > revision` and `resources`:
 ```
 
 > See more: [`juju_application > resources`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#resources)
-
-
-
-
-
-<br>
-
-> <small>**Contributors:** @cderici, @hmlanigan, @tmihoc </small>

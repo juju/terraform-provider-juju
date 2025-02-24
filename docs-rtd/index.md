@@ -13,9 +13,9 @@ reference/index
 explanation/index
 -->
 
-The Terraform Provider for Juju (henceforth, `terraform-provider-juju`) is a [Terraform Provider](https://developer.hashicorp.com/terraform/language/providers) that extends [Terraform](https://developer.hashicorp.com/terraform) with [Juju](https://juju.is) functionality.
+The Terraform Provider for Juju (henceforth, `terraform-provider-juju`) is a [Terraform Provider](https://developer.hashicorp.com/terraform/language/providers) that extends [Terraform](https://developer.hashicorp.com/terraform) with [Juju](https://juju.is) and [JAAS](https://jaas.ai/) functionality.
 
-When you're putting together your Terraform plan, if you specify `juju` as the provider, you can connect to a pre-existing Juju controller (created with the [`juju` CLI](https://juju.is/docs/juju/juju-client)) and then go ahead and use it to do Juju things -- easy deploy, configure, integrate, scale, etc., applications on any Juju-supported cloud (Kubernetes or otherwise) using [charms](https://juju.is/docs/juju/charmed-operator).
+When you're putting together your Terraform plan, if you specify `juju` as the provider, you can connect to a pre-existing Juju controller (created with the [`juju` CLI](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/juju-cli/)) and then go ahead and use it to do Juju things -- easy deploy, configure, integrate, scale, etc., applications on any Juju-supported cloud (Kubernetes or otherwise) using [charms](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/charm/).
 
 `terraform-provider-juju` combines the power of Terraform -- comprehensive infrastructure management, declaratively -- with the power of Juju -- easy systems management, from Day 0 to Day n.
 

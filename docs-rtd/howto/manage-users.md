@@ -1,7 +1,7 @@
 (manage-users)=
-# How to manage users
+# Manage users
 
-> See also: [`juju` | User](https://juju.is/docs/juju/user)
+> See also: {external+juju:ref}`Juju | User <user>`
 
 ## Add a user
 
@@ -13,27 +13,14 @@ resource "juju_user" "alex" {
   password = "alexsupersecretpassword"
 
 }
-``` 
+```
 
 > See more: [`juju_user` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/user)
 
 
-## Manage a user's access level
-> See also: [`juju` | User access levels](https://juju.is/docs/juju/user-permissions)
+## Manage a user's access to a controller, cloud, model, offer, or group
 
-With `terraform-provider-juju` you can manage user access only at the model level; for anything else, please use the `juju` CLI.
-
-To grant a user access to a model, in your Terraform plan add a `juju_access_model` resource, specifying the model, the access level, and the user(s) to which you want to grant access. For example:
-
-```terraform
-resource "juju_access_model" "this" {
-  model  = juju_model.dev.name
-  access = "write"
-  users  = [juju_user.dev.name, juju_user.qa.name]
-}
-```
-
-> See more: [`juju_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/access_model)
+> See more: {ref}`manage-access-to-a-controller`, {ref}`manage-access-to-a-cloud`, {ref}`manage-access-to-a-model`, {ref}`manage-access-to-an-offer`, {ref}`manage-access-to-a-group`
 
 ## Manager a user's login details
 
@@ -45,7 +32,7 @@ resource "juju_user" "alex" {
   password = "alexnewsupersecretpassword"
 
 }
-``` 
+```
 
 > See more: [`juju_user`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/user#password)
 

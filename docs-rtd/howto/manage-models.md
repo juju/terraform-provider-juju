@@ -1,7 +1,20 @@
 (manage-models)=
-# How to manage models
+# Manage models
 
-> See also: [`juju` | Model](https://juju.is/docs/juju/model)
+> See also: {external+juju:ref}`Juju | Model <model>`
+
+
+## Reference an externally managed model
+
+To reference a model that you've created outside of the current Terraform plan, in your Terraform plan add a data source of the `juju_model` type, specifying the name of the model. For example:
+
+```terraform
+data "juju_model" "mymodel" {
+  name = "development"
+}
+```
+
+> See more: [`juju_model` (data source)](https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/model)
 
 ## Add a model
 
@@ -21,9 +34,9 @@ In the case of a multi-cloud controller, you can specify which cloud you want th
 
 ## Configure a model
 
-> See also: [`juju` | Model configuration](https://juju.is/docs/juju/configuration#heading--model-configuration), [`juju` | List of model configuration keys](https://juju.is/docs/juju/list-of-model-configuration-keys)
+> See also: {external+juju:ref}`Juju | Model configuration <model-configuration>`, {external+juju:ref}`Juju | List of model configuration keys <list-of-model-configuration-keys>`
 >
-> See related: [`juju` | How to configure a controller](https://juju.is/docs/juju/manage-controllers#heading--configure-a-controller)
+> See related: {external+juju:ref}`Juju | Configure a controller <configure-a-controller>`
 
 With `terraform-provider-juju` you can only set configuration values, only for a specific model, and only a workload model; for anything else, please use the `juju`  CLI.
 
@@ -51,7 +64,7 @@ resource "juju_model" "this" {
 
 
 ## Manage constraints for a model
-> See also: [`juju` | Constraint](https://juju.is/docs/juju/constraint)
+> See also: {external+juju:ref}`Juju | Constraint <constraint>`
 
 With `terraform-provider-juju` you can only set constraints -- to view them, please use the `juju` CLI.
 
@@ -73,8 +86,44 @@ resource "juju_model" "this" {
 > See more: [`juju_model` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/model)
 
 
+(manage-access-to-a-model)=
+## Manage access to a model
+
+Your model access management options depend on whether the controller you are applying the Terraform plan to is a regular Juju controller or rather a Juju controller added to JIMM -- for the former you can grant access only to a user, but for the latter you can grant access to a user, a group, or a service account.
+
+
+### For a regular Juju controller
+To grant a user access to a model, in your Terraform plan add a `juju_access_model` resource, specifying the model, the Juju access level, and the user(s) to which you want to grant access. For example:
+
+```terraform
+resource "juju_access_model" "this" {
+  model  = juju_model.dev.name
+  access = "write"
+  users  = [juju_user.dev.name, juju_user.qa.name]
+}
+```
+
+> See more: [`juju_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/access_model), [Juju | Model access levels](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/user/#valid-access-levels-for-models)
+
+
+### For a Juju controller added to JIMM
+To grant one or more users, groups, and/or service accounts access to a model, in your Terraform plan add a resource type `juju_jaas_access_model`, specifying the model UUID, the JAAS model access level, and the desired list of users, groups, and/or service accounts. For example:
+
+```terraform
+resource "juju_jaas_access_model" "development" {
+  model_uuid       = juju_model.development.uuid
+  access           = "administrator"
+  users            = ["foo@domain.com"]
+  groups           = [juju_jaas_group.development.uuid]
+  service_accounts = ["Client-ID-1", "Client-ID-2"]
+}
+
+```
+
+> See more: [`juju_jaas_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_model), [JAAS | Model access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/authorisation_model/#model)
+
 ## Upgrade a model
-> See also: [`juju` | Upgrading things](https://juju.is/docs/juju/upgrading)
+> See also: {external+juju:ref}`Juju | Upgrading things <upgrading-things>`
 
 To migrate a model to another controller, use the `juju` CLI to perform the migration, then, in your Terraform plan, reconfigure the `juju` provider to point to the destination controller (we recommend the method where you configure the provider using static credentials). You can verify your configuration changes by running `terraform plan` and noticing no change: Terraform merely compares the plan to what it finds in your deployment -- if model migration with `juju` has been successful, it should detect no change.
 
@@ -88,7 +137,3 @@ To destroy a model, remove its resource definition from your Terraform plan.
 
 > See more: [`juju_model` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/model)
 
-
-<br>
-
-<small>**Contributors:** @aflynn, @awnns, @barrettj12, @cderici, @hmlanigan,  @pedroleaoc, @pmatulis, @serdarvural80, @timclicks, @tmihoc</small>

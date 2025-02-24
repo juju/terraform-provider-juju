@@ -1,7 +1,7 @@
 (manage-ssh-keys)=
-# How to manage SSH keys
+# Manage SSH keys
 
-> See also: [`juju` | SSH key](https://juju.is/docs/juju/ssh-key)
+> See also: {external+juju:ref}`Juju | SSH key <ssh-key>`
 
 ## Add an SSH key
 
@@ -22,6 +22,3 @@ To remove an SSH key, remove its resource definition from your Terraform plan.
 
 > See more: [`juju_ssh_key` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/ssh_key)
 
-<br>
-
-> <small>**Contributors:** @cderici, @hmlanigan, @tmihoc </small>

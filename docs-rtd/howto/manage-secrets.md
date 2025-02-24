@@ -1,14 +1,28 @@
 (manage-secrets)=
-# How to manage secrets
+# Manage secrets
 
-> See also: [`juju` | Secret](https://juju.is/docs/juju/secret)
+> See also: {external+juju:ref}`Juju | Secret <secret>`
 
-Charms can use relations to share secrets, such as API keys, a database’s address, credentials and so on. This document demonstrates how to interact with them as a Juju user. 
+Charms can use relations to share secrets, such as API keys, a database’s address, credentials and so on. This document demonstrates how to interact with them as a Juju user.
 
 ```{caution}
 
-The write operations are only available (a) starting with Juju 3.3 and (b) to model admin users looking to manage user-owned secrets. 
+The write operations are only available (a) starting with Juju 3.3 and (b) to model admin users looking to manage user-owned secrets.
 ```
+
+## Reference an externally managed secret
+
+To reference a user secret you've created outside of the current Terraform plan, in your Terraform plan add a data source of the `juju_secret` type, specifying the name of the secret and its host model. For example:
+
+```terraform
+data "juju_secret" "my_secret_data_source" {
+  name  = "my_secret"
+  model = data.juju_model.my_model.name
+}
+```
+
+> See more: [`juju_offer` (data source)](https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/offer)
+
 
 ## Add a secret
 
@@ -29,8 +43,7 @@ resource "juju_secret" "my-secret" {
 
 > See more: [`juju_secret` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/secret)
 
-## Grant access to a secret
-
+## Manage access to a secret
 
 Given a model that contains both your (user) secret and the application(s) that you want to grant access to, to grant the application(s) access to the secret, in your Terraform plan create a resource of the `juju_access_secret` type, specifying the model, the secret ID, and the application(s) that you wish to grant access to. For example:
 
@@ -42,13 +55,13 @@ resource "juju_access_secret" "my-secret-access" {
   secret_id = juju_secret.my-secret.secret_id
 
   applications = [
-    juju_application.app.name, juju_application.app2.name
+    juju_application.app1.name, juju_application.app2.name
   ]
 }
 
 ```
 
-> See more: [`juju_access_secret` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/access_secret)
+> See more: [`juju_access_secret`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/access_secret)
 
 
 ## Update a secret
@@ -64,6 +77,3 @@ To remove a secret, remove its resource definition from your Terraform plan.
 
 > See more: [`juju_secret` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/secret)
 
-<br>
-
-> <small>Contributors: @anvial, @cderici, @kelvin.liu , @tmihoc, @tony-meyer , @wallyworld </small>

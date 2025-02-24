@@ -1,5 +1,5 @@
-(install-and-manage-terraform-provider-juju)=
-# How to install and manage `terraform-provider-juju`
+(manage-terraform-provider-juju)=
+# Manage `terraform-provider-juju`
 
 ## Install `terraform-provider-juju`
 
@@ -107,5 +107,3 @@ Once you've installed the `terraform` CLI, to start using it:
 To upgrade `terraform-provider-juju`, in your Terraform plan update the version constraint, then run `terraform init` with the `--upgrade` flag.
 
 > See more: Terraform [Version constraints](https://developer.hashicorp.com/terraform/language/providers/requirements#version-constraints), [`terraform init --upgrade`](https://developer.hashicorp.com/terraform/cli/commands/init#upgrade-1)
-
-> <small> **Contributors:** @cderici, @hmlanigan, @simonrichardson, @timclicks, @tmihoc</small>
