@@ -41,7 +41,7 @@ jobs:
   test:
     name: Integration-JAAS
     needs: build
-    runs-on: [self-hosted, jammy, x64]
+    runs-on: [self-hosted, jammy, xlarge, x64]
     strategy:
       fail-fast: false
     timeout-minutes: 60
@@ -68,7 +68,7 @@ jobs:
         uses: canonical/jimm/.github/actions/test-server@v3
         id: jaas
         with:
-          jimm-version: v3.1.10
+          jimm-version: v3.2.2
           juju-channel: 3/stable
           ghcr-pat: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup microk8s for juju_kubernetes_cloud test
