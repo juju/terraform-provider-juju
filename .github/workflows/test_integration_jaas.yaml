@@ -41,7 +41,7 @@ jobs:
   test:
     name: Integration-JAAS
     needs: build
-    runs-on: [self-hosted, jammy, xlarge, x64]
+    runs-on: [self-hosted, jammy, x64]
     strategy:
       fail-fast: false
     timeout-minutes: 60
