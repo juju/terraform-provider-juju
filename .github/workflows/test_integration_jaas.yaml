@@ -32,6 +32,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - name: Setup tmate session
+        if: ${{ failure() }}
+        uses: canonical/action-tmate@main
       - uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
@@ -64,7 +67,7 @@ jobs:
         uses: canonical/jimm/.github/actions/test-server@v3
         id: jaas
         with:
-          jimm-version: v3.1.10
+          jimm-version: v3.2.2
           juju-channel: 3/stable
           ghcr-pat: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup microk8s for juju_kubernetes_cloud test
