@@ -29,7 +29,7 @@ jobs:
     name: Terraform Provider Acceptance Tests
     needs:
       - build
-    runs-on: [self-hosted, jammy, x64]
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false

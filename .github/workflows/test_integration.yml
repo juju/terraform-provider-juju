@@ -22,7 +22,7 @@ jobs:
   # turn around time for self-hosted PS6 runners.
   build:
     name: Build
-    runs-on: [ubuntu-latest]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +37,7 @@ jobs:
   test:
     name: Integration
     needs: build
-    runs-on: [self-hosted, jammy, x64]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -109,7 +109,7 @@ jobs:
   add-machine-test:
     name: Add Machine
     needs: build
-    runs-on: [self-hosted, jammy, x64]
+    runs-on: ubuntu-latest
     env:
       ACTIONS_ALLOW_IPV6: false
     strategy:
