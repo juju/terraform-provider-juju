@@ -13,6 +13,7 @@ import (
 	"github.com/juju/clock"
 	"github.com/juju/cmd/v3"
 	"github.com/juju/errors"
+	"github.com/juju/juju/api"
 	apiclient "github.com/juju/juju/api/client/client"
 	apimachinemanager "github.com/juju/juju/api/client/machinemanager"
 	apimodelconfig "github.com/juju/juju/api/client/modelconfig"
@@ -21,11 +22,13 @@ import (
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/core/model"
+	"github.com/juju/juju/core/status"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/environs/manual"
 	"github.com/juju/juju/environs/manual/sshprovisioner"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/juju/storage"
+	"github.com/juju/names/v5"
 	"github.com/juju/retry"
 )
 
@@ -82,6 +85,53 @@ func newMachinesClient(sc SharedClient) *machinesClient {
 	}
 }
 
+type targetStatusFunc func(*params.FullStatus) (string, error)
+
+func getMachineStatusFunc(machineID string) targetStatusFunc {
+	return func(modelStatus *params.FullStatus) (string, error) {
+		machineStatus, ok := modelStatus.Machines[machineID]
+		if !ok {
+			return "", &keepWaitingError{
+				item:     names.NewMachineTag(machineID).String(),
+				state:    "unknown",
+				endState: status.Running.String(),
+			}
+		}
+		return machineStatus.InstanceStatus.Status, nil
+	}
+}
+
+func getContainerStatusFunc(containerID, parentMachineID string) targetStatusFunc {
+	return func(modelStatus *params.FullStatus) (string, error) {
+		machineStatus, ok := modelStatus.Machines[parentMachineID]
+		if !ok {
+			return "", &keepWaitingError{
+				item:     names.NewMachineTag(containerID).String(),
+				state:    "unknown",
+				endState: status.Running.String(),
+			}
+		}
+		containerStatus, ok := machineStatus.Containers[containerID]
+		if !ok {
+			return "", &keepWaitingError{
+				item:     names.NewMachineTag(containerID).String(),
+				state:    "unknown",
+				endState: status.Running.String(),
+			}
+		}
+		return containerStatus.InstanceStatus.Status, nil
+	}
+}
+
+func getTargetStatusFunc(machineID string) targetStatusFunc {
+	if names.IsContainerMachine(machineID) {
+		mt := names.NewMachineTag(machineID)
+
+		return getContainerStatusFunc(machineID, mt.Parent().Id())
+	}
+	return getMachineStatusFunc(machineID)
+}
+
 func (c machinesClient) CreateMachine(ctx context.Context, input *CreateMachineInput) (*CreateMachineResponse, error) {
 	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
@@ -89,8 +139,56 @@ func (c machinesClient) CreateMachine(ctx context.Context, input *CreateMachineI
 	}
 	defer func() { _ = conn.Close() }()
 
-	machineAPIClient := apimachinemanager.NewClient(conn)
+	response, err := c.createMachine(ctx, conn, input)
+	if err != nil {
+		return nil, err
+	}
 
+	getTargetStatusF := getTargetStatusFunc(response.ID)
+
+	// Wait for machine to go into "running" state. This is important when using the placement directive
+	// in juju_application resource - to deploy an application or validate against the operating system
+	// specified for the application Juju must know the operating system to use. For actual machines that
+	// information is not available until it reaches the "running" state.
+	retryErr := retry.Call(retry.CallArgs{
+		Func: func() error {
+			modelStatus, err := c.ModelStatus(input.ModelName, conn)
+			if err != nil {
+				return errors.Annotatef(err, "failed to get model status.")
+			}
+
+			machineStatus, err := getTargetStatusF(modelStatus)
+			if err != nil {
+				return errors.Annotatef(err, "failed to get machine status")
+			}
+			if machineStatus == status.Running.String() {
+				return nil
+			}
+			return &keepWaitingError{
+				item:     names.NewMachineTag(response.ID).String(),
+				state:    machineStatus,
+				endState: status.Running.String(),
+			}
+		},
+		NotifyFunc: func(err error, attempt int) {
+			if attempt%4 == 0 {
+				message := fmt.Sprintf("waiting for machine %q to be created", response.ID)
+				c.Debugf(message, map[string]interface{}{"attempt": attempt, "err": err})
+			}
+		},
+		IsFatalError: func(err error) bool {
+			return !errors.As(err, &KeepWaitingForError)
+		},
+		Attempts: 180,
+		Delay:    defaultModelStatusCacheRetryInterval,
+		Clock:    clock.WallClock,
+		Stop:     ctx.Done(),
+	})
+	return response, retryErr
+}
+
+func (c machinesClient) createMachine(ctx context.Context, conn api.Connection, input *CreateMachineInput) (*CreateMachineResponse, error) {
+	machineAPIClient := apimachinemanager.NewClient(conn)
 	modelConfigAPIClient := apimodelconfig.NewClient(conn)
 
 	if input.SSHAddress != "" {
@@ -107,6 +205,7 @@ func (c machinesClient) CreateMachine(ctx context.Context, input *CreateMachineI
 	}
 
 	var machineParams params.AddMachineParams
+	var err error
 
 	placement := input.Placement
 	if placement != "" {

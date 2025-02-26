@@ -55,7 +55,7 @@ func (c *sshKeysClient) CreateSSHKey(input *CreateSSHKeyInput) error {
 	client := keymanager.NewClient(conn)
 
 	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
-	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.<
+	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
 	params, err := client.AddKeys(input.Username, input.Payload)
 	if err != nil {
 		return err

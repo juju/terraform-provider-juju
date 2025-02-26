@@ -47,7 +47,7 @@ jobs:
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "5.21", juju: "3" }
           - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.28-strict", juju: "3.1" }
           - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.28-strict", juju: "3" }
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -102,8 +102,8 @@ jobs:
       - env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.action-operator.cloud }}
-        run: go test -parallel 1 -timeout 60m -v -cover ./internal/provider/
-        timeout-minutes: 60
+        run: go test -parallel 1 -timeout 90m -v -cover ./internal/provider/
+        timeout-minutes: 90
 
   # Run acceptance tests in a matrix with Terraform CLI versions
   add-machine-test:
@@ -123,7 +123,7 @@ jobs:
         juju:
           - "2.9/stable"
           - "3/stable"
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -189,5 +189,5 @@ jobs:
 
           echo "Running the test"
           cd ./internal/provider/
-          go test ./... -timeout 60m -v -test.run TestAcc_ResourceMachine_AddMachine
-        timeout-minutes: 60
+          go test ./... -timeout 90m -v -test.run TestAcc_ResourceMachine_AddMachine
+        timeout-minutes: 90

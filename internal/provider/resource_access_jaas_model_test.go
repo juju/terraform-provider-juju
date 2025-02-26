@@ -308,45 +308,55 @@ func TestAcc_ResourceJaasAccessModelServiceAccountAndUsers(t *testing.T) {
 	})
 }
 
-// TODO(Kian): Add the test below after a stable release of the provider that includes jaas resources.
+func TestAcc_ResourceJaasAccessModel_UpgradeProvider(t *testing.T) {
+	OnlyTestAgainstJAAS(t)
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
 
-// func TestAcc_ResourceJaasAccessModel_UpgradeProvider(t *testing.T) {
-// 	OnlyTestAgainstJAAS(t)
-// 	if testingCloud != LXDCloudTesting {
-// 		t.Skip(t.Name() + " only runs with LXD")
-// 	}
+	// Resource names
+	resourceName := "juju_jaas_access_model.test"
+	modelName := acctest.RandomWithPrefix("tf-jaas-access-model")
+	accessSuccess := "writer"
+	userOne := "foo@domain.com"
+	userTwo := "bar@domain.com"
 
-// 	modelName := acctest.RandomWithPrefix("tf-jaas-access-model")
-// 	accessSuccess := "writer"
+	// Objects for checking access
+	newModelTagF := func(s string) string { return names.NewModelTag(s).String() }
+	modelCheck := newCheckAttribute(resourceName, "model_uuid", newModelTagF)
+	userOneTag := names.NewUserTag(userOne).String()
+	userTwoTag := names.NewUserTag(userTwo).String()
 
-// 	resourceName := "juju_access_model.test"
-// 	resource.ParallelTest(t, resource.TestCase{
-// 		PreCheck: func() { testAccPreCheck(t) },
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
 
-// 		Steps: []resource.TestStep{
-// 			{
-// 				ExternalProviders: map[string]resource.ExternalProvider{
-// 					"juju": {
-// 						VersionConstraint: TestProviderStableVersion,
-// 						Source:            "juju/juju",
-// 					},
-// 				},
-// 				Config: testAccResourceJaasAccessModel(modelName, accessSuccess),
-// 				Check: resource.ComposeTestCheckFunc(
-// 					resource.TestMatchResourceAttr(resourceName, "model_uuid", regexp.MustCompile(".+")),
-// 					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
-// 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "foo@domain.com"),
-// 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "bar@domain.com"),
-// 				),
-// 			},
-// 			{
-// 				ProtoV6ProviderFactories: frameworkProviderFactories,
-// 				Config:                   testAccResourceJaasAccessModel(modelName, accessSuccess),
-// 				PlanOnly:                 true,
-// 			},
-// 		},
-// 	})
-// }
+		Steps: []resource.TestStep{
+			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderStableVersion,
+						Source:            "juju/juju",
+					},
+				},
+				Config: testAccResourceJaasAccessModelTwoUsers(modelName, accessSuccess, userOne, userTwo),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAttributeNotEmpty(modelCheck),
+					testAccCheckJaasResourceAccess(accessSuccess, &userOneTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(accessSuccess, &userTwoTag, modelCheck.tag, true),
+					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
+					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "foo@domain.com"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "bar@domain.com"),
+					resource.TestCheckResourceAttr(resourceName, "users.#", "2"),
+				),
+			},
+			{
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceJaasAccessModelTwoUsers(modelName, "writer", userOne, userTwo),
+				PlanOnly:                 true,
+			},
+		},
+	})
+}
 
 func testAccResourceJaasAccessModelTwoUsers(modelName, access, userOne, userTwo string) string {
 	return internaltesting.GetStringFromTemplateWithData(
