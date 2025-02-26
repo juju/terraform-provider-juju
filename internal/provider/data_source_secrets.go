@@ -112,7 +112,7 @@ func (d *secretDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	if data.SecretId.ValueString() == "" {
 		readSecretInput.Name = data.Name.ValueStringPointer()
 	} else {
-		readSecretInput.SecretId = data.SecretId.ValueString()
+		readSecretInput.SecretURI = data.SecretId.ValueString()
 	}
 
 	readSecretOutput, err := d.client.Secrets.ReadSecret(&readSecretInput)
@@ -122,7 +122,7 @@ func (d *secretDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	}
 	d.trace(fmt.Sprintf("read secret data source %q", data.SecretId))
 
-	data.SecretId = types.StringValue(readSecretOutput.SecretId)
+	data.SecretId = types.StringValue(readSecretOutput.SecretURI)
 
 	// Save state into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
