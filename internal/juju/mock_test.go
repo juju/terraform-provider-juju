@@ -126,6 +126,21 @@ func (mr *MockSharedClientMockRecorder) JujuLogger() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JujuLogger", reflect.TypeOf((*MockSharedClient)(nil).JujuLogger))
 }
 
+// ModelStatus mocks base method.
+func (m *MockSharedClient) ModelStatus(modelIfentifier string, conn api.Connection) (*params0.FullStatus, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ModelStatus", modelIfentifier, conn)
+	ret0, _ := ret[0].(*params0.FullStatus)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ModelStatus indicates an expected call of ModelStatus.
+func (mr *MockSharedClientMockRecorder) ModelStatus(modelIfentifier, conn any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModelStatus", reflect.TypeOf((*MockSharedClient)(nil).ModelStatus), modelIfentifier, conn)
+}
+
 // ModelType mocks base method.
 func (m *MockSharedClient) ModelType(modelName string) (model.ModelType, error) {
 	m.ctrl.T.Helper()

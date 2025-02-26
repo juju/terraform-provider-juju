@@ -24,7 +24,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/juju/core/constraints"
-	"github.com/juju/names/v4"
+	"github.com/juju/names/v5"
 	"github.com/juju/utils/v3"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"

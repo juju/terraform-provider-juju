@@ -12,9 +12,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
-	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/rpc/params"
 )
 
@@ -113,7 +111,7 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 	}
 
 	// integration is created - fetch the status in order to validate
-	status, err := c.getStatus(conn)
+	status, err := c.ModelStatus(input.ModelName, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +130,7 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 	}
 	defer func() { _ = conn.Close() }()
 
-	status, err := c.getStatus(conn)
+	status, err := c.ModelStatus(input.ModelName, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +222,7 @@ func (c integrationsClient) UpdateIntegration(input *UpdateIntegrationInput) (*U
 	//TODO: check deletion success and force?
 
 	//integration is updated - fetch the status in order to validate
-	status, err := c.getStatus(conn)
+	status, err := c.ModelStatus(input.ModelName, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -258,16 +256,6 @@ func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
 	}
 
 	return nil
-}
-
-func (c integrationsClient) getStatus(conn api.Connection) (*params.FullStatus, error) {
-	client := apiclient.NewClient(conn, c.JujuLogger())
-
-	status, err := client.Status(nil)
-	if err != nil {
-		return nil, err
-	}
-	return status, nil
 }
 
 // This function takes remote applications and endpoint status and combines them into a more usable format to return to the provider
