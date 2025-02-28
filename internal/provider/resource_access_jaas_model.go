@@ -35,13 +35,14 @@ func NewJAASAccessModelResource() resource.Resource {
 type modelInfo struct{}
 
 // Info implements the [resourceInfo] interface, used to extract the info from a Terraform plan/state.
-func (j modelInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessData, names.Tag) {
+func (j modelInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (objectsWithAccess, names.Tag) {
 	modelAccess := jaasAccessModelResourceModel{}
 	diag.Append(getter.Get(ctx, &modelAccess)...)
-	accessModel := genericJAASAccessData{
+	accessModel := objectsWithAccess{
 		ID:              modelAccess.ID,
 		Users:           modelAccess.Users,
 		Groups:          modelAccess.Groups,
+		Roles:           modelAccess.Roles,
 		ServiceAccounts: modelAccess.ServiceAccounts,
 		Access:          modelAccess.Access,
 	}
@@ -49,12 +50,13 @@ func (j modelInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnosti
 }
 
 // Save implements the [resourceInfo] interface, used to save info on Terraform's state.
-func (j modelInfo) Save(ctx context.Context, setter Setter, info genericJAASAccessData, tag names.Tag) diag.Diagnostics {
+func (j modelInfo) Save(ctx context.Context, setter Setter, info objectsWithAccess, tag names.Tag) diag.Diagnostics {
 	modelAccess := jaasAccessModelResourceModel{
 		ModelUUID:       basetypes.NewStringValue(tag.Id()),
 		ID:              info.ID,
 		Users:           info.Users,
 		Groups:          info.Groups,
+		Roles:           info.Roles,
 		ServiceAccounts: info.ServiceAccounts,
 		Access:          info.Access,
 	}
@@ -84,6 +86,7 @@ type jaasAccessModelResourceModel struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
+	Roles           types.Set    `tfsdk:"roles"`
 	Access          types.String `tfsdk:"access"`
 
 	// ID required for imports
@@ -97,7 +100,8 @@ func (a *jaasAccessModelResource) Metadata(_ context.Context, req resource.Metad
 
 // Schema defines the schema for the JAAS model access resource.
 func (a *jaasAccessModelResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attributes := a.partialAccessSchema()
+	attributes := baseAccessSchema()
+	attributes = attributes.WithRoles()
 	attributes["model_uuid"] = schema.StringAttribute{
 		Description: "The uuid of the model for access management. If this is changed the resource will be deleted and a new resource will be created.",
 		Required:    true,

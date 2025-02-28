@@ -37,13 +37,14 @@ func NewJAASAccessServiceAccountResource() resource.Resource {
 type serviceAccountInfo struct{}
 
 // Info implements the [resourceInfo] interface, used to extract the info from a Terraform plan/state.
-func (j serviceAccountInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessData, names.Tag) {
+func (j serviceAccountInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (objectsWithAccess, names.Tag) {
 	serviceAccountAccess := jaasAccessServiceAccountResourceServiceAccount{}
 	diag.Append(getter.Get(ctx, &serviceAccountAccess)...)
-	accessServiceAccount := genericJAASAccessData{
+	accessServiceAccount := objectsWithAccess{
 		ID:              serviceAccountAccess.ID,
 		Users:           serviceAccountAccess.Users,
 		Groups:          serviceAccountAccess.Groups,
+		Roles:           serviceAccountAccess.Roles,
 		ServiceAccounts: serviceAccountAccess.ServiceAccounts,
 		Access:          serviceAccountAccess.Access,
 	}
@@ -53,7 +54,7 @@ func (j serviceAccountInfo) Info(ctx context.Context, getter Getter, diag *diag.
 		svcAccID, err := jimmnames.EnsureValidServiceAccountId(serviceAccountAccess.ServiceAccountID.ValueString())
 		if err != nil {
 			diag.AddError("invalid service account name", err.Error())
-			return genericJAASAccessData{}, nil
+			return objectsWithAccess{}, nil
 		}
 		tag = jimmnames.NewServiceAccountTag(svcAccID)
 	}
@@ -61,7 +62,7 @@ func (j serviceAccountInfo) Info(ctx context.Context, getter Getter, diag *diag.
 }
 
 // Save implements the [resourceInfo] interface, used to save info on Terraform's state.
-func (j serviceAccountInfo) Save(ctx context.Context, setter Setter, info genericJAASAccessData, tag names.Tag) diag.Diagnostics {
+func (j serviceAccountInfo) Save(ctx context.Context, setter Setter, info objectsWithAccess, tag names.Tag) diag.Diagnostics {
 	// Do the reverse of what we did in Info and strip the @serviceaccount suffix.
 	svcAccID := strings.TrimSuffix(tag.Id(), "@serviceaccount")
 	serviceAccountAccess := jaasAccessServiceAccountResourceServiceAccount{
@@ -69,6 +70,7 @@ func (j serviceAccountInfo) Save(ctx context.Context, setter Setter, info generi
 		ID:               info.ID,
 		Users:            info.Users,
 		Groups:           info.Groups,
+		Roles:            info.Roles,
 		ServiceAccounts:  info.ServiceAccounts,
 		Access:           info.Access,
 	}
@@ -98,6 +100,7 @@ type jaasAccessServiceAccountResourceServiceAccount struct {
 	Users            types.Set    `tfsdk:"users"`
 	ServiceAccounts  types.Set    `tfsdk:"service_accounts"`
 	Groups           types.Set    `tfsdk:"groups"`
+	Roles            types.Set    `tfsdk:"roles"`
 	Access           types.String `tfsdk:"access"`
 
 	// ID required for imports
@@ -111,7 +114,8 @@ func (a *jaasAccessServiceAccountResource) Metadata(_ context.Context, req resou
 
 // Schema defines the schema for the JAAS serviceAccount access resource.
 func (a *jaasAccessServiceAccountResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attributes := a.partialAccessSchema()
+	attributes := baseAccessSchema()
+	attributes = attributes.WithRoles()
 	attributes["service_account_id"] = schema.StringAttribute{
 		Description: "The ID of the service account for access management. If this is changed the resource will be deleted and a new resource will be created.",
 		Required:    true,

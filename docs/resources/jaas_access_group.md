@@ -32,9 +32,9 @@ resource "juju_jaas_access_group" "development" {
 
 ### Optional
 
-- `groups` (Set of String) List of groups to grant access.
-- `service_accounts` (Set of String) List of service accounts to grant access.
-- `users` (Set of String) List of users to grant access.
+- `groups` (Set of String) List of groups to grant access. A valid group ID is the group's UUID.
+- `service_accounts` (Set of String) List of service accounts to grant access. A valid service account is the service account's name.
+- `users` (Set of String) List of users to grant access. A valid user is the user's name or email.
 
 ### Read-Only
 

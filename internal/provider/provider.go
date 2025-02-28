@@ -376,10 +376,12 @@ func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
 		func() resource.Resource { return NewJAASAccessModelResource() },
 		func() resource.Resource { return NewJAASAccessCloudResource() },
 		func() resource.Resource { return NewJAASAccessGroupResource() },
+		func() resource.Resource { return NewJAASAccessRoleResource() },
 		func() resource.Resource { return NewJAASAccessOfferResource() },
 		func() resource.Resource { return NewJAASAccessControllerResource() },
 		func() resource.Resource { return NewJAASAccessServiceAccountResource() },
 		func() resource.Resource { return NewJAASGroupResource() },
+		func() resource.Resource { return NewJAASRoleResource() },
 	}
 }
 
@@ -396,6 +398,7 @@ func (p *jujuProvider) DataSources(_ context.Context) []func() datasource.DataSo
 		func() datasource.DataSource { return NewOfferDataSource() },
 		func() datasource.DataSource { return NewSecretDataSource() },
 		func() datasource.DataSource { return NewJAASGroupDataSource() },
+		func() datasource.DataSource { return NewJAASRoleDataSource() },
 	}
 }
 

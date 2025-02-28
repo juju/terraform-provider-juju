@@ -791,6 +791,21 @@ func (mr *MockJaasAPIClientMockRecorder) AddRelation(req any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRelation", reflect.TypeOf((*MockJaasAPIClient)(nil).AddRelation), req)
 }
 
+// AddRole mocks base method.
+func (m *MockJaasAPIClient) AddRole(req *params.AddRoleRequest) (params.AddRoleResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddRole", req)
+	ret0, _ := ret[0].(params.AddRoleResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddRole indicates an expected call of AddRole.
+func (mr *MockJaasAPIClientMockRecorder) AddRole(req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRole", reflect.TypeOf((*MockJaasAPIClient)(nil).AddRole), req)
+}
+
 // GetGroup mocks base method.
 func (m *MockJaasAPIClient) GetGroup(req *params.GetGroupRequest) (params.GetGroupResponse, error) {
 	m.ctrl.T.Helper()
@@ -804,6 +819,21 @@ func (m *MockJaasAPIClient) GetGroup(req *params.GetGroupRequest) (params.GetGro
 func (mr *MockJaasAPIClientMockRecorder) GetGroup(req any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroup", reflect.TypeOf((*MockJaasAPIClient)(nil).GetGroup), req)
+}
+
+// GetRole mocks base method.
+func (m *MockJaasAPIClient) GetRole(req *params.GetRoleRequest) (params.GetRoleResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRole", req)
+	ret0, _ := ret[0].(params.GetRoleResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRole indicates an expected call of GetRole.
+func (mr *MockJaasAPIClientMockRecorder) GetRole(req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRole", reflect.TypeOf((*MockJaasAPIClient)(nil).GetRole), req)
 }
 
 // ListRelationshipTuples mocks base method.
@@ -849,6 +879,20 @@ func (mr *MockJaasAPIClientMockRecorder) RemoveRelation(req any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveRelation", reflect.TypeOf((*MockJaasAPIClient)(nil).RemoveRelation), req)
 }
 
+// RemoveRole mocks base method.
+func (m *MockJaasAPIClient) RemoveRole(req *params.RemoveRoleRequest) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveRole", req)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveRole indicates an expected call of RemoveRole.
+func (mr *MockJaasAPIClientMockRecorder) RemoveRole(req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveRole", reflect.TypeOf((*MockJaasAPIClient)(nil).RemoveRole), req)
+}
+
 // RenameGroup mocks base method.
 func (m *MockJaasAPIClient) RenameGroup(req *params.RenameGroupRequest) error {
 	m.ctrl.T.Helper()
@@ -861,6 +905,20 @@ func (m *MockJaasAPIClient) RenameGroup(req *params.RenameGroupRequest) error {
 func (mr *MockJaasAPIClientMockRecorder) RenameGroup(req any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RenameGroup", reflect.TypeOf((*MockJaasAPIClient)(nil).RenameGroup), req)
+}
+
+// RenameRole mocks base method.
+func (m *MockJaasAPIClient) RenameRole(req *params.RenameRoleRequest) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RenameRole", req)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RenameRole indicates an expected call of RenameRole.
+func (mr *MockJaasAPIClientMockRecorder) RenameRole(req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RenameRole", reflect.TypeOf((*MockJaasAPIClient)(nil).RenameRole), req)
 }
 
 // MockKubernetesCloudAPIClient is a mock of KubernetesCloudAPIClient interface.

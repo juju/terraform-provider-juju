@@ -35,13 +35,14 @@ func NewJAASAccessOfferResource() resource.Resource {
 type offerInfo struct{}
 
 // Info implements the [resourceInfo] interface, used to extract the info from a Terraform plan/state.
-func (j offerInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessData, names.Tag) {
+func (j offerInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (objectsWithAccess, names.Tag) {
 	offerResource := jaasAccessOfferResourceOffer{}
 	diag.Append(getter.Get(ctx, &offerResource)...)
-	genericInfo := genericJAASAccessData{
+	genericInfo := objectsWithAccess{
 		ID:              offerResource.ID,
 		Users:           offerResource.Users,
 		Groups:          offerResource.Groups,
+		Roles:           offerResource.Roles,
 		ServiceAccounts: offerResource.ServiceAccounts,
 		Access:          offerResource.Access,
 	}
@@ -54,12 +55,13 @@ func (j offerInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnosti
 }
 
 // Save implements the [resourceInfo] interface, used to save info on Terraform's state.
-func (j offerInfo) Save(ctx context.Context, setter Setter, info genericJAASAccessData, tag names.Tag) diag.Diagnostics {
+func (j offerInfo) Save(ctx context.Context, setter Setter, info objectsWithAccess, tag names.Tag) diag.Diagnostics {
 	offerAccess := jaasAccessOfferResourceOffer{
 		OfferUrl:        basetypes.NewStringValue(tag.Id()),
 		ID:              info.ID,
 		Users:           info.Users,
 		Groups:          info.Groups,
+		Roles:           info.Roles,
 		ServiceAccounts: info.ServiceAccounts,
 		Access:          info.Access,
 	}
@@ -86,6 +88,7 @@ type jaasAccessOfferResourceOffer struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
+	Roles           types.Set    `tfsdk:"roles"`
 	Access          types.String `tfsdk:"access"`
 
 	// ID required for imports
@@ -99,7 +102,8 @@ func (a *jaasAccessOfferResource) Metadata(_ context.Context, req resource.Metad
 
 // Schema defines the schema for the JAAS offer access resource.
 func (a *jaasAccessOfferResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attributes := a.partialAccessSchema()
+	attributes := baseAccessSchema()
+	attributes = attributes.WithRoles()
 	attributes["offer_url"] = schema.StringAttribute{
 		Description: "The url of the offer for access management. If this is changed the resource will be deleted and a new resource will be created.",
 		Required:    true,

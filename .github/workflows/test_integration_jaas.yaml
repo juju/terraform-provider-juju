@@ -64,8 +64,8 @@ jobs:
         uses: canonical/jimm/.github/actions/test-server@v3
         id: jaas
         with:
-          jimm-version: v3.2.2
           juju-channel: 3.6/edge
+          jimm-version: v3.1.13
           ghcr-pat: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup microk8s for juju_kubernetes_cloud test
         run: |

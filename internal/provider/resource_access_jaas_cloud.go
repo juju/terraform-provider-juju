@@ -35,13 +35,14 @@ func NewJAASAccessCloudResource() resource.Resource {
 type cloudInfo struct{}
 
 // Info implements the [resourceInfo] interface, used to extract the info from a Terraform plan/state.
-func (j cloudInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (genericJAASAccessData, names.Tag) {
+func (j cloudInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostics) (objectsWithAccess, names.Tag) {
 	cloudAccess := jaasAccessCloudResourceCloud{}
 	diag.Append(getter.Get(ctx, &cloudAccess)...)
-	accessCloud := genericJAASAccessData{
+	accessCloud := objectsWithAccess{
 		ID:              cloudAccess.ID,
 		Users:           cloudAccess.Users,
 		Groups:          cloudAccess.Groups,
+		Roles:           cloudAccess.Roles,
 		ServiceAccounts: cloudAccess.ServiceAccounts,
 		Access:          cloudAccess.Access,
 	}
@@ -54,12 +55,13 @@ func (j cloudInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnosti
 }
 
 // Save implements the [resourceInfo] interface, used to save info on Terraform's state.
-func (j cloudInfo) Save(ctx context.Context, setter Setter, info genericJAASAccessData, tag names.Tag) diag.Diagnostics {
+func (j cloudInfo) Save(ctx context.Context, setter Setter, info objectsWithAccess, tag names.Tag) diag.Diagnostics {
 	cloudAccess := jaasAccessCloudResourceCloud{
 		CloudName:       basetypes.NewStringValue(tag.Id()),
 		ID:              info.ID,
 		Users:           info.Users,
 		Groups:          info.Groups,
+		Roles:           info.Roles,
 		ServiceAccounts: info.ServiceAccounts,
 		Access:          info.Access,
 	}
@@ -89,6 +91,7 @@ type jaasAccessCloudResourceCloud struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
+	Roles           types.Set    `tfsdk:"roles"`
 	Access          types.String `tfsdk:"access"`
 
 	// ID required for imports
@@ -102,7 +105,8 @@ func (a *jaasAccessCloudResource) Metadata(_ context.Context, req resource.Metad
 
 // Schema defines the schema for the JAAS cloud access resource.
 func (a *jaasAccessCloudResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	attributes := a.partialAccessSchema()
+	attributes := baseAccessSchema()
+	attributes = attributes.WithRoles()
 	attributes["cloud_name"] = schema.StringAttribute{
 		Description: "The name of the cloud for access management. If this is changed the resource will be deleted and a new resource will be created.",
 		Required:    true,
