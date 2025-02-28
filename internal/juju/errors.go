@@ -4,6 +4,7 @@
 package juju
 
 import (
+	"fmt"
 	"strings"
 
 	jujuerrors "github.com/juju/errors"
@@ -29,4 +30,21 @@ func typedError(err error) error {
 	default:
 		return err
 	}
+}
+
+// KeepWaitingForError is returned when we need to keep
+// waiting for a resource to reach the desired state.
+var KeepWaitingForError = &keepWaitingError{}
+
+// keepWaitingError is returned when we need to keep waiting
+// for an item to reach the desired state.
+type keepWaitingError struct {
+	item     string
+	state    string
+	endState string
+}
+
+// Error implements the error interface.
+func (e *keepWaitingError) Error() string {
+	return fmt.Sprintf("%q in state %q, waiting for %q", e.item, e.state, e.endState)
 }

@@ -15,23 +15,27 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
 	"github.com/juju/juju/api"
+	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/api/connector"
 	"github.com/juju/juju/core/model"
+	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
 )
 
 const (
-	PrefixCloud          = "cloud-"
-	PrefixModel          = "model-"
-	PrefixCharm          = "charm-"
-	PrefixUser           = "user-"
-	PrefixMachine        = "machine-"
-	PrefixApplication    = "application-"
-	PrefixStorage        = "storage-"
-	UnspecifiedRevision  = -1
-	connectionTimeout    = 30 * time.Second
-	serviceAccountSuffix = "@serviceaccount"
+	PrefixCloud                          = "cloud-"
+	PrefixModel                          = "model-"
+	PrefixCharm                          = "charm-"
+	PrefixUser                           = "user-"
+	PrefixMachine                        = "machine-"
+	PrefixApplication                    = "application-"
+	PrefixStorage                        = "storage-"
+	UnspecifiedRevision                  = -1
+	connectionTimeout                    = 30 * time.Second
+	serviceAccountSuffix                 = "@serviceaccount"
+	defaultModelStatusCacheInterval      = 5 * time.Second
+	defaultModelStatusCacheRetryInterval = defaultModelStatusCacheInterval / 2
 )
 
 type ControllerConfiguration struct {
@@ -81,11 +85,19 @@ func (j jujuModel) String() string {
 	return fmt.Sprintf("uuid(%s) type(%s)", j.name, j.modelType.String())
 }
 
+type modelStatus struct {
+	status     params.FullStatus
+	lastUpdate time.Time
+}
+
 type sharedClient struct {
 	controllerConfig ControllerConfiguration
 
 	modelUUIDcache map[string]jujuModel
 	modelUUIDmu    sync.Mutex
+
+	muModelStatusCache sync.RWMutex
+	modelStatusCache   map[string]modelStatus
 
 	// subCtx is the context created with the new tflog subsystem for applications.
 	subCtx context.Context
@@ -104,6 +116,7 @@ func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, er
 	sc := &sharedClient{
 		controllerConfig: config,
 		modelUUIDcache:   make(map[string]jujuModel),
+		modelStatusCache: make(map[string]modelStatus),
 		subCtx:           tflog.NewSubsystem(ctx, LogJujuClient),
 	}
 	// Client ID and secret are only set when connecting to JAAS. Use this as a fallback
@@ -316,6 +329,62 @@ func (sc *sharedClient) AddModel(modelName, modelUUID string, modelType model.Mo
 		name:      modelName,
 		modelType: modelType,
 	}
+}
+
+// ModelStatus returns the status of the model identified by its UUID.
+func (sc *sharedClient) ModelStatus(identifier string, conn api.Connection) (*params.FullStatus, error) {
+	uuid, err := sc.ModelUUID(identifier)
+	if err != nil {
+		return nil, err
+	}
+
+	status, err := sc.getModelStatus(uuid)
+	if err != nil {
+		return sc.updateModelStatus(uuid, conn)
+	}
+
+	return &status.status, nil
+}
+
+func (sc *sharedClient) updateModelStatus(uuid string, conn api.Connection) (*params.FullStatus, error) {
+	sc.muModelStatusCache.Lock()
+	defer sc.muModelStatusCache.Unlock()
+
+	var err error
+	if conn == nil {
+		conn, err = sc.GetConnection(&uuid)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	client := apiclient.NewClient(conn, sc.JujuLogger())
+	status, err := client.Status(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	sc.modelStatusCache[uuid] = modelStatus{
+		status:     *status,
+		lastUpdate: time.Now(),
+	}
+	return status, nil
+}
+
+func (sc *sharedClient) getModelStatus(uuid string) (*modelStatus, error) {
+	sc.muModelStatusCache.RLock()
+	defer sc.muModelStatusCache.RUnlock()
+
+	status, ok := sc.modelStatusCache[uuid]
+	if !ok {
+		return nil, errors.NotFoundf("model status")
+	}
+
+	if time.Since(status.lastUpdate) > defaultModelStatusCacheInterval {
+		return nil, errors.NotFoundf("model status")
+	}
+
+	return &status, nil
 }
 
 // module names for logging
