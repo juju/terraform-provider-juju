@@ -79,8 +79,8 @@ func (s *accessSecretResource) ImportState(ctx context.Context, req resource.Imp
 	// Save the secret access details into the Terraform state
 	state := accessSecretResourceModel{
 		Model:    types.StringValue(modelName),
-		SecretId: types.StringValue(readSecretOutput.SecretId),
-		ID:       types.StringValue(newSecretID(modelName, readSecretOutput.SecretId)),
+		SecretId: types.StringValue(readSecretOutput.SecretURI),
+		ID:       types.StringValue(newSecretID(modelName, readSecretOutput.SecretURI)),
 	}
 
 	// Save the secret details into the Terraform state
@@ -114,7 +114,7 @@ func (s *accessSecretResource) Schema(_ context.Context, req resource.SchemaRequ
 				},
 			},
 			"secret_id": schema.StringAttribute{
-				Description: "The ID of the secret. E.g. coj8mulh8b41e8nv6p90",
+				Description: "The ID of the secret. E.g. secret:coj8mulh8b41e8nv6p90",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -177,7 +177,7 @@ func (s *accessSecretResource) Create(ctx context.Context, req resource.CreateRe
 
 	err := s.client.Secrets.UpdateAccessSecret(&juju.GrantRevokeAccessSecretInput{
 		ModelName:    plan.Model.ValueString(),
-		SecretId:     plan.SecretId.ValueString(),
+		SecretURI:    plan.SecretId.ValueString(),
 		Applications: applications,
 	}, juju.GrantAccess)
 	if err != nil {
@@ -209,7 +209,7 @@ func (s *accessSecretResource) Read(ctx context.Context, req resource.ReadReques
 	}
 
 	readSecretOutput, err := s.client.Secrets.ReadSecret(&juju.ReadSecretInput{
-		SecretId:  state.SecretId.ValueString(),
+		SecretURI: state.SecretId.ValueString(),
 		ModelName: state.Model.ValueString(),
 	})
 	if err != nil {
@@ -225,7 +225,7 @@ func (s *accessSecretResource) Read(ctx context.Context, req resource.ReadReques
 	}
 	state.Applications = secretApplications
 
-	state.ID = types.StringValue(newSecretID(state.Model.ValueString(), readSecretOutput.SecretId))
+	state.ID = types.StringValue(newSecretID(state.Model.ValueString(), readSecretOutput.SecretURI))
 
 	// Save state into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -256,7 +256,7 @@ func (s *accessSecretResource) Update(ctx context.Context, req resource.UpdateRe
 	var updatedAccessSecretInput juju.GrantRevokeAccessSecretInput
 
 	updatedAccessSecretInput.ModelName = state.Model.ValueString()
-	updatedAccessSecretInput.SecretId = state.SecretId.ValueString()
+	updatedAccessSecretInput.SecretURI = state.SecretId.ValueString()
 
 	if plan.Applications.Equal(state.Applications) {
 		s.trace(fmt.Sprintf("no updates to secret access %q", state.SecretId))
@@ -297,7 +297,7 @@ func (s *accessSecretResource) Update(ctx context.Context, req resource.UpdateRe
 	if !applicationsToGrant.IsEmpty() {
 		err := s.client.Secrets.UpdateAccessSecret(&juju.GrantRevokeAccessSecretInput{
 			ModelName:    state.Model.ValueString(),
-			SecretId:     state.SecretId.ValueString(),
+			SecretURI:    state.SecretId.ValueString(),
 			Applications: applicationsToGrant.Values(),
 		}, juju.GrantAccess)
 		if err != nil {
@@ -310,7 +310,7 @@ func (s *accessSecretResource) Update(ctx context.Context, req resource.UpdateRe
 	if !applicationsToRevoke.IsEmpty() {
 		err := s.client.Secrets.UpdateAccessSecret(&juju.GrantRevokeAccessSecretInput{
 			ModelName:    state.Model.ValueString(),
-			SecretId:     state.SecretId.ValueString(),
+			SecretURI:    state.SecretId.ValueString(),
 			Applications: applicationsToRevoke.Values(),
 		}, juju.RevokeAccess)
 		if err != nil {
@@ -349,7 +349,7 @@ func (s *accessSecretResource) Delete(ctx context.Context, req resource.DeleteRe
 
 	err := s.client.Secrets.UpdateAccessSecret(&juju.GrantRevokeAccessSecretInput{
 		ModelName:    state.Model.ValueString(),
-		SecretId:     state.SecretId.ValueString(),
+		SecretURI:    state.SecretId.ValueString(),
 		Applications: applications,
 	}, juju.RevokeAccess)
 	if err != nil {

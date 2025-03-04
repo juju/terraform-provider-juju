@@ -84,7 +84,7 @@ func (s *secretResource) ImportState(ctx context.Context, req resource.ImportSta
 	state := secretResourceModel{
 		Model:    types.StringValue(modelName),
 		Name:     types.StringValue(readSecretOutput.Name),
-		SecretId: types.StringValue(readSecretOutput.SecretId),
+		SecretId: types.StringValue(readSecretOutput.SecretURI),
 	}
 
 	if readSecretOutput.Info != "" {
@@ -131,7 +131,7 @@ func (s *secretResource) Schema(_ context.Context, req resource.SchemaRequest, r
 				Sensitive:   true,
 			},
 			"secret_id": schema.StringAttribute{
-				Description: "The ID of the secret. E.g. coj8mulh8b41e8nv6p90",
+				Description: "The ID of the secret. E.g. secret:coj8mulh8b41e8nv6p90",
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -204,7 +204,7 @@ func (s *secretResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	plan.SecretId = types.StringValue(createSecretOutput.SecretId)
+	plan.SecretId = types.StringValue(createSecretOutput.SecretURI)
 	plan.ID = types.StringValue(newSecretID(plan.Model.ValueString(), plan.SecretId.ValueString()))
 	s.trace(fmt.Sprintf("saving secret resource %q", plan.SecretId.ValueString()),
 		map[string]interface{}{
@@ -212,8 +212,9 @@ func (s *secretResource) Create(ctx context.Context, req resource.CreateRequest,
 			"name":     plan.Name.ValueString(),
 			"model":    plan.Model.ValueString(),
 			"info":     plan.Info.ValueString(),
-			"values":   plan.Value.String(),
-			"id":       plan.ID.ValueString(),
+			// note (alesstimec): we should not be logging secret values!
+			//"values":   plan.Value.String(),
+			"id": plan.ID.ValueString(),
 		})
 	// Save plan into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -240,7 +241,7 @@ func (s *secretResource) Read(ctx context.Context, req resource.ReadRequest, res
 	s.trace(fmt.Sprintf("reading secret resource %q", state.SecretId))
 
 	readSecretOutput, err := s.client.Secrets.ReadSecret(&juju.ReadSecretInput{
-		SecretId:  state.SecretId.ValueString(),
+		SecretURI: state.SecretId.ValueString(),
 		ModelName: state.Model.ValueString(),
 	})
 	if err != nil {
@@ -255,7 +256,7 @@ func (s *secretResource) Read(ctx context.Context, req resource.ReadRequest, res
 	if !state.Info.IsNull() {
 		state.Info = types.StringValue(readSecretOutput.Info)
 	}
-	state.ID = types.StringValue(newSecretID(state.Model.ValueString(), readSecretOutput.SecretId))
+	state.ID = types.StringValue(newSecretID(state.Model.ValueString(), readSecretOutput.SecretURI))
 
 	secretValue, errDiag := types.MapValueFrom(ctx, types.StringType, readSecretOutput.Value)
 	resp.Diagnostics.Append(errDiag...)
@@ -297,7 +298,7 @@ func (s *secretResource) Update(ctx context.Context, req resource.UpdateRequest,
 	var updatedSecretInput juju.UpdateSecretInput
 
 	updatedSecretInput.ModelName = state.Model.ValueString()
-	updatedSecretInput.SecretId = state.SecretId.ValueString()
+	updatedSecretInput.SecretURI = state.SecretId.ValueString()
 
 	// Check if the secret name has changed
 	if !plan.Name.Equal(state.Name) {
@@ -362,7 +363,7 @@ func (s *secretResource) Delete(ctx context.Context, req resource.DeleteRequest,
 
 	err := s.client.Secrets.DeleteSecret(&juju.DeleteSecretInput{
 		ModelName: state.Model.ValueString(),
-		SecretId:  state.SecretId.ValueString(),
+		SecretURI: state.SecretId.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete secret, got error: %s", err))
@@ -380,5 +381,5 @@ func (s *secretResource) trace(msg string, additionalFields ...map[string]interf
 }
 
 func newSecretID(model, secret string) string {
-	return fmt.Sprintf("%s:%s", model, secret)
+	return fmt.Sprintf("%s:%s", model, strings.TrimPrefix(secret, "secret:"))
 }
