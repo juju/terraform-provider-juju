@@ -1,3 +1,16 @@
+## 0.17.1 (March 3, 2025)
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher juju.**
+* **If using JAAS, this release requires Juju controller version 3.5.0 or higher.**
+* This release uses juju client api code from the juju 3.6.3 release.
+
+
+BUG FIXES:
+
+* Upgrade of the Juju dependency to 3.6.3 addresses issue [657](https://github.com/juju/terraform-provider-juju/issues/657)
+
 ## 0.17.0 (February 18, 2025)
 
 NOTES:
