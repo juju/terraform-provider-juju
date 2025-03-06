@@ -9,19 +9,20 @@ In the Juju ecosystem, service accounts are supported only when using [JAAS](htt
 (manage-access-to-a-service account)=
 ## Manage access to a service account
 
-When using Juju with JAAS, to grant a user, a group, or a service account access to a Juju controller connected to JIMM, in your Terraform plan add a resource type `juju_jaas_access_controller`, specifying the model UUID, the JAAS controller access level, and the list of desired users, groups, and/or service accounts. For example:
+When using Juju with JAAS, to grant a one or more users, service accounts, roles, and/or groups access to a Juju controller connected to JIMM, in your Terraform plan add a resource type `juju_jaas_access_controller`, specifying the model UUID, the JAAS controller access level, and the list of desired users, service accounts, roles, and/or groups. For example:
 
 ```terraform
 resource "juju_jaas_access_controller" "development" {
   access           = "administrator"
   users            = ["foo@domain.com"]
-  groups           = [juju_jaas_group.development.uuid]
   service_accounts = ["Client-ID-1", "Client-ID-2"]
+  roles            = [juju_jaas_role.development.uuid]
+  groups           = [juju_jaas_group.development.uuid]
 }
 ```
 
 > See more: [`juju_jaas_access_service_account`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_service_account), [JAAS | Service account access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/authorisation_model/#service-account)
 
-## Manage a service account's access to a controller, cloud, model, offer, or group
+## Manage a service account's access to a controller, cloud, model, offer, role, or group
 
-> See more: {ref}`manage-access-to-a-controller`, {ref}`manage-access-to-a-cloud`, {ref}`manage-access-to-a-model`, {ref}`manage-access-to-an-offer`, {ref}`manage-access-to-a-group`
+> See more: {ref}`manage-access-to-a-controller`, {ref}`manage-access-to-a-cloud`, {ref}`manage-access-to-a-model`, {ref}`manage-access-to-an-offer`, {ref}`manage-access-to-a-role`, {ref}`manage-access-to-a-group`

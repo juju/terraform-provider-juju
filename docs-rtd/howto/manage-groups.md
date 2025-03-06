@@ -33,7 +33,7 @@ resource "juju_jaas_group" "development" {
 (manage-access-to-a-group)=
 ## Manage access to a group
 
-When using Juju with JAAS, to grant one or more users, groups, and/or service accounts access to a group, in your Terraform plan add a resource type `juju_jaas_access_group`, specifying the group ID, the JAAS group access level, and the list of desired users, groups, and/or service accounts. For example:
+When using Juju with JAAS, to grant one or more users, service accounts, roles, and/or groups access to a group, in your Terraform plan add a resource type `juju_jaas_access_group`, specifying the group ID, the JAAS group access level, and the list of desired users, service accounts, roles, and/or groups. For example:
 
 
 ```{note}
@@ -45,13 +45,14 @@ resource "juju_jaas_access_group" "development" {
   group_id         = juju_jaas_group.target-group.uuid
   access           = "member"
   users            = ["foo@domain.com"]
-  groups           = [juju_jaas_group.development.uuid]
   service_accounts = ["Client-ID-1", "Client-ID-2"]
+  roles            = [juju_jaas_role.development.uuid]
+  groups           = [juju_jaas_group.development.uuid]
 }
 ```
 
 > See more: [`juju_jaas_access_group`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_group), [JAAS | Group access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/authorisation_model/#group)
 
-## Manage a group's access to a controller, cloud, model, offer, or group
+## Manage a group's access to a controller, cloud, model, offer, role, or group
 
-> See more: {ref}`manage-access-to-a-controller`, {ref}`manage-access-to-a-cloud`, {ref}`manage-access-to-a-model`, {ref}`manage-access-to-an-offer`, {ref}`manage-access-to-a-group`
+> See more: {ref}`manage-access-to-a-controller`, {ref}`manage-access-to-a-cloud`, {ref}`manage-access-to-a-model`, {ref}`manage-access-to-an-offer`, {ref}`manage-access-to-a-role`, {ref}`manage-access-to-a-group`

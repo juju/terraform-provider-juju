@@ -93,7 +93,7 @@ resource "juju_integration" "this" {
 (manage-access-to-an-offer)=
 ## Manage access to an offer
 
-Your offer access management options depend on whether the controller you are applying the Terraform plan to is a regular Juju controller or rather a a Juju controller connected to JIMM -- for the former you can grant access only to a user, but for the latter you can grant access to a user, a group, or a service account.
+Your offer access management options depend on whether the controller you are applying the Terraform plan to is a regular Juju controller or rather a a Juju controller connected to JIMM -- for the former you can grant access only to a user, but for the latter you can grant access to a user, a service account, a role, or a group.
 
 
 ### For a regular Juju controller
@@ -110,15 +110,16 @@ resource "juju_access_offer" "this" {
 
 
 ### For a Juju controller added to JIMM
-To grant one or more users, groups, and/or service accounts access to a model, in your Terraform plan add a resource type `juju_jaas_access_offer`, specifying the offer URL, the access level, and the desired list desired users, groups, and/or service accounts. For example:
+To grant one or more users, service accounts, roles, and/or groups access to a model, in your Terraform plan add a resource type `juju_jaas_access_offer`, specifying the offer URL, the JAAS offer access level, and the desired list desired users, service accounts, roles, and/or groups. For example:
 
 ```terraform
 resource "juju_jaas_access_offer" "development" {
   offer_url        = juju_offer.myoffer.url
   access           = "consumer"
   users            = ["foo@domain.com"]
-  groups           = [juju_jaas_group.development.uuid]
   service_accounts = ["Client-ID-1", "Client-ID-2"]
+  roles            = [juju_jaas_role.development.uuid]
+  groups           = [juju_jaas_group.development.uuid]
 }
 ```
 
