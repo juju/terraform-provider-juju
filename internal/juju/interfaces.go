@@ -29,6 +29,7 @@ type SharedClient interface {
 	GetConnection(modelName *string) (api.Connection, error)
 	ModelType(modelName string) (model.ModelType, error)
 	ModelUUID(modelName string) (string, error)
+	ModelStatus(modelIdentifier string, conn api.Connection) (*params.FullStatus, error)
 	RemoveModel(modelUUID string)
 
 	Debugf(msg string, additionalFields ...map[string]interface{})
