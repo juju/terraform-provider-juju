@@ -146,6 +146,65 @@ func TestAcc_ResourceModel_UpgradeProvider(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceModel_Annotations_Basic(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAnnotationsModel(modelName, "test", "test"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_model.testmodel", "name", modelName),
+					resource.TestCheckResourceAttr("juju_model.testmodel", "annotations.test", "test"),
+				),
+			},
+			{
+				Config: testAccAnnotationsModel(modelName, "test", "test-update"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_model.testmodel", "name", modelName),
+					resource.TestCheckResourceAttr("juju_model.testmodel", "annotations.test", "test-update"),
+				),
+			},
+			{
+				Config: fmt.Sprintf(`
+resource "juju_model" "testmodel" {
+  name = %q
+}`, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_model.testmodel", "name", modelName),
+					resource.TestCheckNoResourceAttr("juju_model.testmodel", "annotations.test"),
+				),
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceModel_Annotations_DisjointedSet(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAnnotationsModel(modelName, "test", "test"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_model.testmodel", "name", modelName),
+					resource.TestCheckResourceAttr("juju_model.testmodel", "annotations.test", "test"),
+				),
+			},
+			{
+				Config: testAccAnnotationsModel(modelName, "test-another", "test-another"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_model.testmodel", "name", modelName),
+					resource.TestCheckResourceAttr("juju_model.testmodel", "annotations.test-another", "test-another"),
+					resource.TestCheckNoResourceAttr("juju_model.testmodel", "annotations.test"),
+				),
+			},
+		},
+	})
+}
+
 func testAccCheckDevelopmentConfigIsUnset(modelName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		conn, err := TestClient.Models.GetConnection(&modelName)
@@ -207,4 +266,15 @@ resource "juju_model" "model" {
 
   constraints = "%s"
 }`, modelName, cloudName, constraints)
+}
+
+func testAccAnnotationsModel(modelName string, annotationKey, annotationValue string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "testmodel" {
+  name = %q
+
+  annotations = {
+	%q = %q
+  }
+}`, modelName, annotationKey, annotationValue)
 }
