@@ -415,6 +415,26 @@ func (mr *MockApplicationAPIClientMockRecorder) GetCharmURLOrigin(branchName, ap
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCharmURLOrigin", reflect.TypeOf((*MockApplicationAPIClient)(nil).GetCharmURLOrigin), branchName, applicationName)
 }
 
+// GetConfig mocks base method.
+func (m *MockApplicationAPIClient) GetConfig(branchName string, appNames ...string) ([]map[string]any, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{branchName}
+	for _, a := range appNames {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetConfig", varargs...)
+	ret0, _ := ret[0].([]map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetConfig indicates an expected call of GetConfig.
+func (mr *MockApplicationAPIClientMockRecorder) GetConfig(branchName any, appNames ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{branchName}, appNames...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfig", reflect.TypeOf((*MockApplicationAPIClient)(nil).GetConfig), varargs...)
+}
+
 // GetConstraints mocks base method.
 func (m *MockApplicationAPIClient) GetConstraints(applications ...string) ([]constraints.Value, error) {
 	m.ctrl.T.Helper()
@@ -517,6 +537,20 @@ func (m *MockApplicationAPIClient) Unexpose(application string, endpoints []stri
 func (mr *MockApplicationAPIClientMockRecorder) Unexpose(application, endpoints any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unexpose", reflect.TypeOf((*MockApplicationAPIClient)(nil).Unexpose), application, endpoints)
+}
+
+// UnsetApplicationConfig mocks base method.
+func (m *MockApplicationAPIClient) UnsetApplicationConfig(branchName, application string, keys []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnsetApplicationConfig", branchName, application, keys)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UnsetApplicationConfig indicates an expected call of UnsetApplicationConfig.
+func (mr *MockApplicationAPIClientMockRecorder) UnsetApplicationConfig(branchName, application, keys any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnsetApplicationConfig", reflect.TypeOf((*MockApplicationAPIClient)(nil).UnsetApplicationConfig), branchName, application, keys)
 }
 
 // MockModelConfigAPIClient is a mock of ModelConfigAPIClient interface.
