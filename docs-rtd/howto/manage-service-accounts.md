@@ -9,7 +9,7 @@ In the Juju ecosystem, service accounts are supported only when using [JAAS](htt
 (manage-access-to-a-service account)=
 ## Manage access to a service account
 
-When using Juju with JAAS, to grant a one or more users, service accounts, roles, and/or groups access to a Juju controller connected to JIMM, in your Terraform plan add a resource type `juju_jaas_access_controller`, specifying the model UUID, the JAAS controller access level, and the list of desired users, service accounts, roles, and/or groups. For example:
+When using Juju with JAAS, to grant access to a Juju controller connected to JIMM, in your Terraform plan add a resource type `juju_jaas_access_controller`. Access can be granted to one or more users, service accounts, roles, and/or groups. You must specify the model UUID, the JAAS controller access level, and the list of desired users, service accounts, roles, and/or groups. For example:
 
 ```terraform
 resource "juju_jaas_access_controller" "development" {

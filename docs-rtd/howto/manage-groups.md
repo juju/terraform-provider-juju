@@ -33,8 +33,7 @@ resource "juju_jaas_group" "development" {
 (manage-access-to-a-group)=
 ## Manage access to a group
 
-When using Juju with JAAS, to grant one or more users, service accounts, roles, and/or groups access to a group, in your Terraform plan add a resource type `juju_jaas_access_group`, specifying the group ID, the JAAS group access level, and the list of desired users, service accounts, roles, and/or groups. For example:
-
+When using Juju with JAAS, to grant access to a group, in your Terraform plan add a resource type `juju_jaas_access_group`. Access can be granted to one or more users, service accounts, roles, and/or groups. The resource must include the group ID, the JAAS group access level, and the list of desired users, service accounts, roles, and/or groups. For example:
 
 ```{note}
 At present, the only valid JAAS group access level is `member`, so granting an entity access to a group effectively means making them a member of the group.

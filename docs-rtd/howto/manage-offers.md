@@ -97,7 +97,7 @@ Your offer access management options depend on whether the controller you are ap
 
 
 ### For a regular Juju controller
-To grant a user access to an offer, in your Terraform plan add a `juju_access_offer` resource, specifying the offer URL and setting the Juju access level to the list of users you want to grant that level. For example:
+To grant one or more users access to an offer, in your Terraform plan add a `juju_access_offer` resource. You must specify the offer URL and setting the Juju access level to the list of users you want to grant that level. For example:
 
 ```terraform
 resource "juju_access_offer" "this" {
@@ -110,7 +110,7 @@ resource "juju_access_offer" "this" {
 
 
 ### For a Juju controller added to JIMM
-To grant one or more users, service accounts, roles, and/or groups access to a model, in your Terraform plan add a resource type `juju_jaas_access_offer`, specifying the offer URL, the JAAS offer access level, and the desired list desired users, service accounts, roles, and/or groups. For example:
+To grant one or more users, service accounts, roles, and/or groups access to a model, in your Terraform plan add a resource type `juju_jaas_access_offer`. You must specify the offer URL, the JAAS offer access level, and the desired list desired users, service accounts, roles, and/or groups. For example:
 
 ```terraform
 resource "juju_jaas_access_offer" "development" {

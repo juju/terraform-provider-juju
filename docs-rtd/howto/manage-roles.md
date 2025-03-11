@@ -37,7 +37,7 @@ resource "juju_jaas_role" "development" {
 (manage-access-to-a-role)=
 ## Manage access to a role
 
-When using Juju with JAAS, to grant one or more users, service accounts, and/or groups  access to a role, in your Terraform plan add a resource type `juju_jaas_access_role`, specifying the role, the JAAS role access level, and the list of desired users, service accounts, and/or groups. For example:
+When using Juju with JAAS, to grant access to a role, in your Terraform plan add a resource type `juju_jaas_access_role`. Access can be granted to one or more users, service accounts, and/or groups. You must specify the role, the JAAS role access level, and the list of desired users, service accounts, and/or groups. For example:
 
 
 ```{note}

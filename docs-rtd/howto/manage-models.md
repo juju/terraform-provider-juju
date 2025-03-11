@@ -109,7 +109,7 @@ Your model access management options depend on whether the controller you are ap
 
 
 ### For a regular Juju controller
-To grant a user access to a model, in your Terraform plan add a `juju_access_model` resource, specifying the model, the Juju access level, and the user(s) to which you want to grant access. For example:
+To grant one or more users access to a model, in your Terraform plan add a `juju_access_model` resource. You must specify the model, the Juju access level, and the user(s) to which you want to grant access. For example:
 
 ```terraform
 resource "juju_access_model" "this" {
@@ -123,7 +123,7 @@ resource "juju_access_model" "this" {
 
 
 ### For a Juju controller added to JIMM
-To grant one or more users, service accounts, roles, and/or groups access to a model, in your Terraform plan add a resource type `juju_jaas_access_model`, specifying the model UUID, the JAAS model access level, and the desired list of users, service accounts, roles, and/or groups. For example:
+To grant one or more users, service accounts, roles, and/or groups access to a model, in your Terraform plan add a resource type `juju_jaas_access_model`. You must specify the model UUID, the JAAS model access level, and the desired list of users, service accounts, roles, and/or groups. For example:
 
 ```terraform
 resource "juju_jaas_access_model" "development" {
