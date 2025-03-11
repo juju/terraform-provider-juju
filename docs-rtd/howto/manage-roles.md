@@ -28,7 +28,7 @@ To add a role, in your Terraform plan create a resource of the `juju_jaas_role` 
 
 ```terraform
 resource "juju_jaas_role" "development" {
-  name = "devops-team"
+  name = "model-reader"
 }
 ```
 
