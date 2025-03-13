@@ -1507,3 +1507,78 @@ resource "juju_application" "test" {
 		"OciImage":     ociImage,
 	})
 }
+
+func TestAcc_ResourceApplication_UpdateEmptyConfig(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+	appName := "test-app"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationSetInitialConfig(modelName, appName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "alnvdl-test-k8s"),
+					resource.TestCheckResourceAttr("juju_application.this", "trust", "false"),
+					resource.TestCheckResourceAttr("juju_application.this", "config.%", "1"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationUpdateEmptyConfig(modelName, appName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "alnvdl-test-k8s"),
+					resource.TestCheckResourceAttr("juju_application.this", "trust", "false"),
+					resource.TestCheckResourceAttr("juju_application.this", "config.%", "0"),
+				),
+			},
+		},
+	})
+}
+
+func testAccResourceApplicationSetInitialConfig(modelName, appName string) string {
+	return fmt.Sprintf(`
+		resource "juju_model" "this" {
+		  name = %q
+		}
+		
+		resource "juju_application" "this" {
+		  model = juju_model.this.name
+		  name = %q
+		  charm {
+			name = "alnvdl-test-k8s"
+    		channel = "latest/stable"
+		  }
+		  config = {
+			config = "abc"
+		  }
+          units = 1
+		}
+		`, modelName, appName)
+}
+
+func testAccResourceApplicationUpdateEmptyConfig(modelName, appName string) string {
+	return fmt.Sprintf(`
+		resource "juju_model" "this" {
+		  name = %q
+		}
+		
+		resource "juju_application" "this" {
+		  model = juju_model.this.name
+		  name = %q
+		  charm {
+			name = "alnvdl-test-k8s"
+    		channel = "latest/stable"
+		  }
+		  config = {
+		  }
+          units = 1
+		}
+		`, modelName, appName)
+}
