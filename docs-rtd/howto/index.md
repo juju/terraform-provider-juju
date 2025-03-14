@@ -22,6 +22,7 @@ manage-ssh-keys
 manage-users
 manage-groups
 manage-service-accounts
+manage-roles
 manage-secrets
 ```
 

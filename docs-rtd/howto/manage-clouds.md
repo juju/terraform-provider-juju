@@ -33,15 +33,16 @@ resource "juju_model" "my-model" {
 At present the Terraform Provider for Juju supports cloud access management only for clouds added to a Juju controller added to JIMM.
 ```
 
-When using Juju with JAAS, to grant one or more users, groups, and/or service accounts access to a JAAS-known cloud, in your Terraform plan add a resource type `juju_jaas_access_cloud`, specifying the cloud name, the JAAS cloud access level, and the desired list of users, groups, and/or service accounts. For example:
+When using Juju with JAAS, to grant access to a JAAS-known cloud, in your Terraform plan add a resource type `juju_jaas_access_cloud`. Access can be granted to one or more users, service accounts, roles, and/or groups. You must specify the cloud name, the JAAS cloud access level, and the desired list of users, service accounts, roles, and/or groups. For example:
 
 ```terraform
 resource "juju_jaas_access_cloud" "development" {
   cloud_name       = "aws"
   access           = "can_addmodel"
   users            = ["foo@domain.com"]
-  groups           = [juju_jaas_group.development.uuid]
   service_accounts = ["Client-ID-1", "Client-ID-2"]
+  roles            = [juju_jaas_role.development.uuid]
+  groups           = [juju_jaas_group.development.uuid]
 }
 ```
 
