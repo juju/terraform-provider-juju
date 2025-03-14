@@ -1516,8 +1516,9 @@ func TestAcc_ResourceApplication_UpdateEmptyConfig(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
+			// create application with config values present, and default trust = false
 			{
-				Config: testAccResourceApplicationSetInitialConfig(modelName, appName),
+				Config: testAccResourceApplicationUpdateConfig(modelName, appName, false, false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
@@ -1527,14 +1528,27 @@ func TestAcc_ResourceApplication_UpdateEmptyConfig(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application.this", "config.%", "1"),
 				),
 			},
+			// reset config values
 			{
-				Config: testAccResourceApplicationUpdateEmptyConfig(modelName, appName),
+				Config: testAccResourceApplicationUpdateConfig(modelName, appName, false, true),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
-					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "alnvdl-test-k8s"),
 					resource.TestCheckResourceAttr("juju_application.this", "trust", "false"),
+					resource.TestCheckResourceAttr("juju_application.this", "config.%", "0"),
+				),
+			},
+			// reset config value to non-empty, to prepare for next step
+			{
+				Config: testAccResourceApplicationUpdateConfig(modelName, appName, false, false),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "trust", "false"),
+					resource.TestCheckResourceAttr("juju_application.this", "config.%", "1"),
+				),
+			},
+			// set trust to true and config to empty in a single update
+			{
+				Config: testAccResourceApplicationUpdateConfig(modelName, appName, true, true),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 					resource.TestCheckResourceAttr("juju_application.this", "config.%", "0"),
 				),
 			},
@@ -1542,7 +1556,11 @@ func TestAcc_ResourceApplication_UpdateEmptyConfig(t *testing.T) {
 	})
 }
 
-func testAccResourceApplicationSetInitialConfig(modelName, appName string) string {
+func testAccResourceApplicationUpdateConfig(modelName, appName string, trust bool, shouldSetEmptyConfig bool) string {
+	configStr := ""
+	if !shouldSetEmptyConfig {
+		configStr = "config = \"abc\""
+	}
 	return fmt.Sprintf(`
 		resource "juju_model" "this" {
 		  name = %q
@@ -1555,30 +1573,11 @@ func testAccResourceApplicationSetInitialConfig(modelName, appName string) strin
 			name = "alnvdl-test-k8s"
     		channel = "latest/stable"
 		  }
+          trust = %t
 		  config = {
-			config = "abc"
+			%s
 		  }
           units = 1
 		}
-		`, modelName, appName)
-}
-
-func testAccResourceApplicationUpdateEmptyConfig(modelName, appName string) string {
-	return fmt.Sprintf(`
-		resource "juju_model" "this" {
-		  name = %q
-		}
-		
-		resource "juju_application" "this" {
-		  model = juju_model.this.name
-		  name = %q
-		  charm {
-			name = "alnvdl-test-k8s"
-    		channel = "latest/stable"
-		  }
-		  config = {
-		  }
-          units = 1
-		}
-		`, modelName, appName)
+		`, modelName, appName, trust, configStr)
 }
