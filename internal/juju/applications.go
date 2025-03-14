@@ -1231,20 +1231,23 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 			c.Errorf(err, "setting configuration params")
 			return err
 		}
-	} else {
-		// if auxConfig populated from input.Config is nil, we need to reset previously set config
+	}
+
+	if input.Config == nil {
+		// if input.Config is nil, we may need to reset previously set config
 		c.Debugf("Empty input config detected. Checking for config keys to reset..")
-		configMaps, err := applicationAPIClient.GetConfig("master", input.AppName)
+		// Get the current application state
+		currentState, err := c.ReadApplication(&ReadApplicationInput{
+			ModelName: input.ModelName,
+			AppName:   input.AppName,
+		})
 		if err != nil {
-			c.Errorf(err, "getting config to check for reset")
 			return err
 		}
-		if len(configMaps) > 0 {
-			// config map from GetConfig API is a slice of maps. We only need our one app's keys
-			firstConfigMap := configMaps[0]
-			keys := make([]string, 0, len(firstConfigMap))
-			for key := range firstConfigMap {
-				// collect all keys into a string slice to pass to the API
+		// Check if there are any existing config entries to reset
+		if len(currentState.Config) > 0 {
+			keys := make([]string, 0, len(currentState.Config))
+			for key := range currentState.Config {
 				keys = append(keys, key)
 			}
 			if len(keys) > 0 {
