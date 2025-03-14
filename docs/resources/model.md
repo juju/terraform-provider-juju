@@ -38,6 +38,7 @@ resource "juju_model" "this" {
 
 ### Optional
 
+- `annotations` (Map of String) Annotations for the model
 - `cloud` (Block List) Juju Cloud where the model will operate. Changing this value will cause the model to be destroyed and recreated by terraform. (see [below for nested schema](#nestedblock--cloud))
 - `config` (Map of String) Override default model configuration
 - `constraints` (String) Constraints imposed to this model

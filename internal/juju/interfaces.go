@@ -110,3 +110,9 @@ type KubernetesCloudAPIClient interface {
 	AddCredential(cloud string, credential jujucloud.Credential) error
 	UserCredentials(user names.UserTag, cloud names.CloudTag) ([]names.CloudCredentialTag, error)
 }
+
+// AnnotationsAPIClient defines the set of methods that the Annotations API provides.
+type AnnotationsAPIClient interface {
+	Get(tags []string) ([]params.AnnotationsGetResult, error)
+	Set(annotations map[string]map[string]string) ([]params.ErrorResult, error)
+}

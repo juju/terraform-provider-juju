@@ -60,6 +60,7 @@ type Client struct {
 	Users        usersClient
 	Secrets      secretsClient
 	Jaas         jaasClient
+	Annotations  annotationsClient
 
 	isJAAS   func() bool
 	username string
@@ -138,6 +139,7 @@ func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, er
 		Users:        *newUsersClient(sc),
 		Secrets:      *newSecretsClient(sc),
 		Jaas:         *newJaasClient(sc),
+		Annotations:  *newAnnotationsClient(sc),
 		isJAAS:       func() bool { return sc.IsJAAS(defaultJAASCheck) },
 		username:     user,
 	}, nil

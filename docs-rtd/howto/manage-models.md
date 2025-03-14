@@ -87,6 +87,22 @@ resource "juju_model" "this" {
 
 
 (manage-access-to-a-model)=
+
+## Manage annotations for a model
+To set annotations for a model, in your Terraform, in the model's resource definition, specify an `annotations` block, listing all the key=value pairs you want to set. For example:
+
+```terraform
+resource "juju_model" "testmodel" {
+  name = "model"
+
+  annotations = {
+	  test = "test" 
+  }
+}
+```
+
+> See more: [`juju_model` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/model)
+
 ## Manage access to a model
 
 Your model access management options depend on whether the controller you are applying the Terraform plan to is a regular Juju controller or rather a Juju controller added to JIMM -- for the former you can grant access only to a user, but for the latter you can grant access to a user, a group, or a service account.

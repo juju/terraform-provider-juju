@@ -50,6 +50,7 @@ type modelResourceModel struct {
 	Cloud       types.List   `tfsdk:"cloud"`
 	Config      types.Map    `tfsdk:"config"`
 	Constraints types.String `tfsdk:"constraints"`
+	Annotations types.Map    `tfsdk:"annotations"`
 	Credential  types.String `tfsdk:"credential"`
 	Type        types.String `tfsdk:"type"`
 	UUID        types.String `tfsdk:"uuid"`
@@ -84,6 +85,14 @@ func (r *modelResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			},
 			"config": schema.MapAttribute{
 				Description: "Override default model configuration",
+				Optional:    true,
+				ElementType: types.StringType,
+				PlanModifiers: []planmodifier.Map{
+					mapplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"annotations": schema.MapAttribute{
+				Description: "Annotations for the model",
 				Optional:    true,
 				ElementType: types.StringType,
 				PlanModifiers: []planmodifier.Map{
@@ -254,6 +263,23 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 		plan.Cloud = newPlanCloud
 	}
 
+	var annotations map[string]string
+	resp.Diagnostics.Append(plan.Annotations.ElementsAs(ctx, &annotations, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if len(annotations) > 0 {
+		err = r.client.Annotations.SetAnnotations(&juju.SetAnnotationsInput{
+			ModelName:   modelName,
+			Annotations: annotations,
+			EntityTag:   names.NewModelTag(response.UUID),
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to set annotations for model %q, got error: %s", plan.Name, err))
+			return
+		}
+	}
+
 	plan.Credential = types.StringValue(response.CloudCredentialName)
 	plan.Type = types.StringValue(response.Type)
 	plan.UUID = types.StringValue(response.UUID)
@@ -373,13 +399,30 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		state.Config = newStateConfig
 	}
 
+	annotations, err := r.client.Annotations.GetAnnotations(&juju.GetAnnotationsInput{
+		EntityTag: names.NewModelTag(response.ModelInfo.UUID),
+		ModelName: modelName,
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model's annotations, got error: %s", err))
+		return
+	}
+	if len(annotations.Annotations) > 0 {
+		annotationsType := req.State.Schema.GetAttributes()["annotations"].(schema.MapAttribute).ElementType
+
+		annotationsMapValue, errDiag := types.MapValueFrom(ctx, annotationsType, annotations.Annotations)
+		resp.Diagnostics.Append(errDiag...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		state.Annotations = annotationsMapValue
+	}
 	// Name, Type, Credential, and Id.
 	state.Name = types.StringValue(modelName)
 	state.Type = types.StringValue(response.ModelInfo.Type)
 	state.Credential = types.StringValue(credential)
 	state.UUID = types.StringValue(response.ModelInfo.UUID)
 	state.ID = types.StringValue(response.ModelInfo.UUID)
-
 	r.trace(fmt.Sprintf("Read model resource for: %v", modelName))
 	// Set the state onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -401,14 +444,14 @@ func (r *modelResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 
 	var err error
-	noChange := true
+	modelUpdate := false
 
 	// Check config update
 	var configMap map[string]string
 	var unsetConfigKeys []string
 
 	if !plan.Config.Equal(state.Config) {
-		noChange = false
+		modelUpdate = true
 		oldConfigMap := map[string]string{}
 		resp.Diagnostics.Append(state.Config.ElementsAs(ctx, &oldConfigMap, false)...)
 		if resp.Diagnostics.HasError() {
@@ -435,7 +478,7 @@ func (r *modelResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 	if !plan.Constraints.Equal(state.Constraints) {
-		noChange = false
+		modelUpdate = true
 		newConstraints, err = constraints.Parse(plan.Constraints.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse constraints for model, got error: %s", err))
@@ -446,40 +489,47 @@ func (r *modelResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	// Check the credential
 	credentialUpdate := ""
 	if !plan.Credential.Equal(state.Credential) {
-		noChange = false
+		modelUpdate = true
 		credentialUpdate = plan.Credential.ValueString()
 	}
 
-	if noChange {
-		return
+	// Check annotations
+	if !state.Annotations.Equal(plan.Annotations) {
+		resp.Diagnostics.Append(r.updateAnnotations(ctx, state.Annotations, plan.Annotations, plan.Name.ValueString(), plan.UUID.ValueString())...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
-	var clouds []nestedCloud
-	resp.Diagnostics.Append(plan.Cloud.ElementsAs(ctx, &clouds, false)...)
-	if resp.Diagnostics.HasError() {
-		return
+	if modelUpdate {
+		var clouds []nestedCloud
+		resp.Diagnostics.Append(plan.Cloud.ElementsAs(ctx, &clouds, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		var cloudNameInput string
+
+		if len(clouds) > 0 {
+			cloudNameInput = clouds[0].Name.ValueString()
+		}
+
+		err = r.client.Models.UpdateModel(juju.UpdateModelInput{
+			UUID:        plan.UUID.ValueString(),
+			CloudName:   cloudNameInput,
+			Config:      configMap,
+			Unset:       unsetConfigKeys,
+			Constraints: &newConstraints,
+			Credential:  credentialUpdate,
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update model, got error: %s", err))
+			return
+		}
+
+		r.trace(fmt.Sprintf("Updated model resource: %q", plan.Name.ValueString()))
 	}
 
-	var cloudNameInput string
-
-	if len(clouds) > 0 {
-		cloudNameInput = clouds[0].Name.ValueString()
-	}
-
-	err = r.client.Models.UpdateModel(juju.UpdateModelInput{
-		UUID:        plan.UUID.ValueString(),
-		CloudName:   cloudNameInput,
-		Config:      configMap,
-		Unset:       unsetConfigKeys,
-		Constraints: &newConstraints,
-		Credential:  credentialUpdate,
-	})
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update model, got error: %s", err))
-		return
-	}
-
-	r.trace(fmt.Sprintf("Updated model resource: %q", plan.Name.ValueString()))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -534,4 +584,42 @@ func (r *modelResource) trace(msg string, additionalFields ...map[string]interfa
 	// Output:
 	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
 	tflog.SubsystemTrace(r.subCtx, LogResourceModel, msg, additionalFields...)
+}
+
+// updateAnnotations takes the state and the plan, and performs the necessary
+// steps to propagate the changes to juju.
+func (r *modelResource) updateAnnotations(ctx context.Context, stateAnnotations types.Map, planAnnotations types.Map, modelName string, uuid string) diag.Diagnostics {
+	diagnostics := diag.Diagnostics{}
+
+	var annotationsState map[string]string
+	diagnostics.Append(stateAnnotations.ElementsAs(ctx, &annotationsState, false)...)
+	if diagnostics.HasError() {
+		return diagnostics
+	}
+	var annotationsPlan map[string]string
+	diagnostics.Append(planAnnotations.ElementsAs(ctx, &annotationsPlan, false)...)
+	if diagnostics.HasError() {
+		return diagnostics
+	}
+	// when the plan is empty this map is nil, instead of being initialized with 0 items.
+	if annotationsPlan == nil {
+		annotationsPlan = make(map[string]string, 0)
+	}
+	// set the value of removed fields to "" in the plan to unset the value
+	for k := range annotationsState {
+		if _, ok := annotationsPlan[k]; !ok {
+			annotationsPlan[k] = ""
+		}
+	}
+
+	err := r.client.Annotations.SetAnnotations(&juju.SetAnnotationsInput{
+		ModelName:   modelName,
+		Annotations: annotationsPlan,
+		EntityTag:   names.NewModelTag(uuid),
+	})
+	if err != nil {
+		diagnostics.AddError("Client Error", fmt.Sprintf("Unable to set annotations for model %q, got error: %s", modelName, err))
+		return diagnostics
+	}
+	return diagnostics
 }
