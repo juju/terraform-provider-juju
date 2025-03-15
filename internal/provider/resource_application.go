@@ -985,6 +985,15 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 				updateApplicationInput.Config[k] = v
 			}
 		}
+		// Add entries to UnsetConfig if they are present in stateConfigMap but absent in planConfigMap
+		for k := range stateConfigMap {
+			if _, exists := planConfigMap[k]; !exists {
+				if updateApplicationInput.UnsetConfig == nil {
+					updateApplicationInput.UnsetConfig = make(map[string]string)
+				}
+				updateApplicationInput.UnsetConfig[k] = stateConfigMap[k]
+			}
+		}
 	}
 
 	// if resources in the plan are equal to resources stored in the state,
