@@ -311,6 +311,7 @@ type UpdateApplicationInput struct {
 	// Unexpose indicates what endpoints to unexpose
 	Unexpose           []string
 	Config             map[string]string
+	UnsetConfig        map[string]string
 	Base               string
 	Placement          map[string]interface{}
 	Constraints        *constraints.Value
@@ -1233,25 +1234,16 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		}
 	}
 
-	if input.Config == nil {
-		// if input.Config is nil, we may need to reset previously set config
-		c.Debugf("Empty input config detected. Checking for config keys to reset..")
-		// Get the current application state
-		currentState, err := c.ReadApplication(&ReadApplicationInput{
-			ModelName: input.ModelName,
-			AppName:   input.AppName,
-		})
-		if err != nil {
-			return err
-		}
-		// Check if there are any existing config entries to reset
-		if len(currentState.Config) > 0 {
-			keys := make([]string, 0, len(currentState.Config))
-			for key := range currentState.Config {
+	if input.UnsetConfig != nil {
+		// these are config entries to be unset
+		if len(input.UnsetConfig) > 0 {
+			c.Debugf("Detected config keys to be unset..")
+			keys := make([]string, 0, len(input.UnsetConfig))
+			for key := range input.UnsetConfig {
 				keys = append(keys, key)
 			}
 			if len(keys) > 0 {
-				c.Debugf("Resetting config keys", map[string]interface{}{"keys": keys})
+				c.Debugf("Unsetting config keys", map[string]interface{}{"keys": keys})
 				if err := applicationAPIClient.UnsetApplicationConfig("master", input.AppName, keys); err != nil {
 					c.Errorf(err, "unsetting config")
 					return err

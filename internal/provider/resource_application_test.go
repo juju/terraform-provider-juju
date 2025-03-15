@@ -1516,50 +1516,63 @@ func TestAcc_ResourceApplication_UpdateEmptyConfig(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
-			// create application with config values present, and default trust = false
+			// create application with one config value present, and default trust = false
 			{
-				Config: testAccResourceApplicationUpdateConfig(modelName, appName, false, false),
+				Config: testAccResourceApplicationUpdateConfig(modelName, appName, false, map[string]string{"config-file": "xxx"}),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "alnvdl-test-k8s"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "conserver"),
 					resource.TestCheckResourceAttr("juju_application.this", "trust", "false"),
 					resource.TestCheckResourceAttr("juju_application.this", "config.%", "1"),
+					resource.TestCheckResourceAttr("juju_application.this", "config.config-file", "xxx"),
 				),
 			},
-			// reset config values
+			// reset first config values, add a different one
 			{
-				Config: testAccResourceApplicationUpdateConfig(modelName, appName, false, true),
+				Config: testAccResourceApplicationUpdateConfig(modelName, appName, false, map[string]string{"passwd-file": "yyy"}),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "trust", "false"),
+					resource.TestCheckResourceAttr("juju_application.this", "config.%", "1"),
+					resource.TestCheckResourceAttr("juju_application.this", "config.passwd-file", "yyy"),
+				),
+			},
+			// reset all values, pass empty map
+			{
+				Config: testAccResourceApplicationUpdateConfig(modelName, appName, false, map[string]string{}),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "trust", "false"),
 					resource.TestCheckResourceAttr("juju_application.this", "config.%", "0"),
 				),
 			},
-			// reset config value to non-empty, to prepare for next step
+			// set config value to non-empty, to prepare for next step
 			{
-				Config: testAccResourceApplicationUpdateConfig(modelName, appName, false, false),
+				Config: testAccResourceApplicationUpdateConfig(modelName, appName, false, map[string]string{"config-file": "xxx", "passwd-file": "yyy"}),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "trust", "false"),
-					resource.TestCheckResourceAttr("juju_application.this", "config.%", "1"),
+					resource.TestCheckResourceAttr("juju_application.this", "config.%", "2"),
+					resource.TestCheckResourceAttr("juju_application.this", "config.config-file", "xxx"),
+					resource.TestCheckResourceAttr("juju_application.this", "config.passwd-file", "yyy"),
 				),
 			},
-			// set trust to true and config to empty in a single update
+			// set trust to true and remove a config entry in a single update
 			{
-				Config: testAccResourceApplicationUpdateConfig(modelName, appName, true, true),
+				Config: testAccResourceApplicationUpdateConfig(modelName, appName, true, map[string]string{"config-file": "xxx"}),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
-					resource.TestCheckResourceAttr("juju_application.this", "config.%", "0"),
+					resource.TestCheckResourceAttr("juju_application.this", "config.%", "1"),
+					resource.TestCheckResourceAttr("juju_application.this", "config.config-file", "xxx"),
 				),
 			},
 		},
 	})
 }
 
-func testAccResourceApplicationUpdateConfig(modelName, appName string, trust bool, shouldSetEmptyConfig bool) string {
+func testAccResourceApplicationUpdateConfig(modelName, appName string, trust bool, configMap map[string]string) string {
 	configStr := ""
-	if !shouldSetEmptyConfig {
-		configStr = "config = \"abc\""
+	for key, value := range configMap {
+		configStr += fmt.Sprintf("%s = \"%s\"\n", key, value)
 	}
 	return fmt.Sprintf(`
 		resource "juju_model" "this" {
@@ -1570,8 +1583,7 @@ func testAccResourceApplicationUpdateConfig(modelName, appName string, trust boo
 		  model = juju_model.this.name
 		  name = %q
 		  charm {
-			name = "alnvdl-test-k8s"
-    		channel = "latest/stable"
+			name = "conserver"
 		  }
           trust = %t
 		  config = {
