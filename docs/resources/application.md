@@ -125,11 +125,6 @@ Read-Only:
 - `size` (String) The size of each volume.
 
 
-### Notes
-
-Removing the config map will not reset the charm config to defaults per [GH issue #393](https://github.com/juju/terraform-provider-juju/issues/393)
-
-
 ## Import
 
 Import is supported using the following syntax:
