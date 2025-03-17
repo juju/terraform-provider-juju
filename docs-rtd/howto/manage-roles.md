@@ -1,5 +1,5 @@
-(manage-groups)=
-# Manage groups
+(manage-roles)=
+# Manage roles
 
 ```{note}
 In the Juju ecosystem, roles are supported only when using [JAAS](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/).
@@ -57,6 +57,6 @@ resource "juju_jaas_access_role" "development" {
 
 > See more: [`juju_jaas_access_role`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_role), [JAAS | Role access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/authorisation_model/#role)
 
-## Manage a role's access to a controller, cloud, model, offer, or group
+## Manage a role's access to a controller, cloud, model, or offer
 
-> See more: {ref}`manage-access-to-a-controller`, {ref}`manage-access-to-a-cloud`, {ref}`manage-access-to-a-model`, {ref}`manage-access-to-an-offer`, {ref}`manage-access-to-a-group`
+> See more: {ref}`manage-access-to-a-controller`, {ref}`manage-access-to-a-cloud`, {ref}`manage-access-to-a-model`, {ref}`manage-access-to-an-offer`

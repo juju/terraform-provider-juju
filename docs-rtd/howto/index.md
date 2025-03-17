@@ -20,9 +20,9 @@ manage-units
 manage-machines
 manage-ssh-keys
 manage-users
-manage-groups
 manage-service-accounts
 manage-roles
+manage-groups
 manage-secrets
 ```
 
