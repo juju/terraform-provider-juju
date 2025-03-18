@@ -1565,6 +1565,14 @@ func TestAcc_ResourceApplication_UpdateEmptyConfig(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application.this", "config.config-file", "xxx"),
 				),
 			},
+			// test removal of config map altogether, and not just the entries
+			{
+				Config: testAccResourceApplicationRemoveConfig(modelName, appName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "trust", "false"),
+					resource.TestCheckResourceAttr("juju_application.this", "config.%", "0"),
+				),
+			},
 		},
 	})
 }
@@ -1592,4 +1600,22 @@ func testAccResourceApplicationUpdateConfig(modelName, appName string, trust boo
           units = 1
 		}
 		`, modelName, appName, trust, configStr)
+}
+
+func testAccResourceApplicationRemoveConfig(modelName, appName string) string {
+	return fmt.Sprintf(`
+		resource "juju_model" "this" {
+		  name = %q
+		}
+		
+		resource "juju_application" "this" {
+		  model = juju_model.this.name
+		  name = %q
+		  charm {
+			name = "conserver"
+		  }
+          trust = false
+          units = 1
+		}
+		`, modelName, appName)
 }

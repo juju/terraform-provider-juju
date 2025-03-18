@@ -59,7 +59,6 @@ type ApplicationAPIClient interface {
 	ScaleApplication(in apiapplication.ScaleApplicationParams) (params.ScaleApplicationResult, error)
 	SetCharm(branchName string, cfg apiapplication.SetCharmConfig) error
 	SetConfig(branchName, application, configYAML string, config map[string]string) error
-	GetConfig(branchName string, appNames ...string) ([]map[string]interface{}, error)
 	UnsetApplicationConfig(branchName, application string, keys []string) error
 	SetConstraints(application string, constraints constraints.Value) error
 	Unexpose(application string, endpoints []string) error
