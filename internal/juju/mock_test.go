@@ -415,26 +415,6 @@ func (mr *MockApplicationAPIClientMockRecorder) GetCharmURLOrigin(branchName, ap
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCharmURLOrigin", reflect.TypeOf((*MockApplicationAPIClient)(nil).GetCharmURLOrigin), branchName, applicationName)
 }
 
-// GetConfig mocks base method.
-func (m *MockApplicationAPIClient) GetConfig(branchName string, appNames ...string) ([]map[string]any, error) {
-	m.ctrl.T.Helper()
-	varargs := []any{branchName}
-	for _, a := range appNames {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "GetConfig", varargs...)
-	ret0, _ := ret[0].([]map[string]any)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetConfig indicates an expected call of GetConfig.
-func (mr *MockApplicationAPIClientMockRecorder) GetConfig(branchName any, appNames ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{branchName}, appNames...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfig", reflect.TypeOf((*MockApplicationAPIClient)(nil).GetConfig), varargs...)
-}
-
 // GetConstraints mocks base method.
 func (m *MockApplicationAPIClient) GetConstraints(applications ...string) ([]constraints.Value, error) {
 	m.ctrl.T.Helper()

@@ -1234,21 +1234,17 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		}
 	}
 
-	if input.UnsetConfig != nil {
+	if len(input.UnsetConfig) > 0 {
 		// these are config entries to be unset
-		if len(input.UnsetConfig) > 0 {
-			c.Debugf("Detected config keys to be unset..")
-			keys := make([]string, 0, len(input.UnsetConfig))
-			for key := range input.UnsetConfig {
-				keys = append(keys, key)
-			}
-			if len(keys) > 0 {
-				c.Debugf("Unsetting config keys", map[string]interface{}{"keys": keys})
-				if err := applicationAPIClient.UnsetApplicationConfig("master", input.AppName, keys); err != nil {
-					c.Errorf(err, "unsetting config")
-					return err
-				}
-			}
+		c.Debugf("Detected config keys to be unset.")
+		keys := make([]string, 0, len(input.UnsetConfig))
+		for key := range input.UnsetConfig {
+			keys = append(keys, key)
+		}
+		c.Debugf("Unsetting config keys", map[string]interface{}{"keys": keys})
+		if err := applicationAPIClient.UnsetApplicationConfig(model.GenerationMaster, input.AppName, keys); err != nil {
+			c.Errorf(err, "unsetting config")
+			return err
 		}
 	}
 
