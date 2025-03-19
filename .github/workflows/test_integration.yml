@@ -68,10 +68,10 @@ jobs:
       - name: In case of LXD setup also microk8s
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
         run: |
-          sudo snap install microk8s --channel=1.28-strict/stable
+          sudo snap install microk8s --channel=1.32-strict/stable
           sudo usermod -a -G snap_microk8s $USER
           sudo chown -R $USER ~/.kube
-          sudo microk8s.enable dns storage
+          sudo microk8s.enable dns hostpath-storage
           sudo microk8s.enable dns local-storage
           sudo -g snap_microk8s -E microk8s status --wait-ready --timeout=600
       - name: Create additional networks when testing with LXD
