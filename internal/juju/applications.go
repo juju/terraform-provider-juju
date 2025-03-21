@@ -1114,7 +1114,13 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	usedResources := make(map[string]string)
 	for _, iResources := range resources {
 		for _, resource := range iResources.Resources {
-			usedResources[resource.Name] = strconv.Itoa(resource.Revision)
+			// The reason why we do it is to then use the state value for this resource
+			// instead of the revision number.
+			if resource.Resource.Origin == charmresources.OriginUpload {
+				usedResources[resource.Name] = "-1"
+			} else {
+				usedResources[resource.Name] = strconv.Itoa(resource.Revision)
+			}
 		}
 	}
 
