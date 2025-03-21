@@ -870,8 +870,11 @@ func (r *applicationResource) configureResourceData(ctx context.Context, resourc
 		// Add if the value has changed from the previous state
 		if previousValue, found := previousResources[k]; found {
 			if v != previousValue {
-				// remember that this Terraform schema type only accepts strings
-				previousResources[k] = v
+				// if the value is -1, it means this resource was uploaded, so we
+				// get it from the state.
+				if v != "-1" {
+					previousResources[k] = v
+				}
 				changes = true
 			}
 		}
