@@ -2,6 +2,7 @@ CIDRs
 CPUs
 declaratively
 Hashicorp
+jaas
 JAAS
 JIMM
 juju
@@ -17,3 +18,7 @@ SREs
 TLS
 Unexpose
 unexpose
+Annotations
+annotations
+uuid
+UUID

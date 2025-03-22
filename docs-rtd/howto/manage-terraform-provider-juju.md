@@ -3,7 +3,7 @@
 
 ## Install `terraform-provider-juju`
 
-To install `terraform-provider-juju` on Linux, macOS, or Windows, you need to install the `terraform` CLI. 
+To install `terraform-provider-juju` on Linux, macOS, or Windows, you need to install the `terraform` CLI.
 
 > See more: [Hashicorp | Install Terraform](https://developer.hashicorp.com/terraform/install)
 
@@ -62,7 +62,7 @@ Once you've installed the `terraform` CLI, to start using it:
 
     ```terraform
     provider "juju" {}
-    ``` 
+    ```
 
     Then, in a terminal, export the controller environment variables with your controller's values. For example:
 

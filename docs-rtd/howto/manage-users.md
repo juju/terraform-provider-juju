@@ -18,9 +18,9 @@ resource "juju_user" "alex" {
 > See more: [`juju_user` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/user)
 
 
-## Manage a user's access to a controller, cloud, model, offer, or group
+## Manage a user's access to a controller, cloud, model, offer, role, or group
 
-> See more: {ref}`manage-access-to-a-controller`, {ref}`manage-access-to-a-cloud`, {ref}`manage-access-to-a-model`, {ref}`manage-access-to-an-offer`, {ref}`manage-access-to-a-group`
+> See more: {ref}`manage-access-to-a-controller`, {ref}`manage-access-to-a-cloud`, {ref}`manage-access-to-a-model`, {ref}`manage-access-to-an-offer`, {ref}`manage-access-to-a-role`, {ref}`manage-access-to-a-group`
 
 ## Manager a user's login details
 
@@ -41,8 +41,3 @@ resource "juju_user" "alex" {
 To remove a user, in your Terraform plan remove its resource definition.
 
 > See more: [`juju_user` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/user)
-
-
-<br>
-
-> <small>**Contributors:** @cderici, @hmlanigan, @pedroleaoc, @pmatulis, @timclicks, @tmihoc </small>

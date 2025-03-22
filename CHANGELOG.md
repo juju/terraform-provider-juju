@@ -1,3 +1,22 @@
+## 0.18.0 (March 18, 2025)
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher juju.**
+* **If using JAAS, this release requires Juju controller version 3.5.0 or higher.**
+* This release uses juju client api code from the juju 3.6.3 release.
+
+ENHANCEMENTS:
+
+* Support for adding annotations to the `juju_model` resource [689](https://github.com/juju/terraform-provider-juju/pull/689) by @SimoneDutto
+* Support for JAAS roles [648](https://github.com/juju/terraform-provider-juju/pull/648) by @SimoneDutto
+* Creating `juju_machine` resource blocks until machine reaches `running` state, which means `terraform apply` might now take longer to complete, but will enable correct and repeatable deploys in the future [679](https://github.com/juju/terraform-provider-juju/pull/679) by @alesstimec
+
+DOCUMENTATION:
+
+* Added how-tos for all resources and general documentation updates [658](https://github.com/juju/terraform-provider-juju/pull/658) by @tmihoc
+* Updated role management howto [687](https://github.com/juju/terraform-provider-juju/pull/687) by @tmihoc
+
 ## 0.17.0 (February 18, 2025)
 
 NOTES:

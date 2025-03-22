@@ -87,13 +87,29 @@ resource "juju_model" "this" {
 
 
 (manage-access-to-a-model)=
+
+## Manage annotations for a model
+To set annotations for a model, in your Terraform, in the model's resource definition, specify an `annotations` block, listing all the key=value pairs you want to set. For example:
+
+```terraform
+resource "juju_model" "testmodel" {
+  name = "model"
+
+  annotations = {
+	  test = "test" 
+  }
+}
+```
+
+> See more: [`juju_model` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/model)
+
 ## Manage access to a model
 
-Your model access management options depend on whether the controller you are applying the Terraform plan to is a regular Juju controller or rather a Juju controller added to JIMM -- for the former you can grant access only to a user, but for the latter you can grant access to a user, a group, or a service account.
+Your model access management options depend on whether the controller you are applying the Terraform plan to is a regular Juju controller or rather a Juju controller added to JIMM -- for the former you can grant access only to a user, but for the latter you can grant access to a user, a service account, a role, or a group.
 
 
 ### For a regular Juju controller
-To grant a user access to a model, in your Terraform plan add a `juju_access_model` resource, specifying the model, the Juju access level, and the user(s) to which you want to grant access. For example:
+To grant one or more users access to a model, in your Terraform plan add a `juju_access_model` resource. You must specify the model, the Juju access level, and the user(s) to which you want to grant access. For example:
 
 ```terraform
 resource "juju_access_model" "this" {
@@ -107,15 +123,16 @@ resource "juju_access_model" "this" {
 
 
 ### For a Juju controller added to JIMM
-To grant one or more users, groups, and/or service accounts access to a model, in your Terraform plan add a resource type `juju_jaas_access_model`, specifying the model UUID, the JAAS model access level, and the desired list of users, groups, and/or service accounts. For example:
+To grant one or more users, service accounts, roles, and/or groups access to a model, in your Terraform plan add a resource type `juju_jaas_access_model`. You must specify the model UUID, the JAAS model access level, and the desired list of users, service accounts, roles, and/or groups. For example:
 
 ```terraform
 resource "juju_jaas_access_model" "development" {
   model_uuid       = juju_model.development.uuid
   access           = "administrator"
   users            = ["foo@domain.com"]
-  groups           = [juju_jaas_group.development.uuid]
   service_accounts = ["Client-ID-1", "Client-ID-2"]
+  roles            = [juju_jaas_role.development.uuid]
+  groups           = [juju_jaas_group.development.uuid]
 }
 
 ```
