@@ -519,6 +519,20 @@ func (mr *MockApplicationAPIClientMockRecorder) Unexpose(application, endpoints 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unexpose", reflect.TypeOf((*MockApplicationAPIClient)(nil).Unexpose), application, endpoints)
 }
 
+// UnsetApplicationConfig mocks base method.
+func (m *MockApplicationAPIClient) UnsetApplicationConfig(branchName, application string, keys []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnsetApplicationConfig", branchName, application, keys)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UnsetApplicationConfig indicates an expected call of UnsetApplicationConfig.
+func (mr *MockApplicationAPIClientMockRecorder) UnsetApplicationConfig(branchName, application, keys any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnsetApplicationConfig", reflect.TypeOf((*MockApplicationAPIClient)(nil).UnsetApplicationConfig), branchName, application, keys)
+}
+
 // MockModelConfigAPIClient is a mock of ModelConfigAPIClient interface.
 type MockModelConfigAPIClient struct {
 	ctrl     *gomock.Controller
