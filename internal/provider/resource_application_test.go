@@ -1583,39 +1583,39 @@ func testAccResourceApplicationUpdateConfig(modelName, appName string, trust boo
 		configStr += fmt.Sprintf("%s = \"%s\"\n", key, value)
 	}
 	return fmt.Sprintf(`
-		resource "juju_model" "this" {
-		  name = %q
-		}
-		
-		resource "juju_application" "this" {
-		  model = juju_model.this.name
-		  name = %q
-		  charm {
-			name = "conserver"
-		  }
-          trust = %t
-		  config = {
-			%s
-		  }
-          units = 1
-		}
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model = juju_model.this.name
+  name = %q
+  charm {
+	name = "conserver"
+  }
+  trust = %t
+  config = {
+	%s
+  }
+  units = 1
+}
 		`, modelName, appName, trust, configStr)
 }
 
 func testAccResourceApplicationRemoveConfig(modelName, appName string) string {
 	return fmt.Sprintf(`
-		resource "juju_model" "this" {
-		  name = %q
-		}
-		
-		resource "juju_application" "this" {
-		  model = juju_model.this.name
-		  name = %q
-		  charm {
-			name = "conserver"
-		  }
-          trust = false
-          units = 1
-		}
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model = juju_model.this.name
+  name = %q
+  charm {
+	name = "conserver"
+  }
+  trust = false
+  units = 1
+}
 		`, modelName, appName)
 }
