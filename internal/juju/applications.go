@@ -1114,7 +1114,14 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	usedResources := make(map[string]string)
 	for _, iResources := range resources {
 		for _, resource := range iResources.Resources {
-			usedResources[resource.Name] = strconv.Itoa(resource.Revision)
+			// Per juju convention, -1, indicates that an integer value has not been set.
+			// Uploaded resources currently have no revision number.
+			// So when the revision number is -1, we can use the value in state.
+			if resource.Resource.Origin == charmresources.OriginUpload {
+				usedResources[resource.Name] = "-1"
+			} else {
+				usedResources[resource.Name] = strconv.Itoa(resource.Revision)
+			}
 		}
 	}
 

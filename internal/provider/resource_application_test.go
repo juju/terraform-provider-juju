@@ -457,7 +457,6 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:10"),
 				),
-				ExpectNonEmptyPlan: true,
 			},
 			{
 				// Add another custom resource
@@ -465,7 +464,6 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:9"),
 				),
-				ExpectNonEmptyPlan: true,
 			},
 			{
 				// Add resource revision
@@ -506,7 +504,6 @@ func TestAcc_CustomResourceUpdatesMicrok8s(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:9"),
 				),
-				ExpectNonEmptyPlan: true,
 			},
 			{
 				// Keep charm channel and update resource to another custom image
@@ -514,7 +511,6 @@ func TestAcc_CustomResourceUpdatesMicrok8s(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:10"),
 				),
-				ExpectNonEmptyPlan: true,
 			},
 			{
 				// Update charm channel and update resource to a revision
@@ -562,7 +558,6 @@ func TestAcc_CustomResourcesRemovedFromPlanMicrok8s(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:9"),
 				),
-				ExpectNonEmptyPlan: true,
 			},
 			{
 				// Keep charm channel and remove custom resource
@@ -1456,5 +1451,59 @@ resource "juju_application" "{{.AppName2}}" {
 		"AppName2":     appName2,
 		"CharmName":    charm,
 		"CharmChannel": channel,
+	})
+}
+
+func TestAcc_ResourceApplication_CustomOCIForResource(t *testing.T) {
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with MIcroK8s")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-application-parallel-deploy")
+	charm := "hello-kubecon"
+	resourceName := "gosherve-image"
+	ociImage := "ghcr.io/canonical/test:6a873fb35b0170dfe49ed27ba8ee6feb8e475131"
+	ociImage2 := "ghcr.io/canonical/test:ab0b183f22db2959e0350f54d92f9ed3583c4167"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceOciImage(modelName, charm, resourceName, ociImage),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.test", "resources."+resourceName, ociImage),
+				),
+			},
+			{
+				Config: testAccResourceOciImage(modelName, charm, resourceName, ociImage2),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.test", "resources."+resourceName, ociImage2),
+				),
+			},
+		},
+	})
+}
+
+func testAccResourceOciImage(modelName, charm, resourceName, ociImage string) string {
+	return internaltesting.GetStringFromTemplateWithData("testAccResourceApplicationStorage", `
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_application" "test" {
+  model = juju_model.{{.ModelName}}.name
+  name = "test"
+  charm {
+	name = "{{.CharmName}}"
+  }
+  resources = {
+	"{{.ResourceName}}" = "{{.OciImage}}"
+  }
+  units = 1
+}
+`, internaltesting.TemplateData{
+		"ModelName":    modelName,
+		"CharmName":    charm,
+		"ResourceName": resourceName,
+		"OciImage":     ociImage,
 	})
 }
