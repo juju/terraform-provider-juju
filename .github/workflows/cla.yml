@@ -7,12 +7,7 @@ permissions:
 # This task runs solo has it doesn't need to be run as often.
 jobs:
   cla-check:
-    permissions:
-      pull-requests: write  # for canonical/has-signed-canonical-cla to create & update comments
     runs-on: ubuntu-latest
     steps:
       - name: Check if CLA signed
-        uses: canonical/has-signed-canonical-cla@1.2.3
-        with:
-          accept-existing-contributors: true
-
+        uses: canonical/has-signed-canonical-cla@v2
