@@ -1494,6 +1494,7 @@ resource "juju_application" "test" {
   name = "test"
   charm {
 	name = "{{.CharmName}}"
+	revision = 18
   }
   resources = {
 	"{{.ResourceName}}" = "{{.OciImage}}"
