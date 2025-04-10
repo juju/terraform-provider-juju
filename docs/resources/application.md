@@ -56,8 +56,9 @@ resource "juju_application" "this" {
 - `constraints` (String) Constraints imposed on this application. Changing this value will cause the application to be destroyed and recreated by terraform.
 - `endpoint_bindings` (Attributes Set) Configure endpoint bindings (see [below for nested schema](#nestedatt--endpoint_bindings))
 - `expose` (Block List) Makes an application publicly available over the network (see [below for nested schema](#nestedblock--expose))
+- `machines` (Set of String) Specify the target machines for the application's units. The number of machines in the set indicates the unit count for the application. Removing a machine from the set will remove the application's unit residing on it. `machines` is mutually exclusive with `units` and `placement` (which is deprecated).
 - `name` (String) A custom name for the application deployment. If empty, uses the charm's name.Changing this value will cause the application to be destroyed and recreated by terraform.
-- `placement` (String) Specify the target location for the application's units. Changing this value will cause the application to be destroyed and recreated by terraform.
+- `placement` (String, Deprecated) Specify the target location for the application's units. Changing this value will cause the application to be destroyed and recreated by terraform.
 - `resources` (Map of String) Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
 Specify a resource other than the default for a charm. Note that not all charms have resources.
 

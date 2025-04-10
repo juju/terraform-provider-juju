@@ -14,6 +14,7 @@ import (
 	"github.com/juju/juju/api/base"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apicharm "github.com/juju/juju/api/common/charm"
+	"github.com/juju/juju/charmhub/transport"
 	corebase "github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/model"
@@ -41,6 +42,7 @@ type ApplicationSuite struct {
 	mockConnection        *MockConnection
 	mockModelConfigClient *MockModelConfigAPIClient
 	mockSharedClient      *MockSharedClient
+	mockCharmhubClient    *MockCharmhubClient
 }
 
 func (s *ApplicationSuite) SetupTest() {}
@@ -87,6 +89,8 @@ func (s *ApplicationSuite) setupMocks(t *testing.T) *gomock.Controller {
 	s.mockSharedClient.EXPECT().Tracef(gomock.Any(), gomock.Any()).Do(log).AnyTimes()
 	s.mockSharedClient.EXPECT().JujuLogger().Return(&jujuLoggerShim{}).AnyTimes()
 	s.mockSharedClient.EXPECT().GetConnection(&s.testModelName).Return(s.mockConnection, nil).AnyTimes()
+
+	s.mockCharmhubClient = NewMockCharmhubClient(ctlr)
 	return ctlr
 }
 
@@ -692,6 +696,76 @@ func (s *ApplicationSuite) TestUploadExistingPendingResourcesInvalidFileNameRetu
 	fileSystem := osFilesystem{}
 	err := uploadExistingPendingResources(appName, pendingResources, fileSystem, s.mockResourceAPIClient)
 	s.Assert().Equal("unable to open resource custom-image: filepath or registry path:  not valid", err.Error(), "Error is expected.")
+}
+
+func (s *ApplicationSuite) TestIsSubordinate() {
+	defer s.setupMocks(s.T()).Finish()
+
+	tests := []struct {
+		metadataYAML string
+		subordinate  bool
+	}{{
+		metadataYAML: `name: ntp
+subordinate: true
+maintainer: NTP Charm Maintainers <ntp-team@lists.launchpad.net>
+summary: Network Time Protocol
+description: |
+  NTP, the Network Time Protocol, is used to keep computer clocks accurate
+  by synchronizing them over the Internet or a local network, or by
+  following an accurate hardware receiver that interprets GPS, DCF-77,
+  NIST or similar time signals.
+  .
+  This charm can be deployed alongside principal charms to enable NTP
+  management across deployed services.
+tags:
+  - misc
+series:
+  - focal
+  - bionic
+  - xenial
+  - trusty
+  - jammy
+provides:
+  ntpmaster:
+    interface: ntp
+requires:
+  juju-info:
+    interface: juju-info
+    scope: container
+  master:
+    interface: ntp
+peers:
+  ntp-peers:
+    interface: ntp`,
+		subordinate: true,
+	}, {
+		metadataYAML: `name: postgresql
+display-name: Charmed PostgreSQL VM
+summary: Charmed PostgreSQL VM operator
+description: |
+    Charm to operate the PostgreSQL database on machines.
+docs: https://discourse.charmhub.io/t/charmed-postgresql-documentation/9710
+source: https://github.com/canonical/postgresql-operator
+issues: https://github.com/canonical/postgresql-operator/issues
+maintainers:
+    - Canonical Data Platform <data-platform@lists.launchpad.net>
+`,
+		subordinate: false,
+	}}
+
+	for _, test := range tests {
+		s.mockCharmhubClient.EXPECT().Info(gomock.Any(), gomock.Any(), gomock.Any()).Return(transport.InfoResponse{
+			DefaultRelease: transport.InfoChannelMap{
+				Revision: transport.InfoRevision{
+					MetadataYAML: test.metadataYAML,
+				},
+			},
+		}, nil)
+
+		isSubordinate, err := isSubordinateCharm(context.Background(), s.mockCharmhubClient, "some-charm", "latest/stable")
+		s.Assert().Equal(nil, err, "Error is not expected.")
+		s.Assert().Equal(test.subordinate, isSubordinate, "expectedValue")
+	}
 }
 
 // In order for 'go test' to run this suite, we need to create

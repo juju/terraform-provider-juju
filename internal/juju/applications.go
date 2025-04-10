@@ -9,10 +9,12 @@
 package juju
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"reflect"
 	"sort"
 	"strconv"
@@ -33,6 +35,8 @@ import (
 	apiresources "github.com/juju/juju/api/client/resources"
 	apispaces "github.com/juju/juju/api/client/spaces"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
+	"github.com/juju/juju/charmhub"
+	"github.com/juju/juju/charmhub/transport"
 	"github.com/juju/juju/cmd/juju/application/utils"
 	resourcecmd "github.com/juju/juju/cmd/juju/resource"
 	corebase "github.com/juju/juju/core/base"
@@ -44,6 +48,7 @@ import (
 	"github.com/juju/juju/rpc/params"
 	jujustorage "github.com/juju/juju/storage"
 	jujuversion "github.com/juju/juju/version"
+	"github.com/juju/loggo"
 	"github.com/juju/names/v5"
 	"github.com/juju/retry"
 	"github.com/juju/version/v2"
@@ -161,6 +166,7 @@ type CreateApplicationInput struct {
 	Expose             map[string]interface{}
 	Config             map[string]string
 	Placement          string
+	Machines           []string
 	Constraints        constraints.Value
 	EndpointBindings   map[string]string
 	Resources          map[string]string
@@ -225,6 +231,14 @@ func (input CreateApplicationInput) validateAndTransform(conn api.Connection) (p
 			}
 			placements = append(placements, appPlacement)
 		}
+	}
+
+	for _, machine := range input.Machines {
+		appPlacement, err := instance.ParsePlacement(machine)
+		if err != nil {
+			return parsed, err
+		}
+		placements = append(placements, appPlacement)
 	}
 	parsed.placement = placements
 
@@ -294,6 +308,7 @@ type ReadApplicationResponse struct {
 	Expose           map[string]interface{}
 	Principal        bool
 	Placement        string
+	Machines         []string
 	EndpointBindings map[string]string
 	Storage          map[string]jujustorage.Constraints
 	Resources        map[string]string
@@ -313,11 +328,12 @@ type UpdateApplicationInput struct {
 	Config             map[string]string
 	UnsetConfig        map[string]string
 	Base               string
-	Placement          map[string]interface{}
 	Constraints        *constraints.Value
 	EndpointBindings   map[string]string
 	StorageConstraints map[string]jujustorage.Constraints
 	Resources          map[string]string
+	AddMachines        []string
+	RemoveMachines     []string
 }
 
 type DestroyApplicationInput struct {
@@ -440,6 +456,19 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 	charmURL, err := resolveCharmURL(transformedInput.charmName)
 	if err != nil {
 		return err
+	}
+
+	charmhubClient, err := newCharmhubClient()
+	if err != nil {
+		return err
+	}
+
+	subordinate, err := isSubordinateCharm(ctx, charmhubClient, transformedInput.charmName, transformedInput.charmChannel)
+	if err != nil {
+		return err
+	}
+	if subordinate {
+		transformedInput.units = 0
 	}
 
 	if charmURL.Revision != UnspecifiedRevision {
@@ -973,6 +1002,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 			allocatedMachines.Add(v.Machine)
 		}
 	}
+	machines := allocatedMachines.SortedValues()
 
 	var placement string
 	if !allocatedMachines.IsEmpty() {
@@ -1140,6 +1170,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		Constraints:      appInfo.Constraints,
 		Principal:        appInfo.Principal,
 		Placement:        placement,
+		Machines:         machines,
 		EndpointBindings: endpointBindings,
 		Storage:          storages,
 		Resources:        usedResources,
@@ -1275,12 +1306,12 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		}
 	}
 
+	// TODO: Refactor this to a separate function
+	modelType, err := c.ModelType(input.ModelName)
+	if err != nil {
+		return err
+	}
 	if input.Units != nil {
-		// TODO: Refactor this to a separate function
-		modelType, err := c.ModelType(input.ModelName)
-		if err != nil {
-			return err
-		}
 		if modelType == model.CAAS {
 			_, err := applicationAPIClient.ScaleApplication(apiapplication.ScaleApplicationParams{
 				ApplicationName: input.AppName,
@@ -1325,6 +1356,65 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		}
 	}
 
+	// for IAAS model we process additions/removals of units
+	if modelType == model.IAAS {
+		if err = c.addUnits(input, applicationAPIClient); err != nil {
+			return err
+		}
+		if err = c.removeUnits(input, applicationAPIClient, appStatus); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c applicationsClient) addUnits(input *UpdateApplicationInput, client ApplicationAPIClient) error {
+	if len(input.AddMachines) != 0 {
+		placements := make([]*instance.Placement, len(input.AddMachines))
+		for i, machine := range input.AddMachines {
+			placement, err := instance.ParsePlacement(machine)
+			if err != nil {
+				return err
+			}
+			placements[i] = placement
+		}
+
+		_, err := client.AddUnits(apiapplication.AddUnitsParams{
+			ApplicationName: input.AppName,
+			NumUnits:        len(input.AddMachines),
+			Placement:       placements,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c applicationsClient) removeUnits(input *UpdateApplicationInput, client ApplicationAPIClient, appStatus params.ApplicationStatus) error {
+	if len(input.RemoveMachines) != 0 {
+		machineUnits := make(map[string]string)
+		for unitName, unitStatus := range appStatus.Units {
+			machineUnits[unitStatus.Machine] = unitName
+		}
+
+		unitsToDestroy := []string{}
+		for _, machine := range input.RemoveMachines {
+			unitName, ok := machineUnits[machine]
+			if !ok {
+				return fmt.Errorf("no machines deployed on machine: %v", machine)
+			}
+			unitsToDestroy = append(unitsToDestroy, unitName)
+		}
+		_, err := client.DestroyUnits(apiapplication.DestroyUnitsParams{
+			Units:          unitsToDestroy,
+			DestroyStorage: true,
+		})
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -1695,4 +1785,45 @@ func getModelDefaultSpace(modelconfigAPIClient ModelConfigAPIClient) (string, er
 		defaultSpace = network.AlphaSpaceName
 	}
 	return defaultSpace, nil
+}
+
+const (
+	// defaultChamhubURL is the default location of the global Charmhub API.
+	// An alternate location can be configured with the CHARMHUB_URL environement
+	// variable
+	defaultCharmhubURL = "https://api.charmhub.io"
+
+	charmhubURLEnvKey = "CHARMHUB_URL"
+)
+
+type CharmhubClient interface {
+	Info(context.Context, string, ...charmhub.InfoOption) (transport.InfoResponse, error)
+}
+
+var newCharmhubClient = func() (CharmhubClient, error) {
+	charmhubURL := defaultCharmhubURL
+	if url := os.Getenv(charmhubURLEnvKey); url != "" {
+		charmhubURL = url
+	}
+
+	return charmhub.NewClient(charmhub.Config{
+		URL:    charmhubURL,
+		Logger: loggo.Logger{},
+	})
+}
+
+func isSubordinateCharm(ctx context.Context, client CharmhubClient, name string, channel string) (bool, error) {
+	var options []charmhub.InfoOption
+	if channel != "" {
+		options = append(options, charmhub.WithInfoChannel(channel))
+	}
+	info, err := client.Info(ctx, name, options...)
+	if err != nil {
+		return false, err
+	}
+	meta, err := charm.ReadMeta(bytes.NewBufferString(info.DefaultRelease.Revision.MetadataYAML))
+	if err != nil {
+		return false, err
+	}
+	return meta.Subordinate, nil
 }
