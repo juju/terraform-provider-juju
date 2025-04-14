@@ -311,6 +311,7 @@ type UpdateApplicationInput struct {
 	// Unexpose indicates what endpoints to unexpose
 	Unexpose           []string
 	Config             map[string]string
+	UnsetConfig        map[string]string
 	Base               string
 	Placement          map[string]interface{}
 	Constraints        *constraints.Value
@@ -1214,6 +1215,20 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		err := applicationAPIClient.SetConfig("master", input.AppName, "", auxConfig)
 		if err != nil {
 			c.Errorf(err, "setting configuration params")
+			return err
+		}
+	}
+
+	if len(input.UnsetConfig) > 0 {
+		// these are config entries to be unset
+		c.Debugf("Detected config keys to be unset.")
+		keys := make([]string, 0, len(input.UnsetConfig))
+		for key := range input.UnsetConfig {
+			keys = append(keys, key)
+		}
+		c.Debugf("Unsetting config keys", map[string]interface{}{"keys": keys})
+		if err := applicationAPIClient.UnsetApplicationConfig(model.GenerationMaster, input.AppName, keys); err != nil {
+			c.Errorf(err, "unsetting config")
 			return err
 		}
 	}
