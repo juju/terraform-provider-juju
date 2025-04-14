@@ -123,7 +123,7 @@ resource "juju_jaas_access_offer" "development" {
 }
 ```
 
-> See more: [`juju_jaas_access_offer`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_offer), [JAAS | Offer access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/authorisation_model/#application-offer)
+> See more: [`juju_jaas_access_offer`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_offer), [JAAS | List of offer relations](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/offer/#list-of-offer-relations)
 
 
 

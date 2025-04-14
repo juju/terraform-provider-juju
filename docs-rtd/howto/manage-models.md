@@ -96,7 +96,7 @@ resource "juju_model" "testmodel" {
   name = "model"
 
   annotations = {
-	  test = "test" 
+	  test = "test"
   }
 }
 ```
@@ -137,7 +137,7 @@ resource "juju_jaas_access_model" "development" {
 
 ```
 
-> See more: [`juju_jaas_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_model), [JAAS | Model access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/authorisation_model/#model)
+> See more: [`juju_jaas_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_model), [JAAS | List of model relations](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/model/#list-of-model-relations)
 
 ## Upgrade a model
 > See also: {external+juju:ref}`Juju | Upgrading things <upgrading-things>`
