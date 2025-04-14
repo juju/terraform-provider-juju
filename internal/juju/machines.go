@@ -179,7 +179,7 @@ func (c machinesClient) CreateMachine(ctx context.Context, input *CreateMachineI
 		IsFatalError: func(err error) bool {
 			return !errors.As(err, &KeepWaitingForError)
 		},
-		Attempts: 180,
+		Attempts: 720,
 		Delay:    defaultModelStatusCacheRetryInterval,
 		Clock:    clock.WallClock,
 		Stop:     ctx.Done(),

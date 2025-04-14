@@ -1205,25 +1205,10 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		auxConfig["trust"] = fmt.Sprintf("%v", *input.Trust)
 	}
 
-	// Use the revision and channel info to create the
-	// corresponding SetCharm info.
-	//
-	// Note: the operations with revisions should be done
-	// before the operations with config. Because the config params
-	// can be changed from one revision to another. So "Revision-Config"
-	// ordering will help to prevent issues with the configuration parsing.
-	if input.Revision != nil || input.Channel != "" || len(input.Resources) != 0 || input.Base != "" {
-		setCharmConfig, err := c.computeSetCharmConfig(input, applicationAPIClient, charmsAPIClient, resourcesAPIClient)
-		if err != nil {
-			return err
-		}
-
-		setCharmConfig.StorageConstraints = input.StorageConstraints
-
-		err = applicationAPIClient.SetCharm(model.GenerationMaster, *setCharmConfig)
-		if err != nil {
-			return err
-		}
+	err = c.UpdateCharmAndResources(input, applicationAPIClient, charmsAPIClient, resourcesAPIClient)
+	if err != nil {
+		c.Errorf(err, "updating charm and resources")
+		return err
 	}
 
 	if auxConfig != nil {
@@ -1343,6 +1328,72 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	return nil
 }
 
+// UpdateCharmAndResources is a helper function to update the charm and resources
+// of an application. It will update the charm or fetch the current one, and
+// update the resources if required.
+func (c applicationsClient) UpdateCharmAndResources(
+	input *UpdateApplicationInput,
+	applicationAPIClient ApplicationAPIClient,
+	charmsAPIClient *apicharms.Client,
+	resourcesAPIClient ResourceAPIClient,
+) error {
+	// If the input has no revision, channel, or base, and has resources, we can skip
+	// the charm and resources update.
+	if input.Revision == nil && input.Channel == "" && input.Base == "" && len(input.Resources) == 0 {
+		return nil
+	}
+	var err error
+	var updateCharm bool
+	var charmID apiapplication.CharmID
+	// Use the revision and channel info to create the
+	// corresponding SetCharm info.
+	//
+	// Note: the operations with revisions should be done
+	// before the operations with config. Because the config params
+	// can be changed from one revision to another. So "Revision-Config"
+	// ordering will help to prevent issues with the configuration parsing.
+	if input.Revision != nil || input.Channel != "" || input.Base != "" {
+		charmID, err = c.computeCharmID(input, applicationAPIClient, charmsAPIClient)
+		if err != nil {
+			return err
+		}
+		updateCharm = true
+	} else {
+		// Fetch the current charm URL and origin if the charm is not being updated.
+		// This is needed to avoid inadvertently updating the charm when only the
+		// resources are being updated.
+		url, origin, err := applicationAPIClient.GetCharmURLOrigin("", input.AppName)
+		if err != nil {
+			return err
+		}
+		charmID.URL = url.String()
+		charmID.Origin = origin
+	}
+
+	var resourceIds map[string]string
+	if len(input.Resources) != 0 {
+		resourceIds, err = c.updateResources(input.AppName, input.Resources, charmsAPIClient, charmID, resourcesAPIClient)
+		if err != nil {
+			return err
+		}
+		updateCharm = true
+	}
+
+	if updateCharm {
+		charmConfig := apiapplication.SetCharmConfig{
+			ApplicationName:    input.AppName,
+			CharmID:            charmID,
+			ResourceIDs:        resourceIds,
+			StorageConstraints: input.StorageConstraints,
+		}
+		err = applicationAPIClient.SetCharm(model.GenerationMaster, charmConfig)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) error {
 	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
@@ -1368,19 +1419,17 @@ func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) e
 	return nil
 }
 
-// computeSetCharmConfig populates the corresponding configuration object
+// computeCharmID populates the corresponding CharmID struct
 // to indicate juju what charm to be deployed.
-func (c applicationsClient) computeSetCharmConfig(
+func (c applicationsClient) computeCharmID(
 	input *UpdateApplicationInput,
 	applicationAPIClient ApplicationAPIClient,
 	charmsAPIClient *apicharms.Client,
-	resourcesAPIClient ResourceAPIClient,
-) (*apiapplication.SetCharmConfig, error) {
+) (apiapplication.CharmID, error) {
 	oldURL, oldOrigin, err := applicationAPIClient.GetCharmURLOrigin("", input.AppName)
 	if err != nil {
-		return nil, err
+		return apiapplication.CharmID{}, err
 	}
-
 	// You can only refresh on the revision OR the channel at once.
 	newURL := oldURL
 	newOrigin := oldOrigin
@@ -1401,7 +1450,7 @@ func (c applicationsClient) computeSetCharmConfig(
 	} else if input.Channel != "" {
 		parsedChannel, err := charm.ParseChannel(input.Channel)
 		if err != nil {
-			return nil, err
+			return apiapplication.CharmID{}, err
 		}
 		if parsedChannel.Track != "" {
 			newOrigin.Track = strPtr(parsedChannel.Track)
@@ -1414,20 +1463,19 @@ func (c applicationsClient) computeSetCharmConfig(
 	if input.Base != "" {
 		base, err := corebase.ParseBaseFromString(input.Base)
 		if err != nil {
-			return nil, err
+			return apiapplication.CharmID{}, err
 		}
 		newOrigin.Base = base
 	}
-
 	resolvedURL, resolvedOrigin, supportedBases, err := resolveCharm(charmsAPIClient, newURL, newOrigin)
 	if err != nil {
-		return nil, err
+		return apiapplication.CharmID{}, err
 	}
 
 	// Ensure that the new charm supports the architecture used by the deployed application.
 	if oldOrigin.Architecture != resolvedOrigin.Architecture {
 		msg := fmt.Sprintf("the new charm does not support the current architecture %q", oldOrigin.Architecture)
-		return nil, errors.New(msg)
+		return apiapplication.CharmID{}, errors.New(msg)
 	}
 
 	// Ensure the new revision or channel is contained
@@ -1450,31 +1498,18 @@ func (c applicationsClient) computeSetCharmConfig(
 
 	if !basesContain(oldOrigin.Base, supportedBases) {
 		msg := fmt.Sprintf("the new charm does not support the current operating system %q", oldOrigin.Base.String())
-		return nil, errors.New(msg)
+		return apiapplication.CharmID{}, errors.New(msg)
 	}
 
 	resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, oldOrigin, false)
 	if err != nil {
-		return nil, err
+		return apiapplication.CharmID{}, err
 	}
 
-	apiCharmID := apiapplication.CharmID{
+	return apiapplication.CharmID{
 		URL:    resolvedURL.String(),
 		Origin: resultOrigin,
-	}
-
-	resourceIDs, err := c.updateResources(input.AppName, input.Resources, charmsAPIClient, apiCharmID, resourcesAPIClient)
-	if err != nil {
-		return nil, err
-	}
-
-	toReturn := apiapplication.SetCharmConfig{
-		ApplicationName: input.AppName,
-		CharmID:         apiCharmID,
-		ResourceIDs:     resourceIDs,
-	}
-
-	return &toReturn, nil
+	}, nil
 }
 
 func resolveCharm(charmsAPIClient *apicharms.Client, curl *charm.URL, origin apicommoncharm.Origin) (*charm.URL, apicommoncharm.Origin, []corebase.Base, error) {
