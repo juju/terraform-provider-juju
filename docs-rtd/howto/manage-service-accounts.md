@@ -21,7 +21,7 @@ resource "juju_jaas_access_controller" "development" {
 }
 ```
 
-> See more: [`juju_jaas_access_service_account`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_service_account), [JAAS | List of service account relations](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/service-account/#list-of-service-account-relations)
+> See more: [`juju_jaas_access_service_account`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_service_account), [JAAS | Service account access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/service-account/#list-of-service-account-relations)
 
 ## Manage a service account's access to a controller, cloud, model, offer, role, or group
 

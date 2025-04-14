@@ -119,7 +119,7 @@ resource "juju_access_model" "this" {
 }
 ```
 
-> See more: [`juju_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/access_model), [Juju | Model access levels](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/user/#valid-access-levels-for-models)
+> See more: [`juju_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/access_model), [Juju | Model access levels](https://documentation.ubuntu.com/juju/latest/reference/user/#valid-access-levels-for-models)
 
 
 ### For a Juju controller added to JIMM
@@ -137,7 +137,7 @@ resource "juju_jaas_access_model" "development" {
 
 ```
 
-> See more: [`juju_jaas_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_model), [JAAS | List of model relations](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/model/#list-of-model-relations)
+> See more: [`juju_jaas_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_model), [JAAS | Model access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/model/#list-of-model-relations)
 
 ## Upgrade a model
 > See also: {external+juju:ref}`Juju | Upgrading things <upgrading-things>`

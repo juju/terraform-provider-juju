@@ -22,4 +22,4 @@ resource "juju_jaas_access_controller" "development" {
 }
 ```
 
-> See more: [`juju_jaas_access_controller`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_controller), [JAAS | List of controller relations](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/controller/#list-of-controller-relations)
+> See more: [`juju_jaas_access_controller`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_controller), [JAAS | Controller access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/controller/#list-of-controller-relations)
