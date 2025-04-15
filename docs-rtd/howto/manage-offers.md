@@ -14,7 +14,7 @@ data "juju_offer" "myoffer" {
 }
 ```
 
-> See more: [`juju_offer` (data source)](https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/offer)
+> See more: [`juju_offer` (data source)](https://registry.terraform.io/providers/juju/juju/3.6/docs/data-sources/offer)
 
 ## Create an offer
 
@@ -31,7 +31,7 @@ resource "juju_offer" "percona-cluster" {
 }
 ```
 
-> See more: [`juju_offer` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/offer)
+> See more: [`juju_offer` (resource)](https://registry.terraform.io/providers/juju/juju/3.6/docs/resources/offer)
 
 
 (integrate-with-an-offer)=
@@ -68,7 +68,7 @@ resource "juju_integration" "wordpress-db" {
 
 ```
 
-> See more: [`juju_integration` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/integration)
+> See more: [`juju_integration` (resource)](https://registry.terraform.io/providers/juju/juju/3.6/docs/resources/integration)
 
 ## Allow traffic from an integrated offer
 > Who: User with {external+juju:ref}`offer admin access <user-access-offer-admin>`.
@@ -88,7 +88,7 @@ resource "juju_integration" "this" {
 
 ```
 
-> See more: [`juju_integration` > `via`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/integration#via)
+> See more: [`juju_integration` > `via`](https://registry.terraform.io/providers/juju/juju/3.6/docs/resources/integration#via)
 
 
 (manage-access-to-an-offer)=
@@ -107,7 +107,7 @@ resource "juju_access_offer" "this" {
 }
 ```
 
-> See more: [`juju_access_offer`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/access_offer), [Juju | Offer access levels](https://documentation.ubuntu.com/juju/latest/reference/user/#valid-access-levels-for-application-offers)
+> See more: [`juju_access_offer`](https://registry.terraform.io/providers/juju/juju/3.6/docs/resources/access_offer), [Juju | Offer access levels](https://documentation.ubuntu.com/juju/3.6/reference/user/#valid-access-levels-for-application-offers)
 
 
 ### For a Juju controller added to JIMM
@@ -124,7 +124,7 @@ resource "juju_jaas_access_offer" "development" {
 }
 ```
 
-> See more: [`juju_jaas_access_offer`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_offer), [JAAS | Offer access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/offer/#list-of-offer-relations)
+> See more: [`juju_jaas_access_offer`](https://registry.terraform.io/providers/juju/juju/3.6/docs/resources/jaas_access_offer), [JAAS | Offer access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/offer/#list-of-offer-relations)
 
 
 
@@ -134,4 +134,4 @@ resource "juju_jaas_access_offer" "development" {
 
 To remove an offer, in your Terraform plan, remove its resource definition.
 
-> See more: [`juju_offer`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/offer)
+> See more: [`juju_offer`](https://registry.terraform.io/providers/juju/juju/3.6/docs/resources/offer)
