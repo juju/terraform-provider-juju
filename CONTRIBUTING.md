@@ -14,7 +14,7 @@ You will need a GitHub account ([sign up](https://github.com/signup)).
 
 ### Open an issue for docs
 
-To open an issue for a specific doc, find the docs in the [the published docs](https://canonical-terraform-provider-juju.readthedocs-hosted.com), then use the **Give feedback** button.
+To open an issue for a specific doc, in [the published docs](https://canonical-terraform-provider-juju.readthedocs-hosted.com) find the doc, then use the **Give feedback** button.
 
 To open an issue for docs in general, do the same for the homepage of the docs
 or go to https://github.com/juju/terraform-provider-juju/issues, click on **New issue** (top right corner
