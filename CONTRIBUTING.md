@@ -57,6 +57,7 @@ git config --global commit.gpgsign true
 
 ```
 git clone git@github.com:<user>/terraform-provider-juju.git
+cd terraform-provider-juju
 ```
 
 5. Add a new remote with the name `upstream` and set it to point to the upstream
@@ -69,6 +70,7 @@ git remote add upstream git@github.com:juju/terraform-provider-juju.git
 6. Set your local branches to track the `upstream` remote (not your fork). E.g.,
 
 ```
+git fetch --all
 git checkout main
 git branch --set-upstream-to=upstream/main
 ```
