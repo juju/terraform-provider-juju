@@ -144,7 +144,7 @@ may be enough for `git` to prompt you with the correct arguments.
 
 12. Ensure GitHub tests pass.
 
-13. In [the Matrix Juju Development
+13. In [the Matrix Terraform Provider for Juju
 channel](https://matrix.to/#/#terraform-provider-juju:ubuntu.com), drop a link to your
 PR with the mention that it needs reviews. Someone will review your PR. Make all
 the requested changes.
