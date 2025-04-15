@@ -247,7 +247,7 @@ extensions = [
 ##################################
 
 intersphinx_mapping = {
-    'juju': ('https://canonical-juju.readthedocs-hosted.com/en/latest/', None),
+    'juju': ('https://canonical-juju.readthedocs-hosted.com/3.6/', None),
     'pyjuju': ('https://pythonlibjuju.readthedocs.io/en/latest/', None),
     'jaas': ('https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/', None),
     'charmcraft': ('https://canonical-charmcraft.readthedocs-hosted.com/en/latest/', None),
