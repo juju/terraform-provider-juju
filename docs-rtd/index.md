@@ -19,7 +19,7 @@ When you're putting together your Terraform plan, if you specify `juju` as the p
 
 `terraform-provider-juju` combines the power of Terraform -- comprehensive infrastructure management, declaratively -- with the power of Juju -- easy systems management, from Day 0 to Day n.
 
-Like all of Juju, `terraform-provider-juju` is for SREs, or anyone looking to take control of cloud. 
+Like all of Juju, `terraform-provider-juju` is for SREs, or anyone looking to take control of cloud.
 
 ---------
 
@@ -69,19 +69,15 @@ Like all of Juju, `terraform-provider-juju` is for SREs, or anyone looking to ta
 
 ## Project and community
 
-Example Project is a member of the Ubuntu family. It’s an open source project that warmly welcomes community projects, contributions, suggestions, fixes and constructive feedback.
+The Terraform Provider for Juju is a member of the Ubuntu family. It’s an open source project that warmly welcomes community projects, contributions, suggestions, fixes and constructive feedback.
 
-* **[Read our code of conduct](https://ubuntu.com/community/ethos/code-of-conduct)**:
-As a community we adhere to the Ubuntu code of conduct.
+* **[Code of conduct](https://ubuntu.com/community/ethos/code-of-conduct)**
 
-* **[Get support](https://discourse.charmhub.io/)**:
-Discourse is the go-to forum for all questions Juju.
+* **[Join our chat](https://matrix.to/#/#terraform-provider-juju:ubuntu.com)**
 
-* **[Join our online chat](https://matrix.to/#/#terraform-provider-juju:ubuntu.com)**:
-Meet us in the `#terraform-provider-juju` channel on Matrix.
+* **[Join our forum](https://discourse.charmhub.io/)**
 
-* **[Report bugs](https://github.com/juju/terraform-provider-juju/issues/new?title=doc%3A+ADD+A+TITLE&body=DESCRIBE+THE+ISSUE%0A%0A---%0ADocument:%20index.md)**:
-We want to know about the problems so we can fix them.
+* **[Report a bug](https://github.com/juju/terraform-provider-juju/issues/new?title=doc%3A+ADD+A+TITLE&body=DESCRIBE+THE+ISSUE%0A%0A---%0ADocument:%20index.md)**
 
-* **[Contribute docs](https://github.com/juju/terraform-provider-juju/tree/main/docs)**:
-The documentation sources on GitHub.
+* **[Contribute](https://github.com/juju/terraform-provider-juju/blob/main/CONTRIBUTING.md)**
+

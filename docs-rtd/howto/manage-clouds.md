@@ -46,4 +46,4 @@ resource "juju_jaas_access_cloud" "development" {
 }
 ```
 
-> See more: [`juju_jaas_access_cloud`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_cloud), [JAAS | Cloud access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/authorisation_model/#cloud)
+> See more: [`juju_jaas_access_cloud`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_cloud), [JAAS | Cloud access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/cloud/#list-of-cloud-relations)
