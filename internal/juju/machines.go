@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/juju/clock"
@@ -34,6 +35,8 @@ import (
 
 type machinesClient struct {
 	SharedClient
+
+	createMu sync.Mutex
 }
 
 type CreateMachineInput struct {
@@ -132,7 +135,7 @@ func getTargetStatusFunc(machineID string) targetStatusFunc {
 	return getMachineStatusFunc(machineID)
 }
 
-func (c machinesClient) CreateMachine(ctx context.Context, input *CreateMachineInput) (*CreateMachineResponse, error) {
+func (c *machinesClient) CreateMachine(ctx context.Context, input *CreateMachineInput) (*CreateMachineResponse, error) {
 	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return nil, err
@@ -187,7 +190,7 @@ func (c machinesClient) CreateMachine(ctx context.Context, input *CreateMachineI
 	return response, retryErr
 }
 
-func (c machinesClient) createMachine(ctx context.Context, conn api.Connection, input *CreateMachineInput) (*CreateMachineResponse, error) {
+func (c *machinesClient) createMachine(ctx context.Context, conn api.Connection, input *CreateMachineInput) (*CreateMachineResponse, error) {
 	machineAPIClient := apimachinemanager.NewClient(conn)
 	modelConfigAPIClient := apimodelconfig.NewClient(conn)
 
@@ -262,10 +265,18 @@ func (c machinesClient) createMachine(ctx context.Context, conn api.Connection, 
 	machineParams.Base = paramsBase
 
 	addMachineArgs := []params.AddMachineParams{machineParams}
+
+	// There is a bug in juju that affects concurrent creation of machines, so we make
+	// all AddMachine calls sequential.
+	// TODO (alesstimec): remove once this bug in Juju is fixed.
+	c.createMu.Lock()
 	machines, err := machineAPIClient.AddMachines(addMachineArgs)
 	if err != nil {
+		c.createMu.Unlock()
 		return nil, err
 	}
+	c.createMu.Unlock()
+
 	if machines[0].Error != nil {
 		return nil, machines[0].Error
 	}
@@ -403,7 +414,7 @@ func manualProvision(client manual.ProvisioningClientAPI,
 	}, nil
 }
 
-func (c machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse, error) {
+func (c *machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse, error) {
 	var response ReadMachineResponse
 	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
@@ -443,7 +454,7 @@ func (c machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse
 // readMachineWithRetryOnNotFound calls ReadMachine until
 // successful, or the count is exceeded when the error is of type
 // not found. Delay indicates how long to wait between attempts.
-func (c machinesClient) readMachineWithRetryOnNotFound(ctx context.Context, input ReadMachineInput) (ReadMachineResponse, error) {
+func (c *machinesClient) readMachineWithRetryOnNotFound(ctx context.Context, input ReadMachineInput) (ReadMachineResponse, error) {
 	var output ReadMachineResponse
 	err := retry.Call(retry.CallArgs{
 		Func: func() error {
@@ -473,7 +484,7 @@ func (c machinesClient) readMachineWithRetryOnNotFound(ctx context.Context, inpu
 	return output, err
 }
 
-func (c machinesClient) DestroyMachine(input *DestroyMachineInput) error {
+func (c *machinesClient) DestroyMachine(input *DestroyMachineInput) error {
 	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return err

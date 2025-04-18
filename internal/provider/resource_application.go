@@ -6,10 +6,12 @@ package provider
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -18,10 +20,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -38,12 +40,14 @@ const (
 	CharmKey            = "charm"
 	CidrsKey            = "cidrs"
 	ConfigKey           = "config"
+	EndpointBindingsKey = "endpoint_bindings"
 	EndpointsKey        = "endpoints"
 	ExposeKey           = "expose"
-	SpacesKey           = "spaces"
-	EndpointBindingsKey = "endpoint_bindings"
+	MachinesKey         = "machines"
 	ResourceKey         = "resources"
+	SpacesKey           = "spaces"
 	StorageKey          = "storage"
+	UnitsKey            = "units"
 
 	resourceKeyMarkdownDescription = `
 Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
@@ -76,24 +80,26 @@ type applicationResource struct {
 // applicationResourceModel describes the application data model.
 // tfsdk must match user resource schema attribute names.
 type applicationResourceModel struct {
-	ApplicationName   types.String `tfsdk:"name"`
-	Charm             types.List   `tfsdk:"charm"`
-	Config            types.Map    `tfsdk:"config"`
-	Constraints       types.String `tfsdk:"constraints"`
-	Expose            types.List   `tfsdk:"expose"`
-	ModelName         types.String `tfsdk:"model"`
-	ModelType         types.String `tfsdk:"model_type"`
-	Placement         types.String `tfsdk:"placement"`
-	EndpointBindings  types.Set    `tfsdk:"endpoint_bindings"`
-	Resources         types.Map    `tfsdk:"resources"`
-	StorageDirectives types.Map    `tfsdk:"storage_directives"`
-	Storage           types.Set    `tfsdk:"storage"`
+	ApplicationName  types.String `tfsdk:"name"`
+	Charm            types.List   `tfsdk:"charm"`
+	Config           types.Map    `tfsdk:"config"`
+	Constraints      types.String `tfsdk:"constraints"`
+	EndpointBindings types.Set    `tfsdk:"endpoint_bindings"`
+	Expose           types.List   `tfsdk:"expose"`
+	Machines         types.Set    `tfsdk:"machines"`
+	ModelName        types.String `tfsdk:"model"`
+	ModelType        types.String `tfsdk:"model_type"`
+	// TODO - remove Placement
+	Placement types.String `tfsdk:"placement"`
 	// TODO - remove Principal when we version the schema
 	// and remove deprecated elements. Once we create upgrade
 	// functionality it can be removed from the structure.
-	Principal types.Bool  `tfsdk:"principal"`
-	Trust     types.Bool  `tfsdk:"trust"`
-	UnitCount types.Int64 `tfsdk:"units"`
+	Principal         types.Bool  `tfsdk:"principal"`
+	Resources         types.Map   `tfsdk:"resources"`
+	StorageDirectives types.Map   `tfsdk:"storage_directives"`
+	Storage           types.Set   `tfsdk:"storage"`
+	Trust             types.Bool  `tfsdk:"trust"`
+	UnitCount         types.Int64 `tfsdk:"units"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -140,6 +146,23 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			MachinesKey: schema.SetAttribute{
+				ElementType: types.StringType,
+				Description: "Specify the target machines for the application's units. The number of machines in the set indicates" +
+					" the unit count for the application. Removing a machine from the set will remove the application's unit residing on it." +
+					" `machines` is mutually exclusive with `units` and `placement` (which is deprecated).",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Set{
+					setplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.Set{
+					setvalidator.ConflictsWith(path.Expressions{
+						path.MatchRoot(PlacementKey),
+						path.MatchRoot(UnitsKey),
+					}...),
+				},
+			},
 			"model": schema.StringAttribute{
 				Description: "The name of the model where the application is to be deployed. Changing this value" +
 					" will cause the application to be destroyed and recreated by terraform.",
@@ -156,11 +179,15 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"units": schema.Int64Attribute{
+			UnitsKey: schema.Int64Attribute{
 				Description: "The number of application units to deploy for the charm.",
 				Optional:    true,
 				Computed:    true,
-				Default:     int64default.StaticInt64(int64(1)),
+				//Default:     int64default.StaticInt64(int64(1)),
+				PlanModifiers: []planmodifier.Int64{
+					UnitCountModifier(),
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			ConfigKey: schema.MapAttribute{
 				Description: "Application specific configuration. Must evaluate to a string, integer or boolean.",
@@ -224,7 +251,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 			},
-			"placement": schema.StringAttribute{
+			PlacementKey: schema.StringAttribute{
 				Description: "Specify the target location for the application's units. Changing this value" +
 					" will cause the application to be destroyed and recreated by terraform.",
 				Optional: true,
@@ -233,6 +260,12 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 					stringplanmodifier.UseStateForUnknown(),
 				},
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.Expressions{
+						path.MatchRoot(MachinesKey),
+					}...),
+				},
+				DeprecationMessage: "Configure machines instead. This attribute will be removed in the next major version of the provider.",
 			},
 			"principal": schema.BoolAttribute{
 				Description: "Whether this is a Principal application",
@@ -554,6 +587,16 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		}
 	}
 
+	unitCount := int(plan.UnitCount.ValueInt64())
+	machines := []string{}
+	if !plan.Machines.IsUnknown() {
+		resp.Diagnostics.Append(plan.Machines.ElementsAs(ctx, &machines, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		unitCount = len(machines)
+	}
+
 	modelName := plan.ModelName.ValueString()
 	createResp, err := r.client.Applications.CreateApplication(ctx,
 		&juju.CreateApplicationInput{
@@ -564,12 +607,13 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 			CharmRevision:      revision,
 			CharmBase:          planCharm.Base.ValueString(),
 			CharmSeries:        planCharm.Series.ValueString(),
-			Units:              int(plan.UnitCount.ValueInt64()),
+			Units:              unitCount,
 			Config:             configField,
 			Constraints:        parsedConstraints,
 			Trust:              plan.Trust.ValueBool(),
 			Expose:             expose,
 			Placement:          plan.Placement.ValueString(),
+			Machines:           machines,
 			EndpointBindings:   endpointBindings,
 			Resources:          resourceRevisions,
 			StorageConstraints: storageConstraints,
@@ -597,6 +641,19 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	// is subordinate, the constraints will be set to the empty string.
 	plan.Constraints = types.StringValue(readResp.Constraints.String())
 	plan.Placement = types.StringValue(readResp.Placement)
+	if readResp.Principal || readResp.Units > 0 {
+		plan.UnitCount = types.Int64Value(int64(readResp.Units))
+	} else {
+		plan.UnitCount = types.Int64Value(1)
+	}
+
+	var dErr diag.Diagnostics
+	plan.Machines, dErr = types.SetValueFrom(ctx, types.StringType, readResp.Machines)
+	if dErr.HasError() {
+		resp.Diagnostics.Append(dErr...)
+		return
+	}
+
 	plan.Principal = types.BoolNull()
 	plan.ApplicationName = types.StringValue(createResp.AppName)
 	plan.ModelType = types.StringValue(readResp.ModelType)
@@ -605,7 +662,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	planCharm.Series = types.StringValue(readResp.Series)
 	planCharm.Channel = types.StringValue(readResp.Channel)
 	charmType := req.Config.Schema.GetBlocks()[CharmKey].(schema.ListNestedBlock).NestedObject.Type()
-	var dErr diag.Diagnostics
+
 	plan.Charm, dErr = types.ListValueFrom(ctx, charmType, []nestedCharm{planCharm})
 	if dErr.HasError() {
 		resp.Diagnostics.Append(dErr...)
@@ -714,10 +771,24 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 	// Use the response to fill in state
 
 	state.Placement = types.StringValue(response.Placement)
+
 	state.Principal = types.BoolNull()
-	state.UnitCount = types.Int64Value(int64(response.Units))
+	if response.Principal || response.Units > 0 {
+		state.UnitCount = types.Int64Value(int64(response.Units))
+	} else {
+		state.UnitCount = types.Int64Value(1)
+	}
+
 	state.ModelType = types.StringValue(modelType.String())
 	state.Trust = types.BoolValue(response.Trust)
+
+	if len(response.Machines) > 0 {
+		state.Machines, dErr = types.SetValueFrom(ctx, types.StringType, response.Machines)
+		if dErr.HasError() {
+			resp.Diagnostics.Append(dErr...)
+			return
+		}
+	}
 
 	// state requiring transformation
 	dataCharm := nestedCharm{
@@ -996,6 +1067,37 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 	}
 
+	if !plan.Machines.Equal(state.Machines) {
+		var planMachines, stateMachines []string
+		if !(plan.Machines.IsUnknown() || plan.Machines.IsNull()) {
+			resp.Diagnostics.Append(plan.Machines.ElementsAs(ctx, &planMachines, false)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+		}
+		if !(state.Machines.IsUnknown() || plan.Machines.IsUnknown()) {
+			resp.Diagnostics.Append(state.Machines.ElementsAs(ctx, &stateMachines, false)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+		}
+
+		addMachines := []string{}
+		removeMachines := []string{}
+		for _, planMachine := range planMachines {
+			if !slices.Contains(stateMachines, planMachine) {
+				addMachines = append(addMachines, planMachine)
+			}
+		}
+		for _, stateMachine := range stateMachines {
+			if !slices.Contains(planMachines, stateMachine) {
+				removeMachines = append(removeMachines, stateMachine)
+			}
+		}
+		updateApplicationInput.AddMachines = addMachines
+		updateApplicationInput.RemoveMachines = removeMachines
+	}
+
 	// if resources in the plan are equal to resources stored in the state,
 	// we pass on the resources specified in the plan, which tells the provider
 	// NOT to update resources, because we want resources fixed to those
@@ -1081,7 +1183,6 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	storageType := req.Config.Schema.GetAttributes()[StorageKey].(schema.SetNestedAttribute).NestedObject.Type()
 	if updateApplicationInput.Channel != "" ||
 		updateApplicationInput.Revision != nil ||
-		updateApplicationInput.Placement != nil ||
 		updateApplicationInput.Units != nil ||
 		updateApplicationInput.Base != "" {
 		readResp, err := r.client.Applications.ReadApplicationWithRetryOnNotFound(ctx, &juju.ReadApplicationInput{
@@ -1093,6 +1194,13 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 			return
 		}
 		plan.Placement = types.StringValue(readResp.Placement)
+
+		var dErr diag.Diagnostics
+		plan.Machines, dErr = types.SetValueFrom(ctx, types.StringType, readResp.Machines)
+		if dErr.HasError() {
+			resp.Diagnostics.Append(dErr...)
+			return
+		}
 
 		var nestedStorageSlice []nestedStorage
 		for name, storage := range readResp.Storage {

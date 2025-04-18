@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
@@ -628,6 +629,245 @@ func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceApplication_Subordinate(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-application-subordinate")
+
+	ntpName := "juju_application.ntp"
+
+	checkResourceAttrSubordinate := []resource.TestCheckFunc{
+		resource.TestCheckResourceAttr(ntpName, "model", modelName),
+		resource.TestCheckResourceAttr(ntpName, "units", "1"),
+	}
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: testAccResourceApplicationBasic_ntp_Subordinates(modelName),
+			Check: resource.ComposeTestCheckFunc(
+				checkResourceAttrSubordinate...),
+		}, {
+			ImportStateVerify: true,
+			ImportState:       true,
+			ResourceName:      ntpName,
+		}},
+	})
+}
+
+func testAccResourceApplicationBasic_ntp_Subordinates(modelName string) string {
+	return fmt.Sprintf(`
+		resource "juju_model" "model" {
+		  name = %q
+		}
+
+		resource "juju_application" "ntp" {
+			model = juju_model.model.name
+			name = "ntp"
+			charm {
+				name = "ntp"
+				base = "ubuntu@22.04"
+			}
+		}
+		`, modelName)
+}
+
+func TestAcc_ResourceApplication_MachinesWithSubordinates(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-application-placement-machines-with-subordinates")
+
+	charmName := "juju-qa-test"
+
+	resourceName := "juju_application.testapp"
+	ntpName := "juju_application.ntp"
+	numberOfMachines := 10
+
+	checkResourceAttrMachines := []resource.TestCheckFunc{
+		resource.TestCheckResourceAttr(resourceName, "model", modelName),
+		resource.TestCheckResourceAttr(resourceName, "name", charmName),
+		resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
+		resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
+		resource.TestCheckResourceAttr(resourceName, "units", fmt.Sprintf("%d", numberOfMachines)),
+		resource.TestCheckResourceAttr(resourceName, "machines.#", fmt.Sprintf("%d", numberOfMachines)),
+		resource.TestCheckResourceAttr(ntpName, "model", modelName),
+		resource.TestCheckResourceAttr("juju_integration.testapp_ntp", "application.#", "2"),
+	}
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{{
+			ConfigVariables: config.Variables{
+				"machines": config.IntegerVariable(numberOfMachines),
+			},
+			Config: testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmName),
+			Check: resource.ComposeTestCheckFunc(
+				checkResourceAttrMachines...),
+		}, {
+			ImportStateVerify: true,
+			ImportState:       true,
+			ResourceName:      resourceName,
+		}},
+	})
+}
+
+func testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmName string) string {
+	return fmt.Sprintf(`
+		resource "juju_model" "model" {
+		  name = %q
+		}
+
+		resource "juju_machine" "all_machines" {
+			count = var.machines
+  			model = juju_model.model.name
+			base = "ubuntu@22.04"
+			name = "machine_${count.index}"
+		}
+
+		resource "juju_application" "testapp" {
+		  name = "juju-qa-test"
+		  model = juju_model.model.name
+
+
+		  machines = toset( juju_machine.all_machines[*].machine_id )
+
+		  charm {
+			name = %q
+			base = "ubuntu@22.04"
+		  }
+		}
+
+		resource "juju_application" "ntp" {
+			model = juju_model.model.name
+			name = "ntp"
+
+			charm {
+				name = "ntp"
+				base = "ubuntu@22.04"
+			}
+		}
+
+		resource "juju_integration" "testapp_ntp" {
+			model = juju_model.model.name
+
+			application {
+				name = juju_application.testapp.name
+				endpoint = "juju-info"
+			}
+
+			application {
+				name = juju_application.ntp.name
+			}
+		}
+
+		variable "machines" {
+			description = "Number of machines to deploy."
+			type = number
+			default = 1
+		}
+		`, modelName, charmName)
+}
+
+func TestAcc_ResourceApplication_Machines(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-application-placement-machines")
+
+	charmName := "juju-qa-test"
+
+	resourceName := "juju_application.testapp"
+	checkResourceAttrPlacement := []resource.TestCheckFunc{
+		resource.TestCheckResourceAttr(resourceName, "model", modelName),
+		resource.TestCheckResourceAttr(resourceName, "name", charmName),
+		resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
+		resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
+		resource.TestCheckResourceAttr(resourceName, "units", "1"),
+	}
+	checkResourceAttrMachines := []resource.TestCheckFunc{
+		resource.TestCheckResourceAttr(resourceName, "model", modelName),
+		resource.TestCheckResourceAttr(resourceName, "name", charmName),
+		resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
+		resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
+		resource.TestCheckResourceAttr(resourceName, "units", "1"),
+		resource.TestCheckResourceAttr(resourceName, "machines.0", "0"),
+	}
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationBasic_Placement(modelName, charmName),
+				Check: resource.ComposeTestCheckFunc(
+					checkResourceAttrPlacement...),
+			},
+			{
+				Config: testAccResourceApplicationBasic_Machines(modelName, charmName),
+				Check: resource.ComposeTestCheckFunc(
+					checkResourceAttrMachines...),
+			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      resourceName,
+			},
+		},
+	})
+}
+
+func testAccResourceApplicationBasic_Placement(modelName, charmName string) string {
+	return fmt.Sprintf(`
+		resource "juju_model" "model" {
+		  name = %q
+		}
+
+		resource "juju_machine" "machine" {
+		  name = "test machine"
+		  model = juju_model.model.name
+		  base = "ubuntu@22.04"
+		}
+
+		resource "juju_application" "testapp" {
+		  model = juju_model.model.name
+
+		  units = 1
+		  placement =  "${join(",", [juju_machine.machine.machine_id])}"
+
+		  charm {
+			name = %q
+			base = "ubuntu@22.04"
+		  }
+		}
+		`, modelName, charmName)
+}
+
+func testAccResourceApplicationBasic_Machines(modelName, charmName string) string {
+	return fmt.Sprintf(`
+		resource "juju_model" "model" {
+		  name = %q
+		}
+
+		resource "juju_machine" "machine" {
+		  name = "test machine"
+		  model = juju_model.model.name
+		  base = "ubuntu@22.04"
+		}
+
+		resource "juju_application" "testapp" {
+		  model = juju_model.model.name
+
+		  machines = [juju_machine.machine.machine_id]
+
+		  charm {
+			name = %q
+			base = "ubuntu@22.04"
+		  }
+		}
+		`, modelName, charmName)
+}
+
 func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
@@ -1140,8 +1380,6 @@ resource "juju_application" "telegraf" {
     name = "telegraf"
     revision = %d
   }
-
-  units = 0
 }
 `, modelName, subordinateRevision)
 }
@@ -1167,7 +1405,6 @@ resource "juju_application" "this" {
 
 resource "juju_application" "subordinate" {
   model = juju_model.this.name
-  units = 0
   name = "test-subordinate"
   charm {
     name = "nrpe"

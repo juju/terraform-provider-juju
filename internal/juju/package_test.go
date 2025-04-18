@@ -3,5 +3,5 @@
 
 package juju_test
 
-//go:generate go run go.uber.org/mock/mockgen -package juju -destination mock_test.go github.com/juju/terraform-provider-juju/internal/juju SharedClient,ClientAPIClient,ApplicationAPIClient,ModelConfigAPIClient,ResourceAPIClient,SecretAPIClient,JaasAPIClient,KubernetesCloudAPIClient
+//go:generate go run go.uber.org/mock/mockgen -package juju -destination mock_test.go github.com/juju/terraform-provider-juju/internal/juju SharedClient,ClientAPIClient,ApplicationAPIClient,ModelConfigAPIClient,ResourceAPIClient,SecretAPIClient,JaasAPIClient,KubernetesCloudAPIClient,CharmhubClient
 //go:generate go run go.uber.org/mock/mockgen -package juju -destination jujuapi_mock_test.go github.com/juju/juju/api Connection
