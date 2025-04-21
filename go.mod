@@ -4,7 +4,7 @@ go 1.24.1
 
 require (
 	github.com/bflad/tfproviderlint v0.30.0
-	github.com/hashicorp/terraform-plugin-docs v0.19.4
+	github.com/hashicorp/terraform-plugin-docs v0.21.0
 	// v3.6.3
 	github.com/juju/juju v0.0.0-20250306114340-d7a40b3e3801
 )
@@ -23,6 +23,7 @@ require (
 	github.com/juju/cmd/v3 v3.0.16
 	github.com/juju/collections v1.0.4
 	github.com/juju/errors v1.0.0
+	github.com/juju/loggo v1.0.0
 	github.com/juju/names/v5 v5.0.0
 	github.com/juju/retry v1.0.1
 	github.com/juju/utils v0.0.0-20200604140309-9d78121a29e0
@@ -64,7 +65,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bflad/gopaniccheck v0.1.0 // indirect
 	github.com/bgentry/speakeasy v0.1.0 // indirect
-	github.com/bmatcuk/doublestar/v4 v4.7.1 // indirect
+	github.com/bmatcuk/doublestar/v4 v4.8.1 // indirect
 	github.com/canonical/lxd v0.0.0-20241209155119-76da976c6ee7 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudflare/circl v1.3.7 // indirect
@@ -89,7 +90,7 @@ require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/hashicorp/cli v1.1.6 // indirect
+	github.com/hashicorp/cli v1.1.7 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-checkpoint v0.5.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
@@ -125,7 +126,6 @@ require (
 	github.com/juju/http/v2 v2.0.0 // indirect
 	github.com/juju/idmclient/v2 v2.0.0 // indirect
 	github.com/juju/jsonschema v1.0.0 // indirect
-	github.com/juju/loggo v1.0.0 // indirect
 	github.com/juju/lru v1.0.0 // indirect
 	github.com/juju/lumberjack/v2 v2.0.2 // indirect
 	github.com/juju/mgo/v3 v3.0.4 // indirect
@@ -193,7 +193,7 @@ require (
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect
-	github.com/yuin/goldmark v1.7.1 // indirect
+	github.com/yuin/goldmark v1.7.7 // indirect
 	github.com/yuin/goldmark-meta v1.1.0 // indirect
 	github.com/zclconf/go-cty v1.16.2 // indirect
 	go.abhg.dev/goldmark/frontmatter v0.2.0 // indirect
