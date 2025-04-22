@@ -1,3 +1,35 @@
+## 0.19.0 (April 22, 2025)
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.5.0 or higher.**
+* This release uses Juju client api code from the Juju 3.6.4 release.
+
+ENHANCEMENTS
+
+* Support for resetting application configuration settings [694](https://github.com/juju/terraform-provider-juju/pull/694) by @Soundarya03
+* Machine creation timeout increased to 30 minutes [717](https://github.com/juju/terraform-provider-juju/pull/717) by @alesstimec
+* Introduction of `machines` in `juju_application` to replace the now deprecated `placement` [716](https://github.com/juju/terraform-provider-juju/pull/716) by @alesstimec
+
+BUG FIXES
+
+* Fix for custom OCI images in application [700](https://github.com/juju/terraform-provider-juju/pull/700) by @SimoneDutto
+* Fix for application resource update also updating charm revision number [709](https://github.com/juju/terraform-provider-juju/pull/709) by @SimoneDutto 
+
+
+DOCUMENTATION
+
+* Contribution guide [719](https://github.com/juju/terraform-provider-juju/pull/719) by @tmihoc
+* Updates to the documentation home page and the community section [718](https://github.com/juju/terraform-provider-juju/pull/718) by @tmihoc
+
+CI IMPROVEMENTS
+
+* Update JAAS dependency to latest [693](https://github.com/juju/terraform-provider-juju/pull/693) by @SimoneDutto
+* Update Juju dependency to 3.6.4 [696](https://github.com/juju/terraform-provider-juju/pull/696) by @kian99
+* Update the CLA workflow to v2 [702](https://github.com/juju/terraform-provider-juju/pull/702) by @SimoneDutto
+* Use the 3/stable channel for Juju in jaas integration tests [720](https://github.com/juju/terraform-provider-juju/pull/720) by @SimoneDutto
+
 ## 0.18.0 (March 18, 2025)
 
 NOTES:
