@@ -4,6 +4,10 @@ before:
   hooks:
   # TODO: don't tidy beforehand to avoid current ambiguous import error
   # - go mod tidy
+git:
+  # What should be used to sort tags when gathering the current and previous
+  # tags if there are more than one tag in the same commit.
+  tag_sort: -version:creatordate
 builds:
 - env:
     # goreleaser does not work with CGO, it could also complicate
