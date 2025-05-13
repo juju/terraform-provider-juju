@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
@@ -23,15 +24,16 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/juju/clock"
 	"github.com/juju/errors"
 	"github.com/juju/juju/core/constraints"
 	jujustorage "github.com/juju/juju/storage"
+	"github.com/juju/retry"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -66,6 +68,9 @@ var _ resource.Resource = &applicationResource{}
 var _ resource.ResourceWithConfigure = &applicationResource{}
 var _ resource.ResourceWithImportState = &applicationResource{}
 
+// NewApplicationResource returns a new instance of the application resource responsible
+// for managing Juju applications, including their configuration, charm, constraints, and
+// related attributes.
 func NewApplicationResource() resource.Resource {
 	return &applicationResource{}
 }
@@ -153,9 +158,6 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 					" `machines` is mutually exclusive with `units` and `placement` (which is deprecated).",
 				Optional: true,
 				Computed: true,
-				PlanModifiers: []planmodifier.Set{
-					setplanmodifier.UseStateForUnknown(),
-				},
 				Validators: []validator.Set{
 					setvalidator.ConflictsWith(path.Expressions{
 						path.MatchRoot(PlacementKey),
@@ -258,7 +260,6 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
-					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(path.Expressions{
@@ -977,6 +978,10 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	r.trace("Proposed update", applicationResourceModelForLogging(ctx, &plan))
 	r.trace("Current state", applicationResourceModelForLogging(ctx, &state))
 
+	// postUpdateAssertions are intended to be used after the application is update to
+	// assert the update has achieved its intended effect.
+	var postUpdateAssertions []func(context.Context, *juju.ReadApplicationResponse) error
+
 	updateApplicationInput := juju.UpdateApplicationInput{
 		ModelName: state.ModelName.ValueString(),
 		AppName:   state.ApplicationName.ValueString(),
@@ -986,8 +991,11 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		resp.Diagnostics.AddWarning("Unsupported", "unable to update application name")
 	}
 
-	if !plan.UnitCount.Equal(state.UnitCount) {
+	if !plan.UnitCount.Equal(state.UnitCount) && (plan.Machines.IsNull() || plan.Machines.IsUnknown()) {
 		updateApplicationInput.Units = intPtr(plan.UnitCount)
+
+		// TODO (simonedutto): add assertion that the application has the
+		// desired number of units
 	}
 
 	if !plan.Trust.Equal(state.Trust) {
@@ -1096,6 +1104,10 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 		updateApplicationInput.AddMachines = addMachines
 		updateApplicationInput.RemoveMachines = removeMachines
+
+		if len(planMachines) > 0 {
+			postUpdateAssertions = append(postUpdateAssertions, assertMachinesEqual(planMachines))
+		}
 	}
 
 	// if resources in the plan are equal to resources stored in the state,
@@ -1177,31 +1189,36 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
+	readResp, err := r.waitForApplicationAssertions(
+		ctx,
+		&juju.ReadApplicationInput{
+			ModelName: updateApplicationInput.ModelName,
+			AppName:   updateApplicationInput.AppName,
+		},
+		postUpdateAssertions,
+	)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read application resource after update, got error: %s", err))
+		return
+	}
+
 	// If the plan has refreshed the charm, changed the unit count,
 	// or changed placement, wait for the changes to be seen in
 	// status. Including storage as it can be added on a refresh.
 	storageType := req.Config.Schema.GetAttributes()[StorageKey].(schema.SetNestedAttribute).NestedObject.Type()
+
+	plan.Placement = types.StringValue(readResp.Placement)
+	var dErr diag.Diagnostics
+	plan.Machines, dErr = types.SetValueFrom(ctx, types.StringType, readResp.Machines)
+	if dErr.HasError() {
+		resp.Diagnostics.Append(dErr...)
+		return
+	}
+
 	if updateApplicationInput.Channel != "" ||
 		updateApplicationInput.Revision != nil ||
 		updateApplicationInput.Units != nil ||
 		updateApplicationInput.Base != "" {
-		readResp, err := r.client.Applications.ReadApplicationWithRetryOnNotFound(ctx, &juju.ReadApplicationInput{
-			ModelName: updateApplicationInput.ModelName,
-			AppName:   updateApplicationInput.AppName,
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read application resource after update, got error: %s", err))
-			return
-		}
-		plan.Placement = types.StringValue(readResp.Placement)
-
-		var dErr diag.Diagnostics
-		plan.Machines, dErr = types.SetValueFrom(ctx, types.StringType, readResp.Machines)
-		if dErr.HasError() {
-			resp.Diagnostics.Append(dErr...)
-			return
-		}
-
 		var nestedStorageSlice []nestedStorage
 		for name, storage := range readResp.Storage {
 			humanizedSize := transformSizeToHumanizedFormat(storage.Size)
@@ -1454,4 +1471,66 @@ func applicationResourceModelForLogging(_ context.Context, app *applicationResou
 		"storage":          app.Storage.String(),
 	}
 	return value
+}
+
+func assertMachinesEqual(planMachines []string) func(context.Context, *juju.ReadApplicationResponse) error {
+	return func(ctx context.Context, application *juju.ReadApplicationResponse) error {
+		appMachines := application.Machines
+		pms := make([]string, len(planMachines))
+		copy(pms, planMachines)
+
+		slices.Sort(pms)
+		slices.Sort(appMachines)
+
+		if !slices.Equal(pms, appMachines) {
+			return juju.NewRetryReadError("plan machines differ from application machines")
+		}
+
+		return nil
+	}
+}
+
+func (r *applicationResource) waitForApplicationAssertions(ctx context.Context, input *juju.ReadApplicationInput, assertions []func(context.Context, *juju.ReadApplicationResponse) error) (*juju.ReadApplicationResponse, error) {
+	var output *juju.ReadApplicationResponse
+	retryErr := retry.Call(retry.CallArgs{
+		Func: func() error {
+			var err error
+			output, err = r.client.Applications.ReadApplication(input)
+			if err != nil {
+				return err
+			}
+
+			for _, assertion := range assertions {
+				err = assertion(ctx, output)
+				if err != nil {
+					return err
+				}
+			}
+
+			return nil
+		},
+		IsFatalError: func(err error) bool {
+			if errors.As(err, &juju.ApplicationNotFoundError) ||
+				errors.As(err, &juju.StorageNotFoundError) ||
+				errors.As(err, &juju.RetryReadError) ||
+				strings.Contains(err.Error(), "connection refused") {
+				return false
+			}
+			return true
+		},
+		NotifyFunc: func(err error, attempt int) {
+			if attempt%4 == 0 {
+				message := fmt.Sprintf("waiting for application %q", input.AppName)
+				if attempt != 4 {
+					message = "still " + message
+				}
+				r.client.Applications.Debugf(message, map[string]interface{}{"err": err})
+			}
+		},
+		MaxDuration: 30 * time.Minute,
+		Delay:       time.Second,
+		Clock:       clock.WallClock,
+		Stop:        ctx.Done(),
+	})
+	return output, retryErr
 }

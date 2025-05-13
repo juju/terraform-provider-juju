@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"regexp"
 	"testing"
 	"time"
 
@@ -92,6 +91,47 @@ func TestAcc_ResourceApplication(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-application-scale-up")
+	appName := "test-app"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: testAccResourceApplicationScaleUp(modelName, appName, "1"),
+			Check: resource.ComposeTestCheckFunc(
+				resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+				resource.TestCheckResourceAttr("juju_application.this", "name", appName),
+				resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
+				resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
+				resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
+				resource.TestCheckResourceAttr("juju_application.this", "units", "1"),
+			),
+		}, {
+			Config: testAccResourceApplicationScaleUp(modelName, appName, "2"),
+			Check: resource.ComposeTestCheckFunc(
+				resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+				resource.TestCheckResourceAttr("juju_application.this", "name", appName),
+				resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
+				resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
+				resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
+				resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
+			),
+		}, {
+			Config: testAccResourceApplicationScaleUp(modelName, appName, "1"),
+			Check: resource.ComposeTestCheckFunc(
+				resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+				resource.TestCheckResourceAttr("juju_application.this", "name", appName),
+				resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
+				resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
+				resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
+				resource.TestCheckResourceAttr("juju_application.this", "units", "1"),
+			),
+		}},
+	})
+}
+
 func TestAcc_ResourceApplication_Updates(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "ubuntu-lite"
@@ -115,18 +155,6 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 					// a different charm with other config
 					//resource.TestCheckResourceAttr("juju_application.this", "config.hostname", "machinename"),
 				),
-			},
-			{
-				SkipFunc: func() (bool, error) {
-					return testingCloud != LXDCloudTesting, nil
-				},
-				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
-				Check:  resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
-				// After the change for Update to call ReadApplicationWithRetryOnNotFound when
-				// updating unit counts, charm revision/channel or storage this test has started to
-				// fail with the known error: https://github.com/juju/terraform-provider-juju/issues/376
-				// Expecting the error until this issue can be fixed.
-				ExpectError: regexp.MustCompile("Provider produced inconsistent result after apply.*"),
 			},
 			{
 				SkipFunc: func() (bool, error) {
@@ -447,35 +475,35 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// deploy charm without custom resource
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.0/stable"),
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1/stable"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
 			},
 			{
 				// Add a custom resource
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/stable", "grafana-image", "gatici/grafana:10"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1/stable", "grafana-image", "gatici/grafana:10"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:10"),
 				),
 			},
 			{
 				// Add another custom resource
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/stable", "grafana-image", "gatici/grafana:9"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1/stable", "grafana-image", "gatici/grafana:9"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:9"),
 				),
 			},
 			{
 				// Add resource revision
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/stable", "grafana-image", "61"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1/stable", "grafana-image", "61"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "61"),
 				),
 			},
 			{
 				// Remove resource revision
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.0/stable"),
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1/stable"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
@@ -501,35 +529,35 @@ func TestAcc_CustomResourceUpdatesMicrok8s(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// Deploy charm with a custom resource
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/edge", "grafana-image", "gatici/grafana:9"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1/edge", "grafana-image", "gatici/grafana:9"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:9"),
 				),
 			},
 			{
 				// Keep charm channel and update resource to another custom image
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/edge", "grafana-image", "gatici/grafana:10"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1/edge", "grafana-image", "gatici/grafana:10"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:10"),
 				),
 			},
 			{
 				// Update charm channel and update resource to a revision
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/stable", "grafana-image", "59"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1/stable", "grafana-image", "59"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "59"),
 				),
 			},
 			{
 				// Update charm channel and keep resource revision
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/beta", "grafana-image", "59"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1/beta", "grafana-image", "59"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "59"),
 				),
 			},
 			{
 				// Keep charm channel and remove resource revision
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.0/beta"),
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1/beta"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
@@ -555,35 +583,35 @@ func TestAcc_CustomResourcesRemovedFromPlanMicrok8s(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// Deploy charm with a custom resource
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/edge", "grafana-image", "gatici/grafana:9"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1/edge", "grafana-image", "gatici/grafana:9"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:9"),
 				),
 			},
 			{
 				// Keep charm channel and remove custom resource
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.0/edge"),
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1/edge"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
 			},
 			{
 				// Keep charm channel and add resource revision
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/edge", "grafana-image", "60"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1/edge", "grafana-image", "60"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "60"),
 				),
 			},
 			{
 				// Update charm channel and keep resource revision
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1.0/stable", "grafana-image", "60"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "1/stable", "grafana-image", "60"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "60"),
 				),
 			},
 			{
 				// Update charm channel and remove resource revision
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1.0/beta"),
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1/beta"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
@@ -677,7 +705,7 @@ func TestAcc_ResourceApplication_MachinesWithSubordinates(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	modelName := acctest.RandomWithPrefix("tf-test-application-placement-machines-with-subordinates")
+	modelName := acctest.RandomWithPrefix("tf-test-application-machines-with-subordinates")
 
 	charmName := "juju-qa-test"
 
@@ -685,15 +713,17 @@ func TestAcc_ResourceApplication_MachinesWithSubordinates(t *testing.T) {
 	ntpName := "juju_application.ntp"
 	numberOfMachines := 10
 
-	checkResourceAttrMachines := []resource.TestCheckFunc{
-		resource.TestCheckResourceAttr(resourceName, "model", modelName),
-		resource.TestCheckResourceAttr(resourceName, "name", charmName),
-		resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
-		resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
-		resource.TestCheckResourceAttr(resourceName, "units", fmt.Sprintf("%d", numberOfMachines)),
-		resource.TestCheckResourceAttr(resourceName, "machines.#", fmt.Sprintf("%d", numberOfMachines)),
-		resource.TestCheckResourceAttr(ntpName, "model", modelName),
-		resource.TestCheckResourceAttr("juju_integration.testapp_ntp", "application.#", "2"),
+	checkResourceAttrMachines := func(numberOfMachines int) []resource.TestCheckFunc {
+		return []resource.TestCheckFunc{
+			resource.TestCheckResourceAttr(resourceName, "model", modelName),
+			resource.TestCheckResourceAttr(resourceName, "name", charmName),
+			resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
+			resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
+			resource.TestCheckResourceAttr(resourceName, "units", fmt.Sprintf("%d", numberOfMachines)),
+			resource.TestCheckResourceAttr(resourceName, "machines.#", fmt.Sprintf("%d", numberOfMachines)),
+			resource.TestCheckResourceAttr(ntpName, "model", modelName),
+			resource.TestCheckResourceAttr("juju_integration.testapp_ntp", "application.#", "2"),
+		}
 	}
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -704,7 +734,67 @@ func TestAcc_ResourceApplication_MachinesWithSubordinates(t *testing.T) {
 			},
 			Config: testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmName),
 			Check: resource.ComposeTestCheckFunc(
-				checkResourceAttrMachines...),
+				checkResourceAttrMachines(numberOfMachines)...),
+		}, {
+			ConfigVariables: config.Variables{
+				"machines": config.IntegerVariable(numberOfMachines - 1),
+			},
+			Config: testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmName),
+			Check: resource.ComposeTestCheckFunc(
+				checkResourceAttrMachines(numberOfMachines - 1)...),
+		}, {
+			ConfigVariables: config.Variables{
+				"machines": config.IntegerVariable(2),
+			},
+			Config: testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmName),
+			Check: resource.ComposeTestCheckFunc(
+				checkResourceAttrMachines(2)...),
+		}, {
+			ImportStateVerify: true,
+			ImportState:       true,
+			ResourceName:      resourceName,
+		}},
+	})
+}
+
+func TestAcc_ResourceApplication_SwitchMachinestoUnits(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-application-switch-machines-to-units")
+
+	charmName := "juju-qa-test"
+
+	resourceName := "juju_application.testapp"
+	ntpName := "juju_application.ntp"
+	numberOfMachines := 10
+
+	checkResourceAttrMachines := func(numberOfMachines int) []resource.TestCheckFunc {
+		return []resource.TestCheckFunc{
+			resource.TestCheckResourceAttr(resourceName, "model", modelName),
+			resource.TestCheckResourceAttr(resourceName, "name", charmName),
+			resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
+			resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
+			resource.TestCheckResourceAttr(resourceName, "units", fmt.Sprintf("%d", numberOfMachines)),
+			resource.TestCheckResourceAttr(resourceName, "machines.#", fmt.Sprintf("%d", numberOfMachines)),
+			resource.TestCheckResourceAttr(ntpName, "model", modelName),
+			resource.TestCheckResourceAttr("juju_integration.testapp_ntp", "application.#", "2"),
+		}
+	}
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{{
+			ConfigVariables: config.Variables{
+				"machines": config.IntegerVariable(numberOfMachines),
+			},
+			Config: testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmName),
+			Check: resource.ComposeTestCheckFunc(
+				checkResourceAttrMachines(numberOfMachines)...),
+		}, {
+			Config: testAccResourceApplicationBasic_UnitsWithSubordinates(modelName, charmName, fmt.Sprintf("%d", numberOfMachines)),
+			Check: resource.ComposeTestCheckFunc(
+				checkResourceAttrMachines(numberOfMachines)...),
 		}, {
 			ImportStateVerify: true,
 			ImportState:       true,
@@ -768,6 +858,50 @@ func testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmNa
 			default = 1
 		}
 		`, modelName, charmName)
+}
+
+func testAccResourceApplicationBasic_UnitsWithSubordinates(modelName, charmName, numberOfUnits string) string {
+	return fmt.Sprintf(`
+		resource "juju_model" "model" {
+		  name = %q
+		}
+
+		resource "juju_application" "testapp" {
+		  name = "juju-qa-test"
+		  model = juju_model.model.name
+
+
+		  units = %q
+
+		  charm {
+			name = %q
+			base = "ubuntu@22.04"
+		  }
+		}
+
+		resource "juju_application" "ntp" {
+			model = juju_model.model.name
+			name = "ntp"
+
+			charm {
+				name = "ntp"
+				base = "ubuntu@22.04"
+			}
+		}
+
+		resource "juju_integration" "testapp_ntp" {
+			model = juju_model.model.name
+
+			application {
+				name = juju_application.testapp.name
+				endpoint = "juju-info"
+			}
+
+			application {
+				name = juju_application.ntp.name
+			}
+		}
+		`, modelName, numberOfUnits, charmName)
 }
 
 func TestAcc_ResourceApplication_Machines(t *testing.T) {
@@ -1111,6 +1245,48 @@ func testAccResourceApplicationBasic(modelName, appName string) string {
 		  }
 		}
 		`, modelName, appName)
+	}
+}
+
+func testAccResourceApplicationScaleUp(modelName, appName, numberOfUnits string) string {
+	if testingCloud == LXDCloudTesting {
+		return fmt.Sprintf(`
+		resource "juju_model" "this" {
+		  name = %q
+		}
+		
+		resource "juju_application" "this" {
+		  model = juju_model.this.name
+		  name = %q
+		  charm {
+			name = "ubuntu-lite"
+		  }
+		  trust = true
+		  expose{}
+		  units = %q
+		}
+		`, modelName, appName, numberOfUnits)
+	} else {
+		// if we have a K8s deployment we need the machine hostname
+		return fmt.Sprintf(`
+		resource "juju_model" "this" {
+		  name = %q
+		}
+		
+		resource "juju_application" "this" {
+		  model = juju_model.this.name
+		  name = %q
+		  charm {
+			name = "ubuntu-lite"
+		  }
+		  trust = true
+		  expose{}
+		  units = %q
+		  config = {
+			juju-external-hostname="myhostname"
+		  }
+		}
+		`, modelName, appName, numberOfUnits)
 	}
 }
 
