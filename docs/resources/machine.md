@@ -41,6 +41,7 @@ resource "juju_machine" "this_machine" {
 
 ### Read-Only
 
+- `hostname` (String) The hostname of the machine.
 - `id` (String) The ID of this resource.
 - `machine_id` (String) The id of the machine Juju creates.
 

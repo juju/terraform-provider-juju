@@ -29,6 +29,7 @@ func TestAcc_ResourceMachine(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
 					resource.TestCheckResourceAttr("juju_machine.this", "series", "jammy"),
 					resource.TestCheckResourceAttr("juju_machine.this", "base", "ubuntu@22.04"),
+					resource.TestCheckResourceAttrSet("juju_machine.this", "hostname"),
 				),
 			},
 			{
@@ -55,6 +56,7 @@ func TestAcc_ResourceMachine_Minimal(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "model", modelName),
 					resource.TestCheckResourceAttr(resourceName, "machine_id", "0"),
+					resource.TestCheckResourceAttrSet(resourceName, "hostname"),
 				),
 			},
 			{
@@ -82,6 +84,7 @@ func TestAcc_ResourceMachine_WithPlacement(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "model", modelName),
 					resource.TestCheckResourceAttr(resourceName, "machine_id", "0/lxd/0"),
 					resource.TestCheckResourceAttr(resourceName, "placement", "lxd:0"),
+					resource.TestCheckResourceAttrSet(resourceName, "hostname"),
 				),
 			},
 			{
@@ -126,6 +129,7 @@ func TestAcc_ResourceMachine_UpgradeProvider(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
 					resource.TestCheckResourceAttr("juju_machine.this", "series", "focal"),
+					resource.TestCheckResourceAttrSet("juju_machine.this", "hostname"),
 				),
 			},
 			{
@@ -174,6 +178,7 @@ func TestAcc_ResourceMachine_AddMachine_Edge(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_machine.this_machine", "model", modelName),
 					resource.TestCheckResourceAttr("juju_machine.this_machine", "name", "manually_provisioned_machine"),
 					resource.TestCheckResourceAttr("juju_machine.this_machine", "machine_id", "0"),
+					resource.TestCheckResourceAttrSet("juju_machine.this_machine", "hostname"),
 				),
 			},
 			{

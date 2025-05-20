@@ -25,6 +25,7 @@ func TestAcc_DataSourceMachine_Edge(t *testing.T) {
 				Config: testAccDataSourceMachine(modelName, "base = \"ubuntu@22.04\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_machine.machine", "model", modelName),
+					resource.TestCheckResourceAttrPair("data.juju_machine.machine", "hostname", "juju_machine.machine", "hostname"),
 				),
 			},
 		},
@@ -51,6 +52,7 @@ func TestAcc_DataSourceMachine_UpgradeProvider(t *testing.T) {
 				Config: testAccDataSourceMachine(modelName, "series = \"jammy\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_machine.machine", "model", modelName),
+					resource.TestCheckResourceAttrPair("data.juju_machine.machine", "hostname", "juju_machine.machine", "hostname"),
 				),
 			},
 			{
