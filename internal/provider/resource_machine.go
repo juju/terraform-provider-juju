@@ -312,7 +312,6 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	data.Base = types.StringValue(response.Base)
 	data.Series = types.StringValue(response.Series)
 	data.Name = types.StringValue(machineName)
-	data.Hostname = types.StringValue(response.Base)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
