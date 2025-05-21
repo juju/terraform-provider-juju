@@ -66,6 +66,28 @@ type Client struct {
 	username string
 }
 
+// ConnectionRefusedError is a global variable that can be used to check
+// if an error is a connectionRefusedError. This is useful for retry logic
+// where you want to retry on connection refused errors.
+var ConnectionRefusedError = &connectionRefusedError{}
+
+// connectionRefusedError is returned when a connection to the controller
+// is refused. This is usually treated as a retryable error.
+type connectionRefusedError struct {
+	msg string
+}
+
+// Error returns a string representation of the connectionRefusedError.
+func (e *connectionRefusedError) Error() string {
+	return fmt.Sprintf("retrying: %s", e.msg)
+}
+
+// Is checks if the error is a connectionRefusedError.
+func (e *connectionRefusedError) Is(target error) bool {
+	_, ok := target.(*connectionRefusedError)
+	return ok
+}
+
 // IsJAAS returns a boolean to indicate whether the controller configured is a JAAS controller.
 // JAAS controllers offer additional functionality for permission management.
 func (c Client) IsJAAS() bool {

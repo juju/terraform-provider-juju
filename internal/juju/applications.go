@@ -66,6 +66,12 @@ func (ae *applicationNotFoundError) Error() string {
 	return fmt.Sprintf("application %s not found", ae.appName)
 }
 
+// Is checks if the target error is an applicationNotFoundError.
+func (ae *applicationNotFoundError) Is(err error) bool {
+	_, ok := err.(*applicationNotFoundError)
+	return ok
+}
+
 var StorageNotFoundError = &storageNotFoundError{}
 
 // StorageNotFoundError
@@ -75,6 +81,12 @@ type storageNotFoundError struct {
 
 func (se *storageNotFoundError) Error() string {
 	return fmt.Sprintf("storage %s not found", se.storageName)
+}
+
+// Is checks if the target error is a storageNotFoundError.
+func (se *storageNotFoundError) Is(target error) bool {
+	_, ok := target.(*storageNotFoundError)
+	return ok
 }
 
 var RetryReadError = &retryReadError{}
@@ -93,6 +105,12 @@ type retryReadError struct {
 
 func (e *retryReadError) Error() string {
 	return fmt.Sprintf("retrying: %s", e.msg)
+}
+
+// Is checks if the target error is a retryReadError.
+func (e *retryReadError) Is(target error) bool {
+	_, ok := target.(*retryReadError)
+	return ok
 }
 
 type applicationsClient struct {

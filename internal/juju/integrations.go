@@ -36,6 +36,12 @@ func (ie *noIntegrationFoundError) Error() string {
 	return fmt.Sprintf("no integrations exist in model %v", ie.ModelUUID)
 }
 
+// Is checks if the target error is a noIntegrationFoundError.
+func (ie *noIntegrationFoundError) Is(target error) bool {
+	_, ok := target.(*noIntegrationFoundError)
+	return ok
+}
+
 type integrationsClient struct {
 	SharedClient
 }

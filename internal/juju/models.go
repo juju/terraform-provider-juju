@@ -31,6 +31,12 @@ func (me *modelNotFoundError) Error() string {
 	return fmt.Sprintf(toReturn, me.uuid)
 }
 
+// Is checks if the target error is a modelNotFoundError.
+func (me *modelNotFoundError) Is(target error) bool {
+	_, ok := target.(*modelNotFoundError)
+	return ok
+}
+
 type modelsClient struct {
 	SharedClient
 }
