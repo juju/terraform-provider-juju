@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -39,6 +40,10 @@ var Provider provider.Provider
 // TestClient is needed for any resource to be able to use Juju client in
 // custom checkers for their tests (e.g. resource_model_test)
 var TestClient *juju.Client
+
+// setupAccTestsOnce ensures that any setup needed for acceptance tests
+// is only done once.
+var setupAccTestsOnce sync.Once
 
 func init() {
 	Provider = NewJujuProvider("dev")
@@ -192,6 +197,12 @@ func TestProviderAllowsEmptyCACert(t *testing.T) {
 }
 
 func testAccPreCheck(t *testing.T) {
+	setupAccTestsOnce.Do(func() {
+		setupAcceptanceTests(t)
+	})
+}
+
+func setupAcceptanceTests(t *testing.T) {
 	if TestClient != nil {
 		return
 	}
@@ -205,6 +216,78 @@ func testAccPreCheck(t *testing.T) {
 	testClient, ok := confResp.ResourceData.(*juju.Client)
 	require.Truef(t, ok, "ResourceData, not of type juju client")
 	TestClient = testClient
+	createCloudCredential(t)
+}
+
+var cloudNameMap = map[string]string{
+	"lxd": "localhost",
+}
+
+// canonicalCloudName returns the canonical name of the cloud.
+// Where the Terraform provider tests uses the name "lxd" for the
+// local cloud, the Juju client uses "localhost" for example.
+func canonicalCloudName(name string) string {
+	val, ok := cloudNameMap[name]
+	if ok {
+		return val
+	}
+	return name
+}
+
+// createCloudCredential reads a cloud-credential from
+// the local client store and re-creates that cloud-credential
+// on the controller. If a cloud-credential for the cloud
+// under test already exists on the controller, this is a no-op.
+// This is useful when running tests as a user that isn't the admin user.
+func createCloudCredential(t *testing.T) {
+	if TestClient == nil {
+		t.Fatal("TestClient is not set")
+	}
+	cloudName := canonicalCloudName(os.Getenv(TestCloudEnvKey))
+
+	// List controller credentials to bail out early if one already exists.
+	listControllerCreds, _ := TestClient.Credentials.ListCredentials(juju.ListCredentialInput{
+		ControllerCredential: true,
+	})
+	// skip checking the error here, because the controller
+	// returns a not found error if no credentials exist
+	// and for any other errors we want to continue anyway.
+	if listControllerCreds != nil {
+		for cloud := range listControllerCreds.CloudCredentials {
+			if cloud == cloudName {
+				t.Logf("successfully found cloud-credential in controller for cloud %s", cloudName)
+				return
+			}
+		}
+	}
+
+	// List client credentials to check if we have any cloud-credentials.
+	listClientCreds, err := TestClient.Credentials.ListCredentials(juju.ListCredentialInput{
+		ClientCredential: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to read cloud-credential from client store: %v", err)
+	}
+	if len(listClientCreds.CloudCredentials[cloudName].AuthCredentials) == 0 {
+		t.Fatalf("no cloud-credentials for cloud %q found in client store", cloudName)
+	}
+
+	// Create a new credential on the controller using the
+	// first available client credential.
+	var createCredential juju.CreateCredentialInput
+	for credentialName, cred := range listClientCreds.CloudCredentials[cloudName].AuthCredentials {
+		createCredential.AuthType = string(cred.AuthType())
+		createCredential.Attributes = cred.Attributes()
+		createCredential.Name = credentialName
+		createCredential.CloudName = cloudName
+		createCredential.ControllerCredential = true
+		break
+	}
+
+	_, err = TestClient.Credentials.CreateCredential(createCredential)
+	if err != nil {
+		t.Fatalf("failed to create controller credential: %v", err)
+	}
 }
 
 func validateJAASTestConfig(t *testing.T) {
