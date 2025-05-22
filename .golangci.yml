@@ -8,4 +8,4 @@ linters:
 output:
   print-issued-lines: true
   formats:
-    - format: github-actions
+    - format: colored-line-number

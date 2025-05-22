@@ -79,6 +79,13 @@ func (se *storageNotFoundError) Error() string {
 
 var RetryReadError = &retryReadError{}
 
+// NewRetryReadError returns a new retry error with the specified message.
+func NewRetryReadError(msg string) *retryReadError {
+	return &retryReadError{
+		msg: msg,
+	}
+}
+
 // retryReadError
 type retryReadError struct {
 	msg string
