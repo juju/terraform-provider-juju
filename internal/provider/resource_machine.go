@@ -40,17 +40,17 @@ type machineResource struct {
 }
 
 type machineResourceModel struct {
-	Name           types.String `tfsdk:"name"`
-	ModelName      types.String `tfsdk:"model"`
-	Constraints    types.String `tfsdk:"constraints"`
-	Disks          types.String `tfsdk:"disks"`
-	Base           types.String `tfsdk:"base"`
-	Series         types.String `tfsdk:"series"`
-	Placement      types.String `tfsdk:"placement"`
-	MachineID      types.String `tfsdk:"machine_id"`
-	SSHAddress     types.String `tfsdk:"ssh_address"`
-	PublicKeyFile  types.String `tfsdk:"public_key_file"`
-	PrivateKeyFile types.String `tfsdk:"private_key_file"`
+	Name           types.String           `tfsdk:"name"`
+	ModelName      types.String           `tfsdk:"model"`
+	Constraints    CustomConstraintsValue `tfsdk:"constraints"`
+	Disks          types.String           `tfsdk:"disks"`
+	Base           types.String           `tfsdk:"base"`
+	Series         types.String           `tfsdk:"series"`
+	Placement      types.String           `tfsdk:"placement"`
+	MachineID      types.String           `tfsdk:"machine_id"`
+	SSHAddress     types.String           `tfsdk:"ssh_address"`
+	PublicKeyFile  types.String           `tfsdk:"public_key_file"`
+	PrivateKeyFile types.String           `tfsdk:"private_key_file"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -117,12 +117,13 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 				},
 			},
 			ConstraintsKey: schema.StringAttribute{
+				CustomType: CustomConstraintsType{},
 				Description: "Machine constraints that overwrite those available from 'juju get-model-constraints' " +
 					"and provider's defaults. Changing this value will cause the application to be destroyed and" +
 					" recreated by terraform.",
 				Optional: true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplaceIfConfigured(),
+					stringplanmodifier.RequiresReplaceIf(constraintsRequiresReplacefunc, "", ""),
 				},
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(path.Expressions{
@@ -363,7 +364,7 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 	data.Series = types.StringValue(response.Series)
 	data.Base = types.StringValue(response.Base)
 	if response.Constraints != "" {
-		data.Constraints = types.StringValue(response.Constraints)
+		data.Constraints = NewCustomConstraintsValue(response.Constraints)
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

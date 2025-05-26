@@ -186,6 +186,55 @@ func TestAcc_ResourceMachine_AddMachine_Edge(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceMachine_ConstraintsNormalization(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-machine")
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceMachine(modelName, "constraints = \"arch=amd64 mem=4G cores=2\""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
+					resource.TestCheckResourceAttrSet("juju_machine.this", "machine_id"),
+					resource.TestCheckResourceAttr("juju_machine.this", "machine_id", "0"), // Ensure machine is not replaced
+				),
+			},
+			{
+				Config: testAccResourceMachine(modelName, "constraints = \"cores=2 arch=amd64 mem=4G\""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
+					resource.TestCheckResourceAttrSet("juju_machine.this", "machine_id"),
+					resource.TestCheckResourceAttr("juju_machine.this", "machine_id", "0"), // Ensure machine is not replaced
+				),
+			},
+			{
+				Config: testAccResourceMachine(modelName, "constraints = \"mem=4096M cores=2 arch=amd64\""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
+					resource.TestCheckResourceAttrSet("juju_machine.this", "machine_id"),
+					resource.TestCheckResourceAttr("juju_machine.this", "machine_id", "0"), // Ensure machine is not replaced
+				),
+			},
+			{
+				Config: testAccResourceMachine(modelName, "constraints = \"mem=4096M cores=4 arch=amd64\""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
+					resource.TestCheckResourceAttrSet("juju_machine.this", "machine_id"),
+					resource.TestCheckResourceAttr("juju_machine.this", "machine_id", "1"), // Ensure machine is replaced
+				),
+			},
+		},
+	})
+}
+
 func testAccResourceMachineAddMachine(modelName string, IP string, pubKeyPath string, privKeyPath string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this_model" {
