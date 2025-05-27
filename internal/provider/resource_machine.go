@@ -40,18 +40,18 @@ type machineResource struct {
 }
 
 type machineResourceModel struct {
-	Name           types.String `tfsdk:"name"`
-	ModelName      types.String `tfsdk:"model"`
-	Constraints    types.String `tfsdk:"constraints"`
-	Disks          types.String `tfsdk:"disks"`
-	Base           types.String `tfsdk:"base"`
-	Series         types.String `tfsdk:"series"`
-	Placement      types.String `tfsdk:"placement"`
-	MachineID      types.String `tfsdk:"machine_id"`
-	SSHAddress     types.String `tfsdk:"ssh_address"`
-	PublicKeyFile  types.String `tfsdk:"public_key_file"`
-	PrivateKeyFile types.String `tfsdk:"private_key_file"`
-	Hostname       types.String `tfsdk:"hostname"`
+	Name           types.String           `tfsdk:"name"`
+	ModelName      types.String           `tfsdk:"model"`
+	Constraints    CustomConstraintsValue `tfsdk:"constraints"`
+	Disks          types.String           `tfsdk:"disks"`
+	Base           types.String           `tfsdk:"base"`
+	Series         types.String           `tfsdk:"series"`
+	Placement      types.String           `tfsdk:"placement"`
+	MachineID      types.String           `tfsdk:"machine_id"`
+	SSHAddress     types.String           `tfsdk:"ssh_address"`
+	PublicKeyFile  types.String           `tfsdk:"public_key_file"`
+	PrivateKeyFile types.String           `tfsdk:"private_key_file"`
+	Hostname       types.String           `tfsdk:"hostname"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -312,6 +312,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	data.Base = types.StringValue(response.Base)
 	data.Series = types.StringValue(response.Series)
 	data.Name = types.StringValue(machineName)
+	data.Hostname = types.StringUnknown()
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
