@@ -113,6 +113,7 @@ func WaitFor[I any, D any](waitCfg WaitForCfg[I, D]) (D, error) {
 		MaxDuration: waitCfg.RetryConf.MaxDuration,
 		Delay:       waitCfg.RetryConf.Delay,
 		Clock:       waitCfg.RetryConf.Clock,
+		MaxDelay:    time.Minute,
 		Stop:        waitCfg.Context.Done(),
 	})
 	return data, retryErr
@@ -120,10 +121,12 @@ func WaitFor[I any, D any](waitCfg WaitForCfg[I, D]) (D, error) {
 
 // WaitForError waits for a specific error to be returned from the getData function.
 func WaitForError[I any, D any](cfg WaitForErrorCfg[I, D]) error {
-	// Set default values for the retry configuration
+	// Set default values for the retry configuration.
+	// The default max duration is 15 minutes, because this is used
+	// to wait for deletion and it should take less time.
 	if cfg.RetryConf == nil {
 		cfg.RetryConf = &RetryConf{
-			MaxDuration: 30 * time.Minute,
+			MaxDuration: 15 * time.Minute,
 			Delay:       time.Second,
 			Clock:       clock.WallClock,
 		}
@@ -151,6 +154,7 @@ func WaitForError[I any, D any](cfg WaitForErrorCfg[I, D]) error {
 		MaxDuration: cfg.RetryConf.MaxDuration,
 		Delay:       cfg.RetryConf.Delay,
 		Clock:       cfg.RetryConf.Clock,
+		MaxDelay:    time.Minute,
 		Stop:        cfg.Context.Done(),
 	})
 	return retryErr

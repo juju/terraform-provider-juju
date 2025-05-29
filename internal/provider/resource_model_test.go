@@ -205,6 +205,40 @@ func TestAcc_ResourceModel_Annotations_DisjointedSet(t *testing.T) {
 	})
 }
 
+// TestAcc_ResourceModel_WaitForDelete tests that the model can be deleted and recreated successfully.
+// It ensures that the model is properly cleaned up before the next creation attempt.
+func TestAcc_ResourceModel_WaitForDelete(t *testing.T) {
+	// SkipJAAS because the way we delete models in JAAS is not synchronous.
+	// Until we find a way to handle this, we skip the test for JAAS.
+	SkipJAAS(t)
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+	resourceName := "juju_model.model"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceModel(modelName, testingCloud.CloudName(), "INFO"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", modelName),
+					resource.TestMatchResourceAttr(resourceName, "uuid", validUUID),
+				),
+			},
+			{
+				Config: " ",
+			},
+			{
+				Config: testAccResourceModel(modelName, testingCloud.CloudName(), "INFO"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", modelName),
+					resource.TestMatchResourceAttr(resourceName, "uuid", validUUID),
+				),
+			},
+		},
+	})
+}
+
 func testAccCheckDevelopmentConfigIsUnset(modelName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		conn, err := TestClient.Models.GetConnection(&modelName)

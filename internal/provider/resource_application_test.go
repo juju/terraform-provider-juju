@@ -1223,7 +1223,7 @@ func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application-storage")
 	appName := "test-app-storage"
 
-	storageConstraints := map[string]string{"label": "runner", "size": "2G"}
+	storageConstraints := map[string]string{"label": "pgdata", "size": "1M"}
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -1233,12 +1233,20 @@ func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
 				Config: testAccResourceApplicationStorageLXD(modelName, appName, storageConstraints),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
-					resource.TestCheckResourceAttr("juju_application."+appName, "storage_directives.runner", "2G"),
-					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.label", "runner"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage_directives.pgdata", "1M"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.label", "pgdata"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.count", "1"),
-					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.size", "2G"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.size", "1M"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.pool", "lxd"),
 				),
+			},
+			{
+				Config: testAccResourceApplicationStorageLXD(modelName, appName, storageConstraints),
+				PreConfig: func() {
+					// This sleep is necessary because issuing a destroy on a newly created application,
+					// can put Juju in a state where the application is stucked in "waiting" and it cannot be destroyed.
+					time.Sleep(1 * time.Minute)
+				},
 			},
 		},
 	})
@@ -1251,7 +1259,7 @@ func TestAcc_ResourceApplication_StorageK8s(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application-storage")
 	appName := "test-app-storage"
 
-	storageConstraints := map[string]string{"label": "pgdata", "size": "2G"}
+	storageConstraints := map[string]string{"label": "pgdata", "size": "1M"}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -1261,10 +1269,10 @@ func TestAcc_ResourceApplication_StorageK8s(t *testing.T) {
 				Config: testAccResourceApplicationStorageK8s(modelName, appName, storageConstraints),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
-					resource.TestCheckResourceAttr("juju_application."+appName, "storage_directives.pgdata", "2G"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage_directives.pgdata", "1M"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.label", "pgdata"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.count", "1"),
-					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.size", "2G"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.size", "1M"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.pool", "kubernetes"),
 				),
 			},
@@ -1767,9 +1775,9 @@ resource "juju_application" "{{.AppName}}" {
   model = juju_model.{{.ModelName}}.name
   name = "{{.AppName}}"
   charm {
-    name = "github-runner"
-    channel = "latest/stable"
-    revision = 177
+    name = "postgresql"
+	channel = "14/stable"
+	revision = 553
   }
 
   storage_directives = {
