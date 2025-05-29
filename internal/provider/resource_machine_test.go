@@ -275,3 +275,87 @@ resource "juju_machine" "this_machine_1" {
 			"ModelName": modelName,
 		})
 }
+
+func TestAcc_ResourceMachine_Annotations_Basic(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+	machineName := "testmachine"
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAnnotationsMachine(modelName, machineName, "test", "test"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "name", machineName),
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "annotations.test", "test"),
+				),
+			},
+			{
+				Config: testAccAnnotationsMachine(modelName, machineName, "test", "test-update"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "name", machineName),
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "annotations.test", "test-update"),
+				),
+			},
+			{
+				Config: fmt.Sprintf(`
+resource "juju_model" "testmodel" {
+  name = %q
+}
+  
+resource "juju_machine" "testmachine" {
+  name = %q
+  model = juju_model.testmodel.name
+}
+`, modelName, machineName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "name", machineName),
+					resource.TestCheckNoResourceAttr("juju_machine.testmachine", "annotations.test"),
+				),
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceMachine_Annotations_DisjointedSet(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+	machineName := "testmachine"
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAnnotationsMachine(modelName, machineName, "test", "test"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "name", machineName),
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "annotations.test", "test"),
+				),
+			},
+			{
+				Config: testAccAnnotationsMachine(modelName, machineName, "test-another", "test-another"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "name", machineName),
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "annotations.test-another", "test-another"),
+					resource.TestCheckNoResourceAttr("juju_machine.testmachine", "annotations.test"),
+				),
+			},
+		},
+	})
+}
+
+func testAccAnnotationsMachine(modelName, machineName string, annotationKey, annotationValue string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "testmodel" {
+  name = %q
+}
+
+resource "juju_machine" "testmachine" {
+  name = %q
+  model = juju_model.testmodel.name
+
+  
+  annotations = {
+	%q = %q
+  }
+}`, modelName, machineName, annotationKey, annotationValue)
+}
