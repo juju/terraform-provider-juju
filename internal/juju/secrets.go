@@ -29,6 +29,12 @@ func (se *secretNotFoundError) Error() string {
 	}
 }
 
+// Is checks if the target error is a secretNotFoundError.
+func (se *secretNotFoundError) Is(target error) bool {
+	_, ok := target.(*secretNotFoundError)
+	return ok
+}
+
 type secretsClient struct {
 	SharedClient
 

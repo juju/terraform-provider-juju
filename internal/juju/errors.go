@@ -48,3 +48,9 @@ type keepWaitingError struct {
 func (e *keepWaitingError) Error() string {
 	return fmt.Sprintf("%q in state %q, waiting for %q", e.item, e.state, e.endState)
 }
+
+// Is checks if the target error is an keepWaitingError.
+func (e *keepWaitingError) Is(target error) bool {
+	_, ok := target.(*keepWaitingError)
+	return ok
+}
