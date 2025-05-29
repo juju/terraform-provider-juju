@@ -136,7 +136,7 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "ubuntu-lite"
 	if testingCloud != LXDCloudTesting {
-		appName = "hello-kubecon"
+		appName = "coredns"
 	}
 
 	resource.ParallelTest(t, resource.TestCase{
@@ -168,7 +168,7 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 					return testingCloud != MicroK8sTesting, nil
 				},
 				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
-				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "19"),
+				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "165"),
 			},
 			{
 				Config: testAccResourceApplicationUpdates(modelName, 2, false, "machinename"),
@@ -1416,7 +1416,8 @@ func testAccResourceApplicationUpdates(modelName string, units int, expose bool,
 		  units = %d
 		  name = "test-app"
 		  charm {
-			name     = "hello-kubecon"
+			name     = "coredns"
+			revision = 165
 		  }
 		  trust = true
 		  %s
@@ -1455,7 +1456,7 @@ func testAccResourceApplicationUpdatesCharm(modelName string, channel string) st
 		  model = juju_model.this.name
 		  name = "test-app"
 		  charm {
-			name     = "hello-kubecon"
+			name     = "coredns"
 			channel = %q
 		  }
 		}
@@ -1871,9 +1872,9 @@ func TestAcc_ResourceApplication_CustomOCIForResource(t *testing.T) {
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with MIcroK8s")
 	}
-	modelName := acctest.RandomWithPrefix("tf-test-application-parallel-deploy")
-	charm := "hello-kubecon"
-	resourceName := "gosherve-image"
+	modelName := acctest.RandomWithPrefix("tf-test-custom-oci-resource")
+	charm := "coredns"
+	resourceName := "coredns-image"
 	ociImage := "ghcr.io/canonical/test:6a873fb35b0170dfe49ed27ba8ee6feb8e475131"
 	ociImage2 := "ghcr.io/canonical/test:ab0b183f22db2959e0350f54d92f9ed3583c4167"
 	resource.Test(t, resource.TestCase{

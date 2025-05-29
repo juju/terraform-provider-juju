@@ -1420,6 +1420,27 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete application, got error: %s", err))
 	}
 
+	err := wait.WaitForError(
+		wait.WaitForErrorCfg[*juju.ReadApplicationInput, *juju.ReadApplicationResponse]{
+			Context: ctx,
+			GetData: r.client.Applications.ReadApplication,
+			Input: &juju.ReadApplicationInput{
+				ModelName: modelName,
+				AppName:   appName,
+			},
+			ErrorToWait:    juju.ApplicationNotFoundError,
+			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError, juju.StorageNotFoundError},
+		},
+	)
+	if err != nil {
+		// AddWarning is used instead of AddError to make sure that the resource is removed from state.
+		resp.Diagnostics.AddWarning(
+			"Client Error",
+			fmt.Sprintf(`Unable to complete application %s deletion due to error %v, there might be dangling resources. 
+Make sure to manually delete them.`, appName, err))
+		return
+	}
+
 	r.trace(fmt.Sprintf("deleted application resource %q", state.ID.ValueString()))
 }
 

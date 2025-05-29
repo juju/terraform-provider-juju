@@ -11,7 +11,7 @@ package juju
 import (
 	"bytes"
 	"context"
-	"errors"
+	stderrors "errors"
 	"fmt"
 	"math"
 	"os"
@@ -25,6 +25,7 @@ import (
 	charmresources "github.com/juju/charm/v12/resource"
 	"github.com/juju/clock"
 	"github.com/juju/collections/set"
+	"github.com/juju/errors"
 	jujuerrors "github.com/juju/errors"
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
@@ -55,22 +56,9 @@ import (
 	goyaml "gopkg.in/yaml.v2"
 )
 
-var ApplicationNotFoundError = &applicationNotFoundError{}
-
-// ApplicationNotFoundError
-type applicationNotFoundError struct {
-	appName string
-}
-
-func (ae *applicationNotFoundError) Error() string {
-	return fmt.Sprintf("application %s not found", ae.appName)
-}
-
-// Is checks if the target error is an applicationNotFoundError.
-func (ae *applicationNotFoundError) Is(err error) bool {
-	_, ok := err.(*applicationNotFoundError)
-	return ok
-}
+// ApplicationNotFoundError is an error that indicates that the application
+// was not found when contacting the Juju API.
+var ApplicationNotFoundError = errors.ConstError("application-not-found")
 
 var StorageNotFoundError = &storageNotFoundError{}
 
@@ -449,7 +437,7 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient Applicatio
 	})
 
 	if len(errs) != 0 {
-		return errors.Join(errs...)
+		return stderrors.Join(errs...)
 	}
 
 	fileSystem := osFilesystem{}
@@ -985,12 +973,12 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("more than one result for application: %s", input.AppName)
 	}
 	if len(apps) < 1 {
-		return nil, &applicationNotFoundError{input.AppName}
+		return nil, errors.WithType(errors.New(input.AppName), ApplicationNotFoundError)
 	}
 	if apps[0].Error != nil {
 		// Return applicationNotFoundError to trigger retry.
 		c.Debugf("Actual error from ApplicationsInfo", map[string]interface{}{"err": apps[0].Error})
-		return nil, &applicationNotFoundError{input.AppName}
+		return nil, errors.WithType(errors.New(input.AppName), ApplicationNotFoundError)
 	}
 
 	appInfo := apps[0].Result
