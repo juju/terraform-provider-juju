@@ -55,12 +55,10 @@ jobs:
         with:
           terraform_version: "1.11.*"
           terraform_wrapper: false
-      - name: Upgrade docker compose.
+      - name: Install docker compose plugin
         run: |
-          sudo apt-get remove -y --purge docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc
-          sudo rm -rf /etc/docker
-          sudo apt-get autoremove -y --purge  docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc
-          sudo snap install docker --channel latest/edge
+          for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove -y $pkg; done
+          sudo snap install docker --channel latest/stable
       # Starting JAAS will start the JIMM controller and dependencies and create a Juju controller on LXD and connect it to JIMM.
       - name: Setup JAAS
         uses: canonical/jimm/.github/actions/test-server@v3
