@@ -56,49 +56,33 @@ import (
 	goyaml "gopkg.in/yaml.v2"
 )
 
+// NewApplicationNotFoundError returns a new error indicating that the
+// application was not found.
+func NewApplicationNotFoundError(appName string) error {
+	return errors.WithType(errors.Errorf("application %s not found", appName), ApplicationNotFoundError)
+}
+
 // ApplicationNotFoundError is an error that indicates that the application
 // was not found when contacting the Juju API.
 var ApplicationNotFoundError = errors.ConstError("application-not-found")
 
-var StorageNotFoundError = &storageNotFoundError{}
-
-// StorageNotFoundError
-type storageNotFoundError struct {
-	storageName string
+// NewStorageNotFoundError returns a new error indicating that the
+// storage was not found.
+func NewStorageNotFoundError(applicationName string) error {
+	return errors.WithType(errors.Errorf("storage not found for application %s", applicationName), StorageNotFoundError)
 }
 
-func (se *storageNotFoundError) Error() string {
-	return fmt.Sprintf("storage %s not found", se.storageName)
-}
+// StorageNotFoundError is an error that indicates that the storage was not found.
+var StorageNotFoundError = errors.ConstError("storage-not-found")
 
-// Is checks if the target error is a storageNotFoundError.
-func (se *storageNotFoundError) Is(target error) bool {
-	_, ok := target.(*storageNotFoundError)
-	return ok
-}
-
-var RetryReadError = &retryReadError{}
+// RetryReadError is an error that indicates that a read operation
+// should be retried. This is used to handle transient errors
+// that may occur when reading application data from the Juju API.
+var RetryReadError = errors.ConstError("retry-read-error")
 
 // NewRetryReadError returns a new retry error with the specified message.
-func NewRetryReadError(msg string) *retryReadError {
-	return &retryReadError{
-		msg: msg,
-	}
-}
-
-// retryReadError
-type retryReadError struct {
-	msg string
-}
-
-func (e *retryReadError) Error() string {
-	return fmt.Sprintf("retrying: %s", e.msg)
-}
-
-// Is checks if the target error is a retryReadError.
-func (e *retryReadError) Is(target error) bool {
-	_, ok := target.(*retryReadError)
-	return ok
+func NewRetryReadError(msg string) error {
+	return errors.WithType(errors.Errorf("retrying: %s", msg), RetryReadError)
 }
 
 type applicationsClient struct {
@@ -817,83 +801,6 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 	return addPendingResources(appName, charmInfo.Meta.Resources, resourcesToUse, charmID, resourcesAPIClient)
 }
 
-// ReadApplicationWithRetryOnNotFound calls ReadApplication until
-// successful, or the count is exceeded when the error is of type
-// not found. Delay indicates how long to wait between attempts.
-func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Context, input *ReadApplicationInput) (*ReadApplicationResponse, error) {
-	var output *ReadApplicationResponse
-	modelType, err := c.ModelType(input.ModelName)
-	if err != nil {
-		return nil, jujuerrors.Annotatef(err, "getting model type")
-	}
-	retryErr := retry.Call(retry.CallArgs{
-		Func: func() error {
-			var err error
-			output, err = c.ReadApplication(input)
-			if errors.As(err, &ApplicationNotFoundError) || errors.As(err, &StorageNotFoundError) {
-				return err
-			} else if err != nil {
-				return err
-			}
-
-			// NOTE: Applications can always have storage. However, they
-			// will not be listed right after the application is created. So
-			// we need to wait for the storage to be ready. And we need to
-			// check if all storage constraints have pool equal "" and size equal 0
-			// to drop the error.
-			for label, storage := range output.Storage {
-				if storage.Pool == "" || storage.Size == 0 {
-					return &retryReadError{msg: fmt.Sprintf("storage label %q missing detail", label)}
-				}
-			}
-
-			// NOTE: An IAAS subordinate should also have machines. However, they
-			// will not be listed until after the relation has been created.
-			// Those happen with the integration resource which will not be
-			// run by terraform before the application resource finishes. Thus
-			// do not block here for subordinates.
-			if modelType != model.IAAS || !output.Principal || output.Units == 0 {
-				// No need to wait for machines in these cases.
-				return nil
-			}
-			if output.Placement == "" {
-				return &retryReadError{msg: "no machines found in output"}
-			}
-			machines := strings.Split(output.Placement, ",")
-			if len(machines) != output.Units {
-				return &retryReadError{msg: fmt.Sprintf("need %d machines, have %d", output.Units, len(machines))}
-			}
-
-			c.Tracef("Have machines - returning", map[string]interface{}{"output": *output})
-			return nil
-		},
-		IsFatalError: func(err error) bool {
-			if errors.As(err, &ApplicationNotFoundError) ||
-				errors.As(err, &StorageNotFoundError) ||
-				errors.As(err, &RetryReadError) ||
-				strings.Contains(err.Error(), "connection refused") {
-				return false
-			}
-			return true
-		},
-		NotifyFunc: func(err error, attempt int) {
-			if attempt%4 == 0 {
-				message := fmt.Sprintf("waiting for application %q", input.AppName)
-				if attempt != 4 {
-					message = "still " + message
-				}
-				c.Debugf(message, map[string]interface{}{"err": err})
-			}
-		},
-		BackoffFunc: retry.DoubleDelay,
-		Attempts:    30,
-		Delay:       time.Second,
-		Clock:       clock.WallClock,
-		Stop:        ctx.Done(),
-	})
-	return output, retryErr
-}
-
 func (c *applicationsClient) transformToStorageConstraints(
 	storageDetailsSlice []params.StorageDetails,
 	filesystemDetailsSlice []params.FilesystemDetails,
@@ -973,12 +880,12 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("more than one result for application: %s", input.AppName)
 	}
 	if len(apps) < 1 {
-		return nil, errors.WithType(errors.New(input.AppName), ApplicationNotFoundError)
+		return nil, NewApplicationNotFoundError(input.AppName)
 	}
 	if apps[0].Error != nil {
 		// Return applicationNotFoundError to trigger retry.
 		c.Debugf("Actual error from ApplicationsInfo", map[string]interface{}{"err": apps[0].Error})
-		return nil, errors.WithType(errors.New(input.AppName), ApplicationNotFoundError)
+		return nil, NewApplicationNotFoundError(input.AppName)
 	}
 
 	appInfo := apps[0].Result
@@ -996,7 +903,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 			strings.Contains(err.Error(), "volume for storage instance") ||
 			strings.Contains(err.Error(), "cannot convert storage details") {
 			// Retry if we get this error. It means the storage is not ready yet.
-			return nil, &storageNotFoundError{input.AppName}
+			return nil, NewStorageNotFoundError(input.AppName)
 		}
 		c.Errorf(err, "failed to get status")
 		return nil, err
