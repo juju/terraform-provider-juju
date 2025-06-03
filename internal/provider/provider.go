@@ -181,7 +181,7 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			JujuController: schema.StringAttribute{
-				Description: fmt.Sprintf("This is the Controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `%s` environment variable.", JujuControllerEnvKey),
+				Description: fmt.Sprintf("This is the controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `%s` environment variable.", JujuControllerEnvKey),
 				Optional:    true,
 			},
 			JujuUsername: schema.StringAttribute{
@@ -206,7 +206,7 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 				},
 			},
 			JujuClientID: schema.StringAttribute{
-				Description: fmt.Sprintf("This is the client ID to be used. This can also be set by the `%s` environment variable", JujuClientIDEnvKey),
+				Description: fmt.Sprintf("If using JAAS: This is the client ID (OAuth2.0, created by the external identity provider) to be used. This can also be set by the `%s` environment variable", JujuClientIDEnvKey),
 				Optional:    true,
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(path.Expressions{
@@ -216,7 +216,7 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 				},
 			},
 			JujuClientSecret: schema.StringAttribute{
-				Description: fmt.Sprintf("This is the client secret to be used. This can also be set by the `%s` environment variable", JujuClientSecretEnvKey),
+				Description: fmt.Sprintf("If using JAAS: This is the client secret (OAuth2.0, created by the external identity provider) to be used. This can also be set by the `%s` environment variable", JujuClientSecretEnvKey),
 				Optional:    true,
 				Sensitive:   true,
 				Validators: []validator.String{
@@ -227,7 +227,7 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 				},
 			},
 			JujuCACert: schema.StringAttribute{
-				Description: fmt.Sprintf("This is the certificate to use for identification. This can also be set by the `%s` environment variable", JujuCACertEnvKey),
+				Description: fmt.Sprintf("If the controller was deployed with a self-signed certificate: This is the certificate to use for identification. This can also be set by the `%s` environment variable", JujuCACertEnvKey),
 				Optional:    true,
 			},
 		},
