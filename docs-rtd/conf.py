@@ -241,8 +241,14 @@ extensions = [
     # Make it possible to link to related RTD projects using their internal anchors
     # with, e.g., {external+ops:ref}`manage-configurations`:
     'sphinx.ext.intersphinx',
+    # Display an external link icon and open link in new tab:
+    # new_tab_link_show_external_link_icon must also be set to True
+    'sphinx_new_tab_link',
 ]
 
+
+# sphinx_new_tab_link options
+new_tab_link_show_external_link_icon = True
 
 ##################################
 # sphinx.ext.intersphinx options #
