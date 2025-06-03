@@ -240,12 +240,18 @@ extensions = [
     "sphinxcontrib.cairosvgconverter",
     # Make it possible to link to related RTD projects using their internal anchors
     # with, e.g., {external+ops:ref}`manage-configurations`:
+    'sphinxext.rediraffe',
     'sphinx.ext.intersphinx',
     # Display an external link icon and open link in new tab:
     # new_tab_link_show_external_link_icon must also be set to True
     'sphinx_new_tab_link',
 ]
 
+
+# sphinxext.rediraffe options
+#
+# Read redirects from the provided file:
+rediraffe_redirects = "redirects.txt"
 
 # sphinx_new_tab_link options
 new_tab_link_show_external_link_icon = True
