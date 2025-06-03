@@ -27,7 +27,7 @@ resource "juju_jaas_access_offer" "development" {
 
 ### Required
 
-- `access` (String) Level of access to grant. Changing this value will replace the Terraform resource. Valid access levels are described at https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/authorisation_model/#valid-relations
+- `access` (String) Level of access to grant. Changing this value will replace the Terraform resource. Valid access levels are described at https://canonical-jaas-documentation.readthedocs-hosted.com/latest/howto/manage-permissions/#add-a-permission
 - `offer_url` (String) The url of the offer for access management. If this is changed the resource will be deleted and a new resource will be created.
 
 ### Optional
