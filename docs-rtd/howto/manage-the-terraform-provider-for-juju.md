@@ -1,9 +1,9 @@
-(manage-terraform-provider-juju)=
-# Manage `terraform-provider-juju`
+(manage-the-terraform-provider-for-juju)=
+# Manage the Terraform Provider for Juju
 
-## Install `terraform-provider-juju`
+## Install the Terraform Provider for Juju
 
-To install `terraform-provider-juju` on Linux, macOS, or Windows, you need to install the `terraform` CLI.
+To install the Terraform Provider for Juju on Linux, macOS, or Windows, you need to install the `terraform` CLI.
 
 > See more: [Hashicorp | Install Terraform](https://developer.hashicorp.com/terraform/install)
 
@@ -13,8 +13,10 @@ For example, on a Linux that supports snaps:
 sudo snap install terraform
 ```
 
-(use-terraform-provider-juju)=
-## Use `terraform-provider-juju`
+(use-the-terraform-provider-for-juju)=
+## Use the Terraform Provider for Juju
+
+To use the Terraform Provider for Juju, create a Terraform plan specifying the `juju` provider, an existing Juju or JIMM controller, and resources or data sources for whatever Juju entities you want to deploy, then apply your plan in the usual Terraform way.
 
 ### 1. Build your Terraform plan
 
@@ -119,8 +121,8 @@ b. `terraform plan` to stage the changes; and
 c. `terraform apply` to apply the changes to your Juju deployment.
 
 
-## Upgrade `terraform-provider-juju`
+## Upgrade the Terraform Provider for Juju
 
-To upgrade `terraform-provider-juju`, in your Terraform plan update the version constraint, then run `terraform init` with the `--upgrade` flag.
+To upgrade the Terraform Provider for Juju, in your Terraform plan update the version constraint, then run `terraform init` with the `--upgrade` flag.
 
 > See more: Terraform [Version constraints](https://developer.hashicorp.com/terraform/language/providers/requirements#version-constraints), [`terraform init --upgrade`](https://developer.hashicorp.com/terraform/cli/commands/init#upgrade-1)

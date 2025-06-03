@@ -38,7 +38,7 @@ In the case of a multi-cloud controller, you can specify which cloud you want th
 >
 > See related: {external+juju:ref}`Juju | Configure a controller <configure-a-controller>`
 
-With `terraform-provider-juju` you can only set configuration values, only for a specific model, and only a workload model; for anything else, please use the `juju`  CLI.
+With the Terraform Provider for Juju you can only set configuration values, only for a specific model, and only a workload model; for anything else, please use the `juju`  CLI.
 
 To configure a specific workload model, in your Terraform plan, in the model's resource definition, specify a `config` block, listing all the key=value pairs you want to set. For example:
 
@@ -66,7 +66,7 @@ resource "juju_model" "this" {
 ## Manage constraints for a model
 > See also: {external+juju:ref}`Juju | Constraint <constraint>`
 
-With `terraform-provider-juju` you can only set constraints -- to view them, please use the `juju` CLI.
+With the Terraform Provider for Juju you can only set constraints -- to view them, please use the `juju` CLI.
 
 To set constraints for a model, in your Terraform, in the model's resource definition, specify the `constraints` attribute (value is a quotes-enclosed space-separated list of key=value pairs). For example:
 
@@ -145,7 +145,7 @@ resource "juju_jaas_access_model" "development" {
 To migrate a model to another controller, use the `juju` CLI to perform the migration, then, in your Terraform plan, reconfigure the `juju` provider to point to the destination controller (we recommend the method where you configure the provider using static credentials). You can verify your configuration changes by running `terraform plan` and noticing no change: Terraform merely compares the plan to what it finds in your deployment -- if model migration with `juju` has been successful, it should detect no change.
 
 
-> See more: {ref}`use-terraform-provider-juju`
+> See more: {ref}`use-the-terraform-provider-for-juju`
 
 (destroy-a-model)=
 ## Destroy a model

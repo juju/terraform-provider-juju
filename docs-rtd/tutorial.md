@@ -60,7 +60,7 @@ Next, decide which charms (i.e., software operators) you want to use. Charmhub p
 
 You will need to install a Juju client; on the client, add your cloud and cloud credentials; on the cloud, bootstrap a controller (i.e., control plan); on the controller, add a model (i.e., canvas to deploy things on; namespace); on the model, deploy, configure, and integrate the charms that make up your chat service.
 
-`terraform-provider-juju` is not self-sufficient -- follow the instructions for the `juju` CLI all the way up to and including the step where you create the  `34microk8s` controller. Also get the details of that controller: `juju show-controller --show-password 34microk8s`.
+the Terraform Provider for Juju is not self-sufficient -- follow the instructions for the `juju` CLI all the way up to and including the step where you create the  `34microk8s` controller. Also get the details of that controller: `juju show-controller --show-password 34microk8s`.
 
 > See more: {external+juju:ref}`Juju | Tutorial: Deploy <tutorial>`
 
@@ -234,7 +234,7 @@ ubuntu@my-juju-vm:~$ curl 10.1.170.150:8065/api/v4/system/ping
 
 Congratulations, your chat service is up and running!
 
-> See more: {external+juju:ref}`Juju | Set things up <set-things-up>`, {ref}`manage-terraform-provider-juju`, {external+juju:ref}`Juju | Manage clouds <manage-clouds>`, {external+juju:ref}`Juju | Manage credentials <manage-credentials>`, {external+juju:ref}`Juju | Manage controllers <manage-controllers>`, {external+juju:ref}`Juju | Manage models <manage-models>`, {external+juju:ref}`Juju | Manage applications <manage-applications>`
+> See more: {external+juju:ref}`Juju | Set things up <set-things-up>`, {ref}`manage-the-terraform-provider-for-juju`, {external+juju:ref}`Juju | Manage clouds <manage-clouds>`, {external+juju:ref}`Juju | Manage credentials <manage-credentials>`, {external+juju:ref}`Juju | Manage controllers <manage-controllers>`, {external+juju:ref}`Juju | Manage models <manage-models>`, {external+juju:ref}`Juju | Manage applications <manage-applications>`
 
 
 ## Scale
@@ -377,13 +377,13 @@ Follow the instructions for the `juju` CLI.
 
 > See more: {external+juju:ref}`Juju | Tear things down <tear-things-down>`
 
-In addition to that, on your host machine, delete your `terraform-provider-juju` directory.
+In addition to that, on your host machine, delete your the `terraform-juju` directory.
 
 
 <!--
 ## Next steps
 
-This tutorial has introduced you to all the basic things you can do with `terraform-provider-juju`. But there is a lot more to explore:
+This tutorial has introduced you to all the basic things you can do with the Terraform Provider for Juju. But there is a lot more to explore:
 
 | If you are wondering... | visit our...                             |
 |-------------------------|------------------------------------------|

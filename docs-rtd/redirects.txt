@@ -1,1 +1,3 @@
 # <old URL> <new URL>
+
+howto/manage-terraform-provider-juju howto/manage-the-terraform-provider-for-juju
