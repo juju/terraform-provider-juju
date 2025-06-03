@@ -16,90 +16,107 @@ sudo snap install terraform
 (use-terraform-provider-juju)=
 ## Use `terraform-provider-juju`
 
+### 1. Build your Terraform plan
 
-Once you've installed the `terraform` CLI, to start using it:
+#### a. Configure Terraform to use the `juju` provider
 
-1. **Require the `juju` provider.** In your Terraform plan, under `required_providers`, specify the `juju` provider:
+In your Terraform plan, add:
 
-    ```terraform
-    terraform {
-      required_providers {
-        juju = {
-          version = "~> 0.10.0"
-          source  = "juju/juju"
-        }
-      }
+```terraform
+terraform {
+  required_providers {
+    juju = {
+      version = "~> 0.13.0"
+      source  = "juju/juju"
     }
-    ```
+  }
+}
+```
 
-2. **Configure the provider to use a pre-existing controller.** There are 3 ways you can do this: using static credentials, using environment variables, or using the `juju` client.
+#### b. Configure the `juju` provider to use an existing Juju or JIMM controller
 
-    ```{note}
-    For all methods: To view your controller's details, run `juju show-controller --show-password`.
+There are 3 ways you can do this: using static credentials, using environment variables, or using the `juju` client. The last method is only supported for regular Juju controllers.
 
-    ```
+```{tip}
+For all methods: To view your controller’s details, run `juju show-controller --show-password`.
+```
 
-    ::::{dropdown} Configure the provider using static credentials
+##### Using static credentials
 
-    In your Terraform plan, in your provider specification, use the various keywords to provide your controller information statically:
+In your Terraform plan add:
 
-    ```terraform
-    provider "juju" {
-      controller_addresses = "10.225.205.241:17070,10.225.205.242:17070"
-      username = "jujuuser"
-      password = "password1"
-      ca_certificate = file("~/ca-cert.pem")
-    }
-    ```
+```terraform
+provider "juju" {
+  controller_addresses = "<controller addresses>"
+  # For a controller deployed with a self-signed certificate:
+  ca_certificate = file("<path to certificate file>")
+  # For a regular Juju controller, provide the username and password:
+  username = "<username>"
+  password = "<password>"
+  # For a JIMM controller, provide the client ID and client secret:
+  client_id     = "<clientID>"
+  client_secret = "<clientSecret>"
+}
+```
 
-    > See more: [Terraform | `juju` provider](https://registry.terraform.io/providers/juju/juju/latest/docs)
+> See more: [Terraform | `juju` provider](https://registry.terraform.io/providers/juju/juju/latest/docs)
 
-    ::::
+##### Using environment variables
 
-    ::::{dropdown} Configure the provider using environment variables
+In your Terraform plan, leave the `provider` specification empty:
 
-    In your Terraform plan, leave the `provider` specification empty:
+```terraform
+provider "juju" {}
+```
 
-    ```terraform
-    provider "juju" {}
-    ```
+Then, in a terminal, export the controller environment variables with your controller's values. For example:
 
-    Then, in a terminal, export the controller environment variables with your controller's values. For example:
+```bash
+export JUJU_CONTROLLER_ADDRESSES="<controller addresses>"
+# For a controller deployed with a self-signed certificate:
+export JUJU_CA_CERT=file("<path to certificate file>")
+# For a regular Juju controller, provide the username and password:
+export JUJU_USERNAME="<username>"
+export JUJU_PASSWORD="<password>"
+# For a JIMM controller, provide the client ID and client secret:
+export JUJU_CLIENT_ID="<client ID>"
+export JUJU_CLIENT_SECRET="<client secret>"
+```
 
-    ```bash
-    export JUJU_CONTROLLER_ADDRESSES="10.225.205.241:17070,10.225.205.242:17070"
-    export JUJU_USERNAME="jujuuser"
-    export JUJU_PASSWORD="password1"
-    export JUJU_CA_CERT=file("~/ca-cert.pem")
-    ```
-
-    ::::
+> See more: [Terraform | `juju` provider](https://registry.terraform.io/providers/juju/juju/latest/docs)
 
 
-    ::::{dropdown} Configure the provider using the juju CLI
+##### Using the `juju` CLI
 
-    In your Terraform plan, leave the `provider` specification empty:
+```{important}
+This method is only supported for regular Juju controllers.
+```
 
-    ```terraform
-    provider "juju" {}
-    ```
+In your Terraform plan, leave the `provider` specification empty:
 
-    Then, in a terminal, use the `juju` client to switch to the desired controller: `juju switch <controller>`. Your Terraform plan will be interpreted relative to that controller.
+```terraform
+provider "juju" {}
+```
 
-    ::::
+Then, in a terminal, use the `juju` client to switch to the desired controller: `juju switch <controller>`. Your Terraformplan will be interpreted relative to that controller.
 
-3. Build your deployment.
+> See more: [Terraform | `juju` provider](https://registry.terraform.io/providers/juju/juju/latest/docs)
 
-    > See more: [How-to guides](../howto/index)
 
-4. Once you're done, in a terminal, run:
+#### c. Build your deployment
 
-    a. (just the first time) `terraform init` to initialise your project;
+> See more: [How-to guides](../howto/index)
 
-    b. `terraform plan` to stage the changes; and
 
-    c. `terraform apply` to apply the changes to your Juju deployment.
+### 2. Apply your Terraform plan
 
+In a terminal, in your project directory, run:
+
+a. (just the first time) `terraform init` to initialise your project;
+
+b. `terraform plan` to stage the changes; and
+
+c. `terraform apply` to apply the changes to your Juju deployment.
 
 
 ## Upgrade `terraform-provider-juju`
