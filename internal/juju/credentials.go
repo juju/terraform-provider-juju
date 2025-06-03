@@ -31,13 +31,6 @@ type CreateCredentialResponse struct {
 	CloudName       string
 }
 
-// ListCredentialInput is used as input to list
-// credentials for the client or controller.
-type ListCredentialInput struct {
-	ClientCredential     bool
-	ControllerCredential bool
-}
-
 // ListCredentialResponse is the response from listing credentials.
 type ListCredentialResponse struct {
 	// CloudCredentials contain all credentials, keyed by cloud name.
