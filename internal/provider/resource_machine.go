@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -20,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
+	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -40,6 +42,7 @@ type machineResource struct {
 }
 
 type machineResourceModel struct {
+	Annotations    types.Map              `tfsdk:"annotations"`
 	Name           types.String           `tfsdk:"name"`
 	ModelName      types.String           `tfsdk:"model"`
 	Constraints    CustomConstraintsValue `tfsdk:"constraints"`
@@ -100,6 +103,14 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 	resp.Schema = schema.Schema{
 		Description: "A resource that represents a Juju machine deployment. Refer to the juju add-machine CLI command for more information and limitations.",
 		Attributes: map[string]schema.Attribute{
+			"annotations": schema.MapAttribute{
+				Description: "Annotations are key/value pairs that can be used to store additional information about the machine. May not contain dots (.) in keys.",
+				Optional:    true,
+				ElementType: types.StringType,
+				PlanModifiers: []planmodifier.Map{
+					mapplanmodifier.UseStateForUnknown(),
+				},
+			},
 			NameKey: schema.StringAttribute{
 				Description: "A name for the machine resource in Terraform.",
 				Optional:    true,
@@ -292,6 +303,23 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 	r.trace(fmt.Sprintf("create machine resource %q", response.ID))
 
+	var annotations map[string]string
+	resp.Diagnostics.Append(data.Annotations.ElementsAs(ctx, &annotations, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if len(annotations) > 0 {
+		err = r.client.Annotations.SetAnnotations(&juju.SetAnnotationsInput{
+			ModelName:   data.ModelName.ValueString(),
+			Annotations: annotations,
+			EntityTag:   names.NewMachineTag(response.ID),
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to set annotations for machine %q, got error: %s", response.ID, err))
+			return
+		}
+	}
+
 	machineName := data.Name.ValueString()
 	if machineName == "" {
 		machineName = fmt.Sprintf("machine-%s", response.ID)
@@ -358,6 +386,25 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 	r.trace(fmt.Sprintf("read machine resource %q", machineID))
 
+	annotations, err := r.client.Annotations.GetAnnotations(&juju.GetAnnotationsInput{
+		EntityTag: names.NewMachineTag(response.ID),
+		ModelName: modelName,
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get machine's annotations, got error: %s", err))
+		return
+	}
+	if len(annotations.Annotations) > 0 {
+		annotationsType := req.State.Schema.GetAttributes()["annotations"].(schema.MapAttribute).ElementType
+
+		annotationsMapValue, errDiag := types.MapValueFrom(ctx, annotationsType, annotations.Annotations)
+		resp.Diagnostics.Append(errDiag...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		data.Annotations = annotationsMapValue
+	}
+
 	data.Name = types.StringValue(machineName)
 	data.ModelName = types.StringValue(modelName)
 	data.MachineID = types.StringValue(machineID)
@@ -384,14 +431,22 @@ func (r *machineResource) Update(ctx context.Context, req resource.UpdateRequest
 	// TODO hml 28-Jul-2023
 	// Delete the machine resource if it no longer exists in juju.
 
-	// Only the name can be updated it is terraform data and
-	// not saved in juju.
-	if plan.Name.Equal(state.Name) {
+	// Check annotations
+	if !state.Annotations.Equal(plan.Annotations) {
+		resp.Diagnostics.Append(updateAnnotations(ctx, &r.client.Annotations, state.Annotations, plan.Annotations, state.ModelName.ValueString(), names.NewMachineTag(state.MachineID.ValueString()))...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	// Only the name or annotations can be updated in the terraform data.
+	if plan.Name.Equal(state.Name) && state.Annotations.Equal(plan.Annotations) {
 		return
 	}
 	state.Name = plan.Name
-	id := newMachineID(plan.ModelName.ValueString(), plan.MachineID.ValueString(), plan.Name.ValueString())
+	id := newMachineID(plan.ModelName.ValueString(), state.MachineID.ValueString(), plan.Name.ValueString())
 	state.ID = types.StringValue(id)
+	state.Annotations = plan.Annotations
 
 	r.trace(fmt.Sprintf("update machine resource %q", plan.MachineID.ValueString()))
 
@@ -473,4 +528,46 @@ func modelMachineIDAndName(value string, diags *diag.Diagnostics) (string, strin
 		return "", "", ""
 	}
 	return id[0], id[1], id[2]
+}
+
+type annotationSetter interface {
+	SetAnnotations(input *juju.SetAnnotationsInput) error
+}
+
+// updateAnnotations takes the state and the plan, and performs the necessary
+// steps to propagate the changes to juju.
+func updateAnnotations(ctx context.Context, client annotationSetter, stateAnnotations types.Map, planAnnotations types.Map, modelName string, entityTag names.Tag) diag.Diagnostics {
+	diagnostics := diag.Diagnostics{}
+
+	var annotationsState map[string]string
+	diagnostics.Append(stateAnnotations.ElementsAs(ctx, &annotationsState, false)...)
+	if diagnostics.HasError() {
+		return diagnostics
+	}
+	var annotationsPlan map[string]string
+	diagnostics.Append(planAnnotations.ElementsAs(ctx, &annotationsPlan, false)...)
+	if diagnostics.HasError() {
+		return diagnostics
+	}
+	// when the plan is empty this map is nil, instead of being initialized with 0 items.
+	if annotationsPlan == nil {
+		annotationsPlan = make(map[string]string, 0)
+	}
+	// set the value of removed fields to "" in the plan to unset the value
+	for k := range annotationsState {
+		if _, ok := annotationsPlan[k]; !ok {
+			annotationsPlan[k] = ""
+		}
+	}
+
+	err := client.SetAnnotations(&juju.SetAnnotationsInput{
+		ModelName:   modelName,
+		Annotations: annotationsPlan,
+		EntityTag:   entityTag,
+	})
+	if err != nil {
+		diagnostics.AddError("Client Error", fmt.Sprintf("Unable to set annotations for model %q, got error: %s", modelName, err))
+		return diagnostics
+	}
+	return diagnostics
 }
