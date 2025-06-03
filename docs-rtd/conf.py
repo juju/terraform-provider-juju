@@ -139,6 +139,8 @@ html_context = {
     # 'github_version': 'main',
     # Docs location in the repo; used in links for viewing the source files
     #
+    # Your documentation GitHub issues URL
+     "github_issues": "https://github.com/juju/terraform-provider-juju/issues",
     # TODO: To customise the directory, uncomment and update as needed.
     "repo_folder": "/docs-rtd/",
 
