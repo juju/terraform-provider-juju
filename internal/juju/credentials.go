@@ -173,11 +173,19 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 	return &CreateCredentialResponse{CloudCredential: cloudCredential, CloudName: cloudName}, nil
 }
 
-// ListCredentials lists all credentials for the client or controller.
-func (c *credentialsClient) ListCredentials(input ListCredentialInput) (*ListCredentialResponse, error) {
-	clientCredential := input.ClientCredential
-	controllerCredential := input.ControllerCredential
+// ListClientCredentials lists all credentials on the client.
+func (c *credentialsClient) ListClientCredentials() (*ListCredentialResponse, error) {
+	clientCredentialFound, err := getExistingClientCredentials()
+	if err != nil {
+		return nil, err
+	}
+	return &ListCredentialResponse{
+		CloudCredentials: clientCredentialFound,
+	}, nil
+}
 
+// ListControllerCredentials lists all credentials on the controller.
+func (c *credentialsClient) ListControllerCredentials() (*ListCredentialResponse, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -186,48 +194,28 @@ func (c *credentialsClient) ListCredentials(input ListCredentialInput) (*ListCre
 
 	client := cloudapi.NewClient(conn)
 
-	clientCredentialFound := map[string]jujucloud.CloudCredential{}
-	if clientCredential {
-		clientCredentialFound, err = getExistingClientCredentials()
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	controllerCredentialFound := map[string]jujucloud.CloudCredential{}
-	if controllerCredential {
-		credentialContents, err := client.CredentialContents("", "", true)
-		if err != nil {
-			return nil, err
+	credentialContents, err := client.CredentialContents("", "", true)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, one := range credentialContents {
+		remoteCredential := one.Result.Content
+		cloudCredential, ok := controllerCredentialFound[remoteCredential.Cloud]
+		if !ok {
+			cloudCredential = jujucloud.CloudCredential{}
 		}
-
-		for _, one := range credentialContents {
-			remoteCredential := one.Result.Content
-			cloudCredential, ok := controllerCredentialFound[remoteCredential.Cloud]
-			if !ok {
-				cloudCredential = jujucloud.CloudCredential{}
-			}
-			if cloudCredential.AuthCredentials == nil {
-				cloudCredential.AuthCredentials = map[string]jujucloud.Credential{}
-			}
-			cloudCredential.AuthCredentials[remoteCredential.Name] = jujucloud.NewCredential(jujucloud.AuthType(remoteCredential.AuthType), remoteCredential.Attributes)
-			controllerCredentialFound[remoteCredential.Cloud] = cloudCredential
+		if cloudCredential.AuthCredentials == nil {
+			cloudCredential.AuthCredentials = map[string]jujucloud.Credential{}
 		}
+		cloudCredential.AuthCredentials[remoteCredential.Name] = jujucloud.NewCredential(jujucloud.AuthType(remoteCredential.AuthType), remoteCredential.Attributes)
+		controllerCredentialFound[remoteCredential.Cloud] = cloudCredential
 	}
 
-	if controllerCredential {
-		return &ListCredentialResponse{
-			CloudCredentials: controllerCredentialFound,
-		}, nil
-	}
-
-	if clientCredential {
-		return &ListCredentialResponse{
-			CloudCredentials: clientCredentialFound,
-		}, nil
-	}
-
-	return nil, fmt.Errorf("controller and client flags are not set")
+	return &ListCredentialResponse{
+		CloudCredentials: controllerCredentialFound,
+	}, nil
 }
 
 func (c *credentialsClient) ReadCredential(input ReadCredentialInput) (*ReadCredentialResponse, error) {

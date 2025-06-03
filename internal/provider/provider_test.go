@@ -246,9 +246,7 @@ func createCloudCredential(t *testing.T) {
 	cloudName := canonicalCloudName(os.Getenv(TestCloudEnvKey))
 
 	// List controller credentials to bail out early if one already exists.
-	listControllerCreds, _ := TestClient.Credentials.ListCredentials(juju.ListCredentialInput{
-		ControllerCredential: true,
-	})
+	listControllerCreds, _ := TestClient.Credentials.ListControllerCredentials()
 	// skip checking the error here, because the controller
 	// returns a not found error if no credentials exist
 	// and for any other errors we want to continue anyway.
@@ -262,9 +260,7 @@ func createCloudCredential(t *testing.T) {
 	}
 
 	// List client credentials to check if we have any cloud-credentials.
-	listClientCreds, err := TestClient.Credentials.ListCredentials(juju.ListCredentialInput{
-		ClientCredential: true,
-	})
+	listClientCreds, err := TestClient.Credentials.ListClientCredentials()
 	if err != nil {
 		t.Fatalf("failed to read cloud-credential from client store: %v", err)
 	}
