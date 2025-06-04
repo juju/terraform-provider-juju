@@ -100,7 +100,7 @@ In your Terraform plan, leave the `provider` specification empty:
 provider "juju" {}
 ```
 
-Then, in a terminal, use the `juju` client to switch to the desired controller: `juju switch <controller>`. Your Terraformplan will be interpreted relative to that controller.
+Then, in a terminal, use the `juju` client to switch to the desired controller: `juju switch <controller>`. Your Terraform plan will be interpreted relative to that controller.
 
 > See more: [Terraform | `juju` provider](https://registry.terraform.io/providers/juju/juju/latest/docs)
 
