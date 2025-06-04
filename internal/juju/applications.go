@@ -801,6 +801,87 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 	return addPendingResources(appName, charmInfo.Meta.Resources, resourcesToUse, charmID, resourcesAPIClient)
 }
 
+// ReadApplicationWithRetryOnNotFound calls ReadApplication until
+// successful, or the count is exceeded when the error is of type
+// not found. Delay indicates how long to wait between attempts.
+func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Context, input *ReadApplicationInput) (*ReadApplicationResponse, error) {
+	var output *ReadApplicationResponse
+	modelType, err := c.ModelType(input.ModelName)
+	if err != nil {
+		return nil, jujuerrors.Annotatef(err, "getting model type")
+	}
+	retryErr := retry.Call(retry.CallArgs{
+		Func: func() error {
+			var err error
+			output, err = c.ReadApplication(input)
+			if errors.As(err, &ApplicationNotFoundError) || errors.As(err, &StorageNotFoundError) {
+				return err
+			} else if err != nil {
+				return err
+			}
+
+			// NOTE: Applications can always have storage. However, they
+			// will not be listed right after the application is created. So
+			// we need to wait for the storage to be ready. And we need to
+			// check if all storage constraints have pool equal "" and size equal 0
+			// to drop the error.
+			for label, storage := range output.Storage {
+				if storage.Pool == "" || storage.Size == 0 {
+					return NewRetryReadError(
+						fmt.Sprintf("storage label %q missing detail", label),
+					)
+				}
+			}
+
+			// NOTE: An IAAS subordinate should also have machines. However, they
+			// will not be listed until after the relation has been created.
+			// Those happen with the integration resource which will not be
+			// run by terraform before the application resource finishes. Thus
+			// do not block here for subordinates.
+			if modelType != model.IAAS || !output.Principal || output.Units == 0 {
+				// No need to wait for machines in these cases.
+				return nil
+			}
+			if output.Placement == "" {
+				return NewRetryReadError("no machines found in output")
+			}
+			machines := strings.Split(output.Placement, ",")
+			if len(machines) != output.Units {
+				return NewRetryReadError(
+					fmt.Sprintf("expected %d machines, got %d", output.Units, len(machines)),
+				)
+			}
+
+			c.Tracef("Have machines - returning", map[string]interface{}{"output": *output})
+			return nil
+		},
+		IsFatalError: func(err error) bool {
+			if errors.Is(err, ApplicationNotFoundError) ||
+				errors.Is(err, StorageNotFoundError) ||
+				errors.Is(err, RetryReadError) ||
+				strings.Contains(err.Error(), "connection refused") {
+				return false
+			}
+			return true
+		},
+		NotifyFunc: func(err error, attempt int) {
+			if attempt%4 == 0 {
+				message := fmt.Sprintf("waiting for application %q", input.AppName)
+				if attempt != 4 {
+					message = "still " + message
+				}
+				c.Debugf(message, map[string]interface{}{"err": err})
+			}
+		},
+		BackoffFunc: retry.DoubleDelay,
+		Attempts:    30,
+		Delay:       time.Second,
+		Clock:       clock.WallClock,
+		Stop:        ctx.Done(),
+	})
+	return output, retryErr
+}
+
 func (c *applicationsClient) transformToStorageConstraints(
 	storageDetailsSlice []params.StorageDetails,
 	filesystemDetailsSlice []params.FilesystemDetails,

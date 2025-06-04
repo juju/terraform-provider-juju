@@ -624,24 +624,10 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	r.trace(fmt.Sprintf("create application resource %q", createResp.AppName))
-	asserts := []wait.Assert[*juju.ReadApplicationResponse]{
-		assertStorage(),
-	}
-	if len(machines) > 0 {
-		asserts = append(asserts, assertEqualsMachines(machines))
-	}
-	readResp, err := wait.WaitFor(
-		wait.WaitForCfg[*juju.ReadApplicationInput, *juju.ReadApplicationResponse]{
-			Context: ctx,
-			GetData: r.client.Applications.ReadApplication,
-			Input: &juju.ReadApplicationInput{
-				ModelName: modelName,
-				AppName:   createResp.AppName,
-			},
-			NonFatalErrors: []error{juju.StorageNotFoundError, juju.ApplicationNotFoundError, juju.ConnectionRefusedError, juju.RetryReadError},
-			DataAssertions: asserts,
-		},
-	)
+	readResp, err := r.client.Applications.ReadApplicationWithRetryOnNotFound(ctx, &juju.ReadApplicationInput{
+		ModelName: modelName,
+		AppName:   createResp.AppName,
+	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read application, got error: %s", err))
 		return
@@ -1523,22 +1509,6 @@ func assertEqualsMachines(machinesToCompare []string) func(outputFromAPI *juju.R
 			return juju.NewRetryReadError("plan machines differ from application machines")
 		}
 
-		return nil
-	}
-}
-
-func assertStorage() func(outputFromAPI *juju.ReadApplicationResponse) error {
-	return func(outputFromAPI *juju.ReadApplicationResponse) error {
-		// NOTE: Applications can always have storage. However, they
-		// will not be listed right after the application is created. So
-		// we need to wait for the storage to be ready. And we need to
-		// check if all storage constraints have pool equal "" and size equal 0
-		// to drop the error.
-		for label, storage := range outputFromAPI.Storage {
-			if storage.Pool == "" || storage.Size == 0 {
-				return juju.NewRetryReadError(fmt.Sprintf("storage label %q missing detail", label))
-			}
-		}
 		return nil
 	}
 }
