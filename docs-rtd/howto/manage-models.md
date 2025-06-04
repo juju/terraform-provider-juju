@@ -137,7 +137,7 @@ resource "juju_jaas_access_model" "development" {
 
 ```
 
-> See more: [`juju_jaas_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_model), [JAAS | Model access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/model/#list-of-model-relations)
+> See more: [`juju_jaas_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_model), {external+jaas:ref}`JAAS | Model access levels <list-of-model-permissions>`
 
 ## Upgrade a model
 > See also: {external+juju:ref}`Juju | Upgrading things <upgrading-things>`

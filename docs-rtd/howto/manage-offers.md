@@ -124,7 +124,7 @@ resource "juju_jaas_access_offer" "development" {
 }
 ```
 
-> See more: [`juju_jaas_access_offer`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_offer), [JAAS | Offer access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/offer/#list-of-offer-relations)
+> See more: [`juju_jaas_access_offer`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_offer), {external+jaas:ref}`JAAS | Offer access levels <list-of-offer-permissions>`
 
 
 

@@ -375,7 +375,7 @@ ubuntu@my-juju-vm:~/terraform-juju$ juju status --relations
 
 Follow the instructions for the `juju` CLI.
 
-> See more: {external+juju:ref}`Juju | Tear things down <tear-things-down>`
+> See more: {external+juju:ref}`Juju | Set things up <tear-things-down>`
 
 In addition to that, on your host machine, delete your the `terraform-juju` directory.
 
