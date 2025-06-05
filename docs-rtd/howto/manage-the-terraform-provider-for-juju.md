@@ -1,6 +1,7 @@
 (manage-the-terraform-provider-for-juju)=
 # Manage the Terraform Provider for Juju
 
+(install-the-terraform-provider-for-juju)=
 ## Install the Terraform Provider for Juju
 
 To install the Terraform Provider for Juju on Linux, macOS, or Windows, you need to install the `terraform` CLI.
@@ -10,7 +11,7 @@ To install the Terraform Provider for Juju on Linux, macOS, or Windows, you need
 For example, on a Linux that supports snaps:
 
 ```text
-sudo snap install terraform
+sudo snap install terraform --classic
 ```
 
 (use-the-terraform-provider-for-juju)=
@@ -28,7 +29,7 @@ In your Terraform plan, add:
 terraform {
   required_providers {
     juju = {
-      version = "~> 0.13.0"
+      version = "~> 0.19.0"
       source  = "juju/juju"
     }
   }
