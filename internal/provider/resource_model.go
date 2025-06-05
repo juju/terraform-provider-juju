@@ -495,7 +495,7 @@ func (r *modelResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	// Check annotations
 	if !state.Annotations.Equal(plan.Annotations) {
-		resp.Diagnostics.Append(r.updateAnnotations(ctx, state.Annotations, plan.Annotations, plan.Name.ValueString(), plan.UUID.ValueString())...)
+		resp.Diagnostics.Append(updateAnnotations(ctx, &r.client.Annotations, state.Annotations, plan.Annotations, plan.Name.ValueString(), names.NewModelTag(plan.UUID.ValueString()))...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -584,42 +584,4 @@ func (r *modelResource) trace(msg string, additionalFields ...map[string]interfa
 	// Output:
 	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
 	tflog.SubsystemTrace(r.subCtx, LogResourceModel, msg, additionalFields...)
-}
-
-// updateAnnotations takes the state and the plan, and performs the necessary
-// steps to propagate the changes to juju.
-func (r *modelResource) updateAnnotations(ctx context.Context, stateAnnotations types.Map, planAnnotations types.Map, modelName string, uuid string) diag.Diagnostics {
-	diagnostics := diag.Diagnostics{}
-
-	var annotationsState map[string]string
-	diagnostics.Append(stateAnnotations.ElementsAs(ctx, &annotationsState, false)...)
-	if diagnostics.HasError() {
-		return diagnostics
-	}
-	var annotationsPlan map[string]string
-	diagnostics.Append(planAnnotations.ElementsAs(ctx, &annotationsPlan, false)...)
-	if diagnostics.HasError() {
-		return diagnostics
-	}
-	// when the plan is empty this map is nil, instead of being initialized with 0 items.
-	if annotationsPlan == nil {
-		annotationsPlan = make(map[string]string, 0)
-	}
-	// set the value of removed fields to "" in the plan to unset the value
-	for k := range annotationsState {
-		if _, ok := annotationsPlan[k]; !ok {
-			annotationsPlan[k] = ""
-		}
-	}
-
-	err := r.client.Annotations.SetAnnotations(&juju.SetAnnotationsInput{
-		ModelName:   modelName,
-		Annotations: annotationsPlan,
-		EntityTag:   names.NewModelTag(uuid),
-	})
-	if err != nil {
-		diagnostics.AddError("Client Error", fmt.Sprintf("Unable to set annotations for model %q, got error: %s", modelName, err))
-		return diagnostics
-	}
-	return diagnostics
 }
