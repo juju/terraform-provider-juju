@@ -131,16 +131,9 @@ type sharedClient struct {
 // NewClient returns a client which can talk to the juju controller
 // represented by controllerConfig. A context is required for logging in the
 // terraform framework.
-func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, error) {
+func NewClient(ctx context.Context, config ControllerConfiguration, waitForResources bool) (*Client, error) {
 	if ctx == nil {
 		return nil, errors.NotValidf("missing context")
-	}
-	waitForResources := true
-	if waitVal, ok := os.LookupEnv(waitForResourcesKey); ok {
-		parsed, err := strconv.ParseBool(waitVal)
-		if err == nil {
-			waitForResources = parsed
-		}
 	}
 	sc := &sharedClient{
 		controllerConfig: config,
