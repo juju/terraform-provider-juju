@@ -232,13 +232,13 @@ func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
 				},
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.b1.0", "model", dstModelName),
-					resource.TestCheckResourceAttr("juju_integration.b1.0", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "a:db-admin", "b1:backend-db-admin")),
+					resource.TestCheckResourceAttr("juju_integration.b1.0", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "a:source", "b1:sink")),
 					resource.TestCheckResourceAttr("juju_integration.b1.0", "application.#", "2"),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.b1.0", "application.*", map[string]string{"name": "b1", "endpoint": "backend-db-admin"}),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.b1.0", "application.*", map[string]string{"name": "b1", "endpoint": "sink"}),
 					resource.TestCheckResourceAttr("juju_integration.b2.0", "model", dstModelName),
-					resource.TestCheckResourceAttr("juju_integration.b2.0", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "a:db-admin", "b2:backend-db-admin")),
+					resource.TestCheckResourceAttr("juju_integration.b2.0", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "a:source", "b2:sink")),
 					resource.TestCheckResourceAttr("juju_integration.b2.0", "application.#", "2"),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.b2.0", "application.*", map[string]string{"name": "b2", "endpoint": "backend-db-admin"}),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.b2.0", "application.*", map[string]string{"name": "b2", "endpoint": "sink"}),
 				),
 			},
 			{
@@ -249,9 +249,9 @@ func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
 				},
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.b1.0", "model", dstModelName),
-					resource.TestCheckResourceAttr("juju_integration.b1.0", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "a:db-admin", "b1:backend-db-admin")),
+					resource.TestCheckResourceAttr("juju_integration.b1.0", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "a:source", "b1:sink")),
 					resource.TestCheckResourceAttr("juju_integration.b1.0", "application.#", "2"),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.b1.0", "application.*", map[string]string{"name": "b1", "endpoint": "backend-db-admin"}),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.b1.0", "application.*", map[string]string{"name": "b1", "endpoint": "sink"}),
 				),
 			},
 			{
@@ -266,7 +266,7 @@ func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
 }
 
 // testAccResourceIntegrationWithMultipleConusmers generates a plan where a
-// two pgbouncer applications relates to postgresql:db-admin offer.
+// two juju-qa-dummy-source applications relates to source offer.
 func testAccResourceIntegrationMultipleConsumers(srcModelName string, dstModelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "a" {
@@ -278,15 +278,14 @@ resource "juju_application" "a" {
         name  = "a"
 
         charm {
-                name    = "postgresql"
-                base    = "ubuntu@22.04"
+                name    = "juju-qa-dummy-sink"
         }
 }
 
 resource "juju_offer" "a" {
         model            = juju_model.a.name
         application_name = juju_application.a.name
-        endpoint         = "db-admin"
+        endpoint         = "source"
 }
 
 resource "juju_model" "b" {
@@ -298,9 +297,7 @@ resource "juju_application" "b1" {
         name  = "b1"
 
         charm {
-                name   = "pgbouncer"
-                base = "ubuntu@20.04"
-                channel = "latest/stable"
+                name   = "juju-qa-dummy-source"
         }
 }
 
@@ -310,7 +307,7 @@ resource "juju_integration" "b1" {
 
         application {
                 name     = juju_application.b1.name
-                endpoint = "backend-db-admin"
+                endpoint = "sink"
         }
 
         application {
@@ -323,9 +320,7 @@ resource "juju_application" "b2" {
         name  = "b2"
 
         charm {
-                name   = "pgbouncer"
-                base = "ubuntu@20.04"
-                channel = "latest/stable"
+                name   = "juju-qa-dummy-source"
         }
 }
 
@@ -335,7 +330,7 @@ resource "juju_integration" "b2" {
 
         application {
                 name     = juju_application.b2.name
-                endpoint = "backend-db-admin"
+                endpoint = "sink"
         }
 
         application {

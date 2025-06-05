@@ -5,10 +5,10 @@ package wait
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/juju/clock"
+	"github.com/juju/errors"
 	"github.com/juju/retry"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -103,12 +103,13 @@ func WaitFor[I any, D any](waitCfg WaitForCfg[I, D]) (D, error) {
 		},
 		IsFatalError: func(err error) bool {
 			for _, nonFatalError := range waitCfg.NonFatalErrors {
-				if errors.Is(nonFatalError, err) {
+				if errors.Is(err, nonFatalError) {
 					return false
 				}
 			}
 			return true
 		},
+		BackoffFunc: retry.DoubleDelay,
 		MaxDuration: waitCfg.RetryConf.MaxDuration,
 		Delay:       waitCfg.RetryConf.Delay,
 		Clock:       waitCfg.RetryConf.Clock,
