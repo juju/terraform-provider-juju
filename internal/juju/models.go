@@ -16,26 +16,9 @@ import (
 	"github.com/juju/names/v5"
 )
 
-var ModelNotFoundError = &modelNotFoundError{}
-
-type modelNotFoundError struct {
-	uuid string
-	name string
-}
-
-func (me *modelNotFoundError) Error() string {
-	toReturn := "model %q was not found"
-	if me.name != "" {
-		return fmt.Sprintf(toReturn, me.name)
-	}
-	return fmt.Sprintf(toReturn, me.uuid)
-}
-
-// Is checks if the target error is a modelNotFoundError.
-func (me *modelNotFoundError) Is(target error) bool {
-	_, ok := target.(*modelNotFoundError)
-	return ok
-}
+// ModelNotFoundError is returned when a model cannot be found
+// when contacting the Juju API.
+var ModelNotFoundError = errors.ConstError("model-not-found")
 
 type modelsClient struct {
 	SharedClient
@@ -219,7 +202,7 @@ func (c *modelsClient) ReadModel(name string) (*ReadModelResponse, error) {
 
 	modelconfigConn, err := c.GetConnection(&name)
 	if err != nil {
-		return nil, errors.Wrap(err, &modelNotFoundError{uuid: name})
+		return nil, errors.WithType(err, ModelNotFoundError)
 	}
 	defer func() { _ = modelconfigConn.Close() }()
 
@@ -239,7 +222,7 @@ func (c *modelsClient) ReadModel(name string) (*ReadModelResponse, error) {
 		return nil, fmt.Errorf("more than one model returned for UUID: %s", modelUUIDTag.Id())
 	}
 	if len(models) < 1 {
-		return nil, &modelNotFoundError{uuid: modelUUIDTag.Id()}
+		return nil, ModelNotFoundError
 	}
 
 	// Check if the model has an error first
