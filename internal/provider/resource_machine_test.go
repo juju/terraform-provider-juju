@@ -5,6 +5,7 @@ package provider
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -70,6 +71,8 @@ func TestAcc_ResourceMachine_WithPlacement(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
+	os.Setenv("JUJU_WAIT_FOR_RESOURCES", "false")
+	defer os.Unsetenv("JUJU_WAIT_FOR_RESOURCES")
 	modelName := acctest.RandomWithPrefix("tf-test-machine")
 	resourceName := "juju_machine.this_machine_1"
 	resource.ParallelTest(t, resource.TestCase{

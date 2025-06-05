@@ -125,6 +125,8 @@ func TestProviderConfigureClientIDAndSecretFromEnv(t *testing.T) {
 
 func TestProviderConfigureAddresses(t *testing.T) {
 	testAccPreCheck(t)
+	os.Setenv("JUJU_CONNECTION_TIMEOUT", "2") // 2s timeout
+	defer os.Unsetenv("JUJU_CONNECTION_TIMEOUT")
 	jujuProvider := NewJujuProvider("dev")
 	// This IP is from a test network that should never be routed. https://www.rfc-editor.org/rfc/rfc5737#section-3
 	t.Setenv(JujuControllerEnvKey, "192.0.2.100:17070")
