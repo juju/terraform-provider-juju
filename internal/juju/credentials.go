@@ -31,6 +31,12 @@ type CreateCredentialResponse struct {
 	CloudName       string
 }
 
+// ListCredentialResponse is the response from listing credentials.
+type ListCredentialResponse struct {
+	// CloudCredentials contain all credentials, keyed by cloud name.
+	CloudCredentials map[string]jujucloud.CloudCredential
+}
+
 type ReadCredentialInput struct {
 	Name                 string
 	ClientCredential     bool
@@ -160,6 +166,51 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 	return &CreateCredentialResponse{CloudCredential: cloudCredential, CloudName: cloudName}, nil
 }
 
+// ListClientCredentials lists all credentials on the client.
+func (c *credentialsClient) ListClientCredentials() (*ListCredentialResponse, error) {
+	clientCredentialFound, err := getExistingClientCredentials()
+	if err != nil {
+		return nil, err
+	}
+	return &ListCredentialResponse{
+		CloudCredentials: clientCredentialFound,
+	}, nil
+}
+
+// ListControllerCredentials lists all credentials on the controller.
+func (c *credentialsClient) ListControllerCredentials() (*ListCredentialResponse, error) {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := cloudapi.NewClient(conn)
+
+	controllerCredentialFound := map[string]jujucloud.CloudCredential{}
+	credentialContents, err := client.CredentialContents("", "", true)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, one := range credentialContents {
+		remoteCredential := one.Result.Content
+		cloudCredential, ok := controllerCredentialFound[remoteCredential.Cloud]
+		if !ok {
+			cloudCredential = jujucloud.CloudCredential{}
+		}
+		if cloudCredential.AuthCredentials == nil {
+			cloudCredential.AuthCredentials = map[string]jujucloud.Credential{}
+		}
+		cloudCredential.AuthCredentials[remoteCredential.Name] = jujucloud.NewCredential(jujucloud.AuthType(remoteCredential.AuthType), remoteCredential.Attributes)
+		controllerCredentialFound[remoteCredential.Cloud] = cloudCredential
+	}
+
+	return &ListCredentialResponse{
+		CloudCredentials: controllerCredentialFound,
+	}, nil
+}
+
 func (c *credentialsClient) ReadCredential(input ReadCredentialInput) (*ReadCredentialResponse, error) {
 	clientCredential := input.ClientCredential
 	cloudName := input.CloudName
@@ -282,6 +333,15 @@ func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error 
 	}
 
 	return nil
+}
+
+func getExistingClientCredentials() (map[string]jujucloud.CloudCredential, error) {
+	store := jujuclient.NewFileClientStore()
+	existingCredentials, err := store.AllCredentials()
+	if err != nil {
+		return nil, errors.Annotate(err, "reading all existing credentials")
+	}
+	return existingCredentials, nil
 }
 
 func getExistingClientCredential(cloudName string) (*jujucloud.CloudCredential, error) {
