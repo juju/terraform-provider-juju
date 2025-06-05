@@ -49,7 +49,7 @@ resource "juju_jaas_access_group" "development" {
 }
 ```
 
-> See more: [`juju_jaas_access_group`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_group), [JAAS | Group access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/group/#list-of-group-relations)
+> See more: [`juju_jaas_access_group`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_group), {external+jaas:ref}`JAAS | Group access levels <list-of-group-permissions>`
 
 ## Manage a group's access to a controller, cloud, model, offer, role, or group
 
