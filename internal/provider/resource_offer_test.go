@@ -73,7 +73,7 @@ resource "juju_application" "appone" {
 resource "juju_offer" "offerone" {
 	model            = juju_model.modelone.name
 	application_name = juju_application.appone.name
-	endpoint         = "sink"
+	endpoints         = ["sink"]
 }
 
 resource "juju_model" "modeldest" {
@@ -122,7 +122,7 @@ func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
 						Source:            "juju/juju",
 					},
 				},
-				Config: testAccResourceOffer(modelName, "series = \"focal\""),
+				Config: testAccResourceOfferv0(modelName, "series = \"focal\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
@@ -149,7 +149,31 @@ resource "juju_application" "this" {
 	name  = "this"
 
 	charm {
-		name = "postgresql"
+		name = "juju-qa-dummy-source"
+		%s
+	}
+}
+
+resource "juju_offer" "this" {
+	model            = juju_model.this.name
+	application_name = juju_application.this.name
+	endpoints         = ["sink"]
+}
+`, modelName, os)
+}
+
+func testAccResourceOfferv0(modelName, os string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_application" "this" {
+	model = juju_model.this.name
+	name  = "this"
+
+	charm {
+		name = "juju-qa-dummy-source"
 		channel = "latest/stable"
 		%s
 	}
@@ -158,7 +182,101 @@ resource "juju_application" "this" {
 resource "juju_offer" "this" {
 	model            = juju_model.this.name
 	application_name = juju_application.this.name
-	endpoint         = "db"
+	endpoint         = "sink"
 }
 `, modelName, os)
+}
+
+func TestAcc_ResourceOfferMultipleEndpoints(t *testing.T) {
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName1 := acctest.RandomWithPrefix("tf-test-offer")
+	modelName2 := acctest.RandomWithPrefix("tf-test-offer")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceOfferMultipleEndpoints(modelName1, modelName2),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName1),
+					resource.TestCheckResourceAttr("juju_offer.this", "endpoints.0", "grafana-dashboard"),
+					resource.TestCheckResourceAttr("juju_offer.this", "endpoints.1", "metrics-endpoint"),
+					resource.TestCheckResourceAttr("juju_offer.this", "endpoints.#", "2"),
+				),
+			},
+		},
+	})
+}
+
+func testAccResourceOfferMultipleEndpoints(modelName1, modelName2 string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_application" "this" {
+	model = juju_model.this.name
+	name  = "this"
+
+	charm {
+		name = "content-cache-k8s"
+		revision = 49
+	}
+}
+
+resource "juju_offer" "this" {
+	model            = juju_model.this.name
+	application_name = juju_application.this.name
+	endpoints         = ["grafana-dashboard", "metrics-endpoint"]
+}
+
+resource "juju_model" "that" {
+	name = %q
+}
+
+resource "juju_application" "that" {
+	model = juju_model.that.name
+	name  = "that"
+	charm {
+	    name = "grafana-agent-k8s"
+		revision = 113
+    }
+}
+
+resource "juju_integration" "offer_db" {
+	model = juju_model.that.name
+	application {
+		name     = juju_application.that.name
+		endpoint = "metrics-endpoint"
+	}
+	application {
+		offer_url = juju_offer.this.url
+		endpoint = "metrics-endpoint"
+	}
+}
+
+resource "juju_application" "toc" {
+	model = juju_model.that.name
+	name  = "toc"
+	charm {
+	    name = "grafana-agent-k8s"
+		revision = 113
+    }
+}
+
+resource "juju_integration" "offer_db_admin" {
+	model = juju_model.that.name
+	application {
+		name     = juju_application.toc.name
+		endpoint = "grafana-dashboards-consumer"
+	}
+	application {
+		offer_url = juju_offer.this.url
+		endpoint = "grafana-dashboard"
+	}
+}
+`, modelName1, modelName2)
 }

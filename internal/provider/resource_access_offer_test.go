@@ -129,7 +129,7 @@ resource "juju_application" "appone" {
 resource "juju_offer" "appone_endpoint" {
   model            = juju_model.{{.ModelName}}.name
   application_name = juju_application.appone.name
-  endpoint         = "sink"
+  endpoints         = ["sink"]
 }
 
 resource "juju_access_offer" "test" {
@@ -181,7 +181,7 @@ resource "juju_application" "appone" {
 resource "juju_offer" "appone_endpoint" {
   model            = juju_model.{{.ModelName}}.name
   application_name = juju_application.appone.name
-  endpoint         = "sink"
+  endpoints         = ["sink"]
 }
 
 resource "juju_access_offer" "access_appone_endpoint" {

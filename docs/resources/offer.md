@@ -39,7 +39,7 @@ resource "juju_integration" "myintegration" {
 ### Required
 
 - `application_name` (String) The name of the application. Changing this value will cause the offer to be destroyed and recreated by terraform.
-- `endpoint` (String) The endpoint name. Changing this value will cause the offer to be destroyed and recreated by terraform.
+- `endpoints` (Set of String) The endpoint names. Changing this value will cause the offer to be destroyed and recreated by terraform.
 - `model` (String) The name of the model to operate in. Changing this value will cause the offer to be destroyed and recreated by terraform.
 
 ### Optional
