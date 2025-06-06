@@ -32,6 +32,7 @@ type machineDataSource struct {
 type machineDataSourceModel struct {
 	Model     types.String `tfsdk:"model"`
 	MachineID types.String `tfsdk:"machine_id"`
+	Hostname  types.String `tfsdk:"hostname"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -52,6 +53,10 @@ func (d *machineDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 			"machine_id": schema.StringAttribute{
 				Description: "The Juju id of the machine.",
 				Required:    true,
+			},
+			"hostname": schema.StringAttribute{
+				Description: "The hostname of the machine.",
+				Computed:    true,
 			},
 			// ID required by the testing framework
 			"id": schema.StringAttribute{
@@ -109,15 +114,18 @@ func (d *machineDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	d.trace(fmt.Sprintf("reading juju machine %q data source", machine_id))
 
 	// Verify the machine exists in the model provided
-	if _, err := d.client.Machines.ReadMachine(
+	machine, err := d.client.Machines.ReadMachine(
 		juju.ReadMachineInput{
 			ModelName: data.Model.ValueString(),
 			ID:        machine_id,
 		},
-	); err != nil {
+	)
+	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read machine %q, got error: %s", machine_id, err))
 		return
 	}
+
+	data.Hostname = types.StringValue(machine.Hostname)
 
 	// machine_id is not unique, however it matches the
 	// SDK value used. "id" is required for tests.
