@@ -3,7 +3,7 @@ module github.com/juju/terraform-provider-juju
 go 1.24.1
 
 require (
-	github.com/bflad/tfproviderlint v0.30.0
+	github.com/bflad/tfproviderlint v0.31.0
 	github.com/hashicorp/terraform-plugin-docs v0.19.4
 	// v3.6.3
 	github.com/juju/juju v0.0.0-20250306114340-d7a40b3e3801
