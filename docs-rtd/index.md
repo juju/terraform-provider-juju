@@ -6,6 +6,7 @@
 
 tutorial
 howto/index
+reference/index
 ```
 
 <!--
@@ -43,6 +44,18 @@ Like all of Juju, the Terraform Provider for Juju is for SREs, or anyone looking
 
 ````
 
+
+````{grid} 1 1 2 2
+:reverse:
+
+```{grid-item-card} [Reference](/index)
+:link: reference/index
+:link-type: doc
+
+**Technical information** - specifications, APIs, architecture
+```
+
+````
 <!--
 ````{grid} 1 1 2 2
 :reverse:
