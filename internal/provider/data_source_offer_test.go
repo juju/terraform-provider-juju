@@ -47,7 +47,7 @@ func TestAcc_DataSourceOffer_UpgradeProvider(t *testing.T) {
 						Source:            "juju/juju",
 					},
 				},
-				Config: testAccDataSourceOffer(modelName, "series = \"jammy\"", offerName),
+				Config: testAccDataSourceOfferv0(modelName, "series = \"jammy\"", offerName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("data.juju_offer.this", "name", offerName),
@@ -63,6 +63,35 @@ func TestAcc_DataSourceOffer_UpgradeProvider(t *testing.T) {
 }
 
 func testAccDataSourceOffer(modelName, os, offerName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_application" "this" {
+	model = juju_model.this.name
+	name  = "this"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		%s
+	}
+}
+
+resource "juju_offer" "this" {
+	model            = juju_model.this.name
+	application_name = juju_application.this.name
+	endpoints         = ["sink"]
+	name             = %q
+}
+
+data "juju_offer" "this" {
+	url = juju_offer.this.url
+}
+`, modelName, os, offerName)
+}
+
+func testAccDataSourceOfferv0(modelName, os, offerName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q

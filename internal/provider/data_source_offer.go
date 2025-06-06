@@ -33,7 +33,7 @@ type offerDataSource struct {
 // tfsdk must match offer data source schema attribute names.
 type offerDataSourceModel struct {
 	ApplicationName types.String `tfsdk:"application_name"`
-	Endpoint        types.String `tfsdk:"endpoint"`
+	Endpoints       types.Set    `tfsdk:"endpoints"`
 	ModelName       types.String `tfsdk:"model"`
 	OfferName       types.String `tfsdk:"name"`
 	OfferURL        types.String `tfsdk:"url"`
@@ -67,9 +67,11 @@ func (d *offerDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 				Description: "The name of the application.",
 				Computed:    true,
 			},
-			"endpoint": schema.StringAttribute{
-				Description: "The endpoint name.",
-				Computed:    true,
+			"endpoints": schema.SetAttribute{
+				ElementType: types.StringType,
+				Description: "The endpoint names. Changing this value will cause the offer" +
+					" to be destroyed and recreated by terraform.",
+				Computed: true,
 			},
 			// ID required by the testing framework
 			"id": schema.StringAttribute{
@@ -125,7 +127,12 @@ func (d *offerDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 
 	// Save data into Terraform state
 	data.ApplicationName = types.StringValue(offer.ApplicationName)
-	data.Endpoint = types.StringValue(offer.Endpoint)
+	endpointSet, diags := types.SetValueFrom(ctx, types.StringType, offer.Endpoints)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+	data.Endpoints = endpointSet
 	data.ModelName = types.StringValue(offer.ModelName)
 	data.OfferName = types.StringValue(offer.Name)
 	data.OfferURL = types.StringValue(offer.OfferURL)
