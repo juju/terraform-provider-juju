@@ -93,12 +93,18 @@ func getEnvVar(field string) types.String {
 var _ provider.Provider = &jujuProvider{}
 
 // NewJujuProvider returns a framework style terraform provider.
-func NewJujuProvider(version string) provider.Provider {
-	return &jujuProvider{version: version}
+func NewJujuProvider(version string, waitForResources bool) provider.Provider {
+	return &jujuProvider{
+		version:          version,
+		waitForResources: waitForResources,
+	}
 }
 
 type jujuProvider struct {
 	version string
+	// waitForResources is used to determine if the provider should wait for
+	// resources to be created/destroyed before proceeding.
+	waitForResources bool
 }
 
 type jujuProviderModel struct {
@@ -257,7 +263,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		ClientID:            data.ClientID.ValueString(),
 		ClientSecret:        data.ClientSecret.ValueString(),
 	}
-	client, err := juju.NewClient(ctx, config)
+	client, err := juju.NewClient(ctx, config, p.waitForResources)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create juju client, got error: %s", err))
 		return

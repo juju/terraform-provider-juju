@@ -1811,10 +1811,10 @@ func TestAcc_ResourceApplication_ParallelDeploy(t *testing.T) {
 	var charm, channel string
 	switch testingCloud {
 	case MicroK8sTesting:
-		charm = "traefik-k8s"
-		channel = "1.0/candidate"
+		charm = "juju-qa-test"
+		channel = "latest/stable"
 	case LXDCloudTesting:
-		charm = "github-runner"
+		charm = "juju-qa-test"
 		channel = "latest/stable"
 	default:
 		t.Fatalf("unknown test cloud")

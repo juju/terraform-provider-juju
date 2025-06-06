@@ -38,6 +38,7 @@ type SharedClient interface {
 	Warnf(msg string, additionalFields ...map[string]interface{})
 
 	JujuLogger() *jujuLoggerShim
+	WaitForResource() bool
 }
 
 type ClientAPIClient interface {

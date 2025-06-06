@@ -74,7 +74,7 @@ func TestAcc_ResourceMachine_WithPlacement(t *testing.T) {
 	resourceName := "juju_machine.this_machine_1"
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: frameworkProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactoriesNoResourceWait,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccResourceMachineWithPlacement(modelName),

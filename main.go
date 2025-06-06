@@ -46,9 +46,10 @@ func main() {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 
+	waitForResources := true
 	if err := tf6server.Serve(
 		"registry.terraform.io/juju/juju",
-		providerserver.NewProtocol6(provider.NewJujuProvider(version)),
+		providerserver.NewProtocol6(provider.NewJujuProvider(version, waitForResources)),
 		serveOpts...,
 	); err != nil {
 		log.Fatal().Msg(err.Error())

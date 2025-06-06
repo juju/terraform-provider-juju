@@ -6,6 +6,7 @@ package juju
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,6 +34,8 @@ const (
 	PrefixApplication                    = "application-"
 	PrefixStorage                        = "storage-"
 	UnspecifiedRevision                  = -1
+	customTimeoutKey                     = "JUJU_CONNECTION_TIMEOUT"
+	waitForResourcesKey                  = "JUJU_WAIT_FOR_RESOURCES"
 	connectionTimeout                    = 30 * time.Second
 	serviceAccountSuffix                 = "@serviceaccount"
 	defaultModelStatusCacheInterval      = 5 * time.Second
@@ -94,6 +97,7 @@ func (j jujuModel) String() string {
 
 type sharedClient struct {
 	controllerConfig ControllerConfiguration
+	waitForResources bool
 
 	modelUUIDcache map[string]jujuModel
 	modelUUIDmu    sync.Mutex
@@ -110,12 +114,13 @@ type sharedClient struct {
 // NewClient returns a client which can talk to the juju controller
 // represented by controllerConfig. A context is required for logging in the
 // terraform framework.
-func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, error) {
+func NewClient(ctx context.Context, config ControllerConfiguration, waitForResources bool) (*Client, error) {
 	if ctx == nil {
 		return nil, errors.NotValidf("missing context")
 	}
 	sc := &sharedClient{
 		controllerConfig: config,
+		waitForResources: waitForResources,
 		modelUUIDcache:   make(map[string]jujuModel),
 		modelStatusCache: cache.New(defaultModelStatusCacheInterval),
 		subCtx:           tflog.NewSubsystem(ctx, LogJujuClient),
@@ -175,6 +180,25 @@ func (sc *sharedClient) IsJAAS(defaultVal bool) bool {
 	return sc.isJAAS
 }
 
+func getConnectionTimeout() time.Duration {
+	if timeout, ok := os.LookupEnv(customTimeoutKey); ok {
+		if t, err := strconv.Atoi(timeout); err == nil && t > 0 {
+			return time.Duration(t) * time.Second
+		}
+		tflog.Warn(context.Background(), "Invalid JUJU_CONNECTION_TIMEOUT value, using default", map[string]interface{}{
+			"JUJU_CONNECTION_TIMEOUT": timeout,
+			"default":                 connectionTimeout,
+		})
+	}
+	return connectionTimeout
+}
+
+// WaitForResource returns a bool indicating whether the client
+// should wait for resources to be available/destroyed before proceeding.
+func (sc *sharedClient) WaitForResource() bool {
+	return sc.waitForResources
+}
+
 // GetConnection returns a juju connection for use creating juju
 // api clients given the provided model uuid, name, or neither.
 // Allowing a model name is a fallback behavior until the name
@@ -191,7 +215,7 @@ func (sc *sharedClient) GetConnection(modelIdentifier *string) (api.Connection, 
 
 	dialOptions := func(do *api.DialOpts) {
 		//this is set as a const above, in case we need to use it elsewhere to manage connection timings
-		do.Timeout = connectionTimeout
+		do.Timeout = getConnectionTimeout()
 		//default is 2 seconds, as we are changing the overall timeout it makes sense to reduce this as well
 		do.RetryDelay = 1 * time.Second
 	}
