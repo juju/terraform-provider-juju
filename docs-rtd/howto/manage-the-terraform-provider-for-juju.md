@@ -126,4 +126,4 @@ c. `terraform apply` to apply the changes to your Juju deployment.
 
 To upgrade the Terraform Provider for Juju, in your Terraform plan update the version constraint, then run `terraform init` with the `--upgrade` flag.
 
-> See more: Terraform [Version constraints](https://developer.hashicorp.com/terraform/language/providers/requirements#version-constraints), [`terraform init --upgrade`](https://developer.hashicorp.com/terraform/cli/commands/init#upgrade-1)
+> See more: Terraform [Version constraints](https://developer.hashicorp.com/terraform/language/expressions/version-constraints), [`terraform init --upgrade`](https://developer.hashicorp.com/terraform/cli/commands/init#upgrade-1)
