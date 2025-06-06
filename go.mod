@@ -29,7 +29,7 @@ require (
 	github.com/juju/utils v0.0.0-20200604140309-9d78121a29e0
 	github.com/juju/utils/v3 v3.2.0
 	github.com/juju/version/v2 v2.0.1
-	github.com/rs/zerolog v1.33.0
+	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/mock v0.5.0
 	gopkg.in/httprequest.v1 v1.2.1
