@@ -203,6 +203,20 @@ func (mr *MockSharedClientMockRecorder) Tracef(msg any, additionalFields ...any)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Tracef", reflect.TypeOf((*MockSharedClient)(nil).Tracef), varargs...)
 }
 
+// WaitForResource mocks base method.
+func (m *MockSharedClient) WaitForResource() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WaitForResource")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// WaitForResource indicates an expected call of WaitForResource.
+func (mr *MockSharedClientMockRecorder) WaitForResource() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForResource", reflect.TypeOf((*MockSharedClient)(nil).WaitForResource))
+}
+
 // Warnf mocks base method.
 func (m *MockSharedClient) Warnf(msg string, additionalFields ...map[string]any) {
 	m.ctrl.T.Helper()
