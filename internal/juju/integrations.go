@@ -34,8 +34,6 @@ func NewIntegrationNotFoundError(modelUUID string) error {
 	return errors.WithType(errors.Errorf("no integration found for model %s", modelUUID), IntegrationNotFoundError)
 }
 
-// NoIntegrationFoundErr
-
 type integrationsClient struct {
 	SharedClient
 }
@@ -129,8 +127,8 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 		return nil, err
 	}
 	defer func() { _ = conn.Close() }()
-	modelUUID, thisModel := conn.ModelTag()
-	if !thisModel {
+	modelUUID, ok := conn.ModelTag()
+	if !ok {
 		return nil, errors.Errorf("Unable to get model uuid for %q", input.ModelName)
 	}
 	status, err := c.ModelStatus(input.ModelName, conn)
