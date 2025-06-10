@@ -370,15 +370,15 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (r *machineResource) waitForMachine(ctx context.Context, waitForHostname bool, modelName, machineID string) (juju.ReadMachineResponse, error) {
-	asserts := []wait.Assert[juju.ReadMachineResponse]{assertMachineRunning}
+func (r *machineResource) waitForMachine(ctx context.Context, waitForHostname bool, modelName, machineID string) (*juju.ReadMachineResponse, error) {
+	asserts := []wait.Assert[*juju.ReadMachineResponse]{assertMachineRunning}
 	if waitForHostname {
 		asserts = append(asserts, assertHostnamePopulated)
 	}
-	readResponse, err := wait.WaitFor(wait.WaitForCfg[juju.ReadMachineInput, juju.ReadMachineResponse]{
+	readResponse, err := wait.WaitFor(wait.WaitForCfg[*juju.ReadMachineInput, *juju.ReadMachineResponse]{
 		Context: ctx,
 		GetData: r.client.Machines.ReadMachine,
-		Input: juju.ReadMachineInput{
+		Input: &juju.ReadMachineInput{
 			ModelName: modelName,
 			ID:        machineID,
 		},
@@ -552,14 +552,33 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	defer func() {
+		r.trace(fmt.Sprintf("delete machine resource %q", machineID))
+	}()
 
 	if err := r.client.Machines.DestroyMachine(&juju.DestroyMachineInput{
 		ModelName: modelName,
 		ID:        machineID,
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete machine, got error: %s", err))
+		return
 	}
-	r.trace(fmt.Sprintf("delete machine resource %q", machineID))
+
+	if err := wait.WaitForError(wait.WaitForErrorCfg[*juju.ReadMachineInput, *juju.ReadMachineResponse]{
+		Context: ctx,
+		GetData: r.client.Machines.ReadMachine,
+		Input: &juju.ReadMachineInput{
+			ModelName: modelName,
+			ID:        machineID,
+		},
+		ErrorToWait:    juju.MachineNotFoundError,
+		NonFatalErrors: []error{juju.RetryReadError},
+	}); err != nil {
+		resp.Diagnostics.AddError(
+			"Wait Error",
+			fmt.Sprintf("Timeout reached waiting for machine %q deletion, got error: %s. Make sure no application units or containers are still running on the machine", machineID, err),
+		)
+	}
 }
 
 // ImportState is called when the provider must import the state of a
@@ -642,7 +661,7 @@ func updateAnnotations(ctx context.Context, client annotationSetter, stateAnnota
 
 // assertHostnamePopulated asserts the hostname is populated in the machine response.
 // Otherwise it returns a retry error to wait for the hostname to be set.
-func assertHostnamePopulated(respFromAPI juju.ReadMachineResponse) error {
+func assertHostnamePopulated(respFromAPI *juju.ReadMachineResponse) error {
 	if respFromAPI.Hostname == "" {
 		return juju.NewRetryReadError("waiting for hostname to be set on machine")
 	}
@@ -653,7 +672,7 @@ func assertHostnamePopulated(respFromAPI juju.ReadMachineResponse) error {
 // This is important when using the placement directive in juju_application resource - to deploy an application
 // or validate against the operating system specified for the application Juju must know the operating system to use.
 // For actual machines that information is not available until it reaches the "running" state.
-func assertMachineRunning(respFromAPI juju.ReadMachineResponse) error {
+func assertMachineRunning(respFromAPI *juju.ReadMachineResponse) error {
 	if respFromAPI.Status != status.Running.String() {
 		return juju.NewRetryReadError("waiting for machine to be in running state")
 	}

@@ -30,6 +30,14 @@ import (
 	"github.com/juju/names/v5"
 )
 
+// MachineNotFoundError is returned when a machine cannot be found.
+var MachineNotFoundError = errors.ConstError("machine-not-found")
+
+// NewMachineNotFoundError returns an error indicating that a machine with the given ID was not found.
+func NewMachineNotFoundError(machineId string) error {
+	return errors.WithType(errors.Errorf("machine %s not found", machineId), MachineNotFoundError)
+}
+
 type machinesClient struct {
 	SharedClient
 
@@ -330,11 +338,10 @@ func manualProvision(client manual.ProvisioningClientAPI,
 	return machineId, nil
 }
 
-func (c *machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse, error) {
-	var response ReadMachineResponse
+func (c *machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineResponse, error) {
 	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
-		return response, err
+		return nil, err
 	}
 	defer func() { _ = conn.Close() }()
 
@@ -342,34 +349,40 @@ func (c *machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineRespons
 
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
-		return response, err
+		return nil, err
 	}
 	machineIDParts := strings.Split(input.ID, "/")
 	machineStatus, exists := status.Machines[machineIDParts[0]]
 	if !exists {
-		return response, fmt.Errorf("no status returned for machine: %s", input.ID)
+		return nil, NewMachineNotFoundError(input.ID)
 	}
 	c.Tracef("ReadMachine:Machine status result", map[string]interface{}{"machineStatus": machineStatus})
 	if len(machineIDParts) > 1 {
 		// check for containers
 		machineStatus, exists = machineStatus.Containers[input.ID]
 		if !exists {
-			return response, fmt.Errorf("no status returned for container in machine: %s", input.ID)
+			return nil, NewMachineNotFoundError(input.ID)
 		}
 	}
+
 	machineStatusString, err := getTargetStatusFunc(input.ID)(status)
 	if err != nil {
-		return response, err
+		return nil, err
 	}
-	response.ID = machineStatus.Id
-	response.Hostname = machineStatus.Hostname
-	response.Base, response.Series, err = baseAndSeriesFromParams(&machineStatus.Base)
+
+	base, series, err := baseAndSeriesFromParams(&machineStatus.Base)
 	if err != nil {
-		return response, err
+		return nil, err
 	}
-	response.Constraints = machineStatus.Constraints
-	response.Status = machineStatusString
-	return response, nil
+
+	return &ReadMachineResponse{
+		ID:          machineStatus.Id,
+		Hostname:    machineStatus.Hostname,
+		Constraints: machineStatus.Constraints,
+		Base:        base,
+		Series:      series,
+		Status:      machineStatusString,
+	}, nil
 }
 
 func (c *machinesClient) DestroyMachine(input *DestroyMachineInput) error {
@@ -382,7 +395,6 @@ func (c *machinesClient) DestroyMachine(input *DestroyMachineInput) error {
 	machineAPIClient := apimachinemanager.NewClient(conn)
 
 	_, err = machineAPIClient.DestroyMachinesWithParams(false, false, false, (*time.Duration)(nil), input.ID)
-
 	if err != nil {
 		return err
 	}
