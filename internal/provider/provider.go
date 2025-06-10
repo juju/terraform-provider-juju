@@ -385,7 +385,6 @@ func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
 		func() resource.Resource { return NewJAASAccessRoleResource() },
 		func() resource.Resource { return NewJAASAccessOfferResource() },
 		func() resource.Resource { return NewJAASAccessControllerResource() },
-		func() resource.Resource { return NewJAASAccessServiceAccountResource() },
 		func() resource.Resource { return NewJAASGroupResource() },
 		func() resource.Resource { return NewJAASRoleResource() },
 	}
