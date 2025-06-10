@@ -23,6 +23,7 @@ import (
 
 	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -376,7 +377,7 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	response, err := r.client.Machines.ReadMachine(juju.ReadMachineInput{
+	response, err := r.client.Machines.ReadMachine(&juju.ReadMachineInput{
 		ModelName: modelName,
 		ID:        machineID,
 	})
@@ -491,6 +492,17 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete machine, got error: %s", err))
 	}
+
+	if err := wait.WaitForError(wait.WaitForErrorCfg[*juju.ReadMachineInput, *juju.ReadMachineResponse]{
+		Context:        ctx,
+		GetData:        r.client.Machines.ReadMachine,
+		Input:          &juju.ReadMachineInput{ModelName: modelName, ID: machineID},
+		ErrorToWait:    juju.MachineNotFoundError,
+		NonFatalErrors: []error{juju.RetryReadError},
+	}); err != nil {
+		resp.Diagnostics.AddError("Wait Error", fmt.Sprintf("Unable to wait for machine deletion, got error: %s", err))
+	}
+
 	r.trace(fmt.Sprintf("delete machine resource %q", machineID))
 }
 

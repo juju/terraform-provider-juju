@@ -110,7 +110,7 @@ func (d *machineDataSource) Read(ctx context.Context, req datasource.ReadRequest
 
 	// Verify the machine exists in the model provided
 	if _, err := d.client.Machines.ReadMachine(
-		juju.ReadMachineInput{
+		&juju.ReadMachineInput{
 			ModelName: data.Model.ValueString(),
 			ID:        machine_id,
 		},

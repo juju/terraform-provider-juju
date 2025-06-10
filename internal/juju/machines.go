@@ -33,6 +33,14 @@ import (
 	"github.com/juju/retry"
 )
 
+// MachineNotFoundError is returned when a machine cannot be found.
+var MachineNotFoundError = errors.ConstError("machine-not-found")
+
+// NewMachineNotFoundError returns an error indicating that a machine with the given ID was not found.
+func NewMachineNotFoundError(machineId string) error {
+	return errors.WithType(errors.Errorf("machine %s not found", machineId), MachineNotFoundError)
+}
+
 type machinesClient struct {
 	SharedClient
 
@@ -287,8 +295,13 @@ func (c *machinesClient) createMachine(ctx context.Context, conn api.Connection,
 
 	// Read the machine to ensure we have a base and series. It's
 	// not a required field in a minimal machine config.
-	readResponse, err := c.readMachineWithRetryOnNotFound(ctx,
-		ReadMachineInput{ModelName: input.ModelName, ID: machineID})
+	readResponse, err := c.readMachineWithRetryOnNotFound(
+		ctx,
+		&ReadMachineInput{
+			ModelName: input.ModelName,
+			ID:        machineID,
+		},
+	)
 
 	return &CreateMachineResponse{
 		ID:     machineID,
@@ -417,11 +430,10 @@ func manualProvision(client manual.ProvisioningClientAPI,
 	}, nil
 }
 
-func (c *machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse, error) {
-	var response ReadMachineResponse
+func (c *machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineResponse, error) {
 	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
-		return response, err
+		return nil, err
 	}
 	defer func() { _ = conn.Close() }()
 
@@ -429,23 +441,25 @@ func (c *machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineRespons
 
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
-		return response, err
+		return nil, err
 	}
 
 	machineIDParts := strings.Split(input.ID, "/")
 	machineStatus, exists := status.Machines[machineIDParts[0]]
 	if !exists {
-		return response, fmt.Errorf("no status returned for machine: %s", input.ID)
+		return nil, NewMachineNotFoundError(input.ID)
 	}
 	c.Tracef("ReadMachine:Machine status result", map[string]interface{}{"machineStatus": machineStatus})
 	if len(machineIDParts) > 1 {
 		// check for containers
 		machineStatus, exists = machineStatus.Containers[input.ID]
 		if !exists {
-			return response, fmt.Errorf("no status returned for container in machine: %s", input.ID)
+			return nil, NewMachineNotFoundError(input.ID)
 		}
 	}
-	response.ID = machineStatus.Id
+	response := &ReadMachineResponse{
+		ID: machineStatus.Id,
+	}
 	response.Base, response.Series, err = baseAndSeriesFromParams(&machineStatus.Base)
 	if err != nil {
 		return response, err
@@ -457,8 +471,8 @@ func (c *machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineRespons
 // readMachineWithRetryOnNotFound calls ReadMachine until
 // successful, or the count is exceeded when the error is of type
 // not found. Delay indicates how long to wait between attempts.
-func (c *machinesClient) readMachineWithRetryOnNotFound(ctx context.Context, input ReadMachineInput) (ReadMachineResponse, error) {
-	var output ReadMachineResponse
+func (c *machinesClient) readMachineWithRetryOnNotFound(ctx context.Context, input *ReadMachineInput) (*ReadMachineResponse, error) {
+	var output *ReadMachineResponse
 	err := retry.Call(retry.CallArgs{
 		Func: func() error {
 			var err error
