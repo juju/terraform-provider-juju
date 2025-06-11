@@ -28,6 +28,7 @@ import (
 	"github.com/juju/utils/v3"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 var _ resource.Resource = &modelResource{}
@@ -560,10 +561,27 @@ func (r *modelResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete model, got error: %s", err))
 		return
 	}
-	r.trace(fmt.Sprintf("model deleted : %q", state.Name.ValueString()))
+	modelName := state.Name.ValueString()
+	err = wait.WaitForError(wait.WaitForErrorCfg[string, *juju.ReadModelResponse]{
+		Context:        ctx,
+		GetData:        r.client.Models.ReadModel,
+		Input:          modelName,
+		ErrorToWait:    juju.ModelNotFoundError,
+		NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError},
+	})
+	if err != nil {
+		// AddWarning is used instead of AddError to make sure that the resource is removed from state.
+		resp.Diagnostics.AddWarning(
+			"Client Error",
+			fmt.Sprintf(`Unable to complete model %s deletion due to error %v, there might be dangling resources. 
+Make sure to manually delete them.`, modelName, err))
+		return
+	}
+	r.trace(fmt.Sprintf("model deleted : %q", modelName))
 }
 
 func handleModelNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
+	// This should not happen anymore, because Delete waits for the model to be destroyed.
 	if errors.As(err, &juju.ModelNotFoundError) {
 		// Model manually removed
 		st.RemoveResource(ctx)
