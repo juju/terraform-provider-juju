@@ -27,7 +27,7 @@ require (
 	github.com/juju/names/v5 v5.0.0
 	github.com/juju/retry v1.0.1
 	github.com/juju/utils v0.0.0-20200604140309-9d78121a29e0
-	github.com/juju/utils/v3 v3.2.0
+	github.com/juju/utils/v3 v3.2.1
 	github.com/juju/version/v2 v2.0.1
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.10.0
