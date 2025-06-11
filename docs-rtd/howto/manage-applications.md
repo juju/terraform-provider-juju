@@ -28,9 +28,7 @@ To deploy an application, find and deploy a charm that delivers it.
 
 TBA
 
-
 ## Trust an application with a credential
-
 
 Some applications may require access to the backing cloud in order to fulfil their purpose (e.g., storage-related tasks). In such cases, the remote credential associated with the current model would need to be shared with the application. When the Juju administrator allows this to occur the application is said to be *trusted*.
 

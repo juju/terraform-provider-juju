@@ -74,7 +74,7 @@ func TestAcc_ResourceMachine_WithPlacement(t *testing.T) {
 	resourceName := "juju_machine.this_machine_1"
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: frameworkProviderFactories,
+		ProtoV6ProviderFactories: frameworkProviderFactoriesNoResourceWait,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccResourceMachineWithPlacement(modelName),
@@ -274,4 +274,94 @@ resource "juju_machine" "this_machine_1" {
 `, internaltesting.TemplateData{
 			"ModelName": modelName,
 		})
+}
+
+func TestAcc_ResourceMachine_Annotations(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-machine-annotations")
+	machineName := "testmachine"
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAnnotationsMachine(modelName, machineName, "test", "test"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "name", machineName),
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "annotations.test", "test"),
+				),
+			},
+			{
+				Config: testAccAnnotationsMachine(modelName, machineName, "test", "test-update"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "name", machineName),
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "annotations.test", "test-update"),
+				),
+			},
+			{
+				Config: fmt.Sprintf(`
+resource "juju_model" "testmodel" {
+  name = %q
+}
+  
+resource "juju_machine" "testmachine" {
+  name = %q
+  model = juju_model.testmodel.name
+}
+`, modelName, machineName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "name", machineName),
+					resource.TestCheckNoResourceAttr("juju_machine.testmachine", "annotations.test"),
+				),
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceMachine_UnsetAnnotations(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-machine-annotations-unset")
+	machineName := "testmachine"
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAnnotationsMachine(modelName, machineName, "test", "test"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "name", machineName),
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "annotations.test", "test"),
+				),
+			},
+			{
+				Config: testAccAnnotationsMachine(modelName, machineName, "test-another", "test-another"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "name", machineName),
+					resource.TestCheckResourceAttr("juju_machine.testmachine", "annotations.test-another", "test-another"),
+					resource.TestCheckNoResourceAttr("juju_machine.testmachine", "annotations.test"),
+				),
+			},
+		},
+	})
+}
+
+func testAccAnnotationsMachine(modelName, machineName string, annotationKey, annotationValue string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "testmodel" {
+  name = %q
+}
+
+resource "juju_machine" "testmachine" {
+  name = %q
+  model = juju_model.testmodel.name
+
+  
+  annotations = {
+	%q = %q
+  }
+}`, modelName, machineName, annotationKey, annotationValue)
 }

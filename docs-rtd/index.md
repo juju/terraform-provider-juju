@@ -1,4 +1,4 @@
-# Terraform Provider for Juju (`terraform-provider-juju`)
+# Terraform Provider for Juju
 
 ```{toctree}
 :maxdepth: 2
@@ -13,13 +13,13 @@ reference/index
 explanation/index
 -->
 
-The Terraform Provider for Juju (henceforth, `terraform-provider-juju`) is a [Terraform Provider](https://developer.hashicorp.com/terraform/language/providers) that extends [Terraform](https://developer.hashicorp.com/terraform) with [Juju](https://juju.is) and [JAAS](https://jaas.ai/) functionality.
+The Terraform Provider for Juju is a [Terraform Provider](https://developer.hashicorp.com/terraform/language/providers) that extends [Terraform](https://developer.hashicorp.com/terraform) with [Juju](https://documentation.ubuntu.com/juju) and [JAAS](https://jaas.ai/) functionality.
 
-When you're putting together your Terraform plan, if you specify `juju` as the provider, you can connect to a pre-existing Juju controller (created with the [`juju` CLI](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/juju-cli/)) and then go ahead and use it to do Juju things -- easy deploy, configure, integrate, scale, etc., applications on any Juju-supported cloud (Kubernetes or otherwise) using [charms](https://canonical-juju.readthedocs-hosted.com/en/latest/user/reference/charm/).
+When you're putting together your Terraform plan, if you specify `juju` as the provider, you can connect to a pre-existing Juju controller or JIMM controller and then go ahead and use it to do Juju things -- easy deploy, configure, integrate, scale, etc., infrastructure and applications on any Juju-supported cloud (Kubernetes or otherwise) using charms.
 
-`terraform-provider-juju` combines the power of Terraform -- comprehensive infrastructure management, declaratively -- with the power of Juju -- easy systems management, from Day 0 to Day n.
+The Terraform Provider for Juju combines the power of Terraform -- comprehensive infrastructure management, declaratively -- with the power of Juju -- easy systems management, from Day 0 to Day n.
 
-Like all of Juju, `terraform-provider-juju` is for SREs, or anyone looking to take control of cloud.
+Like all of Juju, the Terraform Provider for Juju is for SREs, or anyone looking to take control of cloud.
 
 ---------
 
@@ -31,7 +31,7 @@ Like all of Juju, `terraform-provider-juju` is for SREs, or anyone looking to ta
 :link: tutorial
 :link-type: doc
 
-**Start here**: a hands-on introduction to Example Product for new users
+**Start here**: a hands-on introduction to the Terraform Provider for Juju for new users
 ```
 
 ```{grid-item-card} [How-to guides](/index)
@@ -71,13 +71,18 @@ Like all of Juju, `terraform-provider-juju` is for SREs, or anyone looking to ta
 
 The Terraform Provider for Juju is a member of the Ubuntu family. It’s an open source project that warmly welcomes community projects, contributions, suggestions, fixes and constructive feedback.
 
-* **[Code of conduct](https://ubuntu.com/community/ethos/code-of-conduct)**
+* [Release notes](https://github.com/juju/terraform-provider-juju/releases )
 
-* **[Join our chat](https://matrix.to/#/#terraform-provider-juju:ubuntu.com)**
+* [Code of conduct](https://ubuntu.com/community/ethos/code-of-conduct)
 
-* **[Join our forum](https://discourse.charmhub.io/)**
+* [Join our chat](https://matrix.to/#/#terraform-provider-juju:ubuntu.com)
 
-* **[Report a bug](https://github.com/juju/terraform-provider-juju/issues/new?title=doc%3A+ADD+A+TITLE&body=DESCRIBE+THE+ISSUE%0A%0A---%0ADocument:%20index.md)**
+* [Join our forum](https://discourse.charmhub.io/)
 
-* **[Contribute](https://github.com/juju/terraform-provider-juju/blob/main/CONTRIBUTING.md)**
+* [Report a bug](https://github.com/juju/terraform-provider-juju/issues/new?title=doc%3A+ADD+A+TITLE&body=DESCRIBE+THE+ISSUE%0A%0A---%0ADocument:%20index.md)
 
+* [Contribute](https://github.com/juju/terraform-provider-juju/blob/main/CONTRIBUTING.md)
+
+* [Visit our careers page](https://juju.is/careers)
+
+Thinking about using Juju for your next project? [Get in touch!](https://canonical.com/contact-us)

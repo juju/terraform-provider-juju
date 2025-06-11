@@ -6,7 +6,7 @@
 ```{toctree}
 :maxdepth: 2
 
-manage-terraform-provider-juju
+manage-the-terraform-provider-for-juju
 manage-clouds
 manage-credentials
 manage-controllers

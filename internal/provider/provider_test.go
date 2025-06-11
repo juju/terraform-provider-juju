@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -32,6 +33,10 @@ const (
 // acceptance testing.
 var frameworkProviderFactories map[string]func() (tfprotov6.ProviderServer, error)
 
+// frameworkProviderFactoriesNoResourceWait are used to instantiate the Framework provider during
+// acceptance testing but configures the provider to not wait for resources to be ready or destroyed.
+var frameworkProviderFactoriesNoResourceWait map[string]func() (tfprotov6.ProviderServer, error)
+
 // Provider makes a separate provider available for tests.
 // Note that testAccPreCheck needs to invoked before use.
 var Provider provider.Provider
@@ -40,11 +45,19 @@ var Provider provider.Provider
 // custom checkers for their tests (e.g. resource_model_test)
 var TestClient *juju.Client
 
+// setupAccTestsOnce ensures that any setup needed for acceptance tests
+// is only done once.
+var setupAccTestsOnce sync.Once
+
 func init() {
-	Provider = NewJujuProvider("dev")
+	waitForResources := true
+	Provider = NewJujuProvider("dev", waitForResources)
 
 	frameworkProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
-		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev")),
+		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev", true)),
+	}
+	frameworkProviderFactoriesNoResourceWait = map[string]func() (tfprotov6.ProviderServer, error){
+		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev", false)),
 	}
 }
 
@@ -68,7 +81,7 @@ func OnlyTestAgainstJAAS(t *testing.T) {
 
 func TestProviderConfigure(t *testing.T) {
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev")
+	jujuProvider := NewJujuProvider("dev", true)
 	confResp := configureProvider(t, jujuProvider)
 	assert.Equal(t, confResp.Diagnostics.HasError(), false)
 }
@@ -76,7 +89,7 @@ func TestProviderConfigure(t *testing.T) {
 func TestProviderConfigureUsernameFromEnv(t *testing.T) {
 	SkipJAAS(t)
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev")
+	jujuProvider := NewJujuProvider("dev", true)
 	userNameValue := "the-username"
 	t.Setenv(JujuUsernameEnvKey, userNameValue)
 
@@ -91,7 +104,7 @@ func TestProviderConfigureUsernameFromEnv(t *testing.T) {
 func TestProviderConfigurePasswordFromEnv(t *testing.T) {
 	SkipJAAS(t)
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev")
+	jujuProvider := NewJujuProvider("dev", true)
 	passwordValue := "the-password"
 	t.Setenv(JujuPasswordEnvKey, passwordValue)
 	confResp := configureProvider(t, jujuProvider)
@@ -105,7 +118,7 @@ func TestProviderConfigurePasswordFromEnv(t *testing.T) {
 func TestProviderConfigureClientIDAndSecretFromEnv(t *testing.T) {
 	SkipJAAS(t)
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev")
+	jujuProvider := NewJujuProvider("dev", true)
 	emptyValue := ""
 	t.Setenv(JujuUsernameEnvKey, emptyValue)
 	t.Setenv(JujuPasswordEnvKey, emptyValue)
@@ -125,7 +138,9 @@ func TestProviderConfigureClientIDAndSecretFromEnv(t *testing.T) {
 
 func TestProviderConfigureAddresses(t *testing.T) {
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev")
+	os.Setenv("JUJU_CONNECTION_TIMEOUT", "2") // 2s timeout
+	defer os.Unsetenv("JUJU_CONNECTION_TIMEOUT")
+	jujuProvider := NewJujuProvider("dev", true)
 	// This IP is from a test network that should never be routed. https://www.rfc-editor.org/rfc/rfc5737#section-3
 	t.Setenv(JujuControllerEnvKey, "192.0.2.100:17070")
 	confResp := configureProvider(t, jujuProvider)
@@ -149,7 +164,7 @@ func TestProviderConfigurex509FromEnv(t *testing.T) {
 		//https://github.com/golang/go/issues/52010
 		t.Skip("This test does not work on MacOS")
 	}
-	jujuProvider := NewJujuProvider("dev")
+	jujuProvider := NewJujuProvider("dev", true)
 	t.Setenv(JujuCACertEnvKey, invalidCA)
 	confResp := configureProvider(t, jujuProvider)
 	// This is a live test, expect that the client connection will fail.
@@ -162,7 +177,7 @@ func TestProviderConfigurex509FromEnv(t *testing.T) {
 
 func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
 	SkipJAAS(t)
-	jujuProvider := NewJujuProvider("dev")
+	jujuProvider := NewJujuProvider("dev", true)
 	//Set the CA to the invalid one above
 	//Juju will ignore the system trust store if we set the CA property
 	t.Setenv(JujuCACertEnvKey, invalidCA)
@@ -178,7 +193,7 @@ func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
 
 func TestProviderAllowsEmptyCACert(t *testing.T) {
 	SkipJAAS(t)
-	jujuProvider := NewJujuProvider("dev")
+	jujuProvider := NewJujuProvider("dev", true)
 	//Set the CA cert to be empty and check that the provider still tries to connect.
 	t.Setenv(JujuCACertEnvKey, "")
 	t.Setenv("JUJU_CA_CERT_FILE", "")
@@ -192,6 +207,12 @@ func TestProviderAllowsEmptyCACert(t *testing.T) {
 }
 
 func testAccPreCheck(t *testing.T) {
+	setupAccTestsOnce.Do(func() {
+		setupAcceptanceTests(t)
+	})
+}
+
+func setupAcceptanceTests(t *testing.T) {
 	if TestClient != nil {
 		return
 	}
@@ -205,6 +226,74 @@ func testAccPreCheck(t *testing.T) {
 	testClient, ok := confResp.ResourceData.(*juju.Client)
 	require.Truef(t, ok, "ResourceData, not of type juju client")
 	TestClient = testClient
+	createCloudCredential(t)
+}
+
+var cloudNameMap = map[string]string{
+	"lxd": "localhost",
+}
+
+// canonicalCloudName returns the canonical name of the cloud.
+// Where the Terraform provider tests uses the name "lxd" for the
+// local cloud, the Juju client uses "localhost" for example.
+func canonicalCloudName(name string) string {
+	val, ok := cloudNameMap[name]
+	if ok {
+		return val
+	}
+	return name
+}
+
+// createCloudCredential reads a cloud-credential from
+// the local client store and re-creates that cloud-credential
+// on the controller. If a cloud-credential for the cloud
+// under test already exists on the controller, this is a no-op.
+// This is useful when running tests as a user that isn't the admin user.
+func createCloudCredential(t *testing.T) {
+	if TestClient == nil {
+		t.Fatal("TestClient is not set")
+	}
+	cloudName := canonicalCloudName(os.Getenv(TestCloudEnvKey))
+
+	// List controller credentials to bail out early if one already exists.
+	controllerCreds, _ := TestClient.Credentials.ListControllerCredentials()
+	// skip checking the error here, because the controller
+	// returns a not found error if no credentials exist
+	// and for any other errors we want to continue anyway.
+	if controllerCreds != nil {
+		for cloud := range controllerCreds.CloudCredentials {
+			if cloud == cloudName {
+				t.Logf("successfully found cloud-credential in controller for cloud %s", cloudName)
+				return
+			}
+		}
+	}
+
+	// List client credentials to check if we have any cloud-credentials.
+	clientCreds, err := TestClient.Credentials.ListClientCredentials()
+	if err != nil {
+		t.Fatalf("failed to read cloud-credential from client store: %v", err)
+	}
+	if len(clientCreds.CloudCredentials[cloudName].AuthCredentials) == 0 {
+		t.Fatalf("no cloud-credentials for cloud %q found in client store", cloudName)
+	}
+
+	// Create a new credential on the controller using the
+	// first available client credential.
+	var createCredential juju.CreateCredentialInput
+	for credentialName, cred := range clientCreds.CloudCredentials[cloudName].AuthCredentials {
+		createCredential.AuthType = string(cred.AuthType())
+		createCredential.Attributes = cred.Attributes()
+		createCredential.Name = credentialName
+		createCredential.CloudName = cloudName
+		createCredential.ControllerCredential = true
+		break
+	}
+
+	_, err = TestClient.Credentials.CreateCredential(createCredential)
+	if err != nil {
+		t.Fatalf("failed to create controller credential: %v", err)
+	}
 }
 
 func validateJAASTestConfig(t *testing.T) {
@@ -270,7 +359,7 @@ func configureProvider(t *testing.T, p provider.Provider) provider.ConfigureResp
 
 func TestFrameworkProviderSchema(t *testing.T) {
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev")
+	jujuProvider := NewJujuProvider("dev", true)
 	req := provider.SchemaRequest{}
 	resp := provider.SchemaResponse{}
 	jujuProvider.Schema(context.Background(), req, &resp)

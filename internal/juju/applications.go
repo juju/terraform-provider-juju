@@ -11,7 +11,7 @@ package juju
 import (
 	"bytes"
 	"context"
-	"errors"
+	stderrors "errors"
 	"fmt"
 	"math"
 	"os"
@@ -25,6 +25,7 @@ import (
 	charmresources "github.com/juju/charm/v12/resource"
 	"github.com/juju/clock"
 	"github.com/juju/collections/set"
+	"github.com/juju/errors"
 	jujuerrors "github.com/juju/errors"
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
@@ -55,62 +56,33 @@ import (
 	goyaml "gopkg.in/yaml.v2"
 )
 
-var ApplicationNotFoundError = &applicationNotFoundError{}
-
-// ApplicationNotFoundError
-type applicationNotFoundError struct {
-	appName string
+// NewApplicationNotFoundError returns a new error indicating that the
+// application was not found.
+func NewApplicationNotFoundError(appName string) error {
+	return errors.WithType(errors.Errorf("application %s not found", appName), ApplicationNotFoundError)
 }
 
-func (ae *applicationNotFoundError) Error() string {
-	return fmt.Sprintf("application %s not found", ae.appName)
+// ApplicationNotFoundError is an error that indicates that the application
+// was not found when contacting the Juju API.
+var ApplicationNotFoundError = errors.ConstError("application-not-found")
+
+// NewStorageNotFoundError returns a new error indicating that the
+// storage was not found.
+func NewStorageNotFoundError(applicationName string) error {
+	return errors.WithType(errors.Errorf("storage not found for application %s", applicationName), StorageNotFoundError)
 }
 
-// Is checks if the target error is an applicationNotFoundError.
-func (ae *applicationNotFoundError) Is(err error) bool {
-	_, ok := err.(*applicationNotFoundError)
-	return ok
-}
+// StorageNotFoundError is an error that indicates that the storage was not found.
+var StorageNotFoundError = errors.ConstError("storage-not-found")
 
-var StorageNotFoundError = &storageNotFoundError{}
-
-// StorageNotFoundError
-type storageNotFoundError struct {
-	storageName string
-}
-
-func (se *storageNotFoundError) Error() string {
-	return fmt.Sprintf("storage %s not found", se.storageName)
-}
-
-// Is checks if the target error is a storageNotFoundError.
-func (se *storageNotFoundError) Is(target error) bool {
-	_, ok := target.(*storageNotFoundError)
-	return ok
-}
-
-var RetryReadError = &retryReadError{}
+// RetryReadError is an error that indicates that a read operation
+// should be retried. This is used to handle transient errors
+// that may occur when reading application data from the Juju API.
+var RetryReadError = errors.ConstError("retry-read-error")
 
 // NewRetryReadError returns a new retry error with the specified message.
-func NewRetryReadError(msg string) *retryReadError {
-	return &retryReadError{
-		msg: msg,
-	}
-}
-
-// retryReadError
-type retryReadError struct {
-	msg string
-}
-
-func (e *retryReadError) Error() string {
-	return fmt.Sprintf("retrying: %s", e.msg)
-}
-
-// Is checks if the target error is a retryReadError.
-func (e *retryReadError) Is(target error) bool {
-	_, ok := target.(*retryReadError)
-	return ok
+func NewRetryReadError(msg string) error {
+	return errors.WithType(errors.Errorf("retrying: %s", msg), RetryReadError)
 }
 
 type applicationsClient struct {
@@ -449,7 +421,7 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient Applicatio
 	})
 
 	if len(errs) != 0 {
-		return errors.Join(errs...)
+		return stderrors.Join(errs...)
 	}
 
 	fileSystem := osFilesystem{}
@@ -855,7 +827,9 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 			// to drop the error.
 			for label, storage := range output.Storage {
 				if storage.Pool == "" || storage.Size == 0 {
-					return &retryReadError{msg: fmt.Sprintf("storage label %q missing detail", label)}
+					return NewRetryReadError(
+						fmt.Sprintf("storage label %q missing detail", label),
+					)
 				}
 			}
 
@@ -869,20 +843,22 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 				return nil
 			}
 			if output.Placement == "" {
-				return &retryReadError{msg: "no machines found in output"}
+				return NewRetryReadError("no machines found in output")
 			}
 			machines := strings.Split(output.Placement, ",")
 			if len(machines) != output.Units {
-				return &retryReadError{msg: fmt.Sprintf("need %d machines, have %d", output.Units, len(machines))}
+				return NewRetryReadError(
+					fmt.Sprintf("expected %d machines, got %d", output.Units, len(machines)),
+				)
 			}
 
 			c.Tracef("Have machines - returning", map[string]interface{}{"output": *output})
 			return nil
 		},
 		IsFatalError: func(err error) bool {
-			if errors.As(err, &ApplicationNotFoundError) ||
-				errors.As(err, &StorageNotFoundError) ||
-				errors.As(err, &RetryReadError) ||
+			if errors.Is(err, ApplicationNotFoundError) ||
+				errors.Is(err, StorageNotFoundError) ||
+				errors.Is(err, RetryReadError) ||
 				strings.Contains(err.Error(), "connection refused") {
 				return false
 			}
@@ -985,12 +961,12 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("more than one result for application: %s", input.AppName)
 	}
 	if len(apps) < 1 {
-		return nil, &applicationNotFoundError{input.AppName}
+		return nil, NewApplicationNotFoundError(input.AppName)
 	}
 	if apps[0].Error != nil {
 		// Return applicationNotFoundError to trigger retry.
 		c.Debugf("Actual error from ApplicationsInfo", map[string]interface{}{"err": apps[0].Error})
-		return nil, &applicationNotFoundError{input.AppName}
+		return nil, NewApplicationNotFoundError(input.AppName)
 	}
 
 	appInfo := apps[0].Result
@@ -1008,7 +984,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 			strings.Contains(err.Error(), "volume for storage instance") ||
 			strings.Contains(err.Error(), "cannot convert storage details") {
 			// Retry if we get this error. It means the storage is not ready yet.
-			return nil, &storageNotFoundError{input.AppName}
+			return nil, NewStorageNotFoundError(input.AppName)
 		}
 		c.Errorf(err, "failed to get status")
 		return nil, err

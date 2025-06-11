@@ -624,7 +624,6 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	r.trace(fmt.Sprintf("create application resource %q", createResp.AppName))
-
 	readResp, err := r.client.Applications.ReadApplicationWithRetryOnNotFound(ctx, &juju.ReadApplicationInput{
 		ModelName: modelName,
 		AppName:   createResp.AppName,
@@ -706,7 +705,7 @@ func transformSizeToHumanizedFormat(size uint64) string {
 }
 
 func handleApplicationNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
-	if errors.As(err, &juju.ApplicationNotFoundError) {
+	if errors.Is(err, juju.ApplicationNotFoundError) {
 		// Application manually removed
 		st.RemoveResource(ctx)
 		return diag.Diagnostics{}
@@ -1418,6 +1417,27 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 		ModelName:       modelName,
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete application, got error: %s", err))
+	}
+
+	err := wait.WaitForError(
+		wait.WaitForErrorCfg[*juju.ReadApplicationInput, *juju.ReadApplicationResponse]{
+			Context: ctx,
+			GetData: r.client.Applications.ReadApplication,
+			Input: &juju.ReadApplicationInput{
+				ModelName: modelName,
+				AppName:   appName,
+			},
+			ErrorToWait:    juju.ApplicationNotFoundError,
+			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError, juju.StorageNotFoundError},
+		},
+	)
+	if err != nil {
+		// AddWarning is used instead of AddError to make sure that the resource is removed from state.
+		resp.Diagnostics.AddWarning(
+			"Client Error",
+			fmt.Sprintf(`Unable to complete application %s deletion due to error %v, there might be dangling resources. 
+Make sure to manually delete them.`, appName, err))
+		return
 	}
 
 	r.trace(fmt.Sprintf("deleted application resource %q", state.ID.ValueString()))
