@@ -120,6 +120,7 @@ func (j jujuProviderModel) loginViaUsername() bool {
 	return j.UserName.ValueString() != "" && j.Password.ValueString() != ""
 }
 
+// silly godoc
 func (j jujuProviderModel) loginViaClientCredentials() bool {
 	return j.ClientID.ValueString() != "" && j.ClientSecret.ValueString() != ""
 }
