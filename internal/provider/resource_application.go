@@ -482,6 +482,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		addClientNotConfiguredError(&resp.Diagnostics, "application", "create")
 		return
 	}
+	var asserts []wait.Assert[*juju.ReadApplicationResponse]
 
 	var plan applicationResourceModel
 
@@ -521,6 +522,9 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &resourceRevisions, false)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+	if len(resourceRevisions) > 0 {
+		asserts = append(asserts, assertEqualsResources(resourceRevisions))
 	}
 
 	// If the plan has an empty expose block, that has meaning.
@@ -686,6 +690,23 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		}
 	} else {
 		plan.Storage = types.SetNull(storageType)
+	}
+
+	_, err = wait.WaitFor(
+		wait.WaitForCfg[*juju.ReadApplicationInput, *juju.ReadApplicationResponse]{
+			Context: ctx,
+			GetData: r.client.Applications.ReadApplication,
+			Input: &juju.ReadApplicationInput{
+				ModelName: plan.ModelName.ValueString(),
+				AppName:   plan.ApplicationName.ValueString(),
+			},
+			DataAssertions: asserts,
+			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError, juju.ApplicationNotFoundError, juju.StorageNotFoundError},
+		},
+	)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read application resource after create, got error: %s", err))
+		return
 	}
 
 	plan.ID = types.StringValue(newAppID(plan.ModelName.ValueString(), createResp.AppName))
@@ -1146,6 +1167,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 				}
 			}
 		}
+		asserts = append(asserts, assertEqualsResources(planResourceMap))
 	}
 
 	// Do not use .Equal() here as we should consider null constraints the same
@@ -1509,6 +1531,21 @@ func assertEqualsMachines(machinesToCompare []string) func(outputFromAPI *juju.R
 			return juju.NewRetryReadError("plan machines differ from application machines")
 		}
 
+		return nil
+	}
+}
+
+func assertEqualsResources(planResourceMap map[string]string) func(outputFromAPI *juju.ReadApplicationResponse) error {
+	return func(outputFromAPI *juju.ReadApplicationResponse) error {
+		resourceFromAPI := outputFromAPI.Resources
+		for k, v := range planResourceMap {
+			// Uploaded resources currently have no revision number, the juju convention is to use -1.
+			// When the resource is -1 we can't check if the resource has being propagated because in the state
+			// we hold the OCI URL, but Juju is not tracking it.
+			if resourceFromAPI[k] != "-1" && resourceFromAPI[k] != v {
+				return juju.NewRetryReadError(fmt.Sprintf("for resource %q got %s, expected %s", k, resourceFromAPI[k], v))
+			}
+		}
 		return nil
 	}
 }
