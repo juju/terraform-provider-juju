@@ -3,7 +3,6 @@
 ```{toctree}
 :titlesonly:
 :glob:
-:hidden:
 
 *
 
