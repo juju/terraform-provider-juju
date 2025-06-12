@@ -25,21 +25,13 @@ const (
 	IntegrationAppAvailableTimeout = time.Second * 60
 )
 
-var NoIntegrationFoundError = &noIntegrationFoundError{}
+// IntegrationNotFoundError is returned when an integration cannot be found.
+var IntegrationNotFoundError = errors.ConstError("integration-not-found")
 
-// NoIntegrationFoundError
-type noIntegrationFoundError struct {
-	ModelUUID string
-}
-
-func (ie *noIntegrationFoundError) Error() string {
-	return fmt.Sprintf("no integrations exist in model %v", ie.ModelUUID)
-}
-
-// Is checks if the target error is a noIntegrationFoundError.
-func (ie *noIntegrationFoundError) Is(target error) bool {
-	_, ok := target.(*noIntegrationFoundError)
-	return ok
+// NewIntegrationNotFoundError creates a new error indicating that no integration was found
+// for the given model UUID.
+func NewIntegrationNotFoundError(modelUUID string) error {
+	return errors.WithType(errors.Errorf("no integration found for model %s", modelUUID), IntegrationNotFoundError)
 }
 
 type integrationsClient struct {
@@ -135,7 +127,10 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 		return nil, err
 	}
 	defer func() { _ = conn.Close() }()
-
+	modelUUID, ok := conn.ModelTag()
+	if !ok {
+		return nil, errors.Errorf("Unable to get model uuid for %q", input.ModelName)
+	}
 	status, err := c.ModelStatus(input.ModelName, conn)
 	if err != nil {
 		return nil, err
@@ -144,11 +139,7 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 	integrations := status.Relations
 	var integration params.RelationStatus
 	if len(integrations) == 0 {
-		modelUUID, thisModel := conn.ModelTag()
-		if !thisModel {
-			return nil, errors.Errorf("Unable to get model uuid for %q", input.ModelName)
-		}
-		return nil, &noIntegrationFoundError{ModelUUID: modelUUID.Id()}
+		return nil, NewIntegrationNotFoundError(modelUUID.Id())
 	}
 
 	apps := make([][]string, 0, len(input.Endpoints))
@@ -159,6 +150,7 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 			app[1],
 		})
 	}
+
 	// the key is built assuming that the ID is "<provider>:<endpoint> <requirer>:<endpoint>"
 	// the integrations that come back from status have the key formatted as "<requirer>:<endpoint> <provider>:<endpoint>"
 	key := fmt.Sprintf("%v:%v %v:%v", apps[1][0], apps[1][1], apps[0][0], apps[0][1])
@@ -180,7 +172,7 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 	}
 
 	if integration.Id == 0 && integration.Key == "" {
-		return nil, fmt.Errorf("integration not found in model")
+		return nil, NewIntegrationNotFoundError(modelUUID.Id())
 	}
 
 	applications := parseApplications(status.RemoteApplications, integration.Endpoints)
@@ -249,12 +241,9 @@ func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
 
 	client := apiapplication.NewClient(conn)
 
-	var force bool = false
-	var timeout time.Duration = 30 * time.Second
-
 	err = client.DestroyRelation(
-		&force,
-		&timeout,
+		nil,
+		nil,
 		input.Endpoints...,
 	)
 	if err != nil {

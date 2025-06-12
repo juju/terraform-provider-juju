@@ -1718,6 +1718,7 @@ resource "juju_application" "{{.AppName}}" {
   charm {
     name = "postgresql-k8s"
     channel = "14/stable"
+	revision = 300
   }
 
   storage_directives = {
