@@ -23,6 +23,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -414,7 +415,6 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	var state integrationResourceModel
-
 	// Read Terraform configuration from the request into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -440,11 +440,41 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 		resp.Diagnostics.AddError("Client Error", err.Error())
 		return
 	}
+	modelName, endpointA, endpointB, idErr := modelNameAndEndpointsFromID(state.ID.ValueString())
+	if idErr.HasError() {
+		resp.Diagnostics.Append(idErr...)
+		return
+	}
+
+	err = wait.WaitForError(
+		wait.WaitForErrorCfg[*juju.IntegrationInput, *juju.ReadIntegrationResponse]{
+			Context: ctx,
+			GetData: r.client.Integrations.ReadIntegration,
+			Input: &juju.IntegrationInput{
+				ModelName: modelName,
+				Endpoints: []string{
+					endpointA,
+					endpointB,
+				},
+			},
+			ErrorToWait:    juju.IntegrationNotFoundError,
+			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError},
+		},
+	)
+	if err != nil {
+		// AddWarning is used instead of AddError to make sure that the resource is removed from state.
+		resp.Diagnostics.AddWarning(
+			"Client Error",
+			fmt.Sprintf(`Unable to complete integration %v for model %s deletion due to error %v, there might be dangling resources. 
+	Make sure to manually delete them.`, endpoints, modelName, err))
+		return
+	}
+
 	r.trace(fmt.Sprintf("Deleted integration resource: %q", state.ID.ValueString()))
 }
 
 func handleIntegrationNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
-	if errors.As(err, &juju.NoIntegrationFoundError) {
+	if errors.Is(err, juju.IntegrationNotFoundError) {
 		// Integration manually removed
 		st.RemoveResource(ctx)
 		return diag.Diagnostics{}
