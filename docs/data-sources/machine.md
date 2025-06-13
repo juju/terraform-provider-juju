@@ -29,4 +29,5 @@ data "juju_machine" "this" {
 
 ### Read-Only
 
+- `hostname` (String) The hostname of the machine.
 - `id` (String) The ID of this resource.

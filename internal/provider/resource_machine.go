@@ -54,6 +54,7 @@ type machineResourceModel struct {
 	SSHAddress     types.String           `tfsdk:"ssh_address"`
 	PublicKeyFile  types.String           `tfsdk:"public_key_file"`
 	PrivateKeyFile types.String           `tfsdk:"private_key_file"`
+	Hostname       types.String           `tfsdk:"hostname"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -97,6 +98,7 @@ const (
 	SSHAddressKey     = "ssh_address"
 	PrivateKeyFileKey = "private_key_file"
 	PublicKeyFileKey  = "public_key_file"
+	HostnameKey       = "hostname"
 )
 
 func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -256,6 +258,13 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 					}...),
 				},
 			},
+			HostnameKey: schema.StringAttribute{
+				Description: "The hostname of the machine.",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
 			"id": schema.StringAttribute{
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
@@ -331,6 +340,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	data.Base = types.StringValue(response.Base)
 	data.Series = types.StringValue(response.Series)
 	data.Name = types.StringValue(machineName)
+	data.Hostname = types.StringUnknown()
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -410,6 +420,7 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 	data.MachineID = types.StringValue(machineID)
 	data.Series = types.StringValue(response.Series)
 	data.Base = types.StringValue(response.Base)
+	data.Hostname = types.StringValue(response.Hostname)
 	if response.Constraints != "" {
 		data.Constraints = NewCustomConstraintsValue(response.Constraints)
 	}
