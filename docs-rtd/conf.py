@@ -139,6 +139,8 @@ html_context = {
     # 'github_version': 'main',
     # Docs location in the repo; used in links for viewing the source files
     #
+    # Your documentation GitHub issues URL
+     "github_issues": "https://github.com/juju/terraform-provider-juju/issues",
     # TODO: To customise the directory, uncomment and update as needed.
     "repo_folder": "/docs-rtd/",
 
@@ -238,9 +240,21 @@ extensions = [
     "sphinxcontrib.cairosvgconverter",
     # Make it possible to link to related RTD projects using their internal anchors
     # with, e.g., {external+ops:ref}`manage-configurations`:
+    'sphinxext.rediraffe',
     'sphinx.ext.intersphinx',
+    # Display an external link icon and open link in new tab:
+    # new_tab_link_show_external_link_icon must also be set to True
+    'sphinx_new_tab_link',
 ]
 
+
+# sphinxext.rediraffe options
+#
+# Read redirects from the provided file:
+rediraffe_redirects = "redirects.txt"
+
+# sphinx_new_tab_link options
+new_tab_link_show_external_link_icon = True
 
 ##################################
 # sphinx.ext.intersphinx options #

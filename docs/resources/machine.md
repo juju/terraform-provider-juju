@@ -29,6 +29,7 @@ resource "juju_machine" "this_machine" {
 
 ### Optional
 
+- `annotations` (Map of String) Annotations are key/value pairs that can be used to store additional information about the machine. May not contain dots (.) in keys.
 - `base` (String) The operating system to install on the new machine(s). E.g. ubuntu@22.04. Changing this value will cause the machine to be destroyed and recreated by terraform.
 - `constraints` (String) Machine constraints that overwrite those available from 'juju get-model-constraints' and provider's defaults. Changing this value will cause the application to be destroyed and recreated by terraform.
 - `disks` (String) Storage constraints for disks to attach to the machine(s). Changing this value will cause the machine to be destroyed and recreated by terraform.

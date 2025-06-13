@@ -156,6 +156,9 @@ func (c *machinesClient) CreateMachine(ctx context.Context, input *CreateMachine
 	// information is not available until it reaches the "running" state.
 	retryErr := retry.Call(retry.CallArgs{
 		Func: func() error {
+			if !c.WaitForResource() {
+				return nil
+			}
 			modelStatus, err := c.ModelStatus(input.ModelName, conn)
 			if err != nil {
 				return errors.Annotatef(err, "failed to get model status.")

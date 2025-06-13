@@ -55,7 +55,7 @@ resource "juju_jaas_access_role" "development" {
 }
 ```
 
-> See more: [`juju_jaas_access_role`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_role), [JAAS | Role access levels](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/role/#list-of-role-relations)
+> See more: [`juju_jaas_access_role`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_role), {external+jaas:ref}`JAAS | Role access levels <list-of-role-permissions>`
 
 ## Manage a role's access to a controller, cloud, model, or offer
 

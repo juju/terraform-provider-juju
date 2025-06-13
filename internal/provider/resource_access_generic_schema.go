@@ -22,7 +22,7 @@ type genericSchema map[string]schema.Attribute
 func baseAccessSchema() genericSchema {
 	return map[string]schema.Attribute{
 		"access": schema.StringAttribute{
-			Description: "Level of access to grant. Changing this value will replace the Terraform resource. Valid access levels are described at https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/reference/authorisation_model/#valid-relations",
+			Description: "Level of access to grant. Changing this value will replace the Terraform resource. Valid access levels are described at https://canonical-jaas-documentation.readthedocs-hosted.com/latest/howto/manage-permissions/#add-a-permission",
 			Required:    true,
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.RequiresReplace(),

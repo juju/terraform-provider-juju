@@ -136,7 +136,7 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "ubuntu-lite"
 	if testingCloud != LXDCloudTesting {
-		appName = "hello-kubecon"
+		appName = "coredns"
 	}
 
 	resource.ParallelTest(t, resource.TestCase{
@@ -168,7 +168,7 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 					return testingCloud != MicroK8sTesting, nil
 				},
 				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
-				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "19"),
+				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "165"),
 			},
 			{
 				Config: testAccResourceApplicationUpdates(modelName, 2, false, "machinename"),
@@ -475,35 +475,35 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// deploy charm without custom resource
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1/stable"),
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "latest/stable"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
 			},
 			{
 				// Add a custom resource
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1/stable", "grafana-image", "gatici/grafana:10"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "latest/stable", "coredns-image", "ghcr.io/canonical/test:6a873fb35b0170dfe49ed27ba8ee6feb8e475131"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:10"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.coredns-image", "ghcr.io/canonical/test:6a873fb35b0170dfe49ed27ba8ee6feb8e475131"),
 				),
 			},
 			{
 				// Add another custom resource
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1/stable", "grafana-image", "gatici/grafana:9"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "latest/stable", "coredns-image", "ghcr.io/canonical/test:ab0b183f22db2959e0350f54d92f9ed3583c4167"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:9"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.coredns-image", "ghcr.io/canonical/test:ab0b183f22db2959e0350f54d92f9ed3583c4167"),
 				),
 			},
 			{
 				// Add resource revision
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1/stable", "grafana-image", "61"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "latest/stable", "coredns-image", "69"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "61"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.coredns-image", "69"),
 				),
 			},
 			{
 				// Remove resource revision
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1/stable"),
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "latest/stable"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
@@ -529,35 +529,35 @@ func TestAcc_CustomResourceUpdatesMicrok8s(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// Deploy charm with a custom resource
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1/edge", "grafana-image", "gatici/grafana:9"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "latest/edge", "coredns-image", "ghcr.io/canonical/test:ab0b183f22db2959e0350f54d92f9ed3583c4167"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:9"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.coredns-image", "ghcr.io/canonical/test:ab0b183f22db2959e0350f54d92f9ed3583c4167"),
 				),
 			},
 			{
 				// Keep charm channel and update resource to another custom image
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1/edge", "grafana-image", "gatici/grafana:10"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "latest/edge", "coredns-image", "ghcr.io/canonical/test:6a873fb35b0170dfe49ed27ba8ee6feb8e475131"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:10"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.coredns-image", "ghcr.io/canonical/test:6a873fb35b0170dfe49ed27ba8ee6feb8e475131"),
 				),
 			},
 			{
 				// Update charm channel and update resource to a revision
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1/stable", "grafana-image", "59"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "latest/stable", "coredns-image", "59"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "59"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.coredns-image", "59"),
 				),
 			},
 			{
 				// Update charm channel and keep resource revision
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1/beta", "grafana-image", "59"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "latest/beta", "coredns-image", "59"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "59"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.coredns-image", "59"),
 				),
 			},
 			{
 				// Keep charm channel and remove resource revision
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1/beta"),
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "latest/beta"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
@@ -583,35 +583,35 @@ func TestAcc_CustomResourcesRemovedFromPlanMicrok8s(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// Deploy charm with a custom resource
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1/edge", "grafana-image", "gatici/grafana:9"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "latest/edge", "coredns-image", "ghcr.io/canonical/test:ab0b183f22db2959e0350f54d92f9ed3583c4167"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "gatici/grafana:9"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.coredns-image", "ghcr.io/canonical/test:ab0b183f22db2959e0350f54d92f9ed3583c4167"),
 				),
 			},
 			{
 				// Keep charm channel and remove custom resource
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1/edge"),
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "latest/edge"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
 			},
 			{
 				// Keep charm channel and add resource revision
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1/edge", "grafana-image", "60"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "latest/edge", "coredns-image", "60"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "60"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.coredns-image", "60"),
 				),
 			},
 			{
 				// Update charm channel and keep resource revision
-				Config: testAccResourceApplicationWithCustomResources(modelName, "1/stable", "grafana-image", "60"),
+				Config: testAccResourceApplicationWithCustomResources(modelName, "latest/stable", "coredns-image", "60"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "resources.grafana-image", "60"),
+					resource.TestCheckResourceAttr("juju_application.this", "resources.coredns-image", "60"),
 				),
 			},
 			{
 				// Update charm channel and remove resource revision
-				Config: testAccResourceApplicationWithoutCustomResources(modelName, "1/beta"),
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "latest/beta"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
@@ -1342,7 +1342,7 @@ resource "juju_application" "this" {
   model = juju_model.this.name
   name = "test-app"
   charm {
-    name     = "grafana-k8s"
+    name     = "coredns"
 	channel  = "%s"
   }
   trust = true
@@ -1367,7 +1367,7 @@ resource "juju_application" "this" {
   model = juju_model.this.name
   name = "test-app"
   charm {
-    name     = "grafana-k8s"
+    name     = "coredns"
 	channel  = "%s"
   }
   trust = true
@@ -1416,7 +1416,8 @@ func testAccResourceApplicationUpdates(modelName string, units int, expose bool,
 		  units = %d
 		  name = "test-app"
 		  charm {
-			name     = "hello-kubecon"
+			name     = "coredns"
+			revision = 165
 		  }
 		  trust = true
 		  %s
@@ -1455,7 +1456,7 @@ func testAccResourceApplicationUpdatesCharm(modelName string, channel string) st
 		  model = juju_model.this.name
 		  name = "test-app"
 		  charm {
-			name     = "hello-kubecon"
+			name     = "coredns"
 			channel = %q
 		  }
 		}
@@ -1717,6 +1718,7 @@ resource "juju_application" "{{.AppName}}" {
   charm {
     name = "postgresql-k8s"
     channel = "14/stable"
+	revision = 300
   }
 
   storage_directives = {
@@ -1810,10 +1812,10 @@ func TestAcc_ResourceApplication_ParallelDeploy(t *testing.T) {
 	var charm, channel string
 	switch testingCloud {
 	case MicroK8sTesting:
-		charm = "traefik-k8s"
-		channel = "1.0/candidate"
+		charm = "juju-qa-test"
+		channel = "latest/stable"
 	case LXDCloudTesting:
-		charm = "github-runner"
+		charm = "juju-qa-test"
 		channel = "latest/stable"
 	default:
 		t.Fatalf("unknown test cloud")
@@ -1871,9 +1873,9 @@ func TestAcc_ResourceApplication_CustomOCIForResource(t *testing.T) {
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with MIcroK8s")
 	}
-	modelName := acctest.RandomWithPrefix("tf-test-application-parallel-deploy")
-	charm := "hello-kubecon"
-	resourceName := "gosherve-image"
+	modelName := acctest.RandomWithPrefix("tf-test-custom-oci-resource")
+	charm := "coredns"
+	resourceName := "coredns-image"
 	ociImage := "ghcr.io/canonical/test:6a873fb35b0170dfe49ed27ba8ee6feb8e475131"
 	ociImage2 := "ghcr.io/canonical/test:ab0b183f22db2959e0350f54d92f9ed3583c4167"
 	resource.Test(t, resource.TestCase{

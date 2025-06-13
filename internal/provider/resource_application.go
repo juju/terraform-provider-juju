@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
@@ -29,13 +28,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"github.com/juju/clock"
 	"github.com/juju/errors"
 	"github.com/juju/juju/core/constraints"
 	jujustorage "github.com/juju/juju/storage"
-	"github.com/juju/retry"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 const (
@@ -626,7 +624,6 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	r.trace(fmt.Sprintf("create application resource %q", createResp.AppName))
-
 	readResp, err := r.client.Applications.ReadApplicationWithRetryOnNotFound(ctx, &juju.ReadApplicationInput{
 		ModelName: modelName,
 		AppName:   createResp.AppName,
@@ -708,7 +705,7 @@ func transformSizeToHumanizedFormat(size uint64) string {
 }
 
 func handleApplicationNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
-	if errors.As(err, &juju.ApplicationNotFoundError) {
+	if errors.Is(err, juju.ApplicationNotFoundError) {
 		// Application manually removed
 		st.RemoveResource(ctx)
 		return diag.Diagnostics{}
@@ -967,6 +964,9 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	var plan, state applicationResourceModel
+	// asserts are intended to be used after the application is update to
+	// assert the update has achieved its intended effect.
+	asserts := []wait.Assert[*juju.ReadApplicationResponse]{}
 
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -977,10 +977,6 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 
 	r.trace("Proposed update", applicationResourceModelForLogging(ctx, &plan))
 	r.trace("Current state", applicationResourceModelForLogging(ctx, &state))
-
-	// postUpdateAssertions are intended to be used after the application is update to
-	// assert the update has achieved its intended effect.
-	var postUpdateAssertions []func(context.Context, *juju.ReadApplicationResponse) error
 
 	updateApplicationInput := juju.UpdateApplicationInput{
 		ModelName: state.ModelName.ValueString(),
@@ -1106,7 +1102,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		updateApplicationInput.RemoveMachines = removeMachines
 
 		if len(planMachines) > 0 {
-			postUpdateAssertions = append(postUpdateAssertions, assertMachinesEqual(planMachines))
+			asserts = append(asserts, assertEqualsMachines(planMachines))
 		}
 	}
 
@@ -1189,13 +1185,17 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	readResp, err := r.waitForApplicationAssertions(
-		ctx,
-		&juju.ReadApplicationInput{
-			ModelName: updateApplicationInput.ModelName,
-			AppName:   updateApplicationInput.AppName,
+	readResp, err := wait.WaitFor(
+		wait.WaitForCfg[*juju.ReadApplicationInput, *juju.ReadApplicationResponse]{
+			Context: ctx,
+			GetData: r.client.Applications.ReadApplication,
+			Input: &juju.ReadApplicationInput{
+				ModelName: updateApplicationInput.ModelName,
+				AppName:   updateApplicationInput.AppName,
+			},
+			DataAssertions: asserts,
+			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError, juju.ApplicationNotFoundError, juju.StorageNotFoundError},
 		},
-		postUpdateAssertions,
 	)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read application resource after update, got error: %s", err))
@@ -1418,6 +1418,28 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete application, got error: %s", err))
 	}
+
+	err := wait.WaitForError(
+		wait.WaitForErrorCfg[*juju.ReadApplicationInput, *juju.ReadApplicationResponse]{
+			Context: ctx,
+			GetData: r.client.Applications.ReadApplication,
+			Input: &juju.ReadApplicationInput{
+				ModelName: modelName,
+				AppName:   appName,
+			},
+			ErrorToWait:    juju.ApplicationNotFoundError,
+			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError, juju.StorageNotFoundError},
+		},
+	)
+	if err != nil {
+		// AddWarning is used instead of AddError to make sure that the resource is removed from state.
+		resp.Diagnostics.AddWarning(
+			"Client Error",
+			fmt.Sprintf(`Unable to complete application %s deletion due to error %v, there might be dangling resources. 
+Make sure to manually delete them.`, appName, err))
+		return
+	}
+
 	r.trace(fmt.Sprintf("deleted application resource %q", state.ID.ValueString()))
 }
 
@@ -1473,64 +1495,20 @@ func applicationResourceModelForLogging(_ context.Context, app *applicationResou
 	return value
 }
 
-func assertMachinesEqual(planMachines []string) func(context.Context, *juju.ReadApplicationResponse) error {
-	return func(ctx context.Context, application *juju.ReadApplicationResponse) error {
-		appMachines := application.Machines
-		pms := make([]string, len(planMachines))
-		copy(pms, planMachines)
+func assertEqualsMachines(machinesToCompare []string) func(outputFromAPI *juju.ReadApplicationResponse) error {
+	return func(outputFromAPI *juju.ReadApplicationResponse) error {
+		machineFromAPI := outputFromAPI.Machines
 
-		slices.Sort(pms)
-		slices.Sort(appMachines)
+		pms := make([]string, len(machinesToCompare))
+		copy(pms, machinesToCompare)
 
-		if !slices.Equal(pms, appMachines) {
+		slices.Sort(machineFromAPI)
+		slices.Sort(machinesToCompare)
+
+		if !slices.Equal(machineFromAPI, machinesToCompare) {
 			return juju.NewRetryReadError("plan machines differ from application machines")
 		}
 
 		return nil
 	}
-}
-
-func (r *applicationResource) waitForApplicationAssertions(ctx context.Context, input *juju.ReadApplicationInput, assertions []func(context.Context, *juju.ReadApplicationResponse) error) (*juju.ReadApplicationResponse, error) {
-	var output *juju.ReadApplicationResponse
-	retryErr := retry.Call(retry.CallArgs{
-		Func: func() error {
-			var err error
-			output, err = r.client.Applications.ReadApplication(input)
-			if err != nil {
-				return err
-			}
-
-			for _, assertion := range assertions {
-				err = assertion(ctx, output)
-				if err != nil {
-					return err
-				}
-			}
-
-			return nil
-		},
-		IsFatalError: func(err error) bool {
-			if errors.As(err, &juju.ApplicationNotFoundError) ||
-				errors.As(err, &juju.StorageNotFoundError) ||
-				errors.As(err, &juju.RetryReadError) ||
-				strings.Contains(err.Error(), "connection refused") {
-				return false
-			}
-			return true
-		},
-		NotifyFunc: func(err error, attempt int) {
-			if attempt%4 == 0 {
-				message := fmt.Sprintf("waiting for application %q", input.AppName)
-				if attempt != 4 {
-					message = "still " + message
-				}
-				r.client.Applications.Debugf(message, map[string]interface{}{"err": err})
-			}
-		},
-		MaxDuration: 30 * time.Minute,
-		Delay:       time.Second,
-		Clock:       clock.WallClock,
-		Stop:        ctx.Done(),
-	})
-	return output, retryErr
 }
