@@ -118,7 +118,7 @@ resource "juju_application" "appone" {
 resource "juju_offer" "offerone" {
 	model            = juju_model.modelone.name
 	application_name = juju_application.appone.name
-	endpoint         = "sink"
+	endpoints         = ["sink"]
 }
 
 resource "juju_jaas_role" "test" {

@@ -33,7 +33,7 @@ type offersClient struct {
 
 type CreateOfferInput struct {
 	ApplicationName string
-	Endpoint        string
+	Endpoints       []string
 	ModelName       string
 	ModelOwner      string
 	OfferOwner      string
@@ -51,7 +51,7 @@ type ReadOfferInput struct {
 
 type ReadOfferResponse struct {
 	ApplicationName string
-	Endpoint        string
+	Endpoints       []string
 	ModelName       string
 	Name            string
 	OfferURL        string
@@ -128,7 +128,7 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 		return nil, append(errs, err)
 	}
 
-	result, err := client.Offer(modelUUID, input.ApplicationName, []string{input.Endpoint}, input.OfferOwner, offerName, "")
+	result, err := client.Offer(modelUUID, input.ApplicationName, input.Endpoints, input.OfferOwner, offerName, "")
 	if err != nil {
 		return nil, append(errs, err)
 	}
@@ -181,7 +181,9 @@ func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, erro
 	response.Name = result.OfferName
 	response.ApplicationName = result.ApplicationName
 	response.OfferURL = result.OfferURL
-	response.Endpoint = result.Endpoints[0].Name
+	for _, endpoint := range result.Endpoints {
+		response.Endpoints = append(response.Endpoints, endpoint.Name)
+	}
 	response.Users = result.Users
 
 	//no model name is returned but it can be parsed from the resulting offer URL to ensure parity
