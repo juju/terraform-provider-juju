@@ -480,6 +480,18 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
 			},
+			// In the next step we verify the plan has no changes. First waiting 30 seconds
+			// to avoid a race condition in Juju where updating the resource revision too
+			// quickly means that the change doesn't take immediate effect.
+			{
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "latest/stable"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
+				),
+				PreConfig: func() {
+					time.Sleep(30 * time.Second)
+				},
+			},
 			{
 				// Add a custom resource
 				Config: testAccResourceApplicationWithCustomResources(modelName, "latest/stable", "coredns-image", "ghcr.io/canonical/test:6a873fb35b0170dfe49ed27ba8ee6feb8e475131"),
