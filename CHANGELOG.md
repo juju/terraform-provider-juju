@@ -1,3 +1,35 @@
+## 0.20.0 (June 16, 2025)
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.4 release.
+
+ENHANCEMENTS
+
+* **BREAKING CHANGE** to the `juju_offer` schema. The `endpoint` field is field has been removed in favor of the `endpoints` field, which allows for definition of multiple endpoints in a single juju application offer [752](https://github.com/juju/terraform-provider-juju/pull/752) by @SimoneDutto.
+* Introduction of `juju_machine` annotations [748](https://github.com/juju/terraform-provider-juju/pull/748) by @alesstimec.
+* Introduction of waiting for changes to take effect [738](https://github.com/juju/terraform-provider-juju/pull/738) by SimoneDutto, followed up by [738](https://github.com/juju/terraform-provider-juju/pull/742) that introduces a wait for application deletion and [760](https://github.com/juju/terraform-provider-juju/pull/760) that introduces a wait for integration deletion.
+* Removal of the `juju_jaas_access_service_account` resource [759](https://github.com/juju/terraform-provider-juju/pull/759) by @kian99. Service account authentication can now be used with JAAS to upload cloud credentials directly to the controller. 
+
+
+BUG FIXES
+
+* Fix for scaling up applications [730](https://github.com/juju/terraform-provider-juju/pull/730) by @alesstimec.
+* Introduction of a custom type for `juju_machine` constraints [739](https://github.com/juju/terraform-provider-juju/pull/739) by @SimoneDutto, which fixes issues [#734](https://github.com/juju/terraform-provider-juju/issues/734) and [#729](https://github.com/juju/terraform-provider-juju/issues/729).
+
+DOCUMENTATION
+
+* Introduction of auto-generated RTD documentation [758](https://github.com/juju/terraform-provider-juju/pull/758) by @SimoneDutto.
+* JAAS-related documentation improvements [746](https://github.com/juju/terraform-provider-juju/pull/746) by @tmihoc.
+
+CI IMPROVEMENTS
+
+* Update to the acceptance test to upload cloud credentials to the controller at the start of test [737](https://github.com/juju/terraform-provider-juju/pull/737) by @kian99.
+* Allowing tests to diable waiting for changes to take effect [751](https://github.com/juju/terraform-provider-juju/pull/751) by @kian99.
+
+
 ## 0.19.0 (April 22, 2025)
 
 NOTES:
