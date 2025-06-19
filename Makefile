@@ -33,7 +33,7 @@ simplify:
 
 .PHONY: lint
 lint:
-## lint: run the go linter
+## lint: Run the go linter
 	@echo "Running go lint"
 	@golangci-lint run -c .golangci.yml
 
@@ -45,7 +45,7 @@ static-analysis:
 HAS_TERRAFORM := $(shell command -v terraform 2> /dev/null)
 .PHONY: docs
 docs:
-## docs: update the generated terraform docs.
+## docs: Update the generated terraform docs.
 ifneq ($(HAS_TERRAFORM),)
 	@echo "Generating docs"
 	@go generate ./...
@@ -105,3 +105,8 @@ install-dependencies: install-snap-dependencies
 ## install-dependencies: Install all the dependencies
 
 check: juju-unit-test
+
+.PHONY: update-ctrl
+## update-ctrl: Updates your ./vscode/settings.json with the current controller details
+update-ctrl:
+	./tools/update-current-controller.sh
