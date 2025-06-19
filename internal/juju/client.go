@@ -19,6 +19,7 @@ import (
 	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/api/connector"
+	"github.com/juju/juju/core/arch"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
@@ -118,9 +119,6 @@ func (j jujuModel) String() string {
 }
 
 type sharedClient struct {
-	controllerConfig ControllerConfiguration
-	waitForResources bool
-
 	modelUUIDcache map[string]jujuModel
 	modelUUIDmu    sync.Mutex
 
@@ -131,32 +129,47 @@ type sharedClient struct {
 
 	checkJAASOnce sync.Once
 	isJAAS        bool
+
+	// The following parameters are set when the client is created.
+
+	controllerConfig             ControllerConfiguration
+	waitForResources             bool
+	defaultTestModelArchitecture string
+}
+
+type ClientParams struct {
+	ControllerConfig ControllerConfiguration
+	// WaitForResources is used to determine if the client should wait for resources to be created or destroyed.
+	WaitForResources bool
+	// DefaultModelArchitecture is the default architecture to use when creating a model via CreateModel.
+	DefaultTestModelArchitecture arch.Arch
 }
 
 // NewClient returns a client which can talk to the juju controller
 // represented by controllerConfig. A context is required for logging in the
 // terraform framework.
-func NewClient(ctx context.Context, config ControllerConfiguration, waitForResources bool) (*Client, error) {
+func NewClient(ctx context.Context, p ClientParams) (*Client, error) {
 	if ctx == nil {
 		return nil, errors.NotValidf("missing context")
 	}
 	sc := &sharedClient{
-		controllerConfig: config,
-		waitForResources: waitForResources,
-		modelUUIDcache:   make(map[string]jujuModel),
-		modelStatusCache: cache.New(defaultModelStatusCacheInterval),
-		subCtx:           tflog.NewSubsystem(ctx, LogJujuClient),
+		controllerConfig:             p.ControllerConfig,
+		waitForResources:             p.WaitForResources,
+		defaultTestModelArchitecture: p.DefaultTestModelArchitecture,
+		modelUUIDcache:               make(map[string]jujuModel),
+		modelStatusCache:             cache.New(defaultModelStatusCacheInterval),
+		subCtx:                       tflog.NewSubsystem(ctx, LogJujuClient),
 	}
 	// Client ID and secret are only set when connecting to JAAS. Use this as a fallback
 	// value if connecting to the controller fails.
 	defaultJAASCheck := false
-	if config.ClientID != "" && config.ClientSecret != "" {
+	if p.ControllerConfig.ClientID != "" && p.ControllerConfig.ClientSecret != "" {
 		defaultJAASCheck = true
 	}
 
-	user := config.Username
-	if config.ClientID != "" && !strings.HasSuffix(config.ClientID, serviceAccountSuffix) {
-		user = fmt.Sprintf("%s%s", config.ClientID, serviceAccountSuffix)
+	user := p.ControllerConfig.Username
+	if p.ControllerConfig.ClientID != "" && !strings.HasSuffix(p.ControllerConfig.ClientID, serviceAccountSuffix) {
+		user = fmt.Sprintf("%s%s", p.ControllerConfig.ClientID, serviceAccountSuffix)
 	}
 
 	return &Client{
@@ -202,23 +215,16 @@ func (sc *sharedClient) IsJAAS(defaultVal bool) bool {
 	return sc.isJAAS
 }
 
-func getConnectionTimeout() time.Duration {
-	if timeout, ok := os.LookupEnv(customTimeoutKey); ok {
-		if t, err := strconv.Atoi(timeout); err == nil && t > 0 {
-			return time.Duration(t) * time.Second
-		}
-		tflog.Warn(context.Background(), "Invalid JUJU_CONNECTION_TIMEOUT value, using default", map[string]interface{}{
-			"JUJU_CONNECTION_TIMEOUT": timeout,
-			"default":                 connectionTimeout,
-		})
-	}
-	return connectionTimeout
-}
-
 // WaitForResource returns a bool indicating whether the client
 // should wait for resources to be available/destroyed before proceeding.
 func (sc *sharedClient) WaitForResource() bool {
 	return sc.waitForResources
+}
+
+// DefaultTestModelArchitecture returns the default architecture to use when creating a model.
+// This is used in tests to ensure that the model is created with a specific architecture.
+func (sc *sharedClient) DefaultTestModelArchitecture() arch.Arch {
+	return sc.defaultTestModelArchitecture
 }
 
 // GetConnection returns a juju connection for use creating juju
@@ -233,6 +239,19 @@ func (sc *sharedClient) GetConnection(modelIdentifier *string) (api.Connection, 
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	getConnectionTimeout := func() time.Duration {
+		if timeout, ok := os.LookupEnv(customTimeoutKey); ok {
+			if t, err := strconv.Atoi(timeout); err == nil && t > 0 {
+				return time.Duration(t) * time.Second
+			}
+			tflog.Warn(context.Background(), "Invalid JUJU_CONNECTION_TIMEOUT value, using default", map[string]interface{}{
+				"JUJU_CONNECTION_TIMEOUT": timeout,
+				"default":                 connectionTimeout,
+			})
+		}
+		return connectionTimeout
 	}
 
 	dialOptions := func(do *api.DialOpts) {

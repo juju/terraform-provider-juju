@@ -12,6 +12,7 @@ import (
 	"github.com/juju/juju/api/base"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/client/modelmanager"
+	"github.com/juju/juju/core/arch"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/rpc/params"
@@ -187,20 +188,31 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 	// Add a model object on the client internal to the provider
 	c.AddModel(modelInfo.Name, modelInfo.UUID, modelInfo.Type)
 
-	// set constraints when required
-	if input.Constraints.String() == "" {
+	// Set constraints only when they are provided, including via the environment variable (DefaultTestModelArchitecture) for tests.
+	if input.Constraints.String() == "" && c.SharedClient.DefaultTestModelArchitecture() == "" {
 		return resp, nil
 	}
 
-	// we have to set constraints ...
-	// establish a new connection with the created model through the modelconfig api to set constraints
+	// As we're going to set constraints now, we open a model connection,
+	// allowing us to set constraints for the newly created model.
+
 	connModel, err := c.GetConnection(&modelName)
 	if err != nil {
 		return resp, err
 	}
-	defer func() { _ = conn.Close() }()
-
+	defer conn.Close()
 	modelClient := modelconfig.NewClient(connModel)
+
+	// When running tests where the architecture isn't amd64, we must set this architecture
+	// constraint within the model configuration such that each deployed application
+	// will have the correct architecture constraint and successfully deploy. If this
+	// is not set, Juju returns an error stating the architectures do not match.
+	defaultArch := c.SharedClient.DefaultTestModelArchitecture()
+	if defaultArch != "" {
+		normalisedArch := arch.NormaliseArch(defaultArch)
+		input.Constraints.Arch = &normalisedArch
+	}
+
 	err = modelClient.SetModelConstraints(input.Constraints)
 	if err != nil {
 		return resp, err

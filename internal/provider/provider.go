@@ -28,13 +28,14 @@ import (
 )
 
 const (
-	JujuControllerEnvKey     = "JUJU_CONTROLLER_ADDRESSES"
-	JujuUsernameEnvKey       = "JUJU_USERNAME"
-	JujuPasswordEnvKey       = "JUJU_PASSWORD"
-	JujuCACertEnvKey         = "JUJU_CA_CERT"
-	JujuClientIDEnvKey       = "JUJU_CLIENT_ID"
-	JujuClientSecretEnvKey   = "JUJU_CLIENT_SECRET"
-	SkipFailedDeletionEnvKey = "JUJU_SKIP_FAILED_DELETION"
+	JujuControllerEnvKey               = "JUJU_CONTROLLER_ADDRESSES"
+	JujuUsernameEnvKey                 = "JUJU_USERNAME"
+	JujuPasswordEnvKey                 = "JUJU_PASSWORD"
+	JujuCACertEnvKey                   = "JUJU_CA_CERT"
+	JujuClientIDEnvKey                 = "JUJU_CLIENT_ID"
+	JujuClientSecretEnvKey             = "JUJU_CLIENT_SECRET"
+	SkipFailedDeletionEnvKey           = "JUJU_SKIP_FAILED_DELETION"
+	DefaultTestModelArchitectureEnvKey = "JUJU_DEFAULT_TEST_MODEL_ARCHITECTURE"
 
 	JujuController     = "controller_addresses"
 	JujuUsername       = "username"
@@ -104,16 +105,23 @@ func getEnvVar(field string) types.String {
 // Ensure jujuProvider satisfies various provider interfaces.
 var _ provider.Provider = &jujuProvider{}
 
+type ProviderParams struct {
+	// WaitForResources is used to determine if the provider should wait for
+	// resources to be created/destroyed before proceeding.
+	WaitForResources bool
+}
+
 // NewJujuProvider returns a framework style terraform provider.
-func NewJujuProvider(version string, waitForResources bool) provider.Provider {
+func NewJujuProvider(version string, p ProviderParams) provider.Provider {
 	return &jujuProvider{
 		version:          version,
-		waitForResources: waitForResources,
+		waitForResources: p.WaitForResources,
 	}
 }
 
 type jujuProvider struct {
 	version string
+
 	// waitForResources is used to determine if the provider should wait for
 	// resources to be created/destroyed before proceeding.
 	waitForResources bool
@@ -284,7 +292,13 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		ClientID:            data.ClientID.ValueString(),
 		ClientSecret:        data.ClientSecret.ValueString(),
 	}
-	client, err := juju.NewClient(ctx, controllerConfig, p.waitForResources)
+	modelArch := os.Getenv(DefaultTestModelArchitectureEnvKey)
+	clientParams := juju.ClientParams{
+		ControllerConfig:             controllerConfig,
+		WaitForResources:             p.waitForResources,
+		DefaultTestModelArchitecture: modelArch,
+	}
+	client, err := juju.NewClient(ctx, clientParams)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create juju client, got error: %s", err))
 		return
