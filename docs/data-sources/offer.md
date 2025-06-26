@@ -28,7 +28,7 @@ data "juju_offer" "this" {
 ### Read-Only
 
 - `application_name` (String) The name of the application.
-- `endpoints` (Set of String) The endpoint names. Changing this value will cause the offer to be destroyed and recreated by terraform.
+- `endpoints` (Set of String) The endpoint names.
 - `id` (String) The ID of this resource.
 - `model` (String) The name of the model to operate in.
 - `name` (String) The name of the offer.

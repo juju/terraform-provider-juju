@@ -16,7 +16,7 @@ A resource that represent a Juju Offer.
 resource "juju_offer" "myoffer" {
   model            = juju_model.development.name
   application_name = juju_application.percona-cluster.name
-  endpoint         = "server"
+  endpoints        = ["server"]
 }
 
 // an offer can then be used in an cross model integration as below:
