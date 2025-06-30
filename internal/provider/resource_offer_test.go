@@ -256,6 +256,7 @@ resource "juju_application" "this" {
 	charm {
 		name = "content-cache-k8s"
 		revision = 49
+		channel = "latest/stable"
 	}
 }
 
@@ -275,6 +276,7 @@ resource "juju_application" "that" {
 	charm {
 	    name = "grafana-agent-k8s"
 		revision = 113
+		channel = "1/stable"
     }
 }
 
@@ -296,6 +298,7 @@ resource "juju_application" "toc" {
 	charm {
 	    name = "grafana-agent-k8s"
 		revision = 113
+		channel = "1/stable"
     }
 }
 
