@@ -122,6 +122,39 @@ func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
 						Source:            "juju/juju",
 					},
 				},
+				Config: testAccResourceOffer(modelName, "series = \"focal\""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
+					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
+				),
+			},
+			{
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceOffer(modelName, "series = \"focal\""),
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceOffer_UpgradeProvider_Schema_v0_To_v1(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-offer")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
+
+		Steps: []resource.TestStep{
+			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						// This is the version with `endpoint` instead of `endpoints`
+						VersionConstraint: "0.19.0",
+						Source:            "juju/juju",
+					},
+				},
 				Config: testAccResourceOfferv0(modelName, "series = \"focal\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
@@ -132,7 +165,6 @@ func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccResourceOffer(modelName, "series = \"focal\""),
-				PlanOnly:                 true,
 			},
 		},
 	})
