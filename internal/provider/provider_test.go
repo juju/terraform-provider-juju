@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	TestProviderStableVersion = "0.18.0"
+	TestProviderStableVersion = "0.20.0"
 	isJaasEnvKey              = "IS_JAAS"
 )
 

@@ -69,10 +69,17 @@ jobs:
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
         run: |
           sudo snap install microk8s --channel=1.32-strict/stable
+          sudo mkdir -p /var/snap/microk8s/current/args/certs.d/docker.io
+          cat <<EOF | sudo tee /var/snap/microk8s/current/args/certs.d/docker.io/hosts.toml
+          server = "$DOCKERHUB_MIRROR"
+          [host."$DOCKERHUB_MIRROR"]
+          capabilities = ["pull", "resolve"]
+          EOF
+          sudo microk8s stop
+          sudo microk8s start
           sudo usermod -a -G snap_microk8s $USER
           sudo chown -R $USER ~/.kube
-          sudo microk8s.enable dns hostpath-storage
-          sudo microk8s.enable dns local-storage
+          sudo microk8s.enable dns hostpath-storage local-storage
           sudo -g snap_microk8s -E microk8s status --wait-ready --timeout=600
       - name: Create additional networks when testing with LXD
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
