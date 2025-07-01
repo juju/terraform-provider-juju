@@ -519,6 +519,14 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
+				// We need to wait 30 seconds to let the charm's agent to settle. Otherwise,
+				// after we try to destroy the application the agent can go into `lost` state,
+				// making the test waits on application destroy until the timeout is reached.
+				// This is not an issue because if we reach the timeout we don't error out,
+				// but it slows down the test suite.
+				PreConfig: func() {
+					time.Sleep(30 * time.Second)
+				},
 			},
 		},
 	})
