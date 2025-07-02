@@ -69,9 +69,8 @@ func (d *offerDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 			},
 			"endpoints": schema.SetAttribute{
 				ElementType: types.StringType,
-				Description: "The endpoint names. Changing this value will cause the offer" +
-					" to be destroyed and recreated by terraform.",
-				Computed: true,
+				Description: "The endpoint names.",
+				Computed:    true,
 			},
 			// ID required by the testing framework
 			"id": schema.StringAttribute{
