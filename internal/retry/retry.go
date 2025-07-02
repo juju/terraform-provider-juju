@@ -9,13 +9,16 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
+// Do is a function type to execute an operation.
 type Do[I any, D any] = wait.GetData[I, D]
 
+// Assert is a function type that takes data and returns an error if the assertion fails.
 type Assert[D any] = wait.Assert[D]
 
+// RetryConf is a struct to configure the retry behavior.
 type RetryConf = wait.RetryConf
 
-// WaitForCfg is a configuration structure for the WaitFor function.
+// RetryOnErrorsCfg is a configuration structure for the RetryOnErrors function.
 type RetryOnErrorsCfg[I any, D any] struct {
 	Context context.Context
 

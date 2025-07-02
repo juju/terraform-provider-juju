@@ -4,5 +4,4 @@
 // Package retry provides utilities for retry on conditions.
 // It includes functions to retry for specific data conditions or errors,
 // with support for retrying operations and handling non-fatal errors.
-
 package retry
