@@ -45,7 +45,6 @@ jobs:
         action-operator:
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "2.9" }
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "3" }
-          - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.32-strict", juju: "3.1" }
           - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.32-strict", juju: "3" }
     timeout-minutes: 90
     steps:
@@ -79,7 +78,7 @@ jobs:
           sudo microk8s start
           sudo usermod -a -G snap_microk8s $USER
           sudo chown -R $USER ~/.kube
-          sudo microk8s.enable dns hostpath-storage local-storage
+          sudo microk8s.enable dns hostpath-storage
           sudo -g snap_microk8s -E microk8s status --wait-ready --timeout=600
       - name: Create additional networks when testing with LXD
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
@@ -109,7 +108,7 @@ jobs:
       - env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.action-operator.cloud }}
-        run: go test -parallel 1 -timeout 90m -v -cover ./internal/provider/
+        run: go test -parallel 3 -timeout 90m -v -cover ./internal/provider/
         timeout-minutes: 90
 
   # Run acceptance tests in a matrix with Terraform CLI versions
