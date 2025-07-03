@@ -75,6 +75,7 @@ type ReadMachineResponse struct {
 	Base        string
 	Constraints string
 	Series      string
+	Hostname    string
 }
 
 type DestroyMachineInput struct {
@@ -447,6 +448,7 @@ func (c *machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineRespons
 	}
 	response.ID = machineStatus.Id
 	response.Base, response.Series, err = baseAndSeriesFromParams(&machineStatus.Base)
+	response.Hostname = machineStatus.Hostname
 	if err != nil {
 		return response, err
 	}
