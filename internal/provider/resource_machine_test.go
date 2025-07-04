@@ -34,10 +34,11 @@ func TestAcc_ResourceMachine(t *testing.T) {
 			{
 				ImportStateVerify: true,
 				ImportState:       true,
-				// We ignore the hostname and wait_for_hostname during import because
-				// we assume hostname is populated by the time somebody is importing it.
-				// However, in our tests suite we don't always wait for the hostname to be set,
-				// so we ignore it here.
+				// We ignore the hostname and wait_for_hostname during ImportVerify in our tests
+				// because it is very unlikely it matches the value from the state, since during
+				// creation we didn't wait for the hostname to be populated, but it might be the
+				// case that during import is populated.
+				// This is just an issue that you might face in tests, so it is fine to ignore it.
 				ImportStateVerifyIgnore: []string{"wait_for_hostname", "hostname"},
 				ResourceName:            "juju_machine.this",
 			},
@@ -95,8 +96,10 @@ func TestAcc_ResourceMachine_Minimal(t *testing.T) {
 			{
 				ImportStateVerify: true,
 				// We ignore the hostname and wait_for_hostname during ImportVerify in our tests
-				// we don't wait for the hostname to be populated, however during the import
-				// we set it.
+				// because it is very unlikely it matches the value from the state, since during
+				// creation we didn't wait for the hostname to be populated, but it might be the
+				// case that during import it is populated.
+				// This is just an issue that you might face in tests, so it is fine to ignore it.
 				ImportStateVerifyIgnore: []string{"wait_for_hostname", "hostname"},
 				ImportState:             true,
 				ResourceName:            resourceName,
