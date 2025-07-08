@@ -17,6 +17,7 @@ import (
 	k8scloud "github.com/juju/juju/caas/kubernetes/cloud"
 	"github.com/juju/names/v5"
 	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 type kubernetesCloudsClient struct {
@@ -26,11 +27,11 @@ type kubernetesCloudsClient struct {
 }
 
 type CreateKubernetesCloudInput struct {
-	Name                  string
-	KubernetesContextName string
-	KubernetesConfig      string
-	ParentCloudName       string
-	ParentCloudRegion     string
+	Name                 string
+	KubernetesConfig     string
+	ParentCloudName      string
+	ParentCloudRegion    string
+	CreateServiceAccount bool
 }
 
 type ReadKubernetesCloudInput struct {
@@ -45,11 +46,11 @@ type ReadKubernetesCloudOutput struct {
 }
 
 type UpdateKubernetesCloudInput struct {
-	Name                  string
-	KubernetesContextName string
-	KubernetesConfig      string
-	ParentCloudName       string
-	ParentCloudRegion     string
+	Name                 string
+	KubernetesConfig     string
+	ParentCloudName      string
+	ParentCloudRegion    string
+	CreateServiceAccount bool
 }
 
 type DestroyKubernetesCloudInput struct {
@@ -82,27 +83,9 @@ func (c *kubernetesCloudsClient) CreateKubernetesCloud(input *CreateKubernetesCl
 	defer func() { _ = conn.Close() }()
 
 	kubernetesAPIClient := c.getKubernetesCloudAPIClient(conn)
-
-	credentialUID, err := getNewCredentialUID()
-	if err != nil {
-		return "", errors.Annotate(err, "generating new credential UID")
-	}
-
-	conf, err := clientcmd.NewClientConfigFromBytes([]byte(input.KubernetesConfig))
+	k8sConf, err := createKubernetesConfig([]byte(input.KubernetesConfig), input.CreateServiceAccount)
 	if err != nil {
 		return "", errors.Annotate(err, "parsing kubernetes configuration data")
-	}
-
-	k8sConf, err := conf.RawConfig()
-	if err != nil {
-		return "", errors.Annotate(err, "fetching kubernetes configuration")
-	}
-
-	var k8sContextName string
-	if input.KubernetesContextName == "" {
-		k8sContextName = k8sConf.CurrentContext
-	} else {
-		k8sContextName = input.KubernetesContextName
 	}
 
 	var hostCloudRegion string
@@ -111,27 +94,14 @@ func (c *kubernetesCloudsClient) CreateKubernetesCloud(input *CreateKubernetesCl
 	} else {
 		hostCloudRegion = k8s.K8sCloudOther
 	}
-
-	credResolver := clientconfig.GetJujuAdminServiceAccountResolver(jujuclock.WallClock)
-
-	k8sConfWithCreds, err := credResolver(credentialUID, &k8sConf, k8sContextName)
-	if err != nil {
-		return "", errors.Annotate(err, "resolving k8s credential")
-	}
-
 	newCloud, err := k8scloud.CloudFromKubeConfigContext(
-		k8sContextName,
-		k8sConfWithCreds,
+		k8sConf.CurrentContext,
+		k8sConf,
 		k8scloud.CloudParamaters{
 			Name:            input.Name,
 			HostCloudRegion: hostCloudRegion,
 		},
 	)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-
-	newCredential, err := k8scloud.CredentialFromKubeConfigContext(k8sContextName, k8sConfWithCreds)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
@@ -151,12 +121,48 @@ func (c *kubernetesCloudsClient) CreateKubernetesCloud(input *CreateKubernetesCl
 		return "", errors.Annotate(err, "getting cloud credential tag")
 	}
 
+	newCredential, err := k8scloud.CredentialFromKubeConfigContext(k8sConf.CurrentContext, k8sConf)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
 	err = kubernetesAPIClient.AddCredential(cloudCredTag.String(), newCredential)
 	if err != nil {
 		return "", errors.Annotate(err, "adding kubernetes cloud credential")
 	}
 
 	return credentialName, nil
+}
+
+// createKubernetesConfig creates a Kubernetes configuration from the provided config data.
+// If createServiceAccount is true, it will create or get the Juju admin service account credentials.
+// If createServiceAccount is false, it will use the credentials already present in the config data.
+func createKubernetesConfig(config []byte, createServiceAccount bool) (*clientcmdapi.Config, error) {
+	conf, err := clientcmd.NewClientConfigFromBytes(config)
+	if err != nil {
+		return nil, errors.Annotate(err, "parsing kubernetes configuration data")
+	}
+
+	k8sConf, err := conf.RawConfig()
+	if err != nil {
+		return nil, errors.Annotate(err, "fetching kubernetes configuration")
+	}
+
+	if !createServiceAccount {
+		return &k8sConf, nil
+	}
+
+	// If createServiceAccount is true, we need to create or get the Juju admin service account credentials and update the config.
+	credentialUUID, err := getNewCredentialUID()
+	if err != nil {
+		return nil, errors.Annotate(err, "generating new credential UID")
+	}
+	credResolver := clientconfig.GetJujuAdminServiceAccountResolver(jujuclock.WallClock)
+	k8sConfWithCreds, err := credResolver(credentialUUID, &k8sConf, k8sConf.CurrentContext)
+	if err != nil {
+		return nil, errors.Annotate(err, "resolving k8s credential")
+	}
+
+	return k8sConfWithCreds, nil
 }
 
 // ReadKubernetesCloud reads a Kubernetes cloud with juju cloud facade.
@@ -215,22 +221,9 @@ func (c *kubernetesCloudsClient) UpdateKubernetesCloud(input UpdateKubernetesClo
 	defer func() { _ = conn.Close() }()
 
 	kubernetesAPIClient := c.getKubernetesCloudAPIClient(conn)
-
-	conf, err := clientcmd.NewClientConfigFromBytes([]byte(input.KubernetesConfig))
+	k8sConf, err := createKubernetesConfig([]byte(input.KubernetesConfig), input.CreateServiceAccount)
 	if err != nil {
 		return errors.Annotate(err, "parsing kubernetes configuration data")
-	}
-
-	apiConf, err := conf.RawConfig()
-	if err != nil {
-		return errors.Annotate(err, "fetching kubernetes configuration")
-	}
-
-	var k8sContextName string
-	if input.KubernetesContextName == "" {
-		k8sContextName = apiConf.CurrentContext
-	} else {
-		k8sContextName = input.KubernetesContextName
 	}
 
 	var hostCloudRegion string
@@ -241,8 +234,8 @@ func (c *kubernetesCloudsClient) UpdateKubernetesCloud(input UpdateKubernetesClo
 	}
 
 	newCloud, err := k8scloud.CloudFromKubeConfigContext(
-		k8sContextName,
-		&apiConf,
+		k8sConf.CurrentContext,
+		k8sConf,
 		k8scloud.CloudParamaters{
 			Name:            input.Name,
 			HostCloudRegion: hostCloudRegion,
