@@ -61,6 +61,19 @@ jobs:
           sudo rm -rf /etc/docker
           sudo apt-get autoremove -y --purge  docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc
           sudo snap install docker --channel latest/edge
+      - name: Set DOCKERHUB_MIRROR.
+        run: |
+          sudo snap install jq
+          # If the file exists, use jq to append/merge the registry-mirrors entry; otherwise, create it.
+          if [ -f /var/snap/docker/current/config/daemon.json ]; then
+          sudo jq --arg mirror "$DOCKERHUB_MIRROR" '
+            .["registry-mirrors"] = (.["registry-mirrors"] // []) + [$mirror]
+          ' /var/snap/docker/current/config/daemon.json | sudo tee /var/snap/docker/current/config/daemon.json.tmp
+          sudo mv /var/snap/docker/current/config/daemon.json.tmp /var/snap/docker/current/config/daemon.json
+          else
+          echo '{"registry-mirrors": ["'"$DOCKERHUB_MIRROR"'"]}' | sudo tee /var/snap/docker/current/config/daemon.json
+          fi
+          sudo snap restart docker
       # Starting JAAS will start the JIMM controller and dependencies and create a Juju controller on LXD and connect it to JIMM.
       - name: Setup JAAS
         uses: canonical/jimm/.github/actions/test-server@v3
