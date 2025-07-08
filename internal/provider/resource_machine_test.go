@@ -34,7 +34,43 @@ func TestAcc_ResourceMachine(t *testing.T) {
 			{
 				ImportStateVerify: true,
 				ImportState:       true,
-				ResourceName:      "juju_machine.this",
+				// We ignore the hostname and wait_for_hostname during ImportVerify in our tests
+				// because it is very unlikely it matches the value from the state, since during
+				// creation we didn't wait for the hostname to be populated, but it might be the
+				// case that during import is populated.
+				// This is just an issue that you might face in tests, so it is fine to ignore it.
+				ImportStateVerifyIgnore: []string{"wait_for_hostname", "hostname"},
+				ResourceName:            "juju_machine.this",
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceMachineWaitForHostname(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-machine-wait-for-hostname")
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceMachineWaitForHostname(modelName, "base = \"ubuntu@22.04\""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
+					resource.TestCheckResourceAttr("juju_machine.this", "series", "jammy"),
+					resource.TestCheckResourceAttr("juju_machine.this", "base", "ubuntu@22.04"),
+					resource.TestCheckResourceAttrSet("juju_machine.this", "hostname"),
+				),
+			},
+			{
+				ImportState:       true,
+				ImportStateVerify: true,
+				// We ignore wait_for_hostname because we don't set it during import.
+				ImportStateVerifyIgnore: []string{"wait_for_hostname"},
+				ResourceName:            "juju_machine.this",
 			},
 		},
 	})
@@ -59,8 +95,14 @@ func TestAcc_ResourceMachine_Minimal(t *testing.T) {
 			},
 			{
 				ImportStateVerify: true,
-				ImportState:       true,
-				ResourceName:      resourceName,
+				// We ignore the hostname and wait_for_hostname during ImportVerify in our tests
+				// because it is very unlikely it matches the value from the state, since during
+				// creation we didn't wait for the hostname to be populated, but it might be the
+				// case that during import it is populated.
+				// This is just an issue that you might face in tests, so it is fine to ignore it.
+				ImportStateVerifyIgnore: []string{"wait_for_hostname", "hostname"},
+				ImportState:             true,
+				ResourceName:            resourceName,
 			},
 		},
 	})
@@ -151,6 +193,21 @@ resource "juju_machine" "this" {
 `, modelName, operatingSystem)
 }
 
+func testAccResourceMachineWaitForHostname(modelName, operatingSystem string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_machine" "this" {
+	name = "this_machine"
+	model = juju_model.this.name
+	wait_for_hostname = true
+	%s
+}
+`, modelName, operatingSystem)
+}
+
 func TestAcc_ResourceMachine_AddMachine_Edge(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
@@ -179,7 +236,7 @@ func TestAcc_ResourceMachine_AddMachine_Edge(t *testing.T) {
 			{
 				ImportStateVerify:       true,
 				ImportState:             true,
-				ImportStateVerifyIgnore: []string{"ssh_address", "public_key_file", "private_key_file"},
+				ImportStateVerifyIgnore: []string{"ssh_address", "public_key_file", "private_key_file", "hostname", "wait_for_hostname"},
 				ResourceName:            "juju_machine.this_machine",
 			},
 		},

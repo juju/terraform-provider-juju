@@ -43,3 +43,4 @@ Juju's
 authorization
 OAuth
 boolean
+hostname
