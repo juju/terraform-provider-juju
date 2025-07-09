@@ -91,6 +91,40 @@ func TestAcc_ResourceApplication(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceApplication_ConstraintsNormalization(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationConstraints(modelName, "arch=amd64 cores=1 mem=4096M"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 cores=1 mem=4096M"),
+					resource.TestCheckResourceAttr("juju_application.this", "machines.#", "1"),
+					resource.TestCheckResourceAttr("juju_application.this", "machines.0", "0"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationConstraints(modelName, "mem=4096M cores=1 arch=amd64"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_application.this", "constraints", "mem=4096M cores=1 arch=amd64"),
+					// assert that machines have not changed due to changed order in constraints
+					resource.TestCheckResourceAttr("juju_application.this", "machines.#", "1"),
+					resource.TestCheckResourceAttr("juju_application.this", "machines.0", "0"),
+				),
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application-scale-up")
 	appName := "test-app"
@@ -1531,7 +1565,7 @@ resource "juju_model" "this" {
 
 resource "juju_application" "this" {
   model = juju_model.this.name
-  units = 0
+  units = 1
   name = "test-app"
   charm {
     name     = "ubuntu-lite"
