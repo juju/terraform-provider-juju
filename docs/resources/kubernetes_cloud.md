@@ -39,6 +39,7 @@ resource "juju_model" "my-model" {
 - `kubernetes_config` (String, Sensitive) The kubernetes config file path for the cloud. Cloud credentials will be added to the Juju controller for you.
 - `parent_cloud_name` (String) The parent cloud name, for adding a k8s cluster from an existing cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.
 - `parent_cloud_region` (String) The parent cloud region name, for adding a k8s cluster from an existing cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.
+- `skip_service_account_creation` (Boolean) If set to true, the Juju Terraform provider will not create a service account and associated role within the K8s cluster and override the authentication info in the K8s config. This way it does not need to connect to the K8s API when adding a k8s cloud.
 
 ### Read-Only
 

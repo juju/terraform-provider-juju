@@ -34,11 +34,12 @@ type kubernetesCloudResource struct {
 }
 
 type kubernetesCloudResourceModel struct {
-	CloudName         types.String `tfsdk:"name"`
-	CloudCredential   types.String `tfsdk:"credential"`
-	KubernetesConfig  types.String `tfsdk:"kubernetes_config"`
-	ParentCloudName   types.String `tfsdk:"parent_cloud_name"`
-	ParentCloudRegion types.String `tfsdk:"parent_cloud_region"`
+	CloudName                  types.String `tfsdk:"name"`
+	CloudCredential            types.String `tfsdk:"credential"`
+	KubernetesConfig           types.String `tfsdk:"kubernetes_config"`
+	ParentCloudName            types.String `tfsdk:"parent_cloud_name"`
+	ParentCloudRegion          types.String `tfsdk:"parent_cloud_region"`
+	SkipServiceAccountCreation types.Bool   `tfsdk:"skip_service_account_creation"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -107,6 +108,11 @@ func (r *kubernetesCloudResource) Schema(_ context.Context, req resource.SchemaR
 				Description: "The parent cloud region name, for adding a k8s cluster from an existing cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.",
 				Optional:    true,
 			},
+			"skip_service_account_creation": schema.BoolAttribute{
+				Description: "If set to true, the Juju Terraform provider will not create a service account and associated role within the K8s cluster and override the authentication info in the K8s config. " +
+					"This way it does not need to connect to the K8s API when adding a k8s cloud.",
+				Optional: true,
+			},
 			"id": schema.StringAttribute{
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
@@ -136,10 +142,11 @@ func (r *kubernetesCloudResource) Create(ctx context.Context, req resource.Creat
 	// Create the kubernetes cloud.
 	cloudCredentialName, err := r.client.Clouds.CreateKubernetesCloud(
 		&juju.CreateKubernetesCloudInput{
-			Name:              plan.CloudName.ValueString(),
-			KubernetesConfig:  plan.KubernetesConfig.ValueString(),
-			ParentCloudName:   plan.ParentCloudName.ValueString(),
-			ParentCloudRegion: plan.ParentCloudRegion.ValueString(),
+			Name:                 plan.CloudName.ValueString(),
+			KubernetesConfig:     plan.KubernetesConfig.ValueString(),
+			ParentCloudName:      plan.ParentCloudName.ValueString(),
+			ParentCloudRegion:    plan.ParentCloudRegion.ValueString(),
+			CreateServiceAccount: !plan.SkipServiceAccountCreation.ValueBool(),
 		},
 	)
 	if err != nil {
@@ -215,10 +222,11 @@ func (r *kubernetesCloudResource) Update(ctx context.Context, req resource.Updat
 	// Update the kubernetes cloud.
 	err := r.client.Clouds.UpdateKubernetesCloud(
 		juju.UpdateKubernetesCloudInput{
-			Name:              plan.CloudName.ValueString(),
-			KubernetesConfig:  plan.KubernetesConfig.ValueString(),
-			ParentCloudName:   plan.ParentCloudName.ValueString(),
-			ParentCloudRegion: plan.ParentCloudRegion.ValueString(),
+			Name:                 plan.CloudName.ValueString(),
+			KubernetesConfig:     plan.KubernetesConfig.ValueString(),
+			ParentCloudName:      plan.ParentCloudName.ValueString(),
+			ParentCloudRegion:    plan.ParentCloudRegion.ValueString(),
+			CreateServiceAccount: !plan.SkipServiceAccountCreation.ValueBool(),
 		},
 	)
 	if err != nil {
