@@ -20,9 +20,14 @@ func TestAcc_ResourceKubernetesCloud(t *testing.T) {
 	}
 	cloudName := acctest.RandomWithPrefix("tf-test-k8scloud")
 
+	createModel := true
 	jaasTest := false
 	if _, ok := os.LookupEnv("IS_JAAS"); ok {
 		jaasTest = true
+		// We don't create the model in JAAS tests because atm we can't remove a cloud if it is used by a model.
+		// In Juju if you don't specify a cloud, it picks the controller's cloud, but JAAS doesn't and returns an error if multiple
+		// clouds are available, which is the case because we don't remove them after the test.
+		createModel = false
 	}
 
 	resource.ParallelTest(t, resource.TestCase{
@@ -30,12 +35,16 @@ func TestAcc_ResourceKubernetesCloud(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceKubernetesCloud(cloudName, "", jaasTest, false, true),
+				Config: testAccResourceKubernetesCloud(cloudName, "", jaasTest, false, createModel),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
 				),
 			},
 			{
+				// We skip this step if we don't create the model, because we can destroy the cloud.
+				SkipFunc: func() (bool, error) {
+					return !createModel, nil
+				},
 				// This step we leverage `removed` to remove the cloud from the state, so we don't issue
 				// a `Destroy` on the cloud, which would fail with "cloud is used by 1 model".
 				// This is a bug in the provider that should be solved once we wait on model's deletion.
@@ -74,9 +83,14 @@ func TestAcc_ResourceKubernetesCloudWithoutServiceAccount(t *testing.T) {
 	}
 	cloudName := acctest.RandomWithPrefix("tf-test-k8scloud")
 
+	createModel := true
 	jaasTest := false
 	if _, ok := os.LookupEnv("IS_JAAS"); ok {
 		jaasTest = true
+		// We don't create the model in JAAS tests because atm we can't remove a cloud if it is used by a model.
+		// In Juju if you don't specify a cloud, it picks the controller's cloud, but JAAS doesn't and returns an error if multiple
+		// clouds are available, which is the case because we don't remove them after the test.
+		createModel = false
 	}
 
 	resource.ParallelTest(t, resource.TestCase{
@@ -84,12 +98,16 @@ func TestAcc_ResourceKubernetesCloudWithoutServiceAccount(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceKubernetesCloud(cloudName, "", jaasTest, true, true),
+				Config: testAccResourceKubernetesCloud(cloudName, "", jaasTest, true, createModel),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
 				),
 			},
 			{
+				// We skip this step if we don't create the model, because we can destroy the cloud.
+				SkipFunc: func() (bool, error) {
+					return !createModel, nil
+				},
 				// This step we leverage `removed` to remove the cloud from the state, so we don't issue
 				// a `Destroy` on the cloud, which would fail with "cloud is used by 1 model".
 				// This is a bug in the provider that should be solved once we wait on model's deletion.
