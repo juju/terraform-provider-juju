@@ -326,7 +326,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		machineName = fmt.Sprintf("machine-%s", response.ID)
 	}
 
-	id := newMachineID(plan.ModelName.ValueString(), response.ID, plan.Name.ValueString())
+	id := newMachineID(plan.ModelName.ValueString(), response.ID, machineName)
 
 	plan.ID = types.StringValue(id)
 	plan.MachineID = types.StringValue(response.ID)
@@ -355,7 +355,9 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
-	readResponse, err := r.waitForMachine(ctx, plan, response.ID)
+	waitForHostname := plan.WaitForHostname.ValueBool()
+	modelName := plan.ModelName.ValueString()
+	readResponse, err := r.waitForMachine(ctx, waitForHostname, modelName, response.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for machine %q readiness, got error: %s", response.ID, err))
 		return
@@ -368,16 +370,16 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (r *machineResource) waitForMachine(ctx context.Context, plan machineResourceModel, machineID string) (juju.ReadMachineResponse, error) {
+func (r *machineResource) waitForMachine(ctx context.Context, waitForHostname bool, modelName, machineID string) (juju.ReadMachineResponse, error) {
 	asserts := []wait.Assert[juju.ReadMachineResponse]{assertMachineRunning}
-	if plan.WaitForHostname.ValueBool() {
+	if waitForHostname {
 		asserts = append(asserts, assertHostnamePopulated)
 	}
 	readResponse, err := wait.WaitFor(wait.WaitForCfg[juju.ReadMachineInput, juju.ReadMachineResponse]{
 		Context: ctx,
 		GetData: r.client.Machines.ReadMachine,
 		Input: juju.ReadMachineInput{
-			ModelName: plan.ModelName.ValueString(),
+			ModelName: modelName,
 			ID:        machineID,
 		},
 		DataAssertions: asserts,
@@ -436,7 +438,9 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	response, err := r.waitForMachine(ctx, data, machineID)
+	// During import, we don't know whether to wait for the machine hostname.
+	// So we opt not to wait, assuming the machine is ready.
+	response, err := r.waitForMachine(ctx, false, modelName, machineID)
 	if err != nil {
 		resp.Diagnostics.Append(handleMachineNotFoundError(ctx, err, &resp.State)...)
 		return
@@ -470,7 +474,9 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 	// Here is ok to always set Hostname from the response because:
 	// 1. if you set wait_for_hostname to true, this is correctly populated.
 	// 2. if you set wait_for_hostname to false, you shouldn't use the hostname.
-	// 3. if you import a machine immediately after creation, Read will wait for the machine to be ready.
+	// 3. if you import a machine, the hostname should have been already populated.
+	//    It could happen that the hostname is set to an empty string during import, but unlikely because
+	//    that means you've created a machine and then imported it immediately afterwards.
 	data.Hostname = types.StringValue(response.Hostname)
 	if response.Constraints != "" {
 		data.Constraints = NewCustomConstraintsValue(response.Constraints)
