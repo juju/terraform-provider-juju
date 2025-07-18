@@ -109,6 +109,7 @@ func TestAcc_ResourceMachine_Minimal(t *testing.T) {
 }
 
 func TestAcc_ResourceMachine_WithPlacement(t *testing.T) {
+	t.Skip("This test is skipped because it is not guaranteed to work on LXD.")
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}

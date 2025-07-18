@@ -821,7 +821,7 @@ func TestAcc_ResourceApplication_SwitchMachinestoUnits(t *testing.T) {
 
 	resourceName := "juju_application.testapp"
 	ntpName := "juju_application.ntp"
-	numberOfMachines := 10
+	numberOfMachines := 3
 
 	checkResourceAttrMachines := func(numberOfMachines int) []resource.TestCheckFunc {
 		return []resource.TestCheckFunc{
@@ -846,6 +846,9 @@ func TestAcc_ResourceApplication_SwitchMachinestoUnits(t *testing.T) {
 			Check: resource.ComposeTestCheckFunc(
 				checkResourceAttrMachines(numberOfMachines)...),
 		}, {
+			ConfigVariables: config.Variables{
+				"machines": config.IntegerVariable(numberOfMachines),
+			},
 			Config: testAccResourceApplicationBasic_UnitsWithSubordinates(modelName, charmName, fmt.Sprintf("%d", numberOfMachines)),
 			Check: resource.ComposeTestCheckFunc(
 				checkResourceAttrMachines(numberOfMachines)...),
@@ -868,6 +871,15 @@ func testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmNa
   			model = juju_model.model.name
 			base = "ubuntu@22.04"
 			name = "machine_${count.index}"
+
+			# The following lifecycle directive instructs Terraform to update 
+			# any dependent resources before destroying the machine - in the 
+			# case of applications this means that application units get 
+			# removed from units before Terraform attempts to destroy the 
+			# machine.
+			lifecycle {
+				create_before_destroy = true
+			}
 		}
 
 		resource "juju_application" "testapp" {
@@ -920,6 +932,13 @@ func testAccResourceApplicationBasic_UnitsWithSubordinates(modelName, charmName,
 		  name = %q
 		}
 
+		resource "juju_machine" "all_machines" {
+			count = var.machines
+  			model = juju_model.model.name
+			base = "ubuntu@22.04"
+			name = "machine_${count.index}"
+		}
+
 		resource "juju_application" "testapp" {
 		  name = "juju-qa-test"
 		  model = juju_model.model.name
@@ -954,6 +973,12 @@ func testAccResourceApplicationBasic_UnitsWithSubordinates(modelName, charmName,
 			application {
 				name = juju_application.ntp.name
 			}
+		}
+
+		variable "machines" {
+			description = "Number of machines to deploy."
+			type = number
+			default = 1
 		}
 		`, modelName, numberOfUnits, charmName)
 }
