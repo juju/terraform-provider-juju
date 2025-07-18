@@ -115,6 +115,7 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 	}
 
 	applications := parseApplications(status.RemoteApplications, response.Endpoints)
+	c.Debugf("related apps", map[string]any{"apps": applications})
 
 	return &CreateIntegrationResponse{
 		Applications: applications,
