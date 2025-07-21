@@ -1,3 +1,33 @@
+## 0.21.0 (July 21, 2025)
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.4 release.
+
+ENHANCEMENTS
+
+* Retry model creation when error is `TransactionAborted` [763](https://github.com/juju/terraform-provider-juju/pull/763) by @SimoneDutto
+* Wait for `hostname` field to be populated when creating `juju_machine` resource [788](https://github.com/juju/terraform-provider-juju/pull/788) by @SimoneDutto
+* Add a `no-service-account` flag to the `juju_kubernetes_cloud` resource to avoid service account creation by the provier [793](https://github.com/juju/terraform-provider-juju/pull/793) by @SimoneDutto
+* Using the custom type for `constraints` in the `juju_application` resource [796](https://github.com/juju/terraform-provider-juju/pull/796) by @alesstimec
+* Waiting for machine deletion [761](https://github.com/juju/terraform-provider-juju/pull/761) by @alesstimec
+
+BUG FIXES
+
+* Store `juju_machine` ID immediately after creation [799](https://github.com/juju/terraform-provider-juju/pull/799) by @kian99
+
+DOCUMENTATION
+
+* Update `juju_offer` documentation to use `endpoints` [781](https://github.com/juju/terraform-provider-juju/pull/781) by @SimoneDutto
+
+CI IMPROVEMENTS
+
+* Fix UpgradeProvider tests by removing `PlanOnly = true` [782](https://github.com/juju/terraform-provider-juju/pull/782) by @SimoneDutto
+* Fix JAAS integration test [792](https://github.com/juju/terraform-provider-juju/pull/792) by @SimoneDutto
+* Avoid model creation in JAAS tests for `juju_kubernetes_cloud` [797](https://github.com/juju/terraform-provider-juju/pull/797) by @SimoneDutto
+
 ## 0.20.0 (June 16, 2025)
 
 NOTES:
