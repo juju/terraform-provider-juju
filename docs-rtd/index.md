@@ -26,8 +26,6 @@ Like all of Juju, the Terraform Provider for Juju is for SREs, or anyone looking
 
 ## In this documentation
 
-````{grid} 1 1 2 2
-
 ```{grid-item-card} [Tutorial](tutorial)
 :link: tutorial
 :link-type: doc
@@ -42,40 +40,12 @@ Like all of Juju, the Terraform Provider for Juju is for SREs, or anyone looking
 **Step-by-step guides** covering key operations and common tasks
 ```
 
-````
-
-
-````{grid} 1 1 2 2
-:reverse:
-
 ```{grid-item-card} [Reference](/index)
 :link: reference/index
 :link-type: doc
 
 **Technical information** - specifications, APIs, architecture
 ```
-
-````
-<!--
-````{grid} 1 1 2 2
-:reverse:
-
-```{grid-item-card} [Reference](/index)
-:link: reference/index
-:link-type: doc
-
-**Technical information** - specifications, APIs, architecture
-```
-
-```{grid-item-card} [Explanation](/index)
-:link: explanation/index
-:link-type: doc
-
-**Discussion and clarification** of key topics
-```
-
-````
--->
 
 ---------
 
