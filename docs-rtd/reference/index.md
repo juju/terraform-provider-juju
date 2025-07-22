@@ -1,3 +1,4 @@
+(reference)=
 # `juju` provider reference
 
 ```{toctree}

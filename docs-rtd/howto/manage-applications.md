@@ -16,6 +16,7 @@ data "juju_application" "my-application" {
 
 > See more: [`juju_application` (data source)](../reference/terraform-provider/data-sources/application)
 
+(deploy-an-application)=
 ## Deploy an application
 
 To deploy an application, find and deploy a charm that delivers it.
@@ -49,7 +50,7 @@ resource "juju_application" "this" {
 > See more: [`juju_application` (resource)](../reference/terraform-provider/resources/application)
 
 
-
+(configure-an-application)=
 ## Configure an application
 > See also: {external+juju:ref}`Juju | Application configuration <application-configuration>`
 
@@ -101,12 +102,12 @@ To scale an application horizontally, control the number of units.
 
 > See more: {ref}`scale-an-application-horizontally`
 
-
+(integrate-an-application-with-another-application)=
 ## Integrate an application with another application
 
 > See more: {ref}`manage-relations`
 
-
+(manage-an-applications-public-availability-over-the-network)=
 ## Manage an application’s public availability over the network
 
 **Expose.** To expose an application over a network, in its resource definition use an expose attribute:
@@ -175,7 +176,7 @@ resource "juju_application" "this" {
 > See more: [`juju_application` (resource)](../reference/terraform-provider/resources/application)
 
 
-
+(change-space-bindings-for-an-application)=
 ## Change space bindings for an application
 
 > See also: {external+juju:ref}`Juju | Space <space>`
@@ -204,7 +205,7 @@ resource "juju_application" "application_three" {
 > See more: [`juju_application` > `endpoint_bindings`](../reference/terraform-provider/resources/application/#nested-schema-for-endpoint-bindings)
 
 
-
+(upgrade-an-application)=
 ## Upgrade an application
 
 To upgrade an application, update its charm.

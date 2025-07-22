@@ -42,7 +42,7 @@ user@ubuntu:~$ multipass mount ~/terraform-juju my-juju-vm:~/terraform-juju
 
 This setup will enable you to create and edit Terraform files in your local editor while running them inside your VM.
 
-
+(tutorial-plan)=
 ## Plan
 
 In this tutorial your goal is to set up a chat service on a cloud.
@@ -56,6 +56,7 @@ Next, decide which charms (i.e., software operators) you want to use. Charmhub p
 > See more: {external+juju:ref}`Juju | Charm <charm>`, [Charmhub](https://charmhub.io/), Charmhub | [`mattermost-k8s`](https://charmhub.io/mattermost-k8s), [`postgresql-k8s`](https://charmhub.io/postgresql-k8s), [`self-signed-certificates`](https://charmhub.io/self-signed-certificates)
 
 
+(tutorial-deploy-configure-integrate)=
 ## Deploy, configure, integrate
 
 You will need to install a Juju client; on the client, add your cloud and cloud credentials; on the cloud, bootstrap a controller (i.e., control plan); on the controller, add a model (i.e., canvas to deploy things on; namespace); on the model, deploy, configure, and integrate the charms that make up your chat service.
@@ -236,7 +237,7 @@ Congratulations, your chat service is up and running!
 
 > See more: {external+juju:ref}`Juju | Set things up <set-things-up>`, {ref}`manage-the-terraform-provider-for-juju`, {external+juju:ref}`Juju | Manage clouds <manage-clouds>`, {external+juju:ref}`Juju | Manage credentials <manage-credentials>`, {external+juju:ref}`Juju | Manage controllers <manage-controllers>`, {external+juju:ref}`Juju | Manage models <manage-models>`, {external+juju:ref}`Juju | Manage applications <manage-applications>`
 
-
+(tutorial-scale)=
 ## Scale
 
 A database failure can be very costly. Let's scale it!
