@@ -22,4 +22,4 @@ resource "juju_jaas_access_controller" "development" {
 }
 ```
 
-> See more: [`juju_jaas_access_controller`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_controller), {external+jaas:ref}`JAAS | Controller access levels <list-of-controller-permissions>`
+> See more: [`juju_jaas_access_controller`](../reference/terraform-provider/resources/jaas_access_controller), {external+jaas:ref}`JAAS | Controller access levels <list-of-controller-permissions>`

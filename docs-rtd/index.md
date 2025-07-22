@@ -6,7 +6,7 @@
 
 tutorial
 howto/index
-reference/index
+Reference <reference/index>
 ```
 
 <!--

@@ -69,7 +69,7 @@ provider "juju" {
 - `password` (String, Sensitive) This is the password of the username to be used. This can also be set by the `JUJU_PASSWORD` environment variable
 - `username` (String) This is the username registered with the controller to be used. This can also be set by the `JUJU_USERNAME` environment variable
 
-> See more: [Terraform | `juju` provider](https://registry.terraform.io/providers/juju/juju/latest/docs)
+> See more: [`juju` provider](../reference/index)
 
 ##### Using environment variables
 
@@ -93,7 +93,7 @@ export JUJU_CLIENT_ID="<client ID>"
 export JUJU_CLIENT_SECRET="<client secret>"
 ```
 
-> See more: [Terraform | `juju` provider](https://registry.terraform.io/providers/juju/juju/latest/docs)
+> See more: [`juju` provider](../reference/index)
 
 
 ##### Using the `juju` CLI
@@ -110,7 +110,7 @@ provider "juju" {}
 
 Then, in a terminal, use the `juju` client to switch to the desired controller: `juju switch <controller>`. Your Terraform plan will be interpreted relative to that controller.
 
-> See more: [Terraform | `juju` provider](https://registry.terraform.io/providers/juju/juju/latest/docs)
+> See more: [`juju` provider](../reference/index)
 
 
 #### c. Build your deployment

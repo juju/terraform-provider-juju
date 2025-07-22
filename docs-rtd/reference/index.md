@@ -1,4 +1,4 @@
-# Reference
+# `juju` provider reference
 
 ```{toctree}
 :titlesonly:

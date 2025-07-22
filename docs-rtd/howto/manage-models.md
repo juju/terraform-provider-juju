@@ -14,7 +14,7 @@ data "juju_model" "mymodel" {
 }
 ```
 
-> See more: [`juju_model` (data source)](https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/model)
+> See more: [`juju_model` (data source)](../reference/terraform-provider/data-sources/model)
 
 ## Add a model
 
@@ -30,7 +30,7 @@ resource "juju_model" "testmodel" {
 In the case of a multi-cloud controller, you can specify which cloud you want the model to be associated with by defining a `cloud` block. To specify a model configuration, include a `config` block.
 
 
-> See more: [`juju_model` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/model)
+> See more: [`juju_model` (resource)](../reference/terraform-provider/resources/model)
 
 ## Configure a model
 
@@ -60,7 +60,7 @@ resource "juju_model" "this" {
 }
 ```
 
-> See more: [`juju_model` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/model)
+> See more: [`juju_model` (resource)](../reference/terraform-provider/resources/model)
 
 
 ## Manage constraints for a model
@@ -83,7 +83,7 @@ resource "juju_model" "this" {
 }
 ```
 
-> See more: [`juju_model` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/model)
+> See more: [`juju_model` (resource)](../reference/terraform-provider/resources/model)
 
 
 (manage-access-to-a-model)=
@@ -101,7 +101,7 @@ resource "juju_model" "testmodel" {
 }
 ```
 
-> See more: [`juju_model` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/model)
+> See more: [`juju_model` (resource)](../reference/terraform-provider/resources/model)
 
 ## Manage access to a model
 
@@ -119,7 +119,7 @@ resource "juju_access_model" "this" {
 }
 ```
 
-> See more: [`juju_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/access_model), [Juju | Model access levels](https://documentation.ubuntu.com/juju/3.6/reference/user/#valid-access-levels-for-models)
+> See more: [`juju_access_model`](../reference/terraform-provider/resources/access_model), [Juju | Model access levels](https://documentation.ubuntu.com/juju/3.6/reference/user/#valid-access-levels-for-models)
 
 
 ### For a Juju controller added to JIMM
@@ -137,7 +137,7 @@ resource "juju_jaas_access_model" "development" {
 
 ```
 
-> See more: [`juju_jaas_access_model`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_model), {external+jaas:ref}`JAAS | Model access levels <list-of-model-permissions>`
+> See more: [`juju_jaas_access_model`](../reference/terraform-provider/resources/jaas_access_model), {external+jaas:ref}`JAAS | Model access levels <list-of-model-permissions>`
 
 ## Upgrade a model
 > See also: {external+juju:ref}`Juju | Upgrading things <upgrading-things>`
@@ -152,5 +152,5 @@ To migrate a model to another controller, use the `juju` CLI to perform the migr
 
 To destroy a model, remove its resource definition from your Terraform plan.
 
-> See more: [`juju_model` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/model)
+> See more: [`juju_model` (resource)](../reference/terraform-provider/resources/model)
 

@@ -14,7 +14,7 @@ data "juju_application" "my-application" {
 }
 ```
 
-> See more: [`juju_application` (data source)](https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/application)
+> See more: [`juju_application` (data source)](../reference/terraform-provider/data-sources/application)
 
 ## Deploy an application
 
@@ -46,7 +46,7 @@ resource "juju_application" "this" {
 }
 ```
 
-> See more: [`juju_application` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#schema)
+> See more: [`juju_application` (resource)](../reference/terraform-provider/resources/application)
 
 
 
@@ -68,7 +68,7 @@ resource "juju_application" "this" {
    }
 }
 ```
-> See more: [`juju_application` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#schema)
+> See more: [`juju_application` (resource)](../reference/terraform-provider/resources/application)
 
 
 (scale-an-application)=
@@ -144,7 +144,7 @@ resource "juju_application" "this" {
 -->
 
 
-> See more: [`juju_application` > `expose` > nested schema](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#nested-schema-for-expose)
+> See more: [`juju_application` > `expose` > nested schema](../reference/terraform-provider/resources/application#nested-schema-for-expose)
 
 
 
@@ -172,7 +172,7 @@ resource "juju_application" "this" {
 }
 ```
 
-> See more: [`juju_application` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#schema)
+> See more: [`juju_application` (resource)](../reference/terraform-provider/resources/application)
 
 
 
@@ -201,7 +201,7 @@ resource "juju_application" "application_three" {
 }
 ```
 
-> See more: [`juju_application` > `endpoint_bindings`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#endpoint_bindings)
+> See more: [`juju_application` > `endpoint_bindings`](../reference/terraform-provider/resources/application/#nested-schema-for-endpoint-bindings)
 
 
 
@@ -218,4 +218,4 @@ To upgrade an application, update its charm.
 
 To remove an application, remove its resource definition from your Terraform plan.
 
-> See more: [`juju_application` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#schema)
+> See more: [`juju_application` (resource)](../reference/terraform-provider/resources/application)
