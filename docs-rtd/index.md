@@ -29,7 +29,7 @@ Like all of Juju, the Terraform Provider for Juju is for SREs, or anyone looking
 - **Set up Juju:** {ref}`manage-the-terraform-provider-for-juju`, {ref}`manage-controllers`, {ref}`manage-models`
 - **Connect a cloud**: {ref}`manage-clouds`, {ref}`manage-credentials`
 - **Use charmed applications:** {ref}`Deploy <deploy-an-application>`, {ref}`Configure <configure-an-application>`, {ref}`Integrate <integrate-an-application-with-another-application>`, {ref}`Scale <scale-an-application>`, {ref}`Upgrade <upgrade-an-application>`, etc.
-- **Customize the infrastructure:** {ref}`manage-machines`
+- **Customise the infrastructure:** {ref}`manage-machines`
 - **Authorization:** {ref}`manage-users`, {ref}`manage-service-accounts`, {ref}`manage-roles`, {ref}`manage-groups`
 - **Security:** {ref}`manage-ssh-keys`, {ref}`manage-secrets`
 
