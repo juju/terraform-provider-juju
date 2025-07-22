@@ -23,16 +23,12 @@ builds:
     - linux
     - darwin
   goarch:
-    - '386'
     - amd64
-    - arm
     - arm64
   ignore:
     # TODO: disabled => juju/utils symlink_windows.go:54:8: undefined: createSymbolicLink
     - goos: windows
       goarch: arm64
-    - goos: windows
-      goarch: arm
   binary: '{{ .ProjectName }}_v{{ .Version }}'
 archives:
   - format: zip
