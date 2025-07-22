@@ -6,8 +6,6 @@
 :glob:
 :hidden:
 
-:titlesonly:
-
 terraform-provider/data-sources/index
 terraform-provider/resources/index
 
