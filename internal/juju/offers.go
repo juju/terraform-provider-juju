@@ -183,6 +183,8 @@ func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, erro
 	}
 	resultURL.Source = "" // Ensure the source is empty for consistency
 
+	// If the ID used to query the resource does not match the one in the result, it can result
+	// in an unexpected value when saved to a resource, so fail early for easier diagnostics.
 	if resultURL.String() != input.OfferURL {
 		return nil, fmt.Errorf("offer URL %q does not match the expected URL %q", result.OfferURL, input.OfferURL)
 	}
