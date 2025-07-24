@@ -38,15 +38,7 @@ terraform {
 
 #### b. Configure the `juju` provider to use an existing Juju or JIMM controller
 
-There are 3 ways you can do this: using static credentials, using environment variables, or using the `juju` client. The last method is only supported for regular Juju controllers.
-
-```{tip}
-For all methods: To view your controller’s details, run `juju show-controller --show-password`.
-```
-
-##### Using static credentials
-
-In your Terraform plan add:
+In your Terraform plan, configure the `provider` with the details of your existing, externally managed Juju or JIMM controller. For example:
 
 ```terraform
 provider "juju" {
@@ -62,56 +54,7 @@ provider "juju" {
 }
 ```
 
-- `ca_certificate` (String) If the controller was deployed with a self-signed certificate: This is the certificate to use for identification. This can also be set by the `JUJU_CA_CERT` environment variable
-- `client_id` (String) If using JAAS: This is the client ID (OAuth2.0, created by the external identity provider) to be used. This can also be set by the `JUJU_CLIENT_ID` environment variable
-- `client_secret` (String, Sensitive) If using JAAS: This is the client secret (OAuth2.0, created by the external identity provider) to be used. This can also be set by the `JUJU_CLIENT_SECRET` environment variable
-- `controller_addresses` (String) This is the controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `JUJU_CONTROLLER_ADDRESSES` environment variable.
-- `password` (String, Sensitive) This is the password of the username to be used. This can also be set by the `JUJU_PASSWORD` environment variable
-- `username` (String) This is the username registered with the controller to be used. This can also be set by the `JUJU_USERNAME` environment variable
-
-> See more: [`juju` provider](../reference/index)
-
-##### Using environment variables
-
-In your Terraform plan, leave the `provider` specification empty:
-
-```terraform
-provider "juju" {}
-```
-
-Then, in a terminal, export the controller environment variables with your controller's values. For example:
-
-```bash
-export JUJU_CONTROLLER_ADDRESSES="<controller addresses>"
-# For a controller deployed with a self-signed certificate:
-export JUJU_CA_CERT=file("<path to certificate file>")
-# For a regular Juju controller, provide the username and password:
-export JUJU_USERNAME="<username>"
-export JUJU_PASSWORD="<password>"
-# For a JIMM controller, provide the client ID and client secret:
-export JUJU_CLIENT_ID="<client ID>"
-export JUJU_CLIENT_SECRET="<client secret>"
-```
-
-> See more: [`juju` provider](../reference/index)
-
-
-##### Using the `juju` CLI
-
-```{important}
-This method is only supported for regular Juju controllers.
-```
-
-In your Terraform plan, leave the `provider` specification empty:
-
-```terraform
-provider "juju" {}
-```
-
-Then, in a terminal, use the `juju` client to switch to the desired controller: `juju switch <controller>`. Your Terraform plan will be interpreted relative to that controller.
-
-> See more: [`juju` provider](../reference/index)
-
+> See more: {ref}<reference-an-externally-managed-controller>
 
 #### c. Build your deployment
 
