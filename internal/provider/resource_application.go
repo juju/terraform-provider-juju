@@ -65,6 +65,7 @@ Notes:
 var _ resource.Resource = &applicationResource{}
 var _ resource.ResourceWithConfigure = &applicationResource{}
 var _ resource.ResourceWithImportState = &applicationResource{}
+var _ resource.ResourceWithUpgradeState = &applicationResource{}
 
 // NewApplicationResource returns a new instance of the application resource responsible
 // for managing Juju applications, including their configuration, charm, constraints, and
@@ -80,9 +81,9 @@ type applicationResource struct {
 	subCtx context.Context
 }
 
-// applicationResourceModel describes the application data model.
+// applicationResourceModelV0 describes the application data model.
 // tfsdk must match user resource schema attribute names.
-type applicationResourceModel struct {
+type applicationResourceModelV0 struct {
 	ApplicationName  types.String           `tfsdk:"name"`
 	Charm            types.List             `tfsdk:"charm"`
 	Config           types.Map              `tfsdk:"config"`
@@ -91,6 +92,33 @@ type applicationResourceModel struct {
 	Expose           types.List             `tfsdk:"expose"`
 	Machines         types.Set              `tfsdk:"machines"`
 	ModelName        types.String           `tfsdk:"model"`
+	ModelType        types.String           `tfsdk:"model_type"`
+	// TODO - remove Placement
+	Placement types.String `tfsdk:"placement"`
+	// TODO - remove Principal when we version the schema
+	// and remove deprecated elements. Once we create upgrade
+	// functionality it can be removed from the structure.
+	Principal         types.Bool  `tfsdk:"principal"`
+	Resources         types.Map   `tfsdk:"resources"`
+	StorageDirectives types.Map   `tfsdk:"storage_directives"`
+	Storage           types.Set   `tfsdk:"storage"`
+	Trust             types.Bool  `tfsdk:"trust"`
+	UnitCount         types.Int64 `tfsdk:"units"`
+	// ID required by the testing framework
+	ID types.String `tfsdk:"id"`
+}
+
+// applicationResourceModelV1 describes the application data model.
+// tfsdk must match user resource schema attribute names.
+type applicationResourceModelV1 struct {
+	ApplicationName  types.String           `tfsdk:"name"`
+	Charm            types.List             `tfsdk:"charm"`
+	Config           types.Map              `tfsdk:"config"`
+	Constraints      CustomConstraintsValue `tfsdk:"constraints"`
+	EndpointBindings types.Set              `tfsdk:"endpoint_bindings"`
+	Expose           types.List             `tfsdk:"expose"`
+	Machines         types.Set              `tfsdk:"machines"`
+	ModelUUID        types.String           `tfsdk:"model_uuid"`
 	ModelType        types.String           `tfsdk:"model_type"`
 	// TODO - remove Placement
 	Placement types.String `tfsdk:"placement"`
@@ -138,6 +166,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 	resp.Schema = schema.Schema{
 		Description: "A resource that represents a single Juju application deployment from a charm. Deployment of bundles" +
 			" is not supported.",
+		Version: 1,
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Description: "A custom name for the application deployment. If empty, uses the charm's name." +
@@ -163,8 +192,8 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 					}...),
 				},
 			},
-			"model": schema.StringAttribute{
-				Description: "The name of the model where the application is to be deployed. Changing this value" +
+			"model_uuid": schema.StringAttribute{
+				Description: "The UUID of the model where the application is to be deployed. Changing this value" +
 					" will cause the application to be destroyed and recreated by terraform.",
 				Required: true,
 				PlanModifiers: []planmodifier.String{
@@ -484,7 +513,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	var plan applicationResourceModel
+	var plan applicationResourceModelV1
 
 	// Read Terraform plan into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -597,7 +626,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		unitCount = len(machines)
 	}
 
-	modelName := plan.ModelName.ValueString()
+	modelName := plan.ModelUUID.ValueString()
 	createResp, err := r.client.Applications.CreateApplication(ctx,
 		&juju.CreateApplicationInput{
 			ApplicationName:    plan.ApplicationName.ValueString(),
@@ -626,7 +655,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 
 	r.trace(fmt.Sprintf("create application resource %q", createResp.AppName))
 	readResp, err := r.client.Applications.ReadApplicationWithRetryOnNotFound(ctx, &juju.ReadApplicationInput{
-		ModelName: modelName,
+		ModelUUID: modelName,
 		AppName:   createResp.AppName,
 	})
 	if err != nil {
@@ -689,7 +718,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		plan.Storage = types.SetNull(storageType)
 	}
 
-	plan.ID = types.StringValue(newAppID(plan.ModelName.ValueString(), createResp.AppName))
+	plan.ID = types.StringValue(newAppID(plan.ModelUUID.ValueString(), createResp.AppName))
 	r.trace("Created", applicationResourceModelForLogging(ctx, &plan))
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -727,7 +756,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		addClientNotConfiguredError(&resp.Diagnostics, "application", "read")
 		return
 	}
-	var state applicationResourceModel
+	var state applicationResourceModelV1
 
 	// Read Terraform prior state into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -739,14 +768,14 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		"ID": state.ID.ValueString(),
 	})
 
-	modelName, appName, dErr := modelAppNameFromID(state.ID.ValueString())
+	modelUUID, appName, dErr := modelAppNameFromID(state.ID.ValueString())
 	if dErr.HasError() {
 		resp.Diagnostics.Append(dErr...)
 		return
 	}
 
 	response, err := r.client.Applications.ReadApplication(&juju.ReadApplicationInput{
-		ModelName: modelName,
+		ModelUUID: modelUUID,
 		AppName:   appName,
 	})
 	if err != nil {
@@ -758,14 +787,14 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 	r.trace("read application", map[string]interface{}{"resource": appName, "response": response})
 
-	modelType, err := r.client.Applications.ModelType(modelName)
+	modelType, err := r.client.Applications.ModelType(modelUUID)
 	if err != nil {
 		resp.Diagnostics.Append(handleApplicationNotFoundError(ctx, err, &resp.State)...)
 		return
 	}
 
 	state.ApplicationName = types.StringValue(appName)
-	state.ModelName = types.StringValue(modelName)
+	state.ModelUUID = types.StringValue(modelUUID)
 
 	// Use the response to fill in state
 
@@ -964,7 +993,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		addClientNotConfiguredError(&resp.Diagnostics, "application", "update")
 		return
 	}
-	var plan, state applicationResourceModel
+	var plan, state applicationResourceModelV1
 	// asserts are intended to be used after the application is update to
 	// assert the update has achieved its intended effect.
 	asserts := []wait.Assert[*juju.ReadApplicationResponse]{}
@@ -980,7 +1009,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	r.trace("Current state", applicationResourceModelForLogging(ctx, &state))
 
 	updateApplicationInput := juju.UpdateApplicationInput{
-		ModelName: state.ModelName.ValueString(),
+		ModelUUID: state.ModelUUID.ValueString(),
 		AppName:   state.ApplicationName.ValueString(),
 	}
 
@@ -1191,7 +1220,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 			Context: ctx,
 			GetData: r.client.Applications.ReadApplication,
 			Input: &juju.ReadApplicationInput{
-				ModelName: updateApplicationInput.ModelName,
+				ModelUUID: updateApplicationInput.ModelUUID,
 				AppName:   updateApplicationInput.AppName,
 			},
 			DataAssertions: asserts,
@@ -1249,7 +1278,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	plan.ModelType = state.ModelType
-	plan.ID = types.StringValue(newAppID(plan.ModelName.ValueString(), plan.ApplicationName.ValueString()))
+	plan.ID = types.StringValue(newAppID(plan.ModelUUID.ValueString(), plan.ApplicationName.ValueString()))
 	plan.Principal = types.BoolNull()
 	r.trace("Updated", applicationResourceModelForLogging(ctx, &plan))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -1260,8 +1289,8 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 // added as storage constraints.
 func (r *applicationResource) updateStorage(
 	ctx context.Context,
-	plan applicationResourceModel,
-	state applicationResourceModel,
+	plan applicationResourceModelV1,
+	state applicationResourceModelV1,
 ) (map[string]jujustorage.Constraints, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
 	var updatedStorageDirectivesMap map[string]jujustorage.Constraints
@@ -1397,7 +1426,7 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 		addClientNotConfiguredError(&resp.Diagnostics, "application", "delete")
 		return
 	}
-	var state applicationResourceModel
+	var state applicationResourceModelV1
 	// Read Terraform prior state into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -1408,14 +1437,14 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 		"ID": state.ID.ValueString(),
 	})
 
-	modelName, appName, dErr := modelAppNameFromID(state.ID.ValueString())
+	modelUUID, appName, dErr := modelAppNameFromID(state.ID.ValueString())
 	if dErr.HasError() {
 		resp.Diagnostics.Append(dErr...)
 	}
 
 	if err := r.client.Applications.DestroyApplication(&juju.DestroyApplicationInput{
 		ApplicationName: appName,
-		ModelName:       modelName,
+		ModelUUID:       modelUUID,
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete application, got error: %s", err))
 	}
@@ -1425,7 +1454,7 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 			Context: ctx,
 			GetData: r.client.Applications.ReadApplication,
 			Input: &juju.ReadApplicationInput{
-				ModelName: modelName,
+				ModelUUID: modelUUID,
 				AppName:   appName,
 			},
 			ErrorToWait:    juju.ApplicationNotFoundError,
@@ -1444,6 +1473,55 @@ Make sure to manually delete them.`, appName, err))
 	r.trace(fmt.Sprintf("deleted application resource %q", state.ID.ValueString()))
 }
 
+// UpgradeState upgrades the state of the offer resource.
+// This is used to handle changes in the resource schema between versions.
+func (o *applicationResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
+	return map[int64]resource.StateUpgrader{
+		// Upgrade from `endpoint` to `endpoints` attribute.
+		0: {
+			PriorSchema: &appV0Schema,
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				appV0 := applicationResourceModelV0{}
+				resp.Diagnostics.Append(req.State.Get(ctx, &appV0)...)
+
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				modelUUID, err := o.client.Models.ModelUUID(appV0.ModelName.ValueString())
+				if err != nil {
+					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", appV0.ModelName.ValueString(), err))
+					return
+				}
+
+				newID := newAppID(modelUUID, appV0.ApplicationName.ValueString())
+
+				upgradedStateData := applicationResourceModelV1{
+					ID:                types.StringValue(newID),
+					ApplicationName:   appV0.ApplicationName,
+					Charm:             appV0.Charm,
+					Config:            appV0.Config,
+					Constraints:       appV0.Constraints,
+					EndpointBindings:  appV0.EndpointBindings,
+					Expose:            appV0.Expose,
+					Machines:          appV0.Machines,
+					ModelUUID:         types.StringValue(modelUUID),
+					ModelType:         appV0.ModelType,
+					Placement:         appV0.Placement,
+					Principal:         appV0.Principal,
+					Resources:         appV0.Resources,
+					StorageDirectives: appV0.StorageDirectives,
+					Trust:             appV0.Trust,
+					UnitCount:         appV0.UnitCount,
+					Storage:           appV0.Storage,
+				}
+
+				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
+			},
+		},
+	}
+}
+
 // ImportState is called when the provider must import the state of a
 // resource instance. This method must return enough state so the Read
 // method can properly refresh the full resource.
@@ -1454,9 +1532,9 @@ func (r *applicationResource) ImportState(ctx context.Context, req resource.Impo
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-// ID is '<model name>:<app name>'
-func newAppID(model, app string) string {
-	return fmt.Sprintf("%s:%s", model, app)
+// ID is '<model UUID>:<app name>'
+func newAppID(modelUUID, app string) string {
+	return fmt.Sprintf("%s:%s", modelUUID, app)
 }
 
 func modelAppNameFromID(value string) (string, string, diag.Diagnostics) {
@@ -1481,12 +1559,12 @@ func (r *applicationResource) trace(msg string, additionalFields ...map[string]i
 	tflog.SubsystemTrace(r.subCtx, LogResourceApplication, msg, additionalFields...)
 }
 
-func applicationResourceModelForLogging(_ context.Context, app *applicationResourceModel) map[string]interface{} {
+func applicationResourceModelForLogging(_ context.Context, app *applicationResourceModelV1) map[string]interface{} {
 	value := map[string]interface{}{
 		"application-name": app.ApplicationName.ValueString(),
 		"charm":            app.Charm.String(),
 		"constraints":      app.Constraints.ValueString(),
-		"model":            app.ModelName.ValueString(),
+		"model_uuid":       app.ModelUUID.ValueString(),
 		"placement":        app.Placement.ValueString(),
 		"expose":           app.Expose.String(),
 		"trust":            app.Trust.ValueBoolPointer(),
@@ -1512,4 +1590,274 @@ func assertEqualsMachines(machinesToCompare []string) func(outputFromAPI *juju.R
 
 		return nil
 	}
+}
+
+var appV0Schema = schema.Schema{
+	Description: "A resource that represents a single Juju application deployment from a charm. Deployment of bundles" +
+		" is not supported.",
+	Version: 0,
+	Attributes: map[string]schema.Attribute{
+		"name": schema.StringAttribute{
+			Description: "A custom name for the application deployment. If empty, uses the charm's name." +
+				"Changing this value will cause the application to be destroyed and recreated by terraform.",
+			Optional: true,
+			Computed: true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.RequiresReplaceIfConfigured(),
+				stringplanmodifier.UseStateForUnknown(),
+			},
+		},
+		MachinesKey: schema.SetAttribute{
+			ElementType: types.StringType,
+			Description: "Specify the target machines for the application's units. The number of machines in the set indicates" +
+				" the unit count for the application. Removing a machine from the set will remove the application's unit residing on it." +
+				" `machines` is mutually exclusive with `units` and `placement` (which is deprecated).",
+			Optional: true,
+			Computed: true,
+			Validators: []validator.Set{
+				setvalidator.ConflictsWith(path.Expressions{
+					path.MatchRoot(PlacementKey),
+					path.MatchRoot(UnitsKey),
+				}...),
+			},
+		},
+		"model": schema.StringAttribute{
+			Description: "The name of the model where the application is to be deployed. Changing this value" +
+				" will cause the application to be destroyed and recreated by terraform.",
+			Required: true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.RequiresReplaceIfConfigured(),
+			},
+		},
+		"model_type": schema.StringAttribute{
+			Description: "The type of the model where the application is deployed. It is a computed field and " +
+				"is needed to determine if the application should be replaced or updated in case of base updates.",
+			Computed: true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseStateForUnknown(),
+			},
+		},
+		UnitsKey: schema.Int64Attribute{
+			Description: "The number of application units to deploy for the charm.",
+			Optional:    true,
+			Computed:    true,
+			//Default:     int64default.StaticInt64(int64(1)),
+			PlanModifiers: []planmodifier.Int64{
+				UnitCountModifier(),
+				int64planmodifier.UseStateForUnknown(),
+			},
+		},
+		ConfigKey: schema.MapAttribute{
+			Description: "Application specific configuration. Must evaluate to a string, integer or boolean.",
+			Optional:    true,
+			ElementType: types.StringType,
+		},
+		ConstraintsKey: schema.StringAttribute{
+			CustomType: CustomConstraintsType{},
+			Description: "Constraints imposed on this application. Changing this value will cause the" +
+				" application to be destroyed and recreated by terraform.",
+			Optional: true,
+			// Set as "computed" to pre-populate and preserve any implicit constraints
+			Computed: true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.RequiresReplaceIf(constraintsRequiresReplacefunc, "", ""),
+				stringplanmodifier.UseStateForUnknown(),
+			},
+		},
+		"storage_directives": schema.MapAttribute{
+			Description: "Storage directives (constraints) for the juju application." +
+				" The map key is the label of the storage defined by the charm," +
+				" the map value is the storage directive in the form <pool>,<count>,<size>." +
+				" Changing an existing key/value pair will cause the application to be replaced." +
+				" Adding a new key/value pair will add storage to the application on upgrade.",
+			ElementType: types.StringType,
+			Optional:    true,
+			Validators: []validator.Map{
+				stringIsStorageDirectiveValidator{},
+			},
+			PlanModifiers: []planmodifier.Map{
+				mapplanmodifier.RequiresReplaceIf(storageDirectivesMapRequiresReplace, "", ""),
+			},
+		},
+		"storage": schema.SetNestedAttribute{
+			Description: "Storage used by the application.",
+			Optional:    true,
+			Computed:    true,
+			NestedObject: schema.NestedAttributeObject{
+				Attributes: map[string]schema.Attribute{
+					"label": schema.StringAttribute{
+						Description: "The specific storage option defined in the charm.",
+						Computed:    true,
+					},
+					"size": schema.StringAttribute{
+						Description: "The size of each volume.",
+						Computed:    true,
+					},
+					"pool": schema.StringAttribute{
+						Description: "Name of the storage pool.",
+						Computed:    true,
+					},
+					"count": schema.Int64Attribute{
+						Description: "The number of volumes.",
+						Computed:    true,
+					},
+				},
+			},
+		},
+		"trust": schema.BoolAttribute{
+			Description: "Set the trust for the application.",
+			Optional:    true,
+			Computed:    true,
+			Default:     booldefault.StaticBool(false),
+		},
+		PlacementKey: schema.StringAttribute{
+			Description: "Specify the target location for the application's units. Changing this value" +
+				" will cause the application to be destroyed and recreated by terraform.",
+			Optional: true,
+			Computed: true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.RequiresReplaceIfConfigured(),
+			},
+			Validators: []validator.String{
+				stringvalidator.ConflictsWith(path.Expressions{
+					path.MatchRoot(MachinesKey),
+				}...),
+			},
+			DeprecationMessage: "Configure machines instead. This attribute will be removed in the next major version of the provider.",
+		},
+		"principal": schema.BoolAttribute{
+			Description: "Whether this is a Principal application",
+			Computed:    true,
+			PlanModifiers: []planmodifier.Bool{
+				boolplanmodifier.UseStateForUnknown(),
+			},
+			DeprecationMessage: "Principal is computed only and not needed. This attribute will be removed in the next major version of the provider.",
+		},
+		"id": schema.StringAttribute{
+			Computed: true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseStateForUnknown(),
+			},
+		},
+		EndpointBindingsKey: schema.SetNestedAttribute{
+			Description: "Configure endpoint bindings",
+			Optional:    true,
+			NestedObject: schema.NestedAttributeObject{
+				Attributes: map[string]schema.Attribute{
+					"endpoint": schema.StringAttribute{
+						Description: "Name of the endpoint to bind to a space. Keep null (or undefined) to define default binding.",
+						Optional:    true,
+					},
+					"space": schema.StringAttribute{
+						Description: "Name of the space to bind the endpoint to.",
+						Required:    true,
+					},
+				},
+			},
+			Validators: []validator.Set{
+				setNestedIsAttributeUniqueValidator{
+					PathExpressions: path.MatchRelative().AtAnySetValue().MergeExpressions(path.MatchRelative().AtName("endpoint")),
+				},
+			},
+		},
+		ResourceKey: schema.MapAttribute{
+			Optional:    true,
+			ElementType: types.StringType,
+			Validators: []validator.Map{
+				StringIsResourceKeyValidator{},
+			},
+			MarkdownDescription: resourceKeyMarkdownDescription,
+		},
+	},
+	Blocks: map[string]schema.Block{
+		CharmKey: schema.ListNestedBlock{
+			Description: "The charm installed from Charmhub.",
+			NestedObject: schema.NestedBlockObject{
+				Attributes: map[string]schema.Attribute{
+					"name": schema.StringAttribute{
+						Required: true,
+						Description: "The name of the charm to be deployed.  Changing this value will cause" +
+							" the application to be destroyed and recreated by terraform.",
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.RequiresReplaceIfConfigured(),
+						},
+					},
+					"channel": schema.StringAttribute{
+						Description: "The channel to use when deploying a charm. Specified as \\<track>/\\<risk>/\\<branch>.",
+						Optional:    true,
+						Computed:    true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
+						Validators: []validator.String{
+							StringIsChannelValidator{},
+						},
+					},
+					"revision": schema.Int64Attribute{
+						Description: "The revision of the charm to deploy. During the update phase, the charm revision should be update before config update, to avoid issues with config parameters parsing.",
+						Optional:    true,
+						Computed:    true,
+						PlanModifiers: []planmodifier.Int64{
+							int64planmodifier.UseStateForUnknown(),
+						},
+					},
+					SeriesKey: schema.StringAttribute{
+						Description: "The series on which to deploy.",
+						Optional:    true,
+						Computed:    true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
+						Validators: []validator.String{
+							stringvalidator.ConflictsWith(path.Expressions{
+								path.MatchRelative().AtParent().AtName(BaseKey),
+							}...),
+						},
+						DeprecationMessage: "Configure base instead. This attribute will be removed in the next major version of the provider.",
+					},
+					BaseKey: schema.StringAttribute{
+						Description: "The operating system on which to deploy. E.g. ubuntu@22.04. Changing this value for machine charms will trigger a replace by terraform.",
+						Optional:    true,
+						Computed:    true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+							stringplanmodifier.RequiresReplaceIf(baseApplicationRequiresReplaceIf, "", ""),
+						},
+						Validators: []validator.String{
+							stringvalidator.ConflictsWith(path.Expressions{
+								path.MatchRelative().AtParent().AtName(SeriesKey),
+							}...),
+							stringIsBaseValidator{},
+						},
+					},
+				},
+			},
+			Validators: []validator.List{
+				listvalidator.SizeAtMost(1),
+				listvalidator.IsRequired(),
+			},
+		},
+		ExposeKey: schema.ListNestedBlock{
+			Description: "Makes an application publicly available over the network",
+			NestedObject: schema.NestedBlockObject{
+				Attributes: map[string]schema.Attribute{
+					EndpointsKey: schema.StringAttribute{
+						Description: "Expose only the ports that charms have opened for this comma-delimited list of endpoints",
+						Optional:    true,
+					},
+					SpacesKey: schema.StringAttribute{
+						Description: "A comma-delimited list of spaces that should be able to access the application ports once exposed.",
+						Optional:    true,
+					},
+					CidrsKey: schema.StringAttribute{
+						Description: "A comma-delimited list of CIDRs that should be able to access the application ports once exposed.",
+						Optional:    true,
+					},
+				},
+			},
+			Validators: []validator.List{
+				listvalidator.SizeAtMost(1),
+			},
+		},
+	},
 }

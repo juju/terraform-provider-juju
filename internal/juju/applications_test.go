@@ -165,7 +165,7 @@ func (s *ApplicationSuite) TestReadApplicationRetry() {
 	client := s.getApplicationsClient()
 	resp, err := client.ReadApplicationWithRetryOnNotFound(context.Background(),
 		&ReadApplicationInput{
-			ModelName: s.testModelName,
+			ModelUUID: s.testModelName,
 			AppName:   appName,
 		})
 	s.Require().NoError(err, "error from ReadApplicationWithRetryOnNotFound")
@@ -189,7 +189,7 @@ func (s *ApplicationSuite) TestReadApplicationRetryDoNotPanic() {
 	client := s.getApplicationsClient()
 	_, err := client.ReadApplicationWithRetryOnNotFound(context.Background(),
 		&ReadApplicationInput{
-			ModelName: s.testModelName,
+			ModelUUID: s.testModelName,
 			AppName:   appName,
 		})
 	s.Require().Error(err, "don't panic")
@@ -258,7 +258,7 @@ func (s *ApplicationSuite) TestReadApplicationRetryWaitForMachines() {
 	client := s.getApplicationsClient()
 	resp, err := client.ReadApplicationWithRetryOnNotFound(context.Background(),
 		&ReadApplicationInput{
-			ModelName: s.testModelName,
+			ModelUUID: s.testModelName,
 			AppName:   appName,
 		})
 	s.Require().NoError(err, "error from ReadApplicationWithRetryOnNotFound")
@@ -313,7 +313,7 @@ func (s *ApplicationSuite) TestReadApplicationRetrySubordinate() {
 	client := s.getApplicationsClient()
 	resp, err := client.ReadApplicationWithRetryOnNotFound(context.Background(),
 		&ReadApplicationInput{
-			ModelName: s.testModelName,
+			ModelUUID: s.testModelName,
 			AppName:   appName,
 		})
 	s.Require().NoError(err, "error from ReadApplicationWithRetryOnNotFound")
@@ -379,7 +379,7 @@ func (s *ApplicationSuite) TestReadApplicationRetryNotFoundStorageNotFoundError(
 	client := s.getApplicationsClient()
 	resp, err := client.ReadApplicationWithRetryOnNotFound(context.Background(),
 		&ReadApplicationInput{
-			ModelName: s.testModelName,
+			ModelUUID: s.testModelName,
 			AppName:   appName,
 		})
 	s.Require().NoError(err, "error from ReadApplicationWithRetryOnNotFound")

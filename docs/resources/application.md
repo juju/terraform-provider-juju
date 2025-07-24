@@ -47,7 +47,7 @@ resource "juju_application" "this" {
 
 ### Required
 
-- `model` (String) The name of the model where the application is to be deployed. Changing this value will cause the application to be destroyed and recreated by terraform.
+- `model_uuid` (String) The UUID of the model where the application is to be deployed. Changing this value will cause the application to be destroyed and recreated by terraform.
 
 ### Optional
 

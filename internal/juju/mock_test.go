@@ -101,18 +101,18 @@ func (mr *MockSharedClientMockRecorder) Errorf(err, msg any) *gomock.Call {
 }
 
 // GetConnection mocks base method.
-func (m *MockSharedClient) GetConnection(modelName *string) (api.Connection, error) {
+func (m *MockSharedClient) GetConnection(modelUUID *string) (api.Connection, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetConnection", modelName)
+	ret := m.ctrl.Call(m, "GetConnection", modelUUID)
 	ret0, _ := ret[0].(api.Connection)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetConnection indicates an expected call of GetConnection.
-func (mr *MockSharedClientMockRecorder) GetConnection(modelName any) *gomock.Call {
+func (mr *MockSharedClientMockRecorder) GetConnection(modelUUID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConnection", reflect.TypeOf((*MockSharedClient)(nil).GetConnection), modelName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConnection", reflect.TypeOf((*MockSharedClient)(nil).GetConnection), modelUUID)
 }
 
 // JujuLogger mocks base method.
@@ -130,33 +130,33 @@ func (mr *MockSharedClientMockRecorder) JujuLogger() *gomock.Call {
 }
 
 // ModelStatus mocks base method.
-func (m *MockSharedClient) ModelStatus(modelIdentifier string, conn api.Connection) (*params0.FullStatus, error) {
+func (m *MockSharedClient) ModelStatus(modelUUID string, conn api.Connection) (*params0.FullStatus, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ModelStatus", modelIdentifier, conn)
+	ret := m.ctrl.Call(m, "ModelStatus", modelUUID, conn)
 	ret0, _ := ret[0].(*params0.FullStatus)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ModelStatus indicates an expected call of ModelStatus.
-func (mr *MockSharedClientMockRecorder) ModelStatus(modelIdentifier, conn any) *gomock.Call {
+func (mr *MockSharedClientMockRecorder) ModelStatus(modelUUID, conn any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModelStatus", reflect.TypeOf((*MockSharedClient)(nil).ModelStatus), modelIdentifier, conn)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModelStatus", reflect.TypeOf((*MockSharedClient)(nil).ModelStatus), modelUUID, conn)
 }
 
 // ModelType mocks base method.
-func (m *MockSharedClient) ModelType(modelName string) (model.ModelType, error) {
+func (m *MockSharedClient) ModelType(modelUUID string) (model.ModelType, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ModelType", modelName)
+	ret := m.ctrl.Call(m, "ModelType", modelUUID)
 	ret0, _ := ret[0].(model.ModelType)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ModelType indicates an expected call of ModelType.
-func (mr *MockSharedClientMockRecorder) ModelType(modelName any) *gomock.Call {
+func (mr *MockSharedClientMockRecorder) ModelType(modelUUID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModelType", reflect.TypeOf((*MockSharedClient)(nil).ModelType), modelName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModelType", reflect.TypeOf((*MockSharedClient)(nil).ModelType), modelUUID)
 }
 
 // ModelUUID mocks base method.

@@ -106,7 +106,7 @@ func (d *applicationDataSource) Read(ctx context.Context, req datasource.ReadReq
 	})
 
 	response, err := d.client.Applications.ReadApplication(&juju.ReadApplicationInput{
-		ModelName: modelName,
+		ModelUUID: modelName,
 		AppName:   appName,
 	})
 	if err != nil {
