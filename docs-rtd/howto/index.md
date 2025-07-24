@@ -37,7 +37,7 @@ Install the client, connect a Juju controller, connect clouds, add models.
 - {ref}`manage-credentials`
 - {ref}`manage-models`
 
-## Handle authorization
+## Handle authentication and authorization
 
 Set up SSH keys. Add users, service accounts, roles, and groups and control their access to controllers, clouds, models, or application offers.
 
