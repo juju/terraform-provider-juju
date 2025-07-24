@@ -49,7 +49,7 @@ Set up SSH keys. Add users, service accounts, roles, and groups and control thei
 
 ## Deploy infrastructure and applications
 
-Deploy, configure, integrate, scale, etc., charmed applications. This will automatically provision infrastructure, but you can customize it before, during, or after deploy too.
+Deploy, configure, integrate, scale, etc., charmed applications. This will automatically provision infrastructure, but you can customise it before, during, or after deploy too.
 
 - {ref}`manage-charms`
 - {ref}`manage-charm-resources`
