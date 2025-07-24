@@ -38,21 +38,7 @@ terraform {
 
 #### b. Configure the `juju` provider to use an existing Juju or JIMM controller
 
-In your Terraform plan, configure the `provider` with the details of your existing, externally managed Juju or JIMM controller. For example:
-
-```terraform
-provider "juju" {
-  controller_addresses = "<controller addresses>"
-  # For a controller deployed with a self-signed certificate:
-  ca_certificate = file("<path to certificate file>")
-  # For a regular Juju controller, provide the username and password:
-  username = "<username>"
-  password = "<password>"
-  # For a JIMM controller, provide the client ID and client secret:
-  client_id     = "<clientID>"
-  client_secret = "<clientSecret>"
-}
-```
+In your Terraform plan, configure the `provider` with the details of your existing, externally managed Juju or JIMM controller.
 
 > See more: {ref}<reference-an-externally-managed-controller>
 
