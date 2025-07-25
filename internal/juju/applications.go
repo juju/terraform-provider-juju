@@ -152,7 +152,7 @@ func ConfigEntryToString(input interface{}) string {
 
 type CreateApplicationInput struct {
 	ApplicationName    string
-	ModelName          string
+	ModelUUID          string
 	CharmName          string
 	CharmChannel       string
 	CharmBase          string
@@ -352,7 +352,7 @@ func resolveCharmURL(charmName string) (*charm.URL, error) {
 }
 
 func (c applicationsClient) CreateApplication(ctx context.Context, input *CreateApplicationInput) (*CreateApplicationResponse, error) {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +387,7 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	if err != nil {
 		return nil, err
 	}
-	modelType, err := c.ModelType(input.ModelName)
+	modelType, err := c.ModelType(input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}

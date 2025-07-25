@@ -626,11 +626,11 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		unitCount = len(machines)
 	}
 
-	modelName := plan.ModelUUID.ValueString()
+	modelUUID := plan.ModelUUID.ValueString()
 	createResp, err := r.client.Applications.CreateApplication(ctx,
 		&juju.CreateApplicationInput{
 			ApplicationName:    plan.ApplicationName.ValueString(),
-			ModelName:          modelName,
+			ModelUUID:          modelUUID,
 			CharmName:          charmName,
 			CharmChannel:       channel,
 			CharmRevision:      revision,
@@ -655,7 +655,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 
 	r.trace(fmt.Sprintf("create application resource %q", createResp.AppName))
 	readResp, err := r.client.Applications.ReadApplicationWithRetryOnNotFound(ctx, &juju.ReadApplicationInput{
-		ModelUUID: modelName,
+		ModelUUID: modelUUID,
 		AppName:   createResp.AppName,
 	})
 	if err != nil {

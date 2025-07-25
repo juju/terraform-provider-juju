@@ -241,7 +241,7 @@ func TestAcc_ResourceApplication_UpdateImportedSubordinate(t *testing.T) {
 
 	_, err = TestClient.Applications.CreateApplication(ctx, &juju.CreateApplicationInput{
 		ApplicationName: "telegraf",
-		ModelName:       modelName,
+		ModelUUID:       modelName,
 		CharmName:       "telegraf",
 		CharmChannel:    "latest/stable",
 		CharmRevision:   73,
