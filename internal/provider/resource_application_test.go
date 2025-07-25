@@ -745,7 +745,7 @@ func testAccResourceApplicationBasic_ntp_Subordinates(modelName string) string {
 		}
 
 		resource "juju_application" "ntp" {
-			model = juju_model.model.name
+			model_uuid = juju_model.model.uuid
 			name = "ntp"
 			charm {
 				name = "ntp"
@@ -884,7 +884,7 @@ func testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmNa
 
 		resource "juju_application" "testapp" {
 		  name = "juju-qa-test"
-		  model = juju_model.model.name
+		  model_uuid = juju_model.model.uuid
 
 
 		  machines = toset( juju_machine.all_machines[*].machine_id )
@@ -896,7 +896,7 @@ func testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmNa
 		}
 
 		resource "juju_application" "ntp" {
-			model = juju_model.model.name
+			model_uuid = juju_model.model.uuid
 			name = "ntp"
 
 			charm {
@@ -941,7 +941,7 @@ func testAccResourceApplicationBasic_UnitsWithSubordinates(modelName, charmName,
 
 		resource "juju_application" "testapp" {
 		  name = "juju-qa-test"
-		  model = juju_model.model.name
+		  model_uuid = juju_model.model.uuid
 
 
 		  units = %q
@@ -953,7 +953,7 @@ func testAccResourceApplicationBasic_UnitsWithSubordinates(modelName, charmName,
 		}
 
 		resource "juju_application" "ntp" {
-			model = juju_model.model.name
+			model_uuid = juju_model.model.uuid
 			name = "ntp"
 
 			charm {
@@ -1043,7 +1043,7 @@ func testAccResourceApplicationBasic_Placement(modelName, charmName string) stri
 		}
 
 		resource "juju_application" "testapp" {
-		  model = juju_model.model.name
+		  model_uuid = juju_model.model.uuid
 
 		  units = 1
 		  placement =  "${join(",", [juju_machine.machine.machine_id])}"
@@ -1069,7 +1069,7 @@ func testAccResourceApplicationBasic_Machines(modelName, charmName string) strin
 		}
 
 		resource "juju_application" "testapp" {
-		  model = juju_model.model.name
+		  model_uuid = juju_model.model.uuid
 
 		  machines = [juju_machine.machine.machine_id]
 
@@ -1314,7 +1314,7 @@ func testAccResourceApplicationBasic_Minimal(modelName, charmName string) string
 		}
 		
 		resource "juju_application" "testapp" {
-		  model = juju_model.testmodel.name
+		  model_uuid = juju_model.testmodel.uuid
 		  charm {
 			name = %q
 		  }
@@ -1331,7 +1331,7 @@ func testAccResourceApplicationVersioned(modelName, appName string, version int)
 			}
 			
 			resource "juju_application" "this" {
-			  model = juju_model.this.name
+			  model_uuid = juju_model.this.uuid
 			  name = %q
 			  charm {
 				name = "ubuntu-lite"

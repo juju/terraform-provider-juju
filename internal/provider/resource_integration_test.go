@@ -122,7 +122,7 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "one" {
-	model = juju_model.this.name
+	model_uuid = juju_model.this.uuid
 	name  = "one" 
 	
 	charm {
@@ -132,7 +132,7 @@ resource "juju_application" "one" {
 }
 
 resource "juju_application" "two" {
-	model = juju_model.this.name
+	model_uuid = juju_model.this.uuid
 	name  = "two"
 
 	charm {
@@ -167,7 +167,7 @@ resource "juju_model" "a" {
 }
 
 resource "juju_application" "a" {
-	model = juju_model.a.name
+	model_uuid = juju_model.a.uuid
 	name  = "a" 
 	
 	charm {
@@ -181,7 +181,7 @@ resource "juju_model" "b" {
 }
 
 resource "juju_application" "b" {
-	model = juju_model.b.name
+	model_uuid = juju_model.b.uuid
 	name  = "b"
 	
 	charm {
@@ -274,7 +274,7 @@ resource "juju_model" "a" {
 }
 
 resource "juju_application" "a" {
-        model = juju_model.a.name
+        model_uuid = juju_model.a.uuid
         name  = "a"
 
         charm {
@@ -293,7 +293,7 @@ resource "juju_model" "b" {
 }
 
 resource "juju_application" "b1" {
-        model = juju_model.b.name
+        model_uuid = juju_model.b.uuid
         name  = "b1"
 
         charm {
@@ -316,7 +316,7 @@ resource "juju_integration" "b1" {
 }
 
 resource "juju_application" "b2" {
-        model = juju_model.b.name
+        model_uuid = juju_model.b.uuid
         name  = "b2"
 
         charm {

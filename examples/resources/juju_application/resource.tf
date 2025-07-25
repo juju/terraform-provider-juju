@@ -1,7 +1,7 @@
 resource "juju_application" "this" {
   name = "my-application"
 
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   charm {
     name     = "ubuntu"

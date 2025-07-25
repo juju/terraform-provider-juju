@@ -63,7 +63,7 @@ resource "juju_model" "model" {
 
 resource "juju_application" "this" {
   name = %q
-  model = juju_model.model.name
+  model_uuid = juju_model.model.uuid
   trust = true
 
   charm {
@@ -87,7 +87,7 @@ resource "juju_model" "model" {
 
 resource "juju_application" "this" {
   name = %q
-  model = juju_model.model.name
+  model_uuid = juju_model.model.uuid
   trust = true
 
   charm {

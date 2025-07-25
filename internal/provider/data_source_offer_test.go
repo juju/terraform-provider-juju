@@ -99,7 +99,7 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-	model = juju_model.this.name
+	model_uuid = juju_model.this.uuid
 	name  = "this"
 
 	charm {
@@ -128,7 +128,7 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-	model = juju_model.this.name
+	model_uuid = juju_model.this.uuid
 	name  = "this"
 
 	charm {
