@@ -1473,11 +1473,10 @@ Make sure to manually delete them.`, appName, err))
 	r.trace(fmt.Sprintf("deleted application resource %q", state.ID.ValueString()))
 }
 
-// UpgradeState upgrades the state of the offer resource.
+// UpgradeState upgrades the state of the application resource.
 // This is used to handle changes in the resource schema between versions.
 func (o *applicationResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
 	return map[int64]resource.StateUpgrader{
-		// Upgrade from `endpoint` to `endpoints` attribute.
 		0: {
 			PriorSchema: &appV0Schema,
 			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
@@ -1592,271 +1591,141 @@ func assertEqualsMachines(machinesToCompare []string) func(outputFromAPI *juju.R
 	}
 }
 
+// Below we store old schema definitions for the application resource.
+// These are used to upgrade the state of the resource when the schema version changes.
+// Keeping the v0 schema verbatim is the simplest solution currently and permits
+// the design to change to something like a schema factory in the future.
+
 var appV0Schema = schema.Schema{
 	Description: "A resource that represents a single Juju application deployment from a charm. Deployment of bundles" +
 		" is not supported.",
 	Version: 0,
 	Attributes: map[string]schema.Attribute{
 		"name": schema.StringAttribute{
-			Description: "A custom name for the application deployment. If empty, uses the charm's name." +
-				"Changing this value will cause the application to be destroyed and recreated by terraform.",
 			Optional: true,
 			Computed: true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.RequiresReplaceIfConfigured(),
-				stringplanmodifier.UseStateForUnknown(),
-			},
 		},
 		MachinesKey: schema.SetAttribute{
 			ElementType: types.StringType,
-			Description: "Specify the target machines for the application's units. The number of machines in the set indicates" +
-				" the unit count for the application. Removing a machine from the set will remove the application's unit residing on it." +
-				" `machines` is mutually exclusive with `units` and `placement` (which is deprecated).",
-			Optional: true,
-			Computed: true,
-			Validators: []validator.Set{
-				setvalidator.ConflictsWith(path.Expressions{
-					path.MatchRoot(PlacementKey),
-					path.MatchRoot(UnitsKey),
-				}...),
-			},
-		},
-		"model": schema.StringAttribute{
-			Description: "The name of the model where the application is to be deployed. Changing this value" +
-				" will cause the application to be destroyed and recreated by terraform.",
-			Required: true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.RequiresReplaceIfConfigured(),
-			},
-		},
-		"model_type": schema.StringAttribute{
-			Description: "The type of the model where the application is deployed. It is a computed field and " +
-				"is needed to determine if the application should be replaced or updated in case of base updates.",
-			Computed: true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
-			},
-		},
-		UnitsKey: schema.Int64Attribute{
-			Description: "The number of application units to deploy for the charm.",
 			Optional:    true,
 			Computed:    true,
-			//Default:     int64default.StaticInt64(int64(1)),
-			PlanModifiers: []planmodifier.Int64{
-				UnitCountModifier(),
-				int64planmodifier.UseStateForUnknown(),
-			},
+		},
+		"model": schema.StringAttribute{
+			Required: true,
+		},
+		"model_type": schema.StringAttribute{
+			Computed: true,
+		},
+		UnitsKey: schema.Int64Attribute{
+			Optional: true,
+			Computed: true,
 		},
 		ConfigKey: schema.MapAttribute{
-			Description: "Application specific configuration. Must evaluate to a string, integer or boolean.",
 			Optional:    true,
 			ElementType: types.StringType,
 		},
 		ConstraintsKey: schema.StringAttribute{
 			CustomType: CustomConstraintsType{},
-			Description: "Constraints imposed on this application. Changing this value will cause the" +
-				" application to be destroyed and recreated by terraform.",
-			Optional: true,
+			Optional:   true,
 			// Set as "computed" to pre-populate and preserve any implicit constraints
 			Computed: true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.RequiresReplaceIf(constraintsRequiresReplacefunc, "", ""),
-				stringplanmodifier.UseStateForUnknown(),
-			},
 		},
 		"storage_directives": schema.MapAttribute{
-			Description: "Storage directives (constraints) for the juju application." +
-				" The map key is the label of the storage defined by the charm," +
-				" the map value is the storage directive in the form <pool>,<count>,<size>." +
-				" Changing an existing key/value pair will cause the application to be replaced." +
-				" Adding a new key/value pair will add storage to the application on upgrade.",
 			ElementType: types.StringType,
 			Optional:    true,
-			Validators: []validator.Map{
-				stringIsStorageDirectiveValidator{},
-			},
-			PlanModifiers: []planmodifier.Map{
-				mapplanmodifier.RequiresReplaceIf(storageDirectivesMapRequiresReplace, "", ""),
-			},
 		},
 		"storage": schema.SetNestedAttribute{
-			Description: "Storage used by the application.",
-			Optional:    true,
-			Computed:    true,
+			Optional: true,
+			Computed: true,
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: map[string]schema.Attribute{
 					"label": schema.StringAttribute{
-						Description: "The specific storage option defined in the charm.",
-						Computed:    true,
+						Computed: true,
 					},
 					"size": schema.StringAttribute{
-						Description: "The size of each volume.",
-						Computed:    true,
+						Computed: true,
 					},
 					"pool": schema.StringAttribute{
-						Description: "Name of the storage pool.",
-						Computed:    true,
+						Computed: true,
 					},
 					"count": schema.Int64Attribute{
-						Description: "The number of volumes.",
-						Computed:    true,
+						Computed: true,
 					},
 				},
 			},
 		},
 		"trust": schema.BoolAttribute{
-			Description: "Set the trust for the application.",
-			Optional:    true,
-			Computed:    true,
-			Default:     booldefault.StaticBool(false),
-		},
-		PlacementKey: schema.StringAttribute{
-			Description: "Specify the target location for the application's units. Changing this value" +
-				" will cause the application to be destroyed and recreated by terraform.",
 			Optional: true,
 			Computed: true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.RequiresReplaceIfConfigured(),
-			},
-			Validators: []validator.String{
-				stringvalidator.ConflictsWith(path.Expressions{
-					path.MatchRoot(MachinesKey),
-				}...),
-			},
-			DeprecationMessage: "Configure machines instead. This attribute will be removed in the next major version of the provider.",
+			Default:  booldefault.StaticBool(false),
+		},
+		PlacementKey: schema.StringAttribute{
+			Optional: true,
+			Computed: true,
 		},
 		"principal": schema.BoolAttribute{
-			Description: "Whether this is a Principal application",
-			Computed:    true,
-			PlanModifiers: []planmodifier.Bool{
-				boolplanmodifier.UseStateForUnknown(),
-			},
-			DeprecationMessage: "Principal is computed only and not needed. This attribute will be removed in the next major version of the provider.",
+			Computed: true,
 		},
 		"id": schema.StringAttribute{
 			Computed: true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
-			},
 		},
 		EndpointBindingsKey: schema.SetNestedAttribute{
-			Description: "Configure endpoint bindings",
-			Optional:    true,
+			Optional: true,
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: map[string]schema.Attribute{
 					"endpoint": schema.StringAttribute{
-						Description: "Name of the endpoint to bind to a space. Keep null (or undefined) to define default binding.",
-						Optional:    true,
+						Optional: true,
 					},
 					"space": schema.StringAttribute{
-						Description: "Name of the space to bind the endpoint to.",
-						Required:    true,
+						Required: true,
 					},
-				},
-			},
-			Validators: []validator.Set{
-				setNestedIsAttributeUniqueValidator{
-					PathExpressions: path.MatchRelative().AtAnySetValue().MergeExpressions(path.MatchRelative().AtName("endpoint")),
 				},
 			},
 		},
 		ResourceKey: schema.MapAttribute{
 			Optional:    true,
 			ElementType: types.StringType,
-			Validators: []validator.Map{
-				StringIsResourceKeyValidator{},
-			},
-			MarkdownDescription: resourceKeyMarkdownDescription,
 		},
 	},
 	Blocks: map[string]schema.Block{
 		CharmKey: schema.ListNestedBlock{
-			Description: "The charm installed from Charmhub.",
 			NestedObject: schema.NestedBlockObject{
 				Attributes: map[string]schema.Attribute{
 					"name": schema.StringAttribute{
 						Required: true,
-						Description: "The name of the charm to be deployed.  Changing this value will cause" +
-							" the application to be destroyed and recreated by terraform.",
-						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.RequiresReplaceIfConfigured(),
-						},
 					},
 					"channel": schema.StringAttribute{
-						Description: "The channel to use when deploying a charm. Specified as \\<track>/\\<risk>/\\<branch>.",
-						Optional:    true,
-						Computed:    true,
-						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
-						},
-						Validators: []validator.String{
-							StringIsChannelValidator{},
-						},
+						Optional: true,
+						Computed: true,
 					},
 					"revision": schema.Int64Attribute{
-						Description: "The revision of the charm to deploy. During the update phase, the charm revision should be update before config update, to avoid issues with config parameters parsing.",
-						Optional:    true,
-						Computed:    true,
-						PlanModifiers: []planmodifier.Int64{
-							int64planmodifier.UseStateForUnknown(),
-						},
+						Optional: true,
+						Computed: true,
 					},
 					SeriesKey: schema.StringAttribute{
-						Description: "The series on which to deploy.",
-						Optional:    true,
-						Computed:    true,
-						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
-						},
-						Validators: []validator.String{
-							stringvalidator.ConflictsWith(path.Expressions{
-								path.MatchRelative().AtParent().AtName(BaseKey),
-							}...),
-						},
-						DeprecationMessage: "Configure base instead. This attribute will be removed in the next major version of the provider.",
+						Optional: true,
+						Computed: true,
 					},
 					BaseKey: schema.StringAttribute{
-						Description: "The operating system on which to deploy. E.g. ubuntu@22.04. Changing this value for machine charms will trigger a replace by terraform.",
-						Optional:    true,
-						Computed:    true,
-						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
-							stringplanmodifier.RequiresReplaceIf(baseApplicationRequiresReplaceIf, "", ""),
-						},
-						Validators: []validator.String{
-							stringvalidator.ConflictsWith(path.Expressions{
-								path.MatchRelative().AtParent().AtName(SeriesKey),
-							}...),
-							stringIsBaseValidator{},
-						},
+						Optional: true,
+						Computed: true,
 					},
 				},
-			},
-			Validators: []validator.List{
-				listvalidator.SizeAtMost(1),
-				listvalidator.IsRequired(),
 			},
 		},
 		ExposeKey: schema.ListNestedBlock{
-			Description: "Makes an application publicly available over the network",
 			NestedObject: schema.NestedBlockObject{
 				Attributes: map[string]schema.Attribute{
 					EndpointsKey: schema.StringAttribute{
-						Description: "Expose only the ports that charms have opened for this comma-delimited list of endpoints",
-						Optional:    true,
+						Optional: true,
 					},
 					SpacesKey: schema.StringAttribute{
-						Description: "A comma-delimited list of spaces that should be able to access the application ports once exposed.",
-						Optional:    true,
+						Optional: true,
 					},
 					CidrsKey: schema.StringAttribute{
-						Description: "A comma-delimited list of CIDRs that should be able to access the application ports once exposed.",
-						Optional:    true,
+						Optional: true,
 					},
 				},
-			},
-			Validators: []validator.List{
-				listvalidator.SizeAtMost(1),
 			},
 		},
 	},

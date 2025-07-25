@@ -1115,6 +1115,41 @@ func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceApplication_UpgradeV0ToV1(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+	appName := "test-app"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
+
+		Steps: []resource.TestStep{
+			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderPreV1Version,
+						Source:            "juju/juju",
+					},
+				},
+				Config: testAccResourceApplicationVersioned(modelName, appName, 0),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
+				),
+			},
+			{
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceApplicationVersioned(modelName, appName, 1),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
+					resource.TestCheckNoResourceAttr("juju_application.this", "model"),
+				),
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
@@ -1285,6 +1320,41 @@ func testAccResourceApplicationBasic_Minimal(modelName, charmName string) string
 		  }
 		}
 		`, modelName, charmName)
+}
+
+func testAccResourceApplicationVersioned(modelName, appName string, version int) string {
+	switch version {
+	case 0:
+		return fmt.Sprintf(`
+			resource "juju_model" "this" {
+			  name = %q
+			}
+			
+			resource "juju_application" "this" {
+			  model = juju_model.this.name
+			  name = %q
+			  charm {
+				name = "ubuntu-lite"
+			  }
+			}
+			`, modelName, appName)
+	case 1:
+		return fmt.Sprintf(`
+			resource "juju_model" "this" {
+			  name = %q
+			}
+			
+			resource "juju_application" "this" {
+			  model_uuid = juju_model.this.uuid
+			  name = %q
+			  charm {
+				name = "ubuntu-lite"
+			  }
+			}
+			`, modelName, appName)
+	default:
+		panic(fmt.Sprintf("Unsupported version %d", version))
+	}
 }
 
 func testAccResourceApplicationBasic(modelName, appName string) string {
