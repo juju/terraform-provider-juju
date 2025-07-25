@@ -36,7 +36,7 @@ func TestAcc_ResourceApplication(t *testing.T) {
 			{
 				Config: testAccResourceApplicationBasic(modelName, appName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
@@ -52,7 +52,7 @@ func TestAcc_ResourceApplication(t *testing.T) {
 				},
 				Config: testAccResourceApplicationConstraints(modelName, "arch=amd64 cores=1 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 cores=1 mem=4096M"),
 				),
 			},
@@ -68,7 +68,7 @@ func TestAcc_ResourceApplication(t *testing.T) {
 				},
 				Config: testAccResourceApplicationConstraints(modelName, "arch=amd64 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 mem=4096M"),
 				),
 			},
@@ -78,7 +78,7 @@ func TestAcc_ResourceApplication(t *testing.T) {
 				},
 				Config: testAccResourceApplicationConstraintsSubordinate(modelName, "arch=amd64 cores=1 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 cores=1 mem=4096M"),
 				),
 			},
@@ -105,7 +105,7 @@ func TestAcc_ResourceApplication_ConstraintsNormalization(t *testing.T) {
 			{
 				Config: testAccResourceApplicationConstraints(modelName, "arch=amd64 cores=1 mem=4096M"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 cores=1 mem=4096M"),
 					resource.TestCheckResourceAttr("juju_application.this", "machines.#", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "machines.0", "0"),
@@ -114,7 +114,7 @@ func TestAcc_ResourceApplication_ConstraintsNormalization(t *testing.T) {
 			{
 				Config: testAccResourceApplicationConstraints(modelName, "mem=4096M cores=1 arch=amd64"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application.this", "constraints", "mem=4096M cores=1 arch=amd64"),
 					// assert that machines have not changed due to changed order in constraints
 					resource.TestCheckResourceAttr("juju_application.this", "machines.#", "1"),
@@ -135,7 +135,7 @@ func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
 		Steps: []resource.TestStep{{
 			Config: testAccResourceApplicationScaleUp(modelName, appName, "1"),
 			Check: resource.ComposeTestCheckFunc(
-				resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+				resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 				resource.TestCheckResourceAttr("juju_application.this", "name", appName),
 				resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
 				resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
@@ -145,7 +145,7 @@ func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
 		}, {
 			Config: testAccResourceApplicationScaleUp(modelName, appName, "2"),
 			Check: resource.ComposeTestCheckFunc(
-				resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+				resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 				resource.TestCheckResourceAttr("juju_application.this", "name", appName),
 				resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
 				resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
@@ -155,7 +155,7 @@ func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
 		}, {
 			Config: testAccResourceApplicationScaleUp(modelName, appName, "1"),
 			Check: resource.ComposeTestCheckFunc(
-				resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+				resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 				resource.TestCheckResourceAttr("juju_application.this", "name", appName),
 				resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
 				resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
@@ -180,7 +180,7 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 			{
 				Config: testAccResourceApplicationUpdates(modelName, 1, true, "machinename"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", appName),
 					resource.TestCheckResourceAttr("juju_application.this", "units", "1"),
@@ -1098,7 +1098,7 @@ func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
 				},
 				Config: testAccResourceApplicationBasic(modelName, appName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
@@ -1132,7 +1132,7 @@ func TestAcc_ResourceApplication_UpgradeV0ToV1(t *testing.T) {
 				},
 				Config: testAccResourceApplicationVersioned(modelName, appName, 0),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
@@ -1365,7 +1365,7 @@ func testAccResourceApplicationBasic(modelName, appName string) string {
 		}
 		
 		resource "juju_application" "this" {
-		  model = juju_model.this.name
+		  model_uuid = juju_model.this.uuid
 		  name = %q
 		  charm {
 			name = "ubuntu-lite"
@@ -1382,7 +1382,7 @@ func testAccResourceApplicationBasic(modelName, appName string) string {
 		}
 		
 		resource "juju_application" "this" {
-		  model = juju_model.this.name
+		  model_uuid = juju_model.this.uuid
 		  name = %q
 		  charm {
 			name = "ubuntu-lite"
@@ -1405,7 +1405,7 @@ func testAccResourceApplicationScaleUp(modelName, appName, numberOfUnits string)
 		}
 		
 		resource "juju_application" "this" {
-		  model = juju_model.this.name
+		  model_uuid = juju_model.this.uuid
 		  name = %q
 		  charm {
 			name = "ubuntu-lite"
@@ -1423,7 +1423,7 @@ func testAccResourceApplicationScaleUp(modelName, appName, numberOfUnits string)
 		}
 		
 		resource "juju_application" "this" {
-		  model = juju_model.this.name
+		  model_uuid = juju_model.this.uuid
 		  name = %q
 		  charm {
 			name = "ubuntu-lite"
@@ -1488,7 +1488,7 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-  model = juju_model.this.name
+  model_uuid = juju_model.this.uuid
   name = "test-app"
   charm {
     name     = "coredns"
@@ -1513,7 +1513,7 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-  model = juju_model.this.name
+  model_uuid = juju_model.this.uuid
   name = "test-app"
   charm {
     name     = "coredns"
@@ -1541,7 +1541,7 @@ func testAccResourceApplicationUpdates(modelName string, units int, expose bool,
 		}
 		
 		resource "juju_application" "this" {
-		  model = juju_model.this.name
+		  model_uuid = juju_model.this.uuid
 		  units = %d
 		  name = "test-app"
 		  charm {
@@ -1561,7 +1561,7 @@ func testAccResourceApplicationUpdates(modelName string, units int, expose bool,
 		}
 		
 		resource "juju_application" "this" {
-		  model = juju_model.this.name
+		  model_uuid = juju_model.this.uuid
 		  units = %d
 		  name = "test-app"
 		  charm {
@@ -1587,7 +1587,7 @@ func testAccResourceApplicationUpdatesCharm(modelName string, channel string) st
 		}
 		
 		resource "juju_application" "this" {
-		  model = juju_model.this.name
+		  model_uuid = juju_model.this.uuid
 		  name = "test-app"
 		  charm {
 			name     = "ubuntu"
@@ -1602,7 +1602,7 @@ func testAccResourceApplicationUpdatesCharm(modelName string, channel string) st
 		}
 		
 		resource "juju_application" "this" {
-		  model = juju_model.this.name
+		  model_uuid = juju_model.this.uuid
 		  name = "test-app"
 		  charm {
 			name     = "coredns"
@@ -1621,7 +1621,7 @@ func testAccApplicationUpdateBaseCharm(modelName string, base string) string {
 		}
 		
 		resource "juju_application" "this" {
-		  model = juju_model.this.name
+		  model_uuid = juju_model.this.uuid
 		  name = "test-app"
 		  charm {
 			name     = "ubuntu"
@@ -1636,7 +1636,7 @@ func testAccApplicationUpdateBaseCharm(modelName string, base string) string {
 		}
 		
 		resource "juju_application" "this" {
-		  model = juju_model.this.name
+		  model_uuid = juju_model.this.uuid
 		  name = "test-app"
 		  charm {
 			name     = "coredns"
@@ -1659,7 +1659,7 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-  model = juju_model.this.name
+  model_uuid = juju_model.this.uuid
   units = 1
   name = "test-app"
   charm {
@@ -1679,7 +1679,7 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-  model = juju_model.this.name
+  model_uuid = juju_model.this.uuid
   name = "test-app"
   charm {
     name     = "ubuntu-lite"
@@ -1717,7 +1717,7 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-  model = juju_model.this.name
+  model_uuid = juju_model.this.uuid
   units = 0
   name = "test-app"
   charm {
@@ -1730,7 +1730,7 @@ resource "juju_application" "this" {
 }
 
 resource "juju_application" "subordinate" {
-  model = juju_model.this.name
+  model_uuid = juju_model.this.uuid
   name = "test-subordinate"
   charm {
     name = "nrpe"
@@ -2085,7 +2085,7 @@ func TestAcc_ResourceApplication_UpdateEmptyConfig(t *testing.T) {
 			{
 				Config: testAccResourceApplicationUpdateConfig(modelName, appName, false, map[string]string{"config-file": "xxx"}),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "conserver"),
@@ -2153,7 +2153,7 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-  model = juju_model.this.name
+  model_uuid = juju_model.this.uuid
   name = %q
   charm {
 	name = "conserver"
@@ -2174,7 +2174,7 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-  model = juju_model.this.name
+  model_uuid = juju_model.this.uuid
   name = %q
   charm {
 	name = "conserver"

@@ -138,6 +138,11 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 		user = fmt.Sprintf("%s%s", config.ClientID, serviceAccountSuffix)
 	}
 
+	err := sc.fillModelCache()
+	if err != nil {
+		return nil, errors.Annotatef(err, "failed to fill model cache")
+	}
+
 	return &Client{
 		Applications: *newApplicationClient(sc),
 		Clouds:       *newKubernetesCloudsClient(sc),
@@ -315,6 +320,7 @@ func (sc *sharedClient) ModelType(modelIdentifier string) (model.ModelType, erro
 		if modelWithUUID, ok := sc.modelUUIDcache[modelIdentifier]; ok {
 			return modelWithUUID.modelType, nil
 		}
+		return "", errors.NotFoundf("type for model %q", modelIdentifier)
 	}
 
 	for _, m := range sc.modelUUIDcache {
