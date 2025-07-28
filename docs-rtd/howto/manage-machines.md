@@ -20,7 +20,7 @@ data "juju_machine" "this" {
 }
 ```
 
-> See more: [`juju_machine` (data source)](https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/machine)
+> See more: [`juju_machine` (data source)](../reference/terraform-provider/data-sources/machine)
 
 
 ## Add a machine
@@ -36,7 +36,7 @@ resource "juju_machine" "machine_0" {
 You can optionally specify a base, a name, regular constraints, storage constraints, etc. You can also specify a `private_key_file`, `public_key_file`, and `ssh_address` -- that will allow you to add to the model an existing, manual machine (rather than a virtual one provisioned for you by the cloud).
 
 
-> See more: [`juju_machine` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/machine)
+> See more: [`juju_machine` (resource)](../reference/terraform-provider/resources/machine)
 
 ## Manage constraints for a machine
 > See also: {external+juju:ref}`Juju | Constraint <constraint>`
@@ -51,7 +51,7 @@ resource "juju_machine" "machine_0" {
 }
 ```
 
-> See more: [`juju_machine` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/machine)
+> See more: [`juju_machine` (resource)](../reference/terraform-provider/resources/machine)
 
 
 
@@ -60,4 +60,4 @@ resource "juju_machine" "machine_0" {
 
 To remove a machine, remove its resource definition from your Terraform plan.
 
-> See more: [`juju_machine` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/machine)
+> See more: [`juju_machine` (resource)](../reference/terraform-provider/resources/machine)

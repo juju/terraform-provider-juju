@@ -15,7 +15,7 @@ data "juju_jaas_group" "test" {
 }
 ```
 
-> See more: [`juju_jaas_group` (data source)](https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/jaas_group)
+> See more: [`juju_jaas_group` (data source)](../reference/terraform-provider/data-sources/jaas_group)
 
 
 ## Add a group
@@ -28,7 +28,7 @@ resource "juju_jaas_group" "development" {
 }
 ```
 
-> See more: [`juju_jaas_group` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_group)
+> See more: [`juju_jaas_group` (resource)](../reference/terraform-provider/resources/jaas_group)
 
 (manage-access-to-a-group)=
 ## Manage access to a group
@@ -49,7 +49,7 @@ resource "juju_jaas_access_group" "development" {
 }
 ```
 
-> See more: [`juju_jaas_access_group`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_group), {external+jaas:ref}`JAAS | Group access levels <list-of-group-permissions>`
+> See more: [`juju_jaas_access_group`](../reference/terraform-provider/resources/jaas_access_group), {external+jaas:ref}`JAAS | Group access levels <list-of-group-permissions>`
 
 ## Manage a group's access to a controller, cloud, model, offer, role, or group
 

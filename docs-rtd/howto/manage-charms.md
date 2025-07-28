@@ -24,7 +24,7 @@ resource "juju_application" "this" {
 }
 ```
 
-> See more: [`juju_application` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#schema)
+> See more: [`juju_application` (resource)](../reference/terraform-provider//resources/application)
 
 
 (update-a-charm)=
@@ -45,7 +45,7 @@ resource "juju_application" "this" {
 }
 ```
 
-> See more: [`juju_application` > `charm` > nested schema ](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#nested-schema-for-charm)
+> See more: [`juju_application` > `charm` > nested schema ](../reference/terraform-provider/resources/application)
 
 ## Remove a charm
 
