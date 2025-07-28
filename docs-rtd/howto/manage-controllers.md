@@ -14,7 +14,7 @@ To reference a controller that you've created outside of Terraform (because Terr
 For all methods: To view your controller’s details, run `juju show-controller --show-password`.
 ```
 
-##### Using static credentials
+### Using static credentials
 
 In your Terraform plan add:
 
@@ -41,7 +41,7 @@ provider "juju" {
 
 > See more: [`juju` provider](../reference/index)
 
-##### Using environment variables
+### Using environment variables
 
 In your Terraform plan, leave the `provider` specification empty:
 
@@ -66,7 +66,7 @@ export JUJU_CLIENT_SECRET="<client secret>"
 > See more: [`juju` provider](../reference/index)
 
 
-##### Using the `juju` CLI
+### Using the `juju` CLI
 
 ```{important}
 This method is only supported for regular Juju controllers.

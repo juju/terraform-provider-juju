@@ -30,6 +30,8 @@ Like all of Juju, the Terraform Provider for Juju is for SREs, or anyone looking
 - **Handle authentication and authorization:** {ref}`SSH keys <manage-ssh-keys>`, {ref}`Users <manage-users>`, {ref}`Service accounts <manage-service-accounts>`, {ref}`Roles <manage-roles>`, {ref}`Groups <manage-groups>`
 - **Deploy infrastructure and applications:** {ref}`Deploy <deploy-an-application>`, {ref}`Configure <configure-an-application>`, {ref}`Integrate <integrate-an-application-with-another-application>`, {ref}`Scale <scale-an-application>`, {ref}`Upgrade <upgrade-an-application>`, etc.
 
+````{grid} 1 1 1 1
+
 ```{grid-item-card} [Tutorial](tutorial)
 :link: tutorial
 :link-type: doc
@@ -50,6 +52,7 @@ Like all of Juju, the Terraform Provider for Juju is for SREs, or anyone looking
 
 **Technical information** - specifications, APIs, architecture
 ```
+````
 
 ---------
 
