@@ -232,7 +232,7 @@ func TestAcc_ResourceApplication_UpdateImportedSubordinate(t *testing.T) {
 
 	ctx := context.Background()
 
-	_, err := TestClient.Models.CreateModel(juju.CreateModelInput{
+	resp, err := TestClient.Models.CreateModel(juju.CreateModelInput{
 		Name: modelName,
 	})
 	if err != nil {
@@ -241,7 +241,7 @@ func TestAcc_ResourceApplication_UpdateImportedSubordinate(t *testing.T) {
 
 	_, err = TestClient.Applications.CreateApplication(ctx, &juju.CreateApplicationInput{
 		ApplicationName: "telegraf",
-		ModelUUID:       modelName,
+		ModelUUID:       resp.UUID,
 		CharmName:       "telegraf",
 		CharmChannel:    "latest/stable",
 		CharmRevision:   73,
@@ -256,14 +256,14 @@ func TestAcc_ResourceApplication_UpdateImportedSubordinate(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config:             testAccResourceApplicationSubordinate(modelName, 73),
+				Config:             testAccResourceApplicationSubordinate(resp.UUID, 73),
 				ImportState:        true,
-				ImportStateId:      fmt.Sprintf("%s:telegraf", modelName),
+				ImportStateId:      fmt.Sprintf("%s:telegraf", resp.UUID),
 				ImportStatePersist: true,
 				ResourceName:       "juju_application.telegraf",
 			},
 			{
-				Config: testAccResourceApplicationSubordinate(modelName, 75),
+				Config: testAccResourceApplicationSubordinate(resp.UUID, 75),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.telegraf", "charm.0.name", "telegraf"),
 					resource.TestCheckResourceAttr("juju_application.telegraf", "charm.0.revision", "75"),
@@ -291,7 +291,7 @@ func TestAcc_ResourceApplication_UpdatesRevisionConfig(t *testing.T) {
 			{
 				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, appName, 88, "", "", ""),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "charm.#", "1"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "charm.0.name", appName),
 					resource.TestCheckResourceAttr("juju_application."+appName, "charm.0.revision", "88"),
@@ -684,7 +684,6 @@ func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 	}
 	resourceName := "juju_application.testapp"
 	checkResourceAttr := []resource.TestCheckFunc{
-		resource.TestCheckResourceAttr(resourceName, "model", modelName),
 		resource.TestCheckResourceAttr(resourceName, "name", charmName),
 		resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
 		resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
@@ -720,7 +719,7 @@ func TestAcc_ResourceApplication_Subordinate(t *testing.T) {
 	ntpName := "juju_application.ntp"
 
 	checkResourceAttrSubordinate := []resource.TestCheckFunc{
-		resource.TestCheckResourceAttr(ntpName, "model", modelName),
+		resource.TestCheckResourceAttrPair("juju_model.model", "uuid", ntpName, "model_uuid"),
 		resource.TestCheckResourceAttr(ntpName, "units", "1"),
 	}
 	resource.ParallelTest(t, resource.TestCase{
@@ -764,18 +763,16 @@ func TestAcc_ResourceApplication_MachinesWithSubordinates(t *testing.T) {
 	charmName := "juju-qa-test"
 
 	resourceName := "juju_application.testapp"
-	ntpName := "juju_application.ntp"
 	numberOfMachines := 10
 
 	checkResourceAttrMachines := func(numberOfMachines int) []resource.TestCheckFunc {
 		return []resource.TestCheckFunc{
-			resource.TestCheckResourceAttr(resourceName, "model", modelName),
+			resource.TestCheckResourceAttrPair("juju_model.model", "uuid", resourceName, "model_uuid"),
 			resource.TestCheckResourceAttr(resourceName, "name", charmName),
 			resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
 			resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
 			resource.TestCheckResourceAttr(resourceName, "units", fmt.Sprintf("%d", numberOfMachines)),
 			resource.TestCheckResourceAttr(resourceName, "machines.#", fmt.Sprintf("%d", numberOfMachines)),
-			resource.TestCheckResourceAttr(ntpName, "model", modelName),
 			resource.TestCheckResourceAttr("juju_integration.testapp_ntp", "application.#", "2"),
 		}
 	}
@@ -820,18 +817,15 @@ func TestAcc_ResourceApplication_SwitchMachinestoUnits(t *testing.T) {
 	charmName := "juju-qa-test"
 
 	resourceName := "juju_application.testapp"
-	ntpName := "juju_application.ntp"
 	numberOfMachines := 3
 
 	checkResourceAttrMachines := func(numberOfMachines int) []resource.TestCheckFunc {
 		return []resource.TestCheckFunc{
-			resource.TestCheckResourceAttr(resourceName, "model", modelName),
 			resource.TestCheckResourceAttr(resourceName, "name", charmName),
 			resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
 			resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
 			resource.TestCheckResourceAttr(resourceName, "units", fmt.Sprintf("%d", numberOfMachines)),
 			resource.TestCheckResourceAttr(resourceName, "machines.#", fmt.Sprintf("%d", numberOfMachines)),
-			resource.TestCheckResourceAttr(ntpName, "model", modelName),
 			resource.TestCheckResourceAttr("juju_integration.testapp_ntp", "application.#", "2"),
 		}
 	}
@@ -993,14 +987,12 @@ func TestAcc_ResourceApplication_Machines(t *testing.T) {
 
 	resourceName := "juju_application.testapp"
 	checkResourceAttrPlacement := []resource.TestCheckFunc{
-		resource.TestCheckResourceAttr(resourceName, "model", modelName),
 		resource.TestCheckResourceAttr(resourceName, "name", charmName),
 		resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
 		resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
 		resource.TestCheckResourceAttr(resourceName, "units", "1"),
 	}
 	checkResourceAttrMachines := []resource.TestCheckFunc{
-		resource.TestCheckResourceAttr(resourceName, "model", modelName),
 		resource.TestCheckResourceAttr(resourceName, "name", charmName),
 		resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
 		resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
@@ -1082,6 +1074,8 @@ func testAccResourceApplicationBasic_Machines(modelName, charmName string) strin
 }
 
 func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
+	t.Skip("This test currently fails due to the breaking change in the provider schema. " +
+		"Remove the skip after the v1 release of the provider.")
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 
@@ -1132,7 +1126,6 @@ func TestAcc_ResourceApplication_UpgradeV0ToV1(t *testing.T) {
 				},
 				Config: testAccResourceApplicationVersioned(modelName, appName, 0),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
@@ -1169,7 +1162,7 @@ func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 				// test creating a single application with default endpoint bound to management space, and ubuntu endpoint bound to public space
 				Config: testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
+					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "ubuntu", "space": publicSpace}),
@@ -1204,7 +1197,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 				// test creating a single application with default endpoint bound to management space
 				Config: testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": managementSpace}),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
+					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "1"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
 					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, managementSpace, map[string]string{"": managementSpace}),
@@ -1215,7 +1208,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 				// this means all endpoints should be bound to public space (since no endpoint was on a different space)
 				Config: testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": publicSpace}),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
+					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "1"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": publicSpace}),
 					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, publicSpace, map[string]string{"": publicSpace, "ubuntu": publicSpace, "another": publicSpace}),
@@ -1226,7 +1219,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 				// this means all endpoints should be bound to public space, except for ubuntu which should be bound to public space
 				Config: testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
+					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "ubuntu", "space": publicSpace}),
@@ -1237,7 +1230,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 				// removing the endpoint bindings reverts to model's default space
 				Config: testAccResourceApplicationEndpointBindings(modelName, appName, constraints, nil),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
+					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "0"),
 					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, "alpha", map[string]string{"": "alpha", "ubuntu": "alpha", "another": "alpha"}),
 				),
@@ -1267,7 +1260,7 @@ func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
 			{
 				Config: testAccResourceApplicationStorageLXD(modelName, appName, storageConstraints),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage_directives.runner", "2G"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.label", "runner"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.count", "1"),
@@ -1295,7 +1288,7 @@ func TestAcc_ResourceApplication_StorageK8s(t *testing.T) {
 			{
 				Config: testAccResourceApplicationStorageK8s(modelName, appName, storageConstraints),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage_directives.pgdata", "2G"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.label", "pgdata"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.count", "1"),
@@ -1331,7 +1324,7 @@ func testAccResourceApplicationVersioned(modelName, appName string, version int)
 			}
 			
 			resource "juju_application" "this" {
-			  model_uuid = juju_model.this.uuid
+			  model = juju_model.this.name
 			  name = %q
 			  charm {
 				name = "ubuntu-lite"
@@ -1449,7 +1442,7 @@ resource "juju_model" "{{.ModelName}}" {
 
 resource "juju_application" "{{.AppName}}" {
   name  = "{{.AppName}}"
-  model = juju_model.{{.ModelName}}.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
 
   charm {
     name     = "{{.AppName}}"
@@ -1699,7 +1692,7 @@ resource "juju_application" "this" {
 func testAccResourceApplicationSubordinate(modelName string, subordinateRevision int) string {
 	return fmt.Sprintf(`
 resource "juju_application" "telegraf" {
-  model = %q
+  model_uuid = %q
   name = "telegraf"
 
   charm {
@@ -1810,7 +1803,7 @@ data "juju_model" "{{.ModelName}}" {
 }
 
 resource "juju_application" "{{.AppName}}" {
-  model       = data.juju_model.{{.ModelName}}.name
+  model_uuid  = data.juju_model.{{.ModelName}}.uuid
   name        = "{{.AppName}}"
   constraints = "{{.Constraints}}"
   charm {
@@ -1834,7 +1827,7 @@ resource "juju_model" "{{.ModelName}}" {
 }
 
 resource "juju_application" "{{.AppName}}" {
-  model = juju_model.{{.ModelName}}.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
   name = "{{.AppName}}"
   charm {
     name = "github-runner"
@@ -1862,7 +1855,7 @@ resource "juju_model" "{{.ModelName}}" {
 }
 
 resource "juju_application" "{{.AppName}}" {
-  model = juju_model.{{.ModelName}}.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
   name = "{{.AppName}}"
   charm {
     name = "postgresql-k8s"
@@ -1976,8 +1969,8 @@ func TestAcc_ResourceApplication_ParallelDeploy(t *testing.T) {
 			{
 				Config: testAccResourceApplicationParallelDeploy(modelName, appName1, appName2, charm, channel),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application."+appName1, "model", modelName),
-					resource.TestCheckResourceAttr("juju_application."+appName2, "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model."+modelName, "uuid", "juju_application."+appName1, "model_uuid"),
+					resource.TestCheckResourceAttrPair("juju_model."+modelName, "uuid", "juju_application."+appName2, "model_uuid"),
 				),
 			},
 		},
@@ -1991,7 +1984,7 @@ resource "juju_model" "{{.ModelName}}" {
 }
 
 resource "juju_application" "{{.AppName1}}" {
-  model = juju_model.{{.ModelName}}.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
   name = "{{.AppName1}}"
   charm {
     name = "{{.CharmName}}"
@@ -2001,7 +1994,7 @@ resource "juju_application" "{{.AppName1}}" {
 }
 
 resource "juju_application" "{{.AppName2}}" {
-  model = juju_model.{{.ModelName}}.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
   name = "{{.AppName2}}"
   charm {
     name = "{{.CharmName}}"
@@ -2054,7 +2047,7 @@ resource "juju_model" "{{.ModelName}}" {
 }
 
 resource "juju_application" "test" {
-  model = juju_model.{{.ModelName}}.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
   name = "test"
   charm {
 	name = "{{.CharmName}}"

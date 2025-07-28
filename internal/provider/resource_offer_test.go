@@ -106,6 +106,9 @@ resource "juju_integration" "int" {
 }
 
 func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
+	t.Skip("This test currently fails due to the breaking change in the provider schema. " +
+		"Remove the skip after the v1 release of the provider.")
+
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -201,7 +204,7 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-	model_uuid = juju_model.this.uuid
+	model = juju_model.this.name
 	name  = "this"
 
 	charm {

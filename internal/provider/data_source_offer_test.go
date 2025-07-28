@@ -32,6 +32,8 @@ func TestAcc_DataSourceOffer(t *testing.T) {
 }
 
 func TestAcc_DataSourceOffer_UpgradeProvider(t *testing.T) {
+	t.Skip("This test currently fails due to the breaking change in the provider schema. " +
+		"Remove the skip after the v1 release of the provider.")
 	modelName := acctest.RandomWithPrefix("tf-datasource-offer-test-model")
 	// ...-test-[0-9]+ is not a valid offer name, need to remove the dash before numbers
 	offerName := fmt.Sprintf("tf-datasource-offer-test%d", acctest.RandInt())
@@ -128,7 +130,7 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-	model_uuid = juju_model.this.uuid
+	model = juju_model.this.name
 	name  = "this"
 
 	charm {

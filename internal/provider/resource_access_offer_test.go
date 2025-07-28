@@ -118,7 +118,7 @@ name = "{{.ModelName}}"
 
 resource "juju_application" "appone" {
   name  = "appone"
-  model = juju_model.{{.ModelName}}.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
 
   charm {
     name = "juju-qa-dummy-source"
@@ -170,7 +170,7 @@ resource "juju_user" "read_operator" {
 
 resource "juju_application" "appone" {
   name  = "appone"
-  model = juju_model.{{.ModelName}}.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
 
   charm {
     name = "juju-qa-dummy-source"

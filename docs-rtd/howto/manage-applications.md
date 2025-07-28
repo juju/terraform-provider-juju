@@ -185,7 +185,7 @@ To set space bindings for an application, in its resource definition specify an 
 
 ```terraform
 resource "juju_application" "application_three" {
-  model = resource.juju_model.testmodel.name
+  model_uuid = resource.juju_model.testmodel.uuid
   charm {
     name = "juju-qa-test"
   }

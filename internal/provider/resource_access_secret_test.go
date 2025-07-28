@@ -98,7 +98,7 @@ resource "juju_model" "{{.ModelName}}" {
 
 resource "juju_application" "jul" {
   name  = "jul"
-  model = juju_model.{{.ModelName}}.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
 
   charm {
     name     = "ubuntu-lite"
@@ -110,7 +110,7 @@ resource "juju_application" "jul" {
 
 resource "juju_application" "jul2" {
   name  = "jul2"
-  model = juju_model.{{.ModelName}}.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
 
   charm {
     name     = "ubuntu-lite"
