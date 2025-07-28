@@ -2,7 +2,7 @@
 # Manage groups
 
 ```{note}
-In the Juju ecosystem, groups are supported only when using [JAAS](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/).
+In the Juju ecosystem, groups are supported only when using [JAAS](https://documentation.ubuntu.com/jaas/).
 ```
 
 ## Reference an externally managed group

@@ -287,7 +287,7 @@ new_tab_link_show_external_link_icon = True
 intersphinx_mapping = {
     'juju': ('https://documentation.ubuntu.com/juju/3.6/', None),
     'pyjuju': ('https://pythonlibjuju.readthedocs.io/en/latest/', None),
-    'jaas': ('https://documentation.ubuntu.com/jaas/v3/', None),
+    'jaas': ('https://documentation.ubuntu.com/jaas/latest/', None),
     'charmcraft': ('https://canonical-charmcraft.readthedocs-hosted.com/en/latest/', None),
     'ops': ('https://ops.readthedocs.io/en/latest/', None),
 }

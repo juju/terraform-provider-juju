@@ -14,7 +14,7 @@ reference/index
 explanation/index
 -->
 
-The Terraform Provider for Juju is a [Terraform Provider](https://developer.hashicorp.com/terraform/language/providers) that extends [Terraform](https://developer.hashicorp.com/terraform) with [Juju](https://documentation.ubuntu.com/juju) and [JAAS](https://jaas.ai/) functionality.
+The Terraform Provider for Juju is a [Terraform Provider](https://developer.hashicorp.com/terraform/language/providers) that extends [Terraform](https://developer.hashicorp.com/terraform) with [Juju](https://documentation.ubuntu.com/juju) and [JAAS](https://documentation.ubuntu.com/jaas) functionality.
 
 When you're putting together your Terraform plan, if you specify `juju` as the provider, you can connect to a pre-existing Juju controller or JIMM controller and then go ahead and use it to do Juju things -- easy deploy, configure, integrate, scale, etc., infrastructure and applications on any Juju-supported cloud (Kubernetes or otherwise) using charms.
 

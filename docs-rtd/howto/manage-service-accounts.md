@@ -2,7 +2,7 @@
 # Manage service accounts
 
 ```{note}
-In the Juju ecosystem, service accounts are supported only when using [JAAS](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/).
+In the Juju ecosystem, service accounts are supported only when using [JAAS](https://documentation.ubuntu.com/jaas/).
 ```
 
 ## Manage a service account's access to a controller, cloud, model, offer, role, or group

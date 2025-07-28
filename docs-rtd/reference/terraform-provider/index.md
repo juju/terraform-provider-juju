@@ -286,4 +286,4 @@ resource "juju_integration" "wp_to_percona" {
 
 
 [0]: https://juju.is "Juju | An open source application orchestration engine"
-[1]: https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/ "JAAS | An enterprise gateway into your Juju estate"
+[1]: https://documentation.ubuntu.com/jaas/ "JAAS | An enterprise gateway into your Juju estate"
