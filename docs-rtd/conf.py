@@ -285,9 +285,9 @@ new_tab_link_show_external_link_icon = True
 ##################################
 
 intersphinx_mapping = {
-    'juju': ('https://canonical-juju.readthedocs-hosted.com/3.6/', None),
+    'juju': ('https://documentation.ubuntu.com/juju/3.6/', None),
     'pyjuju': ('https://pythonlibjuju.readthedocs.io/en/latest/', None),
-    'jaas': ('https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/', None),
+    'jaas': ('https://documentation.ubuntu.com/jaas/v3/', None),
     'charmcraft': ('https://canonical-charmcraft.readthedocs-hosted.com/en/latest/', None),
     'ops': ('https://ops.readthedocs.io/en/latest/', None),
 }
@@ -298,16 +298,18 @@ exclude_patterns = [
     "doc-cheat-sheet*",
 ]
 
-# Adds custom CSS files, located under 'html_static_path'
-
+# Add CSS files (located in .sphinx/_static/)
 html_css_files = [
     "css/pdf.css",
+	'css/cookie-banner.css'
 ]
 
 
-# Adds custom JavaScript files, located under 'html_static_path'
 
-# html_js_files = []
+# Add JavaScript files (located in .sphinx/_static/)
+html_js_files = [
+	'js/bundle.js',
+]
 
 
 # Specifies a reST snippet to be appended to each .rst file
