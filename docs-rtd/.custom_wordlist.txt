@@ -44,3 +44,4 @@ authorization
 OAuth
 boolean
 hostname
+vlatest
