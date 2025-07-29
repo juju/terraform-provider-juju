@@ -1,5 +1,7 @@
 import datetime
 import ast
+import os
+import yaml
 
 # Configuration for the Sphinx documentation builder.
 # All configuration specific to your project should be done in this file.
@@ -162,6 +164,24 @@ slug = 'terraform-provider-juju'
 html_static_path = [".sphinx/_static"]
 templates_path = [".sphinx/_templates"]
 
+#######################
+# Sitemap configuration: https://sphinx-sitemap.readthedocs.io/
+#######################
+
+# Base URL of RTD hosted project
+
+html_baseurl = 'https://documentation.ubuntu.com/terraform-provider-juju/'
+
+# URL scheme. Add language and version scheme elements.
+# When configured with RTD variables, check for RTD environment so manual runs succeed:
+
+if 'READTHEDOCS_VERSION' in os.environ:
+    version = os.environ["READTHEDOCS_VERSION"]
+    sitemap_url_scheme = '{version}{link}'
+else:
+    sitemap_url_scheme = 'MANUAL/{link}'
+
+sitemap_show_lastmod = True
 
 #############
 # Redirects #
@@ -236,17 +256,21 @@ myst_enable_extensions = {
 #       - youtube-links
 
 extensions = [
+    # FROM THE STARTER PACK:
     "canonical_sphinx",
     "sphinxcontrib.cairosvgconverter",
+    "sphinx_last_updated_by_git",
     # Make it possible to link to related RTD projects using their internal anchors
     # with, e.g., {external+ops:ref}`manage-configurations`:
+    "sphinx.ext.intersphinx",
+    "sphinx_sitemap",
+    # SPECIFIC TO THIS PROJECT:
+    # Conveniently handle internal redirects via the redirects.txt file:
     'sphinxext.rediraffe',
-    'sphinx.ext.intersphinx',
     # Display an external link icon and open link in new tab:
     # new_tab_link_show_external_link_icon must also be set to True
     'sphinx_new_tab_link',
 ]
-
 
 # sphinxext.rediraffe options
 #
@@ -261,9 +285,9 @@ new_tab_link_show_external_link_icon = True
 ##################################
 
 intersphinx_mapping = {
-    'juju': ('https://canonical-juju.readthedocs-hosted.com/3.6/', None),
+    'juju': ('https://documentation.ubuntu.com/juju/3.6/', None),
     'pyjuju': ('https://pythonlibjuju.readthedocs.io/en/latest/', None),
-    'jaas': ('https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/', None),
+    'jaas': ('https://documentation.ubuntu.com/jaas/latest/', None),
     'charmcraft': ('https://canonical-charmcraft.readthedocs-hosted.com/en/latest/', None),
     'ops': ('https://ops.readthedocs.io/en/latest/', None),
 }
@@ -274,16 +298,18 @@ exclude_patterns = [
     "doc-cheat-sheet*",
 ]
 
-# Adds custom CSS files, located under 'html_static_path'
-
+# Add CSS files (located in .sphinx/_static/)
 html_css_files = [
     "css/pdf.css",
+	'css/cookie-banner.css'
 ]
 
 
-# Adds custom JavaScript files, located under 'html_static_path'
 
-# html_js_files = []
+# Add JavaScript files (located in .sphinx/_static/)
+html_js_files = [
+	'js/bundle.js',
+]
 
 
 # Specifies a reST snippet to be appended to each .rst file

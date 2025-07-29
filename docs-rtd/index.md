@@ -14,7 +14,7 @@ reference/index
 explanation/index
 -->
 
-The Terraform Provider for Juju is a [Terraform Provider](https://developer.hashicorp.com/terraform/language/providers) that extends [Terraform](https://developer.hashicorp.com/terraform) with [Juju](https://documentation.ubuntu.com/juju) and [JAAS](https://jaas.ai/) functionality.
+The Terraform Provider for Juju is a [Terraform Provider](https://developer.hashicorp.com/terraform/language/providers) that extends [Terraform](https://developer.hashicorp.com/terraform) with [Juju](https://documentation.ubuntu.com/juju) and [JAAS](https://documentation.ubuntu.com/jaas) functionality.
 
 When you're putting together your Terraform plan, if you specify `juju` as the provider, you can connect to a pre-existing Juju controller or JIMM controller and then go ahead and use it to do Juju things -- easy deploy, configure, integrate, scale, etc., infrastructure and applications on any Juju-supported cloud (Kubernetes or otherwise) using charms.
 
@@ -29,6 +29,8 @@ Like all of Juju, the Terraform Provider for Juju is for SREs, or anyone looking
 - **Set up the Terraform Provider for Juju:** {ref}`Install <install-the-terraform-provider-for-juju>`, {ref}`Connect a controller <manage-controllers>`, {ref}`Connect a cloud <manage-clouds>`, {ref}`Add a model <manage-models>`
 - **Handle authentication and authorization:** {ref}`SSH keys <manage-ssh-keys>`, {ref}`Users <manage-users>`, {ref}`Service accounts <manage-service-accounts>`, {ref}`Roles <manage-roles>`, {ref}`Groups <manage-groups>`
 - **Deploy infrastructure and applications:** {ref}`Deploy <deploy-an-application>`, {ref}`Configure <configure-an-application>`, {ref}`Integrate <integrate-an-application-with-another-application>`, {ref}`Scale <scale-an-application>`, {ref}`Upgrade <upgrade-an-application>`, etc.
+
+````{grid} 1 1 1 1
 
 ```{grid-item-card} [Tutorial](tutorial)
 :link: tutorial
@@ -50,6 +52,7 @@ Like all of Juju, the Terraform Provider for Juju is for SREs, or anyone looking
 
 **Technical information** - specifications, APIs, architecture
 ```
+````
 
 ---------
 

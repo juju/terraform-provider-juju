@@ -2,7 +2,7 @@
 # Manage roles
 
 ```{note}
-In the Juju ecosystem, roles are supported only when using [JAAS](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/).
+In the Juju ecosystem, roles are supported only when using [JAAS](https://documentation.ubuntu.com/jaas/).
 ```
 
 (reference-an-externally-managed-role)=
