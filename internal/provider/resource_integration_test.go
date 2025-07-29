@@ -78,9 +78,6 @@ func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
 }
 
 func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
-	t.Skip("This test currently fails due to the breaking change in the provider schema. " +
-		"Remove the skip after the v1 release of the provider.")
-
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -97,7 +94,7 @@ func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
 						Source:            "juju/juju",
 					},
 				},
-				Config: testAccResourceIntegration(modelName, "series = \"jammy\"", "series = \"jammy\""),
+				Config: testAccResourceIntegrationV0(modelName, "series = \"jammy\"", "series = \"jammy\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
@@ -136,6 +133,48 @@ resource "juju_application" "one" {
 
 resource "juju_application" "two" {
 	model_uuid = juju_model.this.uuid
+	name  = "two"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		%s
+	}
+}
+
+resource "juju_integration" "this" {
+	model = juju_model.this.name
+
+	application {
+		name     = juju_application.one.name
+		endpoint = "source"
+	}
+
+	application {
+		name = juju_application.two.name
+		endpoint = "sink"
+	}
+}
+`, modelName, osOne, osTwo)
+}
+
+func testAccResourceIntegrationV0(modelName, osOne, osTwo string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_application" "one" {
+	model = juju_model.this.name
+	name  = "one" 
+	
+	charm {
+		name = "juju-qa-dummy-sink"
+		%s
+	}
+}
+
+resource "juju_application" "two" {
+	model = juju_model.this.name
 	name  = "two"
 
 	charm {
