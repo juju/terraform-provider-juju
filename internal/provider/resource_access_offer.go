@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
@@ -281,27 +282,27 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	// Get the users to grant admin
-	var adminUsers []string
+	var adminPlanUsers []string
 	if !plan.AdminUsers.IsNull() {
-		resp.Diagnostics.Append(plan.AdminUsers.ElementsAs(ctx, &adminUsers, false)...)
+		resp.Diagnostics.Append(plan.AdminUsers.ElementsAs(ctx, &adminPlanUsers, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 	}
 
 	// Get the users to grant consume
-	var consumeUsers []string
+	var consumePlanUsers []string
 	if !plan.ConsumeUsers.IsNull() {
-		resp.Diagnostics.Append(plan.ConsumeUsers.ElementsAs(ctx, &consumeUsers, false)...)
+		resp.Diagnostics.Append(plan.ConsumeUsers.ElementsAs(ctx, &consumePlanUsers, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 	}
 
 	// Get the users to grant read
-	var readUsers []string
+	var readPlanUsers []string
 	if !plan.ReadUsers.IsNull() {
-		resp.Diagnostics.Append(plan.ReadUsers.ElementsAs(ctx, &readUsers, false)...)
+		resp.Diagnostics.Append(plan.ReadUsers.ElementsAs(ctx, &readPlanUsers, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -309,16 +310,16 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 
 	// validate if there are overlaps or admin user
 	// validation is done here considering dynamic (juju_user resource) and static values for users
-	err := validateNoOverlapsNoAdmin(adminUsers, consumeUsers, readUsers)
+	err := validateNoOverlapsNoAdmin(adminPlanUsers, consumePlanUsers, readPlanUsers)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
 		return
 	}
 
 	// Get users from state
-	var readStateUsers []string
-	if !state.ReadUsers.IsNull() {
-		resp.Diagnostics.Append(state.ReadUsers.ElementsAs(ctx, &readStateUsers, false)...)
+	var adminStateUsers []string
+	if !state.AdminUsers.IsNull() {
+		resp.Diagnostics.Append(state.AdminUsers.ElementsAs(ctx, &adminStateUsers, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -332,66 +333,65 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 	}
 
-	var adminStateUsers []string
-	if !state.AdminUsers.IsNull() {
-		resp.Diagnostics.Append(state.AdminUsers.ElementsAs(ctx, &adminStateUsers, false)...)
+	var readStateUsers []string
+	if !state.ReadUsers.IsNull() {
+		resp.Diagnostics.Append(state.ReadUsers.ElementsAs(ctx, &readStateUsers, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 	}
-
-	// Revoke read (remove access) of all state users
-	totalStateUsers := append(adminStateUsers, consumeStateUsers...)
-	totalStateUsers = append(totalStateUsers, readStateUsers...)
-	if len(totalStateUsers) > 0 {
-		err := a.client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
-			Users:    totalStateUsers,
-			Access:   string(permission.ReadAccess),
-			OfferURL: plan.OfferURL.ValueString(),
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
-			return
-		}
+	err = processRevokeReadUsers(plan.OfferURL.ValueString(), readStateUsers, readPlanUsers, consumeStateUsers, adminStateUsers, a.client)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
+		return
 	}
-
+	err = processRevokeConsumeUser(plan.OfferURL.ValueString(), consumeStateUsers, readPlanUsers, consumePlanUsers, adminPlanUsers, a.client)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
+		return
+	}
+	err = processRevokeAdminUser(plan.OfferURL.ValueString(), adminStateUsers, readPlanUsers, consumePlanUsers, adminPlanUsers, a.client)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
+		return
+	}
 	// grant read
-	err = grantPermission(plan.OfferURL.ValueString(), string(permission.ReadAccess), readUsers, a.client)
+	err = grantPermission(plan.OfferURL.ValueString(), string(permission.ReadAccess), readPlanUsers, a.client)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
 		return
 	}
 
 	// grant consume
-	err = grantPermission(plan.OfferURL.ValueString(), string(permission.ConsumeAccess), consumeUsers, a.client)
+	err = grantPermission(plan.OfferURL.ValueString(), string(permission.ConsumeAccess), consumePlanUsers, a.client)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
 		return
 	}
 
 	// grant admin
-	err = grantPermission(plan.OfferURL.ValueString(), string(permission.AdminAccess), adminUsers, a.client)
+	err = grantPermission(plan.OfferURL.ValueString(), string(permission.AdminAccess), adminPlanUsers, a.client)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
 		return
 	}
 
 	// Save admin users to state
-	adminUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, adminUsers)
+	adminUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, adminPlanUsers)
 	resp.Diagnostics.Append(errDiag...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	plan.AdminUsers = adminUsersSet
 	// Save consume users to state
-	consumeUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, consumeUsers)
+	consumeUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, consumePlanUsers)
 	resp.Diagnostics.Append(errDiag...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	plan.ConsumeUsers = consumeUsersSet
 	// Save read users to state
-	readUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, readUsers)
+	readUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, readPlanUsers)
 	resp.Diagnostics.Append(errDiag...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -504,7 +504,8 @@ func (a *accessOfferResource) trace(msg string, additionalFields ...map[string]i
 	tflog.SubsystemTrace(a.subCtx, LogResourceAccessOffer, msg, additionalFields...)
 }
 
-// Helpers
+// validateNoOverlapsNoAdmin validates that there are no overlaps between the users in different access levels
+// and that the "admin" user is not present in any of the access levels.
 func validateNoOverlapsNoAdmin(admin, consume, read []string) error {
 	sets := map[string]struct{}{}
 	for _, v := range consume {
@@ -542,6 +543,110 @@ func grantPermission(offerURL, permissionType string, planUsers []string, jujuCl
 	})
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+// processRevokeReadUsers processes the differences between the state and plan users for ReadAccess.
+// If a user is in the state and in the plan, no action is needed.
+// If a user is in the state, and in the plan for consume access, no action is needed.
+// If a user is in the state, and in the plan for admin access, no action is needed.
+// If a user is in the state, and not planned for consume or admin access, it revokes read access (which is equivalent to remove all accesses).
+func processRevokeReadUsers(offerURL string, readStateUsers, readPlanUsers, consumePlanUsers, adminPlanUsers []string, client *juju.Client) error {
+	for _, readUser := range readStateUsers {
+		switch {
+		case slices.Contains(readPlanUsers, readUser):
+		case slices.Contains(consumePlanUsers, readUser):
+		case slices.Contains(adminPlanUsers, readUser):
+		default:
+			err := client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{readUser},
+				Access:   string(permission.ReadAccess),
+				OfferURL: offerURL,
+			})
+			if err != nil {
+				return fmt.Errorf("unable to revoke read access for user %s: %w", readUser, err)
+			}
+		}
+	}
+	return nil
+}
+
+// processRevokeConsumeUser processes the differences between the state and plan users for ConsumeAccess.
+// If a user is in the state and in the plan, no action is needed.
+// If a user is in the state, and in the plan for read access, it revokes consume access.
+// If a user is in the state, and in the plan for admin access, it does nothing.
+// If a user is in the state, and not planned for read or admin access, it revokes read access (which is equivalent to remove all accesses).
+func processRevokeConsumeUser(offerURL string, consumeStateUsers, readPlanUsers, consumePlanUsers, adminPlanUsers []string, client *juju.Client) error {
+	for _, consumeUser := range consumeStateUsers {
+		switch {
+		// if the user is in the plan for admin access, do nothing.
+		case slices.Contains(adminPlanUsers, consumeUser):
+		case slices.Contains(consumePlanUsers, consumeUser):
+		// if the user is in the plan for read access, revoke consume access.
+		case slices.Contains(readPlanUsers, consumeUser):
+			err := client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{consumeUser},
+				Access:   string(permission.ConsumeAccess),
+				OfferURL: offerURL,
+			})
+			if err != nil {
+				return err
+			}
+		// if the user is not in the plan for read or admin access, revoke read access.
+		default:
+			// If the user is not in the plan for read or admin access, revoke read access.
+			err := client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{consumeUser},
+				Access:   string(permission.ReadAccess),
+				OfferURL: offerURL,
+			})
+			if err != nil {
+				return fmt.Errorf("unable to revoke read access for user %s: %w", consumeUser, err)
+			}
+		}
+	}
+	return nil
+}
+
+// processRevokeAdminUser processes the differences between the state and plan users for AdminAccess.
+// If a user is in the state and in the plan, no action is needed.
+// If a user is in the state, and in the plan for consume access, it revokes admin access.
+// If a user is in the state, and in the plan for read access, it revokes consume access.
+// If a user is in the state, and not planned for consume or read access, it revokes read access (which is equivalent to remove all accesses).
+func processRevokeAdminUser(offerURL string, adminStateUser, readPlanUsers, consumePlanUsers, adminPlanUsers []string, client *juju.Client) error {
+	for _, adminUser := range adminStateUser {
+		switch {
+		case slices.Contains(adminPlanUsers, adminUser):
+		case slices.Contains(consumePlanUsers, adminUser):
+			err := client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{adminUser},
+				Access:   string(permission.AdminAccess),
+				OfferURL: offerURL,
+			})
+			if err != nil {
+				return err
+			}
+		case slices.Contains(readPlanUsers, adminUser):
+			err := client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{adminUser},
+				Access:   string(permission.ConsumeAccess),
+				OfferURL: offerURL,
+			})
+			if err != nil {
+				return err
+			}
+
+		default:
+			err := client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{adminUser},
+				Access:   string(permission.ReadAccess),
+				OfferURL: offerURL,
+			})
+			if err != nil {
+				return fmt.Errorf("unable to revoke read access for user %s: %w", adminUser, err)
+			}
+		}
 	}
 	return nil
 }

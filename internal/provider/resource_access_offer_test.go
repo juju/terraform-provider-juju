@@ -70,6 +70,76 @@ func TestAcc_ResourceAccessOffer(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceAccessOffer_ChangeAccess(t *testing.T) {
+	SkipJAAS(t)
+	AdminUserName := acctest.RandomWithPrefix("tfadminuser")
+	ConsumeUserName := acctest.RandomWithPrefix("tfconsumeuser")
+	ReadUserName := acctest.RandomWithPrefix("tfreaduser")
+	userPassword := acctest.RandomWithPrefix("tf-test-user")
+	modelName := acctest.RandomWithPrefix("tf-access-model")
+	offerURL := fmt.Sprintf("admin/%s.appone", modelName)
+
+	resourceName := "juju_access_offer.access_appone_endpoint"
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{ // Create the resource with user as admin
+				Config: testAccResourceAccessOffer(AdminUserName, ConsumeUserName, ReadUserName, "admin", "", "", userPassword, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "offer_url", offerURL),
+					resource.TestCheckTypeSetElemAttr(resourceName, "admin.*", AdminUserName),
+					resource.TestCheckNoResourceAttr(resourceName, "consume.*"),
+					resource.TestCheckNoResourceAttr(resourceName, "read.*"),
+				),
+			},
+			{ // Change the admin user to consume.
+				Config: testAccResourceAccessOffer(AdminUserName, ConsumeUserName, ReadUserName, "", "admin", "", userPassword, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "offer_url", offerURL),
+					resource.TestCheckNoResourceAttr(resourceName, "admin.*"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "consume.*", AdminUserName),
+					resource.TestCheckNoResourceAttr(resourceName, "read.*"),
+				),
+			},
+			{ // Change the admin user to read.
+				Config: testAccResourceAccessOffer(AdminUserName, ConsumeUserName, ReadUserName, "", "", "admin", userPassword, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "offer_url", offerURL),
+					resource.TestCheckNoResourceAttr(resourceName, "admin.*"),
+					resource.TestCheckNoResourceAttr(resourceName, "consume.*"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "read.*", AdminUserName),
+				),
+			},
+			{ // Change the consume user to consume.
+				Config: testAccResourceAccessOffer(AdminUserName, ConsumeUserName, ReadUserName, "", "admin", "", userPassword, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "offer_url", offerURL),
+					resource.TestCheckNoResourceAttr(resourceName, "admin.*"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "consume.*", AdminUserName),
+					resource.TestCheckNoResourceAttr(resourceName, "read.*"),
+				),
+			},
+			{ // Change the read user to admin.
+				Config: testAccResourceAccessOffer(AdminUserName, ConsumeUserName, ReadUserName, "admin", "", "", userPassword, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "offer_url", offerURL),
+					resource.TestCheckTypeSetElemAttr(resourceName, "admin.*", AdminUserName),
+					resource.TestCheckNoResourceAttr(resourceName, "consume.*"),
+					resource.TestCheckNoResourceAttr(resourceName, "read.*"),
+				),
+			},
+			{ // Destroy the resource and validate it can be imported correctly
+				Destroy:           true,
+				ImportStateVerify: true,
+				ImportState:       true,
+				ImportStateId:     offerURL,
+				ResourceName:      resourceName,
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceAccessOffer_ErrorWhenUsedWithJAAS(t *testing.T) {
 	OnlyTestAgainstJAAS(t)
 
