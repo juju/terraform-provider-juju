@@ -6,7 +6,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
@@ -340,21 +339,22 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 			return
 		}
 	}
-	err = processRevokeReadUsers(plan.OfferURL.ValueString(), readStateUsers, readPlanUsers, consumeStateUsers, adminStateUsers, a.client)
+
+	// The process for revoking access in Juju is somewhat unintuitive.
+	// If a user has admin access and should be demoted to read access,
+	// we revoke their consume access, dropping them to read access.
+	// Once revokes are done, granting access becomes straightforward.
+	// It's important not to remove all access and then grant access
+	// as this breaks access to offers.
+
+	stateUsers, planUsers := buildUserAccessMaps(adminStateUsers, consumeStateUsers, readStateUsers, adminPlanUsers, consumePlanUsers, readPlanUsers)
+
+	err = processAccessRevokes(plan.OfferURL.ValueString(), stateUsers, planUsers, a.client)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
 		return
 	}
-	err = processRevokeConsumeUser(plan.OfferURL.ValueString(), consumeStateUsers, readPlanUsers, consumePlanUsers, adminPlanUsers, a.client)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
-		return
-	}
-	err = processRevokeAdminUser(plan.OfferURL.ValueString(), adminStateUsers, readPlanUsers, consumePlanUsers, adminPlanUsers, a.client)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
-		return
-	}
+
 	// grant read
 	err = grantPermission(plan.OfferURL.ValueString(), string(permission.ReadAccess), readPlanUsers, a.client)
 	if err != nil {
@@ -383,6 +383,7 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	plan.AdminUsers = adminUsersSet
+
 	// Save consume users to state
 	consumeUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, consumePlanUsers)
 	resp.Diagnostics.Append(errDiag...)
@@ -390,6 +391,7 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	plan.ConsumeUsers = consumeUsersSet
+
 	// Save read users to state
 	readUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, readPlanUsers)
 	resp.Diagnostics.Append(errDiag...)
@@ -397,6 +399,7 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	plan.ReadUsers = readUsersSet
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -547,105 +550,123 @@ func grantPermission(offerURL, permissionType string, planUsers []string, jujuCl
 	return nil
 }
 
-// processRevokeReadUsers processes the differences between the state and plan users for ReadAccess.
-// If a user is in the state and in the plan, no action is needed.
-// If a user is in the state, and in the plan for consume access, no action is needed.
-// If a user is in the state, and in the plan for admin access, no action is needed.
-// If a user is in the state, and not planned for consume or admin access, it revokes read access (which is equivalent to remove all accesses).
-func processRevokeReadUsers(offerURL string, readStateUsers, readPlanUsers, consumePlanUsers, adminPlanUsers []string, client *juju.Client) error {
-	for _, readUser := range readStateUsers {
-		switch {
-		case slices.Contains(readPlanUsers, readUser):
-		case slices.Contains(consumePlanUsers, readUser):
-		case slices.Contains(adminPlanUsers, readUser):
-		default:
-			err := client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
-				Users:    []string{readUser},
-				Access:   string(permission.ReadAccess),
-				OfferURL: offerURL,
-			})
-			if err != nil {
-				return fmt.Errorf("unable to revoke read access for user %s: %w", readUser, err)
-			}
+// buildUserAccessMaps builds stateUsers and planUsers maps for access management.
+func buildUserAccessMaps(adminStateUsers, consumeStateUsers, readStateUsers, adminPlanUsers, consumePlanUsers, readPlanUsers []string) (map[string]permission.Access, map[string]permission.Access) {
+	stateUsers := map[string]permission.Access{}
+	for _, u := range adminStateUsers {
+		stateUsers[u] = permission.AdminAccess
+	}
+	for _, u := range consumeStateUsers {
+		if _, ok := stateUsers[u]; !ok {
+			stateUsers[u] = permission.ConsumeAccess
+		}
+	}
+	for _, u := range readStateUsers {
+		if _, ok := stateUsers[u]; !ok {
+			stateUsers[u] = permission.ReadAccess
+		}
+	}
+
+	planUsers := map[string]permission.Access{}
+	for _, u := range adminPlanUsers {
+		planUsers[u] = permission.AdminAccess
+	}
+	for _, u := range consumePlanUsers {
+		if _, ok := planUsers[u]; !ok {
+			planUsers[u] = permission.ConsumeAccess
+		}
+	}
+	for _, u := range readPlanUsers {
+		if _, ok := planUsers[u]; !ok {
+			planUsers[u] = permission.ReadAccess
+		}
+	}
+	return stateUsers, planUsers
+}
+
+// processAccessRevokes loops over all users in the state and compares their current access to the desired access.
+// It calls revokeAccessIfNeeded to revoke access if needed.
+func processAccessRevokes(
+	offerURL string,
+	stateUsers map[string]permission.Access, // user -> current access
+	planUsers map[string]permission.Access, // user -> desired access (missing means remove)
+	client *juju.Client,
+) error {
+	for user, currentAccess := range stateUsers {
+		desiredAccess, exists := planUsers[user]
+		if !exists {
+			desiredAccess = "" // Means remove all access
+		}
+		if err := revokeAccessIfNeeded(offerURL, user, currentAccess, desiredAccess, client); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-// processRevokeConsumeUser processes the differences between the state and plan users for ConsumeAccess.
-// If a user is in the state and in the plan, no action is needed.
-// If a user is in the state, and in the plan for read access, it revokes consume access.
-// If a user is in the state, and in the plan for admin access, it does nothing.
-// If a user is in the state, and not planned for read or admin access, it revokes read access (which is equivalent to remove all accesses).
-func processRevokeConsumeUser(offerURL string, consumeStateUsers, readPlanUsers, consumePlanUsers, adminPlanUsers []string, client *juju.Client) error {
-	for _, consumeUser := range consumeStateUsers {
-		switch {
-		// if the user is in the plan for admin access, do nothing.
-		case slices.Contains(adminPlanUsers, consumeUser):
-		case slices.Contains(consumePlanUsers, consumeUser):
-		// if the user is in the plan for read access, revoke consume access.
-		case slices.Contains(readPlanUsers, consumeUser):
-			err := client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
-				Users:    []string{consumeUser},
-				Access:   string(permission.ConsumeAccess),
-				OfferURL: offerURL,
-			})
-			if err != nil {
-				return err
-			}
-		// if the user is not in the plan for read or admin access, revoke read access.
-		default:
-			// If the user is not in the plan for read or admin access, revoke read access.
-			err := client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
-				Users:    []string{consumeUser},
-				Access:   string(permission.ReadAccess),
-				OfferURL: offerURL,
-			})
-			if err != nil {
-				return fmt.Errorf("unable to revoke read access for user %s: %w", consumeUser, err)
-			}
-		}
+// revokeAccessIfNeeded revokes the correct permission for a user based on their current and desired access.
+func revokeAccessIfNeeded(
+	offerURL, user string,
+	currentAccess, desiredAccess permission.Access,
+	client *juju.Client,
+) error {
+	// No change, nothing to do
+	if currentAccess == desiredAccess {
+		return nil
 	}
-	return nil
-}
 
-// processRevokeAdminUser processes the differences between the state and plan users for AdminAccess.
-// If a user is in the state and in the plan, no action is needed.
-// If a user is in the state, and in the plan for consume access, it revokes admin access.
-// If a user is in the state, and in the plan for read access, it revokes consume access.
-// If a user is in the state, and not planned for consume or read access, it revokes read access (which is equivalent to remove all accesses).
-func processRevokeAdminUser(offerURL string, adminStateUser, readPlanUsers, consumePlanUsers, adminPlanUsers []string, client *juju.Client) error {
-	for _, adminUser := range adminStateUser {
-		switch {
-		case slices.Contains(adminPlanUsers, adminUser):
-		case slices.Contains(consumePlanUsers, adminUser):
-			err := client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
-				Users:    []string{adminUser},
+	switch currentAccess {
+	case permission.AdminAccess:
+		switch desiredAccess {
+		case permission.ConsumeAccess:
+			return client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{user},
 				Access:   string(permission.AdminAccess),
 				OfferURL: offerURL,
 			})
-			if err != nil {
-				return err
-			}
-		case slices.Contains(readPlanUsers, adminUser):
-			err := client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
-				Users:    []string{adminUser},
+		case permission.ReadAccess:
+			// Only need to revoke consume access to demote from admin to read
+			return client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{user},
 				Access:   string(permission.ConsumeAccess),
 				OfferURL: offerURL,
 			})
-			if err != nil {
-				return err
-			}
-
-		default:
-			err := client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
-				Users:    []string{adminUser},
+		default: // remove all access
+			return client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{user},
 				Access:   string(permission.ReadAccess),
 				OfferURL: offerURL,
 			})
-			if err != nil {
-				return fmt.Errorf("unable to revoke read access for user %s: %w", adminUser, err)
-			}
+		}
+	case permission.ConsumeAccess:
+		switch desiredAccess {
+		case permission.ReadAccess:
+			return client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{user},
+				Access:   string(permission.ConsumeAccess),
+				OfferURL: offerURL,
+			})
+		case permission.AdminAccess:
+			// Upgrading, nothing to revoke
+			return nil
+		default: // remove all access
+			return client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{user},
+				Access:   string(permission.ReadAccess),
+				OfferURL: offerURL,
+			})
+		}
+	case permission.ReadAccess:
+		switch desiredAccess {
+		case permission.ConsumeAccess, permission.AdminAccess:
+			// Upgrading, nothing to revoke
+			return nil
+		default: // remove all access
+			return client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{user},
+				Access:   string(permission.ReadAccess),
+				OfferURL: offerURL,
+			})
 		}
 	}
 	return nil
