@@ -14,7 +14,7 @@ A resource that represents a Juju Integration.
 ```terraform
 resource "juju_integration" "this" {
   model_uuid = juju_model.development.uuid
-  via   = "10.0.0.0/24,10.0.1.0/24"
+  via        = "10.0.0.0/24,10.0.1.0/24"
 
   application {
     name     = juju_application.wordpress.name
@@ -52,7 +52,7 @@ resource "juju_integration" "this" {
 
 ### Required
 
-- `model` (String) The name of the model to operate in.
+- `model_uuid` (String) The UUID of the model to operate in.
 
 ### Optional
 
@@ -97,6 +97,6 @@ bits of data together.
 Import is supported using the following syntax:
 
 ```shell
-# Integrations can be imported by using the format: model_name:provider_app_name:endpoint:requirer_app_name:endpoint, for example:
-$ terraform import juju_integration.wordpress_db development:percona-cluster:server:wordpress:db
+# Integrations can be imported by using the format: model_uuid:provider_app_name:endpoint:requirer_app_name:endpoint, for example:
+$ terraform import juju_integration.wordpress_db 4b6bd192-13bb-489d-b7a7-06f6efc2928d:percona-cluster:server:wordpress:db
 ```
