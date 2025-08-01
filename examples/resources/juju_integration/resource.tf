@@ -1,5 +1,5 @@
 resource "juju_integration" "this" {
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
   via   = "10.0.0.0/24,10.0.1.0/24"
 
   application {
