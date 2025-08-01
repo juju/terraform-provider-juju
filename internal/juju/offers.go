@@ -63,7 +63,7 @@ type DestroyOfferInput struct {
 }
 
 type ConsumeRemoteOfferInput struct {
-	ModelName string
+	ModelUUID string
 	OfferURL  string
 }
 
@@ -72,7 +72,7 @@ type ConsumeRemoteOfferResponse struct {
 }
 
 type RemoveRemoteOfferInput struct {
-	ModelName string
+	ModelUUID string
 	OfferURL  string
 }
 
@@ -261,7 +261,7 @@ func findApplicationOffers(client *applicationoffers.Client, filter crossmodel.A
 
 // ConsumeRemoteOffer allows the integration resource to consume the offers managed by the offer resource.
 func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*ConsumeRemoteOfferResponse, error) {
-	modelConn, err := c.GetConnection(&input.ModelName)
+	modelConn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +352,7 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 // RemoveRemoteOffer allows the integration resource to destroy the offers managed by the offer resource.
 func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 	var errors []error
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		errors = append(errors, err)
 		return errors

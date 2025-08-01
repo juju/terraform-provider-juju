@@ -5,12 +5,16 @@ package provider
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
 func TestAcc_ResourceIntegration(t *testing.T) {
@@ -71,6 +75,49 @@ func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_integration.a", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.a", "application.*", map[string]string{"name": "a", "endpoint": "source"}),
 					resource.TestCheckResourceAttr("juju_integration.a", "via", via),
+				),
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceIntegration_UpgradeV0ToV1(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-integration")
+	idCheck := regexp.MustCompile(fmt.Sprintf(".+:%v:%v", "one:source", "two:sink"))
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		CheckDestroy: testAccCheckIntegrationDestroy,
+		Steps: []resource.TestStep{
+			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderStableVersion,
+						Source:            "juju/juju",
+					},
+				},
+				Config: testAccResourceIntegrationV0(modelName, "series = \"jammy\"", "series = \"jammy\""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_integration.this", "model_uuid"),
+					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
+					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "one", "endpoint": "source"}),
+				),
+			},
+			{
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceIntegration(modelName, "series = \"jammy\"", "series = \"jammy\""),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("juju_integration.this", tfjsonpath.New("id"), knownvalue.StringRegexp(idCheck)),
+				},
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_integration.this", "model_uuid"),
+					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
+					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "one", "endpoint": "source"}),
 				),
 			},
 		},
@@ -185,6 +232,48 @@ resource "juju_application" "two" {
 
 resource "juju_integration" "this" {
 	model = juju_model.this.name
+
+	application {
+		name     = juju_application.one.name
+		endpoint = "source"
+	}
+
+	application {
+		name = juju_application.two.name
+		endpoint = "sink"
+	}
+}
+`, modelName, osOne, osTwo)
+}
+
+func testAccResourceIntegrationV0(modelName, osOne, osTwo string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_application" "one" {
+	model = juju_model.this.name
+	name  = "one" 
+	
+	charm {
+		name = "juju-qa-dummy-sink"
+		%s
+	}
+}
+
+resource "juju_application" "two" {
+	model = juju_model.this.name
+	name  = "two"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		%s
+	}
+}
+
+resource "juju_integration" "this" {
+	model_uuid = juju_model.this.uuid
 
 	application {
 		name     = juju_application.one.name
