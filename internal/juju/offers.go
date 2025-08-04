@@ -437,6 +437,7 @@ func (c offersClient) GrantOffer(input *GrantRevokeOfferInput) error {
 
 // RevokeOffer revokes access to an offer managed by the access offer resource.
 // No action or error if the access was already revoked for the user.
+// Note: revoking `ReadAccess` will remove all access levels for the offer
 func (c offersClient) RevokeOffer(input *GrantRevokeOfferInput) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
