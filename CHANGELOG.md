@@ -1,3 +1,22 @@
+## 0.21.1 (August 4, 2025)
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.4 release.
+* This is a patch release to provide an early fix for [810](https://github.com/juju/terraform-provider-juju/issues/810).
+
+BUG FIXES
+
+* Avoid revoking and re-granting users' access to offers [816](https://github.com/juju/terraform-provider-juju/pull/816) by @SimoneDutto
+* Allow offers that were previously consumed with the Juju CLI to work with Terraform [802](https://github.com/juju/terraform-provider-juju/pull/802) by @kian99
+
+DOCUMENTATION
+
+* Changes to move the docs to the Ubuntu domain [807](https://github.com/juju/terraform-provider-juju/pull/807) by @tmihoc
+* Add sitemap config and support for google analytics [812](https://github.com/juju/terraform-provider-juju/pull/812) by @tmihoc
+
 ## 0.21.0 (July 21, 2025)
 
 NOTES:
