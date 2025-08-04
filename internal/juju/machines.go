@@ -45,7 +45,7 @@ type machinesClient struct {
 }
 
 type CreateMachineInput struct {
-	ModelName   string
+	ModelUUID   string
 	Constraints string
 	Disks       string
 	Base        string
@@ -69,7 +69,7 @@ type CreateMachineResponse struct {
 }
 
 type ReadMachineInput struct {
-	ModelName string
+	ModelUUID string
 	ID        string
 }
 
@@ -83,7 +83,7 @@ type ReadMachineResponse struct {
 }
 
 type DestroyMachineInput struct {
-	ModelName string
+	ModelUUID string
 	ID        string
 }
 
@@ -129,7 +129,7 @@ func getTargetStatusFunc(machineID string) targetStatusFunc {
 }
 
 func (c *machinesClient) CreateMachine(ctx context.Context, input *CreateMachineInput) (*CreateMachineResponse, error) {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +168,7 @@ func (c *machinesClient) createMachine(conn api.Connection, input *CreateMachine
 	if placement != "" {
 		machineParams.Placement, err = instance.ParsePlacement(placement)
 		if err == instance.ErrPlacementScopeMissing {
-			modelUUID, err := c.ModelUUID(input.ModelName)
+			modelUUID, err := c.ModelUUID(input.ModelUUID)
 			if err != nil {
 				return "", err
 			}
@@ -339,7 +339,7 @@ func manualProvision(client manual.ProvisioningClientAPI,
 }
 
 func (c *machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineResponse, error) {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -386,7 +386,7 @@ func (c *machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineRespo
 }
 
 func (c *machinesClient) DestroyMachine(input *DestroyMachineInput) error {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
 	}
