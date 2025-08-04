@@ -900,7 +900,7 @@ func testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmNa
 		}
 
 		resource "juju_integration" "testapp_ntp" {
-			model = juju_model.model.name
+			model_uuid = juju_model.model.uuid
 
 			application {
 				name = juju_application.testapp.name
@@ -957,7 +957,7 @@ func testAccResourceApplicationBasic_UnitsWithSubordinates(modelName, charmName,
 		}
 
 		resource "juju_integration" "testapp_ntp" {
-			model = juju_model.model.name
+			model_uuid = juju_model.model.uuid
 
 			application {
 				name = juju_application.testapp.name

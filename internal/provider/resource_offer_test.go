@@ -34,7 +34,7 @@ func TestAcc_ResourceOffer(t *testing.T) {
 			{
 				Config: testAccResourceOfferXIntegration(modelName2, destModelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.int", "model", destModelName),
+					resource.TestCheckResourceAttrPair("juju_model.modeldest", "uuid", "juju_integration.int", "model_uuid"),
 
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.int", "application.*",
 						map[string]string{"name": "apptwo", "endpoint": "source", "offer_url": ""}),
