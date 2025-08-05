@@ -34,7 +34,6 @@ type offerDataSource struct {
 type offerDataSourceModel struct {
 	ApplicationName types.String `tfsdk:"application_name"`
 	Endpoints       types.Set    `tfsdk:"endpoints"`
-	ModelName       types.String `tfsdk:"model"`
 	OfferName       types.String `tfsdk:"name"`
 	OfferURL        types.String `tfsdk:"url"`
 	// ID required by the testing framework
@@ -52,12 +51,6 @@ func (d *offerDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 			"url": schema.StringAttribute{
 				Description: "The offer URL.",
 				Required:    true,
-			},
-			"model": schema.StringAttribute{
-				Description: "The name of the model to operate in.",
-				Computed:    true,
-				// TODO hml 21-aug-2023
-				// Is model necessary at all?
 			},
 			"name": schema.StringAttribute{
 				Description: "The name of the offer.",
@@ -132,7 +125,6 @@ func (d *offerDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 	data.Endpoints = endpointSet
-	data.ModelName = types.StringValue(offer.ModelUUID)
 	data.OfferName = types.StringValue(offer.Name)
 	data.OfferURL = types.StringValue(offer.OfferURL)
 	data.ID = types.StringValue(offer.OfferURL)

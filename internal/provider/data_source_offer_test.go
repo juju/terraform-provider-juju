@@ -23,7 +23,6 @@ func TestAcc_DataSourceOffer(t *testing.T) {
 			{
 				Config: testAccDataSourceOffer(modelName, "base = \"ubuntu@22.04\"", offerName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("data.juju_offer.this", "name", offerName),
 				),
 			},

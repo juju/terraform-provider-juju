@@ -211,7 +211,8 @@ func (o *offerResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 	response, err := o.client.Offers.ReadOffer(&juju.ReadOfferInput{
-		OfferURL: state.ID.ValueString(),
+		OfferURL:     state.ID.ValueString(),
+		GetModelUUID: true,
 	})
 	if err != nil {
 		resp.Diagnostics.Append(handleOfferNotFoundError(ctx, err, &resp.State)...)

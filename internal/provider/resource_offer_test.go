@@ -160,7 +160,7 @@ func TestAcc_ResourceOffer_Upgradev0Tov2(t *testing.T) {
 				},
 				Config: testAccResourceOfferv0(modelName, "series = \"focal\""),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_offer.this", "model_uuid"),
+					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 				),
@@ -193,7 +193,7 @@ func TestAcc_ResourceOffer_UpgradeV1ToV2(t *testing.T) {
 				},
 				Config: testAccResourceOfferv1(modelName, "series = \"focal\""),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_offer.this", "model_uuid"),
+					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 				),
@@ -248,7 +248,7 @@ resource "juju_application" "this" {
 }
 
 resource "juju_offer" "this" {
-	model_uuid       = juju_model.this.uuid
+	model       = juju_model.this.name
 	application_name = juju_application.this.name
 	endpoint         = "sink"
 }
@@ -273,7 +273,7 @@ resource "juju_application" "this" {
 }
 
 resource "juju_offer" "this" {
-	model_uuid       = juju_model.this.uuid
+	model       = juju_model.this.name
 	application_name = juju_application.this.name
 	endpoints        = ["sink"]
 }
