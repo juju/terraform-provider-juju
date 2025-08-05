@@ -204,59 +204,6 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 }
 
 func (s *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// Prevent panic if the provider has not been configured.
-	if s.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "ssh_key", "update")
-		return
-	}
-
-	var plan, state sshKeyResourceModel
-
-	// Get the Terraform state from the request into the state model
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	// Read Terraform configuration from the request into the plan model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Return early if nothing has changed
-	if plan.Payload.Equal(state.Payload) && plan.ModelName.Equal(state.ModelName) {
-		return
-	}
-
-	modelName, keyIdentifier := retrieveModelKeyNameFromID(plan.ID.ValueString(), &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Delete the key
-	if err := s.client.SSHKeys.DeleteSSHKey(&juju.DeleteSSHKeyInput{
-		Username:      s.client.Username(),
-		ModelName:     modelName,
-		KeyIdentifier: keyIdentifier,
-	}); err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete ssh key for updating, got error: %s", err))
-		return
-	}
-	s.trace(fmt.Sprintf("ssh key deleted : %q", state.ID.ValueString()))
-
-	// Create a new key
-	if err := s.client.SSHKeys.CreateSSHKey(&juju.CreateSSHKeyInput{
-		Username:  s.client.Username(),
-		ModelName: plan.ModelName.ValueString(),
-		Payload:   plan.Payload.ValueString(),
-	}); err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create ssh key for updating, got error: %s", err))
-		return
-	}
-	s.trace(fmt.Sprintf("ssh key created : %q", plan.ID.ValueString()))
-
-	// Set the plan onto the Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 // Delete is called when the provider must delete the resource. Config
