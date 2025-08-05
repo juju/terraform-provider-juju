@@ -26,7 +26,7 @@ func TestAcc_ResourceOffer(t *testing.T) {
 			{
 				Config: testAccResourceOffer(modelName, "base = \"ubuntu@22.04\""),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_offer.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 				),
@@ -71,7 +71,7 @@ resource "juju_application" "appone" {
 }
 
 resource "juju_offer" "offerone" {
-	model            = juju_model.modelone.name
+	model_uuid = juju_model.modelone.uuid
 	application_name = juju_application.appone.name
 	endpoints         = ["sink"]
 }
@@ -127,7 +127,7 @@ func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
 				},
 				Config: testAccResourceOffer(modelName, "series = \"focal\""),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_offer.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 				),
@@ -160,7 +160,7 @@ func TestAcc_ResourceOffer_Upgradev0Tov2(t *testing.T) {
 				},
 				Config: testAccResourceOfferv0(modelName, "series = \"focal\""),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_offer.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 				),
@@ -193,7 +193,7 @@ func TestAcc_ResourceOffer_UpgradeV1ToV2(t *testing.T) {
 				},
 				Config: testAccResourceOfferv1(modelName, "series = \"focal\""),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_offer.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 				),
@@ -248,7 +248,7 @@ resource "juju_application" "this" {
 }
 
 resource "juju_offer" "this" {
-	model            = juju_model.this.name
+	model_uuid       = juju_model.this.uuid
 	application_name = juju_application.this.name
 	endpoint         = "sink"
 }
@@ -273,9 +273,9 @@ resource "juju_application" "this" {
 }
 
 resource "juju_offer" "this" {
-	model            = juju_model.this.name
+	model_uuid       = juju_model.this.uuid
 	application_name = juju_application.this.name
-	endpoints         = ["sink"]
+	endpoints        = ["sink"]
 }
 `, modelName, os)
 }
@@ -294,7 +294,7 @@ func TestAcc_ResourceOfferMultipleEndpoints(t *testing.T) {
 			{
 				Config: testAccResourceOfferMultipleEndpoints(modelName1, modelName2),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName1),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_offer.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_offer.this", "endpoints.0", "grafana-dashboard"),
 					resource.TestCheckResourceAttr("juju_offer.this", "endpoints.1", "metrics-endpoint"),
 					resource.TestCheckResourceAttr("juju_offer.this", "endpoints.#", "2"),
@@ -322,9 +322,9 @@ resource "juju_application" "this" {
 }
 
 resource "juju_offer" "this" {
-	model            = juju_model.this.name
+	model_uuid       = juju_model.this.uuid
 	application_name = juju_application.this.name
-	endpoints         = ["grafana-dashboard", "metrics-endpoint"]
+	endpoints        = ["grafana-dashboard", "metrics-endpoint"]
 }
 
 resource "juju_model" "that" {

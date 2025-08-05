@@ -14,7 +14,7 @@ A resource that represent a Juju Offer.
 
 ```terraform
 resource "juju_offer" "myoffer" {
-  model            = juju_model.development.name
+  model_uuid       = juju_model.development.uuid
   application_name = juju_application.percona-cluster.name
   endpoints        = ["server"]
 }
@@ -40,7 +40,7 @@ resource "juju_integration" "myintegration" {
 
 - `application_name` (String) The name of the application. Changing this value will cause the offer to be destroyed and recreated by terraform.
 - `endpoints` (Set of String) The endpoint names. Changing this value will cause the offer to be destroyed and recreated by terraform.
-- `model` (String) The name of the model to operate in. Changing this value will cause the offer to be destroyed and recreated by terraform.
+- `model_uuid` (String) The UUID of the model to operate in. Changing this value will cause the offer to be destroyed and recreated by terraform.
 
 ### Optional
 

@@ -48,7 +48,7 @@ resource "juju_application" "this" {
 }
 
 resource "juju_offer" "this" {
-	model            = juju_model.this.name
+	model_uuid       = juju_model.this.uuid
 	application_name = juju_application.this.name
 	endpoints         = ["sink"]
 	name             = %q
