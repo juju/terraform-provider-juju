@@ -14,7 +14,7 @@ A data source representing a Juju Model.
 
 ```terraform
 data "juju_model" "this" {
-  name = "development"
+  uuid = "1d10a751-02c1-43d5-b46b-d84fe04d6fde"
 }
 ```
 
@@ -23,9 +23,8 @@ data "juju_model" "this" {
 
 ### Required
 
-- `name` (String) The name of the model.
+- `uuid` (String) The UUID of the model.
 
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-- `uuid` (String) The UUID of the model.

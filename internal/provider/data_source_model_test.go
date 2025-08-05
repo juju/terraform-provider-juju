@@ -21,38 +21,9 @@ func TestAcc_DataSourceModel_Edge(t *testing.T) {
 			{
 				Config: testAccFrameworkDataSourceModel(modelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.juju_model.test-model", "name", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.test-model", "uuid", "data.juju_model.test-model", "uuid"),
 					resource.TestCheckResourceAttrSet("data.juju_model.test-model", "uuid"),
 				),
-			},
-		},
-	})
-}
-
-func TestAcc_DataSourceModel_UpgradeProvider(t *testing.T) {
-	modelName := acctest.RandomWithPrefix("tf-datasource-model-test")
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-
-		Steps: []resource.TestStep{
-			{
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						VersionConstraint: TestProviderStableVersion,
-						Source:            "juju/juju",
-					},
-				},
-				Config: testAccFrameworkDataSourceModel(modelName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.juju_model.test-model", "name", modelName),
-					resource.TestCheckResourceAttrSet("data.juju_model.test-model", "uuid"),
-				),
-			},
-			{
-				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccFrameworkDataSourceModel(modelName),
-				PlanOnly:                 true,
 			},
 		},
 	})
@@ -65,6 +36,6 @@ resource "juju_model" "test-model" {
 }
 
 data "juju_model" "test-model" {
-	name = juju_model.test-model.name
+	uuid = juju_model.test-model.uuid
 }`, modelName)
 }

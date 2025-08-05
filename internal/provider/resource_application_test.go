@@ -1109,7 +1109,7 @@ func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application-bindings")
 	appName := "test-app"
 
-	managementSpace, publicSpace, cleanUp := setupModelAndSpaces(t, modelName)
+	modelUUID, managementSpace, publicSpace, cleanUp := setupModelAndSpaces(t, modelName)
 	defer cleanUp()
 
 	constraints := "arch=amd64 spaces=" + managementSpace + "," + publicSpace
@@ -1119,7 +1119,7 @@ func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// test creating a single application with default endpoint bound to management space, and ubuntu endpoint bound to public space
-				Config: testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
+				Config: testAccResourceApplicationEndpointBindings(modelName, modelUUID, appName, constraints, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "2"),
@@ -1144,7 +1144,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application-bindings-update")
 	appName := "test-app-update"
 
-	managementSpace, publicSpace, cleanUp := setupModelAndSpaces(t, modelName)
+	modelUUID, managementSpace, publicSpace, cleanUp := setupModelAndSpaces(t, modelName)
 	defer cleanUp()
 	constraints := "arch=amd64 spaces=" + managementSpace + "," + publicSpace
 
@@ -1154,7 +1154,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// test creating a single application with default endpoint bound to management space
-				Config: testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": managementSpace}),
+				Config: testAccResourceApplicationEndpointBindings(modelName, modelUUID, appName, constraints, map[string]string{"": managementSpace}),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "1"),
@@ -1165,7 +1165,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 			{
 				// updating the existing application's default endpoint to be bound to public space
 				// this means all endpoints should be bound to public space (since no endpoint was on a different space)
-				Config: testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": publicSpace}),
+				Config: testAccResourceApplicationEndpointBindings(modelName, modelUUID, appName, constraints, map[string]string{"": publicSpace}),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "1"),
@@ -1176,7 +1176,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 			{
 				// updating the existing application's default endpoint to be bound to management space, and specifying ubuntu endpoint to be bound to public space
 				// this means all endpoints should be bound to public space, except for ubuntu which should be bound to public space
-				Config: testAccResourceApplicationEndpointBindings(modelName, appName, constraints, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
+				Config: testAccResourceApplicationEndpointBindings(modelName, modelUUID, appName, constraints, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "2"),
@@ -1187,7 +1187,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 			},
 			{
 				// removing the endpoint bindings reverts to model's default space
-				Config: testAccResourceApplicationEndpointBindings(modelName, appName, constraints, nil),
+				Config: testAccResourceApplicationEndpointBindings(modelName, modelUUID, appName, constraints, nil),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "0"),
@@ -1692,7 +1692,7 @@ resource "juju_application" "subordinate" {
 `, modelName, constraints)
 }
 
-func setupModelAndSpaces(t *testing.T, modelName string) (string, string, func()) {
+func setupModelAndSpaces(t *testing.T, modelName string) (string, string, string, func()) {
 	// All the space setup is needed until https://github.com/juju/terraform-provider-juju/issues/336 is implemented
 	// called to have TestClient populated
 	testAccPreCheck(t)
@@ -1702,6 +1702,7 @@ func setupModelAndSpaces(t *testing.T, modelName string) (string, string, func()
 	if err != nil {
 		t.Fatal(err)
 	}
+	modelUUID := model.UUID
 
 	conn, err := TestClient.Models.GetConnection(&modelName)
 	if err != nil {
@@ -1730,10 +1731,10 @@ func setupModelAndSpaces(t *testing.T, modelName string) (string, string, func()
 		t.Fatal(err)
 	}
 
-	return managementSpace, publicSpace, cleanUp
+	return modelUUID, managementSpace, publicSpace, cleanUp
 }
 
-func testAccResourceApplicationEndpointBindings(modelName, appName, constraints string, endpointBindings map[string]string) string {
+func testAccResourceApplicationEndpointBindings(modelName, modelUUID, appName, constraints string, endpointBindings map[string]string) string {
 	var endpoints string
 	for endpoint, space := range endpointBindings {
 		if endpoint == "" {
@@ -1758,7 +1759,7 @@ func testAccResourceApplicationEndpointBindings(modelName, appName, constraints 
 	}
 	return internaltesting.GetStringFromTemplateWithData("testAccResourceApplicationEndpointBindings", `
 data "juju_model" "{{.ModelName}}" {
-  name = "{{.ModelName}}"
+  name = "{{.ModelUUID}}"
 }
 
 resource "juju_application" "{{.AppName}}" {
