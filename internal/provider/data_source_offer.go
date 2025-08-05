@@ -132,7 +132,7 @@ func (d *offerDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 	data.Endpoints = endpointSet
-	data.ModelName = types.StringValue(offer.ModelName)
+	data.ModelName = types.StringValue(offer.ModelUUID)
 	data.OfferName = types.StringValue(offer.Name)
 	data.OfferURL = types.StringValue(offer.OfferURL)
 	data.ID = types.StringValue(offer.OfferURL)
