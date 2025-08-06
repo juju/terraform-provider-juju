@@ -144,7 +144,7 @@ func newSSHKeyID(modelName string, keyIdentifier string) string {
 // the key identifier is currently based on the comment section of the ssh key
 // (e.g. user@hostname) (TODO: issue #267)
 func retrieveModelKeyNameFromID(id string, d *diag.Diagnostics) (string, string) {
-	tokens := strings.Split(id, ":")
+	tokens := strings.SplitN(id, ":", 3)
 	//If importing with an incorrect ID we need to catch and provide a user-friendly error
 	if len(tokens) != 3 {
 		d.AddError("Malformed ID", fmt.Sprintf("unable to parse model name and user from provided ID: %q", id))
