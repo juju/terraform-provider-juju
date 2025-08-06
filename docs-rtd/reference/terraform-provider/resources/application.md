@@ -15,7 +15,7 @@ A resource that represents a single Juju application deployment from a charm. De
 resource "juju_application" "this" {
   name = "my-application"
 
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   charm {
     name     = "ubuntu"
@@ -47,7 +47,7 @@ resource "juju_application" "this" {
 
 ### Required
 
-- `model` (String) The name of the model where the application is to be deployed. Changing this value will cause the application to be destroyed and recreated by terraform.
+- `model_uuid` (String) The UUID of the model where the application is to be deployed. Changing this value will cause the application to be destroyed and recreated by terraform.
 
 ### Optional
 
@@ -131,6 +131,6 @@ Read-Only:
 Import is supported using the following syntax:
 
 ```shell
-# Applications can be imported using the format: `model_name:application_name`, for example:
-$ terraform import juju_application.wordpress development:wordpress
+# Applications can be imported using the format: `model_uuid:application_name`, for example:
+$ terraform import juju_application.wordpress abe22490-a845-4a4d-ba52-7ec80a60aff5:wordpress
 ```

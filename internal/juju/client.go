@@ -100,6 +100,7 @@ type sharedClient struct {
 	controllerConfig ControllerConfiguration
 	waitForResources bool
 
+	modelCacheOnce sync.Once
 	modelUUIDcache map[string]jujuModel
 	modelUUIDmu    sync.Mutex
 
@@ -248,6 +249,13 @@ func (sc *sharedClient) GetConnection(modelIdentifier *string) (api.Connection, 
 // search the modelUUIDCache for the uuid. If it's not found, fill the model
 // cache and try again.
 func (sc *sharedClient) ModelUUID(modelIdentifier string) (string, error) {
+	sc.modelCacheOnce.Do(func() {
+		if err := sc.fillModelCache(); err != nil {
+			// Log the error and continue
+			sc.Errorf(err, "failed to do initial fill of the model cache")
+		}
+	})
+
 	if names.IsValidModel(modelIdentifier) {
 		return modelIdentifier, nil
 	}
@@ -315,6 +323,7 @@ func (sc *sharedClient) ModelType(modelIdentifier string) (model.ModelType, erro
 		if modelWithUUID, ok := sc.modelUUIDcache[modelIdentifier]; ok {
 			return modelWithUUID.modelType, nil
 		}
+		return "", errors.NotFoundf("type for model %q", modelIdentifier)
 	}
 
 	for _, m := range sc.modelUUIDcache {

@@ -16,7 +16,7 @@ To deploy a Charmhub charm, in your Terraform plan add a `juju_application` reso
 
 ```terraform
 resource "juju_application" "this" {
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   charm {
     name = "hello-kubecon"
@@ -35,7 +35,7 @@ To update a charm, in the application's resource definition, in the charm attrib
 
 ```terraform
 resource "juju_application" "this" {
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   charm {
     name = "hello-kubecon"

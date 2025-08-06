@@ -26,6 +26,7 @@ import (
 var _ resource.Resource = &offerResource{}
 var _ resource.ResourceWithConfigure = &offerResource{}
 var _ resource.ResourceWithImportState = &offerResource{}
+var _ resource.ResourceWithUpgradeState = &offerResource{}
 
 func NewOfferResource() resource.Resource {
 	return &offerResource{}

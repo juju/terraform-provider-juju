@@ -152,7 +152,7 @@ func ConfigEntryToString(input interface{}) string {
 
 type CreateApplicationInput struct {
 	ApplicationName    string
-	ModelName          string
+	ModelUUID          string
 	CharmName          string
 	CharmChannel       string
 	CharmBase          string
@@ -287,7 +287,7 @@ type CreateApplicationResponse struct {
 }
 
 type ReadApplicationInput struct {
-	ModelName string
+	ModelUUID string
 	AppName   string
 }
 
@@ -312,7 +312,7 @@ type ReadApplicationResponse struct {
 }
 
 type UpdateApplicationInput struct {
-	ModelName string
+	ModelUUID string
 	ModelInfo *params.ModelInfo
 	AppName   string
 	Units     *int
@@ -335,7 +335,7 @@ type UpdateApplicationInput struct {
 
 type DestroyApplicationInput struct {
 	ApplicationName string
-	ModelName       string
+	ModelUUID       string
 }
 
 func resolveCharmURL(charmName string) (*charm.URL, error) {
@@ -352,7 +352,7 @@ func resolveCharmURL(charmName string) (*charm.URL, error) {
 }
 
 func (c applicationsClient) CreateApplication(ctx context.Context, input *CreateApplicationInput) (*CreateApplicationResponse, error) {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +387,7 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	if err != nil {
 		return nil, err
 	}
-	modelType, err := c.ModelType(input.ModelName)
+	modelType, err := c.ModelType(input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -806,7 +806,7 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 // not found. Delay indicates how long to wait between attempts.
 func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Context, input *ReadApplicationInput) (*ReadApplicationResponse, error) {
 	var output *ReadApplicationResponse
-	modelType, err := c.ModelType(input.ModelName)
+	modelType, err := c.ModelType(input.ModelUUID)
 	if err != nil {
 		return nil, jujuerrors.Annotatef(err, "getting model type")
 	}
@@ -943,7 +943,7 @@ func getStorageLabel(storageTag string) string {
 }
 
 func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadApplicationResponse, error) {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -1012,7 +1012,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	unitCount := len(appStatus.Units)
 	// if we have a CAAS we use scale instead of units length
-	modelType, err := c.ModelType(input.ModelName)
+	modelType, err := c.ModelType(input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -1194,7 +1194,7 @@ func removeDefaultCidrs(cidrs []string) []string {
 }
 
 func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) error {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -1308,7 +1308,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	}
 
 	// TODO: Refactor this to a separate function
-	modelType, err := c.ModelType(input.ModelName)
+	modelType, err := c.ModelType(input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -1486,7 +1486,7 @@ func (c applicationsClient) UpdateCharmAndResources(
 }
 
 func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) error {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
 	}

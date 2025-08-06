@@ -61,7 +61,7 @@ resource "juju_model" "modelone" {
 }
 
 resource "juju_application" "appone" {
-	model = juju_model.modelone.name
+	model_uuid = juju_model.modelone.uuid
 	name  = "appone"
 
 	charm {
@@ -81,7 +81,7 @@ resource "juju_model" "modeldest" {
 }
 
 resource "juju_application" "apptwo" {
-	model = juju_model.modeldest.name
+	model_uuid = juju_model.modeldest.uuid
 	name = "apptwo"
 
 	charm {
@@ -106,6 +106,9 @@ resource "juju_integration" "int" {
 }
 
 func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
+	t.Skip("This test currently fails due to the breaking change in the provider schema. " +
+		"Remove the skip after the v1 release of the provider.")
+
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -177,7 +180,7 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-	model = juju_model.this.name
+	model_uuid = juju_model.this.uuid
 	name  = "this"
 
 	charm {
@@ -250,7 +253,7 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-	model = juju_model.this.name
+	model_uuid = juju_model.this.uuid
 	name  = "this"
 
 	charm {
@@ -271,7 +274,7 @@ resource "juju_model" "that" {
 }
 
 resource "juju_application" "that" {
-	model = juju_model.that.name
+	model_uuid = juju_model.that.uuid
 	name  = "that"
 	charm {
 	    name = "grafana-agent-k8s"
@@ -293,7 +296,7 @@ resource "juju_integration" "offer_db" {
 }
 
 resource "juju_application" "toc" {
-	model = juju_model.that.name
+	model_uuid = juju_model.that.uuid
 	name  = "toc"
 	charm {
 	    name = "grafana-agent-k8s"

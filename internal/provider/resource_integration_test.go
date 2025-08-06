@@ -94,7 +94,7 @@ func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
 						Source:            "juju/juju",
 					},
 				},
-				Config: testAccResourceIntegration(modelName, "series = \"jammy\"", "series = \"jammy\""),
+				Config: testAccResourceIntegrationV0(modelName, "series = \"jammy\"", "series = \"jammy\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
@@ -116,6 +116,48 @@ func testAccCheckIntegrationDestroy(s *terraform.State) error {
 }
 
 func testAccResourceIntegration(modelName, osOne, osTwo string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_application" "one" {
+	model_uuid = juju_model.this.uuid
+	name  = "one" 
+	
+	charm {
+		name = "juju-qa-dummy-sink"
+		%s
+	}
+}
+
+resource "juju_application" "two" {
+	model_uuid = juju_model.this.uuid
+	name  = "two"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		%s
+	}
+}
+
+resource "juju_integration" "this" {
+	model = juju_model.this.name
+
+	application {
+		name     = juju_application.one.name
+		endpoint = "source"
+	}
+
+	application {
+		name = juju_application.two.name
+		endpoint = "sink"
+	}
+}
+`, modelName, osOne, osTwo)
+}
+
+func testAccResourceIntegrationV0(modelName, osOne, osTwo string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
@@ -167,7 +209,7 @@ resource "juju_model" "a" {
 }
 
 resource "juju_application" "a" {
-	model = juju_model.a.name
+	model_uuid = juju_model.a.uuid
 	name  = "a" 
 	
 	charm {
@@ -181,7 +223,7 @@ resource "juju_model" "b" {
 }
 
 resource "juju_application" "b" {
-	model = juju_model.b.name
+	model_uuid = juju_model.b.uuid
 	name  = "b"
 	
 	charm {
@@ -274,7 +316,7 @@ resource "juju_model" "a" {
 }
 
 resource "juju_application" "a" {
-        model = juju_model.a.name
+        model_uuid = juju_model.a.uuid
         name  = "a"
 
         charm {
@@ -293,7 +335,7 @@ resource "juju_model" "b" {
 }
 
 resource "juju_application" "b1" {
-        model = juju_model.b.name
+        model_uuid = juju_model.b.uuid
         name  = "b1"
 
         charm {
@@ -316,7 +358,7 @@ resource "juju_integration" "b1" {
 }
 
 resource "juju_application" "b2" {
-        model = juju_model.b.name
+        model_uuid = juju_model.b.uuid
         name  = "b2"
 
         charm {

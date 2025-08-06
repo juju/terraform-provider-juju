@@ -106,7 +106,7 @@ resource "juju_model" "modelone" {
 }
 
 resource "juju_application" "appone" {
-	model = juju_model.modelone.name
+	model_uuid = juju_model.modelone.uuid
 	name  = "appone"
 
 	charm {

@@ -34,7 +34,7 @@ import (
 type ApplicationSuite struct {
 	suite.Suite
 
-	testModelName string
+	testModelUUID string
 
 	mockApplicationClient *MockApplicationAPIClient
 	mockClient            *MockClientAPIClient
@@ -48,7 +48,7 @@ type ApplicationSuite struct {
 func (s *ApplicationSuite) SetupTest() {}
 
 func (s *ApplicationSuite) setupMocks(t *testing.T) *gomock.Controller {
-	s.testModelName = "testmodel"
+	s.testModelUUID = "test-uuid"
 
 	ctlr := gomock.NewController(t)
 	s.mockApplicationClient = NewMockApplicationAPIClient(ctlr)
@@ -88,7 +88,7 @@ func (s *ApplicationSuite) setupMocks(t *testing.T) *gomock.Controller {
 	s.mockSharedClient.EXPECT().Errorf(gomock.Any(), gomock.Any()).Do(log).AnyTimes()
 	s.mockSharedClient.EXPECT().Tracef(gomock.Any(), gomock.Any()).Do(log).AnyTimes()
 	s.mockSharedClient.EXPECT().JujuLogger().Return(&jujuLoggerShim{}).AnyTimes()
-	s.mockSharedClient.EXPECT().GetConnection(&s.testModelName).Return(s.mockConnection, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().GetConnection(&s.testModelUUID).Return(s.mockConnection, nil).AnyTimes()
 
 	s.mockCharmhubClient = NewMockCharmhubClient(ctlr)
 	return ctlr
@@ -165,7 +165,7 @@ func (s *ApplicationSuite) TestReadApplicationRetry() {
 	client := s.getApplicationsClient()
 	resp, err := client.ReadApplicationWithRetryOnNotFound(context.Background(),
 		&ReadApplicationInput{
-			ModelName: s.testModelName,
+			ModelUUID: s.testModelUUID,
 			AppName:   appName,
 		})
 	s.Require().NoError(err, "error from ReadApplicationWithRetryOnNotFound")
@@ -189,7 +189,7 @@ func (s *ApplicationSuite) TestReadApplicationRetryDoNotPanic() {
 	client := s.getApplicationsClient()
 	_, err := client.ReadApplicationWithRetryOnNotFound(context.Background(),
 		&ReadApplicationInput{
-			ModelName: s.testModelName,
+			ModelUUID: s.testModelUUID,
 			AppName:   appName,
 		})
 	s.Require().Error(err, "don't panic")
@@ -258,7 +258,7 @@ func (s *ApplicationSuite) TestReadApplicationRetryWaitForMachines() {
 	client := s.getApplicationsClient()
 	resp, err := client.ReadApplicationWithRetryOnNotFound(context.Background(),
 		&ReadApplicationInput{
-			ModelName: s.testModelName,
+			ModelUUID: s.testModelUUID,
 			AppName:   appName,
 		})
 	s.Require().NoError(err, "error from ReadApplicationWithRetryOnNotFound")
@@ -313,7 +313,7 @@ func (s *ApplicationSuite) TestReadApplicationRetrySubordinate() {
 	client := s.getApplicationsClient()
 	resp, err := client.ReadApplicationWithRetryOnNotFound(context.Background(),
 		&ReadApplicationInput{
-			ModelName: s.testModelName,
+			ModelUUID: s.testModelUUID,
 			AppName:   appName,
 		})
 	s.Require().NoError(err, "error from ReadApplicationWithRetryOnNotFound")
@@ -379,7 +379,7 @@ func (s *ApplicationSuite) TestReadApplicationRetryNotFoundStorageNotFoundError(
 	client := s.getApplicationsClient()
 	resp, err := client.ReadApplicationWithRetryOnNotFound(context.Background(),
 		&ReadApplicationInput{
-			ModelName: s.testModelName,
+			ModelUUID: s.testModelUUID,
 			AppName:   appName,
 		})
 	s.Require().NoError(err, "error from ReadApplicationWithRetryOnNotFound")

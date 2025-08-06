@@ -11,7 +11,7 @@ To control the number of units of an application, in its resource definition spe
 
 ```terraform
 resource "juju_application" "this" {
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   charm {
     name = "hello-kubecon"

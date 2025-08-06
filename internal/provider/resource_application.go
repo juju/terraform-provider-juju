@@ -65,6 +65,7 @@ Notes:
 var _ resource.Resource = &applicationResource{}
 var _ resource.ResourceWithConfigure = &applicationResource{}
 var _ resource.ResourceWithImportState = &applicationResource{}
+var _ resource.ResourceWithUpgradeState = &applicationResource{}
 
 // NewApplicationResource returns a new instance of the application resource responsible
 // for managing Juju applications, including their configuration, charm, constraints, and
@@ -80,9 +81,9 @@ type applicationResource struct {
 	subCtx context.Context
 }
 
-// applicationResourceModel describes the application data model.
+// applicationResourceModelV0 describes the application data model.
 // tfsdk must match user resource schema attribute names.
-type applicationResourceModel struct {
+type applicationResourceModelV0 struct {
 	ApplicationName  types.String           `tfsdk:"name"`
 	Charm            types.List             `tfsdk:"charm"`
 	Config           types.Map              `tfsdk:"config"`
@@ -91,6 +92,33 @@ type applicationResourceModel struct {
 	Expose           types.List             `tfsdk:"expose"`
 	Machines         types.Set              `tfsdk:"machines"`
 	ModelName        types.String           `tfsdk:"model"`
+	ModelType        types.String           `tfsdk:"model_type"`
+	// TODO - remove Placement
+	Placement types.String `tfsdk:"placement"`
+	// TODO - remove Principal when we version the schema
+	// and remove deprecated elements. Once we create upgrade
+	// functionality it can be removed from the structure.
+	Principal         types.Bool  `tfsdk:"principal"`
+	Resources         types.Map   `tfsdk:"resources"`
+	StorageDirectives types.Map   `tfsdk:"storage_directives"`
+	Storage           types.Set   `tfsdk:"storage"`
+	Trust             types.Bool  `tfsdk:"trust"`
+	UnitCount         types.Int64 `tfsdk:"units"`
+	// ID required by the testing framework
+	ID types.String `tfsdk:"id"`
+}
+
+// applicationResourceModelV1 describes the application data model.
+// tfsdk must match user resource schema attribute names.
+type applicationResourceModelV1 struct {
+	ApplicationName  types.String           `tfsdk:"name"`
+	Charm            types.List             `tfsdk:"charm"`
+	Config           types.Map              `tfsdk:"config"`
+	Constraints      CustomConstraintsValue `tfsdk:"constraints"`
+	EndpointBindings types.Set              `tfsdk:"endpoint_bindings"`
+	Expose           types.List             `tfsdk:"expose"`
+	Machines         types.Set              `tfsdk:"machines"`
+	ModelUUID        types.String           `tfsdk:"model_uuid"`
 	ModelType        types.String           `tfsdk:"model_type"`
 	// TODO - remove Placement
 	Placement types.String `tfsdk:"placement"`
@@ -138,6 +166,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 	resp.Schema = schema.Schema{
 		Description: "A resource that represents a single Juju application deployment from a charm. Deployment of bundles" +
 			" is not supported.",
+		Version: 1,
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Description: "A custom name for the application deployment. If empty, uses the charm's name." +
@@ -163,8 +192,8 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 					}...),
 				},
 			},
-			"model": schema.StringAttribute{
-				Description: "The name of the model where the application is to be deployed. Changing this value" +
+			"model_uuid": schema.StringAttribute{
+				Description: "The UUID of the model where the application is to be deployed. Changing this value" +
 					" will cause the application to be destroyed and recreated by terraform.",
 				Required: true,
 				PlanModifiers: []planmodifier.String{
@@ -484,7 +513,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	var plan applicationResourceModel
+	var plan applicationResourceModelV1
 
 	// Read Terraform plan into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -597,11 +626,11 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		unitCount = len(machines)
 	}
 
-	modelName := plan.ModelName.ValueString()
+	modelUUID := plan.ModelUUID.ValueString()
 	createResp, err := r.client.Applications.CreateApplication(ctx,
 		&juju.CreateApplicationInput{
 			ApplicationName:    plan.ApplicationName.ValueString(),
-			ModelName:          modelName,
+			ModelUUID:          modelUUID,
 			CharmName:          charmName,
 			CharmChannel:       channel,
 			CharmRevision:      revision,
@@ -626,7 +655,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 
 	r.trace(fmt.Sprintf("create application resource %q", createResp.AppName))
 	readResp, err := r.client.Applications.ReadApplicationWithRetryOnNotFound(ctx, &juju.ReadApplicationInput{
-		ModelName: modelName,
+		ModelUUID: modelUUID,
 		AppName:   createResp.AppName,
 	})
 	if err != nil {
@@ -689,7 +718,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		plan.Storage = types.SetNull(storageType)
 	}
 
-	plan.ID = types.StringValue(newAppID(plan.ModelName.ValueString(), createResp.AppName))
+	plan.ID = types.StringValue(newAppID(plan.ModelUUID.ValueString(), createResp.AppName))
 	r.trace("Created", applicationResourceModelForLogging(ctx, &plan))
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -727,7 +756,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		addClientNotConfiguredError(&resp.Diagnostics, "application", "read")
 		return
 	}
-	var state applicationResourceModel
+	var state applicationResourceModelV1
 
 	// Read Terraform prior state into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -739,14 +768,14 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		"ID": state.ID.ValueString(),
 	})
 
-	modelName, appName, dErr := modelAppNameFromID(state.ID.ValueString())
+	modelUUID, appName, dErr := modelAppNameFromID(state.ID.ValueString())
 	if dErr.HasError() {
 		resp.Diagnostics.Append(dErr...)
 		return
 	}
 
 	response, err := r.client.Applications.ReadApplication(&juju.ReadApplicationInput{
-		ModelName: modelName,
+		ModelUUID: modelUUID,
 		AppName:   appName,
 	})
 	if err != nil {
@@ -758,14 +787,14 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 	r.trace("read application", map[string]interface{}{"resource": appName, "response": response})
 
-	modelType, err := r.client.Applications.ModelType(modelName)
+	modelType, err := r.client.Applications.ModelType(modelUUID)
 	if err != nil {
 		resp.Diagnostics.Append(handleApplicationNotFoundError(ctx, err, &resp.State)...)
 		return
 	}
 
 	state.ApplicationName = types.StringValue(appName)
-	state.ModelName = types.StringValue(modelName)
+	state.ModelUUID = types.StringValue(modelUUID)
 
 	// Use the response to fill in state
 
@@ -964,7 +993,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		addClientNotConfiguredError(&resp.Diagnostics, "application", "update")
 		return
 	}
-	var plan, state applicationResourceModel
+	var plan, state applicationResourceModelV1
 	// asserts are intended to be used after the application is update to
 	// assert the update has achieved its intended effect.
 	asserts := []wait.Assert[*juju.ReadApplicationResponse]{}
@@ -980,7 +1009,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	r.trace("Current state", applicationResourceModelForLogging(ctx, &state))
 
 	updateApplicationInput := juju.UpdateApplicationInput{
-		ModelName: state.ModelName.ValueString(),
+		ModelUUID: state.ModelUUID.ValueString(),
 		AppName:   state.ApplicationName.ValueString(),
 	}
 
@@ -1191,7 +1220,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 			Context: ctx,
 			GetData: r.client.Applications.ReadApplication,
 			Input: &juju.ReadApplicationInput{
-				ModelName: updateApplicationInput.ModelName,
+				ModelUUID: updateApplicationInput.ModelUUID,
 				AppName:   updateApplicationInput.AppName,
 			},
 			DataAssertions: asserts,
@@ -1249,7 +1278,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	plan.ModelType = state.ModelType
-	plan.ID = types.StringValue(newAppID(plan.ModelName.ValueString(), plan.ApplicationName.ValueString()))
+	plan.ID = types.StringValue(newAppID(plan.ModelUUID.ValueString(), plan.ApplicationName.ValueString()))
 	plan.Principal = types.BoolNull()
 	r.trace("Updated", applicationResourceModelForLogging(ctx, &plan))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -1260,8 +1289,8 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 // added as storage constraints.
 func (r *applicationResource) updateStorage(
 	ctx context.Context,
-	plan applicationResourceModel,
-	state applicationResourceModel,
+	plan applicationResourceModelV1,
+	state applicationResourceModelV1,
 ) (map[string]jujustorage.Constraints, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
 	var updatedStorageDirectivesMap map[string]jujustorage.Constraints
@@ -1397,7 +1426,7 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 		addClientNotConfiguredError(&resp.Diagnostics, "application", "delete")
 		return
 	}
-	var state applicationResourceModel
+	var state applicationResourceModelV1
 	// Read Terraform prior state into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -1408,14 +1437,14 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 		"ID": state.ID.ValueString(),
 	})
 
-	modelName, appName, dErr := modelAppNameFromID(state.ID.ValueString())
+	modelUUID, appName, dErr := modelAppNameFromID(state.ID.ValueString())
 	if dErr.HasError() {
 		resp.Diagnostics.Append(dErr...)
 	}
 
 	if err := r.client.Applications.DestroyApplication(&juju.DestroyApplicationInput{
 		ApplicationName: appName,
-		ModelName:       modelName,
+		ModelUUID:       modelUUID,
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete application, got error: %s", err))
 	}
@@ -1425,7 +1454,7 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 			Context: ctx,
 			GetData: r.client.Applications.ReadApplication,
 			Input: &juju.ReadApplicationInput{
-				ModelName: modelName,
+				ModelUUID: modelUUID,
 				AppName:   appName,
 			},
 			ErrorToWait:    juju.ApplicationNotFoundError,
@@ -1444,6 +1473,54 @@ Make sure to manually delete them.`, appName, err))
 	r.trace(fmt.Sprintf("deleted application resource %q", state.ID.ValueString()))
 }
 
+// UpgradeState upgrades the state of the application resource.
+// This is used to handle changes in the resource schema between versions.
+func (o *applicationResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
+	return map[int64]resource.StateUpgrader{
+		0: {
+			PriorSchema: &appV0Schema,
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				appV0 := applicationResourceModelV0{}
+				resp.Diagnostics.Append(req.State.Get(ctx, &appV0)...)
+
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				modelUUID, err := o.client.Models.ModelUUID(appV0.ModelName.ValueString())
+				if err != nil {
+					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", appV0.ModelName.ValueString(), err))
+					return
+				}
+
+				newID := newAppID(modelUUID, appV0.ApplicationName.ValueString())
+
+				upgradedStateData := applicationResourceModelV1{
+					ID:                types.StringValue(newID),
+					ApplicationName:   appV0.ApplicationName,
+					Charm:             appV0.Charm,
+					Config:            appV0.Config,
+					Constraints:       appV0.Constraints,
+					EndpointBindings:  appV0.EndpointBindings,
+					Expose:            appV0.Expose,
+					Machines:          appV0.Machines,
+					ModelUUID:         types.StringValue(modelUUID),
+					ModelType:         appV0.ModelType,
+					Placement:         appV0.Placement,
+					Principal:         appV0.Principal,
+					Resources:         appV0.Resources,
+					StorageDirectives: appV0.StorageDirectives,
+					Trust:             appV0.Trust,
+					UnitCount:         appV0.UnitCount,
+					Storage:           appV0.Storage,
+				}
+
+				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
+			},
+		},
+	}
+}
+
 // ImportState is called when the provider must import the state of a
 // resource instance. This method must return enough state so the Read
 // method can properly refresh the full resource.
@@ -1454,9 +1531,9 @@ func (r *applicationResource) ImportState(ctx context.Context, req resource.Impo
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-// ID is '<model name>:<app name>'
-func newAppID(model, app string) string {
-	return fmt.Sprintf("%s:%s", model, app)
+// ID is '<model UUID>:<app name>'
+func newAppID(modelUUID, app string) string {
+	return fmt.Sprintf("%s:%s", modelUUID, app)
 }
 
 func modelAppNameFromID(value string) (string, string, diag.Diagnostics) {
@@ -1481,12 +1558,12 @@ func (r *applicationResource) trace(msg string, additionalFields ...map[string]i
 	tflog.SubsystemTrace(r.subCtx, LogResourceApplication, msg, additionalFields...)
 }
 
-func applicationResourceModelForLogging(_ context.Context, app *applicationResourceModel) map[string]interface{} {
+func applicationResourceModelForLogging(_ context.Context, app *applicationResourceModelV1) map[string]interface{} {
 	value := map[string]interface{}{
 		"application-name": app.ApplicationName.ValueString(),
 		"charm":            app.Charm.String(),
 		"constraints":      app.Constraints.ValueString(),
-		"model":            app.ModelName.ValueString(),
+		"model_uuid":       app.ModelUUID.ValueString(),
 		"placement":        app.Placement.ValueString(),
 		"expose":           app.Expose.String(),
 		"trust":            app.Trust.ValueBoolPointer(),
@@ -1512,4 +1589,144 @@ func assertEqualsMachines(machinesToCompare []string) func(outputFromAPI *juju.R
 
 		return nil
 	}
+}
+
+// Below we store old schema definitions for the application resource.
+// These are used to upgrade the state of the resource when the schema version changes.
+// Keeping the v0 schema verbatim is the simplest solution currently and permits
+// the design to change to something like a schema factory in the future.
+
+var appV0Schema = schema.Schema{
+	Description: "A resource that represents a single Juju application deployment from a charm. Deployment of bundles" +
+		" is not supported.",
+	Version: 0,
+	Attributes: map[string]schema.Attribute{
+		"name": schema.StringAttribute{
+			Optional: true,
+			Computed: true,
+		},
+		MachinesKey: schema.SetAttribute{
+			ElementType: types.StringType,
+			Optional:    true,
+			Computed:    true,
+		},
+		"model": schema.StringAttribute{
+			Required: true,
+		},
+		"model_type": schema.StringAttribute{
+			Computed: true,
+		},
+		UnitsKey: schema.Int64Attribute{
+			Optional: true,
+			Computed: true,
+		},
+		ConfigKey: schema.MapAttribute{
+			Optional:    true,
+			ElementType: types.StringType,
+		},
+		ConstraintsKey: schema.StringAttribute{
+			CustomType: CustomConstraintsType{},
+			Optional:   true,
+			// Set as "computed" to pre-populate and preserve any implicit constraints
+			Computed: true,
+		},
+		"storage_directives": schema.MapAttribute{
+			ElementType: types.StringType,
+			Optional:    true,
+		},
+		"storage": schema.SetNestedAttribute{
+			Optional: true,
+			Computed: true,
+			NestedObject: schema.NestedAttributeObject{
+				Attributes: map[string]schema.Attribute{
+					"label": schema.StringAttribute{
+						Computed: true,
+					},
+					"size": schema.StringAttribute{
+						Computed: true,
+					},
+					"pool": schema.StringAttribute{
+						Computed: true,
+					},
+					"count": schema.Int64Attribute{
+						Computed: true,
+					},
+				},
+			},
+		},
+		"trust": schema.BoolAttribute{
+			Optional: true,
+			Computed: true,
+			Default:  booldefault.StaticBool(false),
+		},
+		PlacementKey: schema.StringAttribute{
+			Optional: true,
+			Computed: true,
+		},
+		"principal": schema.BoolAttribute{
+			Computed: true,
+		},
+		"id": schema.StringAttribute{
+			Computed: true,
+		},
+		EndpointBindingsKey: schema.SetNestedAttribute{
+			Optional: true,
+			NestedObject: schema.NestedAttributeObject{
+				Attributes: map[string]schema.Attribute{
+					"endpoint": schema.StringAttribute{
+						Optional: true,
+					},
+					"space": schema.StringAttribute{
+						Required: true,
+					},
+				},
+			},
+		},
+		ResourceKey: schema.MapAttribute{
+			Optional:    true,
+			ElementType: types.StringType,
+		},
+	},
+	Blocks: map[string]schema.Block{
+		CharmKey: schema.ListNestedBlock{
+			NestedObject: schema.NestedBlockObject{
+				Attributes: map[string]schema.Attribute{
+					"name": schema.StringAttribute{
+						Required: true,
+					},
+					"channel": schema.StringAttribute{
+						Optional: true,
+						Computed: true,
+					},
+					"revision": schema.Int64Attribute{
+						Optional: true,
+						Computed: true,
+					},
+					SeriesKey: schema.StringAttribute{
+						Optional: true,
+						Computed: true,
+					},
+					BaseKey: schema.StringAttribute{
+						Optional: true,
+						Computed: true,
+					},
+				},
+			},
+		},
+		ExposeKey: schema.ListNestedBlock{
+			NestedObject: schema.NestedBlockObject{
+				Attributes: map[string]schema.Attribute{
+					EndpointsKey: schema.StringAttribute{
+						Optional: true,
+					},
+					SpacesKey: schema.StringAttribute{
+						Optional: true,
+					},
+					CidrsKey: schema.StringAttribute{
+						Optional: true,
+					},
+				},
+			},
+		},
+	},
 }

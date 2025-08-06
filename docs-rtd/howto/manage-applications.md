@@ -37,7 +37,7 @@ To trust an application with a credential, in the `juju_application` resource de
 
 ```terraform
 resource "juju_application" "this" {
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   charm {
     name     = "hello-kubecon"
@@ -58,7 +58,7 @@ To configure an application, in its resource definition add a configuration map 
 
 ```terraform
 resource "juju_application" "this" {
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   charm {
     name = "hello-kubecon"
@@ -114,7 +114,7 @@ To scale an application horizontally, control the number of units.
 
 ```terraform
 resource "juju_application" "this" {
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   charm {
     name = "hello-kubecon"
@@ -129,7 +129,7 @@ This will expose all of the application's endpoints. To restrict exposure to jus
 <!--
 ```terraform
 resource "juju_application" "this" {
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   charm {
     name = "hello-kubecon"
@@ -162,7 +162,7 @@ To set constraints for an application, in its resource definition specify a `con
 
 ```terraform
 resource "juju_application" "this" {
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   charm {
     name = "hello-kubecon"
@@ -185,7 +185,7 @@ To set space bindings for an application, in its resource definition specify an 
 
 ```terraform
 resource "juju_application" "application_three" {
-  model = resource.juju_model.testmodel.name
+  model_uuid = resource.juju_model.testmodel.uuid
   charm {
     name = "juju-qa-test"
   }

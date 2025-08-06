@@ -8,8 +8,8 @@ data "juju_secret" "my_secret_data_source" {
 }
 
 resource "juju_application" "ubuntu" {
-  model = data.juju_model.my_model.name
-  name  = "ubuntu"
+  model_uuid = data.juju_model.my_model.uuid
+  name       = "ubuntu"
 
   charm {
     name = "ubuntu"
