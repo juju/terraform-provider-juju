@@ -9,7 +9,7 @@ To reference an application that you've deployed outside of the current Terrafor
 
 ```terraform
 data "juju_application" "my-application" {
-  model      = juju_model.development.name
+  model_uuid  = juju_model.development.uuid
   application = "mattermost"
 }
 ```

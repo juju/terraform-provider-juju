@@ -25,7 +25,7 @@ func TestAcc_DataSourceApplicationLXD_Edge(t *testing.T) {
 			{
 				Config: testAccDataSourceApplicationLXD(modelName, applicationName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.model", "uuid", "data.juju_application.this", "model_uuid"),
 					resource.TestCheckResourceAttr("data.juju_application.this", "name", applicationName),
 				),
 			},
@@ -47,7 +47,7 @@ func TestAcc_DataSourceApplicationK8s_Edge(t *testing.T) {
 			{
 				Config: testAccDataSourceApplicationK8s(modelName, applicationName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.model", "uuid", "data.juju_application.this", "model_uuid"),
 					resource.TestCheckResourceAttr("data.juju_application.this", "name", applicationName),
 				),
 			},
@@ -73,7 +73,7 @@ resource "juju_application" "this" {
 }
 
 data "juju_application" "this" {
-  model = juju_model.model.name
+  model_uuid = juju_model.model.uuid
   name = juju_application.this.name
 
 }`, modelName, applicationName)
@@ -97,7 +97,7 @@ resource "juju_application" "this" {
 }
 
 data "juju_application" "this" {
-  model = juju_model.model.name
+  model_uuid = juju_model.model.uuid
   name = juju_application.this.name
 
 }`, modelName, applicationName)
