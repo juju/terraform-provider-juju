@@ -139,7 +139,7 @@ resource "juju_application" "self-signed-certificates" {
 }
 
 resource "juju_integration" "postgresql-mattermost" {
-  model = juju_model.chat.name
+  model_uuid = juju_model.chat.uuid
 
   application {
     name     = juju_application.postgresql-k8s.name
@@ -171,7 +171,7 @@ resource "juju_integration" "postgresql-mattermost" {
 }
 
 resource "juju_integration" "postgresql-tls" {
-  model = juju_model.chat.name
+  model_uuid = juju_model.chat.uuid
 
   application {
     name     = juju_application.postgresql-k8s.name
@@ -298,7 +298,7 @@ resource "juju_application" "self-signed-certificates" {
 
 
 resource "juju_integration" "postgresql-mattermost" {
-  model = juju_model.chat.name
+  model_uuid = juju_model.chat.uuid
 
   application {
     name     = juju_application.postgresql-k8s.name
@@ -331,7 +331,7 @@ resource "juju_integration" "postgresql-mattermost" {
 
 
 resource "juju_integration" "postgresql-tls" {
-  model = juju_model.chat.name
+  model_uuid = juju_model.chat.uuid
 
   application {
     name     = juju_application.postgresql-k8s.name

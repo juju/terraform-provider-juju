@@ -43,7 +43,7 @@ resource "juju_application" "percona-cluster" {
 }
 
 resource "juju_integration" "wp_to_percona" {
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   application {
     name     = juju_application.wordpress.name

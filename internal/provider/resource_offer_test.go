@@ -34,7 +34,7 @@ func TestAcc_ResourceOffer(t *testing.T) {
 			{
 				Config: testAccResourceOfferXIntegration(modelName2, destModelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.int", "model", destModelName),
+					resource.TestCheckResourceAttrPair("juju_model.modeldest", "uuid", "juju_integration.int", "model_uuid"),
 
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.int", "application.*",
 						map[string]string{"name": "apptwo", "endpoint": "source", "offer_url": ""}),
@@ -91,7 +91,7 @@ resource "juju_application" "apptwo" {
 }
 
 resource "juju_integration" "int" {
-	model = juju_model.modeldest.name
+	model_uuid = juju_model.modeldest.uuid
 
 	application {
 		name = juju_application.apptwo.name
@@ -284,7 +284,7 @@ resource "juju_application" "that" {
 }
 
 resource "juju_integration" "offer_db" {
-	model = juju_model.that.name
+	model_uuid = juju_model.that.uuid
 	application {
 		name     = juju_application.that.name
 		endpoint = "metrics-endpoint"
@@ -306,7 +306,7 @@ resource "juju_application" "toc" {
 }
 
 resource "juju_integration" "offer_db_admin" {
-	model = juju_model.that.name
+	model_uuid = juju_model.that.uuid
 	application {
 		name     = juju_application.toc.name
 		endpoint = "grafana-dashboards-consumer"
