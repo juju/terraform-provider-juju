@@ -44,20 +44,23 @@ type integrationResource struct {
 	subCtx context.Context
 }
 
-type integrationResourceModelV0 struct {
-	ModelName   types.String `tfsdk:"model"`
+type integrationResourceModel struct {
 	Via         types.String `tfsdk:"via"`
 	Application types.Set    `tfsdk:"application"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
 
+type integrationResourceModelV0 struct {
+	integrationResourceModel
+
+	ModelName types.String `tfsdk:"model"`
+}
+
 type integrationResourceModelV1 struct {
-	ModelUUID   types.String `tfsdk:"model_uuid"`
-	Via         types.String `tfsdk:"via"`
-	Application types.Set    `tfsdk:"application"`
-	// ID required by the testing framework
-	ID types.String `tfsdk:"id"`
+	integrationResourceModel
+
+	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
 // nestedApplication represents an element in an Application set of an
@@ -504,8 +507,9 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 	r.trace(fmt.Sprintf("Deleted integration resource: %q", state.ID.ValueString()))
 }
 
-// UpgradeState upgrades the state of the application resource.
+// UpgradeState upgrades the state of the integration resource.
 // This is used to handle changes in the resource schema between versions.
+// V0->V1: The model name is replaced with the model UUID.
 func (r *integrationResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
 	return map[int64]resource.StateUpgrader{
 		0: {
@@ -527,10 +531,12 @@ func (r *integrationResource) UpgradeState(ctx context.Context) map[int64]resour
 				newID := strings.Replace(integrationV0.ID.ValueString(), integrationV0.ModelName.ValueString(), modelUUID, 1)
 
 				upgradedStateData := integrationResourceModelV1{
-					ID:          types.StringValue(newID),
-					Via:         integrationV0.Via,
-					ModelUUID:   types.StringValue(modelUUID),
-					Application: integrationV0.Application,
+					integrationResourceModel: integrationResourceModel{
+						Via:         integrationV0.Via,
+						ID:          types.StringValue(newID),
+						Application: integrationV0.Application,
+					},
+					ModelUUID: types.StringValue(modelUUID),
 				}
 
 				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
