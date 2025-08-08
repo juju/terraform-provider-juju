@@ -46,10 +46,9 @@ type machineResource struct {
 	subCtx context.Context
 }
 
-type machineResourceModelV0 struct {
+type machineResourceModel struct {
 	Annotations     types.Map              `tfsdk:"annotations"`
 	Name            types.String           `tfsdk:"name"`
-	ModelName       types.String           `tfsdk:"model"`
 	Constraints     CustomConstraintsValue `tfsdk:"constraints"`
 	Disks           types.String           `tfsdk:"disks"`
 	Base            types.String           `tfsdk:"base"`
@@ -65,23 +64,14 @@ type machineResourceModelV0 struct {
 	ID types.String `tfsdk:"id"`
 }
 
+type machineResourceModelV0 struct {
+	machineResourceModel
+	ModelName types.String `tfsdk:"model"`
+}
+
 type machineResourceModelV1 struct {
-	Annotations     types.Map              `tfsdk:"annotations"`
-	Name            types.String           `tfsdk:"name"`
-	ModelUUID       types.String           `tfsdk:"model_uuid"`
-	Constraints     CustomConstraintsValue `tfsdk:"constraints"`
-	Disks           types.String           `tfsdk:"disks"`
-	Base            types.String           `tfsdk:"base"`
-	Series          types.String           `tfsdk:"series"`
-	Placement       types.String           `tfsdk:"placement"`
-	MachineID       types.String           `tfsdk:"machine_id"`
-	SSHAddress      types.String           `tfsdk:"ssh_address"`
-	PublicKeyFile   types.String           `tfsdk:"public_key_file"`
-	PrivateKeyFile  types.String           `tfsdk:"private_key_file"`
-	Hostname        types.String           `tfsdk:"hostname"`
-	WaitForHostname types.Bool             `tfsdk:"wait_for_hostname"`
-	// ID required by the testing framework
-	ID types.String `tfsdk:"id"`
+	machineResourceModel
+	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
 func (r *machineResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -601,8 +591,9 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 }
 
-// UpgradeState upgrades the state of the application resource.
+// UpgradeState upgrades the state of the machine resource.
 // This is used to handle changes in the resource schema between versions.
+// V0-> V1: The model name is replaced with the model UUID.
 func (r *machineResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
 	return map[int64]resource.StateUpgrader{
 		0: {
@@ -622,23 +613,11 @@ func (r *machineResource) UpgradeState(ctx context.Context) map[int64]resource.S
 				}
 
 				newID := strings.Replace(machineV0.ID.ValueString(), machineV0.ModelName.ValueString(), modelUUID, 1)
+				machineV0.ID = types.StringValue(newID)
 
 				upgradedStateData := machineResourceModelV1{
-					ID:              types.StringValue(newID),
-					ModelUUID:       types.StringValue(modelUUID),
-					Annotations:     machineV0.Annotations,
-					Name:            machineV0.Name,
-					Constraints:     machineV0.Constraints,
-					Disks:           machineV0.Disks,
-					Base:            machineV0.Base,
-					Series:          machineV0.Series,
-					Placement:       machineV0.Placement,
-					MachineID:       machineV0.MachineID,
-					SSHAddress:      machineV0.SSHAddress,
-					PublicKeyFile:   machineV0.PublicKeyFile,
-					PrivateKeyFile:  machineV0.PrivateKeyFile,
-					Hostname:        machineV0.Hostname,
-					WaitForHostname: machineV0.WaitForHostname,
+					ModelUUID:            types.StringValue(modelUUID),
+					machineResourceModel: machineV0.machineResourceModel,
 				}
 
 				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
