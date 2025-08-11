@@ -862,7 +862,7 @@ func testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmNa
 
 		resource "juju_machine" "all_machines" {
 			count = var.machines
-  			model = juju_model.model.name
+  			model_uuid = juju_model.model.uuid
 			base = "ubuntu@22.04"
 			name = "machine_${count.index}"
 
@@ -928,7 +928,7 @@ func testAccResourceApplicationBasic_UnitsWithSubordinates(modelName, charmName,
 
 		resource "juju_machine" "all_machines" {
 			count = var.machines
-  			model = juju_model.model.name
+  			model_uuid = juju_model.model.uuid
 			base = "ubuntu@22.04"
 			name = "machine_${count.index}"
 		}
@@ -1030,7 +1030,7 @@ func testAccResourceApplicationBasic_Placement(modelName, charmName string) stri
 
 		resource "juju_machine" "machine" {
 		  name = "test machine"
-		  model = juju_model.model.name
+		  model_uuid = juju_model.model.uuid
 		  base = "ubuntu@22.04"
 		}
 
@@ -1056,7 +1056,7 @@ func testAccResourceApplicationBasic_Machines(modelName, charmName string) strin
 
 		resource "juju_machine" "machine" {
 		  name = "test machine"
-		  model = juju_model.model.name
+		  model_uuid = juju_model.model.uuid
 		  base = "ubuntu@22.04"
 		}
 

@@ -284,7 +284,7 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	if len(annotations) > 0 {
 		err = r.client.Annotations.SetAnnotations(&juju.SetAnnotationsInput{
-			ModelName:   modelName,
+			ModelUUID:   modelName,
 			Annotations: annotations,
 			EntityTag:   names.NewModelTag(response.UUID),
 		})
@@ -415,7 +415,7 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	annotations, err := r.client.Annotations.GetAnnotations(&juju.GetAnnotationsInput{
 		EntityTag: names.NewModelTag(response.ModelInfo.UUID),
-		ModelName: modelName,
+		ModelUUID: modelName,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model's annotations, got error: %s", err))

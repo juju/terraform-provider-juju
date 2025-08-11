@@ -18,14 +18,14 @@ type annotationsClient struct {
 
 // SetAnnotationsInput contains the fields needed to set the annotations for an entity.
 type SetAnnotationsInput struct {
-	ModelName   string
+	ModelUUID   string
 	EntityTag   names.Tag
 	Annotations map[string]string
 }
 
 // GetAnnotationsInput contains the fields needed to get the annotations for an entity.
 type GetAnnotationsInput struct {
-	ModelName string
+	ModelUUID string
 	EntityTag names.Tag
 }
 
@@ -47,7 +47,7 @@ func newAnnotationsClient(sc SharedClient) *annotationsClient {
 // SetAnnotations set the annotations for the entity specified.
 // To unset a specific annotation a empty string "" needs to be set.
 func (c *annotationsClient) SetAnnotations(input *SetAnnotationsInput) error {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func (c *annotationsClient) SetAnnotations(input *SetAnnotationsInput) error {
 
 // GetAnnotations gets the annotation for an entity.
 func (c *annotationsClient) GetAnnotations(input *GetAnnotationsInput) (*GetAnnotationsOutput, error) {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}

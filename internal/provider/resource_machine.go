@@ -33,6 +33,7 @@ import (
 var _ resource.Resource = &machineResource{}
 var _ resource.ResourceWithConfigure = &machineResource{}
 var _ resource.ResourceWithImportState = &machineResource{}
+var _ resource.ResourceWithUpgradeState = &machineResource{}
 
 func NewMachineResource() resource.Resource {
 	return &machineResource{}
@@ -48,7 +49,6 @@ type machineResource struct {
 type machineResourceModel struct {
 	Annotations     types.Map              `tfsdk:"annotations"`
 	Name            types.String           `tfsdk:"name"`
-	ModelName       types.String           `tfsdk:"model"`
 	Constraints     CustomConstraintsValue `tfsdk:"constraints"`
 	Disks           types.String           `tfsdk:"disks"`
 	Base            types.String           `tfsdk:"base"`
@@ -62,6 +62,16 @@ type machineResourceModel struct {
 	WaitForHostname types.Bool             `tfsdk:"wait_for_hostname"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
+}
+
+type machineResourceModelV0 struct {
+	machineResourceModel
+	ModelName types.String `tfsdk:"model"`
+}
+
+type machineResourceModelV1 struct {
+	machineResourceModel
+	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
 func (r *machineResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -93,7 +103,6 @@ func (r *machineResource) Configure(ctx context.Context, req resource.ConfigureR
 
 const (
 	NameKey           = "name"
-	ModelKey          = "model"
 	ConstraintsKey    = "constraints"
 	DisksKey          = "disks"
 	SeriesKey         = "series"
@@ -107,6 +116,7 @@ const (
 
 func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		Version:     1,
 		Description: "A resource that represents a Juju machine deployment. Refer to the juju add-machine CLI command for more information and limitations.",
 		Attributes: map[string]schema.Attribute{
 			"annotations": schema.MapAttribute{
@@ -125,9 +135,9 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			ModelKey: schema.StringAttribute{
-				Description: "The Juju model in which to add a new machine. Changing this value will cause the machine" +
-					" to be destroyed and recreated by terraform.",
+			"model_uuid": schema.StringAttribute{
+				Description: "The Juju model's UUID to specify the model in which to add a new machine. " +
+					"Changing this value will cause the machine to be destroyed and recreated by terraform.",
 				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -297,7 +307,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	var plan machineResourceModel
+	var plan machineResourceModelV1
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -306,7 +316,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 
 	response, err := r.client.Machines.CreateMachine(ctx, &juju.CreateMachineInput{
 		Constraints:    plan.Constraints.ValueString(),
-		ModelName:      plan.ModelName.ValueString(),
+		ModelUUID:      plan.ModelUUID.ValueString(),
 		Disks:          plan.Disks.ValueString(),
 		Base:           plan.Base.ValueString(),
 		Series:         plan.Series.ValueString(),
@@ -326,7 +336,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		machineName = fmt.Sprintf("machine-%s", response.ID)
 	}
 
-	id := newMachineID(plan.ModelName.ValueString(), response.ID, machineName)
+	id := newMachineID(plan.ModelUUID.ValueString(), response.ID, machineName)
 
 	plan.ID = types.StringValue(id)
 	plan.MachineID = types.StringValue(response.ID)
@@ -345,7 +355,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 	if len(annotations) > 0 {
 		err = r.client.Annotations.SetAnnotations(&juju.SetAnnotationsInput{
-			ModelName:   plan.ModelName.ValueString(),
+			ModelUUID:   plan.ModelUUID.ValueString(),
 			Annotations: annotations,
 			EntityTag:   names.NewMachineTag(response.ID),
 		})
@@ -356,8 +366,8 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	waitForHostname := plan.WaitForHostname.ValueBool()
-	modelName := plan.ModelName.ValueString()
-	readResponse, err := r.waitForMachine(ctx, waitForHostname, modelName, response.ID)
+	modelUUID := plan.ModelUUID.ValueString()
+	readResponse, err := r.waitForMachine(ctx, waitForHostname, modelUUID, response.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for machine %q readiness, got error: %s", response.ID, err))
 		return
@@ -370,7 +380,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (r *machineResource) waitForMachine(ctx context.Context, waitForHostname bool, modelName, machineID string) (*juju.ReadMachineResponse, error) {
+func (r *machineResource) waitForMachine(ctx context.Context, waitForHostname bool, modelUUID, machineID string) (*juju.ReadMachineResponse, error) {
 	asserts := []wait.Assert[*juju.ReadMachineResponse]{assertMachineRunning}
 	if waitForHostname {
 		asserts = append(asserts, assertHostnamePopulated)
@@ -379,7 +389,7 @@ func (r *machineResource) waitForMachine(ctx context.Context, waitForHostname bo
 		Context: ctx,
 		GetData: r.client.Machines.ReadMachine,
 		Input: &juju.ReadMachineInput{
-			ModelName: modelName,
+			ModelUUID: modelUUID,
 			ID:        machineID,
 		},
 		DataAssertions: asserts,
@@ -426,21 +436,21 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	var data machineResourceModel
+	var data machineResourceModelV1
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	modelName, machineID, machineName := modelMachineIDAndName(data.ID.ValueString(), &resp.Diagnostics)
+	modelUUID, machineID, machineName := modelMachineIDAndName(data.ID.ValueString(), &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// During import, we don't know whether to wait for the machine hostname.
 	// So we opt not to wait, assuming the machine is ready.
-	response, err := r.waitForMachine(ctx, false, modelName, machineID)
+	response, err := r.waitForMachine(ctx, false, modelUUID, machineID)
 	if err != nil {
 		resp.Diagnostics.Append(handleMachineNotFoundError(ctx, err, &resp.State)...)
 		return
@@ -449,7 +459,7 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	annotations, err := r.client.Annotations.GetAnnotations(&juju.GetAnnotationsInput{
 		EntityTag: names.NewMachineTag(response.ID),
-		ModelName: modelName,
+		ModelUUID: modelUUID,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get machine's annotations, got error: %s", err))
@@ -467,7 +477,7 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 
 	data.Name = types.StringValue(machineName)
-	data.ModelName = types.StringValue(modelName)
+	data.ModelUUID = types.StringValue(modelUUID)
 	data.MachineID = types.StringValue(machineID)
 	data.Series = types.StringValue(response.Series)
 	data.Base = types.StringValue(response.Base)
@@ -488,7 +498,7 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 // state, and prior state values should be read from the
 // UpdateRequest and new state values set on the UpdateResponse.
 func (r *machineResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan, state machineResourceModel
+	var plan, state machineResourceModelV1
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -501,7 +511,7 @@ func (r *machineResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	// Check annotations
 	if !state.Annotations.Equal(plan.Annotations) {
-		resp.Diagnostics.Append(updateAnnotations(ctx, &r.client.Annotations, state.Annotations, plan.Annotations, state.ModelName.ValueString(), names.NewMachineTag(state.MachineID.ValueString()))...)
+		resp.Diagnostics.Append(updateAnnotations(ctx, &r.client.Annotations, state.Annotations, plan.Annotations, state.ModelUUID.ValueString(), names.NewMachineTag(state.MachineID.ValueString()))...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -512,7 +522,7 @@ func (r *machineResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 	state.Name = plan.Name
-	id := newMachineID(plan.ModelName.ValueString(), state.MachineID.ValueString(), plan.Name.ValueString())
+	id := newMachineID(plan.ModelUUID.ValueString(), state.MachineID.ValueString(), plan.Name.ValueString())
 	state.ID = types.StringValue(id)
 	state.Annotations = plan.Annotations
 
@@ -541,14 +551,14 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	var data machineResourceModel
+	var data machineResourceModelV1
 	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	modelName, machineID, _ := modelMachineIDAndName(data.ID.ValueString(), &resp.Diagnostics)
+	modelUUID, machineID, _ := modelMachineIDAndName(data.ID.ValueString(), &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -557,7 +567,7 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}()
 
 	if err := r.client.Machines.DestroyMachine(&juju.DestroyMachineInput{
-		ModelName: modelName,
+		ModelUUID: modelUUID,
 		ID:        machineID,
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete machine, got error: %s", err))
@@ -568,7 +578,7 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 		Context: ctx,
 		GetData: r.client.Machines.ReadMachine,
 		Input: &juju.ReadMachineInput{
-			ModelName: modelName,
+			ModelUUID: modelUUID,
 			ID:        machineID,
 		},
 		ErrorToWait:    juju.MachineNotFoundError,
@@ -578,6 +588,42 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 			"Wait Error",
 			fmt.Sprintf("Timeout reached waiting for machine %q deletion, got error: %s. Make sure no application units or containers are still running on the machine", machineID, err),
 		)
+	}
+}
+
+// UpgradeState upgrades the state of the machine resource.
+// This is used to handle changes in the resource schema between versions.
+// V0-> V1: The model name is replaced with the model UUID.
+func (r *machineResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
+	return map[int64]resource.StateUpgrader{
+		0: {
+			PriorSchema: machineV0Schema(),
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				machineV0 := machineResourceModelV0{}
+				resp.Diagnostics.Append(req.State.Get(ctx, &machineV0)...)
+
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				modelUUID, err := r.client.Models.ModelUUID(machineV0.ModelName.ValueString())
+				if err != nil {
+					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", machineV0.ModelName.ValueString(), err))
+					return
+				}
+
+				_, machineID, machineName := modelMachineIDAndName(machineV0.ID.ValueString(), &resp.Diagnostics)
+				newID := newMachineID(modelUUID, machineID, machineName)
+				machineV0.ID = types.StringValue(newID)
+
+				upgradedStateData := machineResourceModelV1{
+					ModelUUID:            types.StringValue(modelUUID),
+					machineResourceModel: machineV0.machineResourceModel,
+				}
+
+				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
+			},
+		},
 	}
 }
 
@@ -602,16 +648,16 @@ func (r *machineResource) trace(msg string, additionalFields ...map[string]inter
 	tflog.SubsystemTrace(r.subCtx, LogResourceMachine, msg, additionalFields...)
 }
 
-func newMachineID(model, machine_id, machine_name string) string {
-	return fmt.Sprintf("%s:%s:%s", model, machine_id, machine_name)
+func newMachineID(model_uuid, machine_id, machine_name string) string {
+	return fmt.Sprintf("%s:%s:%s", model_uuid, machine_id, machine_name)
 }
 
-// Machines can be imported using the format: `model_name:machine_id:machine_name`.
+// Machines can be imported using the format: `model_uuid:machine_id:machine_name`.
 func modelMachineIDAndName(value string, diags *diag.Diagnostics) (string, string, string) {
 	id := strings.Split(value, ":")
 	//If importing with an incorrect ID we need to catch and provide a user-friendly error
 	if len(id) != 3 {
-		diags.AddError("Malformed ID", fmt.Sprintf("unable to parse model name, machine id, and machine name from provided ID: %q", value))
+		diags.AddError("Malformed ID", fmt.Sprintf("unable to parse model UUID, machine id, and machine name from provided ID: %q", value))
 		return "", "", ""
 	}
 	return id[0], id[1], id[2]
@@ -623,7 +669,7 @@ type annotationSetter interface {
 
 // updateAnnotations takes the state and the plan, and performs the necessary
 // steps to propagate the changes to juju.
-func updateAnnotations(ctx context.Context, client annotationSetter, stateAnnotations types.Map, planAnnotations types.Map, modelName string, entityTag names.Tag) diag.Diagnostics {
+func updateAnnotations(ctx context.Context, client annotationSetter, stateAnnotations types.Map, planAnnotations types.Map, modelUUID string, entityTag names.Tag) diag.Diagnostics {
 	diagnostics := diag.Diagnostics{}
 
 	var annotationsState map[string]string
@@ -648,12 +694,12 @@ func updateAnnotations(ctx context.Context, client annotationSetter, stateAnnota
 	}
 
 	err := client.SetAnnotations(&juju.SetAnnotationsInput{
-		ModelName:   modelName,
+		ModelUUID:   modelUUID,
 		Annotations: annotationsPlan,
 		EntityTag:   entityTag,
 	})
 	if err != nil {
-		diagnostics.AddError("Client Error", fmt.Sprintf("Unable to set annotations for model %q, got error: %s", modelName, err))
+		diagnostics.AddError("Client Error", fmt.Sprintf("Unable to set annotations for model %q, got error: %s", modelUUID, err))
 		return diagnostics
 	}
 	return diagnostics
@@ -677,4 +723,62 @@ func assertMachineRunning(respFromAPI *juju.ReadMachineResponse) error {
 		return juju.NewRetryReadError("waiting for machine to be in running state")
 	}
 	return nil
+}
+
+func machineV0Schema() *schema.Schema {
+	return &schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"annotations": schema.MapAttribute{
+				Optional:    true,
+				ElementType: types.StringType,
+			},
+			"name": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"model": schema.StringAttribute{
+				Required: true,
+			},
+			"constraints": schema.StringAttribute{
+				CustomType: CustomConstraintsType{},
+				Optional:   true,
+			},
+			"disks": schema.StringAttribute{
+				Optional: true,
+			},
+			"base": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"series": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"placement": schema.StringAttribute{
+				Optional: true,
+			},
+			"machine_id": schema.StringAttribute{
+				Computed: true,
+				Optional: false,
+				Required: false,
+			},
+			"ssh_address": schema.StringAttribute{
+				Optional: true,
+			},
+			"public_key_file": schema.StringAttribute{
+				Optional: true,
+			},
+			"private_key_file": schema.StringAttribute{
+				Optional: true,
+			},
+			"hostname": schema.StringAttribute{
+				Computed: true,
+			},
+			"wait_for_hostname": schema.BoolAttribute{
+				Optional: true,
+			},
+			"id": schema.StringAttribute{
+				Computed: true,
+			},
+		}}
 }
