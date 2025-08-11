@@ -612,7 +612,8 @@ func (r *machineResource) UpgradeState(ctx context.Context) map[int64]resource.S
 					return
 				}
 
-				newID := strings.Replace(machineV0.ID.ValueString(), machineV0.ModelName.ValueString(), modelUUID, 1)
+				_, machineID, machineName := modelMachineIDAndName(machineV0.ID.ValueString(), &resp.Diagnostics)
+				newID := newMachineID(modelUUID, machineID, machineName)
 				machineV0.ID = types.StringValue(newID)
 
 				upgradedStateData := machineResourceModelV1{
