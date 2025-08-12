@@ -18,7 +18,7 @@ jobs:
     runs-on: [self-hosted, jammy]
     environment: Release Environment
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Allow goreleaser to access older tag information.
           fetch-depth: 0
