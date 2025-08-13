@@ -289,9 +289,9 @@ resource "juju_application" "b" {
 }
 
 resource "juju_offer" "b" {
-	model            = juju_model.b.name
+	model_uuid       = juju_model.b.uuid
 	application_name = juju_application.b.name
-	endpoints         = ["sink"]
+	endpoints        = ["sink"]
 }
 
 resource "juju_integration" "a" {
@@ -387,9 +387,9 @@ resource "juju_application" "a" {
 }
 
 resource "juju_offer" "a" {
-        model            = juju_model.a.name
+        model_uuid       = juju_model.a.uuid
         application_name = juju_application.a.name
-        endpoints         = ["source"]
+        endpoints        = ["source"]
 }
 
 resource "juju_model" "b" {

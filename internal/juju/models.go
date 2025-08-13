@@ -109,7 +109,7 @@ func newModelsClient(sc SharedClient) *modelsClient {
 }
 
 // GetModelByName retrieves a model by name
-func (c *modelsClient) GetModelByName(name string) (*params.ModelInfo, error) {
+func (c *modelsClient) GetModelByNameOrUUID(name string) (*params.ModelInfo, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err

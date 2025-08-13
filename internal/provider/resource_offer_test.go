@@ -26,7 +26,7 @@ func TestAcc_ResourceOffer(t *testing.T) {
 			{
 				Config: testAccResourceOffer(modelName, "base = \"ubuntu@22.04\""),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_offer.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 				),
@@ -71,7 +71,7 @@ resource "juju_application" "appone" {
 }
 
 resource "juju_offer" "offerone" {
-	model            = juju_model.modelone.name
+	model_uuid = juju_model.modelone.uuid
 	application_name = juju_application.appone.name
 	endpoints         = ["sink"]
 }
@@ -127,7 +127,7 @@ func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
 				},
 				Config: testAccResourceOffer(modelName, "series = \"focal\""),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_offer.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 				),
@@ -140,7 +140,7 @@ func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceOffer_UpgradeProvider_Schema_v0_To_v1(t *testing.T) {
+func TestAcc_ResourceOffer_Upgradev0Tov2(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -173,6 +173,39 @@ func TestAcc_ResourceOffer_UpgradeProvider_Schema_v0_To_v1(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceOffer_UpgradeV1ToV2(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-offer")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
+
+		Steps: []resource.TestStep{
+			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						// This is a version using v1 of the offer schema.
+						VersionConstraint: TestProviderPreV1Version,
+						Source:            "juju/juju",
+					},
+				},
+				Config: testAccResourceOfferv1(modelName, "series = \"focal\""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
+					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
+				),
+			},
+			{
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceOffer(modelName, "series = \"focal\""),
+			},
+		},
+	})
+}
+
 func testAccResourceOffer(modelName, os string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
@@ -190,9 +223,9 @@ resource "juju_application" "this" {
 }
 
 resource "juju_offer" "this" {
-	model            = juju_model.this.name
+	model_uuid       = juju_model.this.uuid
 	application_name = juju_application.this.name
-	endpoints         = ["sink"]
+	endpoints        = ["sink"]
 }
 `, modelName, os)
 }
@@ -215,9 +248,34 @@ resource "juju_application" "this" {
 }
 
 resource "juju_offer" "this" {
-	model            = juju_model.this.name
+	model       = juju_model.this.name
 	application_name = juju_application.this.name
 	endpoint         = "sink"
+}
+`, modelName, os)
+}
+
+func testAccResourceOfferv1(modelName, os string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_application" "this" {
+	model = juju_model.this.name
+	name  = "this"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		channel = "latest/stable"
+		%s
+	}
+}
+
+resource "juju_offer" "this" {
+	model       = juju_model.this.name
+	application_name = juju_application.this.name
+	endpoints        = ["sink"]
 }
 `, modelName, os)
 }
@@ -236,7 +294,7 @@ func TestAcc_ResourceOfferMultipleEndpoints(t *testing.T) {
 			{
 				Config: testAccResourceOfferMultipleEndpoints(modelName1, modelName2),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName1),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_offer.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_offer.this", "endpoints.0", "grafana-dashboard"),
 					resource.TestCheckResourceAttr("juju_offer.this", "endpoints.1", "metrics-endpoint"),
 					resource.TestCheckResourceAttr("juju_offer.this", "endpoints.#", "2"),
@@ -264,9 +322,9 @@ resource "juju_application" "this" {
 }
 
 resource "juju_offer" "this" {
-	model            = juju_model.this.name
+	model_uuid       = juju_model.this.uuid
 	application_name = juju_application.this.name
-	endpoints         = ["grafana-dashboard", "metrics-endpoint"]
+	endpoints        = ["grafana-dashboard", "metrics-endpoint"]
 }
 
 resource "juju_model" "that" {

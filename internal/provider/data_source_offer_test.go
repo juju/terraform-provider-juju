@@ -23,7 +23,6 @@ func TestAcc_DataSourceOffer(t *testing.T) {
 			{
 				Config: testAccDataSourceOffer(modelName, "base = \"ubuntu@22.04\"", offerName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("data.juju_offer.this", "name", offerName),
 				),
 			},
@@ -48,7 +47,7 @@ resource "juju_application" "this" {
 }
 
 resource "juju_offer" "this" {
-	model            = juju_model.this.name
+	model_uuid       = juju_model.this.uuid
 	application_name = juju_application.this.name
 	endpoints         = ["sink"]
 	name             = %q

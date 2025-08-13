@@ -25,7 +25,7 @@ To create an offer, in your Terraform plan, create a resource of the `juju_offer
 
 ```terraform
 resource "juju_offer" "percona-cluster" {
-  model            = juju_model.development.name
+  model_uuid       = juju_model.development.uuid
   application_name = juju_application.percona-cluster.name
   endpoint         = "server"
 }

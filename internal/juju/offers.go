@@ -47,12 +47,17 @@ type CreateOfferResponse struct {
 
 type ReadOfferInput struct {
 	OfferURL string
+	// GetModelUUID set will populate the ModelUUID field in the response.
+	// Only set this if you know the user has at least read access to
+	// the model. E.g. if you are creating the offer you can be sure
+	// that the user has read access to the model.
+	GetModelUUID bool
 }
 
 type ReadOfferResponse struct {
 	ApplicationName string
 	Endpoints       []string
-	ModelName       string
+	ModelUUID       string
 	Name            string
 	OfferURL        string
 	Users           []crossmodel.OfferUserDetails
@@ -198,9 +203,14 @@ func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, erro
 	}
 	response.Users = result.Users
 
-	//no model name is returned but it can be parsed from the resulting offer URL to ensure parity
-	//TODO: verify if we can fetch information another way
-	response.ModelName = resultURL.ModelName
+	if input.GetModelUUID {
+		// TODO(JUJU-8299): The modelUUID method needs to be changed to also use the model owner.
+		// Do this after all resources reference models by UUID and we can clean up the model cache.
+		response.ModelUUID, err = c.ModelUUID(resultURL.ModelName)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get model UUID for model %q: %w", resultURL.ModelName, err)
+		}
+	}
 
 	return &response, nil
 }
