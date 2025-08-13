@@ -38,18 +38,20 @@ type sshKeyResource struct {
 	subCtx context.Context
 }
 
-type sshKeyResourceModelV0 struct {
-	ModelName types.String `tfsdk:"model"`
-	Payload   types.String `tfsdk:"payload"`
+type sshKeyResourceModel struct {
+	Payload types.String `tfsdk:"payload"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
 
+type sshKeyResourceModelV0 struct {
+	sshKeyResourceModel
+	ModelName types.String `tfsdk:"model"`
+}
+
 type sshKeyResourceModelV1 struct {
+	sshKeyResourceModel
 	ModelUUID types.String `tfsdk:"model_uuid"`
-	Payload   types.String `tfsdk:"payload"`
-	// ID required by the testing framework
-	ID types.String `tfsdk:"id"`
 }
 
 func (s *sshKeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -249,6 +251,7 @@ func (s *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 
 // UpgradeState upgrades the state of the sshKey resource.
 // This is used to handle changes in the resource schema between versions.
+// V0->V1: Convert attribute `model` to `model_uuid`.
 func (s *sshKeyResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
 	return map[int64]resource.StateUpgrader{
 		0: {
@@ -270,9 +273,11 @@ func (s *sshKeyResource) UpgradeState(ctx context.Context) map[int64]resource.St
 				newID := strings.Replace(sshKeyV0.ID.ValueString(), sshKeyV0.ModelName.ValueString(), modelUUID, 1)
 
 				upgradedStateData := sshKeyResourceModelV1{
-					ID:        types.StringValue(newID),
 					ModelUUID: types.StringValue(modelUUID),
-					Payload:   sshKeyV0.Payload,
+					sshKeyResourceModel: sshKeyResourceModel{
+						Payload: sshKeyV0.Payload,
+						ID:      types.StringValue(newID),
+					},
 				}
 
 				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
