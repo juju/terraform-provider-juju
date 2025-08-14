@@ -326,20 +326,6 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 								int64planmodifier.UseStateForUnknown(),
 							},
 						},
-						SeriesKey: schema.StringAttribute{
-							Description: "The series on which to deploy.",
-							Optional:    true,
-							Computed:    true,
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.UseStateForUnknown(),
-							},
-							Validators: []validator.String{
-								stringvalidator.ConflictsWith(path.Expressions{
-									path.MatchRelative().AtParent().AtName(BaseKey),
-								}...),
-							},
-							DeprecationMessage: "Configure base instead. This attribute will be removed in the next major version of the provider.",
-						},
 						BaseKey: schema.StringAttribute{
 							Description: "The operating system on which to deploy. E.g. ubuntu@22.04. Changing this value for machine charms will trigger a replace by terraform.",
 							Optional:    true,
@@ -349,9 +335,6 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 								stringplanmodifier.RequiresReplaceIf(baseApplicationRequiresReplaceIf, "", ""),
 							},
 							Validators: []validator.String{
-								stringvalidator.ConflictsWith(path.Expressions{
-									path.MatchRelative().AtParent().AtName(SeriesKey),
-								}...),
 								stringIsBaseValidator{},
 							},
 						},
@@ -395,7 +378,6 @@ type nestedCharm struct {
 	Channel  types.String `tfsdk:"channel"`
 	Revision types.Int64  `tfsdk:"revision"`
 	Base     types.String `tfsdk:"base"`
-	Series   types.String `tfsdk:"series"`
 }
 
 // nestedExpose represents the single element of expose ListNestedBlock
@@ -589,7 +571,6 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 			CharmChannel:       channel,
 			CharmRevision:      revision,
 			CharmBase:          planCharm.Base.ValueString(),
-			CharmSeries:        planCharm.Series.ValueString(),
 			Units:              unitCount,
 			Config:             configField,
 			Constraints:        parsedConstraints,
@@ -638,7 +619,6 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	plan.ModelType = types.StringValue(readResp.ModelType)
 	planCharm.Revision = types.Int64Value(int64(readResp.Revision))
 	planCharm.Base = types.StringValue(readResp.Base)
-	planCharm.Series = types.StringValue(readResp.Series)
 	planCharm.Channel = types.StringValue(readResp.Channel)
 	charmType := req.Config.Schema.GetBlocks()[CharmKey].(schema.ListNestedBlock).NestedObject.Type()
 
@@ -772,7 +752,6 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		Channel:  types.StringValue(response.Channel),
 		Revision: types.Int64Value(int64(response.Revision)),
 		Base:     types.StringValue(response.Base),
-		Series:   types.StringValue(response.Series),
 	}
 	charmType := req.State.Schema.GetBlocks()[CharmKey].(schema.ListNestedBlock).NestedObject.Type()
 	state.Charm, dErr = types.ListValueFrom(ctx, charmType, []nestedCharm{dataCharm})
@@ -994,16 +973,6 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 		if !planCharm.Base.Equal(stateCharm.Base) {
 			updateApplicationInput.Base = planCharm.Base.ValueString()
-		}
-		if !planCharm.Series.Equal(stateCharm.Series) {
-			// This violates Terraform's declarative model. We could implement
-			// `juju set-application-base`, usually used after `upgrade-machine`,
-			// which would change the operating system used for future units of
-			// the application provided the charm supported it, but not change
-			// the current. This provider does not implement an equivalent to
-			// `upgrade-machine`. There is also a question of how to handle a
-			// change to series, revision and channel at the same time.
-			resp.Diagnostics.AddWarning("Not Supported", "Changing operating system's series after deploy.")
 		}
 	}
 
@@ -1631,10 +1600,6 @@ var appV0Schema = schema.Schema{
 						Computed: true,
 					},
 					"revision": schema.Int64Attribute{
-						Optional: true,
-						Computed: true,
-					},
-					SeriesKey: schema.StringAttribute{
 						Optional: true,
 						Computed: true,
 					},

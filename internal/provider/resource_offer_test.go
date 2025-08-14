@@ -24,7 +24,7 @@ func TestAcc_ResourceOffer(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceOffer(modelName, "base = \"ubuntu@22.04\""),
+				Config: testAccResourceOffer(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_offer.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
@@ -125,7 +125,7 @@ func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
 						Source:            "juju/juju",
 					},
 				},
-				Config: testAccResourceOffer(modelName, "series = \"focal\""),
+				Config: testAccResourceOffer(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_offer.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
@@ -134,7 +134,7 @@ func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
 			},
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceOffer(modelName, "series = \"focal\""),
+				Config:                   testAccResourceOffer(modelName),
 			},
 		},
 	})
@@ -158,7 +158,7 @@ func TestAcc_ResourceOffer_Upgradev0Tov2(t *testing.T) {
 						Source:            "juju/juju",
 					},
 				},
-				Config: testAccResourceOfferv0(modelName, "series = \"focal\""),
+				Config: testAccResourceOfferv0(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
@@ -167,7 +167,7 @@ func TestAcc_ResourceOffer_Upgradev0Tov2(t *testing.T) {
 			},
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceOffer(modelName, "series = \"focal\""),
+				Config:                   testAccResourceOffer(modelName),
 			},
 		},
 	})
@@ -191,7 +191,7 @@ func TestAcc_ResourceOffer_UpgradeV1ToV2(t *testing.T) {
 						Source:            "juju/juju",
 					},
 				},
-				Config: testAccResourceOfferv1(modelName, "series = \"focal\""),
+				Config: testAccResourceOfferv1(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
@@ -200,13 +200,13 @@ func TestAcc_ResourceOffer_UpgradeV1ToV2(t *testing.T) {
 			},
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceOffer(modelName, "series = \"focal\""),
+				Config:                   testAccResourceOffer(modelName),
 			},
 		},
 	})
 }
 
-func testAccResourceOffer(modelName, os string) string {
+func testAccResourceOffer(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
@@ -218,7 +218,7 @@ resource "juju_application" "this" {
 
 	charm {
 		name = "juju-qa-dummy-source"
-		%s
+		base = "ubuntu@22.04"
 	}
 }
 
@@ -227,10 +227,10 @@ resource "juju_offer" "this" {
 	application_name = juju_application.this.name
 	endpoints        = ["sink"]
 }
-`, modelName, os)
+`, modelName)
 }
 
-func testAccResourceOfferv0(modelName, os string) string {
+func testAccResourceOfferv0(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
@@ -243,7 +243,7 @@ resource "juju_application" "this" {
 	charm {
 		name = "juju-qa-dummy-source"
 		channel = "latest/stable"
-		%s
+		base = "ubuntu@22.04"
 	}
 }
 
@@ -252,10 +252,10 @@ resource "juju_offer" "this" {
 	application_name = juju_application.this.name
 	endpoint         = "sink"
 }
-`, modelName, os)
+`, modelName)
 }
 
-func testAccResourceOfferv1(modelName, os string) string {
+func testAccResourceOfferv1(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
@@ -268,7 +268,7 @@ resource "juju_application" "this" {
 	charm {
 		name = "juju-qa-dummy-source"
 		channel = "latest/stable"
-		%s
+		base = "ubuntu@22.04"
 	}
 }
 
@@ -277,7 +277,7 @@ resource "juju_offer" "this" {
 	application_name = juju_application.this.name
 	endpoints        = ["sink"]
 }
-`, modelName, os)
+`, modelName)
 }
 
 func TestAcc_ResourceOfferMultipleEndpoints(t *testing.T) {
