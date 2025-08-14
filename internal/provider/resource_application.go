@@ -93,8 +93,7 @@ type applicationResourceModelV0 struct {
 	Machines         types.Set              `tfsdk:"machines"`
 	ModelName        types.String           `tfsdk:"model"`
 	ModelType        types.String           `tfsdk:"model_type"`
-	// TODO - remove Placement
-	Placement types.String `tfsdk:"placement"`
+	Placement        types.String           `tfsdk:"placement"`
 	// TODO - remove Principal when we version the schema
 	// and remove deprecated elements. Once we create upgrade
 	// functionality it can be removed from the structure.
@@ -120,8 +119,6 @@ type applicationResourceModelV1 struct {
 	Machines         types.Set              `tfsdk:"machines"`
 	ModelUUID        types.String           `tfsdk:"model_uuid"`
 	ModelType        types.String           `tfsdk:"model_type"`
-	// TODO - remove Placement
-	Placement types.String `tfsdk:"placement"`
 	// TODO - remove Principal when we version the schema
 	// and remove deprecated elements. Once we create upgrade
 	// functionality it can be removed from the structure.
@@ -182,12 +179,11 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				ElementType: types.StringType,
 				Description: "Specify the target machines for the application's units. The number of machines in the set indicates" +
 					" the unit count for the application. Removing a machine from the set will remove the application's unit residing on it." +
-					" `machines` is mutually exclusive with `units` and `placement` (which is deprecated).",
+					" `machines` is mutually exclusive with `units`.",
 				Optional: true,
 				Computed: true,
 				Validators: []validator.Set{
 					setvalidator.ConflictsWith(path.Expressions{
-						path.MatchRoot(PlacementKey),
 						path.MatchRoot(UnitsKey),
 					}...),
 				},
@@ -280,21 +276,6 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Optional:    true,
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
-			},
-			PlacementKey: schema.StringAttribute{
-				Description: "Specify the target location for the application's units. Changing this value" +
-					" will cause the application to be destroyed and recreated by terraform.",
-				Optional: true,
-				Computed: true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplaceIfConfigured(),
-				},
-				Validators: []validator.String{
-					stringvalidator.ConflictsWith(path.Expressions{
-						path.MatchRoot(MachinesKey),
-					}...),
-				},
-				DeprecationMessage: "Configure machines instead. This attribute will be removed in the next major version of the provider.",
 			},
 			"principal": schema.BoolAttribute{
 				Description: "Whether this is a Principal application",
@@ -641,7 +622,6 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 			Constraints:        parsedConstraints,
 			Trust:              plan.Trust.ValueBool(),
 			Expose:             expose,
-			Placement:          plan.Placement.ValueString(),
 			Machines:           machines,
 			EndpointBindings:   endpointBindings,
 			Resources:          resourceRevisions,
@@ -668,7 +648,6 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	// Constraints do not apply to subordinate applications. If the application
 	// is subordinate, the constraints will be set to the empty string.
 	plan.Constraints = NewCustomConstraintsValue(readResp.Constraints.String())
-	plan.Placement = types.StringValue(readResp.Placement)
 	if readResp.Principal || readResp.Units > 0 {
 		plan.UnitCount = types.Int64Value(int64(readResp.Units))
 	} else {
@@ -797,8 +776,6 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 	state.ModelUUID = types.StringValue(modelUUID)
 
 	// Use the response to fill in state
-
-	state.Placement = types.StringValue(response.Placement)
 
 	state.Principal = types.BoolNull()
 	if response.Principal || response.Units > 0 {
@@ -1237,7 +1214,6 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	// status. Including storage as it can be added on a refresh.
 	storageType := req.Config.Schema.GetAttributes()[StorageKey].(schema.SetNestedAttribute).NestedObject.Type()
 
-	plan.Placement = types.StringValue(readResp.Placement)
 	var dErr diag.Diagnostics
 	plan.Machines, dErr = types.SetValueFrom(ctx, types.StringType, readResp.Machines)
 	if dErr.HasError() {
@@ -1506,7 +1482,6 @@ func (o *applicationResource) UpgradeState(ctx context.Context) map[int64]resour
 					Machines:          appV0.Machines,
 					ModelUUID:         types.StringValue(modelUUID),
 					ModelType:         appV0.ModelType,
-					Placement:         appV0.Placement,
 					Principal:         appV0.Principal,
 					Resources:         appV0.Resources,
 					StorageDirectives: appV0.StorageDirectives,
@@ -1564,7 +1539,6 @@ func applicationResourceModelForLogging(_ context.Context, app *applicationResou
 		"charm":            app.Charm.String(),
 		"constraints":      app.Constraints.ValueString(),
 		"model_uuid":       app.ModelUUID.ValueString(),
-		"placement":        app.Placement.ValueString(),
 		"expose":           app.Expose.String(),
 		"trust":            app.Trust.ValueBoolPointer(),
 		"units":            app.UnitCount.ValueInt64(),
@@ -1659,7 +1633,7 @@ var appV0Schema = schema.Schema{
 			Computed: true,
 			Default:  booldefault.StaticBool(false),
 		},
-		PlacementKey: schema.StringAttribute{
+		"placement": schema.StringAttribute{
 			Optional: true,
 			Computed: true,
 		},
