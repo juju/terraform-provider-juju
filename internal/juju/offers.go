@@ -47,7 +47,7 @@ type CreateOfferResponse struct {
 
 type ReadOfferInput struct {
 	OfferURL string
-	// GetModelUUID set will populate the ModelUUID field in the response.
+	// GetModelUUID, if set, will populate the ModelUUID field in the response.
 	// Only set this if you know the user has at least read access to
 	// the model. E.g. if you are creating the offer you can be sure
 	// that the user has read access to the model.

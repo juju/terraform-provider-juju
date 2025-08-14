@@ -27,14 +27,14 @@ func TestAcc_ResourceSSHKey(t *testing.T) {
 			{
 				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_ssh_key.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
 			},
 			// we update the key
 			{
 				Config: testAccResourceSSHKey(modelName, sshKey2),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_ssh_key.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey2)),
 			},
 		},
@@ -55,7 +55,7 @@ func TestAcc_ResourceSSHKey_ED25519(t *testing.T) {
 			{
 				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_ssh_key.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
 			},
 		},
@@ -63,6 +63,9 @@ func TestAcc_ResourceSSHKey_ED25519(t *testing.T) {
 }
 
 func TestAcc_ResourceSSHKey_UpgradeProvider(t *testing.T) {
+	t.Skip("This test currently fails due to the breaking change in the provider schema. " +
+		"Remove the skip after the v1 release of the provider.")
+
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -84,7 +87,7 @@ func TestAcc_ResourceSSHKey_UpgradeProvider(t *testing.T) {
 				},
 				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_ssh_key.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
 			},
 			{
@@ -96,6 +99,50 @@ func TestAcc_ResourceSSHKey_UpgradeProvider(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceSSHKey_UpgradeV0ToV1(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-sshkey")
+	sshKey1 := `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC1I8QDP79MaHEIAlfh933zqcE8LyUt9doytF3YySBUDWippk8MAaKAJJtNb+Qsi+Kx/RsSY02VxMy9xRTp9d/Vr+U5BctKqhqf3ZkJdTIcy+z4hYpFS8A4bECJFHOnKIekIHD9glHkqzS5Vm6E4g/KMNkKylHKlDXOafhNZAiJ1ynxaZIuedrceFJNC47HnocQEtusPKpR09HGXXYhKMEubgF5tsTO4ks6pplMPvbdjxYcVOg4Wv0N/LJ4ffAucG9edMcKOTnKqZycqqZPE6KsTpSZMJi2Kl3mBrJE7JbR1YMlNwG6NlUIdIqVoTLZgLsTEkHqWi6OExykbVTqFuoWJJY2BmRAcP9T3FdLYbqcajfWshwvPM2AmYb8V3zBvzEKL1rpvG26fd3kGhk3Vu07qAUhHLMi3P0McEky4cLiEWgI7UyHFLI2yMRZgz23UUtxhRSkvCJagRlVG/s4yoylzBQJir8G3qmb36WjBXxpqAXhfLxw05EQI1JGV3ReYOs= jimmy@somewhere`
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
+
+		Steps: []resource.TestStep{
+			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderPreV1Version,
+						Source:            "juju/juju",
+					},
+				},
+				Config: testAccResourceSSHKeyV0(modelName, sshKey1),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
+			},
+			{
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceSSHKey(modelName, sshKey1),
+			},
+		},
+	})
+}
+
+func testAccResourceSSHKeyV0(modelName string, sshKey string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_ssh_key" "this" {
+	model   = juju_model.this.name
+	payload = %q
+}
+`, modelName, sshKey)
+}
+
 func testAccResourceSSHKey(modelName string, sshKey string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
@@ -103,8 +150,8 @@ resource "juju_model" "this" {
 }
 
 resource "juju_ssh_key" "this" {
-	model = juju_model.this.name
-	payload= %q
+	model_uuid = juju_model.this.uuid
+	payload    = %q
 }
 `, modelName, sshKey)
 }

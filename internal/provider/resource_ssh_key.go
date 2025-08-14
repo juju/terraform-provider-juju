@@ -25,6 +25,7 @@ import (
 var _ resource.Resource = &sshKeyResource{}
 var _ resource.ResourceWithConfigure = &sshKeyResource{}
 var _ resource.ResourceWithImportState = &sshKeyResource{}
+var _ resource.ResourceWithUpgradeState = &sshKeyResource{}
 
 func NewSSHKeyResource() resource.Resource {
 	return &sshKeyResource{}
@@ -38,10 +39,19 @@ type sshKeyResource struct {
 }
 
 type sshKeyResourceModel struct {
-	ModelName types.String `tfsdk:"model"`
-	Payload   types.String `tfsdk:"payload"`
+	Payload types.String `tfsdk:"payload"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
+}
+
+type sshKeyResourceModelV0 struct {
+	sshKeyResourceModel
+	ModelName types.String `tfsdk:"model"`
+}
+
+type sshKeyResourceModelV1 struct {
+	sshKeyResourceModel
+	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
 func (s *sshKeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -73,11 +83,15 @@ func (s *sshKeyResource) Metadata(_ context.Context, req resource.MetadataReques
 
 func (s *sshKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		Version:     1,
 		Description: "Resource representing an SSH key.",
 		Attributes: map[string]schema.Attribute{
-			"model": schema.StringAttribute{
-				Description: "The name of the model to operate in.",
+			"model_uuid": schema.StringAttribute{
+				Description: "The UUID of the model to operate in.",
 				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"payload": schema.StringAttribute{
 				Description: "SSH key payload.",
@@ -104,7 +118,7 @@ func (s *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	var plan sshKeyResourceModel
+	var plan sshKeyResourceModelV1
 
 	// Read Terraform configuration from the request into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -119,11 +133,11 @@ func (s *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	modelName := plan.ModelName.ValueString()
+	modelUUID := plan.ModelUUID.ValueString()
 
 	if err := s.client.SSHKeys.CreateSSHKey(&juju.CreateSSHKeyInput{
 		Username:  s.client.Username(),
-		ModelName: modelName,
+		ModelUUID: plan.ModelUUID.ValueString(),
 		Payload:   payload,
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create ssh_key, got error %s", err))
@@ -131,16 +145,16 @@ func (s *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 	s.trace(fmt.Sprintf("created ssh_key for: %q", keyIdentifier))
 
-	plan.ID = types.StringValue(newSSHKeyID(modelName, keyIdentifier))
+	plan.ID = types.StringValue(newSSHKeyID(modelUUID, keyIdentifier))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func newSSHKeyID(modelName string, keyIdentifier string) string {
-	return fmt.Sprintf("sshkey:%s:%s", modelName, keyIdentifier)
+func newSSHKeyID(modelUUID string, keyIdentifier string) string {
+	return fmt.Sprintf("sshkey:%s:%s", modelUUID, keyIdentifier)
 }
 
 // Keys can be imported with the name of the model and the identifier of the key
-// ssh_key:<modelName>:<ssh-key-identifier>
+// ssh_key:<modelUUID>:<ssh-key-identifier>
 // the key identifier is currently based on the comment section of the ssh key
 // (e.g. user@hostname) (TODO: issue #267)
 func retrieveModelKeyNameFromID(id string, d *diag.Diagnostics) (string, string) {
@@ -160,91 +174,38 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	var plan sshKeyResourceModel
+	var data sshKeyResourceModelV1
 
 	// Read Terraform configuration from the request into the model
-	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	modelName, keyIdentifier := retrieveModelKeyNameFromID(plan.ID.ValueString(), &resp.Diagnostics)
+	modelUUID, keyIdentifier := retrieveModelKeyNameFromID(data.ID.ValueString(), &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	result, err := s.client.SSHKeys.ReadSSHKey(&juju.ReadSSHKeyInput{
 		Username:      s.client.Username(),
-		ModelName:     modelName,
+		ModelUUID:     modelUUID,
 		KeyIdentifier: keyIdentifier,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read ssh key, got error: %s", err))
 		return
 	}
-	s.trace(fmt.Sprintf("read ssh key resource %q", plan.ID.ValueString()))
+	s.trace(fmt.Sprintf("read ssh key resource %q", data.ID.ValueString()))
 
-	plan.ModelName = types.StringValue(result.ModelName)
-	plan.Payload = types.StringValue(result.Payload)
+	data.ModelUUID = types.StringValue(modelUUID)
+	data.Payload = types.StringValue(result.Payload)
 
-	// Set the plan onto the Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	// Save the data to Terraform's state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (s *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// Prevent panic if the provider has not been configured.
-	if s.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "ssh_key", "update")
-		return
-	}
-
-	var plan, state sshKeyResourceModel
-
-	// Get the Terraform state from the request into the state model
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	// Read Terraform configuration from the request into the plan model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Return early if nothing has changed
-	if plan.Payload.Equal(state.Payload) && plan.ModelName.Equal(state.ModelName) {
-		return
-	}
-
-	modelName, keyIdentifier := retrieveModelKeyNameFromID(plan.ID.ValueString(), &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Delete the key
-	if err := s.client.SSHKeys.DeleteSSHKey(&juju.DeleteSSHKeyInput{
-		Username:      s.client.Username(),
-		ModelName:     modelName,
-		KeyIdentifier: keyIdentifier,
-	}); err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete ssh key for updating, got error: %s", err))
-		return
-	}
-	s.trace(fmt.Sprintf("ssh key deleted : %q", state.ID.ValueString()))
-
-	// Create a new key
-	if err := s.client.SSHKeys.CreateSSHKey(&juju.CreateSSHKeyInput{
-		Username:  s.client.Username(),
-		ModelName: plan.ModelName.ValueString(),
-		Payload:   plan.Payload.ValueString(),
-	}); err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create ssh key for updating, got error: %s", err))
-		return
-	}
-	s.trace(fmt.Sprintf("ssh key created : %q", plan.ID.ValueString()))
-
-	// Set the plan onto the Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 // Delete is called when the provider must delete the resource. Config
@@ -263,7 +224,7 @@ func (s *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	var plan sshKeyResourceModel
+	var plan sshKeyResourceModelV1
 
 	// Read Terraform configuration from the request into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
@@ -279,13 +240,50 @@ func (s *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	// Delete the key
 	if err := s.client.SSHKeys.DeleteSSHKey(&juju.DeleteSSHKeyInput{
 		Username:      s.client.Username(),
-		ModelName:     modelName,
+		ModelUUID:     modelName,
 		KeyIdentifier: keyIdentifier,
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete ssh key during delete, got error: %s", err))
 		return
 	}
 	s.trace(fmt.Sprintf("delete ssh_key resource : %q", plan.ID.ValueString()))
+}
+
+// UpgradeState upgrades the state of the sshKey resource.
+// This is used to handle changes in the resource schema between versions.
+// V0->V1: Convert attribute `model` to `model_uuid`.
+func (s *sshKeyResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
+	return map[int64]resource.StateUpgrader{
+		0: {
+			PriorSchema: sshKeyV0Schema(),
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				sshKeyV0 := sshKeyResourceModelV0{}
+				resp.Diagnostics.Append(req.State.Get(ctx, &sshKeyV0)...)
+
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				modelUUID, err := s.client.Models.ModelUUID(sshKeyV0.ModelName.ValueString())
+				if err != nil {
+					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", sshKeyV0.ModelName.ValueString(), err))
+					return
+				}
+
+				newID := strings.Replace(sshKeyV0.ID.ValueString(), sshKeyV0.ModelName.ValueString(), modelUUID, 1)
+
+				upgradedStateData := sshKeyResourceModelV1{
+					ModelUUID: types.StringValue(modelUUID),
+					sshKeyResourceModel: sshKeyResourceModel{
+						Payload: sshKeyV0.Payload,
+						ID:      types.StringValue(newID),
+					},
+				}
+
+				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
+			},
+		},
+	}
 }
 
 func (s *sshKeyResource) trace(msg string, additionalFields ...map[string]interface{}) {
@@ -297,4 +295,29 @@ func (s *sshKeyResource) trace(msg string, additionalFields ...map[string]interf
 	// Output:
 	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
 	tflog.SubsystemTrace(s.subCtx, LogResourceSSHKey, msg, additionalFields...)
+}
+
+func sshKeyV0Schema() *schema.Schema {
+	return &schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"model": schema.StringAttribute{
+				Description: "The name of the model to operate in.",
+				Required:    true,
+			},
+			"payload": schema.StringAttribute{
+				Description: "SSH key payload.",
+				Required:    true,
+				Sensitive:   true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"id": schema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+		},
+	}
 }
