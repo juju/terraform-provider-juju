@@ -8,10 +8,11 @@ The Terraform Provider for Juju does not support controller bootstrap. However, 
 (reference-an-externally-managed-controller)=
 ## Reference an externally managed controller
 
-To reference a controller that you've created outside of Terraform (because Terraform does not support controller bootstrap), in your `provider` definition add the controller details. You can do this in one of 3 ways: using static credentials, using environment variables, or using the `juju` client. Note: The last method is only supported for regular (non-JIMM) Juju controllers.
+To reference a controller that you've created outside of Terraform (because Terraform does not support controller bootstrap), in your `provider` definition add your controller address(es) and your controller authentication details. You can do this in one of 3 ways: using static credentials, using environment variables, or using the `juju` client. Note: The last method is supported only for regular Juju controllers. Across all the supported methods, for authentication with a regular Juju controller you must provide the username and password for a user, whereas for authentication with a JIMM controller you must provide the client ID and client secret for a service account (where the service account must be created through the external identity provider connected to the JIMM controller).
+
 
 ```{tip}
-For all methods: To view your controller’s details, run `juju show-controller --show-password`.
+For all methods and both controller types: To view your controller’s details, run `juju show-controller --show-password`.
 ```
 
 ### Using static credentials
@@ -23,10 +24,10 @@ provider "juju" {
   controller_addresses = "<controller addresses>"
   # For a controller deployed with a self-signed certificate:
   ca_certificate = file("<path to certificate file>")
-  # For a regular Juju controller, provide the username and password:
+  # For a regular Juju controller, provide the username and password for a user:
   username = "<username>"
   password = "<password>"
-  # For a JIMM controller, provide the client ID and client secret:
+  # For a JIMM controller, provide the client ID and client secret for a service account:
   client_id     = "<clientID>"
   client_secret = "<clientSecret>"
 }
@@ -55,10 +56,10 @@ Then, in a terminal, export the controller environment variables with your contr
 export JUJU_CONTROLLER_ADDRESSES="<controller addresses>"
 # For a controller deployed with a self-signed certificate:
 export JUJU_CA_CERT=file("<path to certificate file>")
-# For a regular Juju controller, provide the username and password:
+# For a regular Juju controller, provide the username and password for a user:
 export JUJU_USERNAME="<username>"
 export JUJU_PASSWORD="<password>"
-# For a JIMM controller, provide the client ID and client secret:
+# For a JIMM controller, provide the client ID and client secret for a service account:
 export JUJU_CLIENT_ID="<client ID>"
 export JUJU_CLIENT_SECRET="<client secret>"
 ```
