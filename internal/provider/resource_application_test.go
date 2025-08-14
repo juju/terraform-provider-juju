@@ -2114,3 +2114,37 @@ resource "juju_application" "this" {
 }
 		`, modelName, appName)
 }
+
+func TestAcc_ResourceApplication_WithConstraints(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+	appName := "test-app"
+	constraints := "mem=256"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationWithConstraints(modelName, appName, constraints),
+			},
+		},
+	})
+}
+
+func testAccResourceApplicationWithConstraints(modelName, appName, constraints string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model = juju_model.this.name
+  name = %q
+  charm {
+	name = "ubuntu-lite"
+  }
+  units = 1
+  constraints = %q
+}
+		`, modelName, appName, constraints)
+}
