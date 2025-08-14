@@ -89,6 +89,13 @@ While your controller is implicitly connected to the cloud that it has been boot
 
 > See more: {ref}`add-a-kubernetes-cloud`
 
+(add-a-credential-to-a-controller)=
+## Add a credential to a controller
+
+By virtue of being bootstrapped into a cloud, your controller already has a credential for that cloud. However, if you want to use a different credential, or if you're adding a further cloud to the controller and would like to also add a credential for that cloud, you will need to add those credentials to the controller too. You can do that in the usual way by creating a resource of the `juju_credential` type.
+
+> See more: {ref}`add-a-credential`
+
 (manage-access-to-a-controller)=
 ## Manage access to a controller
 
