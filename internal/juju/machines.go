@@ -50,7 +50,6 @@ type CreateMachineInput struct {
 	Disks       string
 	Base        string
 	Placement   string
-	Series      string
 	InstanceId  string
 
 	// SSHAddress is the host address of a machine for manual provisioning
@@ -77,7 +76,6 @@ type ReadMachineResponse struct {
 	ID          string
 	Base        string
 	Constraints string
-	Series      string
 	Hostname    string
 	Status      string
 }
@@ -209,9 +207,6 @@ func (c *machinesClient) createMachine(conn api.Connection, input *CreateMachine
 	machineParams.Jobs = jobs
 
 	opSys := input.Base
-	if opSys == "" {
-		opSys = input.Series
-	}
 	paramsBase, err := baseFromOperatingSystem(opSys)
 	if err != nil {
 		return "", err
@@ -238,27 +233,20 @@ func (c *machinesClient) createMachine(conn api.Connection, input *CreateMachine
 	return machines[0].Machine, nil
 }
 
-func baseAndSeriesFromParams(machineBase *params.Base) (baseStr, seriesStr string, err error) {
+func baseFromParams(machineBase *params.Base) (baseStr string, err error) {
 	if machineBase == nil {
-		return "", "", errors.NotValidf("no base from machine status")
+		return "", errors.NotValidf("no base from machine status")
 	}
 	channel, err := base.ParseChannel(machineBase.Channel)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	// This might cause problems later, but today, no one except for juju internals
 	// uses the channel risk. Using the risk makes the base appear to have changed
 	// with terraform.
 	baseStr = fmt.Sprintf("%s@%s", machineBase.Name, channel.Track)
 
-	seriesStr, err = base.GetSeriesFromBase(base.Base{
-		OS:      machineBase.Name,
-		Channel: base.Channel{Track: channel.Track, Risk: channel.Risk},
-	})
-	if err != nil {
-		return "", "", errors.NotValidf("Base or Series %q", machineBase)
-	}
-	return baseStr, seriesStr, err
+	return baseStr, err
 }
 
 func baseFromOperatingSystem(opSys string) (*params.Base, error) {
@@ -370,7 +358,7 @@ func (c *machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineRespo
 		return nil, err
 	}
 
-	base, series, err := baseAndSeriesFromParams(&machineStatus.Base)
+	base, err := baseFromParams(&machineStatus.Base)
 	if err != nil {
 		return nil, err
 	}
@@ -380,7 +368,6 @@ func (c *machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineRespo
 		Hostname:    machineStatus.Hostname,
 		Constraints: machineStatus.Constraints,
 		Base:        base,
-		Series:      series,
 		Status:      machineStatusString,
 	}, nil
 }

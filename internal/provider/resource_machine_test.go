@@ -27,7 +27,6 @@ func TestAcc_ResourceMachine(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_machine.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
-					resource.TestCheckResourceAttr("juju_machine.this", "series", "jammy"),
 					resource.TestCheckResourceAttr("juju_machine.this", "base", "ubuntu@22.04"),
 				),
 			},
@@ -60,7 +59,6 @@ func TestAcc_ResourceMachineWaitForHostname(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_machine.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
-					resource.TestCheckResourceAttr("juju_machine.this", "series", "jammy"),
 					resource.TestCheckResourceAttr("juju_machine.this", "base", "ubuntu@22.04"),
 					resource.TestCheckResourceAttrSet("juju_machine.this", "hostname"),
 				),
@@ -164,16 +162,16 @@ func TestAcc_ResourceMachine_UpgradeV0ToV1(t *testing.T) {
 						Source:            "juju/juju",
 					},
 				},
-				Config: testAccResourceMachineV0(modelName, "series = \"focal\""),
+				Config: testAccResourceMachineV0(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
-					resource.TestCheckResourceAttr("juju_machine.this", "series", "focal"),
+					resource.TestCheckResourceAttr("juju_machine.this", "base", "ubuntu@22.04"),
 				),
 			},
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceMachine(modelName, "series = \"focal\""),
+				Config:                   testAccResourceMachine(modelName),
 				PlanOnly:                 true,
 			},
 		},
@@ -199,7 +197,7 @@ func TestAcc_ResourceMachine_UpgradeProvider(t *testing.T) {
 						Source:            "juju/juju",
 					},
 				},
-				Config: testAccResourceMachine(modelName, "series = \"focal\""),
+				Config: testAccResourceMachine(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_machine.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
@@ -208,14 +206,14 @@ func TestAcc_ResourceMachine_UpgradeProvider(t *testing.T) {
 			},
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceMachine(modelName, "series = \"focal\""),
+				Config:                   testAccResourceMachine(modelName),
 				PlanOnly:                 true,
 			},
 		},
 	})
 }
 
-func testAccResourceMachine(modelName, operatingSystem string) string {
+func testAccResourceMachine(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
@@ -224,12 +222,27 @@ resource "juju_model" "this" {
 resource "juju_machine" "this" {
 	name = "this_machine"
 	model_uuid = juju_model.this.uuid
-	%s
+	base = "ubuntu@22.04"
 }
-`, modelName, operatingSystem)
+`, modelName)
 }
 
-func testAccResourceMachineV0(modelName, operatingSystem string) string {
+func testAccResourceMachineWithConstraints(modelName, constraints string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_machine" "this" {
+	name = "this_machine"
+	model_uuid = juju_model.this.uuid
+	base = "ubuntu@22.04"
+	constraints = %q
+}
+`, modelName, constraints)
+}
+
+func testAccResourceMachineV0(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
@@ -238,9 +251,9 @@ resource "juju_model" "this" {
 resource "juju_machine" "this" {
 	name = "this_machine"
 	model = juju_model.this.name
-	%s
+	base = "ubuntu@22.04"
 }
-`, modelName, operatingSystem)
+`, modelName)
 }
 
 func testAccResourceMachineWaitForHostname(modelName, operatingSystem string) string {
@@ -303,7 +316,7 @@ func TestAcc_ResourceMachine_ConstraintsNormalization(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceMachine(modelName, "constraints = \"arch=amd64 mem=4G cores=2\""),
+				Config: testAccResourceMachineWithConstraints(modelName, "arch=amd64 mem=4G cores=2"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_machine.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
@@ -312,7 +325,7 @@ func TestAcc_ResourceMachine_ConstraintsNormalization(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceMachine(modelName, "constraints = \"cores=2 arch=amd64 mem=4G\""),
+				Config: testAccResourceMachineWithConstraints(modelName, "cores=2 arch=amd64 mem=4G"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_machine.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
@@ -321,7 +334,7 @@ func TestAcc_ResourceMachine_ConstraintsNormalization(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceMachine(modelName, "constraints = \"mem=4096M cores=2 arch=amd64\""),
+				Config: testAccResourceMachineWithConstraints(modelName, "mem=4096M cores=2 arch=amd64"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_machine.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
@@ -330,7 +343,7 @@ func TestAcc_ResourceMachine_ConstraintsNormalization(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceMachine(modelName, "constraints = \"mem=4096M cores=4 arch=amd64\""),
+				Config: testAccResourceMachineWithConstraints(modelName, "mem=4096M cores=4 arch=amd64"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_machine.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),

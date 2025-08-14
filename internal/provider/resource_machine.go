@@ -52,7 +52,6 @@ type machineResourceModel struct {
 	Constraints     CustomConstraintsValue `tfsdk:"constraints"`
 	Disks           types.String           `tfsdk:"disks"`
 	Base            types.String           `tfsdk:"base"`
-	Series          types.String           `tfsdk:"series"`
 	Placement       types.String           `tfsdk:"placement"`
 	MachineID       types.String           `tfsdk:"machine_id"`
 	SSHAddress      types.String           `tfsdk:"ssh_address"`
@@ -66,6 +65,7 @@ type machineResourceModel struct {
 
 type machineResourceModelV0 struct {
 	machineResourceModel
+	Series    types.String `tfsdk:"series"`
 	ModelName types.String `tfsdk:"model"`
 }
 
@@ -105,7 +105,6 @@ const (
 	NameKey           = "name"
 	ConstraintsKey    = "constraints"
 	DisksKey          = "disks"
-	SeriesKey         = "series"
 	PlacementKey      = "placement"
 	BaseKey           = "base"
 	MachineIDKey      = "machine_id"
@@ -183,28 +182,9 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(path.Expressions{
 						path.MatchRoot(SSHAddressKey),
-						path.MatchRoot(SeriesKey),
 					}...),
 					stringIsBaseValidator{},
 				},
-			},
-			SeriesKey: schema.StringAttribute{
-				Description: "The operating system series to install on the new machine(s). Changing this value" +
-					" will cause the machine to be destroyed and recreated by terraform.",
-				Optional: true,
-				Computed: true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplaceIfConfigured(),
-					stringplanmodifier.UseStateForUnknown(),
-				},
-				Validators: []validator.String{
-					stringvalidator.ConflictsWith(path.Expressions{
-						path.MatchRoot(SSHAddressKey),
-						path.MatchRoot(BaseKey),
-					}...),
-				},
-				DeprecationMessage: "Configure base instead. This attribute will be removed in the next" +
-					" major version of the provider.",
 			},
 			PlacementKey: schema.StringAttribute{
 				Description: "Additional information about how to allocate the machine in the cloud. Changing" +
@@ -236,7 +216,6 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 				},
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(path.Expressions{
-						path.MatchRoot(SeriesKey),
 						path.MatchRoot(BaseKey),
 						path.MatchRoot(ConstraintsKey),
 					}...),
@@ -319,7 +298,6 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		ModelUUID:      plan.ModelUUID.ValueString(),
 		Disks:          plan.Disks.ValueString(),
 		Base:           plan.Base.ValueString(),
-		Series:         plan.Series.ValueString(),
 		SSHAddress:     plan.SSHAddress.ValueString(),
 		Placement:      plan.Placement.ValueString(),
 		PublicKeyFile:  plan.PublicKeyFile.ValueString(),
@@ -374,7 +352,6 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	plan.Base = types.StringValue(readResponse.Base)
-	plan.Series = types.StringValue(readResponse.Series)
 	plan.Hostname = types.StringValue(readResponse.Hostname)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -479,7 +456,6 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 	data.Name = types.StringValue(machineName)
 	data.ModelUUID = types.StringValue(modelUUID)
 	data.MachineID = types.StringValue(machineID)
-	data.Series = types.StringValue(response.Series)
 	data.Base = types.StringValue(response.Base)
 	// Here is ok to always set Hostname from the response because:
 	// 1. if you set wait_for_hostname to true, this is correctly populated.
