@@ -2141,7 +2141,7 @@ resource "juju_application" "this" {
   model = juju_model.this.name
   name = %q
   charm {
-	name = "ubuntu"
+	name = "ubuntu-lite"
   }
   units = 1
   constraints = %q
