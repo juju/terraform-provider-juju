@@ -91,6 +91,40 @@ func TestAcc_ResourceApplication(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceApplication_ConstraintsNormalization(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationConstraints(modelName, "arch=amd64 cores=1 mem=4096M"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_application.this", "constraints", "arch=amd64 cores=1 mem=4096M"),
+					resource.TestCheckResourceAttr("juju_application.this", "machines.#", "1"),
+					resource.TestCheckResourceAttr("juju_application.this", "machines.0", "0"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationConstraints(modelName, "mem=4096M cores=1 arch=amd64"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_application.this", "constraints", "mem=4096M cores=1 arch=amd64"),
+					// assert that machines have not changed due to changed order in constraints
+					resource.TestCheckResourceAttr("juju_application.this", "machines.#", "1"),
+					resource.TestCheckResourceAttr("juju_application.this", "machines.0", "0"),
+				),
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application-scale-up")
 	appName := "test-app"
@@ -480,6 +514,18 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
 			},
+			// In the next step we verify the plan has no changes. First waiting 30 seconds
+			// to avoid a race condition in Juju where updating the resource revision too
+			// quickly means that the change doesn't take immediate effect.
+			{
+				Config: testAccResourceApplicationWithoutCustomResources(modelName, "latest/stable"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
+				),
+				PreConfig: func() {
+					time.Sleep(30 * time.Second)
+				},
+			},
 			{
 				// Add a custom resource
 				Config: testAccResourceApplicationWithCustomResources(modelName, "latest/stable", "coredns-image", "ghcr.io/canonical/test:6a873fb35b0170dfe49ed27ba8ee6feb8e475131"),
@@ -507,6 +553,14 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
+				// We need to wait 30 seconds to let the charm's agent to settle. Otherwise,
+				// after we try to destroy the application the agent can go into `lost` state,
+				// making the test waits on application destroy until the timeout is reached.
+				// This is not an issue because if we reach the timeout we don't error out,
+				// but it slows down the test suite.
+				PreConfig: func() {
+					time.Sleep(30 * time.Second)
+				},
 			},
 		},
 	})
@@ -767,7 +821,7 @@ func TestAcc_ResourceApplication_SwitchMachinestoUnits(t *testing.T) {
 
 	resourceName := "juju_application.testapp"
 	ntpName := "juju_application.ntp"
-	numberOfMachines := 10
+	numberOfMachines := 3
 
 	checkResourceAttrMachines := func(numberOfMachines int) []resource.TestCheckFunc {
 		return []resource.TestCheckFunc{
@@ -792,6 +846,9 @@ func TestAcc_ResourceApplication_SwitchMachinestoUnits(t *testing.T) {
 			Check: resource.ComposeTestCheckFunc(
 				checkResourceAttrMachines(numberOfMachines)...),
 		}, {
+			ConfigVariables: config.Variables{
+				"machines": config.IntegerVariable(numberOfMachines),
+			},
 			Config: testAccResourceApplicationBasic_UnitsWithSubordinates(modelName, charmName, fmt.Sprintf("%d", numberOfMachines)),
 			Check: resource.ComposeTestCheckFunc(
 				checkResourceAttrMachines(numberOfMachines)...),
@@ -814,6 +871,15 @@ func testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmNa
   			model = juju_model.model.name
 			base = "ubuntu@22.04"
 			name = "machine_${count.index}"
+
+			# The following lifecycle directive instructs Terraform to update 
+			# any dependent resources before destroying the machine - in the 
+			# case of applications this means that application units get 
+			# removed from units before Terraform attempts to destroy the 
+			# machine.
+			lifecycle {
+				create_before_destroy = true
+			}
 		}
 
 		resource "juju_application" "testapp" {
@@ -866,6 +932,13 @@ func testAccResourceApplicationBasic_UnitsWithSubordinates(modelName, charmName,
 		  name = %q
 		}
 
+		resource "juju_machine" "all_machines" {
+			count = var.machines
+  			model = juju_model.model.name
+			base = "ubuntu@22.04"
+			name = "machine_${count.index}"
+		}
+
 		resource "juju_application" "testapp" {
 		  name = "juju-qa-test"
 		  model = juju_model.model.name
@@ -900,6 +973,12 @@ func testAccResourceApplicationBasic_UnitsWithSubordinates(modelName, charmName,
 			application {
 				name = juju_application.ntp.name
 			}
+		}
+
+		variable "machines" {
+			description = "Number of machines to deploy."
+			type = number
+			default = 1
 		}
 		`, modelName, numberOfUnits, charmName)
 }
@@ -1511,7 +1590,7 @@ resource "juju_model" "this" {
 
 resource "juju_application" "this" {
   model = juju_model.this.name
-  units = 0
+  units = 1
   name = "test-app"
   charm {
     name     = "ubuntu-lite"
@@ -1718,6 +1797,7 @@ resource "juju_application" "{{.AppName}}" {
   charm {
     name = "postgresql-k8s"
     channel = "14/stable"
+	revision = 300
   }
 
   storage_directives = {
@@ -2033,4 +2113,38 @@ resource "juju_application" "this" {
   units = 1
 }
 		`, modelName, appName)
+}
+
+func TestAcc_ResourceApplication_WithConstraints(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+	appName := "test-app"
+	constraints := "mem=256"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationWithConstraints(modelName, appName, constraints),
+			},
+		},
+	})
+}
+
+func testAccResourceApplicationWithConstraints(modelName, appName, constraints string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model = juju_model.this.name
+  name = %q
+  charm {
+	name = "ubuntu-lite"
+  }
+  units = 1
+  constraints = %q
+}
+		`, modelName, appName, constraints)
 }

@@ -14,11 +14,11 @@ resource "juju_ssh_key" "mykey" {
 }
 ```
 
-> See more: [`juju_ssh_key` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/ssh_key)
+> See more: [`juju_ssh_key` (resource)](../reference/terraform-provider/resources/ssh_key)
 
 ## Remove an SSH key
 
 To remove an SSH key, remove its resource definition from your Terraform plan.
 
-> See more: [`juju_ssh_key` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/ssh_key)
+> See more: [`juju_ssh_key` (resource)](../reference/terraform-provider/resources/ssh_key)
 

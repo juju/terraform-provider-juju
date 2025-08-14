@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juju/clock"
 	"github.com/juju/cmd/v3"
 	"github.com/juju/errors"
 	"github.com/juju/juju/api"
@@ -23,15 +22,21 @@ import (
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/core/model"
-	"github.com/juju/juju/core/status"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/environs/manual"
 	"github.com/juju/juju/environs/manual/sshprovisioner"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/juju/storage"
 	"github.com/juju/names/v5"
-	"github.com/juju/retry"
 )
+
+// MachineNotFoundError is returned when a machine cannot be found.
+var MachineNotFoundError = errors.ConstError("machine-not-found")
+
+// NewMachineNotFoundError returns an error indicating that a machine with the given ID was not found.
+func NewMachineNotFoundError(machineId string) error {
+	return errors.WithType(errors.Errorf("machine %s not found", machineId), MachineNotFoundError)
+}
 
 type machinesClient struct {
 	SharedClient
@@ -60,9 +65,7 @@ type CreateMachineInput struct {
 }
 
 type CreateMachineResponse struct {
-	ID     string
-	Base   string
-	Series string
+	ID string
 }
 
 type ReadMachineInput struct {
@@ -75,6 +78,8 @@ type ReadMachineResponse struct {
 	Base        string
 	Constraints string
 	Series      string
+	Hostname    string
+	Status      string
 }
 
 type DestroyMachineInput struct {
@@ -94,11 +99,7 @@ func getMachineStatusFunc(machineID string) targetStatusFunc {
 	return func(modelStatus *params.FullStatus) (string, error) {
 		machineStatus, ok := modelStatus.Machines[machineID]
 		if !ok {
-			return "", &keepWaitingError{
-				item:     names.NewMachineTag(machineID).String(),
-				state:    "unknown",
-				endState: status.Running.String(),
-			}
+			return "", NewRetryReadError(fmt.Sprintf("machine %q not found", machineID))
 		}
 		return machineStatus.InstanceStatus.Status, nil
 	}
@@ -108,19 +109,11 @@ func getContainerStatusFunc(containerID, parentMachineID string) targetStatusFun
 	return func(modelStatus *params.FullStatus) (string, error) {
 		machineStatus, ok := modelStatus.Machines[parentMachineID]
 		if !ok {
-			return "", &keepWaitingError{
-				item:     names.NewMachineTag(containerID).String(),
-				state:    "unknown",
-				endState: status.Running.String(),
-			}
+			return "", NewRetryReadError(fmt.Sprintf("machine %q not found", parentMachineID))
 		}
 		containerStatus, ok := machineStatus.Containers[containerID]
 		if !ok {
-			return "", &keepWaitingError{
-				item:     names.NewMachineTag(containerID).String(),
-				state:    "unknown",
-				endState: status.Running.String(),
-			}
+			return "", NewRetryReadError(fmt.Sprintf("container %q not found in machine %q", containerID, parentMachineID))
 		}
 		return containerStatus.InstanceStatus.Status, nil
 	}
@@ -142,69 +135,27 @@ func (c *machinesClient) CreateMachine(ctx context.Context, input *CreateMachine
 	}
 	defer func() { _ = conn.Close() }()
 
-	response, err := c.createMachine(ctx, conn, input)
+	machineID, err := c.createMachine(conn, input)
 	if err != nil {
 		return nil, err
 	}
-
-	getTargetStatusF := getTargetStatusFunc(response.ID)
-
-	// Wait for machine to go into "running" state. This is important when using the placement directive
-	// in juju_application resource - to deploy an application or validate against the operating system
-	// specified for the application Juju must know the operating system to use. For actual machines that
-	// information is not available until it reaches the "running" state.
-	retryErr := retry.Call(retry.CallArgs{
-		Func: func() error {
-			if !c.WaitForResource() {
-				return nil
-			}
-			modelStatus, err := c.ModelStatus(input.ModelName, conn)
-			if err != nil {
-				return errors.Annotatef(err, "failed to get model status.")
-			}
-
-			machineStatus, err := getTargetStatusF(modelStatus)
-			if err != nil {
-				return errors.Annotatef(err, "failed to get machine status")
-			}
-			if machineStatus == status.Running.String() {
-				return nil
-			}
-			return &keepWaitingError{
-				item:     names.NewMachineTag(response.ID).String(),
-				state:    machineStatus,
-				endState: status.Running.String(),
-			}
-		},
-		NotifyFunc: func(err error, attempt int) {
-			if attempt%4 == 0 {
-				message := fmt.Sprintf("waiting for machine %q to be created", response.ID)
-				c.Debugf(message, map[string]interface{}{"attempt": attempt, "err": err})
-			}
-		},
-		IsFatalError: func(err error) bool {
-			return !errors.As(err, &KeepWaitingForError)
-		},
-		Attempts: 720,
-		Delay:    defaultModelStatusCacheRetryInterval,
-		Clock:    clock.WallClock,
-		Stop:     ctx.Done(),
-	})
-	return response, retryErr
+	return &CreateMachineResponse{
+		ID: machineID,
+	}, nil
 }
 
-func (c *machinesClient) createMachine(ctx context.Context, conn api.Connection, input *CreateMachineInput) (*CreateMachineResponse, error) {
+func (c *machinesClient) createMachine(conn api.Connection, input *CreateMachineInput) (string, error) {
 	machineAPIClient := apimachinemanager.NewClient(conn)
 	modelConfigAPIClient := apimodelconfig.NewClient(conn)
 
 	if input.SSHAddress != "" {
 		configAttrs, err := modelConfigAPIClient.ModelGet()
 		if err != nil {
-			return nil, errors.Trace(err)
+			return "", errors.Trace(err)
 		}
 		cfg, err := config.New(config.NoDefaults, configAttrs)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return "", errors.Trace(err)
 		}
 		return manualProvision(machineAPIClient, cfg,
 			input.SSHAddress, input.PublicKeyFile, input.PrivateKeyFile)
@@ -219,12 +170,12 @@ func (c *machinesClient) createMachine(ctx context.Context, conn api.Connection,
 		if err == instance.ErrPlacementScopeMissing {
 			modelUUID, err := c.ModelUUID(input.ModelName)
 			if err != nil {
-				return nil, err
+				return "", err
 			}
 			placement = modelUUID + ":" + placement
 			machineParams.Placement, err = instance.ParsePlacement(placement)
 			if err != nil {
-				return nil, err
+				return "", err
 			}
 		}
 	}
@@ -232,13 +183,13 @@ func (c *machinesClient) createMachine(ctx context.Context, conn api.Connection,
 	if input.Constraints == "" {
 		modelConstraints, err := modelConfigAPIClient.GetModelConstraints()
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		machineParams.Constraints = modelConstraints
 	} else {
 		userConstraints, err := constraints.Parse(input.Constraints)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		machineParams.Constraints = userConstraints
 	}
@@ -246,7 +197,7 @@ func (c *machinesClient) createMachine(ctx context.Context, conn api.Connection,
 	if input.Disks != "" {
 		userDisks, err := storage.ParseConstraints(input.Disks)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		fmt.Println(userDisks)
 		machineParams.Disks = []storage.Constraints{userDisks}
@@ -263,7 +214,7 @@ func (c *machinesClient) createMachine(ctx context.Context, conn api.Connection,
 	}
 	paramsBase, err := baseFromOperatingSystem(opSys)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	machineParams.Base = paramsBase
 
@@ -276,25 +227,15 @@ func (c *machinesClient) createMachine(ctx context.Context, conn api.Connection,
 	machines, err := machineAPIClient.AddMachines(addMachineArgs)
 	if err != nil {
 		c.createMu.Unlock()
-		return nil, err
+		return "", err
 	}
 	c.createMu.Unlock()
 
 	if machines[0].Error != nil {
-		return nil, machines[0].Error
+		return "", machines[0].Error
 	}
-	machineID := machines[0].Machine
 
-	// Read the machine to ensure we have a base and series. It's
-	// not a required field in a minimal machine config.
-	readResponse, err := c.readMachineWithRetryOnNotFound(ctx,
-		ReadMachineInput{ModelName: input.ModelName, ID: machineID})
-
-	return &CreateMachineResponse{
-		ID:     machineID,
-		Base:   readResponse.Base,
-		Series: readResponse.Series,
-	}, err
+	return machines[0].Machine, nil
 }
 
 func baseAndSeriesFromParams(machineBase *params.Base) (baseStr, seriesStr string, err error) {
@@ -352,15 +293,15 @@ func fromLegacyCentosChannel(series string) string {
 // private_key in the CreateMachineInput.
 func manualProvision(client manual.ProvisioningClientAPI,
 	config *config.Config, sshAddress string, publicKey string,
-	privateKey string) (*CreateMachineResponse, error) {
+	privateKey string) (string, error) {
 	// Read the public keys
 	cmdCtx, err := cmd.DefaultContext()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return "", errors.Trace(err)
 	}
 	authKeys, err := common.ReadAuthorizedKeys(cmdCtx, publicKey)
 	if err != nil {
-		return nil, errors.Annotatef(err, "cannot read authorized-keys from : %v", publicKey)
+		return "", errors.Annotatef(err, "cannot read authorized-keys from : %v", publicKey)
 	}
 
 	// Extract the user and host in the SSHAddress
@@ -368,7 +309,7 @@ func manualProvision(client manual.ProvisioningClientAPI,
 	if at := strings.Index(sshAddress, "@"); at != -1 {
 		user, host = sshAddress[:at], sshAddress[at+1:]
 	} else {
-		return nil, errors.Errorf("invalid ssh_address, expected <user@host>, "+
+		return "", errors.Errorf("invalid ssh_address, expected <user@host>, "+
 			"given %v", sshAddress)
 	}
 
@@ -391,37 +332,16 @@ func manualProvision(client manual.ProvisioningClientAPI,
 	// Call ProvisionMachine
 	machineId, err := sshprovisioner.ProvisionMachine(provisionArgs)
 	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	// Find out about the series of the machine just provisioned
-	// (because ProvisionMachine only returns machineId)
-	_, machineBase, err := sshprovisioner.DetectBaseAndHardwareCharacteristics(host)
-	if err != nil {
-		return nil, errors.Annotatef(err, "error detecting hardware characteristics")
+		return "", errors.Trace(err)
 	}
 
-	machineSeries, err := base.GetSeriesFromBase(machineBase)
-	if err != nil {
-		return nil, err
-	}
-
-	// This might cause problems later, but today, no one except for juju internals
-	// uses the channel risk. Using the risk makes the base appear to have changed
-	// with terraform.
-	baseStr := fmt.Sprintf("%s@%s", machineBase.OS, machineBase.Channel.Track)
-
-	return &CreateMachineResponse{
-		ID:     machineId,
-		Base:   baseStr,
-		Series: machineSeries,
-	}, nil
+	return machineId, nil
 }
 
-func (c *machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineResponse, error) {
-	var response ReadMachineResponse
+func (c *machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineResponse, error) {
 	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
-		return response, err
+		return nil, err
 	}
 	defer func() { _ = conn.Close() }()
 
@@ -429,62 +349,40 @@ func (c *machinesClient) ReadMachine(input ReadMachineInput) (ReadMachineRespons
 
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
-		return response, err
+		return nil, err
 	}
-
 	machineIDParts := strings.Split(input.ID, "/")
 	machineStatus, exists := status.Machines[machineIDParts[0]]
 	if !exists {
-		return response, fmt.Errorf("no status returned for machine: %s", input.ID)
+		return nil, NewMachineNotFoundError(input.ID)
 	}
 	c.Tracef("ReadMachine:Machine status result", map[string]interface{}{"machineStatus": machineStatus})
 	if len(machineIDParts) > 1 {
 		// check for containers
 		machineStatus, exists = machineStatus.Containers[input.ID]
 		if !exists {
-			return response, fmt.Errorf("no status returned for container in machine: %s", input.ID)
+			return nil, NewMachineNotFoundError(input.ID)
 		}
 	}
-	response.ID = machineStatus.Id
-	response.Base, response.Series, err = baseAndSeriesFromParams(&machineStatus.Base)
-	if err != nil {
-		return response, err
-	}
-	response.Constraints = machineStatus.Constraints
-	return response, nil
-}
 
-// readMachineWithRetryOnNotFound calls ReadMachine until
-// successful, or the count is exceeded when the error is of type
-// not found. Delay indicates how long to wait between attempts.
-func (c *machinesClient) readMachineWithRetryOnNotFound(ctx context.Context, input ReadMachineInput) (ReadMachineResponse, error) {
-	var output ReadMachineResponse
-	err := retry.Call(retry.CallArgs{
-		Func: func() error {
-			var err error
-			output, err = c.ReadMachine(input)
-			typedErr := typedError(err)
-			if errors.Is(typedErr, errors.NotFound) {
-				return nil
-			}
-			return err
-		},
-		NotifyFunc: func(err error, attempt int) {
-			if attempt%4 == 0 {
-				message := fmt.Sprintf("waiting for machine %q", input.ID)
-				if attempt != 4 {
-					message = "still " + message
-				}
-				c.Debugf(message)
-			}
-		},
-		BackoffFunc: retry.DoubleDelay,
-		Attempts:    30,
-		Delay:       time.Second,
-		Clock:       clock.WallClock,
-		Stop:        ctx.Done(),
-	})
-	return output, err
+	machineStatusString, err := getTargetStatusFunc(input.ID)(status)
+	if err != nil {
+		return nil, err
+	}
+
+	base, series, err := baseAndSeriesFromParams(&machineStatus.Base)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ReadMachineResponse{
+		ID:          machineStatus.Id,
+		Hostname:    machineStatus.Hostname,
+		Constraints: machineStatus.Constraints,
+		Base:        base,
+		Series:      series,
+		Status:      machineStatusString,
+	}, nil
 }
 
 func (c *machinesClient) DestroyMachine(input *DestroyMachineInput) error {
@@ -497,7 +395,6 @@ func (c *machinesClient) DestroyMachine(input *DestroyMachineInput) error {
 	machineAPIClient := apimachinemanager.NewClient(conn)
 
 	_, err = machineAPIClient.DestroyMachinesWithParams(false, false, false, (*time.Duration)(nil), input.ID)
-
 	if err != nil {
 		return err
 	}

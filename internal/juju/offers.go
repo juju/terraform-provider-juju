@@ -33,7 +33,7 @@ type offersClient struct {
 
 type CreateOfferInput struct {
 	ApplicationName string
-	Endpoint        string
+	Endpoints       []string
 	ModelName       string
 	ModelOwner      string
 	OfferOwner      string
@@ -51,7 +51,7 @@ type ReadOfferInput struct {
 
 type ReadOfferResponse struct {
 	ApplicationName string
-	Endpoint        string
+	Endpoints       []string
 	ModelName       string
 	Name            string
 	OfferURL        string
@@ -128,7 +128,7 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 		return nil, append(errs, err)
 	}
 
-	result, err := client.Offer(modelUUID, input.ApplicationName, []string{input.Endpoint}, input.OfferOwner, offerName, "")
+	result, err := client.Offer(modelUUID, input.ApplicationName, input.Endpoints, input.OfferOwner, offerName, "")
 	if err != nil {
 		return nil, append(errs, err)
 	}
@@ -177,20 +177,30 @@ func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, erro
 		return nil, err
 	}
 
+	resultURL, err := crossmodel.ParseOfferURL(result.OfferURL)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse offer URL %q: %w", result.OfferURL, err)
+	}
+	resultURL.Source = "" // Ensure the source is empty for consistency
+
+	// If the ID used to query the resource does not match the one in the result, it can result
+	// in an unexpected value when saved to a resource, so fail early for easier diagnostics.
+	if resultURL.String() != input.OfferURL {
+		return nil, fmt.Errorf("offer URL %q does not match the expected URL %q", result.OfferURL, input.OfferURL)
+	}
+
 	var response ReadOfferResponse
 	response.Name = result.OfferName
 	response.ApplicationName = result.ApplicationName
-	response.OfferURL = result.OfferURL
-	response.Endpoint = result.Endpoints[0].Name
+	response.OfferURL = resultURL.String()
+	for _, endpoint := range result.Endpoints {
+		response.Endpoints = append(response.Endpoints, endpoint.Name)
+	}
 	response.Users = result.Users
 
 	//no model name is returned but it can be parsed from the resulting offer URL to ensure parity
 	//TODO: verify if we can fetch information another way
-	modelName, ok := parseModelFromURL(result.OfferURL)
-	if !ok {
-		return nil, fmt.Errorf("unable to parse model name from offer URL")
-	}
-	response.ModelName = modelName
+	response.ModelName = resultURL.ModelName
 
 	return &response, nil
 }
@@ -249,20 +259,6 @@ func findApplicationOffers(client *applicationoffers.Client, filter crossmodel.A
 	return offers[0], nil
 }
 
-func parseModelFromURL(url string) (result string, success bool) {
-	start := strings.Index(url, "/")
-	if start == -1 {
-		return result, false
-	}
-	newURL := url[start+1:]
-	end := strings.Index(newURL, ".")
-	if end == -1 {
-		return result, false
-	}
-	result = newURL[:end]
-	return result, true
-}
-
 // ConsumeRemoteOffer allows the integration resource to consume the offers managed by the offer resource.
 func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*ConsumeRemoteOfferResponse, error) {
 	modelConn, err := c.GetConnection(&input.ModelName)
@@ -297,7 +293,16 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 	if err != nil {
 		return nil, err
 	}
-	offerURL.Source = url.Source
+
+	// The offer URL should not have a source, as that would indicate a cross-controller
+	// relation which is not strictly supported. Support for cross-controller relations
+	// would require some changes above to identify if the URL is pointing to a different
+	// controller than the one we are currently connected to and fetch the consume details
+	// from there instead.
+	if offerURL.Source != "" {
+		return nil, fmt.Errorf("offer URL %q should not have a source", consumeDetails.Offer.OfferURL)
+	}
+
 	consumeDetails.Offer.OfferURL = offerURL.String()
 
 	consumeArgs := crossmodel.ConsumeApplicationArgs{
@@ -432,6 +437,7 @@ func (c offersClient) GrantOffer(input *GrantRevokeOfferInput) error {
 
 // RevokeOffer revokes access to an offer managed by the access offer resource.
 // No action or error if the access was already revoked for the user.
+// Note: revoking `ReadAccess` will remove all access levels for the offer
 func (c offersClient) RevokeOffer(input *GrantRevokeOfferInput) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {

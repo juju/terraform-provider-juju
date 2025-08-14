@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -21,8 +22,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
+	"github.com/juju/clock"
+	"github.com/juju/juju/core/status"
 	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -42,18 +46,20 @@ type machineResource struct {
 }
 
 type machineResourceModel struct {
-	Annotations    types.Map              `tfsdk:"annotations"`
-	Name           types.String           `tfsdk:"name"`
-	ModelName      types.String           `tfsdk:"model"`
-	Constraints    CustomConstraintsValue `tfsdk:"constraints"`
-	Disks          types.String           `tfsdk:"disks"`
-	Base           types.String           `tfsdk:"base"`
-	Series         types.String           `tfsdk:"series"`
-	Placement      types.String           `tfsdk:"placement"`
-	MachineID      types.String           `tfsdk:"machine_id"`
-	SSHAddress     types.String           `tfsdk:"ssh_address"`
-	PublicKeyFile  types.String           `tfsdk:"public_key_file"`
-	PrivateKeyFile types.String           `tfsdk:"private_key_file"`
+	Annotations     types.Map              `tfsdk:"annotations"`
+	Name            types.String           `tfsdk:"name"`
+	ModelName       types.String           `tfsdk:"model"`
+	Constraints     CustomConstraintsValue `tfsdk:"constraints"`
+	Disks           types.String           `tfsdk:"disks"`
+	Base            types.String           `tfsdk:"base"`
+	Series          types.String           `tfsdk:"series"`
+	Placement       types.String           `tfsdk:"placement"`
+	MachineID       types.String           `tfsdk:"machine_id"`
+	SSHAddress      types.String           `tfsdk:"ssh_address"`
+	PublicKeyFile   types.String           `tfsdk:"public_key_file"`
+	PrivateKeyFile  types.String           `tfsdk:"private_key_file"`
+	Hostname        types.String           `tfsdk:"hostname"`
+	WaitForHostname types.Bool             `tfsdk:"wait_for_hostname"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -256,6 +262,18 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 					}...),
 				},
 			},
+			"hostname": schema.StringAttribute{
+				Description: "The machine's hostname. This is set only if 'wait_for_hostname' is true.",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"wait_for_hostname": schema.BoolAttribute{
+				Description: "If true, waits for the machine's hostname to be set during creation. " +
+					"A side effect is that this also waits for the machine to reach 'active' state in Juju.",
+				Optional: true,
+			},
 			"id": schema.StringAttribute{
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
@@ -279,38 +297,55 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	var data machineResourceModel
+	var plan machineResourceModel
 	// Read Terraform prior state data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	response, err := r.client.Machines.CreateMachine(ctx, &juju.CreateMachineInput{
-		Constraints:    data.Constraints.ValueString(),
-		ModelName:      data.ModelName.ValueString(),
-		Disks:          data.Disks.ValueString(),
-		Base:           data.Base.ValueString(),
-		Series:         data.Series.ValueString(),
-		SSHAddress:     data.SSHAddress.ValueString(),
-		Placement:      data.Placement.ValueString(),
-		PublicKeyFile:  data.PublicKeyFile.ValueString(),
-		PrivateKeyFile: data.PrivateKeyFile.ValueString(),
+		Constraints:    plan.Constraints.ValueString(),
+		ModelName:      plan.ModelName.ValueString(),
+		Disks:          plan.Disks.ValueString(),
+		Base:           plan.Base.ValueString(),
+		Series:         plan.Series.ValueString(),
+		SSHAddress:     plan.SSHAddress.ValueString(),
+		Placement:      plan.Placement.ValueString(),
+		PublicKeyFile:  plan.PublicKeyFile.ValueString(),
+		PrivateKeyFile: plan.PrivateKeyFile.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create machine, got error: %s", err))
 		return
 	}
-	r.trace(fmt.Sprintf("create machine resource %q", response.ID))
+	r.trace(fmt.Sprintf("created machine resource %q", response.ID))
+
+	machineName := plan.Name.ValueString()
+	if machineName == "" {
+		machineName = fmt.Sprintf("machine-%s", response.ID)
+	}
+
+	id := newMachineID(plan.ModelName.ValueString(), response.ID, machineName)
+
+	plan.ID = types.StringValue(id)
+	plan.MachineID = types.StringValue(response.ID)
+	plan.Name = types.StringValue(machineName)
+	plan.Hostname = types.StringValue("")
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	var annotations map[string]string
-	resp.Diagnostics.Append(data.Annotations.ElementsAs(ctx, &annotations, false)...)
+	resp.Diagnostics.Append(plan.Annotations.ElementsAs(ctx, &annotations, false)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	if len(annotations) > 0 {
 		err = r.client.Annotations.SetAnnotations(&juju.SetAnnotationsInput{
-			ModelName:   data.ModelName.ValueString(),
+			ModelName:   plan.ModelName.ValueString(),
 			Annotations: annotations,
 			EntityTag:   names.NewMachineTag(response.ID),
 		})
@@ -320,18 +355,42 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
-	machineName := data.Name.ValueString()
-	if machineName == "" {
-		machineName = fmt.Sprintf("machine-%s", response.ID)
+	waitForHostname := plan.WaitForHostname.ValueBool()
+	modelName := plan.ModelName.ValueString()
+	readResponse, err := r.waitForMachine(ctx, waitForHostname, modelName, response.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for machine %q readiness, got error: %s", response.ID, err))
+		return
 	}
 
-	id := newMachineID(data.ModelName.ValueString(), response.ID, machineName)
-	data.ID = types.StringValue(id)
-	data.MachineID = types.StringValue(response.ID)
-	data.Base = types.StringValue(response.Base)
-	data.Series = types.StringValue(response.Series)
-	data.Name = types.StringValue(machineName)
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	plan.Base = types.StringValue(readResponse.Base)
+	plan.Series = types.StringValue(readResponse.Series)
+	plan.Hostname = types.StringValue(readResponse.Hostname)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+func (r *machineResource) waitForMachine(ctx context.Context, waitForHostname bool, modelName, machineID string) (*juju.ReadMachineResponse, error) {
+	asserts := []wait.Assert[*juju.ReadMachineResponse]{assertMachineRunning}
+	if waitForHostname {
+		asserts = append(asserts, assertHostnamePopulated)
+	}
+	readResponse, err := wait.WaitFor(wait.WaitForCfg[*juju.ReadMachineInput, *juju.ReadMachineResponse]{
+		Context: ctx,
+		GetData: r.client.Machines.ReadMachine,
+		Input: &juju.ReadMachineInput{
+			ModelName: modelName,
+			ID:        machineID,
+		},
+		DataAssertions: asserts,
+		NonFatalErrors: []error{juju.RetryReadError, juju.ConnectionRefusedError},
+		RetryConf: &wait.RetryConf{
+			MaxDuration: 30 * time.Minute,
+			Delay:       juju.ReadModelDefaultInterval,
+			Clock:       clock.WallClock,
+		},
+	})
+	return readResponse, err
 }
 
 func IsMachineNotFound(err error) bool {
@@ -341,6 +400,9 @@ func IsMachineNotFound(err error) bool {
 func handleMachineNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
 	if IsMachineNotFound(err) {
 		// Machine manually removed
+		// This behaviour is inconsistent with normal Terraform operations.
+		// If a resource is removed manually, the user is expected use
+		// the Terraform CLI to remove the resource from state.
 		st.RemoveResource(ctx)
 		return diag.Diagnostics{}
 	}
@@ -376,10 +438,9 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	response, err := r.client.Machines.ReadMachine(juju.ReadMachineInput{
-		ModelName: modelName,
-		ID:        machineID,
-	})
+	// During import, we don't know whether to wait for the machine hostname.
+	// So we opt not to wait, assuming the machine is ready.
+	response, err := r.waitForMachine(ctx, false, modelName, machineID)
 	if err != nil {
 		resp.Diagnostics.Append(handleMachineNotFoundError(ctx, err, &resp.State)...)
 		return
@@ -410,6 +471,13 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 	data.MachineID = types.StringValue(machineID)
 	data.Series = types.StringValue(response.Series)
 	data.Base = types.StringValue(response.Base)
+	// Here is ok to always set Hostname from the response because:
+	// 1. if you set wait_for_hostname to true, this is correctly populated.
+	// 2. if you set wait_for_hostname to false, you shouldn't use the hostname.
+	// 3. if you import a machine, the hostname should have been already populated.
+	//    It could happen that the hostname is set to an empty string during import, but unlikely because
+	//    that means you've created a machine and then imported it immediately afterwards.
+	data.Hostname = types.StringValue(response.Hostname)
 	if response.Constraints != "" {
 		data.Constraints = NewCustomConstraintsValue(response.Constraints)
 	}
@@ -484,14 +552,33 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	defer func() {
+		r.trace(fmt.Sprintf("delete machine resource %q", machineID))
+	}()
 
 	if err := r.client.Machines.DestroyMachine(&juju.DestroyMachineInput{
 		ModelName: modelName,
 		ID:        machineID,
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete machine, got error: %s", err))
+		return
 	}
-	r.trace(fmt.Sprintf("delete machine resource %q", machineID))
+
+	if err := wait.WaitForError(wait.WaitForErrorCfg[*juju.ReadMachineInput, *juju.ReadMachineResponse]{
+		Context: ctx,
+		GetData: r.client.Machines.ReadMachine,
+		Input: &juju.ReadMachineInput{
+			ModelName: modelName,
+			ID:        machineID,
+		},
+		ErrorToWait:    juju.MachineNotFoundError,
+		NonFatalErrors: []error{juju.RetryReadError},
+	}); err != nil {
+		resp.Diagnostics.AddError(
+			"Wait Error",
+			fmt.Sprintf("Timeout reached waiting for machine %q deletion, got error: %s. Make sure no application units or containers are still running on the machine", machineID, err),
+		)
+	}
 }
 
 // ImportState is called when the provider must import the state of a
@@ -570,4 +657,24 @@ func updateAnnotations(ctx context.Context, client annotationSetter, stateAnnota
 		return diagnostics
 	}
 	return diagnostics
+}
+
+// assertHostnamePopulated asserts the hostname is populated in the machine response.
+// Otherwise it returns a retry error to wait for the hostname to be set.
+func assertHostnamePopulated(respFromAPI *juju.ReadMachineResponse) error {
+	if respFromAPI.Hostname == "" {
+		return juju.NewRetryReadError("waiting for hostname to be set on machine")
+	}
+	return nil
+}
+
+// assertMachineRunning asserts that the machine is in the running state, otherwise it returns a retry error.
+// This is important when using the placement directive in juju_application resource - to deploy an application
+// or validate against the operating system specified for the application Juju must know the operating system to use.
+// For actual machines that information is not available until it reaches the "running" state.
+func assertMachineRunning(respFromAPI *juju.ReadMachineResponse) error {
+	if respFromAPI.Status != status.Running.String() {
+		return juju.NewRetryReadError("waiting for machine to be in running state")
+	}
+	return nil
 }

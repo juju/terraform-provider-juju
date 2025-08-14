@@ -83,15 +83,15 @@ type applicationResource struct {
 // applicationResourceModel describes the application data model.
 // tfsdk must match user resource schema attribute names.
 type applicationResourceModel struct {
-	ApplicationName  types.String `tfsdk:"name"`
-	Charm            types.List   `tfsdk:"charm"`
-	Config           types.Map    `tfsdk:"config"`
-	Constraints      types.String `tfsdk:"constraints"`
-	EndpointBindings types.Set    `tfsdk:"endpoint_bindings"`
-	Expose           types.List   `tfsdk:"expose"`
-	Machines         types.Set    `tfsdk:"machines"`
-	ModelName        types.String `tfsdk:"model"`
-	ModelType        types.String `tfsdk:"model_type"`
+	ApplicationName  types.String           `tfsdk:"name"`
+	Charm            types.List             `tfsdk:"charm"`
+	Config           types.Map              `tfsdk:"config"`
+	Constraints      CustomConstraintsValue `tfsdk:"constraints"`
+	EndpointBindings types.Set              `tfsdk:"endpoint_bindings"`
+	Expose           types.List             `tfsdk:"expose"`
+	Machines         types.Set              `tfsdk:"machines"`
+	ModelName        types.String           `tfsdk:"model"`
+	ModelType        types.String           `tfsdk:"model_type"`
 	// TODO - remove Placement
 	Placement types.String `tfsdk:"placement"`
 	// TODO - remove Principal when we version the schema
@@ -194,14 +194,15 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Optional:    true,
 				ElementType: types.StringType,
 			},
-			"constraints": schema.StringAttribute{
+			ConstraintsKey: schema.StringAttribute{
+				CustomType: CustomConstraintsType{},
 				Description: "Constraints imposed on this application. Changing this value will cause the" +
 					" application to be destroyed and recreated by terraform.",
 				Optional: true,
 				// Set as "computed" to pre-populate and preserve any implicit constraints
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplaceIfConfigured(),
+					stringplanmodifier.RequiresReplaceIf(constraintsRequiresReplacefunc, "", ""),
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
@@ -637,7 +638,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 
 	// Constraints do not apply to subordinate applications. If the application
 	// is subordinate, the constraints will be set to the empty string.
-	plan.Constraints = types.StringValue(readResp.Constraints.String())
+	plan.Constraints = NewCustomConstraintsValue(readResp.Constraints.String())
 	plan.Placement = types.StringValue(readResp.Placement)
 	if readResp.Principal || readResp.Units > 0 {
 		plan.UnitCount = types.Int64Value(int64(readResp.Units))
@@ -805,7 +806,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 
 	// Constraints do not apply to subordinate applications. If the application
 	// is subordinate, the constraints will be set to the empty string.
-	state.Constraints = types.StringValue(response.Constraints.String())
+	state.Constraints = NewCustomConstraintsValue(response.Constraints.String())
 
 	exposeType := req.State.Schema.GetBlocks()[ExposeKey].(schema.ListNestedBlock).NestedObject.Type()
 	if response.Expose != nil {

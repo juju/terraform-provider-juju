@@ -193,7 +193,7 @@ resource "juju_application" "b" {
 resource "juju_offer" "b" {
 	model            = juju_model.b.name
 	application_name = juju_application.b.name
-	endpoint         = "sink"
+	endpoints         = ["sink"]
 }
 
 resource "juju_integration" "a" {
@@ -285,7 +285,7 @@ resource "juju_application" "a" {
 resource "juju_offer" "a" {
         model            = juju_model.a.name
         application_name = juju_application.a.name
-        endpoint         = "source"
+        endpoints         = ["source"]
 }
 
 resource "juju_model" "b" {

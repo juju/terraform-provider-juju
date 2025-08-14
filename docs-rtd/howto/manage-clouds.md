@@ -23,7 +23,7 @@ resource "juju_model" "my-model" {
 }
 ```
 
-> See more: [`juju_kubernetes_cloud`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/kubernetes_cloud)
+> See more: [`juju_kubernetes_cloud`](../reference/terraform-provider/resources/kubernetes_cloud)
 
 (manage-access-to-a-cloud)=
 ## Manage access to a cloud
@@ -46,4 +46,4 @@ resource "juju_jaas_access_cloud" "development" {
 }
 ```
 
-> See more: [`juju_jaas_access_cloud`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_cloud), {external+jaas:ref}`JAAS | Cloud access levels <list-of-cloud-permissions>`
+> See more: [`juju_jaas_access_cloud`](../reference/terraform-provider/resources/jaas_access_cloud), {external+jaas:ref}`JAAS | Cloud access levels <list-of-cloud-permissions>`

@@ -2,7 +2,7 @@
 # Manage roles
 
 ```{note}
-In the Juju ecosystem, roles are supported only when using [JAAS](https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/).
+In the Juju ecosystem, roles are supported only when using [JAAS](https://documentation.ubuntu.com/jaas/).
 ```
 
 (reference-an-externally-managed-role)=
@@ -19,7 +19,7 @@ output "role_uuid" {
 }
 ```
 
-> See more: [`juju_jaas_role` (data source)](https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/jaas_role)
+> See more: [`juju_jaas_role` (data source)](../reference/terraform-provider/data-sources/jaas_role)
 
 (add-a-role)=
 ## Add a role
@@ -32,7 +32,7 @@ resource "juju_jaas_role" "development" {
 }
 ```
 
-> See more: [`juju_jaas_role` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_role)
+> See more: [`juju_jaas_role` (resource)](../reference/terraform-provider/resources/jaas_role)
 
 (manage-access-to-a-role)=
 ## Manage access to a role
@@ -55,7 +55,7 @@ resource "juju_jaas_access_role" "development" {
 }
 ```
 
-> See more: [`juju_jaas_access_role`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/jaas_access_role), {external+jaas:ref}`JAAS | Role access levels <list-of-role-permissions>`
+> See more: [`juju_jaas_access_role`](../reference/terraform-provider/resources/jaas_access_role), {external+jaas:ref}`JAAS | Role access levels <list-of-role-permissions>`
 
 ## Manage a role's access to a controller, cloud, model, or offer
 

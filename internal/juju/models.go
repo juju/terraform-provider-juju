@@ -5,6 +5,7 @@ package juju
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/juju/errors"
@@ -15,6 +16,9 @@ import (
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
 )
+
+// TransactionError is returned when a transaction is aborted.
+const TransactionError = errors.ConstError("transaction-aborted")
 
 var ModelNotFoundError = &modelNotFoundError{}
 
@@ -176,6 +180,12 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 
 	modelInfo, err := client.CreateModel(modelName, currentUser, cloudName, cloudRegion, *cloudCredTag, configValues)
 	if err != nil {
+		// When we create multiple models concurrently, it can happen that Juju returns an error
+		// that the transaction was aborted. We return a specific error here,
+		// to make sure we can retry.
+		if strings.Contains(err.Error(), "transaction aborted") {
+			return resp, TransactionError
+		}
 		return resp, err
 	}
 

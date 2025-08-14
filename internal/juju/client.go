@@ -40,6 +40,7 @@ const (
 	serviceAccountSuffix                 = "@serviceaccount"
 	defaultModelStatusCacheInterval      = 5 * time.Second
 	defaultModelStatusCacheRetryInterval = defaultModelStatusCacheInterval / 2
+	ReadModelDefaultInterval             = defaultModelStatusCacheInterval / 2
 )
 
 type ControllerConfiguration struct {

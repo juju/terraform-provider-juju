@@ -21,5 +21,5 @@ resource "juju_application" "this" {
 }
 ```
 
-> See more: [`juju_application` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#schema)
+> See more: [`juju_application` (resource)](../reference/terraform-provider/resources/application)
 

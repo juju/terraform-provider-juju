@@ -15,7 +15,7 @@ resource "juju_user" "alex" {
 }
 ```
 
-> See more: [`juju_user` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/user)
+> See more: [`juju_user` (resource)](../reference/terraform-provider/resources/user)
 
 
 ## Manage a user's access to a controller, cloud, model, offer, role, or group
@@ -34,10 +34,10 @@ resource "juju_user" "alex" {
 }
 ```
 
-> See more: [`juju_user`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/user#password)
+> See more: [`juju_user`](../reference/terraform-provider/resources/user)
 
 ## Remove a user
 
 To remove a user, in your Terraform plan remove its resource definition.
 
-> See more: [`juju_user` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/user)
+> See more: [`juju_user`](../reference/terraform-provider/resources/user)

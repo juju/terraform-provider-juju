@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -23,11 +24,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/juju/clock"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/names/v5"
 	"github.com/juju/utils/v3"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	"github.com/juju/terraform-provider-juju/internal/retry"
+	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 var _ resource.Resource = &modelResource{}
@@ -234,13 +238,23 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 		cloudRegionInput = clouds[0].Region.ValueString()
 	}
 
-	response, err := r.client.Models.CreateModel(juju.CreateModelInput{
-		Name:        modelName,
-		CloudName:   cloudNameInput,
-		CloudRegion: cloudRegionInput,
-		Config:      config,
-		Constraints: parsedConstraints,
-		Credential:  credential,
+	response, err := retry.RetryOnErrors(retry.RetryOnErrorsCfg[juju.CreateModelInput, juju.CreateModelResponse]{
+		Context: ctx,
+		Input: juju.CreateModelInput{
+			Name:        modelName,
+			CloudName:   cloudNameInput,
+			CloudRegion: cloudRegionInput,
+			Config:      config,
+			Constraints: parsedConstraints,
+			Credential:  credential,
+		},
+		Do:              r.client.Models.CreateModel,
+		RetriableErrors: []error{juju.TransactionError, juju.ConnectionRefusedError},
+		RetryConf: &wait.RetryConf{
+			MaxDuration: 2 * time.Minute,
+			Delay:       time.Second,
+			Clock:       clock.WallClock,
+		},
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create model %q, got error: %s", plan.Name, err))

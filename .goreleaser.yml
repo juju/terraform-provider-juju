@@ -2,11 +2,8 @@
 # behavior.
 before:
   hooks:
-  # TODO: don't tidy beforehand to avoid current ambiguous import error
-  # - go mod tidy
+  - go mod tidy
 git:
-  # What should be used to sort tags when gathering the current and previous
-  # tags if there are more than one tag in the same commit.
   tag_sort: -version:creatordate
 builds:
 - env:
@@ -55,11 +52,10 @@ signs:
       - "--detach-sign"
       - "${artifact}"
 release:
+  prerelease: auto
   extra_files:
     - glob: 'terraform-registry-manifest.json'
       name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
-  # If you want to manually examine the release before its live, uncomment this line:
-  draft: true
 changelog:
   disable: true
 version: 2
