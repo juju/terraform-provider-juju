@@ -143,7 +143,7 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	modelUUID := plan.ModelUUID.ValueString()
-	modelInfo, err := o.client.Models.GetModelByNameOrUUID(modelUUID)
+	modelInfo, err := o.client.Models.GetModelByUUID(modelUUID)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model %q, got error: %s", modelUUID, err))
 		return

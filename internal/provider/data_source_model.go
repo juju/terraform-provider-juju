@@ -98,7 +98,7 @@ func (d *modelDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	}
 
 	// Get current juju model data source values.
-	model, err := d.client.Models.GetModelByNameOrUUID(data.UUID.ValueString())
+	model, err := d.client.Models.GetModelByUUID(data.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model, got error: %s", err))
 		return

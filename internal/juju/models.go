@@ -108,8 +108,8 @@ func newModelsClient(sc SharedClient) *modelsClient {
 	}
 }
 
-// GetModelByNameOrUUID retrieves a model by name or UUID.
-func (c *modelsClient) GetModelByNameOrUUID(name string) (*params.ModelInfo, error) {
+// GetModelByUUID retrieves a model by UUID.
+func (c *modelsClient) GetModelByUUID(uuid string) (*params.ModelInfo, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -118,11 +118,10 @@ func (c *modelsClient) GetModelByNameOrUUID(name string) (*params.ModelInfo, err
 
 	client := modelmanager.NewClient(conn)
 
-	modelUUID, err := c.ModelUUID(name)
-	if err != nil {
-		return nil, err
+	if !names.IsValidModel(uuid) {
+		return nil, fmt.Errorf("invalid model UUID: %s", uuid)
 	}
-	modelTag := names.NewModelTag(modelUUID)
+	modelTag := names.NewModelTag(uuid)
 
 	results, err := client.ModelInfo([]names.ModelTag{
 		modelTag,
@@ -136,9 +135,9 @@ func (c *modelsClient) GetModelByNameOrUUID(name string) (*params.ModelInfo, err
 
 	modelInfo := results[0].Result
 
-	c.AddModel(modelInfo.Name, modelUUID, model.ModelType(modelInfo.Type))
+	c.AddModel(modelInfo.Name, uuid, model.ModelType(modelInfo.Type))
 
-	c.Tracef(fmt.Sprintf("Retrieved model info: %s, %+v", name, modelInfo))
+	c.Tracef(fmt.Sprintf("Retrieved model info: %s, %+v", uuid, modelInfo))
 	return modelInfo, nil
 }
 
