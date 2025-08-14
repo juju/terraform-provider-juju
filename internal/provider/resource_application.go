@@ -12,14 +12,12 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -81,55 +79,38 @@ type applicationResource struct {
 	subCtx context.Context
 }
 
+type applicationResourceModel struct {
+	ApplicationName   types.String           `tfsdk:"name"`
+	Charm             types.List             `tfsdk:"charm"`
+	Config            types.Map              `tfsdk:"config"`
+	Constraints       CustomConstraintsValue `tfsdk:"constraints"`
+	EndpointBindings  types.Set              `tfsdk:"endpoint_bindings"`
+	Expose            types.List             `tfsdk:"expose"`
+	Machines          types.Set              `tfsdk:"machines"`
+	ModelType         types.String           `tfsdk:"model_type"`
+	Resources         types.Map              `tfsdk:"resources"`
+	StorageDirectives types.Map              `tfsdk:"storage_directives"`
+	Storage           types.Set              `tfsdk:"storage"`
+	Trust             types.Bool             `tfsdk:"trust"`
+	UnitCount         types.Int64            `tfsdk:"units"`
+	// ID required by the testing framework
+	ID types.String `tfsdk:"id"`
+}
+
 // applicationResourceModelV0 describes the application data model.
 // tfsdk must match user resource schema attribute names.
 type applicationResourceModelV0 struct {
-	ApplicationName  types.String           `tfsdk:"name"`
-	Charm            types.List             `tfsdk:"charm"`
-	Config           types.Map              `tfsdk:"config"`
-	Constraints      CustomConstraintsValue `tfsdk:"constraints"`
-	EndpointBindings types.Set              `tfsdk:"endpoint_bindings"`
-	Expose           types.List             `tfsdk:"expose"`
-	Machines         types.Set              `tfsdk:"machines"`
-	ModelName        types.String           `tfsdk:"model"`
-	ModelType        types.String           `tfsdk:"model_type"`
-	Placement        types.String           `tfsdk:"placement"`
-	// TODO - remove Principal when we version the schema
-	// and remove deprecated elements. Once we create upgrade
-	// functionality it can be removed from the structure.
-	Principal         types.Bool  `tfsdk:"principal"`
-	Resources         types.Map   `tfsdk:"resources"`
-	StorageDirectives types.Map   `tfsdk:"storage_directives"`
-	Storage           types.Set   `tfsdk:"storage"`
-	Trust             types.Bool  `tfsdk:"trust"`
-	UnitCount         types.Int64 `tfsdk:"units"`
-	// ID required by the testing framework
-	ID types.String `tfsdk:"id"`
+	applicationResourceModel
+	ModelName types.String `tfsdk:"model"`
+	Placement types.String `tfsdk:"placement"`
+	Principal types.Bool   `tfsdk:"principal"`
 }
 
 // applicationResourceModelV1 describes the application data model.
 // tfsdk must match user resource schema attribute names.
 type applicationResourceModelV1 struct {
-	ApplicationName  types.String           `tfsdk:"name"`
-	Charm            types.List             `tfsdk:"charm"`
-	Config           types.Map              `tfsdk:"config"`
-	Constraints      CustomConstraintsValue `tfsdk:"constraints"`
-	EndpointBindings types.Set              `tfsdk:"endpoint_bindings"`
-	Expose           types.List             `tfsdk:"expose"`
-	Machines         types.Set              `tfsdk:"machines"`
-	ModelUUID        types.String           `tfsdk:"model_uuid"`
-	ModelType        types.String           `tfsdk:"model_type"`
-	// TODO - remove Principal when we version the schema
-	// and remove deprecated elements. Once we create upgrade
-	// functionality it can be removed from the structure.
-	Principal         types.Bool  `tfsdk:"principal"`
-	Resources         types.Map   `tfsdk:"resources"`
-	StorageDirectives types.Map   `tfsdk:"storage_directives"`
-	Storage           types.Set   `tfsdk:"storage"`
-	Trust             types.Bool  `tfsdk:"trust"`
-	UnitCount         types.Int64 `tfsdk:"units"`
-	// ID required by the testing framework
-	ID types.String `tfsdk:"id"`
+	applicationResourceModel
+	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
 func (r *applicationResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -276,14 +257,6 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Optional:    true,
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
-			},
-			"principal": schema.BoolAttribute{
-				Description: "Whether this is a Principal application",
-				Computed:    true,
-				PlanModifiers: []planmodifier.Bool{
-					boolplanmodifier.UseStateForUnknown(),
-				},
-				DeprecationMessage: "Principal is computed only and not needed. This attribute will be removed in the next major version of the provider.",
 			},
 			"id": schema.StringAttribute{
 				Computed: true,
@@ -661,7 +634,6 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	plan.Principal = types.BoolNull()
 	plan.ApplicationName = types.StringValue(createResp.AppName)
 	plan.ModelType = types.StringValue(readResp.ModelType)
 	planCharm.Revision = types.Int64Value(int64(readResp.Revision))
@@ -777,7 +749,6 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 
 	// Use the response to fill in state
 
-	state.Principal = types.BoolNull()
 	if response.Principal || response.Units > 0 {
 		state.UnitCount = types.Int64Value(int64(response.Units))
 	} else {
@@ -1255,7 +1226,6 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 
 	plan.ModelType = state.ModelType
 	plan.ID = types.StringValue(newAppID(plan.ModelUUID.ValueString(), plan.ApplicationName.ValueString()))
-	plan.Principal = types.BoolNull()
 	r.trace("Updated", applicationResourceModelForLogging(ctx, &plan))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -1470,24 +1440,12 @@ func (o *applicationResource) UpgradeState(ctx context.Context) map[int64]resour
 				}
 
 				newID := newAppID(modelUUID, appV0.ApplicationName.ValueString())
+				// appV0.ID is embedded in the applicationResourceModel struct.
+				appV0.ID = types.StringValue(newID)
 
 				upgradedStateData := applicationResourceModelV1{
-					ID:                types.StringValue(newID),
-					ApplicationName:   appV0.ApplicationName,
-					Charm:             appV0.Charm,
-					Config:            appV0.Config,
-					Constraints:       appV0.Constraints,
-					EndpointBindings:  appV0.EndpointBindings,
-					Expose:            appV0.Expose,
-					Machines:          appV0.Machines,
-					ModelUUID:         types.StringValue(modelUUID),
-					ModelType:         appV0.ModelType,
-					Principal:         appV0.Principal,
-					Resources:         appV0.Resources,
-					StorageDirectives: appV0.StorageDirectives,
-					Trust:             appV0.Trust,
-					UnitCount:         appV0.UnitCount,
-					Storage:           appV0.Storage,
+					ModelUUID:                types.StringValue(modelUUID),
+					applicationResourceModel: appV0.applicationResourceModel,
 				}
 
 				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
