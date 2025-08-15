@@ -34,8 +34,7 @@ type offersClient struct {
 type CreateOfferInput struct {
 	ApplicationName string
 	Endpoints       []string
-	ModelName       string
-	ModelOwner      string
+	ModelUUID       string
 	OfferOwner      string
 	Name            string
 }
@@ -112,7 +111,7 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 	}
 
 	// connect to the corresponding model
-	modelConn, err := c.GetConnection(&input.ModelName)
+	modelConn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, append(errs, err)
 	}
@@ -128,12 +127,7 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 		return nil, append(errs, errors.New("the application was not available to be offered"))
 	}
 
-	modelUUID, err := c.ModelUUID(input.ModelName)
-	if err != nil {
-		return nil, append(errs, err)
-	}
-
-	result, err := client.Offer(modelUUID, input.ApplicationName, input.Endpoints, input.OfferOwner, offerName, "")
+	result, err := client.Offer(input.ModelUUID, input.ApplicationName, input.Endpoints, input.OfferOwner, offerName, "")
 	if err != nil {
 		return nil, append(errs, err)
 	}
@@ -150,10 +144,15 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 		return nil, errs
 	}
 
+	modelOwner, modelName, err := c.SharedClient.ModelOwnerAndName(input.ModelUUID)
+	if err != nil {
+		return nil, append(errs, fmt.Errorf("unable to get model name for model UUID %q: %w", input.ModelUUID, err))
+	}
+
 	filter := crossmodel.ApplicationOfferFilter{
 		OfferName: offerName,
-		ModelName: input.ModelName,
-		OwnerName: input.ModelOwner,
+		ModelName: modelName,
+		OwnerName: modelOwner,
 	}
 
 	offer, err := findApplicationOffers(client, filter)
@@ -162,7 +161,7 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 	}
 
 	resp := CreateOfferResponse{
-		Name:     offer.OfferName,
+		Name:     offerName,
 		OfferURL: offer.OfferURL,
 	}
 	return &resp, nil

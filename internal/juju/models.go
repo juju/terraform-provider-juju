@@ -135,8 +135,12 @@ func (c *modelsClient) GetModelByNameOrUUID(name string) (*params.ModelInfo, err
 	}
 
 	modelInfo := results[0].Result
+	modelOwnerTag, err := names.ParseUserTag(modelInfo.OwnerTag)
+	if err != nil {
+		return nil, errors.Annotatef(err, "parsing owner tag %q for model %q", modelInfo.OwnerTag, name)
+	}
 
-	c.AddModel(modelInfo.Name, modelUUID, model.ModelType(modelInfo.Type))
+	c.AddModel(modelInfo.Name, modelOwnerTag.Id(), modelUUID, model.ModelType(modelInfo.Type))
 
 	c.Tracef(fmt.Sprintf("Retrieved model info: %s, %+v", name, modelInfo))
 	return modelInfo, nil
@@ -196,7 +200,7 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 	resp.UUID = modelInfo.UUID
 
 	// Add a model object on the client internal to the provider
-	c.AddModel(modelInfo.Name, modelInfo.UUID, modelInfo.Type)
+	c.AddModel(modelInfo.Name, modelInfo.Owner, modelInfo.UUID, modelInfo.Type)
 
 	// set constraints when required
 	if input.Constraints.String() == "" {
