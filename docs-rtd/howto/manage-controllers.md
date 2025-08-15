@@ -8,7 +8,7 @@ The Terraform Provider for Juju does not support controller bootstrap. However, 
 (reference-an-externally-managed-controller)=
 ## Reference an externally managed controller
 
-To reference a controller that you've created outside of Terraform (because Terraform does not support controller bootstrap), in your `provider` definition add your controller address(es) and your controller authentication details. You can do this in one of 3 ways: using static credentials, using environment variables, or using the `juju` client. Note: The last method is supported only for regular Juju controllers. Across all the supported methods, for authentication with a regular Juju controller you must provide the username and password for a user, whereas for authentication with a JIMM controller you must provide the client ID and client secret for a service account (where the service account must be created through the external identity provider connected to the JIMM controller).
+To reference a controller that you've created outside of Terraform (because Terraform does not support controller bootstrap), in your `provider` definition add your controller address(es) and your controller authentication details. You can do this in one of 3 ways: using static credentials, using environment variables, or using the `juju` client. Note: The last method is not supported for JIMM controllers. Across all the supported methods, for authentication with a Juju controller you must provide the username and password for a user, whereas for authentication with a JIMM controller you must provide the client ID and client secret for a service account (where the service account must be created through the external identity provider connected to the JIMM controller).
 
 
 ```{tip}
