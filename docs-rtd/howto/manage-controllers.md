@@ -8,10 +8,11 @@ The Terraform Provider for Juju does not support controller bootstrap. However, 
 (reference-an-externally-managed-controller)=
 ## Reference an externally managed controller
 
-To reference a controller that you've created outside of Terraform (because Terraform does not support controller bootstrap), in your `provider` definition add the controller details. You can do this in one of 3 ways: using static credentials, using environment variables, or using the `juju` client. Note: The last method is only supported for regular (non-JIMM) Juju controllers.
+To reference a controller that you've created outside of Terraform (because Terraform does not support controller bootstrap), in your `provider` definition add your controller address(es) and your controller authentication details. You can do this in one of 3 ways: using static credentials, using environment variables, or using the `juju` client. Note: The last method is not supported for JIMM controllers. Across all the supported methods, for authentication with a Juju controller you must provide the username and password for a user, whereas for authentication with a JIMM controller you must provide the client ID and client secret for a service account (where the service account must be created through the external identity provider connected to the JIMM controller).
+
 
 ```{tip}
-For all methods: To view your controller’s details, run `juju show-controller --show-password`.
+For all methods and both controller types: To view your controller’s details, run `juju show-controller --show-password`.
 ```
 
 ### Using static credentials
@@ -23,10 +24,10 @@ provider "juju" {
   controller_addresses = "<controller addresses>"
   # For a controller deployed with a self-signed certificate:
   ca_certificate = file("<path to certificate file>")
-  # For a regular Juju controller, provide the username and password:
+  # For a regular Juju controller, provide the username and password for a user:
   username = "<username>"
   password = "<password>"
-  # For a JIMM controller, provide the client ID and client secret:
+  # For a JIMM controller, provide the client ID and client secret for a service account:
   client_id     = "<clientID>"
   client_secret = "<clientSecret>"
 }
@@ -55,10 +56,10 @@ Then, in a terminal, export the controller environment variables with your contr
 export JUJU_CONTROLLER_ADDRESSES="<controller addresses>"
 # For a controller deployed with a self-signed certificate:
 export JUJU_CA_CERT=file("<path to certificate file>")
-# For a regular Juju controller, provide the username and password:
+# For a regular Juju controller, provide the username and password for a user:
 export JUJU_USERNAME="<username>"
 export JUJU_PASSWORD="<password>"
-# For a JIMM controller, provide the client ID and client secret:
+# For a JIMM controller, provide the client ID and client secret for a service account:
 export JUJU_CLIENT_ID="<client ID>"
 export JUJU_CLIENT_SECRET="<client secret>"
 ```
@@ -88,6 +89,13 @@ Then, in a terminal, use the `juju` client to switch to the desired controller: 
 While your controller is implicitly connected to the cloud that it has been bootstrapped on, and can implicitly use that cloud to provision resources, as is generally the case in Juju, you can also give it access to further clouds. The Terraform Provider for Juju currently supports this only for Kubernetes clouds.
 
 > See more: {ref}`add-a-kubernetes-cloud`
+
+(add-a-credential-to-a-controller)=
+## Add a credential to a controller
+
+By virtue of being bootstrapped into a cloud, your controller already has a credential for that cloud. However, if you want to use a different credential, or if you're adding a further cloud to the controller and would like to also add a credential for that cloud, you will need to add those credentials to the controller too. You can do that in the usual way by creating a resource of the `juju_credential` type.
+
+> See more: {ref}`add-a-credential`
 
 (manage-access-to-a-controller)=
 ## Manage access to a controller
