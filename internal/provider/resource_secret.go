@@ -59,7 +59,7 @@ func (s *secretResource) ImportState(ctx context.Context, req resource.ImportSta
 		return
 	}
 
-	// model:name
+	// modelUUID:name
 	parts := strings.Split(req.ID, ":")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		resp.Diagnostics.AddError(
@@ -72,7 +72,7 @@ func (s *secretResource) ImportState(ctx context.Context, req resource.ImportSta
 	secretName := parts[1]
 
 	readSecretOutput, err := s.client.Secrets.ReadSecret(&juju.ReadSecretInput{
-		ModelName: modelName,
+		ModelUUID: modelName,
 		Name:      &secretName,
 	})
 	if err != nil {
@@ -241,7 +241,7 @@ func (s *secretResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	readSecretOutput, err := s.client.Secrets.ReadSecret(&juju.ReadSecretInput{
 		SecretId:  state.SecretId.ValueString(),
-		ModelName: state.Model.ValueString(),
+		ModelUUID: state.Model.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read secret, got error: %s", err))
@@ -296,7 +296,7 @@ func (s *secretResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	var updatedSecretInput juju.UpdateSecretInput
 
-	updatedSecretInput.ModelName = state.Model.ValueString()
+	updatedSecretInput.ModelUUID = state.Model.ValueString()
 	updatedSecretInput.SecretId = state.SecretId.ValueString()
 
 	// Check if the secret name has changed
@@ -379,6 +379,6 @@ func (s *secretResource) trace(msg string, additionalFields ...map[string]interf
 	tflog.SubsystemTrace(s.subCtx, LogResourceSecret, msg, additionalFields...)
 }
 
-func newSecretID(model, secret string) string {
-	return fmt.Sprintf("%s:%s", model, secret)
+func newSecretID(modelUUID, secret string) string {
+	return fmt.Sprintf("%s:%s", modelUUID, secret)
 }

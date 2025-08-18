@@ -107,7 +107,7 @@ func (d *secretDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	}
 
 	readSecretInput := juju.ReadSecretInput{
-		ModelName: data.Model.ValueString(),
+		ModelUUID: data.Model.ValueString(),
 	}
 	if data.SecretId.ValueString() == "" {
 		readSecretInput.Name = data.Name.ValueStringPointer()

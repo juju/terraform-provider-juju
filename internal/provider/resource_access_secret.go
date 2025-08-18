@@ -37,14 +37,24 @@ type accessSecretResource struct {
 }
 
 type accessSecretResourceModel struct {
-	// Model to which the secret belongs.
-	Model types.String `tfsdk:"model"`
 	// SecretId is the ID of the secret to be grant or revoked.
 	SecretId types.String `tfsdk:"secret_id"`
 	// Applications is the list of applications to which the secret is granted or revoked.
 	Applications types.List `tfsdk:"applications"`
 	// ID is used during terraform import.
 	ID types.String `tfsdk:"id"`
+}
+
+type accessSecretResourceModelV0 struct {
+	accessSecretResourceModel
+	// Model to which the secret belongs.
+	Model types.String `tfsdk:"model"`
+}
+
+type accessSecretResourceModelV1 struct {
+	accessSecretResourceModel
+	// Model to which the secret belongs.
+	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
 // ImportState reads the secret based on the model name and secret name to be
@@ -60,15 +70,15 @@ func (s *accessSecretResource) ImportState(ctx context.Context, req resource.Imp
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		resp.Diagnostics.AddError(
 			"Unexpected Import Identifier",
-			fmt.Sprintf("Expected import identifier with format: <modelname>:<secretname>. Got: %q", req.ID),
+			fmt.Sprintf("Expected import identifier with format: <modeluuid>:<secretname>. Got: %q", req.ID),
 		)
 		return
 	}
-	modelName := parts[0]
+	modelUUID := parts[0]
 	secretName := parts[1]
 
 	readSecretOutput, err := s.client.Secrets.ReadSecret(&juju.ReadSecretInput{
-		ModelName: modelName,
+		ModelUUID: modelUUID,
 		Name:      &secretName,
 	})
 	if err != nil {
@@ -77,10 +87,12 @@ func (s *accessSecretResource) ImportState(ctx context.Context, req resource.Imp
 	}
 
 	// Save the secret access details into the Terraform state
-	state := accessSecretResourceModel{
-		Model:    types.StringValue(modelName),
-		SecretId: types.StringValue(readSecretOutput.SecretId),
-		ID:       types.StringValue(newSecretID(modelName, readSecretOutput.SecretId)),
+	state := accessSecretResourceModelV1{
+		ModelUUID: types.StringValue(modelUUID),
+		accessSecretResourceModel: accessSecretResourceModel{
+			SecretId: types.StringValue(readSecretOutput.SecretId),
+			ID:       types.StringValue(newSecretID(modelUUID, readSecretOutput.SecretId)),
+		},
 	}
 
 	// Save the secret details into the Terraform state
@@ -104,10 +116,11 @@ func (s *accessSecretResource) Metadata(_ context.Context, req resource.Metadata
 // Schema is called when the resource schema is being initialized.
 func (s *accessSecretResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		Version:     1,
 		Description: "A resource that represents a Juju secret access.",
 		Attributes: map[string]schema.Attribute{
-			"model": schema.StringAttribute{
-				Description: "The model in which the secret belongs.",
+			"model_uuid": schema.StringAttribute{
+				Description: "The UUID of the model in which the secret belongs.",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -164,7 +177,7 @@ func (s *accessSecretResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	var plan accessSecretResourceModel
+	var plan accessSecretResourceModelV1
 
 	// Read Terraform plan into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -176,7 +189,7 @@ func (s *accessSecretResource) Create(ctx context.Context, req resource.CreateRe
 	resp.Diagnostics.Append(plan.Applications.ElementsAs(ctx, &applications, false)...)
 
 	err := s.client.Secrets.UpdateAccessSecret(&juju.GrantRevokeAccessSecretInput{
-		ModelName:    plan.Model.ValueString(),
+		ModelUUID:    plan.ModelUUID.ValueString(),
 		SecretId:     plan.SecretId.ValueString(),
 		Applications: applications,
 	}, juju.GrantAccess)
@@ -186,7 +199,7 @@ func (s *accessSecretResource) Create(ctx context.Context, req resource.CreateRe
 	}
 
 	// Save plan into Terraform state
-	plan.ID = types.StringValue(newSecretID(plan.Model.ValueString(), plan.SecretId.ValueString()))
+	plan.ID = types.StringValue(newSecretID(plan.ModelUUID.ValueString(), plan.SecretId.ValueString()))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 
 	s.trace(fmt.Sprintf("grant secret access to %s", plan.SecretId))
@@ -200,7 +213,7 @@ func (s *accessSecretResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 
-	var state accessSecretResourceModel
+	var state accessSecretResourceModelV1
 
 	// Read Terraform configuration state into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -210,7 +223,7 @@ func (s *accessSecretResource) Read(ctx context.Context, req resource.ReadReques
 
 	readSecretOutput, err := s.client.Secrets.ReadSecret(&juju.ReadSecretInput{
 		SecretId:  state.SecretId.ValueString(),
-		ModelName: state.Model.ValueString(),
+		ModelUUID: state.ModelUUID.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read secret, got error: %s", err))
@@ -225,7 +238,7 @@ func (s *accessSecretResource) Read(ctx context.Context, req resource.ReadReques
 	}
 	state.Applications = secretApplications
 
-	state.ID = types.StringValue(newSecretID(state.Model.ValueString(), readSecretOutput.SecretId))
+	state.ID = types.StringValue(newSecretID(state.ModelUUID.ValueString(), readSecretOutput.SecretId))
 
 	// Save state into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -241,7 +254,7 @@ func (s *accessSecretResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	var plan, state accessSecretResourceModel
+	var plan, state accessSecretResourceModelV1
 
 	// Read Terraform plan and state into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -255,7 +268,7 @@ func (s *accessSecretResource) Update(ctx context.Context, req resource.UpdateRe
 
 	var updatedAccessSecretInput juju.GrantRevokeAccessSecretInput
 
-	updatedAccessSecretInput.ModelName = state.Model.ValueString()
+	updatedAccessSecretInput.ModelUUID = state.ModelUUID.ValueString()
 	updatedAccessSecretInput.SecretId = state.SecretId.ValueString()
 
 	if plan.Applications.Equal(state.Applications) {
@@ -296,7 +309,7 @@ func (s *accessSecretResource) Update(ctx context.Context, req resource.UpdateRe
 	// revoke access to applications that are in the state but not in the plan
 	if !applicationsToGrant.IsEmpty() {
 		err := s.client.Secrets.UpdateAccessSecret(&juju.GrantRevokeAccessSecretInput{
-			ModelName:    state.Model.ValueString(),
+			ModelUUID:    state.ModelUUID.ValueString(),
 			SecretId:     state.SecretId.ValueString(),
 			Applications: applicationsToGrant.Values(),
 		}, juju.GrantAccess)
@@ -309,7 +322,7 @@ func (s *accessSecretResource) Update(ctx context.Context, req resource.UpdateRe
 	// grant access to applications that are in the plan but not in the state
 	if !applicationsToRevoke.IsEmpty() {
 		err := s.client.Secrets.UpdateAccessSecret(&juju.GrantRevokeAccessSecretInput{
-			ModelName:    state.Model.ValueString(),
+			ModelUUID:    state.ModelUUID.ValueString(),
 			SecretId:     state.SecretId.ValueString(),
 			Applications: applicationsToRevoke.Values(),
 		}, juju.RevokeAccess)
@@ -333,7 +346,7 @@ func (s *accessSecretResource) Delete(ctx context.Context, req resource.DeleteRe
 		return
 	}
 
-	var state accessSecretResourceModel
+	var state accessSecretResourceModelV1
 
 	// Read Terraform configuration state into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -348,7 +361,7 @@ func (s *accessSecretResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 
 	err := s.client.Secrets.UpdateAccessSecret(&juju.GrantRevokeAccessSecretInput{
-		ModelName:    state.Model.ValueString(),
+		ModelUUID:    state.ModelUUID.ValueString(),
 		SecretId:     state.SecretId.ValueString(),
 		Applications: applications,
 	}, juju.RevokeAccess)
@@ -371,9 +384,67 @@ func (s *accessSecretResource) Delete(ctx context.Context, req resource.DeleteRe
 	s.trace(fmt.Sprintf("revoke secret access %s", state.SecretId))
 }
 
+// UpgradeState upgrades the state of the secret access resource.
+// This is used to handle changes in the resource schema between versions.
+// V0 -> V1: Replace model name field with model UUID.
+func (s *accessSecretResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
+	return map[int64]resource.StateUpgrader{
+		0: {
+			PriorSchema: accessSecretResourceSchemaV0(),
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				accessSecretV0 := accessSecretResourceModelV0{}
+				resp.Diagnostics.Append(req.State.Get(ctx, &accessSecretV0)...)
+
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				modelUUID, err := s.client.Models.ModelUUID(accessSecretV0.Model.ValueString())
+				if err != nil {
+					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", accessSecretV0.Model.ValueString(), err))
+					return
+				}
+
+				newID := strings.Replace(accessSecretV0.ID.ValueString(), accessSecretV0.Model.ValueString(), modelUUID, 1)
+
+				upgradedStateData := accessSecretResourceModelV1{
+					ModelUUID: types.StringValue(modelUUID),
+					accessSecretResourceModel: accessSecretResourceModel{
+						SecretId:     accessSecretV0.SecretId,
+						Applications: accessSecretV0.Applications,
+						ID:           types.StringValue(newID),
+					},
+				}
+
+				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
+			},
+		},
+	}
+}
+
 func (s *accessSecretResource) trace(msg string, additionalFields ...map[string]interface{}) {
 	if s.subCtx == nil {
 		return
 	}
 	tflog.SubsystemTrace(s.subCtx, LogResourceAccessSecret, msg, additionalFields...)
+}
+
+func accessSecretResourceSchemaV0() *schema.Schema {
+	return &schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"model": schema.StringAttribute{
+				Required: true,
+			},
+			"secret_id": schema.StringAttribute{
+				Required: true,
+			},
+			"applications": schema.ListAttribute{
+				Required:    true,
+				ElementType: types.StringType,
+			},
+			"id": schema.StringAttribute{
+				Computed: true,
+			},
+		},
+	}
 }
