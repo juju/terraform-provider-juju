@@ -40,7 +40,7 @@ terraform {
 
 In your Terraform plan, configure the `provider` with the details of your existing, externally managed Juju or JIMM controller.
 
-> See more: {ref}<reference-an-externally-managed-controller>
+> See more: {ref}`reference-an-externally-managed-controller`
 
 #### c. Build your deployment
 
