@@ -442,29 +442,18 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	modelName := state.ModelName.ValueString()
-
-	var apps []nestedApplication
-	state.Application.ElementsAs(ctx, &apps, false)
-	endpoints, _, _, err := parseEndpoints(apps)
-	if err != nil {
-		resp.Diagnostics.AddError("Provider Error", err.Error())
+	modelName, endpointA, endpointB, idErr := modelNameAndEndpointsFromID(state.ID.ValueString())
+	if idErr.HasError() {
+		resp.Diagnostics.Append(idErr...)
 		return
 	}
-
-	// Remove the integration
-	err = r.client.Integrations.DestroyIntegration(&juju.IntegrationInput{
+	endpoints := []string{endpointA, endpointB}
+	err := r.client.Integrations.DestroyIntegration(&juju.IntegrationInput{
 		ModelName: modelName,
 		Endpoints: endpoints,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", err.Error())
-		return
-	}
-	modelName, endpointA, endpointB, idErr := modelNameAndEndpointsFromID(state.ID.ValueString())
-	if idErr.HasError() {
-		resp.Diagnostics.Append(idErr...)
 		return
 	}
 
@@ -474,10 +463,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 			GetData: r.client.Integrations.ReadIntegration,
 			Input: &juju.IntegrationInput{
 				ModelName: modelName,
-				Endpoints: []string{
-					endpointA,
-					endpointB,
-				},
+				Endpoints: endpoints,
 			},
 			ErrorToWait:    juju.IntegrationNotFoundError,
 			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError},
@@ -491,7 +477,6 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 	Make sure to manually delete them.`, endpoints, modelName, err))
 		return
 	}
-
 	r.trace(fmt.Sprintf("Deleted integration resource: %q", state.ID.ValueString()))
 }
 
