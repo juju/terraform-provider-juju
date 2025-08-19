@@ -21,7 +21,7 @@ resource "juju_application" "ubuntu" {
 }
 
 resource "juju_access_secret" "my_secret_access" {
-  model = data.juju_model.my_model.name
+  model_uuid = data.juju_model.my_model.uuid
   applications = [
     juju_application.ubuntu.name
   ]
