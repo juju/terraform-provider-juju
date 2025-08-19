@@ -1125,7 +1125,7 @@ func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "ubuntu", "space": publicSpace}),
-					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
 				),
 			},
 			{
@@ -1159,7 +1159,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "1"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
-					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, managementSpace, map[string]string{"": managementSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, managementSpace, map[string]string{"": managementSpace}),
 				),
 			},
 			{
@@ -1170,7 +1170,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "1"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": publicSpace}),
-					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, publicSpace, map[string]string{"": publicSpace, "ubuntu": publicSpace, "another": publicSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, publicSpace, map[string]string{"": publicSpace, "ubuntu": publicSpace, "another": publicSpace}),
 				),
 			},
 			{
@@ -1182,7 +1182,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "ubuntu", "space": publicSpace}),
-					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace, "another": managementSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace, "another": managementSpace}),
 				),
 			},
 			{
@@ -1191,7 +1191,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "0"),
-					testCheckEndpointsAreSetToCorrectSpace(modelName, appName, "alpha", map[string]string{"": "alpha", "ubuntu": "alpha", "another": "alpha"}),
+					testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, "alpha", map[string]string{"": "alpha", "ubuntu": "alpha", "another": "alpha"}),
 				),
 			},
 			{
@@ -1704,7 +1704,7 @@ func setupModelAndSpaces(t *testing.T, modelName string) (string, string, string
 	}
 	modelUUID := model.UUID
 
-	conn, err := TestClient.Models.GetConnection(&modelName)
+	conn, err := TestClient.Models.GetConnection(&model.UUID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1837,9 +1837,9 @@ resource "juju_application" "{{.AppName}}" {
 	})
 }
 
-func testCheckEndpointsAreSetToCorrectSpace(modelName, appName, defaultSpace string, configuredEndpoints map[string]string) resource.TestCheckFunc {
+func testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, defaultSpace string, configuredEndpoints map[string]string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		conn, err := TestClient.Models.GetConnection(&modelName)
+		conn, err := TestClient.Models.GetConnection(&modelUUID)
 		if err != nil {
 			return err
 		}
