@@ -30,7 +30,7 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 		CheckDestroy:             testAccCheckIntegrationDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceIntegration(modelName, "base = \"ubuntu@22.04\"", "base = \"ubuntu@22.04\""),
+				Config: testAccResourceIntegration(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_integration.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
@@ -46,7 +46,7 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 				ResourceName:      "juju_integration.this",
 			},
 			{
-				Config: testAccResourceIntegration(modelName, "base = \"ubuntu@22.04\"", "base = \"ubuntu@22.04\""),
+				Config: testAccResourceIntegration(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_integration.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
@@ -107,7 +107,7 @@ func TestAcc_ResourceIntegration_UpgradeV0ToV1(t *testing.T) {
 						Source:            "juju/juju",
 					},
 				},
-				Config: testAccResourceIntegrationV0(modelName, "series = \"jammy\"", "series = \"jammy\""),
+				Config: testAccResourceIntegrationV0(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
@@ -117,7 +117,7 @@ func TestAcc_ResourceIntegration_UpgradeV0ToV1(t *testing.T) {
 			},
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceIntegration(modelName, "series = \"jammy\"", "series = \"jammy\""),
+				Config:                   testAccResourceIntegration(modelName),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue("juju_integration.this", tfjsonpath.New("id"), knownvalue.StringRegexp(idCheck)),
 				},
@@ -150,7 +150,7 @@ func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
 						Source:            "juju/juju",
 					},
 				},
-				Config: testAccResourceIntegration(modelName, "series = \"jammy\"", "series = \"jammy\""),
+				Config: testAccResourceIntegration(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
@@ -160,7 +160,7 @@ func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
 			},
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceIntegration(modelName, "series = \"jammy\"", "series = \"jammy\""),
+				Config:                   testAccResourceIntegration(modelName),
 				PlanOnly:                 true,
 			},
 		},
@@ -171,7 +171,7 @@ func testAccCheckIntegrationDestroy(s *terraform.State) error {
 	return nil
 }
 
-func testAccResourceIntegration(modelName, osOne, osTwo string) string {
+func testAccResourceIntegration(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
@@ -183,7 +183,7 @@ resource "juju_application" "one" {
 	
 	charm {
 		name = "juju-qa-dummy-sink"
-		%s
+		base = "ubuntu@22.04"
 	}
 }
 
@@ -193,7 +193,7 @@ resource "juju_application" "two" {
 
 	charm {
 		name = "juju-qa-dummy-source"
-		%s
+		base = "ubuntu@22.04"
 	}
 }
 
@@ -210,10 +210,10 @@ resource "juju_integration" "this" {
 		endpoint = "sink"
 	}
 }
-`, modelName, osOne, osTwo)
+`, modelName)
 }
 
-func testAccResourceIntegrationV0(modelName, osOne, osTwo string) string {
+func testAccResourceIntegrationV0(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
@@ -225,7 +225,7 @@ resource "juju_application" "one" {
 	
 	charm {
 		name = "juju-qa-dummy-sink"
-		%s
+		base = "ubuntu@22.04"
 	}
 }
 
@@ -235,7 +235,7 @@ resource "juju_application" "two" {
 
 	charm {
 		name = "juju-qa-dummy-source"
-		%s
+		base = "ubuntu@22.04"
 	}
 }
 
@@ -252,7 +252,7 @@ resource "juju_integration" "this" {
 		endpoint = "sink"
 	}
 }
-`, modelName, osOne, osTwo)
+`, modelName)
 }
 
 // testAccResourceIntegrationWithVia generates a plan where a

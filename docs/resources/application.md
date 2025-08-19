@@ -56,9 +56,8 @@ resource "juju_application" "this" {
 - `constraints` (String) Constraints imposed on this application. Changing this value will cause the application to be destroyed and recreated by terraform.
 - `endpoint_bindings` (Attributes Set) Configure endpoint bindings (see [below for nested schema](#nestedatt--endpoint_bindings))
 - `expose` (Block List) Makes an application publicly available over the network (see [below for nested schema](#nestedblock--expose))
-- `machines` (Set of String) Specify the target machines for the application's units. The number of machines in the set indicates the unit count for the application. Removing a machine from the set will remove the application's unit residing on it. `machines` is mutually exclusive with `units` and `placement` (which is deprecated).
+- `machines` (Set of String) Specify the target machines for the application's units. The number of machines in the set indicates the unit count for the application. Removing a machine from the set will remove the application's unit residing on it. `machines` is mutually exclusive with `units`.
 - `name` (String) A custom name for the application deployment. If empty, uses the charm's name.Changing this value will cause the application to be destroyed and recreated by terraform.
-- `placement` (String, Deprecated) Specify the target location for the application's units. Changing this value will cause the application to be destroyed and recreated by terraform.
 - `resources` (Map of String) Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
 Specify a resource other than the default for a charm. Note that not all charms have resources.
 
@@ -76,7 +75,6 @@ Notes:
 
 - `id` (String) The ID of this resource.
 - `model_type` (String) The type of the model where the application is deployed. It is a computed field and is needed to determine if the application should be replaced or updated in case of base updates.
-- `principal` (Boolean, Deprecated) Whether this is a Principal application
 
 <a id="nestedblock--charm"></a>
 ### Nested Schema for `charm`
@@ -90,7 +88,6 @@ Optional:
 - `base` (String) The operating system on which to deploy. E.g. ubuntu@22.04. Changing this value for machine charms will trigger a replace by terraform.
 - `channel` (String) The channel to use when deploying a charm. Specified as \<track>/\<risk>/\<branch>.
 - `revision` (Number) The revision of the charm to deploy. During the update phase, the charm revision should be update before config update, to avoid issues with config parameters parsing.
-- `series` (String, Deprecated) The series on which to deploy.
 
 
 <a id="nestedatt--endpoint_bindings"></a>

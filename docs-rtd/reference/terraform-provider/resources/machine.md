@@ -46,7 +46,6 @@ resource "juju_machine" "this_machine" {
 - `placement` (String) Additional information about how to allocate the machine in the cloud. Changing this value will cause the application to be destroyed and recreated by terraform.
 - `private_key_file` (String) The file path to read the private key from.
 - `public_key_file` (String) The file path to read the public key from.
-- `series` (String, Deprecated) The operating system series to install on the new machine(s). Changing this value will cause the machine to be destroyed and recreated by terraform.
 - `ssh_address` (String) The user@host directive for manual provisioning an existing machine via ssh. Requires public_key_file & private_key_file arguments. Changing this value will cause the machine to be destroyed and recreated by terraform.
 - `wait_for_hostname` (Boolean) If true, waits for the machine's hostname to be set during creation. A side effect is that this also waits for the machine to reach 'active' state in Juju.
 

@@ -688,10 +688,6 @@ func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 		resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
 		resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
 	}
-	if testingCloud == LXDCloudTesting {
-		// Microk8s doesn't have machine, thus no placement
-		checkResourceAttr = append(checkResourceAttr, resource.TestCheckResourceAttr(resourceName, "placement", "0"))
-	}
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
@@ -986,12 +982,6 @@ func TestAcc_ResourceApplication_Machines(t *testing.T) {
 	charmName := "juju-qa-test"
 
 	resourceName := "juju_application.testapp"
-	checkResourceAttrPlacement := []resource.TestCheckFunc{
-		resource.TestCheckResourceAttr(resourceName, "name", charmName),
-		resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
-		resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
-		resource.TestCheckResourceAttr(resourceName, "units", "1"),
-	}
 	checkResourceAttrMachines := []resource.TestCheckFunc{
 		resource.TestCheckResourceAttr(resourceName, "name", charmName),
 		resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
@@ -1004,11 +994,6 @@ func TestAcc_ResourceApplication_Machines(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationBasic_Placement(modelName, charmName),
-				Check: resource.ComposeTestCheckFunc(
-					checkResourceAttrPlacement...),
-			},
-			{
 				Config: testAccResourceApplicationBasic_Machines(modelName, charmName),
 				Check: resource.ComposeTestCheckFunc(
 					checkResourceAttrMachines...),
@@ -1020,32 +1005,6 @@ func TestAcc_ResourceApplication_Machines(t *testing.T) {
 			},
 		},
 	})
-}
-
-func testAccResourceApplicationBasic_Placement(modelName, charmName string) string {
-	return fmt.Sprintf(`
-		resource "juju_model" "model" {
-		  name = %q
-		}
-
-		resource "juju_machine" "machine" {
-		  name = "test machine"
-		  model_uuid = juju_model.model.uuid
-		  base = "ubuntu@22.04"
-		}
-
-		resource "juju_application" "testapp" {
-		  model_uuid = juju_model.model.uuid
-
-		  units = 1
-		  placement =  "${join(",", [juju_machine.machine.machine_id])}"
-
-		  charm {
-			name = %q
-			base = "ubuntu@22.04"
-		  }
-		}
-		`, modelName, charmName)
 }
 
 func testAccResourceApplicationBasic_Machines(modelName, charmName string) string {

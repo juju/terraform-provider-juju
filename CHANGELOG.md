@@ -1,3 +1,28 @@
+## 1.0.0 (WIP)
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.4 release.
+
+BREAKING CHANGES:
+
+* The following resources have had the `model` field replaced with `model_uuid` [791](https://github.com/juju/terraform-provider-juju/issues/791). Users will need to update their plans and modules to refer to models by UUID. Further details are available at the linked issue.
+  * Model data source
+  * Application data source
+  * Offer data source
+  * Application resource
+  * Integration resource
+  * Machine resource
+  * Offer resource
+  * SSH Key resource
+* The offer data source no longer contains the computed field `model`.
+* The `placement` field has been removed from the application resource - use `machines` instead.
+* The `principle` field has been removed from the application resource - unused.
+* The `series` field has been removed from the application resource - use `base` instead.
+* The `series` field has been removed from the machine resource - use `base` instead.
+
 ## 0.21.0 (July 21, 2025)
 
 NOTES:
