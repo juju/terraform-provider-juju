@@ -5,6 +5,7 @@ package provider
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -109,9 +110,14 @@ func TestAcc_ResourceMachine_Minimal(t *testing.T) {
 }
 
 func TestAcc_ResourceMachine_WithPlacement(t *testing.T) {
-	t.Skip("This test is skipped because it is not guaranteed to work on LXD.")
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
+	}
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.0.0") < 0 {
+		t.Skipf("%s is not set or is below 3.0.0", TestJujuAgentVersion)
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-machine")
 	resourceName := "juju_machine.this_machine_1"
@@ -321,6 +327,7 @@ resource "juju_model" "{{.ModelName}}" {
 resource "juju_machine" "this_machine" {
 	name = "manually_provisioned_machine"
 	model = juju_model.{{.ModelName}}.name
+	constraints = "virt-type=virtual-machine"
 }
 
 resource "juju_machine" "this_machine_1" {
