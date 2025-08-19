@@ -23,7 +23,7 @@ func TestAcc_ResourceMachine(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceMachine(modelName, "base = \"ubuntu@22.04\""),
+				Config: testAccResourceMachine(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_machine.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),

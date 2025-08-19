@@ -22,7 +22,7 @@ func TestAcc_DataSourceMachine_Edge(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccDataSourceMachine(modelName, "base = \"ubuntu@22.04\""),
+				Config: testAccDataSourceMachine(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_machine.machine", "model", modelName),
 				),
