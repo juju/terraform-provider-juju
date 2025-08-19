@@ -57,7 +57,7 @@ type accessSecretResourceModelV1 struct {
 	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
-// ImportState reads the secret based on the model name and secret name to be
+// ImportState reads the secret based on the model UUID and secret name to be
 // imported into terraform.
 func (s *accessSecretResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Prevent panic if the provider has not been configured.
@@ -65,7 +65,7 @@ func (s *accessSecretResource) ImportState(ctx context.Context, req resource.Imp
 		addClientNotConfiguredError(&resp.Diagnostics, "access secret", "import")
 		return
 	}
-	// model:name
+	// modelUUID:name
 	parts := strings.Split(req.ID, ":")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		resp.Diagnostics.AddError(

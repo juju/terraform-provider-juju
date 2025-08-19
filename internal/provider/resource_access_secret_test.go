@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
@@ -74,15 +75,28 @@ func TestAcc_ResourceAccessSecret_Import(t *testing.T) {
 			{
 				Config: testAccResourceSecretWithAccess(modelName, true, 1),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model."+modelName, "uuid", "juju_access_secret.test_access_secret", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "applications.0", "jul"),
 				),
 			},
 			{
 				ImportStateVerify: true,
 				ImportState:       true,
-				ImportStateId:     fmt.Sprintf("%s:test_secret_name", modelName),
 				ResourceName:      "juju_access_secret.test_access_secret",
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					// The import ID for the secret access resource is not the same as the
+					// resource ID. It is in the format modelUUID:name, where modelUUID
+					// is the UUID of the model and name is the name of the secret.
+					rs, ok := s.RootModule().Resources["juju_access_secret.test_access_secret"]
+					if !ok {
+						return "", fmt.Errorf("resource not found in state: juju_access_secret.test_access_secret")
+					}
+					id := rs.Primary.Attributes["model_uuid"]
+					if id == "" {
+						return "", fmt.Errorf("model_uuid is empty in state")
+					}
+					return fmt.Sprintf("%s:test_secret_name", id), nil
+				},
 			},
 		},
 	})
