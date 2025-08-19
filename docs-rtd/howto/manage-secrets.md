@@ -49,7 +49,7 @@ Given a model that contains both your (user) secret and the application(s) that 
 
 ```
 resource "juju_access_secret" "my-secret-access" {
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   # Use the secret_id from your secret resource or data source.
   secret_id = juju_secret.my-secret.secret_id

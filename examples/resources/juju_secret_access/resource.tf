@@ -9,7 +9,7 @@ resource "juju_secret" "my-secret" {
 }
 
 resource "juju_access_secret" "my-secret-access" {
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
   applications = [
     juju_application.app.name, juju_application.app2.name
   ]
