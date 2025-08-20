@@ -1759,7 +1759,7 @@ func testAccResourceApplicationEndpointBindings(modelName, modelUUID, appName, c
 	}
 	return internaltesting.GetStringFromTemplateWithData("testAccResourceApplicationEndpointBindings", `
 data "juju_model" "{{.ModelName}}" {
-  name = "{{.ModelUUID}}"
+  uuid = "{{.ModelUUID}}"
 }
 
 resource "juju_application" "{{.AppName}}" {
@@ -1777,6 +1777,7 @@ resource "juju_application" "{{.AppName}}" {
 		"AppName":          appName,
 		"Constraints":      constraints,
 		"EndpointBindings": endpoints,
+		"ModelUUID":        modelUUID,
 	})
 }
 
