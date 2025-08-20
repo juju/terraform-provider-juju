@@ -1,3 +1,3 @@
 data "juju_model" "this" {
-  name = "development"
+  uuid = "1d10a751-02c1-43d5-b46b-d84fe04d6fde"
 }

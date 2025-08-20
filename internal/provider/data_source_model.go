@@ -30,7 +30,6 @@ type modelDataSource struct {
 }
 
 type modelDataSourceModel struct {
-	Name types.String `tfsdk:"name"`
 	UUID types.String `tfsdk:"uuid"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
@@ -46,13 +45,9 @@ func (d *modelDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 	resp.Schema = schema.Schema{
 		Description: "A data source representing a Juju Model.",
 		Attributes: map[string]schema.Attribute{
-			"name": schema.StringAttribute{
-				Description: "The name of the model.",
-				Required:    true,
-			},
 			"uuid": schema.StringAttribute{
 				Description: "The UUID of the model.",
-				Computed:    true,
+				Required:    true,
 			},
 			// ID required by the testing framework
 			"id": schema.StringAttribute{
@@ -103,15 +98,14 @@ func (d *modelDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	}
 
 	// Get current juju model data source values.
-	model, err := d.client.Models.GetModelByNameOrUUID(data.Name.ValueString())
+	model, err := d.client.Models.GetModelByNameOrUUID(data.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model, got error: %s", err))
 		return
 	}
-	d.trace(fmt.Sprintf("read juju model %q data source", data.Name))
+	d.trace(fmt.Sprintf("read juju model %q data source", data.UUID))
 
 	// Save data into Terraform state
-	data.Name = types.StringValue(model.Name)
 	data.UUID = types.StringValue(model.UUID)
 	data.ID = types.StringValue(model.UUID)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
