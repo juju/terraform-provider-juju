@@ -143,16 +143,6 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	modelUUID := plan.ModelUUID.ValueString()
-	modelInfo, err := o.client.Models.GetModelByNameOrUUID(modelUUID)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model %q, got error: %s", modelUUID, err))
-		return
-	}
-	// TODO (cderici): Leaking Juju info here:
-	// 1 - GetModelByName above returns *params.ModelInfo
-	// 2 - we don't return tag trimmed so provider has to know juju.PrefixUser etc. Make a Tag type and have a Tag.
-	// Id() method.
-	modelOwner := strings.TrimPrefix(modelInfo.OwnerTag, juju.PrefixUser)
 
 	//here we verify if the name property is set, if not, set it to the application name
 	offerName := plan.OfferName.ValueString()
@@ -168,8 +158,7 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	response, errs := o.client.Offers.CreateOffer(&juju.CreateOfferInput{
-		ModelName:       modelInfo.Name,
-		ModelOwner:      modelOwner,
+		ModelUUID:       modelUUID,
 		Name:            offerName,
 		ApplicationName: plan.ApplicationName.ValueString(),
 		Endpoints:       endpoints,

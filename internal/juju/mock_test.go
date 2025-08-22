@@ -60,15 +60,15 @@ func (m *MockSharedClient) EXPECT() *MockSharedClientMockRecorder {
 }
 
 // AddModel mocks base method.
-func (m *MockSharedClient) AddModel(modelName, modelUUID string, modelType model.ModelType) {
+func (m *MockSharedClient) AddModel(modelName, modelOwner, modelUUID string, modelType model.ModelType) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddModel", modelName, modelUUID, modelType)
+	m.ctrl.Call(m, "AddModel", modelName, modelOwner, modelUUID, modelType)
 }
 
 // AddModel indicates an expected call of AddModel.
-func (mr *MockSharedClientMockRecorder) AddModel(modelName, modelUUID, modelType any) *gomock.Call {
+func (mr *MockSharedClientMockRecorder) AddModel(modelName, modelOwner, modelUUID, modelType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddModel", reflect.TypeOf((*MockSharedClient)(nil).AddModel), modelName, modelUUID, modelType)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddModel", reflect.TypeOf((*MockSharedClient)(nil).AddModel), modelName, modelOwner, modelUUID, modelType)
 }
 
 // Debugf mocks base method.
@@ -127,6 +127,22 @@ func (m *MockSharedClient) JujuLogger() *jujuLoggerShim {
 func (mr *MockSharedClientMockRecorder) JujuLogger() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JujuLogger", reflect.TypeOf((*MockSharedClient)(nil).JujuLogger))
+}
+
+// ModelOwnerAndName mocks base method.
+func (m *MockSharedClient) ModelOwnerAndName(modelUUID string) (string, string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ModelOwnerAndName", modelUUID)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(string)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// ModelOwnerAndName indicates an expected call of ModelOwnerAndName.
+func (mr *MockSharedClientMockRecorder) ModelOwnerAndName(modelUUID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModelOwnerAndName", reflect.TypeOf((*MockSharedClient)(nil).ModelOwnerAndName), modelUUID)
 }
 
 // ModelStatus mocks base method.

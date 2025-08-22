@@ -166,11 +166,7 @@ func (c *machinesClient) createMachine(conn api.Connection, input *CreateMachine
 	if placement != "" {
 		machineParams.Placement, err = instance.ParsePlacement(placement)
 		if err == instance.ErrPlacementScopeMissing {
-			modelUUID, err := c.ModelUUID(input.ModelUUID)
-			if err != nil {
-				return "", err
-			}
-			placement = modelUUID + ":" + placement
+			placement = input.ModelUUID + ":" + placement
 			machineParams.Placement, err = instance.ParsePlacement(placement)
 			if err != nil {
 				return "", err

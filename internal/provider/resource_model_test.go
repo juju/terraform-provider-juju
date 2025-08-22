@@ -90,7 +90,7 @@ resource "juju_model" "this" {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
-					testAccCheckDevelopmentConfigIsUnset(modelName),
+					testAccCheckDevelopmentConfigIsUnset("juju_model.this"),
 				),
 			},
 		},
@@ -205,9 +205,17 @@ func TestAcc_ResourceModel_Annotations_DisjointedSet(t *testing.T) {
 	})
 }
 
-func testAccCheckDevelopmentConfigIsUnset(modelName string) resource.TestCheckFunc {
+func testAccCheckDevelopmentConfigIsUnset(resourceID string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		conn, err := TestClient.Models.GetConnection(&modelName)
+		rs, ok := s.RootModule().Resources[resourceID]
+		if !ok {
+			return fmt.Errorf("resource %q not found in state", resourceID)
+		}
+		modelUUID := rs.Primary.Attributes["uuid"]
+		if modelUUID == "" {
+			return fmt.Errorf("uuid is empty in state")
+		}
+		conn, err := TestClient.Models.GetConnection(&modelUUID)
 		if err != nil {
 			return err
 		}
@@ -221,18 +229,18 @@ func testAccCheckDevelopmentConfigIsUnset(modelName string) resource.TestCheckFu
 			return err
 		}
 
-		for k, actual := range metadata {
-			if k == "development" {
-				expected := params.ConfigValue{
-					Value:  false,
-					Source: "default",
-				}
-
-				if actual.Value != expected.Value || actual.Source != expected.Source {
-					return fmt.Errorf("expecting 'development' config for model: %s, to be %#v but was: %#v",
-						modelName, expected, actual)
-				}
-			}
+		actual, found := metadata["development"]
+		if !found {
+			// not set, which is what we want
+			return nil
+		}
+		expected := params.ConfigValue{
+			Value:  false,
+			Source: "default",
+		}
+		if actual.Value != expected.Value || actual.Source != expected.Source {
+			return fmt.Errorf("expecting 'development' config for model: %s, to be %#v but was: %#v",
+				modelUUID, expected, actual)
 		}
 		return nil
 	}
