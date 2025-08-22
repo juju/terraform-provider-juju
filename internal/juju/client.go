@@ -244,10 +244,10 @@ func (sc *sharedClient) GetConnection(modelIdentifier *string) (api.Connection, 
 	return conn, nil
 }
 
-// fillModelCacheOnce is a helper function to ensure that the model cache is filled at
+// initializeModelCache is a helper function to ensure that the model cache is filled at
 // least once. It should be called before accessing the model cache to ensure that
 // the cache is populated with model data.
-func (sc *sharedClient) fillModelCacheOnce() {
+func (sc *sharedClient) initializeModelCache() {
 	sc.modelCacheOnce.Do(func() {
 		if err := sc.fillModelCache(); err != nil {
 			// Log the error and continue
@@ -261,7 +261,7 @@ func (sc *sharedClient) ModelOwnerAndName(modelUUID string) (owner, name string,
 	sc.modelUUIDmu.Lock()
 	defer sc.modelUUIDmu.Unlock()
 
-	sc.fillModelCacheOnce()
+	sc.initializeModelCache()
 	modelInfo, ok := sc.modelUUIDcache[modelUUID]
 	if !ok {
 		return "", "", errors.NotFoundf("model %q", modelUUID)
@@ -280,7 +280,7 @@ func (sc *sharedClient) ModelUUID(modelIdentifier string) (string, error) {
 	sc.modelUUIDmu.Lock()
 	defer sc.modelUUIDmu.Unlock()
 
-	sc.fillModelCacheOnce()
+	sc.initializeModelCache()
 	modelName := modelIdentifier
 	dataMap := make(map[string]interface{})
 	for k, v := range sc.modelUUIDcache {
@@ -330,7 +330,7 @@ func (sc *sharedClient) fillModelCache() error {
 func (sc *sharedClient) ModelType(modelUUID string) (model.ModelType, error) {
 	sc.modelUUIDmu.Lock()
 	defer sc.modelUUIDmu.Unlock()
-	sc.fillModelCacheOnce()
+	sc.initializeModelCache()
 	if !names.IsValidModel(modelUUID) {
 		return "", errors.NotValidf("modelUUID %q is not a valid model UUID", modelUUID)
 	}
