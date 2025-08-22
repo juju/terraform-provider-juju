@@ -20,6 +20,6 @@ jobs:
         with:
           go-version-file: "go.mod"
           cache: true
-      - run: go mod tidy
-      - run: go test -v ./internal/juju/...
-      - run: go test -v ./internal/wait/...
+      # run all tests in the internal directory, excluding provider tests
+      # as these are acceptance tests and require a live Juju controller with env variables set up.
+      - run: find ./internal/* -type d \( -not -path "./internal/provider*" \) -exec go test -v {} +

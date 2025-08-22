@@ -47,6 +47,7 @@ func TestWaitFor(t *testing.T) {
 			MaxDuration: 60 * time.Second,
 			Delay:       1 * time.Second,
 			Clock:       autoAdvancingClock,
+			MaxDelay:    time.Second,
 		},
 	})
 	if err != nil {
@@ -78,6 +79,7 @@ func TestWaitForFatalError(t *testing.T) {
 			MaxDuration: 60 * time.Second,
 			Delay:       1 * time.Second,
 			Clock:       autoAdvancingClock,
+			MaxDelay:    time.Second,
 		},
 	})
 	if err == nil {
@@ -140,6 +142,7 @@ func TestWaitForError(t *testing.T) {
 			MaxDuration: 60 * time.Second,
 			Delay:       1 * time.Second,
 			Clock:       autoAdvancingClock,
+			MaxDelay:    time.Second,
 		},
 	})
 	if err != nil {
@@ -165,6 +168,7 @@ func TestWaitForErrorMaxDuration(t *testing.T) {
 		RetryConf: &wait.RetryConf{
 			MaxDuration: 1 * time.Second,
 			Delay:       1 * time.Second,
+			MaxDelay:    time.Second,
 			Clock:       autoAdvancingClock,
 		},
 	})
