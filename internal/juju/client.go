@@ -282,11 +282,7 @@ func (sc *sharedClient) ModelUUID(modelIdentifier string) (string, error) {
 
 	sc.initializeModelCache()
 	modelName := modelIdentifier
-	dataMap := make(map[string]interface{})
-	for k, v := range sc.modelUUIDcache {
-		dataMap[k] = v.String()
-	}
-	sc.Tracef(fmt.Sprintf("ModelUUID cache looking for %q", modelName), dataMap)
+	sc.Tracef(fmt.Sprintf("ModelUUID cache looking for %q", modelName))
 	for uuid, m := range sc.modelUUIDcache {
 		if m.name == modelName {
 			sc.Tracef(fmt.Sprintf("Found uuid for %q in cache", modelName))
