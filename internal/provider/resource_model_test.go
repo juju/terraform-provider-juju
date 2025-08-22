@@ -205,9 +205,9 @@ func TestAcc_ResourceModel_Annotations_DisjointedSet(t *testing.T) {
 	})
 }
 
-func testAccCheckDevelopmentConfigIsUnset(modelName string) resource.TestCheckFunc {
+func testAccCheckDevelopmentConfigIsUnset(modelUUID string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		conn, err := TestClient.Models.GetConnection(&modelName)
+		conn, err := TestClient.Models.GetConnection(&modelUUID)
 		if err != nil {
 			return err
 		}
@@ -221,18 +221,18 @@ func testAccCheckDevelopmentConfigIsUnset(modelName string) resource.TestCheckFu
 			return err
 		}
 
-		for k, actual := range metadata {
-			if k == "development" {
-				expected := params.ConfigValue{
-					Value:  false,
-					Source: "default",
-				}
-
-				if actual.Value != expected.Value || actual.Source != expected.Source {
-					return fmt.Errorf("expecting 'development' config for model: %s, to be %#v but was: %#v",
-						modelName, expected, actual)
-				}
-			}
+		actual, found := metadata["development"]
+		if !found {
+			// not set, which is what we want
+			return nil
+		}
+		expected := params.ConfigValue{
+			Value:  false,
+			Source: "default",
+		}
+		if actual.Value != expected.Value || actual.Source != expected.Source {
+			return fmt.Errorf("expecting 'development' config for model: %s, to be %#v but was: %#v",
+				modelUUID, expected, actual)
 		}
 		return nil
 	}
