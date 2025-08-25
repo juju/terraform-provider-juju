@@ -148,3 +148,106 @@ resource "juju_access_secret" "test_access_secret" {
 			"AllApplicationAccess": allApplicationAccess,
 		})
 }
+
+func TestAcc_ResourceAccessSecret_UpgradeProvider_Schema_v0_To_v1(t *testing.T) {
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
+		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
+
+		Steps: []resource.TestStep{
+			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						// This is the version with `applications` instead of `endpoints`
+						VersionConstraint: "0.20.0",
+						Source:            "juju/juju",
+					},
+				},
+				Config: testAccResourceSecretWithAccess(modelName, true),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "model", modelName),
+					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "applications.0", "jul"),
+				),
+			},
+			{
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceSecretWithAccess_Reorder(modelName, true),
+				PlanOnly:                 true,
+			},
+			{
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceSecretWithAccess_Reorder(modelName, false),
+				PlanOnly:                 true,
+			},
+		},
+	})
+}
+
+func testAccResourceSecretWithAccess_Reorder(modelName string, reorder bool) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceSecret",
+		`
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_application" "jul" {
+  name  = "jul"
+  model = juju_model.{{.ModelName}}.name
+
+  charm {
+    name     = "ubuntu-lite"
+    channel  = "latest/stable"
+  }
+
+  units = 1
+}
+
+resource "juju_application" "jul2" {
+  name  = "jul2"
+  model = juju_model.{{.ModelName}}.name
+
+  charm {
+    name     = "ubuntu-lite"
+    channel  = "latest/stable"
+  }
+
+  units = 1
+}
+
+resource "juju_secret" "test_secret" {
+  model = juju_model.{{.ModelName}}.name
+  name  = "test_secret_name"
+  value = {
+    key1 = "value1"
+    key2 = "value2"
+  }
+  info  = "This is my secret"
+}
+
+resource "juju_access_secret" "test_access_secret" {
+  model = juju_model.{{.ModelName}}.name
+  {{- if .Reorder }}
+  applications = [
+    juju_application.jul.name, juju_application.jul2.name
+  ]
+  {{- else }}
+  applications = [
+    juju_application.jul2.name, juju_application.jul.name
+  ]
+  {{- end }}
+  secret_id = juju_secret.test_secret.secret_id
+}
+`, internaltesting.TemplateData{
+			"ModelName": modelName,
+			"Reorder":   reorder,
+		})
+}

@@ -17,7 +17,7 @@ A resource that represents a Juju secret access.
 
 ### Required
 
-- `applications` (List of String) The list of applications to which the secret is granted.
+- `applications` (Set of String) The list of applications to which the secret is granted.
 - `model` (String) The model in which the secret belongs.
 - `secret_id` (String) The ID of the secret. E.g. coj8mulh8b41e8nv6p90
 
