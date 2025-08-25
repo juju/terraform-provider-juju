@@ -387,6 +387,7 @@ func (r *machineResource) waitForMachine(ctx context.Context, waitForHostname bo
 		RetryConf: &wait.RetryConf{
 			MaxDuration: 30 * time.Minute,
 			Delay:       juju.ReadModelDefaultInterval,
+			MaxDelay:    time.Minute,
 			Clock:       clock.WallClock,
 		},
 	})
