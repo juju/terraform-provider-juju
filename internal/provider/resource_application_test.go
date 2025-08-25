@@ -195,7 +195,7 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 					return testingCloud != LXDCloudTesting, nil
 				},
 				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
-				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "2"),
+				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "4"),
 			},
 			{
 				SkipFunc: func() (bool, error) {
@@ -1476,6 +1476,7 @@ func testAccResourceApplicationUpdates(modelName string, units int, expose bool,
 		  name = "test-app"
 		  charm {
 			name     = "ubuntu-lite"
+			revision = 4
 		  }
 		  trust = true
 		  %s
