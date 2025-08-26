@@ -14,8 +14,8 @@ A resource that represents a Juju secret.
 
 ```terraform
 resource "juju_secret" "my-secret" {
-  model = juju_model.development.name
-  name  = "my_secret_name"
+  model_uuid = juju_model.development.uuid
+  name       = "my_secret_name"
   value = {
     key1 = "value1"
     key2 = "value2"
@@ -38,7 +38,7 @@ resource "juju_application" "my-application" {
 
 ### Required
 
-- `model` (String) The model in which the secret belongs. Changing this value will cause the secret to be destroyed and recreated by terraform.
+- `model_uuid` (String) The model in which the secret belongs. Changing this value will cause the secret to be destroyed and recreated by terraform.
 - `value` (Map of String, Sensitive) The value map of the secret. There can be more than one key-value pair.
 
 ### Optional

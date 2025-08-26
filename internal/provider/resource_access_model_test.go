@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
@@ -30,13 +31,13 @@ func TestAcc_ResourceAccessModel(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccResourceAccessModel(userName, userPassword, modelName1, accessFail),
+				Config:      testAccResourceAccessModel(userName, userPassword, modelName1, accessFail, true),
 				ExpectError: regexp.MustCompile("Invalid Attribute Value Match.*"),
 			},
 			{
-				Config: testAccResourceAccessModel(userName, userPassword, modelName1, accessSuccess),
+				Config: testAccResourceAccessModel(userName, userPassword, modelName1, accessSuccess, true),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "model", modelName1),
+					resource.TestCheckResourceAttrPair(resourceName, "model_uuid", "juju_model."+modelName1, "uuid"),
 					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", userName),
 				),
@@ -45,15 +46,25 @@ func TestAcc_ResourceAccessModel(t *testing.T) {
 				Destroy:           true,
 				ImportStateVerify: true,
 				ImportState:       true,
-				ImportStateId:     fmt.Sprintf("%s:%s:%s", modelName1, accessSuccess, userName),
-				ResourceName:      resourceName,
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					rs, ok := s.RootModule().Resources[resourceName]
+					if !ok {
+						return "", fmt.Errorf("resource not found in state")
+					}
+					id := rs.Primary.Attributes["model_uuid"]
+					if id == "" {
+						return "", fmt.Errorf("model_uuid is empty in state")
+					}
+					return fmt.Sprintf("%s:%s:%s", id, accessSuccess, userName), nil
+				},
+				ResourceName: resourceName,
 			},
 			{
 				Config: testAccResourceAccessModel(userName2, userPassword2,
-					modelName2, accessSuccess),
+					modelName2, accessSuccess, true),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
-					resource.TestCheckResourceAttr(resourceName, "model", modelName2),
+					resource.TestCheckResourceAttrPair(resourceName, "model_uuid", "juju_model."+modelName2, "uuid"),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", userName2),
 				),
 			},
@@ -61,8 +72,18 @@ func TestAcc_ResourceAccessModel(t *testing.T) {
 				Destroy:           true,
 				ImportStateVerify: true,
 				ImportState:       true,
-				ImportStateId:     fmt.Sprintf("%s:%s:%s", modelName2, accessSuccess, userName2),
-				ResourceName:      resourceName,
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					rs, ok := s.RootModule().Resources[resourceName]
+					if !ok {
+						return "", fmt.Errorf("resource not found in state")
+					}
+					id := rs.Primary.Attributes["model_uuid"]
+					if id == "" {
+						return "", fmt.Errorf("model_uuid is empty in state")
+					}
+					return fmt.Sprintf("%s:%s:%s", id, accessSuccess, userName2), nil
+				},
+				ResourceName: resourceName,
 			},
 		},
 	})
@@ -90,7 +111,7 @@ func TestAcc_ResourceAccessModel_UpgradeProvider(t *testing.T) {
 						Source:            "juju/juju",
 					},
 				},
-				Config: testAccResourceAccessModel(userName, userPassword, modelName, access),
+				Config: testAccResourceAccessModel(userName, userPassword, modelName, access, false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "access", access),
 					resource.TestCheckResourceAttr(resourceName, "model", modelName),
@@ -99,8 +120,7 @@ func TestAcc_ResourceAccessModel_UpgradeProvider(t *testing.T) {
 			},
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceAccessModel(userName, userPassword, modelName, access),
-				PlanOnly:                 true,
+				Config:                   testAccResourceAccessModel(userName, userPassword, modelName, access, true),
 			},
 		},
 	})
@@ -123,33 +143,47 @@ func TestAcc_ResourceAccessModel_ErrorWhenUsedWithJAAS(t *testing.T) {
 
 func testAccResourceAccessModelFixedUser() string {
 	return `
+resource "juju_model" "test-model" {
+	name = "test-model"
+}
 resource "juju_access_model" "test" {
   access = "write"
-  model = "foo"
+  model_uuid = juju_model.test-model.uuid
   users = ["bob"]
 }`
 }
 
-func testAccResourceAccessModel(userName, userPassword, modelName, access string) string {
-	return fmt.Sprintf(`
-resource "juju_user" "test-user" {
-  name = %q
-  password = %q
+func testAccResourceAccessModel(userName, userPassword, modelName, access string, useModelUUID bool) string {
+	return internaltesting.GetStringFromTemplateWithData("testAccResourceAccessModel",
+		`resource "juju_user" "test-user" {
+  name = "{{.UserName}}"
+  password = "{{.UserPassword}}"
 }
 
-resource "juju_model" "test-model" {
-  name = %q
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
 }
 
 resource "juju_access_model" "test" {
-  access = %q
-  model = juju_model.test-model.name
+  access = "{{.Access}}"
+  {{- if eq .UseModelUUID false }}
+  model = juju_model.{{.ModelName}}.name
+  {{- else }}
+  model_uuid = juju_model.{{.ModelName}}.uuid
+  {{- end }}
   users = [juju_user.test-user.name]
-}`, userName, userPassword, modelName, access)
+}`, internaltesting.TemplateData{
+			"UserName":     userName,
+			"UserPassword": userPassword,
+			"ModelName":    modelName,
+			"Access":       access,
+			"UseModelUUID": useModelUUID,
+		})
 }
 
-func TestAcc_ResourceAccessModel_Schema_v0_To_v1(t *testing.T) {
+func TestAcc_ResourceAccessModel_UpgradeV0ToV2(t *testing.T) {
 	SkipJAAS(t)
+
 	user1 := acctest.RandomWithPrefix("tfuser1")
 	password1 := acctest.RandomWithPrefix("tf-test-user1")
 	user2 := acctest.RandomWithPrefix("tfuser2")
@@ -157,6 +191,7 @@ func TestAcc_ResourceAccessModel_Schema_v0_To_v1(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-access-model")
 
 	resourceName := "juju_access_model.test"
+
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
 		Steps: []resource.TestStep{
@@ -167,7 +202,7 @@ func TestAcc_ResourceAccessModel_Schema_v0_To_v1(t *testing.T) {
 						Source:            "juju/juju",
 					},
 				},
-				Config: testAccResourceAccessModelTwoUsers(user1, password1, user2, password2, modelName, "write"),
+				Config: testAccResourceAccessModelTwoUsers(user1, password1, user2, password2, modelName, "write", false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "model", modelName),
 					resource.TestCheckResourceAttr(resourceName, "access", "write"),
@@ -177,13 +212,13 @@ func TestAcc_ResourceAccessModel_Schema_v0_To_v1(t *testing.T) {
 			},
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceAccessModelTwoUsers(user1, password1, user2, password2, modelName, "write"),
+				Config:                   testAccResourceAccessModelTwoUsers(user1, password1, user2, password2, modelName, "write", true),
 			},
 		},
 	})
 }
 
-func testAccResourceAccessModelTwoUsers(user1, password1, user2, password2, modelName, access string) string {
+func testAccResourceAccessModelTwoUsers(user1, password1, user2, password2, modelName, access string, useModelUUID bool) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceModel",
 		`
@@ -203,15 +238,57 @@ resource "juju_model" "test-model" {
 
 resource "juju_access_model" "test" {
   access = "{{.Access}}"
+  {{- if eq .UseModelUUID false }}
   model = juju_model.test-model.name
+  {{- else }}
+  model_uuid = juju_model.test-model.uuid
+  {{- end }}
 
   users = [juju_user.test-user1.name, juju_user.test-user2.name]
 }`, internaltesting.TemplateData{
-			"ModelName": modelName,
-			"User1":     user1,
-			"Password1": password1,
-			"User2":     user2,
-			"Password2": password2,
-			"Access":    access,
+			"ModelName":    modelName,
+			"User1":        user1,
+			"Password1":    password1,
+			"User2":        user2,
+			"Password2":    password2,
+			"Access":       access,
+			"UseModelUUID": useModelUUID,
 		})
+}
+
+func TestAcc_ResourceAccessModel_UpgradeV1ToV2(t *testing.T) {
+	SkipJAAS(t)
+
+	userName := acctest.RandomWithPrefix("tfuser")
+	userPassword := acctest.RandomWithPrefix("tf-test-user")
+	modelName := acctest.RandomWithPrefix("tf-access-model")
+	access := "write"
+
+	resourceName := "juju_access_model.test"
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
+		Steps: []resource.TestStep{
+			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderPreV1Version,
+						Source:            "juju/juju",
+					},
+				},
+				Config: testAccResourceAccessModel(userName, userPassword, modelName, access, false),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "access", access),
+					resource.TestCheckResourceAttr(resourceName, "model", modelName),
+					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", userName),
+				),
+			},
+			{
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceAccessModel(userName, userPassword, modelName, access, true),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair(resourceName, "model_uuid", "juju_model."+modelName, "uuid"),
+				),
+			},
+		},
+	})
 }

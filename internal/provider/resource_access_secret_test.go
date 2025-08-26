@@ -218,7 +218,12 @@ resource "juju_application" "jul2" {
 }
 
 resource "juju_secret" "test_secret" {
+  {{- if eq .UseModelUUID false }}
   model = juju_model.{{.ModelName}}.name
+  {{- else }}
+  model_uuid = juju_model.{{.ModelName}}.uuid
+  {{- end }}
+  
   name  = "test_secret_name"
   value = {
 	key1 = "value1"
