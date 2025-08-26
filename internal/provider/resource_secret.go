@@ -44,6 +44,9 @@ type secretResourceModel struct {
 	Value types.Map `tfsdk:"value"`
 	// SecretId is the ID of the secret to be updated or removed. This attribute is required for 'update' and 'remove' actions.
 	SecretId types.String `tfsdk:"secret_id"`
+	// SecretURI is the URI of the secret e.g. `secret:coj8mulh8b41e8nv6p90` as a convenience for users.
+	SecretURI types.String `tfsdk:"secret_uri"`
+
 	// Info is the description of the secret. This attribute is optional for all actions.
 	Info types.String `tfsdk:"info"`
 	// ID is used during terraform import.
@@ -82,9 +85,10 @@ func (s *secretResource) ImportState(ctx context.Context, req resource.ImportSta
 
 	// Save the secret details into the Terraform state
 	state := secretResourceModel{
-		Model:    types.StringValue(modelName),
-		Name:     types.StringValue(readSecretOutput.Name),
-		SecretId: types.StringValue(readSecretOutput.SecretId),
+		Model:     types.StringValue(modelName),
+		Name:      types.StringValue(readSecretOutput.Name),
+		SecretId:  types.StringValue(readSecretOutput.SecretId),
+		SecretURI: types.StringValue(readSecretOutput.SecretURI),
 	}
 
 	if readSecretOutput.Info != "" {
@@ -132,6 +136,13 @@ func (s *secretResource) Schema(_ context.Context, req resource.SchemaRequest, r
 			},
 			"secret_id": schema.StringAttribute{
 				Description: "The ID of the secret. E.g. coj8mulh8b41e8nv6p90",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"secret_uri": schema.StringAttribute{
+				Description: "The URI of the secret. E.g. secret:coj8mulh8b41e8nv6p90",
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -205,6 +216,7 @@ func (s *secretResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	plan.SecretId = types.StringValue(createSecretOutput.SecretId)
+	plan.SecretURI = types.StringValue(createSecretOutput.SecretURI)
 	plan.ID = types.StringValue(newSecretID(plan.Model.ValueString(), plan.SecretId.ValueString()))
 	s.trace(fmt.Sprintf("saving secret resource %q", plan.SecretId.ValueString()),
 		map[string]interface{}{
@@ -255,6 +267,8 @@ func (s *secretResource) Read(ctx context.Context, req resource.ReadRequest, res
 	if !state.Info.IsNull() {
 		state.Info = types.StringValue(readSecretOutput.Info)
 	}
+
+	state.SecretURI = types.StringValue(readSecretOutput.SecretURI)
 	state.ID = types.StringValue(newSecretID(state.Model.ValueString(), readSecretOutput.SecretId))
 
 	secretValue, errDiag := types.MapValueFrom(ctx, types.StringType, readSecretOutput.Value)

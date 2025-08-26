@@ -195,7 +195,7 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 					return testingCloud != LXDCloudTesting, nil
 				},
 				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
-				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "2"),
+				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "4"),
 			},
 			{
 				SkipFunc: func() (bool, error) {
@@ -1498,6 +1498,7 @@ func testAccResourceApplicationUpdates(modelName string, units int, expose bool,
 		  name = "test-app"
 		  charm {
 			name     = "ubuntu-lite"
+			revision = 4
 		  }
 		  trust = true
 		  %s
@@ -2137,4 +2138,38 @@ resource "juju_application" "this" {
   units = 1
 }
 		`, modelName, appName)
+}
+
+func TestAcc_ResourceApplication_WithConstraints(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+	appName := "test-app"
+	constraints := "mem=256"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationWithConstraints(modelName, appName, constraints),
+			},
+		},
+	})
+}
+
+func testAccResourceApplicationWithConstraints(modelName, appName, constraints string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model = juju_model.this.name
+  name = %q
+  charm {
+	name = "ubuntu-lite"
+  }
+  units = 1
+  constraints = %q
+}
+		`, modelName, appName, constraints)
 }

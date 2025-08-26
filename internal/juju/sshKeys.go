@@ -5,15 +5,18 @@ package juju
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/juju/juju/api/client/keymanager"
 	"github.com/juju/utils/v3/ssh"
-
-	"github.com/juju/terraform-provider-juju/internal/utils"
 )
 
 type sshKeysClient struct {
 	SharedClient
+
+	// KeyLock is used to prevent concurrent calls to AddKeys, ReadKeys and DeleteKeys
+	// which can lead to race conditions in Juju. Issue: https://github.com/juju/juju/issues/20447
+	KeyLock *sync.RWMutex
 }
 
 type CreateSSHKeyInput struct {
@@ -41,10 +44,13 @@ type DeleteSSHKeyInput struct {
 func newSSHKeysClient(sc SharedClient) *sshKeysClient {
 	return &sshKeysClient{
 		SharedClient: sc,
+		KeyLock:      &sync.RWMutex{},
 	}
 }
 
 func (c *sshKeysClient) CreateSSHKey(input *CreateSSHKeyInput) error {
+	c.KeyLock.Lock()
+	defer c.KeyLock.Unlock()
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
@@ -77,6 +83,8 @@ func (c *sshKeysClient) CreateSSHKey(input *CreateSSHKeyInput) error {
 }
 
 func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, error) {
+	c.KeyLock.RLock()
+	defer c.KeyLock.RUnlock()
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -94,7 +102,11 @@ func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, e
 
 	for _, res := range returnedKeys {
 		for _, k := range res.Result {
-			if input.KeyIdentifier == utils.GetKeyIdentifierFromSSHKey(k) {
+			fingerprint, comment, err := ssh.KeyFingerprint(k)
+			if err != nil {
+				return nil, fmt.Errorf("error getting fingerprint for ssh key: %w", err)
+			}
+			if input.KeyIdentifier == fingerprint || input.KeyIdentifier == comment {
 				return &ReadSSHKeyOutput{
 					Payload: k,
 				}, nil
@@ -106,6 +118,8 @@ func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, e
 }
 
 func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
+	c.KeyLock.Lock()
+	defer c.KeyLock.Unlock()
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
@@ -125,8 +139,11 @@ func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	}
 	// only check if there is one key
 	if len(returnedKeys) == 1 {
-		k := returnedKeys[0].Result[0]
-		if input.KeyIdentifier == utils.GetKeyIdentifierFromSSHKey(k) {
+		fingerprint, comment, err := ssh.KeyFingerprint(returnedKeys[0].Result[0])
+		if err != nil {
+			return fmt.Errorf("error getting fingerprint for ssh key: %w", err)
+		}
+		if input.KeyIdentifier == fingerprint || input.KeyIdentifier == comment {
 			// This is the latest key, do not remove it
 			c.Warnf(fmt.Sprintf("ssh key from user %s is the last one and will not be removed", input.KeyIdentifier))
 			return nil

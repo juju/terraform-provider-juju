@@ -369,6 +369,30 @@ func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceIntegrationWithMultipleIntegrationsSameEndpoint(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	srcModelName := acctest.RandomWithPrefix("tf-test-integration-offering")
+	dstModelName := acctest.RandomWithPrefix("tf-test-integration-consuming")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceIntegrationMultipleIntegrationsSameEndpoint(srcModelName, dstModelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_integration.this", "model", dstModelName),
+					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "apptwo:source", "appzero:sink")),
+					resource.TestCheckResourceAttr("juju_integration.this2", "model", dstModelName),
+					resource.TestCheckResourceAttr("juju_integration.this2", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "apptwo:source", "appone:sink")),
+				),
+			},
+		},
+	})
+}
+
 // testAccResourceIntegrationWithMultipleConusmers generates a plan where a
 // two juju-qa-dummy-source applications relates to source offer.
 func testAccResourceIntegrationMultipleConsumers(srcModelName string, dstModelName string) string {
@@ -450,6 +474,92 @@ variable "enable-b1-consumer" {
 variable "enable-b2-consumer" {
         description = "Enable integration for b2 with offer"
         default     = false
+}
+`, srcModelName, dstModelName)
+}
+
+func testAccResourceIntegrationMultipleIntegrationsSameEndpoint(srcModelName string, dstModelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "offering" {
+  name = %q
+}
+
+resource "juju_application" "appzero" {
+  name  = "appzero"
+  model = juju_model.offering.name
+
+  charm {
+    name = "juju-qa-dummy-source"
+  }
+  config = {
+  	token = "abc"
+  }
+}
+
+resource "juju_application" "appone" {
+  name  = "appone"
+  model = juju_model.offering.name
+
+  charm {
+    name = "juju-qa-dummy-source"
+  }
+  config = {
+  	token = "abc"
+  }
+}
+
+resource "juju_offer" "appzero_endpoint" {
+  model            = juju_model.offering.name
+  application_name = juju_application.appzero.name
+  endpoints        = ["sink"]
+}
+
+resource "juju_offer" "appone_endpoint" {
+  model            = juju_model.offering.name
+  application_name = juju_application.appone.name
+  endpoints        = ["sink"]
+}
+
+resource "juju_model" "consuming" {
+  name = %q
+}
+
+resource "juju_application" "apptwo" {
+  name  = "apptwo"
+  model = juju_model.consuming.name
+
+  charm {
+    name = "juju-qa-dummy-sink"
+  }
+  config = {
+  	token = "abc"
+  }
+}
+
+resource "juju_integration" "this" {
+  model = juju_model.consuming.name
+
+  application {
+    name     = juju_application.apptwo.name
+    endpoint = "source"
+  }
+
+  application {
+    offer_url = juju_offer.appzero_endpoint.url
+  }
+}
+
+resource "juju_integration" "this2" {
+  model = juju_model.consuming.name
+
+  application {
+    name     = juju_application.apptwo.name
+    endpoint = "source"
+  }
+
+  application {
+    offer_url = juju_offer.appone_endpoint.url
+  }
 }
 `, srcModelName, dstModelName)
 }

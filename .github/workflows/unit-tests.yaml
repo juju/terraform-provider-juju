@@ -1,0 +1,25 @@
+name: "Unit Tests"
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+# These jobs are small independent tasks which are required, but do not
+# gate any integration or unit tests.
+jobs:
+  unit-tests:
+    name: Run unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      # run all tests in the internal directory, excluding provider tests
+      # as these are acceptance tests and require a live Juju controller with env variables set up.
+      - run: find ./internal/* -type d \( -not -path "./internal/provider*" \) -exec go test -v {} +
