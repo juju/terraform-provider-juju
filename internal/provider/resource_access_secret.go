@@ -39,8 +39,7 @@ type accessSecretResource struct {
 type accessSecretResourceModel struct {
 	// SecretId is the ID of the secret to be grant or revoked.
 	SecretId types.String `tfsdk:"secret_id"`
-	// Applications is the list of applications to which the secret is granted or revoked.
-	Applications types.List `tfsdk:"applications"`
+
 	// ID is used during terraform import.
 	ID types.String `tfsdk:"id"`
 }
@@ -49,12 +48,26 @@ type accessSecretResourceModelV0 struct {
 	accessSecretResourceModel
 	// Model to which the secret belongs.
 	Model types.String `tfsdk:"model"`
+
+	// Applications is a list of applications to which the secret is granted or revoked.
+	Applications types.List `tfsdk:"applications"`
 }
 
 type accessSecretResourceModelV1 struct {
 	accessSecretResourceModel
 	// Model to which the secret belongs.
+	Model types.String `tfsdk:"model"`
+
+	// Applications is a set of applications to which the secret is granted or revoked.
+	Applications types.Set `tfsdk:"applications"`
+}
+
+type accessSecretResourceModelV2 struct {
+	accessSecretResourceModel
+	// Model to which the secret belongs.
 	ModelUUID types.String `tfsdk:"model_uuid"`
+	// Applications is a set of applications to which the secret is granted or revoked.
+	Applications types.Set `tfsdk:"applications"`
 }
 
 // ImportState reads the secret based on the model UUID and secret name to be
@@ -87,7 +100,7 @@ func (s *accessSecretResource) ImportState(ctx context.Context, req resource.Imp
 	}
 
 	// Save the secret access details into the Terraform state
-	state := accessSecretResourceModelV1{
+	state := accessSecretResourceModelV2{
 		ModelUUID: types.StringValue(modelUUID),
 		accessSecretResourceModel: accessSecretResourceModel{
 			SecretId: types.StringValue(readSecretOutput.SecretId),
@@ -96,7 +109,7 @@ func (s *accessSecretResource) ImportState(ctx context.Context, req resource.Imp
 	}
 
 	// Save the secret details into the Terraform state
-	secretApplications, errDiag := types.ListValueFrom(ctx, types.StringType, readSecretOutput.Applications)
+	secretApplications, errDiag := types.SetValueFrom(ctx, types.StringType, readSecretOutput.Applications)
 	resp.Diagnostics.Append(errDiag...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -116,7 +129,7 @@ func (s *accessSecretResource) Metadata(_ context.Context, req resource.Metadata
 // Schema is called when the resource schema is being initialized.
 func (s *accessSecretResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Version:     1,
+		Version:     2,
 		Description: "A resource that represents a Juju secret access.",
 		Attributes: map[string]schema.Attribute{
 			"model_uuid": schema.StringAttribute{
@@ -133,7 +146,7 @@ func (s *accessSecretResource) Schema(_ context.Context, req resource.SchemaRequ
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"applications": schema.ListAttribute{
+			"applications": schema.SetAttribute{
 				Description: "The list of applications to which the secret is granted.",
 				Required:    true,
 				ElementType: types.StringType,
@@ -177,7 +190,7 @@ func (s *accessSecretResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	var plan accessSecretResourceModelV1
+	var plan accessSecretResourceModelV2
 
 	// Read Terraform plan into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -213,7 +226,7 @@ func (s *accessSecretResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 
-	var state accessSecretResourceModelV1
+	var state accessSecretResourceModelV2
 
 	// Read Terraform configuration state into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -231,7 +244,7 @@ func (s *accessSecretResource) Read(ctx context.Context, req resource.ReadReques
 	}
 
 	// Save the secret details into the Terraform state
-	secretApplications, errDiag := types.ListValueFrom(ctx, types.StringType, readSecretOutput.Applications)
+	secretApplications, errDiag := types.SetValueFrom(ctx, types.StringType, readSecretOutput.Applications)
 	resp.Diagnostics.Append(errDiag...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -254,7 +267,7 @@ func (s *accessSecretResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	var plan, state accessSecretResourceModelV1
+	var plan, state accessSecretResourceModelV2
 
 	// Read Terraform plan and state into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -346,7 +359,7 @@ func (s *accessSecretResource) Delete(ctx context.Context, req resource.DeleteRe
 		return
 	}
 
-	var state accessSecretResourceModelV1
+	var state accessSecretResourceModelV2
 
 	// Read Terraform configuration state into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -370,13 +383,13 @@ func (s *accessSecretResource) Delete(ctx context.Context, req resource.DeleteRe
 		return
 	}
 
-	// Save empty list of applications into Terraform state
-	emptyApplicationList, errDiag := types.ListValue(types.StringType, []attr.Value{})
+	// Save empty set of applications into Terraform state
+	emptyApplicationSet, errDiag := types.SetValue(types.StringType, []attr.Value{})
 	resp.Diagnostics.Append(errDiag...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	state.Applications = emptyApplicationList
+	state.Applications = emptyApplicationSet
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -399,24 +412,31 @@ func (s *accessSecretResource) UpgradeState(ctx context.Context) map[int64]resou
 					return
 				}
 
-				modelUUID, err := s.client.Models.ModelUUID(accessSecretV0.Model.ValueString())
-				if err != nil {
-					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", accessSecretV0.Model.ValueString(), err))
+				accessSecretV1 := s.accessSecretV0ToV1(ctx, accessSecretV0, resp)
+				accessSecretV2 := s.accessSecretV1ToV2(accessSecretV1, resp)
+				if resp.Diagnostics.HasError() {
 					return
 				}
 
-				newID := strings.Replace(accessSecretV0.ID.ValueString(), accessSecretV0.Model.ValueString(), modelUUID, 1)
+				resp.Diagnostics.Append(resp.State.Set(ctx, accessSecretV2)...)
+			},
+		},
+		1: {
+			PriorSchema: accessSecretResourceSchemaV1(),
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				accessSecretV1 := accessSecretResourceModelV1{}
+				resp.Diagnostics.Append(req.State.Get(ctx, &accessSecretV1)...)
 
-				upgradedStateData := accessSecretResourceModelV1{
-					ModelUUID: types.StringValue(modelUUID),
-					accessSecretResourceModel: accessSecretResourceModel{
-						SecretId:     accessSecretV0.SecretId,
-						Applications: accessSecretV0.Applications,
-						ID:           types.StringValue(newID),
-					},
+				if resp.Diagnostics.HasError() {
+					return
 				}
 
-				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
+				accessSecretV2 := s.accessSecretV1ToV2(accessSecretV1, resp)
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				resp.Diagnostics.Append(resp.State.Set(ctx, accessSecretV2)...)
 			},
 		},
 	}
@@ -445,6 +465,66 @@ func accessSecretResourceSchemaV0() *schema.Schema {
 			"id": schema.StringAttribute{
 				Computed: true,
 			},
+		},
+	}
+}
+
+func accessSecretResourceSchemaV1() *schema.Schema {
+	return &schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"model": schema.StringAttribute{
+				Required: true,
+			},
+			"secret_id": schema.StringAttribute{
+				Required: true,
+			},
+			"applications": schema.SetAttribute{
+				Required:    true,
+				ElementType: types.StringType,
+			},
+			"id": schema.StringAttribute{
+				Computed: true,
+			},
+		},
+	}
+}
+
+func (s *accessSecretResource) accessSecretV0ToV1(ctx context.Context, resourceV0 accessSecretResourceModelV0, resp *resource.UpgradeStateResponse) accessSecretResourceModelV1 {
+	applications := []string{}
+	if !resourceV0.Applications.IsNull() {
+		resp.Diagnostics.Append(resourceV0.Applications.ElementsAs(ctx, &applications, false)...)
+	}
+
+	applicationsSet, diags := types.SetValueFrom(ctx, types.StringType, applications)
+	if diags.HasError() {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to convert applications to set, got error: %s", diags))
+	}
+
+	return accessSecretResourceModelV1{
+		Model:        resourceV0.Model,
+		Applications: applicationsSet,
+		accessSecretResourceModel: accessSecretResourceModel{
+			SecretId: resourceV0.SecretId,
+			ID:       resourceV0.ID,
+		},
+	}
+}
+
+func (s *accessSecretResource) accessSecretV1ToV2(resourceV1 accessSecretResourceModelV1, resp *resource.UpgradeStateResponse) accessSecretResourceModelV2 {
+	modelUUID, err := s.client.Models.ModelUUID(resourceV1.Model.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", resourceV1.Model.ValueString(), err))
+		return accessSecretResourceModelV2{}
+	}
+
+	newID := strings.Replace(resourceV1.ID.ValueString(), resourceV1.Model.ValueString(), modelUUID, 1)
+
+	return accessSecretResourceModelV2{
+		ModelUUID:    types.StringValue(modelUUID),
+		Applications: resourceV1.Applications,
+		accessSecretResourceModel: accessSecretResourceModel{
+			SecretId: resourceV1.SecretId,
+			ID:       types.StringValue(newID),
 		},
 	}
 }

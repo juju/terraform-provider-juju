@@ -50,6 +50,7 @@ resource "juju_application" "my-application" {
 
 - `id` (String) The ID of the secret. Used for terraform import.
 - `secret_id` (String) The ID of the secret. E.g. coj8mulh8b41e8nv6p90
+- `secret_uri` (String) The URI of the secret. E.g. secret:coj8mulh8b41e8nv6p90
 
 ## Import
 

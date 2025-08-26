@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	TestProviderStableVersion = "0.20.0"
+	TestProviderStableVersion = "0.21.1"
 	TestProviderPreV1Version  = "0.20.0"
 	isJaasEnvKey              = "IS_JAAS"
 )
@@ -255,6 +255,9 @@ func createCloudCredential(t *testing.T) {
 		t.Fatal("TestClient is not set")
 	}
 	cloudName := canonicalCloudName(os.Getenv(TestCloudEnvKey))
+	if cloudName == "localhost" {
+		return
+	}
 
 	// List controller credentials to bail out early if one already exists.
 	controllerCreds, _ := TestClient.Credentials.ListControllerCredentials()

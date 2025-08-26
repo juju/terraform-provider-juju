@@ -1,4 +1,9 @@
-# Terraform Provider for Juju
+---
+relatedlinks: "[Charmcraft](https://documentation.ubuntu.com/charmcraft/), [Charmlibs](https://canonical-charmlibs.readthedocs-hosted.com/), [Concierge](https://github.com/canonical/concierge), [JAAS](https://documentation.ubuntu.com/jaas/), [Jubilant](https://documentation.ubuntu.com/jubilant/), [Juju](https://documentation.ubuntu.com/juju/), [Ops](https://documentation.ubuntu.com/ops/), [Pebble](https://documentation.ubuntu.com/pebble/)"
+---
+
+(home)=
+# Terraform Provider for Juju documentation
 
 ```{toctree}
 :maxdepth: 2
@@ -8,11 +13,6 @@ tutorial
 howto/index
 Reference <reference/index>
 ```
-
-<!--
-reference/index
-explanation/index
--->
 
 The Terraform Provider for Juju is a [Terraform Provider](https://developer.hashicorp.com/terraform/language/providers) that extends [Terraform](https://developer.hashicorp.com/terraform) with [Juju](https://documentation.ubuntu.com/juju) and [JAAS](https://documentation.ubuntu.com/jaas) functionality.
 

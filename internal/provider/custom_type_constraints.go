@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -118,6 +119,14 @@ var _ basetypes.StringValuableWithSemanticEquals = CustomConstraintsValue{}
 // before comparison.
 // This is useful for ensuring that different representations of the same
 // constraints (e.g., different order of constraints) are considered equal.
+//
+// The provider internals call StringSemanticEquals so we can't rely on the order
+// of the values, i.e. we don't know which is the prior value so we just compare
+// the constraint strings in a normalized way.
+//
+// The comparison allows for certain auto-added constraint keys (like "arch")
+// to be present in either value. This also means that the constraint can be
+// dropped by the user without triggering a diff.
 func (v CustomConstraintsValue) StringSemanticEquals(ctx context.Context, newValuable basetypes.StringValuable) (bool, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	// The framework should always pass the correct value type, but always check
@@ -135,7 +144,13 @@ func (v CustomConstraintsValue) StringSemanticEquals(ctx context.Context, newVal
 	}
 
 	// Parse and normalize constraints for semantic comparison
-	priorConstraints, err := constraints.Parse(v.StringValue.ValueString())
+	leftRaw := v.StringValue.ValueString()
+	rightRaw := newValue.ValueString()
+	if leftRaw == rightRaw { // exact match
+		return true, diags
+	}
+
+	leftConstraints, err := constraints.Parse(leftRaw)
 	if err != nil {
 		diags.AddError(
 			"Constraint Parsing Error",
@@ -143,7 +158,7 @@ func (v CustomConstraintsValue) StringSemanticEquals(ctx context.Context, newVal
 		)
 		return false, diags
 	}
-	newConstraints, err := constraints.Parse(newValue.ValueString())
+	rightConstraints, err := constraints.Parse(rightRaw)
 	if err != nil {
 		diags.AddError(
 			"Constraint Parsing Error",
@@ -152,8 +167,64 @@ func (v CustomConstraintsValue) StringSemanticEquals(ctx context.Context, newVal
 		return false, diags
 	}
 
-	// If the constraints are equivalent, keep the prior value
-	return newConstraints.String() == priorConstraints.String(), diags
+	leftCanonical := leftConstraints.String()
+	rightCanonical := rightConstraints.String()
+	if leftCanonical == rightCanonical { // normalized equal
+		return true, diags
+	}
+
+	leftMap := parseConstraintTokens(leftCanonical)
+	rightMap := parseConstraintTokens(rightCanonical)
+
+	// Build union of keys
+	union := make(map[string]struct{}, len(leftMap)+len(rightMap))
+	for k := range leftMap {
+		union[k] = struct{}{}
+	}
+	for k := range rightMap {
+		union[k] = struct{}{}
+	}
+
+	for k := range union {
+		lv, lOk := leftMap[k]
+		rv, rOk := rightMap[k]
+		if !lOk || !rOk { // key only on one side
+			if _, auto := autoAddedConstraintKeys[k]; auto {
+				// allowed missing on one side
+				continue
+			}
+			return false, diags
+		}
+		if lv != rv { // both present but different
+			return false, diags
+		}
+	}
+	return true, diags
+}
+
+// autoAddedConstraintKeys lists constraint keys Juju may inject implicitly
+// when not provided by the user. These should not trigger diffs if absent.
+var autoAddedConstraintKeys = map[string]struct{}{
+	"arch": {},
+}
+
+// parseConstraintTokens converts a constraints string (canonical form
+// "key=value key2=value2") into a map. Malformed tokens are ignored.
+func parseConstraintTokens(raw string) map[string]string {
+	m := make(map[string]string)
+	for tok := range strings.FieldsSeq(raw) {
+		parts := strings.SplitN(tok, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		k := strings.TrimSpace(parts[0])
+		v := strings.TrimSpace(parts[1])
+		if k == "" || v == "" {
+			continue
+		}
+		m[k] = v
+	}
+	return m
 }
 
 // constraintsRequiresReplacefunc checks if the constraints in the plan
@@ -162,7 +233,7 @@ func (v CustomConstraintsValue) StringSemanticEquals(ctx context.Context, newVal
 // It is used to ensure that changes to constraints trigger a resource
 // replacement, as constraints are a fundamental part of the resource's
 // configuration and cannot be updated in place.
-func constraintsRequiresReplacefunc(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+func constraintsRequiresReplacefunc(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
 	if req.ConfigValue.IsNull() {
 		return
 	}
@@ -170,16 +241,15 @@ func constraintsRequiresReplacefunc(_ context.Context, req planmodifier.StringRe
 		return
 	}
 
-	constraintsFromPlan, err := constraints.Parse(req.StateValue.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", "Unable to parse constraints from plan")
-		return
-	}
-	constraintsFromConfig, err := constraints.Parse(req.ConfigValue.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", "Unable to parse constraints from config")
-		return
-	}
+	oldVal := req.StateValue.ValueString()
+	newVal := req.ConfigValue.ValueString()
+	oldConstraints := NewCustomConstraintsValue(oldVal)
+	newConstraints := NewCustomConstraintsValue(newVal)
 
-	resp.RequiresReplace = constraintsFromConfig.String() != constraintsFromPlan.String()
+	equal, diags := oldConstraints.StringSemanticEquals(ctx, newConstraints)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+	resp.RequiresReplace = !equal
 }

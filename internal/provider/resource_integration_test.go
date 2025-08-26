@@ -369,6 +369,34 @@ func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceIntegrationWithMultipleIntegrationsSameEndpoint(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	srcModelName := acctest.RandomWithPrefix("tf-test-integration-offering")
+	dstModelName := acctest.RandomWithPrefix("tf-test-integration-consuming")
+	idOneCheck := regexp.MustCompile(fmt.Sprintf(".+:%v:%v", "apptwo:source", "appzero:sink"))
+	idTwoCheck := regexp.MustCompile(fmt.Sprintf(".+:%v:%v", "apptwo:source", "appone:sink"))
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceIntegrationMultipleIntegrationsSameEndpoint(srcModelName, dstModelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("juju_model.consuming", "uuid", "juju_integration.this", "model_uuid"),
+					resource.TestCheckResourceAttrPair("juju_model.consuming", "uuid", "juju_integration.this2", "model_uuid"),
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("juju_integration.this", tfjsonpath.New("id"), knownvalue.StringRegexp(idOneCheck)),
+					statecheck.ExpectKnownValue("juju_integration.this2", tfjsonpath.New("id"), knownvalue.StringRegexp(idTwoCheck)),
+				},
+			},
+		},
+	})
+}
+
 // testAccResourceIntegrationWithMultipleConusmers generates a plan where a
 // two juju-qa-dummy-source applications relates to source offer.
 func testAccResourceIntegrationMultipleConsumers(srcModelName string, dstModelName string) string {
@@ -450,6 +478,92 @@ variable "enable-b1-consumer" {
 variable "enable-b2-consumer" {
         description = "Enable integration for b2 with offer"
         default     = false
+}
+`, srcModelName, dstModelName)
+}
+
+func testAccResourceIntegrationMultipleIntegrationsSameEndpoint(srcModelName string, dstModelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "offering" {
+  name = %q
+}
+
+resource "juju_application" "appzero" {
+  name  = "appzero"
+  model_uuid = juju_model.offering.uuid
+
+  charm {
+    name = "juju-qa-dummy-source"
+  }
+  config = {
+  	token = "abc"
+  }
+}
+
+resource "juju_application" "appone" {
+  name  = "appone"
+  model_uuid = juju_model.offering.uuid
+
+  charm {
+    name = "juju-qa-dummy-source"
+  }
+  config = {
+  	token = "abc"
+  }
+}
+
+resource "juju_offer" "appzero_endpoint" {
+  model_uuid       = juju_model.offering.uuid
+  application_name = juju_application.appzero.name
+  endpoints        = ["sink"]
+}
+
+resource "juju_offer" "appone_endpoint" {
+  model_uuid       = juju_model.offering.uuid
+  application_name = juju_application.appone.name
+  endpoints        = ["sink"]
+}
+
+resource "juju_model" "consuming" {
+  name = %q
+}
+
+resource "juju_application" "apptwo" {
+  name       = "apptwo"
+  model_uuid = juju_model.consuming.uuid
+
+  charm {
+    name = "juju-qa-dummy-sink"
+  }
+  config = {
+  	token = "abc"
+  }
+}
+
+resource "juju_integration" "this" {
+  model_uuid = juju_model.consuming.uuid
+
+  application {
+    name     = juju_application.apptwo.name
+    endpoint = "source"
+  }
+
+  application {
+    offer_url = juju_offer.appzero_endpoint.url
+  }
+}
+
+resource "juju_integration" "this2" {
+  model_uuid = juju_model.consuming.uuid
+
+  application {
+    name     = juju_application.apptwo.name
+    endpoint = "source"
+  }
+
+  application {
+    offer_url = juju_offer.appone_endpoint.url
+  }
 }
 `, srcModelName, dstModelName)
 }

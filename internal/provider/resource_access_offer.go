@@ -220,7 +220,7 @@ func (a *accessOfferResource) Read(ctx context.Context, req resource.ReadRequest
 	users[permission.ReadAccess] = []string{}
 	users[permission.AdminAccess] = []string{}
 	for _, offerUserDetail := range response.Users {
-		if offerUserDetail.UserName == "everyone@external" || offerUserDetail.UserName == "admin" {
+		if offerUserDetail.UserName == "everyone@external" || offerUserDetail.UserName == a.client.Username() {
 			continue
 		}
 
@@ -281,27 +281,27 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	// Get the users to grant admin
-	var adminUsers []string
+	var adminPlanUsers []string
 	if !plan.AdminUsers.IsNull() {
-		resp.Diagnostics.Append(plan.AdminUsers.ElementsAs(ctx, &adminUsers, false)...)
+		resp.Diagnostics.Append(plan.AdminUsers.ElementsAs(ctx, &adminPlanUsers, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 	}
 
 	// Get the users to grant consume
-	var consumeUsers []string
+	var consumePlanUsers []string
 	if !plan.ConsumeUsers.IsNull() {
-		resp.Diagnostics.Append(plan.ConsumeUsers.ElementsAs(ctx, &consumeUsers, false)...)
+		resp.Diagnostics.Append(plan.ConsumeUsers.ElementsAs(ctx, &consumePlanUsers, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 	}
 
 	// Get the users to grant read
-	var readUsers []string
+	var readPlanUsers []string
 	if !plan.ReadUsers.IsNull() {
-		resp.Diagnostics.Append(plan.ReadUsers.ElementsAs(ctx, &readUsers, false)...)
+		resp.Diagnostics.Append(plan.ReadUsers.ElementsAs(ctx, &readPlanUsers, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -309,16 +309,16 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 
 	// validate if there are overlaps or admin user
 	// validation is done here considering dynamic (juju_user resource) and static values for users
-	err := validateNoOverlapsNoAdmin(adminUsers, consumeUsers, readUsers)
+	err := validateNoOverlapsNoAdmin(adminPlanUsers, consumePlanUsers, readPlanUsers)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
 		return
 	}
 
 	// Get users from state
-	var readStateUsers []string
-	if !state.ReadUsers.IsNull() {
-		resp.Diagnostics.Append(state.ReadUsers.ElementsAs(ctx, &readStateUsers, false)...)
+	var adminStateUsers []string
+	if !state.AdminUsers.IsNull() {
+		resp.Diagnostics.Append(state.AdminUsers.ElementsAs(ctx, &adminStateUsers, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -332,71 +332,74 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 	}
 
-	var adminStateUsers []string
-	if !state.AdminUsers.IsNull() {
-		resp.Diagnostics.Append(state.AdminUsers.ElementsAs(ctx, &adminStateUsers, false)...)
+	var readStateUsers []string
+	if !state.ReadUsers.IsNull() {
+		resp.Diagnostics.Append(state.ReadUsers.ElementsAs(ctx, &readStateUsers, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 	}
 
-	// Revoke read (remove access) of all state users
-	totalStateUsers := append(adminStateUsers, consumeStateUsers...)
-	totalStateUsers = append(totalStateUsers, readStateUsers...)
-	if len(totalStateUsers) > 0 {
-		err := a.client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
-			Users:    totalStateUsers,
-			Access:   string(permission.ReadAccess),
-			OfferURL: plan.OfferURL.ValueString(),
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
-			return
-		}
+	// The process for revoking access in Juju is somewhat unintuitive.
+	// If a user has admin access and should be demoted to read access,
+	// we revoke their consume access, dropping them to read access.
+	// Once revokes are done, granting access becomes straightforward.
+	// It's important not to remove all access and then grant access
+	// as this breaks access to offers.
+
+	stateUsers, planUsers := buildUserAccessMaps(adminStateUsers, consumeStateUsers, readStateUsers, adminPlanUsers, consumePlanUsers, readPlanUsers)
+
+	err = processAccessRevokes(plan.OfferURL.ValueString(), stateUsers, planUsers, a.client)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
+		return
 	}
 
 	// grant read
-	err = grantPermission(plan.OfferURL.ValueString(), string(permission.ReadAccess), readUsers, a.client)
+	err = grantPermission(plan.OfferURL.ValueString(), string(permission.ReadAccess), readPlanUsers, a.client)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
 		return
 	}
 
 	// grant consume
-	err = grantPermission(plan.OfferURL.ValueString(), string(permission.ConsumeAccess), consumeUsers, a.client)
+	err = grantPermission(plan.OfferURL.ValueString(), string(permission.ConsumeAccess), consumePlanUsers, a.client)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
 		return
 	}
 
 	// grant admin
-	err = grantPermission(plan.OfferURL.ValueString(), string(permission.AdminAccess), adminUsers, a.client)
+	err = grantPermission(plan.OfferURL.ValueString(), string(permission.AdminAccess), adminPlanUsers, a.client)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
 		return
 	}
 
 	// Save admin users to state
-	adminUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, adminUsers)
+	adminUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, adminPlanUsers)
 	resp.Diagnostics.Append(errDiag...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	plan.AdminUsers = adminUsersSet
+
 	// Save consume users to state
-	consumeUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, consumeUsers)
+	consumeUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, consumePlanUsers)
 	resp.Diagnostics.Append(errDiag...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	plan.ConsumeUsers = consumeUsersSet
+
 	// Save read users to state
-	readUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, readUsers)
+	readUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, readPlanUsers)
 	resp.Diagnostics.Append(errDiag...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	plan.ReadUsers = readUsersSet
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -504,7 +507,8 @@ func (a *accessOfferResource) trace(msg string, additionalFields ...map[string]i
 	tflog.SubsystemTrace(a.subCtx, LogResourceAccessOffer, msg, additionalFields...)
 }
 
-// Helpers
+// validateNoOverlapsNoAdmin validates that there are no overlaps between the users in different access levels
+// and that the "admin" user is not present in any of the access levels.
 func validateNoOverlapsNoAdmin(admin, consume, read []string) error {
 	sets := map[string]struct{}{}
 	for _, v := range consume {
@@ -542,6 +546,128 @@ func grantPermission(offerURL, permissionType string, planUsers []string, jujuCl
 	})
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+// buildUserAccessMaps builds stateUsers and planUsers maps for access management.
+func buildUserAccessMaps(adminStateUsers, consumeStateUsers, readStateUsers, adminPlanUsers, consumePlanUsers, readPlanUsers []string) (map[string]permission.Access, map[string]permission.Access) {
+	stateUsers := map[string]permission.Access{}
+	for _, u := range adminStateUsers {
+		stateUsers[u] = permission.AdminAccess
+	}
+	for _, u := range consumeStateUsers {
+		if _, ok := stateUsers[u]; !ok {
+			stateUsers[u] = permission.ConsumeAccess
+		}
+	}
+	for _, u := range readStateUsers {
+		if _, ok := stateUsers[u]; !ok {
+			stateUsers[u] = permission.ReadAccess
+		}
+	}
+
+	planUsers := map[string]permission.Access{}
+	for _, u := range adminPlanUsers {
+		planUsers[u] = permission.AdminAccess
+	}
+	for _, u := range consumePlanUsers {
+		if _, ok := planUsers[u]; !ok {
+			planUsers[u] = permission.ConsumeAccess
+		}
+	}
+	for _, u := range readPlanUsers {
+		if _, ok := planUsers[u]; !ok {
+			planUsers[u] = permission.ReadAccess
+		}
+	}
+	return stateUsers, planUsers
+}
+
+// processAccessRevokes loops over all users in the state and compares their current access to the desired access.
+// It calls revokeAccessIfNeeded to revoke access if needed.
+func processAccessRevokes(
+	offerURL string,
+	stateUsers map[string]permission.Access, // user -> current access
+	planUsers map[string]permission.Access, // user -> desired access (missing means remove)
+	client *juju.Client,
+) error {
+	for user, currentAccess := range stateUsers {
+		desiredAccess, exists := planUsers[user]
+		if !exists {
+			desiredAccess = "" // Means remove all access
+		}
+		if err := revokeAccessIfNeeded(offerURL, user, currentAccess, desiredAccess, client); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// revokeAccessIfNeeded revokes the correct permission for a user based on their current and desired access.
+func revokeAccessIfNeeded(
+	offerURL, user string,
+	currentAccess, desiredAccess permission.Access,
+	client *juju.Client,
+) error {
+	// No change, nothing to do
+	if currentAccess == desiredAccess {
+		return nil
+	}
+
+	switch currentAccess {
+	case permission.AdminAccess:
+		switch desiredAccess {
+		case permission.ConsumeAccess:
+			return client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{user},
+				Access:   string(permission.AdminAccess),
+				OfferURL: offerURL,
+			})
+		case permission.ReadAccess:
+			// Only need to revoke consume access to demote from admin to read
+			return client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{user},
+				Access:   string(permission.ConsumeAccess),
+				OfferURL: offerURL,
+			})
+		default: // remove all access
+			return client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{user},
+				Access:   string(permission.ReadAccess),
+				OfferURL: offerURL,
+			})
+		}
+	case permission.ConsumeAccess:
+		switch desiredAccess {
+		case permission.ReadAccess:
+			return client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{user},
+				Access:   string(permission.ConsumeAccess),
+				OfferURL: offerURL,
+			})
+		case permission.AdminAccess:
+			// Upgrading, nothing to revoke
+			return nil
+		default: // remove all access
+			return client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{user},
+				Access:   string(permission.ReadAccess),
+				OfferURL: offerURL,
+			})
+		}
+	case permission.ReadAccess:
+		switch desiredAccess {
+		case permission.ConsumeAccess, permission.AdminAccess:
+			// Upgrading, nothing to revoke
+			return nil
+		default: // remove all access
+			return client.Offers.RevokeOffer(&juju.GrantRevokeOfferInput{
+				Users:    []string{user},
+				Access:   string(permission.ReadAccess),
+				OfferURL: offerURL,
+			})
+		}
 	}
 	return nil
 }
