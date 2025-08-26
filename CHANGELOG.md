@@ -1,3 +1,26 @@
+## 0.22.0 (August 18, 2025)
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.4 release.
+
+ENHANCEMENTS
+
+* An improvement of sematic comparison for constraints by @kian99 in [829](https://github.com/juju/terraform-provider-juju/pull/829).
+
+BUG FIXES
+
+* A fix for SSH key resource ID handling by @kian99 in [824](https://github.com/juju/terraform-provider-juju/pull/824).
+* A fix for removal of multiple integrations with the same endpoint by @SimoneDutto in [814](https://github.com/juju/terraform-provider-juju/pull/814).
+
+DOCUMENTATION
+
+* Addition of related links by @tmihoc in [825](https://github.com/juju/terraform-provider-juju/pull/825).
+* Clarification of cloud and controller authorization and improvement to documentation navigation by @tmihoc in [831](https://github.com/juju/terraform-provider-juju/pull/832).
+* Update to the documentation starter pack by @tmihoc in [836](https://github.com/juju/terraform-provider-juju/pull/836).
+
 ## 0.21.1 (August 4, 2025)
 
 NOTES:
