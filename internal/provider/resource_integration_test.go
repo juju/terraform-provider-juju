@@ -375,6 +375,8 @@ func TestAcc_ResourceIntegrationWithMultipleIntegrationsSameEndpoint(t *testing.
 	}
 	srcModelName := acctest.RandomWithPrefix("tf-test-integration-offering")
 	dstModelName := acctest.RandomWithPrefix("tf-test-integration-consuming")
+	idOneCheck := regexp.MustCompile(fmt.Sprintf(".+:%v:%v", "apptwo:source", "appzero:sink"))
+	idTwoCheck := regexp.MustCompile(fmt.Sprintf(".+:%v:%v", "apptwo:source", "appone:sink"))
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -383,10 +385,13 @@ func TestAcc_ResourceIntegrationWithMultipleIntegrationsSameEndpoint(t *testing.
 			{
 				Config: testAccResourceIntegrationMultipleIntegrationsSameEndpoint(srcModelName, dstModelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "apptwo:source", "appzero:sink")),
-					resource.TestCheckResourceAttr("juju_integration.this2", "model", dstModelName),
-					resource.TestCheckResourceAttr("juju_integration.this2", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "apptwo:source", "appone:sink")),
+					resource.TestCheckResourceAttrPair("juju_model.consuming", "uuid", "juju_integration.this", "model_uuid"),
+					resource.TestCheckResourceAttrPair("juju_model.consuming", "uuid", "juju_integration.this2", "model_uuid"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("juju_integration.this", tfjsonpath.New("id"), knownvalue.StringRegexp(idOneCheck)),
+					statecheck.ExpectKnownValue("juju_integration.this2", tfjsonpath.New("id"), knownvalue.StringRegexp(idTwoCheck)),
+				},
 			},
 		},
 	})
