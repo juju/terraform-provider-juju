@@ -383,7 +383,6 @@ func TestAcc_ResourceIntegrationWithMultipleIntegrationsSameEndpoint(t *testing.
 			{
 				Config: testAccResourceIntegrationMultipleIntegrationsSameEndpoint(srcModelName, dstModelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.this", "model", dstModelName),
 					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "apptwo:source", "appzero:sink")),
 					resource.TestCheckResourceAttr("juju_integration.this2", "model", dstModelName),
 					resource.TestCheckResourceAttr("juju_integration.this2", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "apptwo:source", "appone:sink")),
@@ -486,7 +485,7 @@ resource "juju_model" "offering" {
 
 resource "juju_application" "appzero" {
   name  = "appzero"
-  model = juju_model.offering.name
+  model_uuid = juju_model.offering.uuid
 
   charm {
     name = "juju-qa-dummy-source"
@@ -498,7 +497,7 @@ resource "juju_application" "appzero" {
 
 resource "juju_application" "appone" {
   name  = "appone"
-  model = juju_model.offering.name
+  model_uuid = juju_model.offering.uuid
 
   charm {
     name = "juju-qa-dummy-source"
@@ -509,13 +508,13 @@ resource "juju_application" "appone" {
 }
 
 resource "juju_offer" "appzero_endpoint" {
-  model            = juju_model.offering.name
+  model_uuid       = juju_model.offering.uuid
   application_name = juju_application.appzero.name
   endpoints        = ["sink"]
 }
 
 resource "juju_offer" "appone_endpoint" {
-  model            = juju_model.offering.name
+  model_uuid       = juju_model.offering.uuid
   application_name = juju_application.appone.name
   endpoints        = ["sink"]
 }
@@ -525,8 +524,8 @@ resource "juju_model" "consuming" {
 }
 
 resource "juju_application" "apptwo" {
-  name  = "apptwo"
-  model = juju_model.consuming.name
+  name       = "apptwo"
+  model_uuid = juju_model.consuming.uuid
 
   charm {
     name = "juju-qa-dummy-sink"
@@ -537,7 +536,7 @@ resource "juju_application" "apptwo" {
 }
 
 resource "juju_integration" "this" {
-  model = juju_model.consuming.name
+  model_uuid = juju_model.consuming.uuid
 
   application {
     name     = juju_application.apptwo.name
@@ -550,7 +549,7 @@ resource "juju_integration" "this" {
 }
 
 resource "juju_integration" "this2" {
-  model = juju_model.consuming.name
+  model_uuid = juju_model.consuming.uuid
 
   application {
     name     = juju_application.apptwo.name

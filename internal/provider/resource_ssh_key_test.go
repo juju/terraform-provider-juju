@@ -56,7 +56,7 @@ func TestAcc_ResourceSSHKey_ColonInKeyIdentifier(t *testing.T) {
 			{
 				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_ssh_key.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
 			},
 		},
@@ -77,7 +77,7 @@ func TestAcc_ResourceSSHKey_WithoutComment(t *testing.T) {
 			{
 				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_ssh_key.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
 			},
 		},
@@ -243,9 +243,9 @@ func testAccMultipleSSHKeys(modelName string, sshKeys []string) string {
 	}
 
 	resource "juju_ssh_key" "this" {
-		count   = length(var.ssh_keys)
-		model   = juju_model.this.name
-		payload = var.ssh_keys[count.index]
+		count       = length(var.ssh_keys)
+		model_uuid  = juju_model.this.uuid
+		payload     = var.ssh_keys[count.index]
 	}
 	`, modelName, strings.Join(quotedKeys, ","))
 }
