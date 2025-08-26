@@ -18,7 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
-	"github.com/juju/terraform-provider-juju/internal/utils"
+	"github.com/juju/utils/v3/ssh"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -78,6 +78,9 @@ func (s *sshKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			"model": schema.StringAttribute{
 				Description: "The name of the model to operate in.",
 				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"payload": schema.StringAttribute{
 				Description: "SSH key payload.",
@@ -113,9 +116,13 @@ func (s *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	payload := plan.Payload.ValueString()
-	keyIdentifier := utils.GetKeyIdentifierFromSSHKey(payload)
-	if keyIdentifier == "" {
-		resp.Diagnostics.AddError("Provider Error", fmt.Sprintf("malformed SSH key : %q", payload))
+	// Remove trailing newline if present, as it is not part of the key.
+	// For example, the key contains a \n when it's read via `file(~/.ssh/id_rsa.pub)`
+	// in the terraform configuration.
+	payload = strings.TrimSuffix(payload, "\n")
+	fingerprint, _, err := ssh.KeyFingerprint(payload)
+	if err != nil {
+		resp.Diagnostics.AddError("Malformed SSH Key", fmt.Sprintf("Unable to parse SSH key payload: %s", err))
 		return
 	}
 
@@ -129,9 +136,9 @@ func (s *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create ssh_key, got error %s", err))
 		return
 	}
-	s.trace(fmt.Sprintf("created ssh_key for: %q", keyIdentifier))
+	s.trace(fmt.Sprintf("created ssh_key for: %q", fingerprint))
 
-	plan.ID = types.StringValue(newSSHKeyID(modelName, keyIdentifier))
+	plan.ID = types.StringValue(newSSHKeyID(modelName, fingerprint))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -160,15 +167,15 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	var plan sshKeyResourceModel
+	var state sshKeyResourceModel
 
 	// Read Terraform configuration from the request into the model
-	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	modelName, keyIdentifier := retrieveModelKeyNameFromID(plan.ID.ValueString(), &resp.Diagnostics)
+	modelName, identifier := retrieveModelKeyNameFromID(state.ID.ValueString(), &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -176,75 +183,23 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 	result, err := s.client.SSHKeys.ReadSSHKey(&juju.ReadSSHKeyInput{
 		Username:      s.client.Username(),
 		ModelName:     modelName,
-		KeyIdentifier: keyIdentifier,
+		KeyIdentifier: identifier,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read ssh key, got error: %s", err))
 		return
 	}
-	s.trace(fmt.Sprintf("read ssh key resource %q", plan.ID.ValueString()))
+	s.trace(fmt.Sprintf("read ssh key resource %q", state.ID.ValueString()))
 
-	plan.ModelName = types.StringValue(result.ModelName)
-	plan.Payload = types.StringValue(result.Payload)
+	state.ModelName = types.StringValue(result.ModelName)
+	state.Payload = types.StringValue(result.Payload)
 
 	// Set the plan onto the Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 func (s *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// Prevent panic if the provider has not been configured.
-	if s.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "ssh_key", "update")
-		return
-	}
-
-	var plan, state sshKeyResourceModel
-
-	// Get the Terraform state from the request into the state model
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	// Read Terraform configuration from the request into the plan model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Return early if nothing has changed
-	if plan.Payload.Equal(state.Payload) && plan.ModelName.Equal(state.ModelName) {
-		return
-	}
-
-	modelName, keyIdentifier := retrieveModelKeyNameFromID(plan.ID.ValueString(), &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Delete the key
-	if err := s.client.SSHKeys.DeleteSSHKey(&juju.DeleteSSHKeyInput{
-		Username:      s.client.Username(),
-		ModelName:     modelName,
-		KeyIdentifier: keyIdentifier,
-	}); err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete ssh key for updating, got error: %s", err))
-		return
-	}
-	s.trace(fmt.Sprintf("ssh key deleted : %q", state.ID.ValueString()))
-
-	// Create a new key
-	if err := s.client.SSHKeys.CreateSSHKey(&juju.CreateSSHKeyInput{
-		Username:  s.client.Username(),
-		ModelName: plan.ModelName.ValueString(),
-		Payload:   plan.Payload.ValueString(),
-	}); err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create ssh key for updating, got error: %s", err))
-		return
-	}
-	s.trace(fmt.Sprintf("ssh key created : %q", plan.ID.ValueString()))
-
-	// Set the plan onto the Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	// This should never be called, because all of the fields have a `RequiresReplace` plan modifier.
 }
 
 // Delete is called when the provider must delete the resource. Config
@@ -263,15 +218,15 @@ func (s *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	var plan sshKeyResourceModel
+	var state sshKeyResourceModel
 
 	// Read Terraform configuration from the request into the model
-	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	modelName, keyIdentifier := retrieveModelKeyNameFromID(plan.ID.ValueString(), &resp.Diagnostics)
+	modelName, identifier := retrieveModelKeyNameFromID(state.ID.ValueString(), &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -280,12 +235,12 @@ func (s *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	if err := s.client.SSHKeys.DeleteSSHKey(&juju.DeleteSSHKeyInput{
 		Username:      s.client.Username(),
 		ModelName:     modelName,
-		KeyIdentifier: keyIdentifier,
+		KeyIdentifier: identifier,
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete ssh key during delete, got error: %s", err))
 		return
 	}
-	s.trace(fmt.Sprintf("delete ssh_key resource : %q", plan.ID.ValueString()))
+	s.trace(fmt.Sprintf("delete ssh_key resource : %q", state.ID.ValueString()))
 }
 
 func (s *sshKeyResource) trace(msg string, additionalFields ...map[string]interface{}) {
