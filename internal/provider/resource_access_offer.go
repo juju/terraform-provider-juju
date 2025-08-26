@@ -220,7 +220,7 @@ func (a *accessOfferResource) Read(ctx context.Context, req resource.ReadRequest
 	users[permission.ReadAccess] = []string{}
 	users[permission.AdminAccess] = []string{}
 	for _, offerUserDetail := range response.Users {
-		if offerUserDetail.UserName == "everyone@external" || offerUserDetail.UserName == "admin" {
+		if offerUserDetail.UserName == "everyone@external" {
 			continue
 		}
 
@@ -483,6 +483,7 @@ func (a *accessOfferResource) ConfigValidators(ctx context.Context) []resource.C
 	// JAAS users should use juju_jaas_access_offer instead.
 	return []resource.ConfigValidator{
 		NewAvoidJAASValidator(a.client, "juju_jaas_access_offer"),
+		NewAdminOfferUserValidator(a.client),
 		resourcevalidator.AtLeastOneOf(
 			path.MatchRoot(string(permission.AdminAccess)),
 			path.MatchRoot(string(permission.ConsumeAccess)),
@@ -523,9 +524,6 @@ func validateNoOverlapsNoAdmin(admin, consume, read []string) error {
 		sets[v] = struct{}{}
 	}
 	for _, v := range admin {
-		if v == "admin" {
-			return fmt.Errorf("user admin is not allowed")
-		}
 		if _, exists := sets[v]; exists {
 			return fmt.Errorf("user '%s' appears in multiple roles (e.g., 'consume', 'read', 'admin')", v)
 		}

@@ -85,7 +85,7 @@ func TestAcc_ResourceAccessOffer_ErrorWhenUsedWithJAAS(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceAccessOffer_ErrorWhenUsedWithAdmin(t *testing.T) {
+func TestAcc_ResourceAccessOffer_ErrorWhenAdminIsMissing(t *testing.T) {
 	SkipJAAS(t)
 
 	modelNameAdminTest := acctest.RandomWithPrefix("tf-access-admin-model")
@@ -96,7 +96,7 @@ func TestAcc_ResourceAccessOffer_ErrorWhenUsedWithAdmin(t *testing.T) {
 		Steps: []resource.TestStep{
 			{ // Test username admin validation
 				Config:      testAccResourceAccessOfferAdminUser(modelNameAdminTest),
-				ExpectError: regexp.MustCompile("user admin is not allowed.*"),
+				ExpectError: regexp.MustCompile("The identity configured in the provider must be included in the admin set.*"),
 			},
 		},
 	})
@@ -114,6 +114,11 @@ func testAccResourceAccessOfferAdminUser(modelName string) string {
 	return internaltesting.GetStringFromTemplateWithData("testAccResourceAccessOfferAdminUser", `
 resource "juju_model" "{{.ModelName}}" {
 name = "{{.ModelName}}"
+}
+
+resource "juju_user" "test_user" {
+  name = "testuser"
+  password = "test_password"
 }
 
 resource "juju_application" "appone" {
@@ -134,7 +139,7 @@ resource "juju_offer" "appone_endpoint" {
 
 resource "juju_access_offer" "test" {
   offer_url = juju_offer.appone_endpoint.url
-  admin = ["admin"]
+  admin = [juju_user.test_user.name]
 }`, internaltesting.TemplateData{
 		"ModelName": modelName})
 }
@@ -188,7 +193,12 @@ resource "juju_access_offer" "access_appone_endpoint" {
     offer_url = juju_offer.appone_endpoint.url
 	{{- if ne .OfferAdmin "" }}
     admin = [
+	    "admin",
 		juju_user.{{.OfferAdmin}}_operator.name,
+	]
+    {{- else }}
+	admin = [
+	    "admin",
 	]
 	{{- end }}
 	{{- if ne .OfferConsume "" }}
