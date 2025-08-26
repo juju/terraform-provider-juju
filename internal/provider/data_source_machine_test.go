@@ -24,42 +24,8 @@ func TestAcc_DataSourceMachine_Edge(t *testing.T) {
 			{
 				Config: testAccDataSourceMachine(modelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.juju_machine.machine", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.model", "uuid", "data.juju_machine.machine", "model_uuid"),
 				),
-			},
-		},
-	})
-}
-
-func TestAcc_DataSourceMachine_UpgradeProvider(t *testing.T) {
-	t.Skip("This test currently fails due to the breaking change in the provider schema. " +
-		"Remove the skip after the v1 release of the provider.")
-
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-	modelName := acctest.RandomWithPrefix("tf-datasource-machine-test-model")
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-
-		Steps: []resource.TestStep{
-			{
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						VersionConstraint: TestProviderStableVersion,
-						Source:            "juju/juju",
-					},
-				},
-				Config: testAccDataSourceMachine(modelName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.juju_machine.machine", "model", modelName),
-				),
-			},
-			{
-				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccDataSourceMachine(modelName),
-				PlanOnly:                 true,
 			},
 		},
 	})
@@ -78,7 +44,7 @@ resource "juju_machine" "machine" {
 }
 
 data "juju_machine" "machine" {
-  model = juju_model.model.name
+  model_uuid = juju_model.model.uuid
   machine_id = juju_machine.machine.machine_id
 }`, modelName)
 }

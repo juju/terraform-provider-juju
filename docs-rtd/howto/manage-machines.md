@@ -15,7 +15,7 @@ To reference a machine that you've already provisioned outside of the current Te
 
 ```terraform
 data "juju_machine" "this" {
-  model      = juju_model.development.name
+  model_uuid = juju_model.development.uuid
   machine_id = "2"
 }
 ```
