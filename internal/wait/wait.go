@@ -53,6 +53,25 @@ func retryConfWithDefaults(rc *RetryConf) *RetryConf {
 	return rc
 }
 
+func retryConfWithDefaultsForError(rc *RetryConf) *RetryConf {
+	if rc == nil {
+		rc = &RetryConf{}
+	}
+	if rc.MaxDuration == 0 {
+		rc.MaxDuration = 15 * time.Minute
+	}
+	if rc.Delay == 0 {
+		rc.Delay = time.Second
+	}
+	if rc.MaxDelay == 0 {
+		rc.MaxDelay = time.Minute
+	}
+	if rc.Clock == nil {
+		rc.Clock = clock.WallClock
+	}
+	return rc
+}
+
 // WaitForCfg is a configuration structure for the WaitFor function.
 type WaitForCfg[I any, D any] struct {
 	Context context.Context
@@ -72,8 +91,12 @@ type WaitForCfg[I any, D any] struct {
 	RetryConf *RetryConf
 }
 
-func (cfg *WaitForCfg[I, D]) setRetryConfDefaults() {
-	cfg.RetryConf = retryConfWithDefaults(cfg.RetryConf)
+func (cfg *WaitForCfg[I, D]) setRetryConfDefaults(forError bool) {
+	if forError {
+		cfg.RetryConf = retryConfWithDefaultsForError(cfg.RetryConf)
+	} else {
+		cfg.RetryConf = retryConfWithDefaults(cfg.RetryConf)
+	}
 }
 
 // WaitForErrorCfg is a configuration structure for the WaitForError function.
@@ -94,8 +117,12 @@ type WaitForErrorCfg[I any, D any] struct {
 	RetryConf *RetryConf
 }
 
-func (cfg *WaitForErrorCfg[I, D]) setRetryConfDefaults() {
-	cfg.RetryConf = retryConfWithDefaults(cfg.RetryConf)
+func (cfg *WaitForErrorCfg[I, D]) setRetryConfDefaults(forError bool) {
+	if forError {
+		cfg.RetryConf = retryConfWithDefaultsForError(cfg.RetryConf)
+	} else {
+		cfg.RetryConf = retryConfWithDefaults(cfg.RetryConf)
+	}
 }
 
 // GetData is a function type that retrieves data based on the input.
@@ -108,7 +135,7 @@ type Assert[D any] func(D) error
 // It takes a function that retrieves data, an input to pass to that function, a list of assertions to check the data against,
 // and a list of non-fatal errors to ignore.
 func WaitFor[I any, D any](waitCfg WaitForCfg[I, D]) (D, error) {
-	waitCfg.setRetryConfDefaults()
+	waitCfg.setRetryConfDefaults(false)
 	var data D
 	retryErr := retry.Call(retry.CallArgs{
 		Func: func() error {
@@ -145,7 +172,7 @@ func WaitFor[I any, D any](waitCfg WaitForCfg[I, D]) (D, error) {
 
 // WaitForError waits for a specific error to be returned from the getData function.
 func WaitForError[I any, D any](cfg WaitForErrorCfg[I, D]) error {
-	cfg.setRetryConfDefaults()
+	cfg.setRetryConfDefaults(true)
 
 	retryErr := retry.Call(retry.CallArgs{
 		Func: func() error {
