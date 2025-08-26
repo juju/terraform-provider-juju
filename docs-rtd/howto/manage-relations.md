@@ -62,7 +62,7 @@ resource "juju_integration" "this" {
 }
 ```
 
-> See more: [`juju_integration` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/integration), [Terraform | `lifecycle` > `replace_triggered_by`](https://developer.hashicorp.com/terraform/language/meta-arguments/lifecycle#replace_triggered_by)
+> See more: [`juju_integration` (resource)](../reference/terraform-provider/resources/integration), [Terraform | `lifecycle` > `replace_triggered_by`](https://developer.hashicorp.com/terraform/language/meta-arguments/lifecycle#replace_triggered_by)
 
 
 
@@ -78,4 +78,4 @@ In a cross-model relation there is also an 'offering' model and a 'consuming' mo
 
 To remove a relation, in your Terraform plan, remove its resource definition.
 
-> See more: [`juju_integration` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/integration)
+> See more: [`juju_integration` (resource)](../reference/terraform-provider/resources/integration)

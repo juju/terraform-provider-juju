@@ -25,8 +25,32 @@ type RetryConf struct {
 	MaxDuration time.Duration
 	// Delay is the delay between retries.
 	Delay time.Duration
+
+	// MaxDelay is the maximum delay between retries.
+	MaxDelay time.Duration
+
 	// Clock is the clock to use for timing.
 	Clock clock.Clock
+}
+
+// retryConfWithDefaults creates the retryConf if nil, and sets default values for the RetryConf if they are not set.
+func retryConfWithDefaults(rc *RetryConf) *RetryConf {
+	if rc == nil {
+		rc = &RetryConf{}
+	}
+	if rc.MaxDuration == 0 {
+		rc.MaxDuration = 30 * time.Minute
+	}
+	if rc.Delay == 0 {
+		rc.Delay = time.Second
+	}
+	if rc.MaxDelay == 0 {
+		rc.MaxDelay = time.Minute
+	}
+	if rc.Clock == nil {
+		rc.Clock = clock.WallClock
+	}
+	return rc
 }
 
 // WaitForCfg is a configuration structure for the WaitFor function.
@@ -48,6 +72,10 @@ type WaitForCfg[I any, D any] struct {
 	RetryConf *RetryConf
 }
 
+func (cfg *WaitForCfg[I, D]) setRetryConfDefaults() {
+	cfg.RetryConf = retryConfWithDefaults(cfg.RetryConf)
+}
+
 // WaitForErrorCfg is a configuration structure for the WaitForError function.
 type WaitForErrorCfg[I any, D any] struct {
 	Context context.Context
@@ -66,6 +94,10 @@ type WaitForErrorCfg[I any, D any] struct {
 	RetryConf *RetryConf
 }
 
+func (cfg *WaitForErrorCfg[I, D]) setRetryConfDefaults() {
+	cfg.RetryConf = retryConfWithDefaults(cfg.RetryConf)
+}
+
 // GetData is a function type that retrieves data based on the input.
 type GetData[I any, D any] func(I) (D, error)
 
@@ -76,15 +108,7 @@ type Assert[D any] func(D) error
 // It takes a function that retrieves data, an input to pass to that function, a list of assertions to check the data against,
 // and a list of non-fatal errors to ignore.
 func WaitFor[I any, D any](waitCfg WaitForCfg[I, D]) (D, error) {
-	// Set default values for the wait configuration
-	if waitCfg.RetryConf == nil {
-		waitCfg.RetryConf = &RetryConf{
-			MaxDuration: 30 * time.Minute,
-			Delay:       time.Second,
-			Clock:       clock.WallClock,
-		}
-	}
-
+	waitCfg.setRetryConfDefaults()
 	var data D
 	retryErr := retry.Call(retry.CallArgs{
 		Func: func() error {
@@ -112,8 +136,8 @@ func WaitFor[I any, D any](waitCfg WaitForCfg[I, D]) (D, error) {
 		BackoffFunc: retry.DoubleDelay,
 		MaxDuration: waitCfg.RetryConf.MaxDuration,
 		Delay:       waitCfg.RetryConf.Delay,
+		MaxDelay:    waitCfg.RetryConf.MaxDelay,
 		Clock:       waitCfg.RetryConf.Clock,
-		MaxDelay:    time.Minute,
 		Stop:        waitCfg.Context.Done(),
 	})
 	return data, retryErr
@@ -121,16 +145,7 @@ func WaitFor[I any, D any](waitCfg WaitForCfg[I, D]) (D, error) {
 
 // WaitForError waits for a specific error to be returned from the getData function.
 func WaitForError[I any, D any](cfg WaitForErrorCfg[I, D]) error {
-	// Set default values for the retry configuration.
-	// The default max duration is 15 minutes, because this is used
-	// to wait for deletion and it should take less time.
-	if cfg.RetryConf == nil {
-		cfg.RetryConf = &RetryConf{
-			MaxDuration: 15 * time.Minute,
-			Delay:       time.Second,
-			Clock:       clock.WallClock,
-		}
-	}
+	cfg.setRetryConfDefaults()
 
 	retryErr := retry.Call(retry.CallArgs{
 		Func: func() error {
@@ -151,10 +166,11 @@ func WaitForError[I any, D any](cfg WaitForErrorCfg[I, D]) error {
 			}
 			return true
 		},
+		BackoffFunc: retry.DoubleDelay,
 		MaxDuration: cfg.RetryConf.MaxDuration,
 		Delay:       cfg.RetryConf.Delay,
+		MaxDelay:    cfg.RetryConf.MaxDelay,
 		Clock:       cfg.RetryConf.Clock,
-		MaxDelay:    time.Minute,
 		Stop:        cfg.Context.Done(),
 	})
 	return retryErr

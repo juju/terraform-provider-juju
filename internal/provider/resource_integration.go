@@ -21,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/juju/juju/core/crossmodel"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/wait"
@@ -237,7 +238,11 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 	r.trace(fmt.Sprintf("integration created on Juju between %q at %q on model %q", appNames, endpoints, modelName))
 
-	parsedApplications := parseApplications(response.Applications)
+	parsedApplications, err := parseApplications(response.Applications)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse applications, got error: %s", err))
+		return
+	}
 
 	appsType := req.Plan.Schema.GetBlocks()["application"].(schema.SetNestedBlock).NestedObject.Type()
 	parsedApps, errDiag := types.SetValueFrom(ctx, appsType, parsedApplications)
@@ -293,7 +298,12 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 
 	state.ModelName = types.StringValue(modelName)
 
-	applications := parseApplications(response.Applications)
+	applications, err := parseApplications(response.Applications)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse applications, got error: %s", err))
+		return
+	}
+
 	appType := req.State.Schema.GetBlocks()["application"].(schema.SetNestedBlock).NestedObject.Type()
 	apps, aErr := types.SetValueFrom(ctx, appType, applications)
 	if aErr.HasError() {
@@ -399,7 +409,12 @@ func (r *integrationResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	applications := parseApplications(response.Applications)
+	applications, err := parseApplications(response.Applications)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse applications, got error: %s", err))
+		return
+	}
+
 	appType := req.State.Schema.GetBlocks()["application"].(schema.SetNestedBlock).NestedObject.Type()
 	apps, aErr := types.SetValueFrom(ctx, appType, applications)
 	if aErr.HasError() {
@@ -427,29 +442,18 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	modelName := state.ModelName.ValueString()
-
-	var apps []nestedApplication
-	state.Application.ElementsAs(ctx, &apps, false)
-	endpoints, _, _, err := parseEndpoints(apps)
-	if err != nil {
-		resp.Diagnostics.AddError("Provider Error", err.Error())
+	modelName, endpointA, endpointB, idErr := modelNameAndEndpointsFromID(state.ID.ValueString())
+	if idErr.HasError() {
+		resp.Diagnostics.Append(idErr...)
 		return
 	}
-
-	// Remove the integration
-	err = r.client.Integrations.DestroyIntegration(&juju.IntegrationInput{
+	endpoints := []string{endpointA, endpointB}
+	err := r.client.Integrations.DestroyIntegration(&juju.IntegrationInput{
 		ModelName: modelName,
 		Endpoints: endpoints,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", err.Error())
-		return
-	}
-	modelName, endpointA, endpointB, idErr := modelNameAndEndpointsFromID(state.ID.ValueString())
-	if idErr.HasError() {
-		resp.Diagnostics.Append(idErr...)
 		return
 	}
 
@@ -459,10 +463,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 			GetData: r.client.Integrations.ReadIntegration,
 			Input: &juju.IntegrationInput{
 				ModelName: modelName,
-				Endpoints: []string{
-					endpointA,
-					endpointB,
-				},
+				Endpoints: endpoints,
 			},
 			ErrorToWait:    juju.IntegrationNotFoundError,
 			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError},
@@ -476,7 +477,6 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 	Make sure to manually delete them.`, endpoints, modelName, err))
 		return
 	}
-
 	r.trace(fmt.Sprintf("Deleted integration resource: %q", state.ID.ValueString()))
 }
 
@@ -564,14 +564,18 @@ func parseEndpoints(apps []nestedApplication) (endpoints []string, of *offer, ap
 	return endpoints, of, appNames, nil
 }
 
-func parseApplications(apps []juju.Application) []nestedApplication {
+func parseApplications(apps []juju.Application) ([]nestedApplication, error) {
 	applications := make([]nestedApplication, 2)
 
 	for i, app := range apps {
 		a := nestedApplication{}
 
 		if app.OfferURL != nil {
-			a.OfferURL = types.StringValue(*app.OfferURL)
+			url, err := cleanOfferURL(*app.OfferURL)
+			if err != nil {
+				return nil, err
+			}
+			a.OfferURL = types.StringValue(url)
 			a.Endpoint = types.StringValue(app.Endpoint)
 		} else {
 			a.Endpoint = types.StringValue(app.Endpoint)
@@ -580,7 +584,25 @@ func parseApplications(apps []juju.Application) []nestedApplication {
 		applications[i] = a
 	}
 
-	return applications
+	return applications, nil
+}
+
+// cleanOfferURL removes the source field from the offer URL.
+// The source represents the source controller of the offer.
+//
+// The Juju CLI sets the source field on the offer URL string when the offer is consumed.
+// The Terraform provider leaves this field empty since it is does not support
+// cross-controller relations.
+//
+// Until that changes, we clean the URL to assist in scenarios where an offer URL
+// has the source field set.
+func cleanOfferURL(offerURL string) (string, error) {
+	url, err := crossmodel.ParseOfferURL(offerURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse offer URL %q: %w", offerURL, err)
+	}
+	url.Source = ""
+	return url.String(), nil
 }
 
 func (r *integrationResource) trace(msg string, additionalFields ...map[string]interface{}) {

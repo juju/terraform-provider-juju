@@ -21,7 +21,7 @@ data "juju_secret" "my_secret_data_source" {
 }
 ```
 
-> See more: [`juju_offer` (data source)](https://registry.terraform.io/providers/juju/juju/latest/docs/data-sources/offer)
+> See more: [`juju_offer` (data source)](../reference/terraform-provider/data-sources/offer)
 
 
 ## Add a secret
@@ -41,7 +41,7 @@ resource "juju_secret" "my-secret" {
 }
 ```
 
-> See more: [`juju_secret` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/secret)
+> See more: [`juju_secret` (resource)](../reference/terraform-provider/resources/secret)
 
 ## Manage access to a secret
 
@@ -61,7 +61,7 @@ resource "juju_access_secret" "my-secret-access" {
 
 ```
 
-> See more: [`juju_access_secret`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/access_secret)
+> See more: [`juju_access_secret`](../reference/terraform-provider/resources/access_secret)
 
 
 ## Update a secret
@@ -75,5 +75,5 @@ To update a (user) secret, update its resource definition from your Terraform pl
 
 To remove a secret, remove its resource definition from your Terraform plan.
 
-> See more: [`juju_secret` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/secret)
+> See more: [`juju_secret` (resource)](../reference/terraform-provider/resources/secret)
 

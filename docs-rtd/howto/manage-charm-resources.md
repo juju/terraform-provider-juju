@@ -36,4 +36,4 @@ About `charm > revision` and `resources`:
 
 ```
 
-> See more: [`juju_application > resources`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/application#resources)
+> See more: [`juju_application > resources`](../reference/terraform-provider//resources/application)

@@ -27,7 +27,7 @@ resource "juju_credential" "this" {
 }
 ```
 
-> See more: [`juju_credential` (resource)](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/credential)
+> See more: [`juju_credential` (resource)](../reference/terraform-provider/resources/credential)
 
 ## Add a credential to a model
 > Who: User with controller `superuser` or model `admin` access.
@@ -53,10 +53,10 @@ resource "juju_model" "this" {
 
 To update a credential, in your Terraform plan, update its resource definition.
 
-> See more: [Resource `juju_credential`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/credential)
+> See more: [`juju_credential (resource)`](../reference/terraform-provider/resources/credential)
 
 ## Remove a credential
 
 To remove a credential, remove its resource definition from your Terraform plan.
 
-> See more: [`juju_credential`](https://registry.terraform.io/providers/juju/juju/latest/docs/resources/credential)
+> See more: [`juju_credential (resource)`](../reference/terraform-provider/resources/credential)
