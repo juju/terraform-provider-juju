@@ -6,6 +6,7 @@ package provider
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -29,6 +30,8 @@ func TestAcc_ResourceSecret_CreateWithoutName(t *testing.T) {
 		"key2": "value2",
 	}
 
+	secretURIregexp := regexp.MustCompile("^secret:.+")
+
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
@@ -40,6 +43,7 @@ func TestAcc_ResourceSecret_CreateWithoutName(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_secret.noname", "info", secretInfo),
 					resource.TestCheckResourceAttr("juju_secret.noname", "value.key1", "value1"),
 					resource.TestCheckResourceAttr("juju_secret.noname", "value.key2", "value2"),
+					resource.TestMatchResourceAttr("juju_secret.noname", "secret_uri", secretURIregexp),
 				),
 			},
 		},
