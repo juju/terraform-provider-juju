@@ -56,7 +56,8 @@ type CreateSecretInput struct {
 }
 
 type CreateSecretOutput struct {
-	SecretId string
+	SecretId  string
+	SecretURI string
 }
 
 type ReadSecretInput struct {
@@ -68,6 +69,7 @@ type ReadSecretInput struct {
 
 type ReadSecretOutput struct {
 	SecretId     string
+	SecretURI    string
 	Name         string
 	Value        map[string]string
 	Applications []string
@@ -141,7 +143,8 @@ func (c *secretsClient) CreateSecret(input *CreateSecretInput) (CreateSecretOutp
 		return CreateSecretOutput{}, typedError(err)
 	}
 	return CreateSecretOutput{
-		SecretId: secretURI.ID,
+		SecretId:  secretURI.ID,
+		SecretURI: secretURI.String(),
 	}, nil
 }
 
@@ -192,6 +195,7 @@ func (c *secretsClient) ReadSecret(input *ReadSecretInput) (ReadSecretOutput, er
 
 	return ReadSecretOutput{
 		SecretId:     results[0].Metadata.URI.ID,
+		SecretURI:    results[0].Metadata.URI.String(),
 		Name:         results[0].Metadata.Label,
 		Value:        decodedValue,
 		Applications: applications,
