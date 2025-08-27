@@ -180,7 +180,10 @@ func TestAcc_ResourceAccessSecret_UpgradeProvider_Schema_v0_To_v1(t *testing.T) 
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccResourceSecretWithAccess_Reorder(modelName, true),
-				PlanOnly:                 true,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "model", modelName),
+					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "applications.0", "jul"),
+				),
 			},
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
