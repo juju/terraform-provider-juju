@@ -52,6 +52,7 @@ type ReadModelResponse struct {
 	ModelConstraints constraints.Value
 }
 
+// ReadModelStatusResponse contains the status of a model.
 type ReadModelStatusResponse struct {
 	ModelStatus base.ModelStatus
 }
@@ -217,7 +218,10 @@ func (c *modelsClient) ReadModel(name string) (*ReadModelResponse, error) {
 
 	modelconfigConn, err := c.GetConnection(&name)
 	if err != nil {
-		return nil, errors.WithType(err, ModelNotFoundError)
+		if params.IsCodeNotFound(err) {
+			return nil, errors.WithType(err, ModelNotFoundError)
+		}
+		return nil, err
 	}
 	defer func() { _ = modelconfigConn.Close() }()
 
