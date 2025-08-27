@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
 func TestAcc_ResourceAccessModel(t *testing.T) {
@@ -81,7 +82,6 @@ func TestAcc_ResourceAccessModel_UpgradeProvider(t *testing.T) {
 	resourceName := "juju_access_model.test"
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
-
 		Steps: []resource.TestStep{
 			{
 				ExternalProviders: map[string]resource.ExternalProvider{
@@ -146,4 +146,72 @@ resource "juju_access_model" "test" {
   model = juju_model.test-model.name
   users = [juju_user.test-user.name]
 }`, userName, userPassword, modelName, access)
+}
+
+func TestAcc_ResourceAccessModel_Schema_v0_To_v1(t *testing.T) {
+	SkipJAAS(t)
+	user1 := acctest.RandomWithPrefix("tfuser1")
+	password1 := acctest.RandomWithPrefix("tf-test-user1")
+	user2 := acctest.RandomWithPrefix("tfuser2")
+	password2 := acctest.RandomWithPrefix("tf-test-user2")
+	modelName := acctest.RandomWithPrefix("tf-access-model")
+
+	resourceName := "juju_access_model.test"
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
+		Steps: []resource.TestStep{
+			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: "0.21.1",
+						Source:            "juju/juju",
+					},
+				},
+				Config: testAccResourceAccessModelTwoUsers(user1, password1, user2, password2, modelName, "write"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "model", modelName),
+					resource.TestCheckResourceAttr(resourceName, "access", "write"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", user1),
+					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", user2),
+				),
+			},
+			{
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceAccessModelTwoUsers(user1, password1, user2, password2, modelName, "write"),
+			},
+		},
+	})
+}
+
+func testAccResourceAccessModelTwoUsers(user1, password1, user2, password2, modelName, access string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceModel",
+		`
+resource "juju_user" "test-user1" {
+  name = "{{.User1}}"
+  password = "{{.Password1}}"
+}
+
+resource "juju_user" "test-user2" {
+  name = "{{.User2}}"
+  password = "{{.Password2}}"
+}
+
+resource "juju_model" "test-model" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_access_model" "test" {
+  access = "{{.Access}}"
+  model = juju_model.test-model.name
+
+  users = [juju_user.test-user1.name, juju_user.test-user2.name]
+}`, internaltesting.TemplateData{
+			"ModelName": modelName,
+			"User1":     user1,
+			"Password1": password1,
+			"User2":     user2,
+			"Password2": password2,
+			"Access":    access,
+		})
 }
