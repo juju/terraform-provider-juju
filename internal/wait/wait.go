@@ -91,12 +91,8 @@ type WaitForCfg[I any, D any] struct {
 	RetryConf *RetryConf
 }
 
-func (cfg *WaitForCfg[I, D]) setRetryConfDefaults(forError bool) {
-	if forError {
-		cfg.RetryConf = retryConfWithDefaultsForError(cfg.RetryConf)
-	} else {
-		cfg.RetryConf = retryConfWithDefaults(cfg.RetryConf)
-	}
+func (cfg *WaitForCfg[I, D]) setRetryConfDefaults() {
+	cfg.RetryConf = retryConfWithDefaults(cfg.RetryConf)
 }
 
 // WaitForErrorCfg is a configuration structure for the WaitForError function.
@@ -117,12 +113,8 @@ type WaitForErrorCfg[I any, D any] struct {
 	RetryConf *RetryConf
 }
 
-func (cfg *WaitForErrorCfg[I, D]) setRetryConfDefaults(forError bool) {
-	if forError {
-		cfg.RetryConf = retryConfWithDefaultsForError(cfg.RetryConf)
-	} else {
-		cfg.RetryConf = retryConfWithDefaults(cfg.RetryConf)
-	}
+func (cfg *WaitForErrorCfg[I, D]) setRetryConfDefaults() {
+	cfg.RetryConf = retryConfWithDefaultsForError(cfg.RetryConf)
 }
 
 // GetData is a function type that retrieves data based on the input.
@@ -135,7 +127,7 @@ type Assert[D any] func(D) error
 // It takes a function that retrieves data, an input to pass to that function, a list of assertions to check the data against,
 // and a list of non-fatal errors to ignore.
 func WaitFor[I any, D any](waitCfg WaitForCfg[I, D]) (D, error) {
-	waitCfg.setRetryConfDefaults(false)
+	waitCfg.setRetryConfDefaults()
 	var data D
 	retryErr := retry.Call(retry.CallArgs{
 		Func: func() error {
@@ -172,7 +164,7 @@ func WaitFor[I any, D any](waitCfg WaitForCfg[I, D]) (D, error) {
 
 // WaitForError waits for a specific error to be returned from the getData function.
 func WaitForError[I any, D any](cfg WaitForErrorCfg[I, D]) error {
-	cfg.setRetryConfDefaults(true)
+	cfg.setRetryConfDefaults()
 
 	retryErr := retry.Call(retry.CallArgs{
 		Func: func() error {
