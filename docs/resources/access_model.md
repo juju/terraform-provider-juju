@@ -27,7 +27,7 @@ resource "juju_access_model" "this" {
 
 - `access` (String) Type of access to the model
 - `model` (String) The name of the model for access management
-- `users` (List of String) List of users to grant access to
+- `users` (Set of String) Set of users to grant access to
 
 ### Read-Only
 

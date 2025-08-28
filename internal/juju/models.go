@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/juju/juju/api/base"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/core/constraints"
@@ -20,26 +21,9 @@ import (
 // TransactionError is returned when a transaction is aborted.
 const TransactionError = errors.ConstError("transaction-aborted")
 
-var ModelNotFoundError = &modelNotFoundError{}
-
-type modelNotFoundError struct {
-	uuid string
-	name string
-}
-
-func (me *modelNotFoundError) Error() string {
-	toReturn := "model %q was not found"
-	if me.name != "" {
-		return fmt.Sprintf(toReturn, me.name)
-	}
-	return fmt.Sprintf(toReturn, me.uuid)
-}
-
-// Is checks if the target error is a modelNotFoundError.
-func (me *modelNotFoundError) Is(target error) bool {
-	_, ok := target.(*modelNotFoundError)
-	return ok
-}
+// ModelNotFoundError is returned when a model cannot be found
+// when contacting the Juju API.
+var ModelNotFoundError = errors.ConstError("model-not-found")
 
 type modelsClient struct {
 	SharedClient
@@ -66,6 +50,11 @@ type ReadModelResponse struct {
 	ModelInfo        params.ModelInfo
 	ModelConfig      map[string]interface{}
 	ModelConstraints constraints.Value
+}
+
+// ReadModelStatusResponse contains the status of a model.
+type ReadModelStatusResponse struct {
+	ModelStatus base.ModelStatus
 }
 
 type UpdateModelInput struct {
@@ -233,7 +222,10 @@ func (c *modelsClient) ReadModel(name string) (*ReadModelResponse, error) {
 
 	modelconfigConn, err := c.GetConnection(&name)
 	if err != nil {
-		return nil, errors.Wrap(err, &modelNotFoundError{uuid: name})
+		if params.IsCodeNotFound(err) {
+			return nil, errors.WithType(err, ModelNotFoundError)
+		}
+		return nil, err
 	}
 	defer func() { _ = modelconfigConn.Close() }()
 
@@ -253,7 +245,7 @@ func (c *modelsClient) ReadModel(name string) (*ReadModelResponse, error) {
 		return nil, fmt.Errorf("more than one model returned for UUID: %s", modelUUIDTag.Id())
 	}
 	if len(models) < 1 {
-		return nil, &modelNotFoundError{uuid: modelUUIDTag.Id()}
+		return nil, ModelNotFoundError
 	}
 
 	// Check if the model has an error first
@@ -276,6 +268,43 @@ func (c *modelsClient) ReadModel(name string) (*ReadModelResponse, error) {
 		ModelInfo:        modelInfo,
 		ModelConfig:      modelConfig,
 		ModelConstraints: modelConstraints,
+	}, nil
+}
+
+// ReadModelStatus retrieves the status of a model by its name.
+// It returns a ReadModelStatusResponse containing the model's status.
+// If the model is not found, it returns an error.
+func (c *modelsClient) ReadModelStatus(name string) (*ReadModelStatusResponse, error) {
+	modelmanagerConn, err := c.GetConnection(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = modelmanagerConn.Close() }()
+
+	modelmanagerClient := modelmanager.NewClient(modelmanagerConn)
+	modelUUID, err := c.ModelUUID(name)
+	if err != nil {
+		return nil, err
+	}
+	modelStatus, err := modelmanagerClient.ModelStatus(names.NewModelTag(modelUUID))
+	if err != nil {
+		return nil, err
+	}
+	if len(modelStatus) < 1 {
+		return nil, errors.WithType(err, ModelNotFoundError)
+	}
+	if len(modelStatus) > 1 {
+		return nil, fmt.Errorf("more than one model returned for UUID: %s", modelUUID)
+	}
+	if modelStatus[0].Error != nil {
+		if params.IsCodeNotFound(modelStatus[0].Error) {
+			return nil, errors.WithType(modelStatus[0].Error, ModelNotFoundError)
+		}
+		return nil, modelStatus[0].Error
+	}
+
+	return &ReadModelStatusResponse{
+		ModelStatus: modelStatus[0],
 	}, nil
 }
 
