@@ -42,11 +42,22 @@ type accessModelResource struct {
 
 type accessModelResourceModel struct {
 	Model  types.String `tfsdk:"model"`
-	Users  types.List   `tfsdk:"users"`
 	Access types.String `tfsdk:"access"`
 
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
+}
+
+type accessModelResourceModelV0 struct {
+	accessModelResourceModel
+
+	Users types.List `tfsdk:"users"`
+}
+
+type accessModelResourceModelV1 struct {
+	accessModelResourceModel
+
+	Users types.Set `tfsdk:"users"`
 }
 
 func (a *accessModelResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -71,8 +82,8 @@ func (a *accessModelResource) Schema(_ context.Context, req resource.SchemaReque
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"users": schema.ListAttribute{
-				Description: "List of users to grant access to",
+			"users": schema.SetAttribute{
+				Description: "Set of users to grant access to",
 				Required:    true,
 				ElementType: types.StringType,
 			},
@@ -122,7 +133,7 @@ func (a *accessModelResource) Create(ctx context.Context, req resource.CreateReq
 		addClientNotConfiguredError(&resp.Diagnostics, "access model", "create")
 		return
 	}
-	var plan accessModelResourceModel
+	var plan accessModelResourceModelV1
 
 	// Read Terraform configuration from the request into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -163,7 +174,7 @@ func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest
 		addClientNotConfiguredError(&resp.Diagnostics, "access model", "read")
 		return
 	}
-	var plan accessModelResourceModel
+	var plan accessModelResourceModelV1
 
 	// Get the Terraform state from the request into the plan
 	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
@@ -195,7 +206,7 @@ func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest
 		}
 	}
 
-	uss, errDiag := basetypes.NewListValueFrom(ctx, types.StringType, users)
+	uss, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users)
 	plan.Users = uss
 	resp.Diagnostics.Append(errDiag...)
 	if resp.Diagnostics.HasError() {
@@ -221,7 +232,7 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	var plan, state accessModelResourceModel
+	var plan, state accessModelResourceModelV1
 
 	// Get the Terraform state from the request into the plan
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -305,7 +316,7 @@ func (a *accessModelResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 
-	var plan accessModelResourceModel
+	var plan accessModelResourceModelV1
 
 	// Get the Terraform state from the request into the plan
 	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
@@ -392,7 +403,7 @@ func newAccessModelIDFrom(modelNameStr string, accessStr string, users []string)
 	return fmt.Sprintf("%s:%s:%s", modelNameStr, accessStr, strings.Join(users, ","))
 }
 
-func retrieveAccessModelDataFromID(ctx context.Context, ID types.String, users types.List, diag *diag.Diagnostics) (string, string,
+func retrieveAccessModelDataFromID(ctx context.Context, ID types.String, users types.Set, diag *diag.Diagnostics) (string, string,
 	[]string) {
 	resID := strings.Split(ID.ValueString(), ":")
 	if len(resID) < 2 {
@@ -416,4 +427,63 @@ func retrieveAccessModelDataFromID(ctx context.Context, ID types.String, users t
 	}
 
 	return resID[0], resID[1], stateUsers
+}
+
+// UpgradeState upgrades the state of the access model resource.
+// This is used to handle changes in the resource schema between versions.
+func (o *accessModelResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
+	return map[int64]resource.StateUpgrader{
+		// Upgrade from list to set for `users`.
+		0: {
+			PriorSchema: &schema.Schema{
+				Attributes: map[string]schema.Attribute{
+					"model": schema.StringAttribute{
+						Required: true,
+					},
+					"users": schema.ListAttribute{
+						Required:    true,
+						ElementType: types.StringType,
+					},
+					"access": schema.StringAttribute{
+						Required: true,
+					},
+					// ID required by the testing framework
+					"id": schema.StringAttribute{
+						Computed: true,
+					},
+				},
+				Version: 0,
+			},
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				var priorStateData accessModelResourceModelV0
+
+				resp.Diagnostics.Append(req.State.Get(ctx, &priorStateData)...)
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				users := []string{}
+				if !priorStateData.Users.IsNull() {
+					resp.Diagnostics.Append(priorStateData.Users.ElementsAs(ctx, &users, false)...)
+				}
+
+				usersSet, diags := types.SetValueFrom(ctx, types.StringType, users)
+				if diags.HasError() {
+					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to convert users to set, got error: %s", diags))
+					return
+				}
+
+				upgradedStateData := accessModelResourceModelV1{
+					accessModelResourceModel: accessModelResourceModel{
+						Model:  priorStateData.Model,
+						Access: priorStateData.Access,
+						ID:     priorStateData.ID,
+					},
+					Users: usersSet,
+				}
+
+				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
+			},
+		},
+	}
 }
