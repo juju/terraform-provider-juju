@@ -91,8 +91,8 @@ resource "juju_application" "this" {
   trust = true
 
   charm {
-    name     = "zinc-k8s"
-	channel  = "latest/stable"
+    name     = "coredns"
+	revision = 165
   }
 }
 

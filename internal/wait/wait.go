@@ -53,6 +53,25 @@ func retryConfWithDefaults(rc *RetryConf) *RetryConf {
 	return rc
 }
 
+func retryConfWithDefaultsForError(rc *RetryConf) *RetryConf {
+	if rc == nil {
+		rc = &RetryConf{}
+	}
+	if rc.MaxDuration == 0 {
+		rc.MaxDuration = 15 * time.Minute
+	}
+	if rc.Delay == 0 {
+		rc.Delay = time.Second
+	}
+	if rc.MaxDelay == 0 {
+		rc.MaxDelay = time.Minute
+	}
+	if rc.Clock == nil {
+		rc.Clock = clock.WallClock
+	}
+	return rc
+}
+
 // WaitForCfg is a configuration structure for the WaitFor function.
 type WaitForCfg[I any, D any] struct {
 	Context context.Context
@@ -95,7 +114,7 @@ type WaitForErrorCfg[I any, D any] struct {
 }
 
 func (cfg *WaitForErrorCfg[I, D]) setRetryConfDefaults() {
-	cfg.RetryConf = retryConfWithDefaults(cfg.RetryConf)
+	cfg.RetryConf = retryConfWithDefaultsForError(cfg.RetryConf)
 }
 
 // GetData is a function type that retrieves data based on the input.

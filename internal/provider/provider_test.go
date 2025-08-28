@@ -255,9 +255,6 @@ func createCloudCredential(t *testing.T) {
 		t.Fatal("TestClient is not set")
 	}
 	cloudName := canonicalCloudName(os.Getenv(TestCloudEnvKey))
-	if cloudName == "localhost" {
-		return
-	}
 
 	// List controller credentials to bail out early if one already exists.
 	controllerCreds, _ := TestClient.Credentials.ListControllerCredentials()
