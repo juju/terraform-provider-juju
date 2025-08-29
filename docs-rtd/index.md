@@ -11,6 +11,7 @@ relatedlinks: "[Charmcraft](https://documentation.ubuntu.com/charmcraft/), [Char
 
 tutorial
 howto/index
+explanation/index
 Reference <reference/index>
 ```
 
