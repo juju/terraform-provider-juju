@@ -13,14 +13,21 @@ BREAKING CHANGES:
   * Application data source
   * Offer data source
   * Secret data source
+  * Machine data source
   * Application resource
   * Integration resource
   * Machine resource
   * Offer resource
   * SSH Key resource
+  * Model Access resource
+  * Secret Access resource
+* Related to the above, all resources that import a model-scoped resource have had their import
+syntax changed to require a model UUID instead of a model name. This includes most of the resources
+in the above list with some exceptions (e.g. offer import requires the offer URL) and additionally
+includes the model resource.
 * The offer data source no longer contains the computed field `model`.
 * The `placement` field has been removed from the application resource - use `machines` instead.
-* The `principle` field has been removed from the application resource - unused.
+* The `principle` field has been removed from the application resource as it was unused.
 * The `series` field has been removed from the application resource - use `base` instead.
 * The `series` field has been removed from the machine resource - use `base` instead.
 

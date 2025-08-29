@@ -267,23 +267,28 @@ func (sc *sharedClient) ModelOwnerAndName(modelUUID string) (owner, name string,
 }
 
 // ModelUUID returns the model uuid for the requested model name and owner.
-// The modelName is required by the modelOwner is optional.
+// The modelName is required while the modelOwner is optional.
 //
-// In pre v1.0 releases of the provider, resources referred to model by name
-// only. This was deprecated in favor of using the model uuid, to avoid ambiguity
+// In pre-v1.0 releases of the provider, resources referred to models by name
+// only. This was deprecated in favor of using the model uuid to avoid ambiguity
 // when multiple models with the same name but different owners exist.
 //
-// To allow for upgrades from prev 1.0 versions of the provider, the modelOwner
-// can be excluded and the function will search by model name only which may
+// To allow for upgrades from pre-v1.0 versions of the provider, the modelOwner
+// can be excluded and the method will search only by model name. This may
 // return an incorrect model if multiple models with the same name exist.
 // In these scenarios the user will find that their plan will specify a different
-// model uuid to the one they expect which will require manual intervention.
+// model uuid to the one they expect requiring manual intervention.
 func (sc *sharedClient) ModelUUID(modelName, modelOwner string) (string, error) {
 	sc.modelUUIDmu.Lock()
 	defer sc.modelUUIDmu.Unlock()
 
 	sc.initializeModelCache()
-	sc.Tracef(fmt.Sprintf("ModelUUID cache looking for %q", modelName))
+
+	if modelOwner != "" {
+		sc.Tracef(fmt.Sprintf("ModelUUID cache looking for %q owned by %q", modelName, modelOwner))
+	} else {
+		sc.Tracef(fmt.Sprintf("ModelUUID cache looking for %q with no owner specified", modelName))
+	}
 	for uuid, m := range sc.modelUUIDcache {
 		if m.name == modelName {
 			if modelOwner == "" {
