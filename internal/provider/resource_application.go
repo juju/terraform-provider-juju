@@ -1402,7 +1402,7 @@ func (o *applicationResource) UpgradeState(ctx context.Context) map[int64]resour
 					return
 				}
 
-				modelUUID, err := o.client.Models.ModelUUID(appV0.ModelName.ValueString())
+				modelUUID, err := o.client.Models.ModelUUID(appV0.ModelName.ValueString(), "")
 				if err != nil {
 					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", appV0.ModelName.ValueString(), err))
 					return

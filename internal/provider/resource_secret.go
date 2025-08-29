@@ -448,7 +448,7 @@ func (o *secretResource) UpgradeState(ctx context.Context) map[int64]resource.St
 				}
 
 				modelStr := priorStateData.Model.ValueString()
-				modelUUID, err := o.client.Models.ModelUUID(modelStr)
+				modelUUID, err := o.client.Models.ModelUUID(modelStr, "")
 				if err != nil {
 					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", modelStr, err))
 					return

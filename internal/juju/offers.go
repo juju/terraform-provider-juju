@@ -205,7 +205,7 @@ func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, erro
 	if input.GetModelUUID {
 		// TODO(JUJU-8299): The modelUUID method needs to be changed to also use the model owner.
 		// Do this after all resources reference models by UUID and we can clean up the model cache.
-		response.ModelUUID, err = c.ModelUUID(resultURL.ModelName)
+		response.ModelUUID, err = c.ModelUUID(resultURL.ModelName, resultURL.User)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get model UUID for model %q: %w", resultURL.ModelName, err)
 		}

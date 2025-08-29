@@ -283,7 +283,7 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	if len(annotations) > 0 {
 		err = r.client.Annotations.SetAnnotations(&juju.SetAnnotationsInput{
-			ModelUUID:   modelName,
+			ModelUUID:   response.UUID,
 			Annotations: annotations,
 			EntityTag:   names.NewModelTag(response.UUID),
 		})
@@ -504,7 +504,7 @@ func (r *modelResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	// Check annotations
 	if !state.Annotations.Equal(plan.Annotations) {
-		resp.Diagnostics.Append(updateAnnotations(ctx, &r.client.Annotations, state.Annotations, plan.Annotations, plan.Name.ValueString(), names.NewModelTag(plan.UUID.ValueString()))...)
+		resp.Diagnostics.Append(updateAnnotations(ctx, &r.client.Annotations, state.Annotations, plan.Annotations, plan.UUID.ValueString(), names.NewModelTag(plan.UUID.ValueString()))...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -573,7 +573,7 @@ func (r *modelResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	err = wait.WaitForError(wait.WaitForErrorCfg[string, *juju.ReadModelStatusResponse]{
 		Context:        ctx,
 		GetData:        r.client.Models.ReadModelStatus,
-		Input:          modelName,
+		Input:          modelUUID,
 		ErrorToWait:    juju.ModelNotFoundError,
 		NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError},
 	})
