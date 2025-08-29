@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
 // newConfig converts a types.Map (from state or plan) to a map[string]string.
@@ -66,6 +67,41 @@ func newConfigFromModelConfigAPI(ctx context.Context, configFromAPI map[string]i
 		}
 	}
 
+	return config, nil
+}
+
+// newConfigFromReaApplicationAPI converts the config returned by the
+// ReaApplication API to a map[string]*string, filtering out any keys that
+// are at their default value. And adding the keys in the state but not in
+// the API response.
+func newConfigFromReaApplicationAPI(_ context.Context, configFromAPI map[string]juju.ConfigEntry, configFromState types.Map) (map[string]*string, diag.Diagnostics) {
+	diags := diag.Diagnostics{}
+	config := map[string]*string{}
+	stateConfig := map[string]*string{}
+	diags.Append(configFromState.ElementsAs(context.Background(), &stateConfig, false)...)
+	if diags.HasError() {
+		return nil, diags
+	}
+	// Add all non-default config from the API.
+	for k, v := range configFromAPI {
+		if !v.IsDefault {
+			stringifiedValue := v.String()
+			config[k] = &stringifiedValue
+		}
+	}
+
+	// Add all config from the state that is not in the API response.
+	for k, v := range stateConfig {
+		if _, exists := config[k]; !exists {
+			config[k] = v
+		}
+	}
+	// If there is no config, return nil to avoid returning
+	// an empty map. We need that because in the state we have nil, and
+	// if we return an empty map here, the state will see that as a change.
+	if len(config) == 0 {
+		return nil, nil
+	}
 	return config, nil
 }
 

@@ -1280,6 +1280,80 @@ func TestAcc_ResourceApplication_StorageK8s(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceApplication_UnsetConfigUsingNull(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-application-unset-config")
+	appName := "test-app"
+	resourceName := "juju_application.test-app"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccApplicationConfigNull(modelName, appName, "\"xxx\"", true),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", appName),
+					resource.TestCheckResourceAttr(resourceName, "config.token", "xxx"),
+				),
+			},
+			{
+				Config: testAccApplicationConfigNull(modelName, appName, "null", true),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", appName),
+					resource.TestCheckNoResourceAttr(resourceName, "config.token"),
+				),
+			},
+			{
+				Config: testAccApplicationConfigNull(modelName, appName, "null", false),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", appName),
+					resource.TestCheckNoResourceAttr(resourceName, "config.token"),
+				),
+			},
+			{
+				Config: testAccApplicationConfigNull(modelName, appName, "\"ABC\"", true),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", appName),
+					resource.TestCheckResourceAttr(resourceName, "config.token", "ABC"),
+				),
+			},
+			{
+				Config: testAccApplicationConfigNull(modelName, appName, "\"\"", true),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", appName),
+					resource.TestCheckResourceAttr(resourceName, "config.token", ""),
+				),
+			},
+		},
+	})
+}
+
+func testAccApplicationConfigNull(modelName, appName, configValue string, includeConfig bool) string {
+	return internaltesting.GetStringFromTemplateWithData("testAccApplicationConfigNull", `
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_application" "{{.AppName}}" {
+  model = juju_model.{{.ModelName}}.name
+  name  = "{{.AppName}}"
+  charm {
+	name = "juju-qa-dummy-source"
+  }
+  {{ if .IncludeConfig }}
+  config = {
+	token = {{.ConfigValue}}
+  }
+  {{ end }}
+}
+`, internaltesting.TemplateData{
+		"ModelName":     modelName,
+		"AppName":       appName,
+		"ConfigValue":   configValue,
+		"IncludeConfig": includeConfig,
+	})
+}
+
 func testAccResourceApplicationBasic_Minimal(modelName, charmName string) string {
 	return fmt.Sprintf(`
 		resource "juju_model" "testmodel" {
