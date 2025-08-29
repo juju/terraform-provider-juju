@@ -49,7 +49,7 @@ const (
 )
 
 type CreateSecretInput struct {
-	ModelName string
+	ModelUUID string
 	Name      string
 	Value     map[string]string
 	Info      string
@@ -87,7 +87,7 @@ type UpdateSecretInput struct {
 
 type DeleteSecretInput struct {
 	SecretId  string
-	ModelName string
+	ModelUUID string
 }
 
 type GrantRevokeAccessSecretInput struct {
@@ -120,7 +120,7 @@ func newSecretsClient(sc SharedClient) *secretsClient {
 
 // CreateSecret creates a new secret.
 func (c *secretsClient) CreateSecret(input *CreateSecretInput) (CreateSecretOutput, error) {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return CreateSecretOutput{}, err
 	}
@@ -266,7 +266,7 @@ func (c *secretsClient) UpdateSecret(input *UpdateSecretInput) error {
 
 // DeleteSecret deletes a secret.
 func (c *secretsClient) DeleteSecret(input *DeleteSecretInput) error {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
 	}

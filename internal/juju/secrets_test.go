@@ -58,7 +58,7 @@ func (s *SecretSuite) TestCreateSecret() {
 
 	client := s.getSecretsClient()
 	output, err := client.CreateSecret(&CreateSecretInput{
-		ModelName: *s.testModelName,
+		ModelUUID: *s.testModelName,
 		Name:      "test-secret",
 		Value:     decodedValue,
 		Info:      "test info",
@@ -84,7 +84,7 @@ func (s *SecretSuite) TestCreateSecretError() {
 
 	client := s.getSecretsClient()
 	output, err := client.CreateSecret(&CreateSecretInput{
-		ModelName: *s.testModelName,
+		ModelUUID: *s.testModelName,
 		Name:      "test-secret",
 		Value:     decodedValue,
 		Info:      "test info",
@@ -300,7 +300,7 @@ func (s *SecretSuite) TestDeleteSecret() {
 	client := s.getSecretsClient()
 	err = client.DeleteSecret(&DeleteSecretInput{
 		SecretId:  secretId,
-		ModelName: *s.testModelName,
+		ModelUUID: *s.testModelName,
 	})
 	s.Assert().NoError(err)
 }

@@ -14,9 +14,9 @@ A resource that represent a Juju Access Model.
 
 ```terraform
 resource "juju_access_model" "this" {
-  model  = juju_model.dev.name
-  access = "write"
-  users  = [juju_user.dev.name, juju_user.qa.name]
+  model_uuid = juju_model.dev.uuid
+  access     = "write"
+  users      = [juju_user.dev.name, juju_user.qa.name]
 }
 ```
 
@@ -26,7 +26,7 @@ resource "juju_access_model" "this" {
 ### Required
 
 - `access` (String) Type of access to the model
-- `model` (String) The name of the model for access management
+- `model_uuid` (String) The uuid of the model for access management
 - `users` (Set of String) Set of users to grant access to
 
 ### Read-Only

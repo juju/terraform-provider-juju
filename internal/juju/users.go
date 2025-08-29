@@ -101,7 +101,7 @@ func (c *usersClient) ReadUser(name string) (*ReadUserResponse, error) {
 	}, nil
 }
 
-func (c *usersClient) ModelUserInfo(modelName string) (*ReadModelUserResponse, error) {
+func (c *usersClient) ModelUserInfo(modelUUID string) (*ReadModelUserResponse, error) {
 	usermanagerConn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func (c *usersClient) ModelUserInfo(modelName string) (*ReadModelUserResponse, e
 	defer func() { _ = usermanagerConn.Close() }()
 	usermanagerClient := usermanager.NewClient(usermanagerConn)
 
-	uuid, err := c.ModelUUID(modelName)
+	uuid, err := c.ModelUUID(modelUUID)
 	if err != nil {
 		return nil, err
 	}

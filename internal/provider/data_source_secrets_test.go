@@ -55,7 +55,7 @@ resource "juju_model" "{{.ModelName}}" {
 }
 
 resource "juju_secret" "secret_resource" {
-  model = juju_model.{{.ModelName}}.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
   name  = "{{.SecretName}}"
   value =  {
     {{- range $key, $value := .SecretValue }}

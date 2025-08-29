@@ -11,6 +11,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
@@ -39,7 +40,7 @@ func TestAcc_ResourceSecret_CreateWithoutName(t *testing.T) {
 			{
 				Config: testAccResourceSecretWithoutName(modelName, secretValue, secretInfo),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_secret.noname", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_secret.noname", "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr("juju_secret.noname", "info", secretInfo),
 					resource.TestCheckResourceAttr("juju_secret.noname", "value.key1", "value1"),
 					resource.TestCheckResourceAttr("juju_secret.noname", "value.key2", "value2"),
@@ -73,7 +74,7 @@ func TestAcc_ResourceSecret_CreateWithInfo(t *testing.T) {
 			{
 				Config: testAccResourceSecret(modelName, secretName, secretValue, secretInfo),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_secret."+secretName, "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_secret."+secretName, "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "name", secretName),
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "info", secretInfo),
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "value.key1", "value1"),
@@ -83,8 +84,18 @@ func TestAcc_ResourceSecret_CreateWithInfo(t *testing.T) {
 			{
 				ImportStateVerify: true,
 				ImportState:       true,
-				ImportStateId:     fmt.Sprintf("%s:%s", modelName, secretName),
-				ResourceName:      "juju_secret." + secretName,
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					rs, ok := s.RootModule().Resources["juju_secret."+secretName]
+					if !ok {
+						return "", fmt.Errorf("resource not found in state")
+					}
+					id := rs.Primary.Attributes["model_uuid"]
+					if id == "" {
+						return "", fmt.Errorf("model_uuid is empty in state")
+					}
+					return fmt.Sprintf("%s:%s", id, secretName), nil
+				},
+				ResourceName: "juju_secret." + secretName,
 			},
 		},
 	})
@@ -112,7 +123,7 @@ func TestAcc_ResourceSecret_CreateWithNoInfo(t *testing.T) {
 			{
 				Config: testAccResourceSecret(modelName, secretName, secretValue, ""),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_secret."+secretName, "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_secret."+secretName, "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "name", secretName),
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "value.key1", "value1"),
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "value.key2", "value2"),
@@ -154,7 +165,7 @@ func TestAcc_ResourceSecret_Update(t *testing.T) {
 			{
 				Config: testAccResourceSecret(modelName, secretName, secretValue, secretInfo),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_secret."+secretName, "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_secret."+secretName, "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "name", secretName),
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "info", secretInfo),
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "value.key1", "value1"),
@@ -164,7 +175,7 @@ func TestAcc_ResourceSecret_Update(t *testing.T) {
 			{
 				Config: testAccResourceSecret(modelName, secretName, secretValueUpdated, updatedSecretInfo),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_secret."+secretName, "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_secret."+secretName, "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "name", secretName),
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "info", updatedSecretInfo),
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "value.key1", "value1"),
@@ -176,7 +187,79 @@ func TestAcc_ResourceSecret_Update(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceSecret_UpgradeV0ToV1(t *testing.T) {
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
+		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+	secretName := "tf-test-secret"
+	secretValue := map[string]string{
+		"key1": "value1",
+		"key2": "value2",
+	}
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() { testAccPreCheck(t) },
+		Steps: []resource.TestStep{
+			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderPreV1Version,
+						Source:            "juju/juju",
+					},
+				},
+				Config: testAccResourceSecretV0(modelName, secretName, secretValue, ""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_secret."+secretName, "model", modelName),
+					resource.TestCheckResourceAttr("juju_secret."+secretName, "name", secretName),
+					resource.TestCheckResourceAttr("juju_secret."+secretName, "value.key1", "value1"),
+					resource.TestCheckResourceAttr("juju_secret."+secretName, "value.key2", "value2"),
+				),
+			},
+			{
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceSecret(modelName, secretName, secretValue, ""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("juju_secret."+secretName, "model_uuid", "juju_model."+modelName, "uuid"),
+				),
+			},
+		},
+	})
+}
+
 func testAccResourceSecret(modelName, secretName string, secretValue map[string]string, secretInfo string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceSecret",
+		`
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_secret" "{{.SecretName}}" {
+  model_uuid = juju_model.{{.ModelName}}.uuid
+  name  = "{{.SecretName}}"
+  value =  {
+    {{- range $key, $value := .SecretValue }}
+    "{{$key}}" = "{{$value}}"
+    {{- end }}
+  }
+  {{- if ne .SecretInfo "" }}
+  info  = "{{.SecretInfo}}"
+  {{- end }}
+}
+`, internaltesting.TemplateData{
+			"ModelName":   modelName,
+			"SecretName":  secretName,
+			"SecretValue": secretValue,
+			"SecretInfo":  secretInfo,
+		})
+}
+
+func testAccResourceSecretV0(modelName, secretName string, secretValue map[string]string, secretInfo string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceSecret",
 		`
@@ -213,7 +296,7 @@ resource "juju_model" "{{.ModelName}}" {
 }
 
 resource "juju_secret" "noname" {
-  model = juju_model.{{.ModelName}}.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
   value =  {
     {{- range $key, $value := .SecretValue }}
     "{{$key}}" = "{{$value}}"
