@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 
@@ -22,6 +23,7 @@ func TestNewConfig(t *testing.T) {
 		"key2": stringP("value2"),
 		"key3": stringP("value3"),
 		"key4": nil,
+		"key5": stringP(""),
 	}
 	tfMapToTest, diags := types.MapValueFrom(t.Context(), types.StringType, mapToTest)
 	require.False(t, diags.HasError(), "failed to create types.Map from map: %v", diags)
@@ -32,11 +34,9 @@ func TestNewConfig(t *testing.T) {
 	expectedConfig := map[string]string{
 		"key2": "value2",
 		"key3": "value3",
+		"key5": "",
 	}
-	assert.Equal(t, len(expectedConfig), len(config), "config length mismatch")
-	for k, v := range expectedConfig {
-		assert.Equal(t, v, config[k], "config[%q] mismatch", k)
-	}
+	assert.Equal(t, config, expectedConfig, fmt.Sprintf("config mismatch: got %+v, want %+v", config, expectedConfig))
 }
 
 func TestNewConfigFromModelConfigAPI(t *testing.T) {
@@ -59,16 +59,10 @@ func TestNewConfigFromModelConfigAPI(t *testing.T) {
 
 	expectedConfig := map[string]*string{
 		"key2": stringP("value2"),
-		"key5": nil,
+		"key3": nil,
+		"key5": stringP("value5"),
 	}
-	assert.Equal(t, len(expectedConfig), len(config), "config length mismatch")
-	for k, v := range expectedConfig {
-		if v == nil || config[k] == nil {
-			assert.Equal(t, v, config[k], "config[%q] nil mismatch", k)
-		} else {
-			assert.Equal(t, *v, *config[k], "config[%q] value mismatch", k)
-		}
-	}
+	assert.Equal(t, config, expectedConfig, fmt.Sprintf("config mismatch: got %+v, want %+v", config, expectedConfig))
 }
 
 func TestComputeConfigDiff(t *testing.T) {
@@ -98,10 +92,7 @@ func TestComputeConfigDiff(t *testing.T) {
 		"key4": "value4",
 		"key5": "value5",
 	}
-	assert.Equal(t, len(expectedNewConfig), len(newConfig), "newConfig length mismatch")
-	for k, v := range expectedNewConfig {
-		assert.Equal(t, v, newConfig[k], "newConfig[%q] mismatch", k)
-	}
+	assert.Equal(t, expectedNewConfig, newConfig, fmt.Sprintf("newConfig mismatch: got %+v, want %+v", newConfig, expectedNewConfig))
 
 	expectedKeysToUnset := []string{"key3", "key1"}
 	assert.Equal(t, len(expectedKeysToUnset), len(keysToUnset), "keysToUnset length mismatch")

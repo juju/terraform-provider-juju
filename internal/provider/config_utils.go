@@ -58,6 +58,8 @@ func newConfigFromModelConfigAPI(ctx context.Context, configFromAPI map[string]i
 			if value, exists := configFromAPI[k]; exists {
 				stringifiedValue := fmt.Sprint(value)
 				config[k] = &stringifiedValue
+			} else {
+				config[k] = v
 			}
 		} else {
 			config[k] = nil

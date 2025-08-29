@@ -136,6 +136,21 @@ resource "juju_model" "this" {
 					testAccCheckDevelopmentConfigIsUnset(modelName),
 				),
 			},
+			{
+				Config: fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+  config = {
+	logging-config = "warn"
+  }
+}
+`, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", modelName),
+					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
+					testAccCheckDevelopmentConfigIsUnset(modelName),
+				),
+			},
 		},
 	})
 }
