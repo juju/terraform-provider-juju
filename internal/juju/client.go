@@ -213,11 +213,9 @@ func (sc *sharedClient) GetConnection(modelUUID *string) (api.Connection, error)
 		do.RetryDelay = 1 * time.Second
 	}
 
-	getModelUUID := func() string {
-		if modelUUID != nil {
-			return *modelUUID
-		}
-		return ""
+	var modelUUIDStr string
+	if modelUUID != nil {
+		modelUUIDStr = *modelUUID
 	}
 
 	connr, err := connector.NewSimple(connector.SimpleConfig{
@@ -227,7 +225,7 @@ func (sc *sharedClient) GetConnection(modelUUID *string) (api.Connection, error)
 		ClientID:            sc.controllerConfig.ClientID,
 		ClientSecret:        sc.controllerConfig.ClientSecret,
 		CACert:              sc.controllerConfig.CACert,
-		ModelUUID:           getModelUUID(),
+		ModelUUID:           modelUUIDStr,
 	}, dialOptions)
 	if err != nil {
 		return nil, err
