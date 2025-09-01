@@ -128,7 +128,7 @@ func TestNewConfigFromReaApplicationAPI(t *testing.T) {
 	tfStateConfig, diags := types.MapValueFrom(t.Context(), types.StringType, stateConfigMap)
 	require.False(t, diags.HasError(), "failed to create types.Map from stateConfigMap: %v", diags)
 
-	config, diags := newConfigFromReaApplicationAPI(t.Context(), configFromAPI, tfStateConfig)
+	config, diags := newConfigFromApplicationAPI(t.Context(), configFromAPI, tfStateConfig)
 	require.False(t, diags.HasError(), "newConfigFromReaApplicationAPI returned diagnostics: %v", diags)
 
 	expectedConfig := map[string]*string{
@@ -138,5 +138,55 @@ func TestNewConfigFromReaApplicationAPI(t *testing.T) {
 		"key5": nil,                    // from state, not in API
 		"key6": nil,                    // from state, even if default in API
 	}
+	assert.Equal(t, expectedConfig, config, fmt.Sprintf("config mismatch: got %+v, want %+v", config, expectedConfig))
+}
+
+func TestNewConfigFromReadApplicationAPINilState(t *testing.T) {
+	var configFromAPI map[string]juju.ConfigEntry
+	tfStateConfig, diags := types.MapValueFrom(t.Context(), types.StringType, configFromAPI)
+	require.False(t, diags.HasError(), "failed to create types.Map from empty stateConfig: %v", diags)
+
+	config, diags := newConfigFromApplicationAPI(t.Context(), configFromAPI, tfStateConfig)
+	require.False(t, diags.HasError(), "newConfigFromReaApplicationAPI returned diagnostics: %v", diags)
+
+	var expectedConfig map[string]*string // nil
+	assert.Equal(t, expectedConfig, config, fmt.Sprintf("config mismatch: got %+v, want %+v", config, expectedConfig))
+}
+
+func TestNewConfigFromReadApplicationAPIEmptyState(t *testing.T) {
+	configFromAPI := map[string]juju.ConfigEntry{}
+
+	tfStateConfig, diags := types.MapValueFrom(t.Context(), types.StringType, map[string]*string{})
+	require.False(t, diags.HasError(), "failed to create types.Map from empty stateConfig: %v", diags)
+
+	config, diags := newConfigFromApplicationAPI(t.Context(), configFromAPI, tfStateConfig)
+	require.False(t, diags.HasError(), "newConfigFromReaApplicationAPI returned diagnostics: %v", diags)
+
+	expectedConfig := map[string]*string{} // expect empty map
+	assert.Equal(t, expectedConfig, config, fmt.Sprintf("config mismatch: got %+v, want %+v", config, expectedConfig))
+}
+
+func TestNewConfigModelConfigAPINilState(t *testing.T) {
+	var configFromAPI map[string]interface{}
+	tfStateConfig, diags := types.MapValueFrom(t.Context(), types.StringType, configFromAPI)
+	require.False(t, diags.HasError(), "failed to create types.Map from empty stateConfig: %v", diags)
+
+	config, diags := newConfigFromModelConfigAPI(t.Context(), configFromAPI, tfStateConfig)
+	require.False(t, diags.HasError(), "newConfigFromReaApplicationAPI returned diagnostics: %v", diags)
+
+	var expectedConfig map[string]*string // nil
+	assert.Equal(t, expectedConfig, config, fmt.Sprintf("config mismatch: got %+v, want %+v", config, expectedConfig))
+}
+
+func TestNewConfigFromModelConfigAPIEmptyState(t *testing.T) {
+	configFromAPI := map[string]interface{}{}
+
+	tfStateConfig, diags := types.MapValueFrom(t.Context(), types.StringType, map[string]*string{})
+	require.False(t, diags.HasError(), "failed to create types.Map from empty stateConfig: %v", diags)
+
+	config, diags := newConfigFromModelConfigAPI(t.Context(), configFromAPI, tfStateConfig)
+	require.False(t, diags.HasError(), "newConfigFromReaApplicationAPI returned diagnostics: %v", diags)
+
+	expectedConfig := map[string]*string{} // expect empty map
 	assert.Equal(t, expectedConfig, config, fmt.Sprintf("config mismatch: got %+v, want %+v", config, expectedConfig))
 }

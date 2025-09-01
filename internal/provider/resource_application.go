@@ -820,7 +820,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 
 	// Config
 	if len(response.Config) > 0 {
-		config, diags := newConfigFromReaApplicationAPI(ctx, response.Config, state.Config)
+		config, diags := newConfigFromApplicationAPI(ctx, response.Config, state.Config)
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
