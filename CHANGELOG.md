@@ -12,6 +12,7 @@ BREAKING CHANGES:
   * Model data source
   * Application data source
   * Offer data source
+  * Secret data source
   * Application resource
   * Integration resource
   * Machine resource
