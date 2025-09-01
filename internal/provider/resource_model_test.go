@@ -50,11 +50,7 @@ func TestAcc_ResourceModel(t *testing.T) {
 			{
 				ImportStateVerify: true,
 				ImportState:       true,
-				ImportStateVerifyIgnore: []string{
-					"config.%",
-					"config.logging-config"},
-				ImportStateId: modelName,
-				ResourceName:  resourceName,
+				ResourceName:      resourceName,
 			},
 		},
 	})
