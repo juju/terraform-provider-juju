@@ -5,7 +5,6 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -212,8 +211,10 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 	var config map[string]string
-	resp.Diagnostics.Append(plan.Config.ElementsAs(ctx, &config, false)...)
-	if resp.Diagnostics.HasError() {
+	var diags diag.Diagnostics
+	config, diags = newConfig(ctx, plan.Config)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
 		return
 	}
 	credential := plan.Credential.ValueString()
@@ -373,44 +374,16 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	// Config
 	if len(response.ModelConfig) > 0 {
-		// we make the stateConfig (instead of only declaring), because
-		// if state.Config is null, then stateConfig will be null as well,
-		// and we want to store the newStateConfig below as {} instead of
-		// null in the state
-		stateConfig := make(map[string]string, len(response.ModelConfig))
-		resp.Diagnostics.Append(state.Config.ElementsAs(ctx, &stateConfig, false)...)
+		config, diags := newConfigFromModelConfigAPI(ctx, response.ModelConfig, state.Config)
+		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-
-		for k := range stateConfig {
-			if value, exists := response.ModelConfig[k]; exists {
-				var serialised string
-				switch value.(type) {
-				// TODO: review for other possible types
-				case bool:
-					b, err := json.Marshal(value)
-					if err != nil {
-						resp.Diagnostics.AddError("Provider Error", fmt.Sprintf("Unable to cast config value, got error: %s", err))
-						return
-					}
-					serialised = string(b)
-				default:
-					serialised = value.(string)
-				}
-
-				stateConfig[k] = serialised
-			}
-		}
-
-		configType := req.State.Schema.GetAttributes()["config"].(schema.MapAttribute).ElementType
-		newStateConfig, errDiag := types.MapValueFrom(ctx, configType, stateConfig)
-		resp.Diagnostics.Append(errDiag...)
+		state.Config, diags = types.MapValueFrom(ctx, types.StringType, config)
+		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-
-		state.Config = newStateConfig
 	}
 
 	annotations, err := r.client.Annotations.GetAnnotations(&juju.GetAnnotationsInput{
@@ -466,23 +439,12 @@ func (r *modelResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	if !plan.Config.Equal(state.Config) {
 		modelUpdate = true
-		oldConfigMap := map[string]string{}
-		resp.Diagnostics.Append(state.Config.ElementsAs(ctx, &oldConfigMap, false)...)
-		if resp.Diagnostics.HasError() {
+		var diags diag.Diagnostics
+		configMap, unsetConfigKeys, diags = computeConfigDiff(ctx, state.Config, plan.Config)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
 			return
 		}
-		newConfigMap := map[string]string{}
-		resp.Diagnostics.Append(plan.Config.ElementsAs(ctx, &newConfigMap, false)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-
-		for k := range oldConfigMap {
-			if _, ok := newConfigMap[k]; !ok {
-				unsetConfigKeys = append(unsetConfigKeys, k)
-			}
-		}
-		configMap = newConfigMap
 	}
 
 	// Check the constraints
