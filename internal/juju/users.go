@@ -109,18 +109,13 @@ func (c *usersClient) ModelUserInfo(modelUUID string) (*ReadModelUserResponse, e
 	defer func() { _ = usermanagerConn.Close() }()
 	usermanagerClient := usermanager.NewClient(usermanagerConn)
 
-	uuid, err := c.ModelUUID(modelUUID)
-	if err != nil {
-		return nil, err
-	}
-
-	users, err := usermanagerClient.ModelUserInfo(uuid)
+	users, err := usermanagerClient.ModelUserInfo(modelUUID)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(users) < 1 {
-		return nil, fmt.Errorf("no users returned for model name: %s", uuid)
+		return nil, fmt.Errorf("no users returned for model (%s)", modelUUID)
 	}
 
 	return &ReadModelUserResponse{

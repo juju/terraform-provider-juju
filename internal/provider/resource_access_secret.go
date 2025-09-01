@@ -511,7 +511,7 @@ func (s *accessSecretResource) accessSecretV0ToV1(ctx context.Context, resourceV
 }
 
 func (s *accessSecretResource) accessSecretV1ToV2(resourceV1 accessSecretResourceModelV1, resp *resource.UpgradeStateResponse) accessSecretResourceModelV2 {
-	modelUUID, err := s.client.Models.ModelUUID(resourceV1.Model.ValueString())
+	modelUUID, err := s.client.Models.ModelUUID(resourceV1.Model.ValueString(), "")
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", resourceV1.Model.ValueString(), err))
 		return accessSecretResourceModelV2{}

@@ -159,9 +159,9 @@ func (a *accessModelResource) Create(ctx context.Context, req resource.CreateReq
 	// Call Models.GrantModel
 	for _, user := range users {
 		err := a.client.Models.GrantModel(juju.GrantModelInput{
-			User:            user,
-			Access:          accessStr,
-			ModelIdentifier: modelUUIDStr,
+			User:      user,
+			Access:    accessStr,
+			ModelUUID: modelUUIDStr,
 		})
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access model resource, got error: %s", err))
@@ -298,11 +298,11 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	err := a.client.Models.UpdateAccessModel(juju.UpdateAccessModelInput{
-		ModelIdentifier: modelUUID,
-		OldAccess:       oldAccess,
-		Grant:           addedUserList,
-		Revoke:          missingUserList,
-		Access:          access,
+		ModelUUID: modelUUID,
+		OldAccess: oldAccess,
+		Grant:     addedUserList,
+		Revoke:    missingUserList,
+		Access:    access,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access model resource, got error: %s", err))
@@ -338,9 +338,9 @@ func (a *accessModelResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	err := a.client.Models.DestroyAccessModel(juju.DestroyAccessModelInput{
-		ModelIdentifier: plan.ModelUUID.ValueString(),
-		Revoke:          stateUsers,
-		Access:          plan.Access.ValueString(),
+		ModelUUID: plan.ModelUUID.ValueString(),
+		Revoke:    stateUsers,
+		Access:    plan.Access.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete access model resource, got error: %s", err))
@@ -539,7 +539,7 @@ func (o *accessModelResource) stateDataV0ToV1(ctx context.Context, resp *resourc
 
 func (o *accessModelResource) stateDataV1ToV2(ctx context.Context, resp *resource.UpgradeStateResponse, priorStateData accessModelResourceModelV1) accessModelResourceModelV2 {
 	modelStr := priorStateData.Model.ValueString()
-	modelUUID, err := o.client.Models.ModelUUID(modelStr)
+	modelUUID, err := o.client.Models.ModelUUID(modelStr, "")
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", modelStr, err))
 		return accessModelResourceModelV2{}

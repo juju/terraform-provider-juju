@@ -72,23 +72,23 @@ type DestroyModelInput struct {
 }
 
 type GrantModelInput struct {
-	User            string
-	Access          string
-	ModelIdentifier string
+	User      string
+	Access    string
+	ModelUUID string
 }
 
 type UpdateAccessModelInput struct {
-	ModelIdentifier string
-	OldAccess       string
-	Grant           []string
-	Revoke          []string
-	Access          string
+	ModelUUID string
+	OldAccess string
+	Grant     []string
+	Revoke    []string
+	Access    string
 }
 
 type DestroyAccessModelInput struct {
-	ModelIdentifier string
-	Revoke          []string
-	Access          string
+	ModelUUID string
+	Revoke    []string
+	Access    string
 }
 
 func newModelsClient(sc SharedClient) *modelsClient {
@@ -97,8 +97,8 @@ func newModelsClient(sc SharedClient) *modelsClient {
 	}
 }
 
-// GetModelByNameOrUUID retrieves a model by name or UUID.
-func (c *modelsClient) GetModelByNameOrUUID(name string) (*params.ModelInfo, error) {
+// GetModel retrieves a model by UUID.
+func (c *modelsClient) GetModel(modelUUID string) (*params.ModelInfo, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -107,10 +107,6 @@ func (c *modelsClient) GetModelByNameOrUUID(name string) (*params.ModelInfo, err
 
 	client := modelmanager.NewClient(conn)
 
-	modelUUID, err := c.ModelUUID(name)
-	if err != nil {
-		return nil, err
-	}
 	modelTag := names.NewModelTag(modelUUID)
 
 	results, err := client.ModelInfo([]names.ModelTag{
@@ -126,12 +122,12 @@ func (c *modelsClient) GetModelByNameOrUUID(name string) (*params.ModelInfo, err
 	modelInfo := results[0].Result
 	modelOwnerTag, err := names.ParseUserTag(modelInfo.OwnerTag)
 	if err != nil {
-		return nil, errors.Annotatef(err, "parsing owner tag %q for model %q", modelInfo.OwnerTag, name)
+		return nil, errors.Annotatef(err, "parsing owner tag %q for model %q", modelInfo.OwnerTag, modelInfo.Name)
 	}
 
 	c.AddModel(modelInfo.Name, modelOwnerTag.Id(), modelUUID, model.ModelType(modelInfo.Type))
 
-	c.Tracef(fmt.Sprintf("Retrieved model info: %s, %+v", name, modelInfo))
+	c.Tracef(fmt.Sprintf("Retrieved model info: %s, %+v", modelUUID, modelInfo))
 	return modelInfo, nil
 }
 
@@ -198,7 +194,7 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 
 	// we have to set constraints ...
 	// establish a new connection with the created model through the modelconfig api to set constraints
-	connModel, err := c.GetConnection(&modelName)
+	connModel, err := c.GetConnection(&modelInfo.UUID)
 	if err != nil {
 		return resp, err
 	}
@@ -213,14 +209,14 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 	return resp, nil
 }
 
-func (c *modelsClient) ReadModel(name string) (*ReadModelResponse, error) {
+func (c *modelsClient) ReadModel(modelUUID string) (*ReadModelResponse, error) {
 	modelmanagerConn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = modelmanagerConn.Close() }()
 
-	modelconfigConn, err := c.GetConnection(&name)
+	modelconfigConn, err := c.GetConnection(&modelUUID)
 	if err != nil {
 		if params.IsCodeNotFound(err) {
 			return nil, errors.WithType(err, ModelNotFoundError)
@@ -234,7 +230,7 @@ func (c *modelsClient) ReadModel(name string) (*ReadModelResponse, error) {
 
 	modelUUIDTag, modelOk := modelconfigConn.ModelTag()
 	if !modelOk {
-		return nil, errors.Errorf("Not connected to model %q", name)
+		return nil, errors.Errorf("Not connected to model %q", modelUUID)
 	}
 	models, err := modelmanagerClient.ModelInfo([]names.ModelTag{modelUUIDTag})
 	if err != nil {
@@ -274,7 +270,7 @@ func (c *modelsClient) ReadModel(name string) (*ReadModelResponse, error) {
 // ReadModelStatus retrieves the status of a model by its name.
 // It returns a ReadModelStatusResponse containing the model's status.
 // If the model is not found, it returns an error.
-func (c *modelsClient) ReadModelStatus(name string) (*ReadModelStatusResponse, error) {
+func (c *modelsClient) ReadModelStatus(modelUUID string) (*ReadModelStatusResponse, error) {
 	modelmanagerConn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -282,10 +278,6 @@ func (c *modelsClient) ReadModelStatus(name string) (*ReadModelStatusResponse, e
 	defer func() { _ = modelmanagerConn.Close() }()
 
 	modelmanagerClient := modelmanager.NewClient(modelmanagerConn)
-	modelUUID, err := c.ModelUUID(name)
-	if err != nil {
-		return nil, err
-	}
 	modelStatus, err := modelmanagerClient.ModelStatus(names.NewModelTag(modelUUID))
 	if err != nil {
 		return nil, err
@@ -403,12 +395,7 @@ func (c *modelsClient) GrantModel(input GrantModelInput) error {
 
 	client := modelmanager.NewClient(conn)
 
-	modelUUID, err := c.ModelUUID(input.ModelIdentifier)
-	if err != nil {
-		return err
-	}
-
-	err = client.GrantModel(input.User, input.Access, modelUUID)
+	err = client.GrantModel(input.User, input.Access, input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -420,14 +407,6 @@ func (c *modelsClient) GrantModel(input GrantModelInput) error {
 // If a user has had `write`, then removing that access would decrease their
 // access to `read` and the user will remain part of the model access.
 func (c *modelsClient) UpdateAccessModel(input UpdateAccessModelInput) error {
-	model := input.ModelIdentifier
-	access := input.OldAccess
-
-	uuid, err := c.ModelUUID(model)
-	if err != nil {
-		return err
-	}
-
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return err
@@ -437,14 +416,14 @@ func (c *modelsClient) UpdateAccessModel(input UpdateAccessModelInput) error {
 	client := modelmanager.NewClient(conn)
 
 	for _, user := range input.Revoke {
-		err := client.RevokeModel(user, "read", uuid)
+		err := client.RevokeModel(user, "read", input.ModelUUID)
 		if err != nil {
 			return err
 		}
 	}
 
 	for _, user := range input.Grant {
-		err := client.GrantModel(user, access, uuid)
+		err := client.GrantModel(user, input.OldAccess, input.ModelUUID)
 		if err != nil {
 			return err
 		}
@@ -465,13 +444,8 @@ func (c *modelsClient) DestroyAccessModel(input DestroyAccessModelInput) error {
 
 	client := modelmanager.NewClient(conn)
 
-	uuid, err := c.ModelUUID(input.ModelIdentifier)
-	if err != nil {
-		return err
-	}
-
 	for _, user := range input.Revoke {
-		err := client.RevokeModel(user, "read", uuid)
+		err := client.RevokeModel(user, "read", input.ModelUUID)
 		if err != nil {
 			return err
 		}

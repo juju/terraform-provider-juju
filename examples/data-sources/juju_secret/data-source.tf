@@ -3,8 +3,8 @@ data "juju_model" "my_model" {
 }
 
 data "juju_secret" "my_secret_data_source" {
-  name  = "my_secret"
-  model = data.juju_model.my_model.name
+  name       = "my_secret"
+  model_uuid = data.juju_model.my_model.uuid
 }
 
 resource "juju_application" "ubuntu" {

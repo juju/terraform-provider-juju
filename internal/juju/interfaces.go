@@ -29,9 +29,12 @@ type SharedClient interface {
 	GetConnection(modelUUID *string) (api.Connection, error)
 	ModelType(modelUUID string) (model.ModelType, error)
 	ModelOwnerAndName(modelUUID string) (string, string, error)
-	ModelUUID(modelName string) (string, error)
 	ModelStatus(modelUUID string, conn api.Connection) (*params.FullStatus, error)
 	RemoveModel(modelUUID string)
+	// ModelUUID returns a model's UUID based on the model name and owner.
+	// Specifying the owner is optional but recommended. See the docstring
+	// of the implementation for more details.
+	ModelUUID(modelName, modelOwner string) (string, error)
 
 	Debugf(msg string, additionalFields ...map[string]interface{})
 	Errorf(err error, msg string)

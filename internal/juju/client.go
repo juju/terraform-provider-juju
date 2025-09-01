@@ -203,24 +203,19 @@ func (sc *sharedClient) WaitForResource() bool {
 }
 
 // GetConnection returns a juju connection for use creating juju
-// api clients given the provided model uuid, name, or neither.
-// Allowing a model name is a fallback behavior until the name
-// used by most resources has been removed in favor of the UUID.
-func (sc *sharedClient) GetConnection(modelIdentifier *string) (api.Connection, error) {
-	var modelUUID string
-	if modelIdentifier != nil {
-		var err error
-		modelUUID, err = sc.ModelUUID(*modelIdentifier)
-		if err != nil {
-			return nil, err
-		}
-	}
-
+// api clients. A model UUID can optionally be provided to connect
+// to a specific model.
+func (sc *sharedClient) GetConnection(modelUUID *string) (api.Connection, error) {
 	dialOptions := func(do *api.DialOpts) {
 		//this is set as a const above, in case we need to use it elsewhere to manage connection timings
 		do.Timeout = getConnectionTimeout()
 		//default is 2 seconds, as we are changing the overall timeout it makes sense to reduce this as well
 		do.RetryDelay = 1 * time.Second
+	}
+
+	var modelUUIDStr string
+	if modelUUID != nil {
+		modelUUIDStr = *modelUUID
 	}
 
 	connr, err := connector.NewSimple(connector.SimpleConfig{
@@ -230,7 +225,7 @@ func (sc *sharedClient) GetConnection(modelIdentifier *string) (api.Connection, 
 		ClientID:            sc.controllerConfig.ClientID,
 		ClientSecret:        sc.controllerConfig.ClientSecret,
 		CACert:              sc.controllerConfig.CACert,
-		ModelUUID:           modelUUID,
+		ModelUUID:           modelUUIDStr,
 	}, dialOptions)
 	if err != nil {
 		return nil, err
@@ -269,27 +264,42 @@ func (sc *sharedClient) ModelOwnerAndName(modelUUID string) (owner, name string,
 	return modelInfo.owner, modelInfo.name, nil
 }
 
-// ModelUUID returns the model uuid for the provided modelIdentifier.
-// The modelIdentifier can be a model name or model uuid. If the modelIdentifier
-// is a uuid, return that without verification. If a name is provided, it will
-// search the modelUUIDCache for the uuid.
-func (sc *sharedClient) ModelUUID(modelIdentifier string) (string, error) {
-	if names.IsValidModel(modelIdentifier) {
-		return modelIdentifier, nil
-	}
+// ModelUUID returns the model uuid for the requested model name and owner.
+// The modelName is required while the modelOwner is optional.
+//
+// In pre-v1.0 releases of the provider, resources referred to models by name
+// only. This was deprecated in favor of using the model uuid to avoid ambiguity
+// when multiple models with the same name but different owners exist.
+//
+// To allow for upgrades from pre-v1.0 versions of the provider, the modelOwner
+// can be excluded and the method will search only by model name. This may
+// return an incorrect model if multiple models with the same name exist.
+// In these scenarios the user will find that their plan will specify a different
+// model uuid to the one they expect requiring manual intervention.
+func (sc *sharedClient) ModelUUID(modelName, modelOwner string) (string, error) {
 	sc.modelUUIDmu.Lock()
 	defer sc.modelUUIDmu.Unlock()
 
 	sc.initializeModelCache()
-	modelName := modelIdentifier
-	sc.Tracef(fmt.Sprintf("ModelUUID cache looking for %q", modelName))
+
+	if modelOwner != "" {
+		sc.Tracef(fmt.Sprintf("ModelUUID cache looking for %q owned by %q", modelName, modelOwner))
+	} else {
+		sc.Tracef(fmt.Sprintf("ModelUUID cache looking for %q with no owner specified", modelName))
+	}
 	for uuid, m := range sc.modelUUIDcache {
 		if m.name == modelName {
-			sc.Tracef(fmt.Sprintf("Found uuid for %q in cache", modelName))
-			return uuid, nil
+			if modelOwner == "" {
+				sc.Tracef(fmt.Sprintf("Found uuid for %q in cache", modelName))
+				return uuid, nil
+			}
+			if modelOwner == m.owner {
+				sc.Tracef(fmt.Sprintf("Found uuid for %q owned by %q in cache", modelName, modelOwner))
+				return uuid, nil
+			}
 		}
 	}
-	return "", errors.NotFoundf("model %q", modelName)
+	return "", errors.NotFoundf("model %q with owner %s", modelName, modelOwner)
 }
 
 // fillModelCache checks with the juju controller for all
@@ -344,7 +354,7 @@ func (sc *sharedClient) RemoveModel(modelUUID string) {
 	sc.modelUUIDmu.Unlock()
 }
 
-// AddModel adds a model to the cache of model data. If any of the three required
+// AddModel adds a model to the cache of model data. If any of the required
 // pieces of data are empty, nothing is added to the cache of model data. If the UUID
 // already exists in the cache, do nothing.
 func (sc *sharedClient) AddModel(modelName, modelOwner, modelUUID string, modelType model.ModelType) {

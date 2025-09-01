@@ -27,7 +27,6 @@ import (
 	"github.com/juju/clock"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/names/v5"
-	"github.com/juju/utils/v3"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/retry"
@@ -284,7 +283,7 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	if len(annotations) > 0 {
 		err = r.client.Annotations.SetAnnotations(&juju.SetAnnotationsInput{
-			ModelUUID:   modelName,
+			ModelUUID:   response.UUID,
 			Annotations: annotations,
 			EntityTag:   names.NewModelTag(response.UUID),
 		})
@@ -320,26 +319,22 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	// Find the model name. If the Id is a UUID, this is
-	// not an Import followed by a Read. If the Id string
-	// is not a UUID, find the model name in the Id, rather
-	// than Name as we're doing a Read after Import. Either
-	// way, we need the model name.
-	var modelName string
-	var imported bool
-	if utils.IsValidUUIDString(state.ID.ValueString()) {
-		modelName = state.Name.ValueString()
-	} else {
-		imported = true
-		modelName = state.ID.ValueString()
-	}
+	// Check if the model was imported. If the model was imported
+	// we store model details like the model's cloud and constraints.
+	// Otherwise we only read this info if plan specified them,
+	// in which case they will be set on create.
+	//
+	// This allows a user to create models without specifying a cloud
+	// or constraints, relying on the controller to choose defaults.
 
-	response, err := r.client.Models.ReadModel(modelName)
+	imported := state.UUID.ValueString() == "" && state.ID.ValueString() != ""
+	modelUUID := state.ID.ValueString()
+	response, err := r.client.Models.ReadModel(modelUUID)
 	if err != nil {
 		resp.Diagnostics.Append(handleModelNotFoundError(ctx, err, &resp.State)...)
 		return
 	}
-	r.trace(fmt.Sprintf("found model: %v", modelName))
+	r.trace(fmt.Sprintf("found model: %v", modelUUID))
 
 	// Acquire cloud, credential, and config
 	tag, err := names.ParseCloudCredentialTag(response.ModelInfo.CloudCredentialTag)
@@ -415,7 +410,7 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	annotations, err := r.client.Annotations.GetAnnotations(&juju.GetAnnotationsInput{
 		EntityTag: names.NewModelTag(response.ModelInfo.UUID),
-		ModelUUID: modelName,
+		ModelUUID: modelUUID,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model's annotations, got error: %s", err))
@@ -432,12 +427,12 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		state.Annotations = annotationsMapValue
 	}
 	// Name, Type, Credential, and Id.
-	state.Name = types.StringValue(modelName)
+	state.Name = types.StringValue(response.ModelInfo.Name)
 	state.Type = types.StringValue(response.ModelInfo.Type)
 	state.Credential = types.StringValue(credential)
 	state.UUID = types.StringValue(response.ModelInfo.UUID)
 	state.ID = types.StringValue(response.ModelInfo.UUID)
-	r.trace(fmt.Sprintf("Read model resource for: %v", modelName))
+	r.trace(fmt.Sprintf("Read model resource for: %v", response.ModelInfo.Name))
 	// Set the state onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -509,7 +504,7 @@ func (r *modelResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	// Check annotations
 	if !state.Annotations.Equal(plan.Annotations) {
-		resp.Diagnostics.Append(updateAnnotations(ctx, &r.client.Annotations, state.Annotations, plan.Annotations, plan.Name.ValueString(), names.NewModelTag(plan.UUID.ValueString()))...)
+		resp.Diagnostics.Append(updateAnnotations(ctx, &r.client.Annotations, state.Annotations, plan.Annotations, plan.UUID.ValueString(), names.NewModelTag(plan.UUID.ValueString()))...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -578,7 +573,7 @@ func (r *modelResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	err = wait.WaitForError(wait.WaitForErrorCfg[string, *juju.ReadModelStatusResponse]{
 		Context:        ctx,
 		GetData:        r.client.Models.ReadModelStatus,
-		Input:          modelName,
+		Input:          modelUUID,
 		ErrorToWait:    juju.ModelNotFoundError,
 		NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError},
 	})

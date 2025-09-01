@@ -269,7 +269,7 @@ func (s *sshKeyResource) UpgradeState(ctx context.Context) map[int64]resource.St
 					return
 				}
 
-				modelUUID, err := s.client.Models.ModelUUID(sshKeyV0.ModelName.ValueString())
+				modelUUID, err := s.client.Models.ModelUUID(sshKeyV0.ModelName.ValueString(), "")
 				if err != nil {
 					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", sshKeyV0.ModelName.ValueString(), err))
 					return

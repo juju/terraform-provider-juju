@@ -507,7 +507,7 @@ func (r *integrationResource) UpgradeState(ctx context.Context) map[int64]resour
 					return
 				}
 
-				modelUUID, err := r.client.Models.ModelUUID(integrationV0.ModelName.ValueString())
+				modelUUID, err := r.client.Models.ModelUUID(integrationV0.ModelName.ValueString(), "")
 				if err != nil {
 					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", integrationV0.ModelName.ValueString(), err))
 					return

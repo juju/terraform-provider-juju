@@ -381,7 +381,7 @@ func (o *offerResource) offerV0ToV1(offerV0 offerResourceModelV0) offerResourceM
 // It converts the `model` attribute to `model_uuid` and ensures the model UUID is
 // fetched using the Juju client.
 func (o *offerResource) offerV1ToV2(offerV1 offerResourceModelV1, resp *resource.UpgradeStateResponse) offerResourceModelV2 {
-	modelUUID, err := o.client.Models.ModelUUID(offerV1.ModelName.ValueString())
+	modelUUID, err := o.client.Models.ModelUUID(offerV1.ModelName.ValueString(), "")
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", offerV1.ModelName.ValueString(), err))
 		return offerResourceModelV2{}

@@ -176,18 +176,18 @@ func (mr *MockSharedClientMockRecorder) ModelType(modelUUID any) *gomock.Call {
 }
 
 // ModelUUID mocks base method.
-func (m *MockSharedClient) ModelUUID(modelName string) (string, error) {
+func (m *MockSharedClient) ModelUUID(modelName, modelOwner string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ModelUUID", modelName)
+	ret := m.ctrl.Call(m, "ModelUUID", modelName, modelOwner)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ModelUUID indicates an expected call of ModelUUID.
-func (mr *MockSharedClientMockRecorder) ModelUUID(modelName any) *gomock.Call {
+func (mr *MockSharedClientMockRecorder) ModelUUID(modelName, modelOwner any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModelUUID", reflect.TypeOf((*MockSharedClient)(nil).ModelUUID), modelName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModelUUID", reflect.TypeOf((*MockSharedClient)(nil).ModelUUID), modelName, modelOwner)
 }
 
 // RemoveModel mocks base method.
