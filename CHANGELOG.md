@@ -21,6 +21,8 @@ BREAKING CHANGES:
   * SSH Key resource
   * Model Access resource
   * Secret Access resource
+  * Secret resource
+  * Machine resource
 * Related to the above, all resources that import a model-scoped resource have had their import
 syntax changed to require a model UUID instead of a model name. This includes most of the resources
 in the above list with some exceptions (e.g. offer import requires the offer URL) and additionally
