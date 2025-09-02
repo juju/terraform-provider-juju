@@ -9,9 +9,11 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
+	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -48,6 +50,9 @@ func (d *machineDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 			"model_uuid": schema.StringAttribute{
 				Description: "The UUID of the model.",
 				Required:    true,
+				Validators: []validator.String{
+					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
+				},
 			},
 			"machine_id": schema.StringAttribute{
 				Description: "The Juju id of the machine.",

@@ -12,9 +12,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
+	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -135,6 +137,9 @@ func (s *secretResource) Schema(_ context.Context, req resource.SchemaRequest, r
 				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
 				},
 			},
 			"name": schema.StringAttribute{

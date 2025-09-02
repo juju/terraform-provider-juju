@@ -106,7 +106,7 @@ func (a *jaasAccessModelResource) Schema(ctx context.Context, req resource.Schem
 		Description: "The uuid of the model for access management. If this is changed the resource will be deleted and a new resource will be created.",
 		Required:    true,
 		Validators: []validator.String{
-			ValidatorMatchString(names.IsValidModel, "model must be a valid UUID"),
+			ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
 		},
 		PlanModifiers: []planmodifier.String{
 			stringplanmodifier.RequiresReplace(),
