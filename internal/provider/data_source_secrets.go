@@ -9,9 +9,11 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
+	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -53,6 +55,9 @@ func (d *secretDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 			"model_uuid": schema.StringAttribute{
 				Description: "The uuid of the model containing the secret.",
 				Required:    true,
+				Validators: []validator.String{
+					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
+				},
 			},
 			"name": schema.StringAttribute{
 				Description: "The name of the secret.",

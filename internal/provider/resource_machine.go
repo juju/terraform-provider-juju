@@ -141,6 +141,9 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+				Validators: []validator.String{
+					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
+				},
 			},
 			ConstraintsKey: schema.StringAttribute{
 				CustomType: CustomConstraintsType{},

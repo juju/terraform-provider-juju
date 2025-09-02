@@ -29,6 +29,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/juju/juju/core/constraints"
 	jujustorage "github.com/juju/juju/storage"
+	"github.com/juju/names/v5"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/wait"
@@ -175,6 +176,9 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
+				},
+				Validators: []validator.String{
+					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
 				},
 			},
 			"model_type": schema.StringAttribute{

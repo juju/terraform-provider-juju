@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -2180,4 +2181,31 @@ resource "juju_application" "this" {
   constraints = %q
 }
 		`, modelName, appName, constraints)
+}
+
+func TestAcc_ResourceApplicationInvalidModelUUID(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model_uuid = "invalid-uuid"
+  name = "test-app"
+  charm {
+	name = "ubuntu-lite"
+  }
+}
+`, modelName),
+				ExpectError: regexp.MustCompile(`invalid-uuid`),
+			},
+		},
+	})
 }

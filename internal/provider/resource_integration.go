@@ -22,6 +22,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/juju/core/crossmodel"
+	"github.com/juju/names/v5"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/wait"
@@ -129,6 +130,9 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"model_uuid": schema.StringAttribute{
 				Description: "The UUID of the model to operate in.",
 				Required:    true,
+				Validators: []validator.String{
+					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
+				},
 			},
 			"via": schema.StringAttribute{
 				Description: "A comma separated list of CIDRs for outbound traffic.",
