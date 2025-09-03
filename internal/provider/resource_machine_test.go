@@ -60,6 +60,7 @@ func TestAcc_ResourceMachineWaitForHostname(t *testing.T) {
 				Config: testAccResourceMachineWaitForHostname(modelName, "base = \"ubuntu@22.04\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_machine.this", "timeouts.create", "31m"),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
 					resource.TestCheckResourceAttr("juju_machine.this", "series", "jammy"),
 					resource.TestCheckResourceAttr("juju_machine.this", "base", "ubuntu@22.04"),
@@ -210,6 +211,9 @@ resource "juju_machine" "this" {
 	name = "this_machine"
 	model = juju_model.this.name
 	wait_for_hostname = true
+	timeouts {
+		create = "31m"
+	}
 	%s
 }
 `, modelName, operatingSystem)
