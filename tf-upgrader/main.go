@@ -271,12 +271,12 @@ func processVariableBlock(block *hclwrite.Block, filename string, srcBlockMap ma
 	*warnings++
 	fmt.Printf("  ⚠️  WARNING: %s:%d:1 - Variable '%s' may need review - check if it should use model UUID instead of name\n", filename, lineNum, varName)
 
-	// Check if there's a description that mentions "name"
+	// Check if there's a description that mentions "model"
 	if descAttr := block.Body().GetAttribute("description"); descAttr != nil {
 		expr := descAttr.Expr()
 		tokens := expr.BuildTokens(nil)
 		descStr := strings.Trim(strings.Trim(string(tokens.Bytes()), "\""), " ")
-		if strings.Contains(strings.ToLower(descStr), "name") {
+		if strings.Contains(strings.ToLower(descStr), "model") {
 			fmt.Printf("      Description: %s\n", descStr)
 		}
 	}
