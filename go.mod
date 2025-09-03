@@ -31,7 +31,7 @@ require (
 	github.com/juju/utils/v3 v3.2.0
 	github.com/juju/version/v2 v2.0.1
 	github.com/rs/zerolog v1.33.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.5.0
 	gopkg.in/httprequest.v1 v1.2.1
 	gopkg.in/macaroon.v2 v2.1.0
