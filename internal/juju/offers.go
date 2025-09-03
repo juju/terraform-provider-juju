@@ -145,10 +145,16 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 		return nil, errs
 	}
 
+	endpoints := make([]crossmodel.EndpointFilterTerm, len(input.Endpoints))
+	for _, endpoint := range input.Endpoints {
+		endpoints = append(endpoints, crossmodel.EndpointFilterTerm{Name: endpoint})
+	}
+
 	filter := crossmodel.ApplicationOfferFilter{
 		OfferName: offerName,
 		ModelName: input.ModelName,
 		OwnerName: input.ModelOwner,
+		Endpoints: endpoints,
 	}
 
 	offer, err := findApplicationOffers(client, filter)
