@@ -1,4 +1,4 @@
-// Copyright 2024 Canonical Ltd.
+// Copyright 2025 Canonical Ltd.
 // Licensed under the Apache License, Version 2.0, see LICENCE file for details.
 
 package main
@@ -119,6 +119,13 @@ func transformTerraformFile(src []byte, filename string) (*transformationResult,
 func processFile(filename string) (bool, int) {
 	fmt.Printf("Processing: %s\n", filename)
 
+	// Get original file info to preserve permissions
+	fileInfo, err := os.Stat(filename)
+	if err != nil {
+		fmt.Printf("  Error getting file info: %v\n", err)
+		return false, 0
+	}
+
 	src, err := os.ReadFile(filename)
 	if err != nil {
 		fmt.Printf("  Error reading file: %v\n", err)
@@ -132,8 +139,8 @@ func processFile(filename string) (bool, int) {
 	}
 
 	if result.WasUpgraded {
-		// Write the upgraded content back to the original file
-		err = os.WriteFile(filename, result.ModifiedContent, 0644)
+		// Write the upgraded content back to the original file with original permissions
+		err = os.WriteFile(filename, result.ModifiedContent, fileInfo.Mode())
 		if err != nil {
 			fmt.Printf("  Error writing file: %v\n", err)
 			return false, result.Warnings
@@ -182,7 +189,7 @@ func processResourceBlock(block *hclwrite.Block, _ string, upgraded *bool) {
 	for src, tgt := range transformation {
 		sourceField = src
 		targetField = tgt
-		break // We expect only one mapping per resource type
+		break
 	}
 
 	// Look for the source attribute
@@ -331,11 +338,11 @@ func discoverTerraformFiles(target string) ([]string, error) {
 
 	if info.IsDir() {
 		// Find all .tf files in the directory and subdirectories
-		err := filepath.Walk(target, func(path string, info os.FileInfo, err error) error {
+		err := filepath.WalkDir(target, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			if strings.HasSuffix(path, ".tf") && !strings.Contains(path, "_upgraded") {
+			if !d.IsDir() && strings.HasSuffix(path, ".tf") && !strings.Contains(path, "_upgraded") {
 				filesToProcess = append(filesToProcess, path)
 			}
 			return nil
