@@ -77,7 +77,7 @@ func (resource *jaasRoleResource) Configure(ctx context.Context, req resource.Co
 		return
 	}
 
-	client, ok := req.ProviderData.(*juju.Client)
+	provider, ok := req.ProviderData.(*juju.ProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
@@ -85,7 +85,7 @@ func (resource *jaasRoleResource) Configure(ctx context.Context, req resource.Co
 		)
 		return
 	}
-	resource.client = client
+	resource.client = provider.Client
 	// Create the local logging subsystem here, using the TF context when creating it.
 	resource.subCtx = tflog.NewSubsystem(ctx, LogResourceJAASRole)
 }

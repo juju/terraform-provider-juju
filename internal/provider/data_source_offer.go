@@ -86,7 +86,7 @@ func (d *offerDataSource) Configure(ctx context.Context, req datasource.Configur
 		return
 	}
 
-	client, ok := req.ProviderData.(*juju.Client)
+	provider, ok := req.ProviderData.(*juju.ProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
@@ -95,7 +95,7 @@ func (d *offerDataSource) Configure(ctx context.Context, req datasource.Configur
 		return
 	}
 
-	d.client = client
+	d.client = provider.Client
 	d.subCtx = tflog.NewSubsystem(ctx, LogDataSourceOffer)
 }
 

@@ -45,6 +45,7 @@ func NewMachineResource() resource.Resource {
 
 type machineResource struct {
 	client *juju.Client
+	config juju.Config
 
 	// subCtx is the context created with the new tflog subsystem for applications.
 	subCtx context.Context
@@ -83,7 +84,7 @@ func (r *machineResource) Configure(ctx context.Context, req resource.ConfigureR
 		return
 	}
 
-	client, ok := req.ProviderData.(*juju.Client)
+	provider, ok := req.ProviderData.(*juju.ProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
@@ -92,7 +93,8 @@ func (r *machineResource) Configure(ctx context.Context, req resource.ConfigureR
 		return
 	}
 
-	r.client = client
+	r.client = provider.Client
+	r.config = provider.Config
 	// Create the local logging subsystem here, using the TF context when creating it.
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceMachine)
 }

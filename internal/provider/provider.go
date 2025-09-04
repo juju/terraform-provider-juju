@@ -255,7 +255,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
-	config := juju.ControllerConfiguration{
+	controllerConfig := juju.ControllerConfiguration{
 		ControllerAddresses: strings.Split(data.ControllerAddrs.ValueString(), ","),
 		Username:            data.UserName.ValueString(),
 		Password:            data.Password.ValueString(),
@@ -263,23 +263,30 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		ClientID:            data.ClientID.ValueString(),
 		ClientSecret:        data.ClientSecret.ValueString(),
 	}
-	client, err := juju.NewClient(ctx, config, p.waitForResources)
+	client, err := juju.NewClient(ctx, controllerConfig, p.waitForResources)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create juju client, got error: %s", err))
 		return
 	}
+	config := juju.Config{
+	}
+
+	jujuProvider := juju.ProviderData{
+		Client: client,
+		Config: config,
+	}
 
 	// Here we are testing that we can connect successfully to the Juju server
 	// this prevents having logic to check the connection is OK in every function
-	testConn, err := client.Models.GetConnection(nil)
+	testConn, err := jujuProvider.Client.Models.GetConnection(nil)
 	if err != nil {
-		resp.Diagnostics.Append(checkClientErr(err, config)...)
+		resp.Diagnostics.Append(checkClientErr(err, controllerConfig)...)
 		return
 	}
 	_ = testConn.Close()
 
-	resp.ResourceData = client
-	resp.DataSourceData = client
+	resp.ResourceData = jujuProvider
+	resp.DataSourceData = jujuProvider
 }
 
 // getJujuProviderModel a filled in jujuProviderModel if able. First check

@@ -96,7 +96,7 @@ func (resource *genericJAASAccessResource) Configure(ctx context.Context, req re
 		return
 	}
 
-	client, ok := req.ProviderData.(*juju.Client)
+	provider, ok := req.ProviderData.(*juju.ProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
@@ -104,7 +104,7 @@ func (resource *genericJAASAccessResource) Configure(ctx context.Context, req re
 		)
 		return
 	}
-	resource.client = client
+	resource.client = provider.Client
 	// Create the local logging subsystem here, using the TF context when creating it.
 	resource.subCtx = tflog.NewSubsystem(ctx, resource.resourceLogName)
 }

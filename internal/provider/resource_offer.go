@@ -271,7 +271,7 @@ func (o *offerResource) Configure(ctx context.Context, req resource.ConfigureReq
 		return
 	}
 
-	client, ok := req.ProviderData.(*juju.Client)
+	provider, ok := req.ProviderData.(*juju.ProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
@@ -280,7 +280,7 @@ func (o *offerResource) Configure(ctx context.Context, req resource.ConfigureReq
 		return
 	}
 
-	o.client = client
+	o.client = provider.Client
 	// Create the local logging subsystem here, using the TF context when creating it.
 	o.subCtx = tflog.NewSubsystem(ctx, LogResourceOffer)
 }

@@ -383,7 +383,7 @@ func (c *credentialResource) Configure(ctx context.Context, req resource.Configu
 		return
 	}
 
-	client, ok := req.ProviderData.(*juju.Client)
+	provider, ok := req.ProviderData.(*juju.ProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
@@ -391,7 +391,7 @@ func (c *credentialResource) Configure(ctx context.Context, req resource.Configu
 		)
 		return
 	}
-	c.client = client
+	c.client = provider.Client
 	// Create the local logging subsystem here, using the TF context when creating it.
 	c.subCtx = tflog.NewSubsystem(ctx, LogResourceCredential)
 }

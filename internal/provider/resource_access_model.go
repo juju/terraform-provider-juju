@@ -114,7 +114,7 @@ func (a *accessModelResource) Configure(ctx context.Context, req resource.Config
 		return
 	}
 
-	client, ok := req.ProviderData.(*juju.Client)
+	provider, ok := req.ProviderData.(*juju.ProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
@@ -122,7 +122,7 @@ func (a *accessModelResource) Configure(ctx context.Context, req resource.Config
 		)
 		return
 	}
-	a.client = client
+	a.client = provider.Client
 	// Create the local logging subsystem here, using the TF context when creating it.
 	a.subCtx = tflog.NewSubsystem(ctx, LogResourceAccessModel)
 }

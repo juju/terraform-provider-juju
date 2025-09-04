@@ -39,6 +39,7 @@ func NewIntegrationResource() resource.Resource {
 
 type integrationResource struct {
 	client *juju.Client
+	config juju.Config
 
 	// context for the logging subsystem.
 	subCtx context.Context
@@ -72,7 +73,7 @@ func (r *integrationResource) Configure(ctx context.Context, req resource.Config
 		return
 	}
 
-	client, ok := req.ProviderData.(*juju.Client)
+	provider, ok := req.ProviderData.(*juju.ProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
@@ -80,7 +81,8 @@ func (r *integrationResource) Configure(ctx context.Context, req resource.Config
 		)
 		return
 	}
-	r.client = client
+	r.client = provider.Client
+	r.config = provider.Config
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceIntegration)
 }
 
