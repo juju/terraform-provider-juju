@@ -594,10 +594,20 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 		ErrorToWait:    juju.MachineNotFoundError,
 		NonFatalErrors: []error{juju.RetryReadError},
 	}); err != nil {
-		resp.Diagnostics.AddError(
-			"Wait Error",
-			fmt.Sprintf("Timeout reached waiting for machine %q deletion, got error: %s. Make sure no application units or containers are still running on the machine", machineID, err),
-		)
+		errSummary := "Wait Error"
+		errDetail := fmt.Sprintf("Timeout reached waiting for machine %q deletion, got error: %s.\n"+
+			"Make sure no application units or containers are still running on the machine", machineID, err)
+		if r.config.IssueWarningOnFailedDeletion {
+			resp.Diagnostics.AddWarning(
+				errSummary,
+				errDetail,
+			)
+		} else {
+			resp.Diagnostics.AddError(
+				errSummary,
+				errDetail,
+			)
+		}
 	}
 }
 

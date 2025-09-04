@@ -1383,11 +1383,20 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 		},
 	)
 	if err != nil {
-		// AddWarning is used instead of AddError to make sure that the resource is removed from state.
-		resp.Diagnostics.AddWarning(
-			"Client Error",
-			fmt.Sprintf(`Unable to complete application %s deletion due to error %v, there might be dangling resources. 
-Make sure to manually delete them.`, appName, err))
+		errSummary := "Client Error"
+		errDetail := fmt.Sprintf("Unable to complete application %s deletion due to error %v, there might be dangling resources.\n"+
+			"Make sure to manually delete them.", appName, err)
+		if r.providerConfig.IssueWarningOnFailedDeletion {
+			resp.Diagnostics.AddWarning(
+				errSummary,
+				errDetail,
+			)
+		} else {
+			resp.Diagnostics.AddError(
+				errSummary,
+				errDetail,
+			)
+		}
 		return
 	}
 

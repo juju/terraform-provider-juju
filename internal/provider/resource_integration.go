@@ -472,11 +472,20 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 		},
 	)
 	if err != nil {
-		// AddWarning is used instead of AddError to make sure that the resource is removed from state.
-		resp.Diagnostics.AddWarning(
-			"Client Error",
-			fmt.Sprintf(`Unable to complete integration %v for model %s deletion due to error %v, there might be dangling resources. 
-	Make sure to manually delete them.`, endpoints, modelName, err))
+		errSummary := "Client Error"
+		errDetail := fmt.Sprintf("Unable to complete integration %v for model %s deletion due to error %v, there might be dangling resources.\n"+
+			"Make sure to manually delete them.", endpoints, modelName, err)
+		if r.config.IssueWarningOnFailedDeletion {
+			resp.Diagnostics.AddWarning(
+				errSummary,
+				errDetail,
+			)
+		} else {
+			resp.Diagnostics.AddError(
+				errSummary,
+				errDetail,
+			)
+		}
 		return
 	}
 	r.trace(fmt.Sprintf("Deleted integration resource: %q", state.ID.ValueString()))

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -27,12 +28,13 @@ import (
 )
 
 const (
-	JujuControllerEnvKey   = "JUJU_CONTROLLER_ADDRESSES"
-	JujuUsernameEnvKey     = "JUJU_USERNAME"
-	JujuPasswordEnvKey     = "JUJU_PASSWORD"
-	JujuCACertEnvKey       = "JUJU_CA_CERT"
-	JujuClientIDEnvKey     = "JUJU_CLIENT_ID"
-	JujuClientSecretEnvKey = "JUJU_CLIENT_SECRET"
+	JujuControllerEnvKey               = "JUJU_CONTROLLER_ADDRESSES"
+	JujuUsernameEnvKey                 = "JUJU_USERNAME"
+	JujuPasswordEnvKey                 = "JUJU_PASSWORD"
+	JujuCACertEnvKey                   = "JUJU_CA_CERT"
+	JujuClientIDEnvKey                 = "JUJU_CLIENT_ID"
+	JujuClientSecretEnvKey             = "JUJU_CLIENT_SECRET"
+	IssueWarningOnFailedDeletionEnvKey = "JUJU_ISSUE_WARNING_ON_FAILED_DELETION"
 
 	JujuController   = "controller_addresses"
 	JujuUsername     = "username"
@@ -48,12 +50,13 @@ const (
 // from environment variables.
 func jujuProviderModelEnvVar() jujuProviderModel {
 	return jujuProviderModel{
-		ControllerAddrs: getEnvVar(JujuControllerEnvKey),
-		CACert:          getEnvVar(JujuCACertEnvKey),
-		ClientID:        getEnvVar(JujuClientIDEnvKey),
-		ClientSecret:    getEnvVar(JujuClientSecretEnvKey),
-		UserName:        getEnvVar(JujuUsernameEnvKey),
-		Password:        getEnvVar(JujuPasswordEnvKey),
+		ControllerAddrs:              getEnvVar(JujuControllerEnvKey),
+		CACert:                       getEnvVar(JujuCACertEnvKey),
+		ClientID:                     getEnvVar(JujuClientIDEnvKey),
+		ClientSecret:                 getEnvVar(JujuClientSecretEnvKey),
+		UserName:                     getEnvVar(JujuUsernameEnvKey),
+		Password:                     getEnvVar(JujuPasswordEnvKey),
+		IssueWarningOnFailedDeletion: getEnvVar(IssueWarningOnFailedDeletionEnvKey),
 	}
 }
 
@@ -114,6 +117,8 @@ type jujuProviderModel struct {
 	CACert          types.String `tfsdk:"ca_certificate"`
 	ClientID        types.String `tfsdk:"client_id"`
 	ClientSecret    types.String `tfsdk:"client_secret"`
+
+	IssueWarningOnFailedDeletion types.String `tfsdk:"issue_warning_on_failed_deletion"`
 }
 
 func (j jujuProviderModel) loginViaUsername() bool {
@@ -143,6 +148,9 @@ func (j jujuProviderModel) valid() bool {
 func (j jujuProviderModel) merge(in jujuProviderModel, from string) (jujuProviderModel, diag.Diagnostics) {
 	diags := diag.Diagnostics{}
 	mergedModel := j
+	if mergedModel.IssueWarningOnFailedDeletion.IsNull() {
+		mergedModel.IssueWarningOnFailedDeletion = in.IssueWarningOnFailedDeletion
+	}
 	if mergedModel.ControllerAddrs.ValueString() == "" {
 		mergedModel.ControllerAddrs = in.ControllerAddrs
 	}
@@ -236,6 +244,10 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 				Description: fmt.Sprintf("If the controller was deployed with a self-signed certificate: This is the certificate to use for identification. This can also be set by the `%s` environment variable", JujuCACertEnvKey),
 				Optional:    true,
 			},
+			"issue_warning_on_failed_deletion": schema.BoolAttribute{
+				Description: fmt.Sprintf("Whether to issue a warning instead of an error if a resource deletion fails. This can also be set by the `%s` environment variable. Defaults to false.", IssueWarningOnFailedDeletionEnvKey),
+				Optional:    true,
+			},
 		},
 	}
 }
@@ -255,6 +267,14 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
+	// Parse the issueWarningOnFailedDeletion value.
+	// If parsing fails, issue a warning and default to false.
+	issueWarningOnFailedDeletion, err := strconv.ParseBool(data.IssueWarningOnFailedDeletion.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddWarning("Invalid value for issue_warning_on_failed_deletion",
+			fmt.Sprintf("The value %q is not a valid boolean. Defaulting to false.", data.IssueWarningOnFailedDeletion.ValueString()))
+	}
+
 	controllerConfig := juju.ControllerConfiguration{
 		ControllerAddresses: strings.Split(data.ControllerAddrs.ValueString(), ","),
 		Username:            data.UserName.ValueString(),
@@ -269,6 +289,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 	config := juju.Config{
+		IssueWarningOnFailedDeletion: issueWarningOnFailedDeletion,
 	}
 
 	jujuProvider := juju.ProviderData{
@@ -301,11 +322,7 @@ func getJujuProviderModel(ctx context.Context, req provider.ConfigureRequest) (j
 	if diags.HasError() {
 		return planData, diags
 	}
-	if planData.valid() {
-		// The plan contained full controller config,
-		// no need to continue
-		return planData, diags
-	}
+
 	// If validation failed because we have both username/password
 	// and client ID/secret combinations in the plan. Exit now.
 	if planData.UserName.ValueString() != "" && planData.ClientID.ValueString() != "" {
@@ -316,8 +333,7 @@ func getJujuProviderModel(ctx context.Context, req provider.ConfigureRequest) (j
 		return planData, diags
 	}
 
-	// Not all controller config contained in the plan, attempt
-	// to find it via the optional environment variables.
+	// Check env vars to capture variables set outside of the plan.
 	envVarData := jujuProviderModelEnvVar()
 	planEnvVarDataModel, planEnvVarDataDiags := planData.merge(envVarData, "environment variables")
 	diags.Append(planEnvVarDataDiags...)
