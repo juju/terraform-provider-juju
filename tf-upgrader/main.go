@@ -106,6 +106,8 @@ func transformTerraformFile(src []byte, filename string) (*transformationResult,
 			processOutputBlock(block, filename, &upgraded)
 		case "variable":
 			processVariableBlock(block, filename, srcBlockMap, blockKey, &warnings)
+		case "data":
+			processDataBlock(block, filename, &upgraded, srcBlockMap, blockKey, &warnings)
 		}
 	}
 
@@ -287,7 +289,83 @@ func processVariableBlock(block *hclwrite.Block, filename string, srcBlockMap ma
 			fmt.Printf("      Description: %s\n", descStr)
 		}
 	}
+}
 
+// processDataBlock handles data source blocks that reference juju_model.*.name
+func processDataBlock(block *hclwrite.Block, filename string, upgraded *bool, srcBlockMap map[string]*hclsyntax.Block, blockKey string, warnings *int) {
+	if len(block.Labels()) < 2 {
+		return
+	}
+
+	dataSourceType := block.Labels()[0]
+
+	// Define data source type transformations: source_field -> target_field
+	supportedDataSources := map[string]map[string]string{
+		"juju_model":       {"name": "uuid"},
+		"juju_application": {"model": "model_uuid"},
+		"juju_secret":      {"model": "model_uuid"},
+		"juju_machine":     {"model": "model_uuid"},
+	}
+
+	transformation, isSupported := supportedDataSources[dataSourceType]
+	if !isSupported {
+		return
+	}
+
+	// Get the source field name (should be "model" for all current resources)
+	var sourceField, targetField string
+	for src, tgt := range transformation {
+		sourceField = src
+		targetField = tgt
+		break
+	}
+
+	// Look for the source attribute
+	attr := block.Body().GetAttribute(sourceField)
+	if attr == nil {
+		return
+	}
+
+	// Check if it's a juju_model.*.name reference
+	attrStr := getAttributeString(attr)
+
+	if !isJujuModelNameReference(attrStr) {
+		// Check for data sources that might need manual review
+		dataSourceName := block.Labels()[0]
+		if !strings.Contains(dataSourceName, "model") {
+			return
+		}
+
+		// Get line number from source block
+		lineNum := 0
+		if srcBlock, exists := srcBlockMap[blockKey]; exists {
+			lineNum = srcBlock.DefRange().Start.Line
+		}
+
+		*warnings++
+		fmt.Printf("  ⚠️  WARNING: %s:%d:1 - Data source '%s' may need review - check if it should use model UUID instead of name\n", filename, lineNum, dataSourceName)
+		return
+	}
+
+	// Replace .name with .uuid
+	traversal, err := upgradeModelReference(attrStr)
+	if err != nil {
+		return
+	}
+
+	// Set the target field and remove source field if different
+	block.Body().SetAttributeTraversal(targetField, traversal.Traversal)
+	if sourceField != targetField {
+		block.Body().RemoveAttribute(sourceField)
+	}
+	*upgraded = true
+
+	referenceType := getReferenceType(attrStr)
+	if sourceField == targetField {
+		fmt.Printf("  ✓ Upgraded %s.%s: %s reference .name -> .uuid (%s reference)\n", dataSourceType, block.Labels()[1], sourceField, referenceType)
+	} else {
+		fmt.Printf("  ✓ Upgraded %s.%s: %s -> %s (%s reference)\n", dataSourceType, block.Labels()[1], sourceField, targetField, referenceType)
+	}
 }
 
 // isJujuModelNameReference checks if an attribute string references juju_model.*.name
