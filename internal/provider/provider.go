@@ -28,21 +28,21 @@ import (
 )
 
 const (
-	JujuControllerEnvKey               = "JUJU_CONTROLLER_ADDRESSES"
-	JujuUsernameEnvKey                 = "JUJU_USERNAME"
-	JujuPasswordEnvKey                 = "JUJU_PASSWORD"
-	JujuCACertEnvKey                   = "JUJU_CA_CERT"
-	JujuClientIDEnvKey                 = "JUJU_CLIENT_ID"
-	JujuClientSecretEnvKey             = "JUJU_CLIENT_SECRET"
-	IssueWarningOnFailedDeletionEnvKey = "JUJU_ISSUE_WARNING_ON_FAILED_DELETION"
+	JujuControllerEnvKey     = "JUJU_CONTROLLER_ADDRESSES"
+	JujuUsernameEnvKey       = "JUJU_USERNAME"
+	JujuPasswordEnvKey       = "JUJU_PASSWORD"
+	JujuCACertEnvKey         = "JUJU_CA_CERT"
+	JujuClientIDEnvKey       = "JUJU_CLIENT_ID"
+	JujuClientSecretEnvKey   = "JUJU_CLIENT_SECRET"
+	SkipFailedDeletionEnvKey = "JUJU_SKIP_FAILED_DELETION"
 
-	JujuController               = "controller_addresses"
-	JujuUsername                 = "username"
-	JujuPassword                 = "password"
-	JujuClientID                 = "client_id"
-	JujuClientSecret             = "client_secret"
-	JujuCACert                   = "ca_certificate"
-	IssueWarningOnFailedDeletion = "issue_warning_on_failed_deletion"
+	JujuController     = "controller_addresses"
+	JujuUsername       = "username"
+	JujuPassword       = "password"
+	JujuClientID       = "client_id"
+	JujuClientSecret   = "client_secret"
+	JujuCACert         = "ca_certificate"
+	SkipFailedDeletion = "skip_failed_deletion"
 
 	TwoSourcesAuthWarning = "Two sources of identity for controller login"
 )
@@ -50,23 +50,22 @@ const (
 // jujuProviderModelEnvVar gets the controller config,
 // from environment variables.
 func jujuProviderModelEnvVar(diags diag.Diagnostics) jujuProviderModel {
-	// Parse the issueWarningOnFailedDeletion value.
 	// If parsing fails, issue a warning and default to false.
-	issueWarningStringVal := os.Getenv(IssueWarningOnFailedDeletionEnvKey)
-	issueWarningOnFailedDeletion, err := strconv.ParseBool(issueWarningStringVal)
+	skipFailedDeletionStrVal := os.Getenv(SkipFailedDeletionEnvKey)
+	skipFailedDeletion, err := strconv.ParseBool(skipFailedDeletionStrVal)
 	if err != nil {
 		diags.AddWarning("Invalid value for issue_warning_on_failed_deletion",
-			fmt.Sprintf("The value %q is not a valid boolean. Defaulting to false.", issueWarningStringVal))
+			fmt.Sprintf("The value %q is not a valid boolean. Defaulting to false.", skipFailedDeletionStrVal))
 	}
 
 	return jujuProviderModel{
-		ControllerAddrs:              getEnvVar(JujuControllerEnvKey),
-		CACert:                       getEnvVar(JujuCACertEnvKey),
-		ClientID:                     getEnvVar(JujuClientIDEnvKey),
-		ClientSecret:                 getEnvVar(JujuClientSecretEnvKey),
-		UserName:                     getEnvVar(JujuUsernameEnvKey),
-		Password:                     getEnvVar(JujuPasswordEnvKey),
-		IssueWarningOnFailedDeletion: types.BoolValue(issueWarningOnFailedDeletion),
+		ControllerAddrs:    getEnvVar(JujuControllerEnvKey),
+		CACert:             getEnvVar(JujuCACertEnvKey),
+		ClientID:           getEnvVar(JujuClientIDEnvKey),
+		ClientSecret:       getEnvVar(JujuClientSecretEnvKey),
+		UserName:           getEnvVar(JujuUsernameEnvKey),
+		Password:           getEnvVar(JujuPasswordEnvKey),
+		SkipFailedDeletion: types.BoolValue(skipFailedDeletion),
 	}
 }
 
@@ -128,7 +127,7 @@ type jujuProviderModel struct {
 	ClientID        types.String `tfsdk:"client_id"`
 	ClientSecret    types.String `tfsdk:"client_secret"`
 
-	IssueWarningOnFailedDeletion types.Bool `tfsdk:"issue_warning_on_failed_deletion"`
+	SkipFailedDeletion types.Bool `tfsdk:"issue_warning_on_failed_deletion"`
 }
 
 func (j jujuProviderModel) loginViaUsername() bool {
@@ -158,8 +157,8 @@ func (j jujuProviderModel) valid() bool {
 func (j jujuProviderModel) merge(in jujuProviderModel, from string) (jujuProviderModel, diag.Diagnostics) {
 	diags := diag.Diagnostics{}
 	mergedModel := j
-	if mergedModel.IssueWarningOnFailedDeletion.IsNull() {
-		mergedModel.IssueWarningOnFailedDeletion = in.IssueWarningOnFailedDeletion
+	if mergedModel.SkipFailedDeletion.IsNull() {
+		mergedModel.SkipFailedDeletion = in.SkipFailedDeletion
 	}
 	if mergedModel.ControllerAddrs.ValueString() == "" {
 		mergedModel.ControllerAddrs = in.ControllerAddrs
@@ -254,8 +253,8 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 				Description: fmt.Sprintf("If the controller was deployed with a self-signed certificate: This is the certificate to use for identification. This can also be set by the `%s` environment variable", JujuCACertEnvKey),
 				Optional:    true,
 			},
-			IssueWarningOnFailedDeletion: schema.BoolAttribute{
-				Description: fmt.Sprintf("Whether to issue a warning instead of an error if a resource deletion fails. This can also be set by the `%s` environment variable. Defaults to false.", IssueWarningOnFailedDeletionEnvKey),
+			SkipFailedDeletion: schema.BoolAttribute{
+				Description: fmt.Sprintf("Whether to issue a warning instead of an error if a resource deletion fails. This can also be set by the `%s` environment variable. Defaults to false.", SkipFailedDeletionEnvKey),
 				Optional:    true,
 			},
 		},
@@ -291,7 +290,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 	config := juju.Config{
-		IssueWarningOnFailedDeletion: data.IssueWarningOnFailedDeletion.ValueBool(),
+		SkipFailedDeletion: data.SkipFailedDeletion.ValueBool(),
 	}
 
 	providerData := juju.ProviderData{

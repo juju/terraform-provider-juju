@@ -73,14 +73,14 @@ type Client struct {
 
 // Config holds configuration options for the Juju provider.
 type Config struct {
-	// IssueWarningOnFailedDeletion indicates whether the provider should issue warnings
-	// instead of errors on failed deletions.
+	// SkipFailedDeletion indicates whether the provider should issue warnings
+	// instead of errors and continue on failed deletions.
 	//
 	// This config acts as an escape hatch for scenarios where bugs exist in Juju that prevent
 	// a resource from being deleted. If set, the resource is removed from state but might
 	// leave dangling resources in the Juju controller left for the user to clean up.
 	// This avoids making the user manipulate Terraform state manually to get rid of the resource.
-	IssueWarningOnFailedDeletion bool
+	SkipFailedDeletion bool
 }
 
 // ProviderData holds data provided to resources and data sources.

@@ -597,7 +597,7 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 		errSummary := "Wait Error"
 		errDetail := fmt.Sprintf("Timeout reached waiting for machine %q deletion, got error: %s.\n"+
 			"Make sure no application units or containers are still running on the machine", machineID, err)
-		if r.config.IssueWarningOnFailedDeletion {
+		if r.config.SkipFailedDeletion {
 			resp.Diagnostics.AddWarning(
 				errSummary,
 				errDetail,

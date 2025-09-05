@@ -213,15 +213,15 @@ func TestProviderSetWarnOnDeletionErrors(t *testing.T) {
 	require.Truef(t, ok, "ResourceData, not of type juju ProviderData")
 	require.NotNil(t, providerData)
 
-	assert.Equal(t, providerData.Config.IssueWarningOnFailedDeletion, false)
+	assert.Equal(t, providerData.Config.SkipFailedDeletion, false)
 
-	t.Setenv(IssueWarningOnFailedDeletionEnvKey, "true")
+	t.Setenv(SkipFailedDeletionEnvKey, "true")
 	confResp = configureProvider(t, jujuProvider)
 	providerData, ok = confResp.ResourceData.(juju.ProviderData)
 	require.Truef(t, ok, "ResourceData, not of type juju client")
 	require.NotNil(t, providerData)
 
-	assert.Equal(t, providerData.Config.IssueWarningOnFailedDeletion, true)
+	assert.Equal(t, providerData.Config.SkipFailedDeletion, true)
 }
 
 func testAccPreCheck(t *testing.T) {
@@ -360,13 +360,13 @@ func newConfigureRequest(t *testing.T, conf jujuProviderModel) provider.Configur
 	assert.Equal(t, schemaResp.Diagnostics.HasError(), false)
 
 	mapTypes := map[string]attr.Type{
-		JujuController:               types.StringType,
-		JujuUsername:                 types.StringType,
-		JujuPassword:                 types.StringType,
-		JujuCACert:                   types.StringType,
-		JujuClientID:                 types.StringType,
-		JujuClientSecret:             types.StringType,
-		IssueWarningOnFailedDeletion: types.BoolType,
+		JujuController:     types.StringType,
+		JujuUsername:       types.StringType,
+		JujuPassword:       types.StringType,
+		JujuCACert:         types.StringType,
+		JujuClientID:       types.StringType,
+		JujuClientSecret:   types.StringType,
+		SkipFailedDeletion: types.BoolType,
 	}
 
 	val, confObjErr := types.ObjectValueFrom(context.Background(), mapTypes, conf)
@@ -406,19 +406,19 @@ func TestGetJujuProviderModel(t *testing.T) {
 		{
 			name: "ValidPlanData",
 			plan: jujuProviderModel{
-				ControllerAddrs:              types.StringValue("localhost:17070"),
-				UserName:                     types.StringValue("user"),
-				Password:                     types.StringValue("pass"),
-				CACert:                       types.StringValue("cert"),
-				IssueWarningOnFailedDeletion: types.BoolValue(true),
+				ControllerAddrs:    types.StringValue("localhost:17070"),
+				UserName:           types.StringValue("user"),
+				Password:           types.StringValue("pass"),
+				CACert:             types.StringValue("cert"),
+				SkipFailedDeletion: types.BoolValue(true),
 			},
 			wantErr: false,
 			wantValues: jujuProviderModel{
-				ControllerAddrs:              types.StringValue("localhost:17070"),
-				UserName:                     types.StringValue("user"),
-				Password:                     types.StringValue("pass"),
-				CACert:                       types.StringValue("cert"),
-				IssueWarningOnFailedDeletion: types.BoolValue(true),
+				ControllerAddrs:    types.StringValue("localhost:17070"),
+				UserName:           types.StringValue("user"),
+				Password:           types.StringValue("pass"),
+				CACert:             types.StringValue("cert"),
+				SkipFailedDeletion: types.BoolValue(true),
 			},
 		},
 		{
@@ -444,11 +444,11 @@ func TestGetJujuProviderModel(t *testing.T) {
 			},
 			wantErr: false,
 			wantValues: jujuProviderModel{
-				ControllerAddrs:              types.StringValue("env-controller:17070"),
-				UserName:                     types.StringValue("env-user"),
-				Password:                     types.StringValue("env-pass"),
-				CACert:                       types.StringValue("env-cert"),
-				IssueWarningOnFailedDeletion: types.BoolValue(false),
+				ControllerAddrs:    types.StringValue("env-controller:17070"),
+				UserName:           types.StringValue("env-user"),
+				Password:           types.StringValue("env-pass"),
+				CACert:             types.StringValue("env-cert"),
+				SkipFailedDeletion: types.BoolValue(false),
 			},
 		},
 		{
@@ -460,15 +460,15 @@ func TestGetJujuProviderModel(t *testing.T) {
 			},
 			setEnv: func(t *testing.T) {
 				t.Setenv(JujuPasswordEnvKey, "env-pass")
-				t.Setenv(IssueWarningOnFailedDeletionEnvKey, "true")
+				t.Setenv(SkipFailedDeletionEnvKey, "true")
 			},
 			wantErr: false,
 			wantValues: jujuProviderModel{
-				ControllerAddrs:              types.StringValue("localhost:17070"),
-				UserName:                     types.StringValue("user"),
-				Password:                     types.StringValue("env-pass"),
-				CACert:                       types.StringValue("cert"),
-				IssueWarningOnFailedDeletion: types.BoolValue(true),
+				ControllerAddrs:    types.StringValue("localhost:17070"),
+				UserName:           types.StringValue("user"),
+				Password:           types.StringValue("env-pass"),
+				CACert:             types.StringValue("cert"),
+				SkipFailedDeletion: types.BoolValue(true),
 			},
 		},
 		{
@@ -485,11 +485,11 @@ func TestGetJujuProviderModel(t *testing.T) {
 			},
 			wantErr: false,
 			wantValues: jujuProviderModel{
-				ControllerAddrs:              types.StringValue("localhost:17070"),
-				UserName:                     types.StringValue("user"),
-				Password:                     types.StringValue("pass"),
-				CACert:                       types.StringValue("cert"),
-				IssueWarningOnFailedDeletion: types.BoolValue(false),
+				ControllerAddrs:    types.StringValue("localhost:17070"),
+				UserName:           types.StringValue("user"),
+				Password:           types.StringValue("pass"),
+				CACert:             types.StringValue("cert"),
+				SkipFailedDeletion: types.BoolValue(false),
 			},
 		},
 	}

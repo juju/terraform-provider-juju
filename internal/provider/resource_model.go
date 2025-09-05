@@ -550,7 +550,7 @@ func (r *modelResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		errSummary := "Client Error"
 		errDetail := fmt.Sprintf("Unable to complete model %s deletion due to error %v, there might be dangling resources.\n"+
 			"Make sure to manually delete them.", modelName, err)
-		if r.config.IssueWarningOnFailedDeletion {
+		if r.config.SkipFailedDeletion {
 			resp.Diagnostics.AddWarning(
 				errSummary,
 				errDetail,

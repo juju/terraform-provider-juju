@@ -1386,7 +1386,7 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 		errSummary := "Client Error"
 		errDetail := fmt.Sprintf("Unable to complete application %s deletion due to error %v, there might be dangling resources.\n"+
 			"Make sure to manually delete them.", appName, err)
-		if r.providerConfig.IssueWarningOnFailedDeletion {
+		if r.providerConfig.SkipFailedDeletion {
 			resp.Diagnostics.AddWarning(
 				errSummary,
 				errDetail,
