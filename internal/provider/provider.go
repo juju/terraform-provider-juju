@@ -36,19 +36,29 @@ const (
 	JujuClientSecretEnvKey             = "JUJU_CLIENT_SECRET"
 	IssueWarningOnFailedDeletionEnvKey = "JUJU_ISSUE_WARNING_ON_FAILED_DELETION"
 
-	JujuController   = "controller_addresses"
-	JujuUsername     = "username"
-	JujuPassword     = "password"
-	JujuClientID     = "client_id"
-	JujuClientSecret = "client_secret"
-	JujuCACert       = "ca_certificate"
+	JujuController               = "controller_addresses"
+	JujuUsername                 = "username"
+	JujuPassword                 = "password"
+	JujuClientID                 = "client_id"
+	JujuClientSecret             = "client_secret"
+	JujuCACert                   = "ca_certificate"
+	IssueWarningOnFailedDeletion = "issue_warning_on_failed_deletion"
 
 	TwoSourcesAuthWarning = "Two sources of identity for controller login"
 )
 
 // jujuProviderModelEnvVar gets the controller config,
 // from environment variables.
-func jujuProviderModelEnvVar() jujuProviderModel {
+func jujuProviderModelEnvVar(diags diag.Diagnostics) jujuProviderModel {
+	// Parse the issueWarningOnFailedDeletion value.
+	// If parsing fails, issue a warning and default to false.
+	issueWarningStringVal := os.Getenv(IssueWarningOnFailedDeletionEnvKey)
+	issueWarningOnFailedDeletion, err := strconv.ParseBool(issueWarningStringVal)
+	if err != nil {
+		diags.AddWarning("Invalid value for issue_warning_on_failed_deletion",
+			fmt.Sprintf("The value %q is not a valid boolean. Defaulting to false.", issueWarningStringVal))
+	}
+
 	return jujuProviderModel{
 		ControllerAddrs:              getEnvVar(JujuControllerEnvKey),
 		CACert:                       getEnvVar(JujuCACertEnvKey),
@@ -56,7 +66,7 @@ func jujuProviderModelEnvVar() jujuProviderModel {
 		ClientSecret:                 getEnvVar(JujuClientSecretEnvKey),
 		UserName:                     getEnvVar(JujuUsernameEnvKey),
 		Password:                     getEnvVar(JujuPasswordEnvKey),
-		IssueWarningOnFailedDeletion: getEnvVar(IssueWarningOnFailedDeletionEnvKey),
+		IssueWarningOnFailedDeletion: types.BoolValue(issueWarningOnFailedDeletion),
 	}
 }
 
@@ -118,7 +128,7 @@ type jujuProviderModel struct {
 	ClientID        types.String `tfsdk:"client_id"`
 	ClientSecret    types.String `tfsdk:"client_secret"`
 
-	IssueWarningOnFailedDeletion types.String `tfsdk:"issue_warning_on_failed_deletion"`
+	IssueWarningOnFailedDeletion types.Bool `tfsdk:"issue_warning_on_failed_deletion"`
 }
 
 func (j jujuProviderModel) loginViaUsername() bool {
@@ -244,7 +254,7 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 				Description: fmt.Sprintf("If the controller was deployed with a self-signed certificate: This is the certificate to use for identification. This can also be set by the `%s` environment variable", JujuCACertEnvKey),
 				Optional:    true,
 			},
-			"issue_warning_on_failed_deletion": schema.BoolAttribute{
+			IssueWarningOnFailedDeletion: schema.BoolAttribute{
 				Description: fmt.Sprintf("Whether to issue a warning instead of an error if a resource deletion fails. This can also be set by the `%s` environment variable. Defaults to false.", IssueWarningOnFailedDeletionEnvKey),
 				Optional:    true,
 			},
@@ -267,14 +277,6 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
-	// Parse the issueWarningOnFailedDeletion value.
-	// If parsing fails, issue a warning and default to false.
-	issueWarningOnFailedDeletion, err := strconv.ParseBool(data.IssueWarningOnFailedDeletion.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddWarning("Invalid value for issue_warning_on_failed_deletion",
-			fmt.Sprintf("The value %q is not a valid boolean. Defaulting to false.", data.IssueWarningOnFailedDeletion.ValueString()))
-	}
-
 	controllerConfig := juju.ControllerConfiguration{
 		ControllerAddresses: strings.Split(data.ControllerAddrs.ValueString(), ","),
 		Username:            data.UserName.ValueString(),
@@ -289,25 +291,25 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 	config := juju.Config{
-		IssueWarningOnFailedDeletion: issueWarningOnFailedDeletion,
+		IssueWarningOnFailedDeletion: data.IssueWarningOnFailedDeletion.ValueBool(),
 	}
 
-	jujuProvider := juju.ProviderData{
+	providerData := juju.ProviderData{
 		Client: client,
 		Config: config,
 	}
 
 	// Here we are testing that we can connect successfully to the Juju server
 	// this prevents having logic to check the connection is OK in every function
-	testConn, err := jujuProvider.Client.Models.GetConnection(nil)
+	testConn, err := providerData.Client.Models.GetConnection(nil)
 	if err != nil {
 		resp.Diagnostics.Append(checkClientErr(err, controllerConfig)...)
 		return
 	}
 	_ = testConn.Close()
 
-	resp.ResourceData = jujuProvider
-	resp.DataSourceData = jujuProvider
+	resp.ResourceData = providerData
+	resp.DataSourceData = providerData
 }
 
 // getJujuProviderModel a filled in jujuProviderModel if able. First check
@@ -334,7 +336,7 @@ func getJujuProviderModel(ctx context.Context, req provider.ConfigureRequest) (j
 	}
 
 	// Check env vars to capture variables set outside of the plan.
-	envVarData := jujuProviderModelEnvVar()
+	envVarData := jujuProviderModelEnvVar(diags)
 	planEnvVarDataModel, planEnvVarDataDiags := planData.merge(envVarData, "environment variables")
 	diags.Append(planEnvVarDataDiags...)
 	if planEnvVarDataModel.valid() {
