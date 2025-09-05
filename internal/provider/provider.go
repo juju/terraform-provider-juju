@@ -254,7 +254,7 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 				Optional:    true,
 			},
 			SkipFailedDeletion: schema.BoolAttribute{
-				Description: fmt.Sprintf("Whether to issue a warning instead of an error if a resource deletion fails. This can also be set by the `%s` environment variable. Defaults to false.", SkipFailedDeletionEnvKey),
+				Description: fmt.Sprintf("Whether to issue a warning instead of an error and continue if a resource deletion fails. This can also be set by the `%s` environment variable. Defaults to false.", SkipFailedDeletionEnvKey),
 				Optional:    true,
 			},
 		},
