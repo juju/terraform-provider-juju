@@ -54,7 +54,7 @@ func jujuProviderModelEnvVar(diags diag.Diagnostics) jujuProviderModel {
 	skipFailedDeletionStrVal := os.Getenv(SkipFailedDeletionEnvKey)
 	skipFailedDeletion, err := strconv.ParseBool(skipFailedDeletionStrVal)
 	if err != nil {
-		diags.AddWarning("Invalid value for issue_warning_on_failed_deletion",
+		diags.AddWarning(fmt.Sprintf("Invalid value for %s", SkipFailedDeletion),
 			fmt.Sprintf("The value %q is not a valid boolean. Defaulting to false.", skipFailedDeletionStrVal))
 	}
 
@@ -127,7 +127,7 @@ type jujuProviderModel struct {
 	ClientID        types.String `tfsdk:"client_id"`
 	ClientSecret    types.String `tfsdk:"client_secret"`
 
-	SkipFailedDeletion types.Bool `tfsdk:"issue_warning_on_failed_deletion"`
+	SkipFailedDeletion types.Bool `tfsdk:"skip_failed_deletion"`
 }
 
 func (j jujuProviderModel) loginViaUsername() bool {
