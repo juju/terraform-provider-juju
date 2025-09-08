@@ -84,11 +84,11 @@ func (r *machineResource) Configure(ctx context.Context, req resource.ConfigureR
 		return
 	}
 
-	provider, ok := req.ProviderData.(*juju.ProviderData)
+	provider, ok := req.ProviderData.(juju.ProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *juju.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}

@@ -241,9 +241,9 @@ func setupAcceptanceTests(t *testing.T) {
 	}
 	confResp := configureProvider(t, Provider)
 	require.Equal(t, confResp.Diagnostics.HasError(), false, fmt.Sprintf("provider configuration failed: %v", confResp.Diagnostics.Errors()))
-	testClient, ok := confResp.ResourceData.(*juju.Client)
-	require.Truef(t, ok, "ResourceData, not of type juju client")
-	TestClient = testClient
+	providerData, ok := confResp.ResourceData.(juju.ProviderData)
+	require.Truef(t, ok, "ResourceData, not of type ProviderData")
+	TestClient = providerData.Client
 	createCloudCredential(t)
 }
 
