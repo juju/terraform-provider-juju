@@ -108,6 +108,8 @@ func transformTerraformFile(src []byte, filename string) (*transformationResult,
 			processVariableBlock(block, filename, srcBlockMap, blockKey, &warnings)
 		case "data":
 			processDataBlock(block, filename, &upgraded, srcBlockMap, blockKey, &warnings)
+		case "terraform":
+			processTerraformBlock(block, filename, &upgraded)
 		}
 	}
 
@@ -365,6 +367,66 @@ func processDataBlock(block *hclwrite.Block, filename string, upgraded *bool, sr
 		fmt.Printf("  ✓ Upgraded %s.%s: %s reference .name -> .uuid (%s reference)\n", dataSourceType, block.Labels()[1], sourceField, referenceType)
 	} else {
 		fmt.Printf("  ✓ Upgraded %s.%s: %s -> %s (%s reference)\n", dataSourceType, block.Labels()[1], sourceField, targetField, referenceType)
+	}
+}
+
+// processTerraformBlock handles terraform blocks that need provider version upgrades
+func processTerraformBlock(block *hclwrite.Block, _ string, upgraded *bool) {
+	// Look for required_providers block
+	requiredProvidersBlock := block.Body().FirstMatchingBlock("required_providers", nil)
+	if requiredProvidersBlock == nil {
+		return
+	}
+
+	// Look for juju provider configuration
+	jujuAttr := requiredProvidersBlock.Body().GetAttribute("juju")
+	if jujuAttr == nil {
+		return
+	}
+
+	// Parse the juju provider configuration to check if it needs upgrading
+	attrStr := getAttributeString(jujuAttr)
+
+	// Check if it contains any 0.x version constraint that needs upgrading
+	if !strings.Contains(attrStr, "0.") {
+		return
+	}
+
+	// Create a simple replacement of version strings containing 0.x
+	for _, pattern := range []string{">= 0.", "~> 0.", "= 0.", "0."} {
+		if strings.Contains(attrStr, pattern) {
+			// Find the version line and replace it
+			lines := strings.Split(attrStr, "\n")
+			for i, line := range lines {
+				if strings.Contains(line, "version") && strings.Contains(line, pattern) {
+					// Extract indentation
+					indent := ""
+					for _, char := range line {
+						if char == ' ' || char == '\t' {
+							indent += string(char)
+						} else {
+							break
+						}
+					}
+					lines[i] = indent + "version = \">=1.0.0\""
+					updatedContent := strings.Join(lines, "\n")
+
+					// Use raw tokens as fallback
+					rawTokens := []byte(updatedContent)
+					tokens := hclwrite.Tokens{}
+					tokens = append(tokens, &hclwrite.Token{
+						Bytes: rawTokens,
+					})
+					requiredProvidersBlock.Body().SetAttributeRaw("juju", tokens)
+
+					// Only set upgraded and print message after successful update
+					*upgraded = true
+					fmt.Printf("  ✓ Upgraded terraform.required_providers.juju: version 0.x -> >=1.0.0\n")
+					return
+				}
+			}
+			break
+		}
 	}
 }
 
