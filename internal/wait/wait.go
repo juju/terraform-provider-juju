@@ -103,10 +103,12 @@ type WaitForErrorCfg[I any, D any] struct {
 	GetData GetData[I, D]
 	// Input is the input to be passed to the GetData function.
 	Input I
-	// ErrorToWait is the error to wait for.
-	ErrorToWait error
+	// ExpectedErr is the error to wait for.
+	ExpectedErr error
 	// NonFatalErrors is a list of non-fatal errors to ignore.
 	NonFatalErrors []error
+	// RetryAllErrors indicates whether to retry on all errors.
+	RetryAllErrors bool
 
 	// RetryConf is a configuration for retrying the operation.
 	// If not provided, default values will be used.
@@ -172,12 +174,15 @@ func WaitForError[I any, D any](cfg WaitForErrorCfg[I, D]) error {
 			if err == nil {
 				return juju.NewRetryReadError("no error returned")
 			}
-			if errors.Is(err, cfg.ErrorToWait) {
+			if errors.Is(err, cfg.ExpectedErr) {
 				return nil
 			}
 			return err
 		},
 		IsFatalError: func(err error) bool {
+			if cfg.RetryAllErrors {
+				return false
+			}
 			for _, nonFatalError := range cfg.NonFatalErrors {
 				if errors.Is(err, nonFatalError) {
 					return false

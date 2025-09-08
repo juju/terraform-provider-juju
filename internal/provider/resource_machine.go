@@ -591,8 +591,8 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 			ModelName: modelName,
 			ID:        machineID,
 		},
-		ErrorToWait:    juju.MachineNotFoundError,
-		NonFatalErrors: []error{juju.RetryReadError},
+		ExpectedErr:    juju.MachineNotFoundError,
+		RetryAllErrors: true,
 	}); err != nil {
 		errSummary := "Wait Error"
 		errDetail := fmt.Sprintf("Timeout reached waiting for machine %q deletion, got error: %s.\n"+

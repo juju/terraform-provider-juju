@@ -386,7 +386,7 @@ func TestFrameworkProviderSchema(t *testing.T) {
 	resp := provider.SchemaResponse{}
 	jujuProvider.Schema(context.Background(), req, &resp)
 	assert.Equal(t, resp.Diagnostics.HasError(), false)
-	assert.Len(t, resp.Schema.Attributes, 6)
+	assert.Len(t, resp.Schema.Attributes, 7)
 }
 
 // TestGetJujuProviderModel tests the getJujuProviderModel function.

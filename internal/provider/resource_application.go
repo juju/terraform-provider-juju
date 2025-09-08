@@ -1378,14 +1378,14 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 				ModelName: modelName,
 				AppName:   appName,
 			},
-			ErrorToWait:    juju.ApplicationNotFoundError,
-			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError, juju.StorageNotFoundError},
+			ExpectedErr:    juju.ApplicationNotFoundError,
+			RetryAllErrors: true,
 		},
 	)
 	if err != nil {
 		errSummary := "Client Error"
-		errDetail := fmt.Sprintf("Unable to complete application %s deletion due to error %v, there might be dangling resources.\n"+
-			"Make sure to manually delete them.", appName, err)
+		errDetail := fmt.Sprintf("Unable to complete application %q deletion: %v\n"+
+			"There might be dangling resources requiring manual intervion.\n", appName, err)
 		if r.providerConfig.SkipFailedDeletion {
 			resp.Diagnostics.AddWarning(
 				errSummary,

@@ -467,8 +467,8 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 				ModelName: modelName,
 				Endpoints: endpoints,
 			},
-			ErrorToWait:    juju.IntegrationNotFoundError,
-			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError},
+			ExpectedErr:    juju.IntegrationNotFoundError,
+			RetryAllErrors: true,
 		},
 	)
 	if err != nil {

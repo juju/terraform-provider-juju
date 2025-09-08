@@ -543,8 +543,8 @@ func (r *modelResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		Context:        ctx,
 		GetData:        r.client.Models.ReadModelStatus,
 		Input:          modelName,
-		ErrorToWait:    juju.ModelNotFoundError,
-		NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError},
+		ExpectedErr:    juju.ModelNotFoundError,
+		RetryAllErrors: true,
 	})
 	if err != nil {
 		errSummary := "Client Error"
