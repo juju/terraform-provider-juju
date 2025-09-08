@@ -66,13 +66,13 @@ func TestDiscoverTerraformFiles(t *testing.T) {
 		{
 			name:          "discover files from in folder",
 			target:        "in",
-			expectedCount: 9,
+			expectedCount: 13,
 			expectError:   false,
 		},
 		{
 			name:          "discover files from in folder with relative path",
 			target:        filepath.Join(".", "in"),
-			expectedCount: 9,
+			expectedCount: 13,
 			expectError:   false,
 		},
 		{

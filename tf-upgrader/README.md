@@ -15,6 +15,13 @@ This tool automatically transforms Juju provider resources that use `model = juj
 - `juju_secret`
 - `juju_machine`
 
+It also transforms Juju provider data sources from name to uuid references:
+
+- `juju_model`
+- `juju_application`
+- `juju_secret`
+- `juju_machine`
+
 It also upgrades output blocks that reference `juju_model.*.name` to use `juju_model.*.uuid`.
 
 ## Usage
