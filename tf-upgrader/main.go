@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -387,46 +388,21 @@ func processTerraformBlock(block *hclwrite.Block, _ string, upgraded *bool) {
 	// Parse the juju provider configuration to check if it needs upgrading
 	attrStr := getAttributeString(jujuAttr)
 
-	// Check if it contains any 0.x version constraint that needs upgrading
-	if !strings.Contains(attrStr, "0.") {
-		return
-	}
+	// Use regex to replace version values containing 0.x with >=1.0.0
+	versionRegex := regexp.MustCompile(`version\s*=\s*"[^"]*0\.[^"]*"`)
+	if versionRegex.MatchString(attrStr) {
+		updatedContent := versionRegex.ReplaceAllString(attrStr, `version = ">=1.0.0"`)
 
-	// Create a simple replacement of version strings containing 0.x
-	for _, pattern := range []string{">= 0.", "~> 0.", "= 0.", "0."} {
-		if strings.Contains(attrStr, pattern) {
-			// Find the version line and replace it
-			lines := strings.Split(attrStr, "\n")
-			for i, line := range lines {
-				if strings.Contains(line, "version") && strings.Contains(line, pattern) {
-					// Extract indentation
-					indent := ""
-					for _, char := range line {
-						if char == ' ' || char == '\t' {
-							indent += string(char)
-						} else {
-							break
-						}
-					}
-					lines[i] = indent + "version = \">=1.0.0\""
-					updatedContent := strings.Join(lines, "\n")
+		// Use raw tokens for the replacement
+		rawTokens := []byte(updatedContent)
+		tokens := hclwrite.Tokens{}
+		tokens = append(tokens, &hclwrite.Token{
+			Bytes: rawTokens,
+		})
+		requiredProvidersBlock.Body().SetAttributeRaw("juju", tokens)
 
-					// Use raw tokens as fallback
-					rawTokens := []byte(updatedContent)
-					tokens := hclwrite.Tokens{}
-					tokens = append(tokens, &hclwrite.Token{
-						Bytes: rawTokens,
-					})
-					requiredProvidersBlock.Body().SetAttributeRaw("juju", tokens)
-
-					// Only set upgraded and print message after successful update
-					*upgraded = true
-					fmt.Printf("  ✓ Upgraded terraform.required_providers.juju: version 0.x -> >=1.0.0\n")
-					return
-				}
-			}
-			break
-		}
+		*upgraded = true
+		fmt.Printf("  ✓ Upgraded terraform.required_providers.juju: version 0.x -> >=1.0.0\n")
 	}
 }
 
