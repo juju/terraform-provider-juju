@@ -473,12 +473,11 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 	)
 	if err != nil {
 		errSummary := "Client Error"
-		errDetail := fmt.Sprintf("Unable to complete integration deletion (endpoints %v) in model %q: %v\n"+
-			"There might be dangling resources requiring manual intervion.\n", endpoints, modelName, err)
+		errDetail := fmt.Sprintf("Unable to complete integration deletion (endpoints %v) in model %q: %v\n", endpoints, modelName, err)
 		if r.config.SkipFailedDeletion {
 			resp.Diagnostics.AddWarning(
 				errSummary,
-				errDetail,
+				errDetail+"There might be dangling resources requiring manual intervion.\n",
 			)
 		} else {
 			resp.Diagnostics.AddError(

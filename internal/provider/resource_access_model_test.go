@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"regexp"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -177,10 +176,6 @@ func TestAcc_ResourceAccessModel_Schema_v0_To_v1(t *testing.T) {
 				),
 			},
 			{
-				// Short sleep to avoiding deleting the model too quickly after creation.
-				PreConfig: func() {
-					time.Sleep(2 * time.Second)
-				},
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccResourceAccessModelTwoUsers(user1, password1, user2, password2, modelName, "write"),
 			},

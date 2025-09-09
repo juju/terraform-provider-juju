@@ -395,6 +395,9 @@ func TestFrameworkProviderSchema(t *testing.T) {
 // missing required fields may/may not work depending on the
 // environment the tests are run in.
 func TestGetJujuProviderModel(t *testing.T) {
+	// Skip this test when running under JAAS
+	// as the JAAS provided env vars interfere.
+	SkipJAAS(t)
 	tests := []struct {
 		name           string
 		plan           jujuProviderModel

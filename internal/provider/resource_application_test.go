@@ -670,6 +670,14 @@ func TestAcc_CustomResourcesRemovedFromPlanMicrok8s(t *testing.T) {
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
 			},
+			{
+				// Add a dummy final step to allow the app to settle before destroying the environment.
+				PreConfig: func() {
+					fmt.Println("Final wait before destroying the model")
+					time.Sleep(30 * time.Second)
+				},
+				RefreshState: true,
+			},
 		},
 	})
 }
