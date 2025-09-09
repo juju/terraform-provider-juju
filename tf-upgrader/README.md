@@ -26,6 +26,12 @@ It also upgrades output blocks that reference `juju_model.*.name` to use `juju_m
 
 It also upgrades the `required_providers` block from specifying version `0.x` to `>= 1.0.0`.
 
+It also handles deprecated fields in resource configurations:
+
+- **`placement`**: Shows a warning for `juju_application` resources using the deprecated `placement` field, recommending migration to the `machines` field
+- **`principal`**: Automatically removes the unused `principal` field from `juju_application` resources  
+- **`series`**: Automatically upgrades the deprecated `series` field to `base` for both `juju_application` and `juju_machine` resources
+
 ## Usage
 
 Upgrade a single file:
@@ -77,6 +83,8 @@ output "model_name" {
 - Resources without model references
 
 The tool will show warnings for variables that contain "model" in their name, as these may need manual review.
+
+The tool will also show warnings for deprecated fields that require manual intervention, such as the `placement` field which should be migrated to use the `machines` field according to the documentation.
 
 ## Testing
 

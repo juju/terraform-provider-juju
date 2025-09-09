@@ -102,7 +102,8 @@ func transformTerraformFile(src []byte, filename string) (*transformationResult,
 
 		switch block.Type() {
 		case "resource":
-			processResourceBlock(block, filename, &upgraded)
+			processResourceBlockModelUUID(block, filename, &upgraded)
+			processResourceBlockDeprecatedFields(block, filename, srcBlockMap, blockKey, &upgraded, &warnings)
 		case "output":
 			processOutputBlock(block, filename, &upgraded)
 		case "variable":
@@ -164,8 +165,8 @@ func processFile(filename string) (bool, int) {
 	return result.WasUpgraded, result.Warnings
 }
 
-// processResourceBlock handles resource blocks that need model -> model_uuid transformation
-func processResourceBlock(block *hclwrite.Block, _ string, upgraded *bool) {
+// processResourceBlockModelUUID handles resource blocks that need model -> model_uuid transformation
+func processResourceBlockModelUUID(block *hclwrite.Block, _ string, upgraded *bool) {
 	if len(block.Labels()) < 2 {
 		return
 	}
@@ -472,4 +473,57 @@ func discoverTerraformFiles(target string) ([]string, error) {
 	}
 
 	return filesToProcess, nil
+}
+
+// processResourceBlockDeprecatedFields handles deprecated fields in resource blocks
+func processResourceBlockDeprecatedFields(block *hclwrite.Block, filename string, srcBlockMap map[string]*hclsyntax.Block, blockKey string, upgraded *bool, warnings *int) {
+	if len(block.Labels()) < 2 {
+		return
+	}
+
+	resourceType := block.Labels()[0]
+	resourceName := block.Labels()[1]
+
+	// Get line number from source block
+	lineNum := 0
+	if srcBlock, exists := srcBlockMap[blockKey]; exists {
+		lineNum = srcBlock.DefRange().Start.Line
+	}
+
+	switch resourceType {
+	case "juju_application":
+		// Handle placement field - warning only
+		if placementAttr := block.Body().GetAttribute("placement"); placementAttr != nil {
+			*warnings++
+			fmt.Printf("  ⚠️  WARNING: %s:%d:1 - %s.%s uses deprecated 'placement' field - use 'machines' instead. See documentation for migration guidance.\n", filename, lineNum, resourceType, resourceName)
+		}
+
+		// Handle principal field - remove it
+		if principalAttr := block.Body().GetAttribute("principal"); principalAttr != nil {
+			block.Body().RemoveAttribute("principal")
+			*upgraded = true
+			fmt.Printf("  ✓ Removed deprecated 'principal' field from %s.%s (field was unused)\n", resourceType, resourceName)
+		}
+
+		// Handle series field - replace with base
+		if seriesAttr := block.Body().GetAttribute("series"); seriesAttr != nil {
+			// Get the series value and set it as base
+			expr := seriesAttr.Expr()
+			block.Body().SetAttributeRaw("base", expr.BuildTokens(nil))
+			block.Body().RemoveAttribute("series")
+			*upgraded = true
+			fmt.Printf("  ✓ Upgraded %s.%s: 'series' -> 'base'\n", resourceType, resourceName)
+		}
+
+	case "juju_machine":
+		// Handle series field - replace with base
+		if seriesAttr := block.Body().GetAttribute("series"); seriesAttr != nil {
+			// Get the series value and set it as base
+			expr := seriesAttr.Expr()
+			block.Body().SetAttributeRaw("base", expr.BuildTokens(nil))
+			block.Body().RemoveAttribute("series")
+			*upgraded = true
+			fmt.Printf("  ✓ Upgraded %s.%s: 'series' -> 'base'\n", resourceType, resourceName)
+		}
+	}
 }
