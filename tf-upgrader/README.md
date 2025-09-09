@@ -24,6 +24,8 @@ It also transforms Juju provider data sources from name to uuid references:
 
 It also upgrades output blocks that reference `juju_model.*.name` to use `juju_model.*.uuid`.
 
+It also upgrades the `required_providers` block from specifying version `0.x` to `>= 1.0.0`.
+
 ## Usage
 
 Upgrade a single file:

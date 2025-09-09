@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -108,6 +109,8 @@ func transformTerraformFile(src []byte, filename string) (*transformationResult,
 			processVariableBlock(block, filename, srcBlockMap, blockKey, &warnings)
 		case "data":
 			processDataBlock(block, filename, &upgraded, srcBlockMap, blockKey, &warnings)
+		case "terraform":
+			processTerraformBlock(block, filename, &upgraded)
 		}
 	}
 
@@ -365,6 +368,41 @@ func processDataBlock(block *hclwrite.Block, filename string, upgraded *bool, sr
 		fmt.Printf("  ✓ Upgraded %s.%s: %s reference .name -> .uuid (%s reference)\n", dataSourceType, block.Labels()[1], sourceField, referenceType)
 	} else {
 		fmt.Printf("  ✓ Upgraded %s.%s: %s -> %s (%s reference)\n", dataSourceType, block.Labels()[1], sourceField, targetField, referenceType)
+	}
+}
+
+// processTerraformBlock handles terraform blocks that need provider version upgrades
+func processTerraformBlock(block *hclwrite.Block, _ string, upgraded *bool) {
+	// Look for required_providers block
+	requiredProvidersBlock := block.Body().FirstMatchingBlock("required_providers", nil)
+	if requiredProvidersBlock == nil {
+		return
+	}
+
+	// Look for juju provider configuration
+	jujuAttr := requiredProvidersBlock.Body().GetAttribute("juju")
+	if jujuAttr == nil {
+		return
+	}
+
+	// Parse the juju provider configuration to check if it needs upgrading
+	attrStr := getAttributeString(jujuAttr)
+
+	// Use regex to replace version values containing 0.x with >=1.0.0
+	versionRegex := regexp.MustCompile(`version\s*=\s*"[^"]*0\.[^"]*"`)
+	if versionRegex.MatchString(attrStr) {
+		updatedContent := versionRegex.ReplaceAllString(attrStr, `version = ">=1.0.0"`)
+
+		// Use raw tokens for the replacement
+		rawTokens := []byte(updatedContent)
+		tokens := hclwrite.Tokens{}
+		tokens = append(tokens, &hclwrite.Token{
+			Bytes: rawTokens,
+		})
+		requiredProvidersBlock.Body().SetAttributeRaw("juju", tokens)
+
+		*upgraded = true
+		fmt.Printf("  ✓ Upgraded terraform.required_providers.juju: version 0.x -> >=1.0.0\n")
 	}
 }
 
