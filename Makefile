@@ -105,3 +105,8 @@ install-dependencies: install-snap-dependencies
 ## install-dependencies: Install all the dependencies
 
 check: juju-unit-test
+
+generate-env-file:
+## populate-env: Populate the test.env file with current juju controller details.
+	@echo "Populating the test.env file with current juju controller details"
+	@./tools/generate_env_file.sh
