@@ -252,8 +252,12 @@ func findApplicationOffers(client *applicationoffers.Client, filter crossmodel.A
 		return nil, err
 	}
 
-	if len(offers) > 1 || len(offers) == 0 {
+	if len(offers) == 0 {
 		return nil, fmt.Errorf("unable to find offer after creation")
+	}
+
+	if len(offers) > 1 {
+		return nil, fmt.Errorf("%d offers found using filter after creation", len(offers))
 	}
 
 	return offers[0], nil
