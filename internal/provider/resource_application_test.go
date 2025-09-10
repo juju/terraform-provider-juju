@@ -1117,7 +1117,6 @@ func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccResourceApplicationBasic(modelName, appName),
-				PlanOnly:                 true,
 			},
 		},
 	})
