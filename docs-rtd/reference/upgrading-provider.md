@@ -123,17 +123,17 @@ go run github.com/juju/terraform-provider-juju/tf-upgrader path/to/terraform/dir
 
 The tool automatically:
 
-1. Transforms `model = juju_model.*.name` references to `model_uuid = juju_model.*.uuid`
-2. Update your plan/module's `required_providers` block to specify a minimum Juju provider version of `1.0.0`
-3. Updates data source references from name to UUID
-4. Upgrades output blocks that reference `juju_model.*.name` to use `juju_model.*.uuid`
-5. Issue warning for scenarios that require manual intervention.
+1. Transforms resources and data sources that reference `model = juju_model.*.name` to `model_uuid = juju_model.*.uuid`.
+2. Transforms output blocks that reference `juju_model.*.name` to `juju_model.*.uuid`.
+3. Updates your plan/module's `required_providers` block to specify a minimum Juju provider version of `1.0.0`.
+4. Issues a warning for scenarios that require manual intervention.
 
 ### What tf-upgrader Won't Upgrade
 
 The tool cannot automatically upgrade:
 
 - Resources that reference variables (e.g., `model = var.model_name`)
+- Resources that reference hardcoded strings (e.g. `model = "stg-model"`)
 - Complex expressions or conditional logic
 - Resources without model references
 - The tool will not add a minimum provider version if one is not specified (opting to only issue a warning instead).
@@ -147,7 +147,7 @@ The tool will show warnings for variables containing "model" in their name, as t
 Before making any changes:
 
 ```bash
-# Backup your Terraform files (or use source control)
+# Backup your Terraform files (or use version control)
 cp -r your-terraform-config your-terraform-config-backup
 
 # Backup your Terraform state
@@ -159,6 +159,9 @@ terraform state pull > terraform.tfstate.backup
 ```bash
 go run github.com/juju/terraform-provider-juju/tf-upgrader .
 ```
+
+Check the output for any warnings that will indicate fields
+that require further inspection.
 
 ### Step 3: Review and Update Variables
 
