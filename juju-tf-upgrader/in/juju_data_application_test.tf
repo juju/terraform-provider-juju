@@ -25,7 +25,7 @@ data "juju_application" "already_correct" {
   model_uuid = juju_model.test.uuid
 }
 
-# juju_application with variable reference (should NOT be upgraded)
+# juju_application with variable reference (should be upgraded)
 data "juju_application" "with_variable" {
   name  = "with_variable"
   model = var.model_name

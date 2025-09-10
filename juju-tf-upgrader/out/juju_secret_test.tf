@@ -37,11 +37,11 @@ resource "juju_secret" "already_correct" {
   }
 }
 
-# juju_secret with variable reference (should NOT be upgraded)
+# juju_secret with variable reference (should be upgraded)
 resource "juju_secret" "with_variable" {
-  model = var.model_name
-  name  = "var_secret"
+  name = "var_secret"
   value = {
     token = "xyz789"
   }
+  model_uuid = var.model_name
 }

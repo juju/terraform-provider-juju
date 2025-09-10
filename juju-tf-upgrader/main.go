@@ -17,7 +17,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: tf-upgrader <terraform-file-or-directory>")
+		fmt.Println("Usage: juju-tf-upgrader <terraform-file-or-directory>")
 		os.Exit(1)
 	}
 
@@ -204,31 +204,50 @@ func processResourceBlockModelUUID(block *hclwrite.Block, _ string, upgraded *bo
 		return
 	}
 
-	// Check if it's a juju_model.*.name reference
+	// Check if it's a juju_model.*.name reference or a variable reference
 	attrStr := getAttributeString(attr)
 
-	if !isJujuModelNameReference(attrStr) {
+	isModelNameRef := isJujuModelNameReference(attrStr)
+	isVariableRef := isVariableReference(attrStr)
+
+	if !isModelNameRef && !isVariableRef {
 		return
 	}
 
-	// Replace .name with .uuid
-	traversal, err := upgradeModelReference(attrStr)
-	if err != nil {
-		return
-	}
+	if isModelNameRef {
+		// Replace .name with .uuid for juju_model references
+		traversal, err := upgradeModelReference(attrStr)
+		if err != nil {
+			return
+		}
 
-	// Set the target field and remove source field if different
-	block.Body().SetAttributeTraversal(targetField, traversal.Traversal)
-	if sourceField != targetField {
-		block.Body().RemoveAttribute(sourceField)
-	}
-	*upgraded = true
+		// Set the target field and remove source field if different
+		block.Body().SetAttributeTraversal(targetField, traversal.Traversal)
+		if sourceField != targetField {
+			block.Body().RemoveAttribute(sourceField)
+		}
+		*upgraded = true
 
-	referenceType := getReferenceType(attrStr)
-	if sourceField == targetField {
-		fmt.Printf("  ✓ Upgraded %s.%s: %s reference .name -> .uuid (%s reference)\n", resourceType, block.Labels()[1], sourceField, referenceType)
-	} else {
-		fmt.Printf("  ✓ Upgraded %s.%s: %s -> %s (%s reference)\n", resourceType, block.Labels()[1], sourceField, targetField, referenceType)
+		referenceType := getReferenceType(attrStr)
+		if sourceField == targetField {
+			fmt.Printf("  ✓ Upgraded %s.%s: %s reference .name -> .uuid (%s reference)\n", resourceType, block.Labels()[1], sourceField, referenceType)
+		} else {
+			fmt.Printf("  ✓ Upgraded %s.%s: %s -> %s (%s reference)\n", resourceType, block.Labels()[1], sourceField, targetField, referenceType)
+		}
+	} else if isVariableRef {
+		// For variable references, just change the field name (keep the variable name the same)
+		expr := attr.Expr()
+		block.Body().SetAttributeRaw(targetField, expr.BuildTokens(nil))
+		if sourceField != targetField {
+			block.Body().RemoveAttribute(sourceField)
+		}
+		*upgraded = true
+
+		if sourceField == targetField {
+			fmt.Printf("  ✓ Upgraded %s.%s: %s with variable reference (field name unchanged)\n", resourceType, block.Labels()[1], sourceField)
+		} else {
+			fmt.Printf("  ✓ Upgraded %s.%s: %s -> %s (variable reference)\n", resourceType, block.Labels()[1], sourceField, targetField)
+		}
 	}
 }
 
@@ -330,10 +349,13 @@ func processDataBlock(block *hclwrite.Block, filename string, upgraded *bool, sr
 		return
 	}
 
-	// Check if it's a juju_model.*.name reference
+	// Check if it's a juju_model.*.name reference or a variable reference
 	attrStr := getAttributeString(attr)
 
-	if !isJujuModelNameReference(attrStr) {
+	isModelNameRef := isJujuModelNameReference(attrStr)
+	isVariableRef := isVariableReference(attrStr)
+
+	if !isModelNameRef && !isVariableRef {
 		// Check for data sources that might need manual review
 		dataSourceName := block.Labels()[0]
 		if !strings.Contains(dataSourceName, "model") {
@@ -351,24 +373,40 @@ func processDataBlock(block *hclwrite.Block, filename string, upgraded *bool, sr
 		return
 	}
 
-	// Replace .name with .uuid
-	traversal, err := upgradeModelReference(attrStr)
-	if err != nil {
-		return
-	}
+	if isModelNameRef {
+		// Replace .name with .uuid for juju_model references
+		traversal, err := upgradeModelReference(attrStr)
+		if err != nil {
+			return
+		}
 
-	// Set the target field and remove source field if different
-	block.Body().SetAttributeTraversal(targetField, traversal.Traversal)
-	if sourceField != targetField {
-		block.Body().RemoveAttribute(sourceField)
-	}
-	*upgraded = true
+		// Set the target field and remove source field if different
+		block.Body().SetAttributeTraversal(targetField, traversal.Traversal)
+		if sourceField != targetField {
+			block.Body().RemoveAttribute(sourceField)
+		}
+		*upgraded = true
 
-	referenceType := getReferenceType(attrStr)
-	if sourceField == targetField {
-		fmt.Printf("  ✓ Upgraded %s.%s: %s reference .name -> .uuid (%s reference)\n", dataSourceType, block.Labels()[1], sourceField, referenceType)
-	} else {
-		fmt.Printf("  ✓ Upgraded %s.%s: %s -> %s (%s reference)\n", dataSourceType, block.Labels()[1], sourceField, targetField, referenceType)
+		referenceType := getReferenceType(attrStr)
+		if sourceField == targetField {
+			fmt.Printf("  ✓ Upgraded %s.%s: %s reference .name -> .uuid (%s reference)\n", dataSourceType, block.Labels()[1], sourceField, referenceType)
+		} else {
+			fmt.Printf("  ✓ Upgraded %s.%s: %s -> %s (%s reference)\n", dataSourceType, block.Labels()[1], sourceField, targetField, referenceType)
+		}
+	} else if isVariableRef {
+		// For variable references, just change the field name (keep the variable name the same)
+		expr := attr.Expr()
+		block.Body().SetAttributeRaw(targetField, expr.BuildTokens(nil))
+		if sourceField != targetField {
+			block.Body().RemoveAttribute(sourceField)
+		}
+		*upgraded = true
+
+		if sourceField == targetField {
+			fmt.Printf("  ✓ Upgraded %s.%s: %s with variable reference (field name unchanged)\n", dataSourceType, block.Labels()[1], sourceField)
+		} else {
+			fmt.Printf("  ✓ Upgraded %s.%s: %s -> %s (variable reference)\n", dataSourceType, block.Labels()[1], sourceField, targetField)
+		}
 	}
 }
 
@@ -410,6 +448,11 @@ func processTerraformBlock(block *hclwrite.Block, _ string, upgraded *bool) {
 // isJujuModelNameReference checks if an attribute string references juju_model.*.name
 func isJujuModelNameReference(attrStr string) bool {
 	return (strings.Contains(attrStr, "juju_model.") || strings.Contains(attrStr, "data.juju_model.")) && strings.HasSuffix(attrStr, ".name")
+}
+
+// isVariableReference checks if an attribute string is a variable reference (var.*)
+func isVariableReference(attrStr string) bool {
+	return strings.HasPrefix(strings.TrimSpace(attrStr), "var.")
 }
 
 // getReferenceType determines if the reference is to a resource or data source

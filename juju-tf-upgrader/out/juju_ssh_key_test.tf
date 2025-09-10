@@ -25,8 +25,8 @@ resource "juju_ssh_key" "already_correct" {
   payload    = "ssh-rsa AAAAB3NzaC1yc2E..."
 }
 
-# juju_ssh_key with variable reference (should NOT be upgraded)
+# juju_ssh_key with variable reference (should be upgraded)
 resource "juju_ssh_key" "with_variable" {
-  model   = var.model_name
-  payload = "ssh-rsa AAAAB3NzaC1yc2E..."
+  payload    = "ssh-rsa AAAAB3NzaC1yc2E..."
+  model_uuid = var.model_name
 }

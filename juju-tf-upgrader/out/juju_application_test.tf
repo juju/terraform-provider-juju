@@ -35,11 +35,11 @@ resource "juju_application" "already_correct" {
   model_uuid = juju_model.development.uuid
 }
 
-# juju_application with variable reference (should NOT be upgraded)
+# juju_application with variable reference (should be upgraded)
 resource "juju_application" "with_variable" {
   name = "mysql"
   charm {
     name = "mysql"
   }
-  model = var.model_name
+  model_uuid = var.model_name
 }

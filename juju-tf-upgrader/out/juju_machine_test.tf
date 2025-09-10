@@ -31,10 +31,10 @@ resource "juju_machine" "already_correct" {
   constraints = "tags=correct-tag"
 }
 
-# juju_machine with variable reference (should NOT be upgraded)
+# juju_machine with variable reference (should be upgraded)
 resource "juju_machine" "with_variable" {
-  model       = var.model_name
   base        = "ubuntu@22.04"
   name        = "var_machine"
   constraints = "cores=2"
+  model_uuid  = var.model_name
 }
