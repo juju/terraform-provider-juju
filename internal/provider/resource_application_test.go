@@ -1230,7 +1230,7 @@ func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application-storage")
 	appName := "test-app-storage"
 
-	storageConstraints := map[string]string{"label": "pgdata", "size": "1M"}
+	storageConstraints := map[string]string{"label": "pgdata", "size": "200M"}
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -1240,20 +1240,12 @@ func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
 				Config: testAccResourceApplicationStorageLXD(modelName, appName, storageConstraints),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application."+appName, "model", modelName),
-					resource.TestCheckResourceAttr("juju_application."+appName, "storage_directives.pgdata", "1M"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage_directives.pgdata", "200M"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.label", "pgdata"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.count", "1"),
-					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.size", "1M"),
+					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.size", "200M"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.pool", "lxd"),
 				),
-			},
-			{
-				Config: testAccResourceApplicationStorageLXD(modelName, appName, storageConstraints),
-				PreConfig: func() {
-					// This sleep is necessary because issuing a destroy on a newly created application,
-					// can put Juju in a state where the application is stucked in "waiting" and it cannot be destroyed.
-					time.Sleep(1 * time.Minute)
-				},
 			},
 		},
 	})
