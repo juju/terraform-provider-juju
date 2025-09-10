@@ -1,4 +1,4 @@
-name: "tf-upgrader Unit Tests"
+name: "juju-tf-upgrader Unit Tests"
 on:
   push:
     branches: [main]
@@ -10,11 +10,11 @@ permissions:
 
 jobs:
   unit-tests:
-    name: Run tf-upgrader unit tests
+    name: Run juju-tf-upgrader unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: "tf-upgrader/go.mod"
-      - run: cd tf-upgrader && go test -v 
+          go-version-file: "juju-tf-upgrader/go.mod"
+      - run: cd juju-tf-upgrader && go test -v 
