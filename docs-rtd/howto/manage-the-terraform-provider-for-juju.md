@@ -1,6 +1,13 @@
 (manage-the-terraform-provider-for-juju)=
 # Manage the Terraform Provider for Juju
 
+```{toctree}
+:maxdepth: 2
+:hidden:
+
+manage-provider/upgrade-provider-to-v1.md
+```
+
 (install-the-terraform-provider-for-juju)=
 ## Install the Terraform Provider for Juju
 
@@ -63,3 +70,7 @@ c. `terraform apply` to apply the changes to your Juju deployment.
 To upgrade the Terraform Provider for Juju, in your Terraform plan update the version constraint, then run `terraform init` with the `--upgrade` flag.
 
 > See more: Terraform [Version constraints](https://developer.hashicorp.com/terraform/language/expressions/version-constraints), [`terraform init --upgrade`](https://developer.hashicorp.com/terraform/cli/commands/init#upgrade-1)
+
+### Upgrade from v0.x to version v1
+
+See {ref}`upgrade-to-terraform-provider-juju-v-1`.

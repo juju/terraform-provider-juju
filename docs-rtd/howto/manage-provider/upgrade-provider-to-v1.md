@@ -1,14 +1,18 @@
-# Upgrading to Juju Terraform Provider v1.0.0
+(upgrade-to-terraform-provider-juju-v-1)=
+# Upgrade the provider to v1
 
-This guide outlines the breaking changes and upgrade procedures when migrating from pre-v1.0.0 versions of the Juju Terraform provider to v1.0.0.
+This guide shows how to modify your plans when upgrading from pre-v1.0.0 versions of the Terraform Provider for Juju to v1.0.0.
 
-## Breaking Changes
+Version 1.0.0 is a major release with breaking changes that requires changes to your plans. Upgrades from any v0.x version
+are supported. 
 
-### 1. Model Field Replacement
+## Breaking changes
+
+### 1. Model name replacement
 
 The most significant change is the replacement of the `model` field with `model_uuid` across multiple resources and data sources.
 
-#### Affected Resources:
+#### Affected resources:
 - `juju_application`
 - `juju_offer` 
 - `juju_ssh_key`
@@ -18,7 +22,7 @@ The most significant change is the replacement of the `model` field with `model_
 - `juju_secret`
 - `juju_machine`
 
-#### Affected Data Sources:
+#### Affected data sources:
 - `juju_model`
 - `juju_application`
 - `juju_secret`
@@ -57,7 +61,7 @@ data "juju_model" "existing" {
 This change does not require resource re-creation. All infrastructure should remain intact
 and only the Terraform state will be updated.
 
-### 2. Import Syntax Changes
+### 2. Import syntax changes
 
 Import syntax for model-scoped resources has changed to require model UUIDs instead of model names.
 
@@ -71,11 +75,11 @@ terraform import juju_application.myapp model-name:application-name
 terraform import juju_application.myapp model-uuid:application-name
 ```
 
-### 3. Offer Data Source Changes
+### 3. Offer data source changes
 
 The `juju_offer` data source no longer contains the computed `model` field.
 
-### 4. Application Resource Field Removals
+### 4. Application resource
 
 Several deprecated fields have been removed from the `juju_application` resource:
 
@@ -83,7 +87,7 @@ Several deprecated fields have been removed from the `juju_application` resource
 - **`principle`** - Field was unused and has been removed.
 - **`series`** - Use `base` instead.
 
-### 5. Machine Resource Field Removals
+### 5. Machine resource
 
 The deprecated `series` field has been removed from the `juju_machine` resource. Use `base` instead.
 
@@ -103,11 +107,11 @@ resource "juju_machine" "machine" {
 }
 ```
 
-## Automated Upgrade Tool
+## Automated upgrade tool
 
 The team provides an automated upgrade tool called `tf-upgrader` to help migrate your Terraform configurations.
 
-### Using tf-upgrader
+### Using `tf-upgrader`
 
 The tool can be run directly using Go:
 
@@ -119,7 +123,7 @@ go run github.com/juju/terraform-provider-juju/tf-upgrader path/to/file.tf
 go run github.com/juju/terraform-provider-juju/tf-upgrader path/to/terraform/directory
 ```
 
-### What tf-upgrader Does
+### What `tf-upgrader` does
 
 The tool automatically:
 
@@ -128,7 +132,7 @@ The tool automatically:
 3. Updates your plan/module's `required_providers` block to specify a minimum Juju provider version of `1.0.0`.
 4. Issues a warning for scenarios that require manual intervention.
 
-### What tf-upgrader Won't Upgrade
+### What `tf-upgrader` Won't Upgrade
 
 The tool cannot automatically upgrade:
 
@@ -142,7 +146,9 @@ The tool will show warnings for variables containing "model" in their name, as t
 
 ## Upgrade Steps
 
-### Step 1: Backup Your Configuration
+### Step 1: Back up your configuration
+
+This step is recommended but not required.
 
 Before making any changes:
 
@@ -154,7 +160,38 @@ cp -r your-terraform-config your-terraform-config-backup
 terraform state pull > terraform.tfstate.backup
 ```
 
-### Step 2: Run tf-upgrader
+### Step 2: Upgrade provider version
+
+We recommend using [version constraints](https://developer.hashicorp.com/terraform/language/providers/requirements#provider-versions)
+to specify your provider version. 
+
+**Example**
+
+**Before v1.0.0:**
+```terraform
+terraform {
+  required_providers {
+    juju = {
+      source = "juju/juju"
+      version = "0.20.0"
+    }
+  }
+}
+```
+
+**After v1.0.0:**
+```terraform
+terraform {
+  required_providers {
+    juju = {
+      source = "juju/juju"
+      version = "~> 1.0" # Allows any 1.x version
+    }
+  }
+}
+```
+
+### Step 3: Run `tf-upgrader`
 
 ```bash
 go run github.com/juju/terraform-provider-juju/tf-upgrader .
@@ -163,7 +200,7 @@ go run github.com/juju/terraform-provider-juju/tf-upgrader .
 Check the output for any warnings that will indicate fields
 that require further inspection.
 
-### Step 3: Review and Update Variables
+### Step 4: Review and update variables
 
 Check for any variables that reference model names:
 
@@ -189,19 +226,19 @@ resource "juju_application" "app" {
 }
 ```
 
-### Step 4: Update Import Statements
+### Step 5: Update import statements
 
 If you use `terraform import`, update your import commands to use UUIDs:
 
 ```bash
 # Get the model UUID first
-juju models --format=json | jq -r '.models[] | select(.name=="your-model") | ."model-uuid"
+juju models --format=json | jq -r '.models[] | select(.name=="your-model") | ."model-uuid"'
 
 # Use the UUID in import commands
 terraform import juju_application.myapp model-uuid:application-name
 ```
 
-### Step 5: Plan and Apply
+### Step 6: Plan and apply
 
 After making changes:
 
@@ -216,7 +253,7 @@ terraform plan
 terraform apply
 ```
 
-In most cases where the only change is to move from model name to model UUID, we expect that no resource recreation should be required.
+In most cases where the only change is to move from model name to model UUID, expect no resource recreation.
 
 ## Validation
 
@@ -225,7 +262,7 @@ After upgrading, verify your configuration:
 1. **Run terraform plan** - Should show no errors and expected changes
 2. **Check resource state** - Verify resources are correctly referenced by UUID
 
-## Getting Help
+## Getting help
 
 If you encounter issues during the upgrade:
 
