@@ -444,6 +444,7 @@ func TestGetJujuProviderModel(t *testing.T) {
 				t.Setenv(JujuUsernameEnvKey, "env-user")
 				t.Setenv(JujuPasswordEnvKey, "env-pass")
 				t.Setenv(JujuCACertEnvKey, "env-cert")
+				t.Setenv(SkipFailedDeletionEnvKey, "false")
 			},
 			wantErr: false,
 			wantValues: jujuProviderModel{
@@ -477,10 +478,11 @@ func TestGetJujuProviderModel(t *testing.T) {
 		{
 			name: "ConfigOverridesEnvVars",
 			plan: jujuProviderModel{
-				ControllerAddrs: types.StringValue("localhost:17070"),
-				UserName:        types.StringValue("user"),
-				Password:        types.StringValue("pass"),
-				CACert:          types.StringValue("cert"),
+				ControllerAddrs:    types.StringValue("localhost:17070"),
+				UserName:           types.StringValue("user"),
+				Password:           types.StringValue("pass"),
+				CACert:             types.StringValue("cert"),
+				SkipFailedDeletion: types.BoolValue(false),
 			},
 			setEnv: func(t *testing.T) {
 				t.Setenv(JujuUsernameEnvKey, "env-user")
