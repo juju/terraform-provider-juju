@@ -71,6 +71,9 @@ To upgrade the Terraform Provider for Juju, in your Terraform plan update the ve
 
 > See more: Terraform [Version constraints](https://developer.hashicorp.com/terraform/language/expressions/version-constraints), [`terraform init --upgrade`](https://developer.hashicorp.com/terraform/cli/commands/init#upgrade-1)
 
-### Upgrade from v0.x to version v1
+If there are breaking changes between versions, also update your Terraform plans to match the new version.
+See below for a guide on upgrading between major versions.
+
+### Upgrade from `v0.x` to `v1.0.0`
 
 See {ref}`upgrade-to-terraform-provider-juju-v-1`.

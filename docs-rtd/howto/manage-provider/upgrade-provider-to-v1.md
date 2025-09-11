@@ -1,10 +1,10 @@
 (upgrade-to-terraform-provider-juju-v-1)=
 # Upgrade the provider to v1
 
-This guide shows how to modify your plans when upgrading from pre-v1.0.0 versions of the Terraform Provider for Juju to v1.0.0.
+This guide shows how to modify your plans when upgrading from pre-`v1.0.0` versions of the Terraform Provider for Juju to `v1.0.0`.
 
-Version 1.0.0 is a major release with breaking changes that requires changes to your plans. Upgrades from any v0.x version
-are supported. 
+Version `1.0.0` is a major release with breaking changes that requires changes to your plans. Upgrades from any `v0.x` version
+are supported.
 
 ## Breaking changes
 
@@ -12,9 +12,9 @@ are supported.
 
 The most significant change is the replacement of the `model` field with `model_uuid` across multiple resources and data sources.
 
-#### Affected resources:
+**Affected resources:**
 - `juju_application`
-- `juju_offer` 
+- `juju_offer`
 - `juju_ssh_key`
 - `juju_access_model`
 - `juju_access_secret`
@@ -22,11 +22,13 @@ The most significant change is the replacement of the `model` field with `model_
 - `juju_secret`
 - `juju_machine`
 
-#### Affected data sources:
+**Affected data sources:**
 - `juju_model`
 - `juju_application`
 - `juju_secret`
 - `juju_machine`
+
+For example:
 
 **Before v1.0.0:**
 ```terraform
@@ -43,11 +45,11 @@ data "juju_model" "existing" {
 }
 ```
 
-**After v1.0.0:**
+**After `v1.0.0`:**
 ```terraform
 resource "juju_application" "app" {
   name       = "postgresql"
-  model_uuid = juju_model.test.uuid # <-- 
+  model_uuid = juju_model.test.uuid # <--
   charm {
     name = "postgresql"
   }
@@ -65,12 +67,12 @@ and only the Terraform state will be updated.
 
 Import syntax for model-scoped resources has changed to require model UUIDs instead of model names.
 
-**Before v1.0.0:**
+**Before `v1.0.0`:**
 ```bash
 terraform import juju_application.myapp model-name:application-name
 ```
 
-**After v1.0.0:**
+**After `v1.0.0`:**
 ```bash
 terraform import juju_application.myapp model-uuid:application-name
 ```
@@ -132,19 +134,19 @@ The tool automatically:
 3. Updates your plan/module's `required_providers` block to specify a minimum Juju provider version of `1.0.0`.
 4. Issues a warning for scenarios that require manual intervention.
 
-### What `tf-upgrader` Won't Upgrade
+### What `tf-upgrader` won't upgrade
 
 The tool cannot automatically upgrade:
 
-- Resources that reference variables (e.g., `model = var.model_name`)
-- Resources that reference hardcoded strings (e.g. `model = "stg-model"`)
-- Complex expressions or conditional logic
-- Resources without model references
-- The tool will not add a minimum provider version if one is not specified (opting to only issue a warning instead).
+- Resources that reference variables (e.g., `model = var.model_name`).
+- Resources that reference hardcoded strings (e.g. `model = "stg-model"`).
+- Complex expressions or conditional logic.
+- Resources without model references.
+- The tool will not add a minimum provider version if one is not specified (it will only issue a warning instead).
 
 The tool will show warnings for variables containing "model" in their name, as these may need manual review.
 
-## Upgrade Steps
+## Upgrade steps
 
 ### Step 1: Back up your configuration
 
@@ -163,7 +165,7 @@ terraform state pull > terraform.tfstate.backup
 ### Step 2: Upgrade provider version
 
 We recommend using [version constraints](https://developer.hashicorp.com/terraform/language/providers/requirements#provider-versions)
-to specify your provider version. 
+to specify your provider version.
 
 **Example**
 
@@ -259,8 +261,8 @@ In most cases where the only change is to move from model name to model UUID, ex
 
 After upgrading, verify your configuration:
 
-1. **Run terraform plan** - Should show no errors and expected changes
-2. **Check resource state** - Verify resources are correctly referenced by UUID
+1. Run your Terraform plan - it should show no errors and all the expected changes.
+2. Check resource state - verify resources are correctly referenced by UUID
 
 ## Getting help
 
