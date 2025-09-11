@@ -479,11 +479,9 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		revision = int(planCharm.Revision.ValueInt64())
 	}
 
-	// TODO: investigate using map[string]string here and let
-	// terraform do the conversion, will help in CreateApplication.
-	configField := map[string]string{}
-	resp.Diagnostics.Append(plan.Config.ElementsAs(ctx, &configField, false)...)
-	if resp.Diagnostics.HasError() {
+	config, diags := newConfig(ctx, plan.Config)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
 		return
 	}
 
@@ -576,7 +574,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 			CharmRevision:      revision,
 			CharmBase:          planCharm.Base.ValueString(),
 			Units:              unitCount,
-			Config:             configField,
+			Config:             config,
 			Constraints:        parsedConstraints,
 			Trust:              plan.Trust.ValueBool(),
 			Expose:             expose,
@@ -780,13 +778,18 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		state.Expose = types.ListNull(exposeType)
 	}
 
-	// we only set changes if there is any difference between
-	// the previous and the current config values
-	configType := req.State.Schema.GetAttributes()[ConfigKey].(schema.MapAttribute).ElementType
-	state.Config, dErr = r.configureConfigData(ctx, configType, state.Config, response.Config)
-	if dErr.HasError() {
-		resp.Diagnostics.Append(dErr...)
-		return
+	// Config
+	if len(response.Config) > 0 {
+		config, diags := newConfigFromApplicationAPI(ctx, response.Config, state.Config)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		state.Config, diags = types.MapValueFrom(ctx, types.StringType, config)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
 	endpointBindingsType := req.State.Schema.GetAttributes()[EndpointBindingsKey].(schema.SetNestedAttribute).NestedObject.Type()
@@ -829,42 +832,6 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 
 	r.trace("Found", applicationResourceModelForLogging(ctx, &state))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
-}
-
-func (r *applicationResource) configureConfigData(ctx context.Context, configType attr.Type, config types.Map, respCfg map[string]juju.ConfigEntry) (types.Map, diag.Diagnostics) {
-	// We focus on those config entries that are not the default value.
-	// If the value was the same we ignore it. If no changes were made,
-	// jump to the next step.
-	var previousConfig map[string]string
-	diagErr := config.ElementsAs(ctx, &previousConfig, false)
-	if diagErr.HasError() {
-		r.trace("configureConfigData exit A")
-		return types.Map{}, diagErr
-	}
-	if previousConfig == nil {
-		previousConfig = make(map[string]string)
-	}
-	// known previously
-	// update the values from the previous config
-	changes := false
-	for k, v := range respCfg {
-		// Add if the value has changed from the previous state
-		if previousValue, found := previousConfig[k]; found {
-			if !juju.EqualConfigEntries(v, previousValue) {
-				// remember that this Terraform schema type only accepts strings
-				previousConfig[k] = v.String()
-				changes = true
-			}
-		} else if !v.IsDefault {
-			// Add if the value is not default
-			previousConfig[k] = v.String()
-			changes = true
-		}
-	}
-	if changes {
-		return types.MapValueFrom(ctx, configType, previousConfig)
-	}
-	return config, nil
 }
 
 // Convert the endpoint bindings from the juju api to terraform nestedEndpointBinding set
@@ -991,35 +958,16 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	if !plan.Config.Equal(state.Config) {
-		planConfigMap := map[string]string{}
-		stateConfigMap := map[string]string{}
-		resp.Diagnostics.Append(plan.Config.ElementsAs(ctx, &planConfigMap, false)...)
-		resp.Diagnostics.Append(state.Config.ElementsAs(ctx, &stateConfigMap, false)...)
+		newConfig, unsetKeys, diags := computeConfigDiff(ctx, state.Config, plan.Config)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		for k, v := range planConfigMap {
-			// we've lost the type of the config value. We compare the string
-			// values.
-			oldEntry := fmt.Sprintf("%#v", stateConfigMap[k])
-			newEntry := fmt.Sprintf("%#v", v)
-			if oldEntry != newEntry {
-				if updateApplicationInput.Config == nil {
-					// initialize just in case
-					updateApplicationInput.Config = make(map[string]string)
-				}
-				updateApplicationInput.Config[k] = v
-			}
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
 		}
-		// Add entries to UnsetConfig if they are present in stateConfigMap but absent in planConfigMap
-		for k := range stateConfigMap {
-			if _, exists := planConfigMap[k]; !exists {
-				if updateApplicationInput.UnsetConfig == nil {
-					updateApplicationInput.UnsetConfig = make(map[string]string)
-				}
-				updateApplicationInput.UnsetConfig[k] = stateConfigMap[k]
-			}
-		}
+		updateApplicationInput.Config = newConfig
+		updateApplicationInput.UnsetConfig = unsetKeys
 	}
 
 	if !plan.Machines.Equal(state.Machines) {

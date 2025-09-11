@@ -93,6 +93,77 @@ resource "juju_model" "this" {
 	})
 }
 
+func TestAcc_ResourceModel_UnsetConfigUsingNull(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+
+	resourceName := "juju_model.this"
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+
+  config = {
+	development = true
+	logging-config = "info"
+  }
+}`, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", modelName),
+					resource.TestCheckResourceAttr(resourceName, "config.development", "true"),
+				),
+			},
+			{
+				Config: fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+  config = {
+	development = null
+	logging-config = "warn"
+  }
+}
+`, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", modelName),
+					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
+					testAccCheckDevelopmentConfigIsUnset(modelName),
+				),
+			},
+			{
+				Config: fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+  config = {
+	logging-config = "warn"
+  }
+}
+`, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", modelName),
+					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
+					testAccCheckDevelopmentConfigIsUnset(modelName),
+				),
+			},
+			{
+				Config: fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+  config = {}
+}
+`, modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", modelName),
+					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
+					testAccCheckDevelopmentConfigIsUnset(modelName),
+				),
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceModel_Minimal(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	resource.ParallelTest(t, resource.TestCase{

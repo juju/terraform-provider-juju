@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -27,6 +28,10 @@ import (
 	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/wait"
+)
+
+const (
+	defaultCreateTimeout = 30 * time.Minute
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -55,6 +60,7 @@ type machineResourceModel struct {
 	Placement       types.String           `tfsdk:"placement"`
 	MachineID       types.String           `tfsdk:"machine_id"`
 	SSHAddress      types.String           `tfsdk:"ssh_address"`
+	Timeouts        timeouts.Value         `tfsdk:"timeouts"`
 	PublicKeyFile   types.String           `tfsdk:"public_key_file"`
 	PrivateKeyFile  types.String           `tfsdk:"private_key_file"`
 	Hostname        types.String           `tfsdk:"hostname"`
@@ -113,7 +119,7 @@ const (
 	PublicKeyFileKey  = "public_key_file"
 )
 
-func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *machineResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:     1,
 		Description: "A resource that represents a Juju machine deployment. Refer to the juju add-machine CLI command for more information and limitations.",
@@ -273,6 +279,11 @@ func (r *machineResource) Schema(_ context.Context, req resource.SchemaRequest, 
 				},
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{
+				Create: true,
+			}),
+		},
 	}
 }
 
@@ -346,9 +357,15 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
+	createTimeout, diags := plan.Timeouts.Create(ctx, defaultCreateTimeout)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	waitForHostname := plan.WaitForHostname.ValueBool()
 	modelUUID := plan.ModelUUID.ValueString()
-	readResponse, err := r.waitForMachine(ctx, waitForHostname, modelUUID, response.ID)
+	readResponse, err := r.waitForMachine(ctx, waitForHostname, modelUUID, response.ID, createTimeout)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for machine %q readiness, got error: %s", response.ID, err))
 		return
@@ -360,7 +377,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (r *machineResource) waitForMachine(ctx context.Context, waitForHostname bool, modelUUID, machineID string) (*juju.ReadMachineResponse, error) {
+func (r *machineResource) waitForMachine(ctx context.Context, waitForHostname bool, modelUUID, machineID string, timeout time.Duration) (*juju.ReadMachineResponse, error) {
 	asserts := []wait.Assert[*juju.ReadMachineResponse]{assertMachineRunning}
 	if waitForHostname {
 		asserts = append(asserts, assertHostnamePopulated)
@@ -375,7 +392,7 @@ func (r *machineResource) waitForMachine(ctx context.Context, waitForHostname bo
 		DataAssertions: asserts,
 		NonFatalErrors: []error{juju.RetryReadError, juju.ConnectionRefusedError},
 		RetryConf: &wait.RetryConf{
-			MaxDuration: 30 * time.Minute,
+			MaxDuration: timeout,
 			Delay:       juju.ReadModelDefaultInterval,
 			MaxDelay:    time.Minute,
 			Clock:       clock.WallClock,
@@ -431,7 +448,7 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	// During import, we don't know whether to wait for the machine hostname.
 	// So we opt not to wait, assuming the machine is ready.
-	response, err := r.waitForMachine(ctx, false, modelUUID, machineID)
+	response, err := r.waitForMachine(ctx, false, modelUUID, machineID, defaultCreateTimeout)
 	if err != nil {
 		resp.Diagnostics.Append(handleMachineNotFoundError(ctx, err, &resp.State)...)
 		return
