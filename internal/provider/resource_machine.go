@@ -594,7 +594,7 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 func (r *machineResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
 	return map[int64]resource.StateUpgrader{
 		0: {
-			PriorSchema: machineV0Schema(),
+			PriorSchema: machineV0Schema(ctx),
 			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
 				machineV0 := machineResourceModelV0{}
 				resp.Diagnostics.Append(req.State.Get(ctx, &machineV0)...)
@@ -722,7 +722,7 @@ func assertMachineRunning(respFromAPI *juju.ReadMachineResponse) error {
 	return nil
 }
 
-func machineV0Schema() *schema.Schema {
+func machineV0Schema(ctx context.Context) *schema.Schema {
 	return &schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"annotations": schema.MapAttribute{
@@ -777,5 +777,10 @@ func machineV0Schema() *schema.Schema {
 			"id": schema.StringAttribute{
 				Computed: true,
 			},
+		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{
+				Create: true,
+			}),
 		}}
 }
