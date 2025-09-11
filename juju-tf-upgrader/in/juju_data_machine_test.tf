@@ -25,7 +25,7 @@ data "juju_machine" "already_correct" {
   model_uuid = juju_model.test.uuid
 }
 
-# juju_machine with variable reference (should NOT be upgraded)
+# juju_machine with variable reference (should be upgraded)
 data "juju_machine" "with_variable" {
   machine_id = "with_variable"
   model      = var.model_name

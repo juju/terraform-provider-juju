@@ -28,9 +28,9 @@ resource "juju_offer" "already_correct" {
   endpoints        = ["endpoint"]
 }
 
-# juju_offer with variable reference (should NOT be upgraded)
+# juju_offer with variable reference (should be upgraded)
 resource "juju_offer" "with_variable" {
-  model            = var.model_name
   application_name = "var-app"
   endpoints        = ["db"]
+  model_uuid       = var.model_name
 }

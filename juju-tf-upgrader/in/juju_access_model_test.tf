@@ -28,7 +28,7 @@ resource "juju_access_model" "already_correct" {
   users      = ["admin"]
 }
 
-# juju_access_model with variable reference (should NOT be upgraded)
+# juju_access_model with variable reference (should be upgraded)
 resource "juju_access_model" "with_variable" {
   access = "read"
   model  = var.model_name

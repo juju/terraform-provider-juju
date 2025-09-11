@@ -42,7 +42,7 @@ resource "juju_integration" "already_upgraded" {
   }
 }
 
-# juju_integration that should NOT be upgraded (model references variable)
+# juju_integration that should be upgraded (model references variable)
 resource "juju_integration" "variable_ref" {
   model = var.model_name
 

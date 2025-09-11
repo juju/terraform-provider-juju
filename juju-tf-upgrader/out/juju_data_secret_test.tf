@@ -28,9 +28,9 @@ data "juju_secret" "already_correct" {
   model_uuid = juju_model.test.uuid
 }
 
-# juju_secret with variable reference (should NOT be upgraded)
+# juju_secret with variable reference (should be upgraded)
 data "juju_secret" "with_variable" {
-  name      = "with_variable"
-  secret_id = "x"
-  model     = var.model_name
+  name       = "with_variable"
+  secret_id  = "x"
+  model_uuid = var.model_name
 }

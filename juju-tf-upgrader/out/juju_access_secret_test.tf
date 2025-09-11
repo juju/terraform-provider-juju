@@ -31,10 +31,10 @@ resource "juju_access_secret" "already_correct" {
   users      = ["admin"]
 }
 
-# juju_access_secret with variable reference (should NOT be upgraded)
+# juju_access_secret with variable reference (should be upgraded)
 resource "juju_access_secret" "with_variable" {
-  access    = "read"
-  model     = var.model_name
-  secret_id = "secret:jkl012"
-  users     = ["user1"]
+  access     = "read"
+  secret_id  = "secret:jkl012"
+  users      = ["user1"]
+  model_uuid = var.model_name
 }
