@@ -208,6 +208,7 @@ func TestProviderAllowsEmptyCACert(t *testing.T) {
 
 func TestProviderSetWarnOnDeletionErrors(t *testing.T) {
 	jujuProvider := NewJujuProvider("dev", true)
+	t.Setenv(SkipFailedDeletionEnvKey, "false")
 	confResp := configureProvider(t, jujuProvider)
 	providerData, ok := confResp.ResourceData.(juju.ProviderData)
 	require.Truef(t, ok, "ResourceData, not of type juju ProviderData")
