@@ -427,10 +427,10 @@ func processTerraformBlock(block *hclwrite.Block, _ string, upgraded *bool) {
 	// Parse the juju provider configuration to check if it needs upgrading
 	attrStr := getAttributeString(jujuAttr)
 
-	// Use regex to replace version values containing 0.x with >=1.0.0
+	// Use regex to replace version values containing 0.x with ~> 1.0
 	versionRegex := regexp.MustCompile(`version\s*=\s*"[^"]*0\.[^"]*"`)
 	if versionRegex.MatchString(attrStr) {
-		updatedContent := versionRegex.ReplaceAllString(attrStr, `version = ">=1.0.0"`)
+		updatedContent := versionRegex.ReplaceAllString(attrStr, `version = "~> 1.0"`)
 
 		// Use raw tokens for the replacement
 		rawTokens := []byte(updatedContent)
@@ -441,7 +441,7 @@ func processTerraformBlock(block *hclwrite.Block, _ string, upgraded *bool) {
 		requiredProvidersBlock.Body().SetAttributeRaw("juju", tokens)
 
 		*upgraded = true
-		fmt.Printf("  ✓ Upgraded terraform.required_providers.juju: version 0.x -> >=1.0.0\n")
+		fmt.Printf("  ✓ Upgraded terraform.required_providers.juju: version 0.x -> ~> 1.0\n")
 	}
 }
 
@@ -501,6 +501,10 @@ func discoverTerraformFiles(target string) ([]string, error) {
 		err := filepath.WalkDir(target, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				return err
+			}
+			// Skip .terraform directory and its contents
+			if d.IsDir() && d.Name() == ".terraform" {
+				return filepath.SkipDir
 			}
 			if !d.IsDir() && strings.HasSuffix(path, ".tf") && !strings.Contains(path, "_upgraded") {
 				filesToProcess = append(filesToProcess, path)
