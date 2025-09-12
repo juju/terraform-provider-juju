@@ -1323,8 +1323,8 @@ resource "juju_model" "{{.ModelName}}" {
 }
 
 resource "juju_application" "{{.AppName}}" {
-  model = juju_model.{{.ModelName}}.name
-  name  = "{{.AppName}}"
+  model_uuid = juju_model.{{.ModelName}}.uuid
+  name       = "{{.AppName}}"
   charm {
 	name = "juju-qa-dummy-source"
   }
