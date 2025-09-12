@@ -5,6 +5,7 @@ package provider
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -58,6 +59,7 @@ func TestAcc_ResourceMachineWaitForHostname(t *testing.T) {
 				Config: testAccResourceMachineWaitForHostname(modelName, "base = \"ubuntu@22.04\""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_machine.this", "model_uuid"),
+					resource.TestCheckResourceAttr("juju_machine.this", "timeouts.create", "31m"),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
 					resource.TestCheckResourceAttr("juju_machine.this", "base", "ubuntu@22.04"),
 					resource.TestCheckResourceAttrSet("juju_machine.this", "hostname"),
@@ -107,9 +109,14 @@ func TestAcc_ResourceMachine_Minimal(t *testing.T) {
 }
 
 func TestAcc_ResourceMachine_WithPlacement(t *testing.T) {
-	t.Skip("This test is skipped because it is not guaranteed to work on LXD.")
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
+	}
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.0.0") < 0 {
+		t.Skipf("%s is not set or is below 3.0.0", TestJujuAgentVersion)
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-machine")
 	resourceName := "juju_machine.this_machine_1"
@@ -120,7 +127,7 @@ func TestAcc_ResourceMachine_WithPlacement(t *testing.T) {
 			{
 				Config: testAccResourceMachineWithPlacement(modelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", resourceName, "model_uuid"),
+					resource.TestCheckResourceAttrPair("juju_model."+modelName, "uuid", resourceName, "model_uuid"),
 					resource.TestCheckResourceAttr(resourceName, "machine_id", "0/lxd/0"),
 					resource.TestCheckResourceAttr(resourceName, "placement", "lxd:0"),
 				),
@@ -266,6 +273,9 @@ resource "juju_machine" "this" {
 	name = "this_machine"
 	model_uuid = juju_model.this.uuid
 	wait_for_hostname = true
+	timeouts {
+		create = "31m"
+	}
 	%s
 }
 `, modelName, operatingSystem)
@@ -383,6 +393,7 @@ resource "juju_model" "{{.ModelName}}" {
 resource "juju_machine" "this_machine" {
 	name = "manually_provisioned_machine"
 	model_uuid = juju_model.{{.ModelName}}.uuid
+	constraints = "virt-type=virtual-machine"
 }
 
 resource "juju_machine" "this_machine_1" {

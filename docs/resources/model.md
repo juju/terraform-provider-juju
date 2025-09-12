@@ -26,6 +26,10 @@ resource "juju_model" "this" {
     no-proxy                    = "jujucharms.com"
     update-status-hook-interval = "5m"
   }
+
+  timeouts {
+    create = "60m" # default is 30m
+  }
 }
 ```
 

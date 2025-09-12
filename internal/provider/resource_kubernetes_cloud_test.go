@@ -4,7 +4,6 @@
 package provider
 
 import (
-	"os"
 	"regexp"
 	"testing"
 
@@ -15,61 +14,38 @@ import (
 )
 
 func TestAcc_ResourceKubernetesCloud(t *testing.T) {
+	SkipJAAS(t)
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
 	cloudName := acctest.RandomWithPrefix("tf-test-k8scloud")
-
-	createModel := true
-	jaasTest := false
-	if _, ok := os.LookupEnv("IS_JAAS"); ok {
-		jaasTest = true
-		// We don't create the model in JAAS tests because atm we can't remove a cloud if it is used by a model.
-		// In Juju if you don't specify a cloud, it picks the controller's cloud, but JAAS doesn't and returns an error if multiple
-		// clouds are available, which is the case because we don't remove them after the test.
-		createModel = false
-	}
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceKubernetesCloud(cloudName, "", jaasTest, false, createModel),
+				Config: testAccResourceKubernetesCloud(cloudName, "", false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
 				),
-			},
-			{
-				// We skip this step if we don't create the model, because we can destroy the cloud.
-				SkipFunc: func() (bool, error) {
-					return !createModel, nil
-				},
-				// This step we leverage `removed` to remove the cloud from the state, so we don't issue
-				// a `Destroy` on the cloud, which would fail with "cloud is used by 1 model".
-				// This is a bug in the provider that should be solved once we wait on model's deletion.
-				Config: testAccRemovedResourceKubernetesCloud(cloudName),
 			},
 		}})
 }
 
 func TestAcc_ResourceKubernetesCloudDelete(t *testing.T) {
+	SkipJAAS(t)
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
 	cloudName := acctest.RandomWithPrefix("tf-test-k8scloud")
-
-	jaasTest := false
-	if _, ok := os.LookupEnv("IS_JAAS"); ok {
-		jaasTest = true
-	}
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceKubernetesCloud(cloudName, "", jaasTest, false, false),
+				Config: testAccResourceKubernetesCloud(cloudName, "", false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
 				),
@@ -78,40 +54,21 @@ func TestAcc_ResourceKubernetesCloudDelete(t *testing.T) {
 }
 
 func TestAcc_ResourceKubernetesCloudWithoutServiceAccount(t *testing.T) {
+	SkipJAAS(t)
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
 	cloudName := acctest.RandomWithPrefix("tf-test-k8scloud")
-
-	createModel := true
-	jaasTest := false
-	if _, ok := os.LookupEnv("IS_JAAS"); ok {
-		jaasTest = true
-		// We don't create the model in JAAS tests because atm we can't remove a cloud if it is used by a model.
-		// In Juju if you don't specify a cloud, it picks the controller's cloud, but JAAS doesn't and returns an error if multiple
-		// clouds are available, which is the case because we don't remove them after the test.
-		createModel = false
-	}
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceKubernetesCloud(cloudName, "", jaasTest, true, createModel),
+				Config: testAccResourceKubernetesCloud(cloudName, "", true),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
 				),
-			},
-			{
-				// We skip this step if we don't create the model, because we can destroy the cloud.
-				SkipFunc: func() (bool, error) {
-					return !createModel, nil
-				},
-				// This step we leverage `removed` to remove the cloud from the state, so we don't issue
-				// a `Destroy` on the cloud, which would fail with "cloud is used by 1 model".
-				// This is a bug in the provider that should be solved once we wait on model's deletion.
-				Config: testAccRemovedResourceKubernetesCloud(cloudName),
 			},
 		},
 	})
@@ -129,23 +86,38 @@ func TestAcc_ResourceKubernetesCloudUpdate(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceKubernetesCloud(cloudName, "", false, false, true),
+				Config: testAccResourceKubernetesCloud(cloudName, "", false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
 				),
 			},
 			{
-				Config: testAccResourceKubernetesCloud(cloudName, "test string", false, false, true),
+				Config: testAccResourceKubernetesCloud(cloudName, "test string", false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
 					resource.TestMatchResourceAttr("juju_kubernetes_cloud."+cloudName, "kubernetes_config", regexp.MustCompile(".*test string.*")),
 				),
 			},
+		},
+	})
+}
+
+func TestAcc_ResourceKubernetesCloudWithJAAS(t *testing.T) {
+	OnlyTestAgainstJAAS(t)
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	cloudName := acctest.RandomWithPrefix("tf-test-k8scloud")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
 			{
-				// This step we leverage `removed` to remove the cloud from the state, so we don't issue
-				// a `Destroy` on the cloud, which would fail with "cloud is used by 1 model".
-				// This is a bug in the provider that should be solved once we wait on model's deletion.
-				Config: testAccRemovedResourceKubernetesCloud(cloudName),
+				Config: testAccResourceKubernetesCloudJAAS(cloudName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
+				),
 			},
 		},
 	})
@@ -175,9 +147,9 @@ func TestAcc_ResourceKubernetesCloudWithJAASIncompleteConfig(t *testing.T) {
 // testAccResourceKubernetesCloud creates a terraform plan to test juju_kubernetes_cloud.
 // stringToAppendToConfig is a string appended as a comment to the microk8s config and it is used to simulate
 // a change in the kubernetes config.
-func testAccResourceKubernetesCloud(cloudName string, stringToAppendToConfig string, jaasTest bool, noServiceAccount bool, withModel bool) string {
+func testAccResourceKubernetesCloud(cloudName string, stringToAppendToConfig string, noServiceAccount bool) string {
 	return internaltesting.GetStringFromTemplateWithData(
-		"testAccResourceSecret",
+		"testAccResourceKubernetesCloud",
 		`
 resource "juju_kubernetes_cloud" "{{.CloudName}}" {
  name = "{{.CloudName}}"
@@ -195,7 +167,6 @@ resource "juju_kubernetes_cloud" "{{.CloudName}}" {
  {{ end }}
 }
 
-{{ if .WithModel }}
 resource "juju_model" "{{.CloudName}}-model" {
  name = "{{.CloudName}}-model"
  cloud {
@@ -204,34 +175,41 @@ resource "juju_model" "{{.CloudName}}-model" {
 
  credential = juju_kubernetes_cloud.{{.CloudName}}.credential
 }
-{{ end }}
 
 `, internaltesting.TemplateData{
 			"CloudName":              cloudName,
 			"StringToAppendToConfig": stringToAppendToConfig,
-			"JAASTest":               jaasTest,
 			"NoServiceAccount":       noServiceAccount,
-			"WithModel":              withModel,
 		})
 }
 
-func testAccRemovedResourceKubernetesCloud(cloudName string) string {
+// testAccResourceKubernetesCloudJAAS creates a terraform plan to test juju_kubernetes_cloud in JAAS.
+// In JAAS test we don't want to setup microk8s, so we skip the service account creation and we put
+// a fake valid k8s config.
+func testAccResourceKubernetesCloudJAAS(cloudName string) string {
 	return internaltesting.GetStringFromTemplateWithData(
-		"testAccRemovedResourceKubernetesCloud",
+		"testAccResourceKubernetesCloud",
 		`
-		removed {
-  from = juju_kubernetes_cloud.{{.CloudName}}
-  lifecycle {
-    destroy = false
-  }
-}`, internaltesting.TemplateData{
+resource "juju_kubernetes_cloud" "{{.CloudName}}" {
+ name = "{{.CloudName}}"
+ kubernetes_config = <<EOT
+{{.K8sConfig}}
+EOT
+ parent_cloud_name = "lxd"
+ parent_cloud_region = "localhost"
+ skip_service_account_creation = true
+}
+
+
+`, internaltesting.TemplateData{
 			"CloudName": cloudName,
+			"K8sConfig": internaltesting.FakeKubernetesConfig,
 		})
 }
 
 func testAccResourceKubernetesCloudWithoutParentCloudName(cloudName string) string {
 	return internaltesting.GetStringFromTemplateWithData(
-		"testAccResourceSecret",
+		"testAccResourceKubernetesCloud",
 		`
 resource "juju_kubernetes_cloud" "{{.CloudName}}" {
  name = "{{.CloudName}}"
