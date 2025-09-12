@@ -977,11 +977,10 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 		planCharm := planCharms[0]
 		stateCharm := stateCharms[0]
-		if !planCharm.Channel.Equal(stateCharm.Channel) && !planCharm.Revision.Equal(stateCharm.Revision) {
-			resp.Diagnostics.AddWarning("Not Supported", "Changing an application's revision and channel at the same time.")
-		} else if !planCharm.Channel.Equal(stateCharm.Channel) {
+		if !planCharm.Channel.Equal(stateCharm.Channel) {
 			updateApplicationInput.Channel = planCharm.Channel.ValueString()
-		} else if !planCharm.Revision.Equal(stateCharm.Revision) {
+		}
+		if !planCharm.Revision.Equal(stateCharm.Revision) {
 			updateApplicationInput.Revision = intPtr(planCharm.Revision)
 		}
 		if !planCharm.Base.Equal(stateCharm.Base) {
