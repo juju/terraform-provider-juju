@@ -129,7 +129,7 @@ resource "juju_model" "this" {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
-					testAccCheckDevelopmentConfigIsUnset(modelName),
+					testAccCheckDevelopmentConfigIsUnset(resourceName),
 				),
 			},
 			{
@@ -144,7 +144,7 @@ resource "juju_model" "this" {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
-					testAccCheckDevelopmentConfigIsUnset(modelName),
+					testAccCheckDevelopmentConfigIsUnset(resourceName),
 				),
 			},
 			{
@@ -157,7 +157,7 @@ resource "juju_model" "this" {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
-					testAccCheckDevelopmentConfigIsUnset(modelName),
+					testAccCheckDevelopmentConfigIsUnset(resourceName),
 				),
 			},
 		},

@@ -127,7 +127,7 @@ func TestAcc_ResourceMachine_WithPlacement(t *testing.T) {
 			{
 				Config: testAccResourceMachineWithPlacement(modelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", resourceName, "model_uuid"),
+					resource.TestCheckResourceAttrPair("juju_model."+modelName, "uuid", resourceName, "model_uuid"),
 					resource.TestCheckResourceAttr(resourceName, "machine_id", "0/lxd/0"),
 					resource.TestCheckResourceAttr(resourceName, "placement", "lxd:0"),
 				),
