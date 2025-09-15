@@ -34,10 +34,14 @@ resource "juju_application" "this" {
 }
 ```
 
+This works as follows:
+
 - If both `channel` and `revision` are specified (recommended for reproducibility), the Terraform provider will deploy the requested revision.
 - If only `channel` is specified, the provider will deploy the latest revision available in that channel. The charm will not be refreshed on subsequent `terraform apply` runs.
 - If only `revision` is specified, the provider will try to deploy that revision from the default channel (as set for the charm on Charmhub); if not available, the result will be an error.
 - If neither field is specified, the provider will deploy the latest revision from the default channel (as set for the charm on Charmhub). The charm will not be refreshed on subsequent `terraform apply` runs.
+
+If the charm has any resources, and your Terraform plan does not specify them explicitly, resources will come from the tip of the specified or inferred channel.
 
 > See more: [`juju_application` (resource)](../reference/terraform-provider//resources/application)
 
