@@ -245,10 +245,11 @@ linkcheck_anchors_ignore_for_url = [
     r"https://juju\.is/.*",
     r"https://matrix\.to/.*",
     r"https://registry\.terraform\.io/.*",
+    r"https://developer\.hashicorp\.com/.*",
 ]
 
 # give linkcheck multiple tries on failure
-# linkcheck_timeout = 30
+linkcheck_timeout = 30
 linkcheck_retries = 3
 
 ########################
