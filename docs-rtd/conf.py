@@ -234,9 +234,9 @@ redirects = {}
 
 linkcheck_ignore = [
     "http://127.0.0.1:8000",
-    "https://github.com/canonical/ACME/*"
+    "https://github.com/canonical/ACME/*",
+    "https://developer.hashicorp.com/terraform/*",
     ]
-
 
 # A regex list of URLs where anchors are ignored by 'make linkcheck'
 
@@ -245,6 +245,7 @@ linkcheck_anchors_ignore_for_url = [
     r"https://juju\.is/.*",
     r"https://matrix\.to/.*",
     r"https://registry\.terraform\.io/.*",
+    r"https://developer\.hashicorp\.com/.*",
 ]
 
 # give linkcheck multiple tries on failure
