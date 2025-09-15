@@ -385,7 +385,12 @@ func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 			errors = append(errors, v.Err)
 			return errors
 		}
-		if v.OfferURL != input.OfferURL {
+		url, err := cleanOfferURL(v.OfferURL)
+		if err != nil {
+			errors = append(errors, err)
+			return errors
+		}
+		if url != input.OfferURL {
 			continue
 		}
 		offerName = v.OfferName
@@ -463,4 +468,22 @@ func (c offersClient) RevokeOffer(input *GrantRevokeOfferInput) error {
 	}
 
 	return nil
+}
+
+// cleanOfferURL removes the source field from the offer URL.
+// The source represents the source controller of the offer.
+//
+// The Juju CLI sets the source field on the offer URL string when the offer is consumed.
+// The Terraform provider leaves this field empty since it is does not support
+// cross-controller relations.
+//
+// Until that changes, we clean the URL to assist in scenarios where an offer URL
+// has the source field set.
+func cleanOfferURL(offerURL string) (string, error) {
+	url, err := crossmodel.ParseOfferURL(offerURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse offer URL %q: %w", offerURL, err)
+	}
+	url.Source = ""
+	return url.String(), nil
 }
