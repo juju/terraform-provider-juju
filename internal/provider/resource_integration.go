@@ -39,6 +39,7 @@ func NewIntegrationResource() resource.Resource {
 
 type integrationResource struct {
 	client *juju.Client
+	config juju.Config
 
 	// context for the logging subsystem.
 	subCtx context.Context
@@ -72,15 +73,16 @@ func (r *integrationResource) Configure(ctx context.Context, req resource.Config
 		return
 	}
 
-	client, ok := req.ProviderData.(*juju.Client)
+	provider, ok := req.ProviderData.(juju.ProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *juju.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
-	r.client = client
+	r.client = provider.Client
+	r.config = provider.Config
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceIntegration)
 }
 
@@ -465,16 +467,24 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 				ModelName: modelName,
 				Endpoints: endpoints,
 			},
-			ErrorToWait:    juju.IntegrationNotFoundError,
-			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError},
+			ExpectedErr:    juju.IntegrationNotFoundError,
+			RetryAllErrors: true,
 		},
 	)
 	if err != nil {
-		// AddWarning is used instead of AddError to make sure that the resource is removed from state.
-		resp.Diagnostics.AddWarning(
-			"Client Error",
-			fmt.Sprintf(`Unable to complete integration %v for model %s deletion due to error %v, there might be dangling resources. 
-	Make sure to manually delete them.`, endpoints, modelName, err))
+		errSummary := "Client Error"
+		errDetail := fmt.Sprintf("Unable to complete integration deletion (endpoints %v) in model %q: %v\n", endpoints, modelName, err)
+		if r.config.SkipFailedDeletion {
+			resp.Diagnostics.AddWarning(
+				errSummary,
+				errDetail+"There might be dangling resources requiring manual intervion.\n",
+			)
+		} else {
+			resp.Diagnostics.AddError(
+				errSummary,
+				errDetail,
+			)
+		}
 		return
 	}
 	r.trace(fmt.Sprintf("Deleted integration resource: %q", state.ID.ValueString()))

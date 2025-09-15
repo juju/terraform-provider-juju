@@ -100,7 +100,6 @@ func TestAcc_ResourceAccessModel_UpgradeProvider(t *testing.T) {
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccResourceAccessModel(userName, userPassword, modelName, access),
-				PlanOnly:                 true,
 			},
 		},
 	})

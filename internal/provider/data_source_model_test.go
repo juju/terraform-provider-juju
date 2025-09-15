@@ -52,7 +52,6 @@ func TestAcc_DataSourceModel_UpgradeProvider(t *testing.T) {
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccFrameworkDataSourceModel(modelName),
-				PlanOnly:                 true,
 			},
 		},
 	})

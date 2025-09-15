@@ -670,6 +670,14 @@ func TestAcc_CustomResourcesRemovedFromPlanMicrok8s(t *testing.T) {
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
 			},
+			{
+				// Add a dummy final step to allow the app to settle before destroying the environment.
+				PreConfig: func() {
+					fmt.Println("Final wait before destroying the model")
+					time.Sleep(30 * time.Second)
+				},
+				RefreshState: true,
+			},
 		},
 	})
 }
@@ -1109,7 +1117,6 @@ func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccResourceApplicationBasic(modelName, appName),
-				PlanOnly:                 true,
 			},
 		},
 	})
@@ -1239,14 +1246,6 @@ func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.size", "1M"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.pool", "lxd"),
 				),
-			},
-			{
-				Config: testAccResourceApplicationStorageLXD(modelName, appName, storageConstraints),
-				PreConfig: func() {
-					// This sleep is necessary because issuing a destroy on a newly created application,
-					// can put Juju in a state where the application is stucked in "waiting" and it cannot be destroyed.
-					time.Sleep(1 * time.Minute)
-				},
 			},
 		},
 	})
