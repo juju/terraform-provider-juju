@@ -17,6 +17,28 @@ import (
 
 var validUUID = regexp.MustCompile(`[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}`)
 
+func TestCreatingMultipleModels(t *testing.T) {
+	modelNames := make([]string, 10)
+	for i := range modelNames {
+		modelNames[i] = acctest.RandomWithPrefix(fmt.Sprintf("tf-test-model-%d", i))
+	}
+
+	config := ""
+	for i := range 10 {
+		config += testAccResourceModel(modelNames[i], testingCloud.CloudName(), "INFO")
+	}
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceModel(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	logLevelInfo := "INFO"
@@ -342,7 +364,7 @@ func testAccCheckDevelopmentConfigIsUnset(modelName string) resource.TestCheckFu
 
 func testAccResourceModel(modelName string, cloudName string, logLevel string) string {
 	return fmt.Sprintf(`
-resource "juju_model" "model" {
+resource "juju_model" "model_%s" {
   name = %q
 
   cloud {
@@ -353,7 +375,7 @@ resource "juju_model" "model" {
   config = {
     logging-config = "<root>=%s"
   }
-}`, modelName, cloudName, logLevel)
+}`, modelName, modelName, cloudName, logLevel)
 }
 
 func testAccConstraintsModel(modelName string, cloudName string, constraints string) string {
