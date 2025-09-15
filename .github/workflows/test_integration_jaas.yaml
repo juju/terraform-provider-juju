@@ -24,6 +24,10 @@ permissions:
   contents: read
   packages: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Ensure project builds before running test
   build:
