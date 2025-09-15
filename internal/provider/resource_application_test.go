@@ -339,6 +339,41 @@ func TestAcc_CharmUpdates(t *testing.T) {
 	})
 }
 
+func TestAcc_CharmUpdatesWithRevision(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-charmupdates")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationUpdatesCharmWithRevision(modelName, "2.0/stable", ""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "2.0/stable"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "22"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationUpdatesCharmWithRevision(modelName, "2.0/edge", "23"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "2.0/edge"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "23"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationUpdatesCharmWithRevision(modelName, "2.0/stable", "22"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "2.0/stable"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "22"),
+				),
+			},
+		},
+	})
+}
+
 func TestAcc_CharmUpdateBase(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-charmbaseupdates")
 
@@ -1623,6 +1658,30 @@ func testAccResourceApplicationUpdatesCharm(modelName string, channel string) st
 		}
 		`, modelName, channel)
 	}
+}
+
+func testAccResourceApplicationUpdatesCharmWithRevision(modelName string, channel string, revision string) string {
+	return internaltesting.GetStringFromTemplateWithData("testAccResourceApplicationUpdatesCharm", `
+		resource "juju_model" "this" {
+		  name = "{{.ModelName}}"
+		}
+
+		resource "juju_application" "this" {
+		  model = juju_model.this.name
+		  name = "test-app"
+		  charm {
+			name    = "juju-qa-test"
+			channel = "{{.Channel}}"
+			{{- if .Revision }}
+			revision = "{{.Revision}}"
+			{{- end }}
+		  }
+		}
+		`, internaltesting.TemplateData{
+		"ModelName": modelName,
+		"Channel":   channel,
+		"Revision":  revision,
+	})
 }
 
 func testAccApplicationUpdateBaseCharm(modelName string, base string) string {
