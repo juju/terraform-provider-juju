@@ -171,7 +171,7 @@ resource "juju_kubernetes_cloud" "{{.CloudName}}" {
 resource "juju_model" "{{.CloudName}}-model" {
  name = "{{.CloudName}}-model"
  cloud {
-		name = "{{.CloudName}}"
+		name = juju_kubernetes_cloud.{{.CloudName}}.name
  }
 
  credential = juju_kubernetes_cloud.{{.CloudName}}.credential
