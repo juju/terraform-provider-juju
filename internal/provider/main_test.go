@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Env variables to use for various testing purposes
@@ -63,6 +64,10 @@ func TypeTestingCloudFromString(from string) (CloudTesting, error) {
 	}
 }
 
+func setTestOverrides() {
+	maxModelDestroyWait = 1 * time.Minute
+}
+
 // testingCloud stores what type of cloud are we using
 // for the testing phase.
 var testingCloud CloudTesting
@@ -84,6 +89,8 @@ func TestMain(m *testing.M) {
 	}
 	testSSHPubKeyPath = os.Getenv(TestSSHPublicKeyFileEnvKey)
 	testSSHPrivKeyPath = os.Getenv(TestSSHPrivateKeyFileEnvKey)
+
+	setTestOverrides()
 
 	var err error
 	testingCloud, err = TypeTestingCloudFromString(testCloud)

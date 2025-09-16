@@ -33,11 +33,12 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
-const (
-	// maxModelDestroyWait provides a reasonably long wait time for a
-	// model to be destroyed considering that we wait for all the
-	// model's resources to be destroyed before starting the model deletion.
-	maxModelDestroyWait = 1 * time.Minute
+var (
+	// maxModelDestroyWait sets a long wait time for a model to be destroyed.
+	// This is a very conservative value as model destroy is usually very quick.
+	// In tests this value is reduced because sometimes Juju fails to destroy
+	// a model that was recently created and we want to avoid long test times.
+	maxModelDestroyWait = 15 * time.Minute
 )
 
 var _ resource.Resource = &modelResource{}
