@@ -50,6 +50,27 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceIntegrationUpdateIntegration(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-integration")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		CheckDestroy:             testAccCheckIntegrationDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testUpdateIntegrationToAppWithSameInterface(modelName, false),
+			},
+			{
+				Config: testUpdateIntegrationToAppWithSameInterface(modelName, true),
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
@@ -154,6 +175,62 @@ resource "juju_integration" "this" {
 	}
 }
 `, modelName, osOne, osTwo)
+}
+
+func testUpdateIntegrationToAppWithSameInterface(modelName string, relateToNewApp bool) string {
+	appToRelate := "two"
+	if relateToNewApp {
+		appToRelate = "three"
+	}
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_application" "one" {
+	model = juju_model.this.name
+	name  = "one" 
+	
+	charm {
+		name = "juju-qa-dummy-sink"
+		base = "ubuntu@22.04"
+	}
+}
+
+resource "juju_application" "two" {
+	model = juju_model.this.name
+	name  = "two"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		base = "ubuntu@22.04"
+	}
+}
+
+resource "juju_application" "three" {
+	model = juju_model.this.name
+	name  = "three"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		base = "ubuntu@22.04"
+	}
+}
+
+resource "juju_integration" "this" {
+	model = juju_model.this.name
+
+	application {
+		name     = juju_application.one.name
+		endpoint = "source"
+	}
+
+	application {
+		name = juju_application.%s.name
+		endpoint = "sink"
+	}
+}
+`, modelName, appToRelate)
 }
 
 // testAccResourceIntegrationWithVia generates a plan where a
