@@ -9,14 +9,6 @@ on:
       - "project-docs/**"
       - ".github/ISSUE_TEMPLATE/**"
       - ".github/PULL_REQUEST_TEMPLATE.md"
-  push:
-    branches:
-      - "main"
-    paths-ignore:
-      - "README.md"
-      - "project-docs/**"
-      - ".github/ISSUE_TEMPLATE/**"
-      - ".github/PULL_REQUEST_TEMPLATE.md"
   workflow_dispatch:
 
 # Testing needs read permission and access to Github's container registry to pull JIMM.
@@ -104,5 +96,5 @@ jobs:
       - env:
           TF_ACC: "1"
           TEST_CLOUD: "lxd"
-        run: go test -parallel 3 -timeout 90m -v -cover ./internal/provider/
+        run: go test -parallel 8 -timeout 90m -v -cover ./internal/provider/
         timeout-minutes: 90

@@ -8,9 +8,6 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   #    paths-ignore:
   #     DON'T SET - these are "required" so they need to run on every PR
-  push:
-    branches:
-      - "main"
 
 # Testing only needs permissions to read the repository contents.
 permissions:
@@ -116,7 +113,7 @@ jobs:
       - env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.action-operator.cloud }}
-        run: go test -parallel 3 -timeout 90m -v -cover ./internal/provider/
+        run: go test -parallel 8 -timeout 90m -v -cover ./internal/provider/
         timeout-minutes: 90
 
   # Run acceptance tests in a matrix with Terraform CLI versions
