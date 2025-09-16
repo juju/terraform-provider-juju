@@ -139,10 +139,10 @@ resource "juju_jaas_access_model" "development" {
 
 > See more: [`juju_jaas_access_model`](../reference/terraform-provider/resources/jaas_access_model), {external+jaas:ref}`JAAS | Model access levels <list-of-model-permissions>`
 
-(manage-model-migrations)=
-## Model migration
+(migrate-a-model)=
+## Migrate a model
 
-This section highlights what changes, if any, are needed to your Terraform plan after migrating a model(s) between Juju controllers and/or JAAS.
+This section highlights what changes, if any, are needed to your Terraform plan after migrating a model(s) between Juju controllers and/or JAAS. The Juju provider itself does not currently support migrating a model to a new controller, use the Juju CLI instead.
 
 ### Migrating to another Juju controller
 
@@ -153,9 +153,9 @@ The only exception to this scenario is when cross-model relations are involved. 
 (manage-migration-cross-controller-relations)=
 ### Cross-controller relations
 
-If the providing model is moved, your applications will continue to work but the Juju provider has limitations on creating {ref}`cross-controller relations <manage-cross-model-relations>`.
+If the providing model is moved, your applications will continue to work but the Juju provider has limitations on creating {ref}`cross-controller relations <add-a-cross-model-relation>`.
 
-This means that if you modify your plan in a way that causes recreation of the relation, the creation operation will fail.
+This means that, if you modify your plan in a way that causes recreation of the relation, the creation operation will fail.
 
 ### Migrating to JAAS
 
@@ -165,7 +165,7 @@ When a model is migrated to JAAS, the model's name and offer URLs will change. T
 
 Our recommended way of resolving your Terraform state for this scenario is described below.
 
-While it is recommended to migrate **all** models involved in a relation to JAAS, it is not a requirement, and migration can be done slowly over the course of days and weeks. See the section on {ref}`cross-controller relations <manage-cross-model-relations>` for the provider's limitations on cross-controller relations.
+While it is recommended to migrate **all** models involved in a relation to JAAS, it is not a requirement, and migration can be done slowly over the course of days and weeks. See the section on {ref}`cross-controller relations <add-a-cross-model-relation>` for the provider's limitations on cross-controller relations.
 
 ```{admonition} Migration order
 There is no recommended order to migrate your models. Regardless of the order you decide to migrate your models, i.e. providing model first or consuming model first, cross-model application offers are expected to continue working.
@@ -212,7 +212,7 @@ resource "juju_integration" "sink_source_integration" {
 
 The `juju_offer` data source will return an error because this offer no longer exists at the same URL. However, the relation itself will continue to work because this URL is only used once, during the creation of the relation.
 
-To resolve this error we suggest one of 2 options,
+To resolve this error we suggest one of 2 options:
 
 1. Recreate the relation using the new URL.
 2. Change the plan to resemble the example below.
