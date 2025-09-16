@@ -41,15 +41,17 @@ jobs:
   test:
     name: Integration
     needs: build
-    runs-on: [self-hosted, jammy, x64]
+    runs-on: ${{ fromJSON(matrix.action-operator.runner) }}
     strategy:
       fail-fast: false
       matrix:
         terraform: ["1.11.*"]
         action-operator:
-          - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "2.9" }
-          - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "3" }
-          - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.32-strict", juju: "3" }
+          - { arch: "amd64", lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "2.9", runner: '["self-hosted","jammy","x64"]' }
+          - { arch: "amd64", lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "3", runner: '["self-hosted","jammy","x64"]' }
+          - { arch: "amd64", lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.32-strict", juju: "3", runner: '["self-hosted","jammy","x64"]' }
+          - { arch: "aarch64", lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "3", runner: '"ubuntu-24.04-arm"' }
+
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -113,11 +115,13 @@ jobs:
         run: |
           sudo microk8s.config > /home/$USER/microk8s-config.yaml
       - run: go mod download
-      - env:
-          TF_ACC: "1"
-          TEST_CLOUD: ${{ matrix.action-operator.cloud }}
+      - name: "Run Tests"
         run: go test -parallel 3 -timeout 90m -v -cover ./internal/provider/
         timeout-minutes: 90
+        env:
+          TF_ACC: "1"
+          TEST_CLOUD: ${{ matrix.action-operator.cloud }}
+          JUJU_DEFAULT_TEST_MODEL_ARCHITECTURE: ${{ matrix.action-operator.arch }}
 
   # Run acceptance tests in a matrix with Terraform CLI versions
   add-machine-test:
