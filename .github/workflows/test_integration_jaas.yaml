@@ -96,5 +96,5 @@ jobs:
       - env:
           TF_ACC: "1"
           TEST_CLOUD: "lxd"
-        run: go test -parallel 8 -timeout 90m -v -cover ./internal/provider/
+        run: go test -parallel 4 -timeout 90m -v -cover ./internal/provider/
         timeout-minutes: 90
