@@ -21,7 +21,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"github.com/juju/juju/core/crossmodel"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/wait"
@@ -581,10 +580,7 @@ func parseApplications(apps []juju.Application) ([]nestedApplication, error) {
 		a := nestedApplication{}
 
 		if app.OfferURL != nil {
-			url, err := cleanOfferURL(*app.OfferURL)
-			if err != nil {
-				return nil, err
-			}
+			url := *app.OfferURL
 			a.OfferURL = types.StringValue(url)
 			a.Endpoint = types.StringValue(app.Endpoint)
 		} else {
@@ -595,24 +591,6 @@ func parseApplications(apps []juju.Application) ([]nestedApplication, error) {
 	}
 
 	return applications, nil
-}
-
-// cleanOfferURL removes the source field from the offer URL.
-// The source represents the source controller of the offer.
-//
-// The Juju CLI sets the source field on the offer URL string when the offer is consumed.
-// The Terraform provider leaves this field empty since it is does not support
-// cross-controller relations.
-//
-// Until that changes, we clean the URL to assist in scenarios where an offer URL
-// has the source field set.
-func cleanOfferURL(offerURL string) (string, error) {
-	url, err := crossmodel.ParseOfferURL(offerURL)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse offer URL %q: %w", offerURL, err)
-	}
-	url.Source = ""
-	return url.String(), nil
 }
 
 func (r *integrationResource) trace(msg string, additionalFields ...map[string]interface{}) {
