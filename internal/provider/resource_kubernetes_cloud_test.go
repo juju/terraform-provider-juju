@@ -180,7 +180,7 @@ resource "juju_application" "testapp" {
  model = juju_model.{{.CloudName}}-model.name
 
  charm {
-		name = "self-signed-certificates"
+		name = "coredns"
  } 
 }
 

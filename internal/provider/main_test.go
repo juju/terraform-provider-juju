@@ -68,6 +68,7 @@ func TypeTestingCloudFromString(from string) (CloudTesting, error) {
 
 func setTestOverrides() {
 	maxModelDestroyWait = 1 * time.Minute
+	maxIntegrationDestroyWait = 1 * time.Minute
 	juju.MaxOfferWaitBeforeForcing = 1 * time.Minute
 }
 
