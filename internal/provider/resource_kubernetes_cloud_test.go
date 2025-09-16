@@ -170,10 +170,18 @@ resource "juju_kubernetes_cloud" "{{.CloudName}}" {
 resource "juju_model" "{{.CloudName}}-model" {
  name = "{{.CloudName}}-model"
  cloud {
-		name = "{{.CloudName}}"
+		name = juju_kubernetes_cloud.{{.CloudName}}.name
  }
 
  credential = juju_kubernetes_cloud.{{.CloudName}}.credential
+}
+
+resource "juju_application" "testapp" {
+ model = juju_model.{{.CloudName}}-model.name
+
+ charm {
+		name = "self-signed-certificates"
+ } 
 }
 
 `, internaltesting.TemplateData{
