@@ -61,7 +61,7 @@ func retryConfWithDefaultsForError(rc *RetryConf) *RetryConf {
 		rc.MaxDuration = 15 * time.Minute
 	}
 	if rc.Delay == 0 {
-		rc.Delay = time.Second
+		rc.Delay = 2 * time.Second
 	}
 	if rc.MaxDelay == 0 {
 		rc.MaxDelay = time.Minute
