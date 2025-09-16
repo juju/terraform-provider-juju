@@ -1362,6 +1362,22 @@ func TestAcc_ResourceApplication_UnsetConfigUsingNull(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceApplicationChangingChannel(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationWithChannelAndRevision(modelName, "latest/candidate", 20),
+			},
+			{
+				Config: testAccResourceApplicationWithChannelAndRevision(modelName, "latest/stable", 20),
+			},
+		}})
+}
+
 func testAccApplicationConfigNull(modelName, appName, configValue string, includeConfig bool) string {
 	return internaltesting.GetStringFromTemplateWithData("testAccApplicationConfigNull", `
 resource "juju_model" "{{.ModelName}}" {
@@ -1550,6 +1566,24 @@ resource "juju_application" "this" {
   }
 }
 `, modelName, channel, resourceName, customResource)
+}
+
+func testAccResourceApplicationWithChannelAndRevision(modelName, channel string, revision int) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model = juju_model.this.name
+  name = "test-app"
+  charm {
+    name     = "juju-qa-test"
+	channel  = "%s"
+	revision = %d
+  }
+}
+`, modelName, channel, revision)
 }
 
 func testAccResourceApplicationWithoutCustomResources(modelName, channel string) string {

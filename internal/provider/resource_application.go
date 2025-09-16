@@ -979,10 +979,16 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		stateCharm := stateCharms[0]
 		if !planCharm.Channel.Equal(stateCharm.Channel) {
 			updateApplicationInput.Channel = planCharm.Channel.ValueString()
+		} else {
+			updateApplicationInput.Channel = stateCharm.Channel.ValueString()
 		}
+
 		if !planCharm.Revision.Equal(stateCharm.Revision) {
 			updateApplicationInput.Revision = intPtr(planCharm.Revision)
+		} else {
+			updateApplicationInput.Revision = intPtr(stateCharm.Revision)
 		}
+
 		if !planCharm.Base.Equal(stateCharm.Base) {
 			updateApplicationInput.Base = planCharm.Base.ValueString()
 		}
