@@ -33,6 +33,14 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
+var (
+	// maxModelDestroyWait sets a long wait time for a model to be destroyed.
+	// This is a very conservative value as model destroy is usually very quick.
+	// In tests this value is reduced because sometimes Juju fails to destroy
+	// a model that was recently created and we want to avoid long test times.
+	maxModelDestroyWait = 15 * time.Minute
+)
+
 var _ resource.Resource = &modelResource{}
 var _ resource.ResourceWithConfigure = &modelResource{}
 var _ resource.ResourceWithImportState = &modelResource{}
@@ -545,6 +553,9 @@ func (r *modelResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		Input:          modelName,
 		ExpectedErr:    juju.ModelNotFoundError,
 		RetryAllErrors: true,
+		RetryConf: &wait.RetryConf{
+			MaxDuration: maxModelDestroyWait,
+		},
 	})
 	if err != nil {
 		errSummary := "Client Error"

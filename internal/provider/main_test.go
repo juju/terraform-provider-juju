@@ -12,6 +12,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
 // Env variables to use for various testing purposes
@@ -63,6 +66,12 @@ func TypeTestingCloudFromString(from string) (CloudTesting, error) {
 	}
 }
 
+func setTestOverrides() {
+	maxModelDestroyWait = 1 * time.Minute
+	maxIntegrationDestroyWait = 1 * time.Minute
+	juju.MaxOfferWaitBeforeForcing = 1 * time.Minute
+}
+
 // testingCloud stores what type of cloud are we using
 // for the testing phase.
 var testingCloud CloudTesting
@@ -84,6 +93,8 @@ func TestMain(m *testing.M) {
 	}
 	testSSHPubKeyPath = os.Getenv(TestSSHPublicKeyFileEnvKey)
 	testSSHPrivKeyPath = os.Getenv(TestSSHPrivateKeyFileEnvKey)
+
+	setTestOverrides()
 
 	var err error
 	testingCloud, err = TypeTestingCloudFromString(testCloud)

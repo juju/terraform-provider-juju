@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -24,6 +25,10 @@ import (
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/wait"
+)
+
+var (
+	maxIntegrationDestroyWait = 15 * time.Minute
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -468,6 +473,9 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 			},
 			ExpectedErr:    juju.IntegrationNotFoundError,
 			RetryAllErrors: true,
+			RetryConf: &wait.RetryConf{
+				MaxDuration: maxIntegrationDestroyWait,
+			},
 		},
 	)
 	if err != nil {
