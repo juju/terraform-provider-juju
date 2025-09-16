@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
 // Env variables to use for various testing purposes
@@ -66,6 +68,7 @@ func TypeTestingCloudFromString(from string) (CloudTesting, error) {
 
 func setTestOverrides() {
 	maxModelDestroyWait = 1 * time.Minute
+	juju.MaxOfferWaitBeforeForcing = 1 * time.Minute
 }
 
 // testingCloud stores what type of cloud are we using

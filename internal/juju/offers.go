@@ -27,6 +27,15 @@ const (
 	OfferApiTickWait = time.Second * 5
 )
 
+var (
+	// MaxOfferWaitBeforeForcing sets the amount of time to wait before destroying
+	// an offer by force, because it still has active connections. This is
+	// caused by a bug in Juju where sometimes offers show connections that were removed.
+	//
+	// In tests this value is reduced to avoid long test times.
+	MaxOfferWaitBeforeForcing = 5 * time.Minute
+)
+
 type offersClient struct {
 	SharedClient
 }
@@ -220,9 +229,9 @@ func (c offersClient) DestroyOffer(input *DestroyOfferInput) error {
 	}
 
 	forceDestroy := false
-	//This code loops until it detects 0 connections in the offer or 3 minutes elapses
+	//This code loops until it detects 0 connections in the offer or `MaxOfferWaitBeforeForcing` has elapsed.
 	if len(offer.Connections) > 0 {
-		end := time.Now().Add(5 * time.Minute)
+		end := time.Now().Add(MaxOfferWaitBeforeForcing)
 		for ok := true; ok; ok = len(offer.Connections) > 0 {
 			//if we have been failing to destroy offer for 5 minutes then force destroy
 			//TODO: investigate cleaner solution (acceptance tests fail even if timeout set to 20m)
