@@ -211,7 +211,6 @@ func TestAcc_ResourceModel_UpgradeProvider(t *testing.T) {
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccResourceModel(modelName, testingCloud.CloudName(), logLevelDebug),
-				PlanOnly:                 true,
 			},
 		},
 	})

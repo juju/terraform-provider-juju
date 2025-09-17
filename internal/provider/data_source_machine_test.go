@@ -56,7 +56,6 @@ func TestAcc_DataSourceMachine_UpgradeProvider(t *testing.T) {
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccDataSourceMachine(modelName, "series = \"jammy\""),
-				PlanOnly:                 true,
 			},
 		},
 	})

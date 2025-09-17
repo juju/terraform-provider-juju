@@ -24,6 +24,10 @@ permissions:
   contents: read
   packages: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Ensure project builds before running test
   build:
@@ -95,6 +99,7 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
           echo "TEST_MANAGEMENT_BR=10.150.40.0/24" >> $GITHUB_ENV
           echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
+          echo "JUJU_SKIP_FAILED_DELETION=true" >> $GITHUB_ENV
       - run: go mod download
       - env:
           TF_ACC: "1"

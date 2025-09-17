@@ -105,7 +105,6 @@ func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccResourceIntegration(modelName, "series = \"jammy\"", "series = \"jammy\""),
-				PlanOnly:                 true,
 			},
 		},
 	})

@@ -161,7 +161,6 @@ func TestAcc_ResourceSSHKey_UpgradeProvider(t *testing.T) {
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccResourceSSHKey(modelName, sshKey2),
-				PlanOnly:                 true,
 			},
 		},
 	})

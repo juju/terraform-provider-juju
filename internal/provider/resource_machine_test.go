@@ -181,7 +181,6 @@ func TestAcc_ResourceMachine_UpgradeProvider(t *testing.T) {
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccResourceMachine(modelName, "series = \"focal\""),
-				PlanOnly:                 true,
 			},
 		},
 	})
