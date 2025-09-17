@@ -1,0 +1,103 @@
+name: TIOBE scan
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * 1" # Runs every Monday at 00:00 UTC.
+
+jobs:
+  build:
+    runs-on: [self-hosted, linux, amd64, tiobe, jammy]
+    steps:
+    - name: Checkout the project
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version-file: "go.mod"
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update -y && sudo apt-get install -y gcc git-core gnupg build-essential
+        go install honnef.co/go/tools/cmd/staticcheck@v0.6.1
+        go install github.com/t-yuki/gocover-cobertura@latest
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: "go.mod"
+        cache: true
+    - uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.11.*"
+        terraform_wrapper: false
+    - name: Setup operator environment
+      uses: charmed-kubernetes/actions-operator@main
+      with:
+        provider: "lxd"
+        channel: "6"
+        juju-channel: "3/stable"
+    - name: In case of LXD setup also microk8s
+      run: |
+        sudo snap install microk8s --channel=1.32-strict/stable
+        sudo mkdir -p /var/snap/microk8s/current/args/certs.d/docker.io
+        cat <<EOF | sudo tee /var/snap/microk8s/current/args/certs.d/docker.io/hosts.toml
+        server = "$DOCKERHUB_MIRROR"
+        [host."$DOCKERHUB_MIRROR"]
+        capabilities = ["pull", "resolve"]
+        EOF
+        sudo microk8s stop
+        sudo microk8s start
+        sudo usermod -a -G snap_microk8s $USER
+        sudo chown -R $USER ~/.kube
+        sudo microk8s.enable dns hostpath-storage
+        sudo -g snap_microk8s -E microk8s status --wait-ready --timeout=600
+    - name: Create additional networks when testing with LXD
+      run: |
+        sudo lxc network create management-br ipv4.address=10.150.40.1/24 ipv4.nat=true ipv6.address=none ipv6.nat=false
+        sudo lxc network create public-br ipv4.address=10.170.80.1/24 ipv4.nat=true ipv6.address=none ipv6.nat=false
+    - name: "Set additional environment for LXD"
+      # language=bash
+      run: |
+       sudo microk8s.config > /home/$USER/microk8s-config.yaml
+    - name: "Set environment to configure provider"
+      # language=bash
+      # JUJU_SKIP_FAILED_DELETION is set to avoid issues with tests failing
+      # on resource deletion. The issue in Juju is unclear but models and apps
+      # fail to be removed sometimes.
+      run: |
+        CONTROLLER=$(juju whoami --format yaml | yq .controller)
+
+        echo "JUJU_AGENT_VERSION=$(juju show-controller | yq .$CONTROLLER.details.agent-version |tr -d '"')" >> $GITHUB_ENV
+        echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq .$CONTROLLER.details.api-endpoints | yq -r '. | join(",")')" >> $GITHUB_ENV
+        echo "JUJU_USERNAME=$(juju show-controller | yq .$CONTROLLER.account.user)"  >> $GITHUB_ENV
+        echo "JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password)"  >> $GITHUB_ENV
+        echo "JUJU_CA_CERT<<EOF" >> $GITHUB_ENV
+        juju show-controller | yq .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+        echo "TEST_MANAGEMENT_BR=10.150.40.0/24" >> $GITHUB_ENV
+        echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
+        echo "JUJU_SKIP_FAILED_DELETION=true" >> $GITHUB_ENV
+    - run: go mod download
+    - env:
+        TF_ACC: "1"
+        TEST_CLOUD: "lxd"
+      run: |
+        go test -mod readonly -parallel 3 ./... -timeout 90m -coverprofile=coverage.out
+        mkdir -p .coverage
+        gocover-cobertura < coverage.out > .coverage/coverage.xml
+      timeout-minutes: 90
+
+    - name: Run TICS analysis with github-action
+      uses: tiobe/tics-github-action@v3
+      with:
+        mode: qserver
+        project: juju-terraform-provider
+        branchdir: .
+        viewerUrl: https://canonical.tiobe.com/tiobeweb/TICS/api/cfg?name=GoProjects
+        ticsAuthToken: ${{ secrets.TICSAUTHTOKEN }}
+        installTics: true
+
+    - name: echo URL to TIOBE dashboard
+      run: |
+        echo 'Go here to see the results: https://canonical.tiobe.com/tiobeweb/TICS/Explorer.html#axes=ProjectGroup(PublicRepos),ProjectGroup(CharmEngineering),Project(terraform-provider-juju),Sub()
