@@ -114,7 +114,10 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 		return nil, err
 	}
 
-	applications := parseApplications(status.RemoteApplications, response.Endpoints)
+	applications, err := parseApplications(status.RemoteApplications, response.Endpoints)
+	if err != nil {
+		return nil, err
+	}
 	c.Debugf("related apps", map[string]any{"apps": applications})
 
 	return &CreateIntegrationResponse{
@@ -176,7 +179,10 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 		return nil, NewIntegrationNotFoundError(modelUUID.Id())
 	}
 
-	applications := parseApplications(status.RemoteApplications, integration.Endpoints)
+	applications, err := parseApplications(status.RemoteApplications, integration.Endpoints)
+	if err != nil {
+		return nil, err
+	}
 
 	return &ReadIntegrationResponse{
 		Applications: applications,
@@ -226,7 +232,10 @@ func (c integrationsClient) UpdateIntegration(input *UpdateIntegrationInput) (*U
 		return nil, err
 	}
 
-	applications := parseApplications(status.RemoteApplications, response.Endpoints)
+	applications, err := parseApplications(status.RemoteApplications, response.Endpoints)
+	if err != nil {
+		return nil, err
+	}
 
 	return &UpdateIntegrationResponse{
 		Applications: applications,
@@ -255,25 +264,31 @@ func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
 }
 
 // This function takes remote applications and endpoint status and combines them into a more usable format to return to the provider
-func parseApplications(remoteApplications map[string]params.RemoteApplicationStatus, src interface{}) []Application {
+func parseApplications(remoteApplications map[string]params.RemoteApplicationStatus, src interface{}) ([]Application, error) {
 	applications := make([]Application, 0, 2)
 
 	switch endpoints := src.(type) {
 	case []params.EndpointStatus:
-		if len(remoteApplications) != 0 {
-			for index, endpoint := range endpoints {
-				if remote, exists := remoteApplications[endpoint.ApplicationName]; exists {
-					a := Application{
-						Name:     endpoint.ApplicationName,
-						Endpoint: endpoint.Name,
-						Role:     endpoint.Role,
-						OfferURL: &remote.OfferURL,
+		for index, endpoint := range endpoints {
+			if remote, exists := remoteApplications[endpoint.ApplicationName]; exists {
+				if remote.OfferURL != "" {
+					url, err := removeOfferURLSource(remote.OfferURL)
+					if err != nil {
+						return nil, err
 					}
-					applications = append(applications, a)
-
-					endpoints[index] = endpoints[len(endpoints)-1]
-					endpoints = endpoints[:len(endpoints)-1]
+					remote.OfferURL = url
 				}
+
+				a := Application{
+					Name:     endpoint.ApplicationName,
+					Endpoint: endpoint.Name,
+					Role:     endpoint.Role,
+					OfferURL: &remote.OfferURL,
+				}
+				applications = append(applications, a)
+
+				endpoints[index] = endpoints[len(endpoints)-1]
+				endpoints = endpoints[:len(endpoints)-1]
 			}
 		}
 		for _, endpoint := range endpoints {
@@ -312,5 +327,5 @@ func parseApplications(remoteApplications map[string]params.RemoteApplicationSta
 		}
 	}
 
-	return applications
+	return applications, nil
 }
