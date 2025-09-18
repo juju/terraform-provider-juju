@@ -22,7 +22,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/juju/core/crossmodel"
-	"github.com/juju/names/v5"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/wait"
@@ -54,18 +53,12 @@ type integrationResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
-type integrationApps []nestedApplication
-
 // nestedApplication represents an element in an Application set of an
 // integration resource
 type nestedApplication struct {
 	Name     types.String `tfsdk:"name"`
 	Endpoint types.String `tfsdk:"endpoint"`
 	OfferURL types.String `tfsdk:"offer_url"`
-	// AppSuffix is used when relating to an offer URL
-	// in order to create a unique saas app and avoid relating
-	// multiple local applications with the same offer.
-	AppSuffix types.String `tfsdk:"app_suffix"`
 }
 
 func (r *integrationResource) ImportState(ctx context.Context, req resource.ImportStateRequest,
@@ -160,6 +153,7 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Description: "The name of the application. This attribute may not be used at the" +
 								" same time as the offer_url.",
 							Optional: true,
+							Computed: true,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.RequiresReplace(),
 							},
@@ -192,14 +186,6 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 								}...),
 							},
 						},
-						"app_suffix": schema.StringAttribute{
-							Description: "A suffix appended to the SAAS application created in cross-model relations." +
-								" This is computed by the provider and avoids relating multiple local apps to a single remote app.",
-							Computed: true,
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.UseStateForUnknown(),
-							},
-						},
 					},
 				},
 			},
@@ -223,15 +209,19 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 	modelName := plan.ModelName.ValueString()
 
-	var apps integrationApps
-	resp.Diagnostics.Append(plan.Application.ElementsAs(ctx, &apps, false)...)
+	var parsedApplications []nestedApplication
+	resp.Diagnostics.Append(plan.Application.ElementsAs(ctx, &parsedApplications, false)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	apps = createRemoteAppSuffix(apps)
+	parsedApplications, err := createRemoteAppName(parsedApplications)
+	if err != nil {
+		resp.Diagnostics.AddError("Provider Error", err.Error())
+		return
+	}
 
-	endpoints, offer, appNames, err := parseEndpoints(apps)
+	endpoints, offer, appNames, err := parseEndpoints(parsedApplications)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse endpoints, got error: %s", err))
 		return
@@ -239,15 +229,10 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 
 	// If we have an offer URL, we need to consume it before creating the integration.
 	if offer != nil {
-		remoteAppName, err := offer.remoteAppName()
-		if err != nil {
-			resp.Diagnostics.AddError("Provider Error", err.Error())
-			return
-		}
 		offerResponse, err := r.client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
 			ModelName:      modelName,
 			OfferURL:       offer.url,
-			RemoteAppAlias: remoteAppName,
+			RemoteAppAlias: offer.name,
 		})
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to consume remote offer, got error: %s", err))
@@ -279,7 +264,7 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 	r.trace(fmt.Sprintf("integration created on Juju between %q at %q on model %q", appNames, endpoints, modelName))
 
-	parsedApplications, err := apps.mergeJujuData(response.Applications)
+	parsedApplications, err = parseApplications(response.Applications)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse applications, got error: %s", err))
 		return
@@ -316,12 +301,6 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	var apps integrationApps
-	resp.Diagnostics.Append(state.Application.ElementsAs(ctx, &apps, false)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
 	modelName, endpointA, endpointB, idErr := modelNameAndEndpointsFromID(state.ID.ValueString())
 	if idErr.HasError() {
 		resp.Diagnostics.Append(idErr...)
@@ -345,20 +324,19 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 
 	state.ModelName = types.StringValue(modelName)
 
-	appWithJujuData, err := apps.mergeJujuData(response.Applications)
+	applications, err := parseApplications(response.Applications)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to merge Juju data, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse applications, got error: %s", err))
 		return
 	}
 
 	appType := req.State.Schema.GetBlocks()["application"].(schema.SetNestedBlock).NestedObject.Type()
-	appsSet, aErr := types.SetValueFrom(ctx, appType, appWithJujuData)
+	apps, aErr := types.SetValueFrom(ctx, appType, applications)
 	if aErr.HasError() {
 		resp.Diagnostics.Append(aErr...)
 		return
 	}
-
-	state.Application = appsSet
+	state.Application = apps
 
 	r.trace(fmt.Sprintf("read integration resource: %v", state.ID.ValueString()))
 	// Set the state onto the Terraform state
@@ -447,15 +425,9 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	// Destroy consumed offer.
-	remoteAppName, err := offer.remoteAppName()
-	if err != nil {
-		resp.Diagnostics.AddError("Provider Error", err.Error())
-		return
-	}
-
 	err = r.client.Offers.RemoveRemoteApp(&juju.RemoveRemoteAppInput{
 		ModelName:     modelName,
-		RemoteAppName: remoteAppName,
+		RemoteAppName: offer.name,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", err.Error())
@@ -468,7 +440,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 			GetData: r.client.Offers.ReadRemoteApp,
 			Input: &juju.ReadRemoteAppInput{
 				ModelName:     modelName,
-				RemoteAppName: remoteAppName,
+				RemoteAppName: offer.name,
 			},
 			ExpectedErr:    juju.RemoteAppNotFoundError,
 			RetryAllErrors: true,
@@ -476,7 +448,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 	)
 	if err != nil {
 		errSummary := "Client Error"
-		errDetail := fmt.Sprintf("Unable to complete remote-app %q deletion in model %q: %v\n", remoteAppName, modelName, err)
+		errDetail := fmt.Sprintf("Unable to complete remote-app %q deletion in model %q: %v\n", offer.name, modelName, err)
 		if r.config.SkipFailedDeletion {
 			resp.Diagnostics.AddWarning(
 				errSummary,
@@ -491,56 +463,39 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 		}
 	}
 
-	r.trace(fmt.Sprintf("removed remote app %q", remoteAppName))
+	r.trace(fmt.Sprintf("removed remote app %q", offer.name))
 }
 
-// createRemoteAppSuffix checks if one of the applications is a cross-model offer
-// and if so, returns a copy of the apps with the AppSUffix field populated.
-// This should only be called during Create.
+// createRemoteAppName checks if one of the applications is a cross-model offer
+// and if so, sets a custom name for the remote application.
 //
 // As background, the Juju API allows a user to consume an offer with a
 // specified alias. The Terraform provider does not expose this to the user,
 // and instead generates a unique name for each consumed offer.
 //
-// The suffix has the format "-<local-app-name>-<local-endpoint>" and is stored separately
-// for backwards compatibility with old versions of the provider where it may be empty.
-// This function returns a new slice of applications with the suffix added
-// to the offer application.
-func createRemoteAppSuffix(apps []nestedApplication) []nestedApplication {
-	var localApp, offer nestedApplication
+// The name has the format "<remoteApp>-<localApp>-<endpoint>".
+// This function returns a new slice of applications with remote app name set.
+func createRemoteAppName(apps []nestedApplication) ([]nestedApplication, error) {
+	var localApp, remoteApp nestedApplication
 	var crossModel bool
 	for _, app := range apps {
 		if app.OfferURL.ValueString() != "" {
 			crossModel = true
-			offer = app
+			remoteApp = app
 			continue
 		}
 		localApp = app
 	}
 	if !crossModel {
-		return apps
+		return apps, nil
 	}
-	suffix := fmt.Sprintf("-%s-%s", localApp.Name.ValueString(), localApp.Endpoint.ValueString())
-	offer.AppSuffix = types.StringValue(suffix)
-	return []nestedApplication{localApp, offer}
-}
-
-// remoteAppName constructs the remote application name from
-// the offer URL and the remote-app suffix created when the
-// offer was consumed.
-//
-// The suffix may be empty if the offer was consumed using
-// an older version of the provider.
-func (offer offer) remoteAppName() (string, error) {
-	url, err := crossmodel.ParseOfferURL(offer.url)
+	parsedURL, err := crossmodel.ParseOfferURL(remoteApp.OfferURL.ValueString())
 	if err != nil {
-		return "", fmt.Errorf("failed to parse offer URL %q: %w", offer.url, err)
+		return nil, fmt.Errorf("failed to parse offer URL %q: %w", remoteApp.OfferURL.ValueString(), err)
 	}
-	remoteAppName := url.ApplicationName + offer.remoteAppSuffix
-	if !names.IsValidApplication(remoteAppName) {
-		return "", fmt.Errorf("the constructed remote application name %q is not valid", remoteAppName)
-	}
-	return remoteAppName, nil
+	remoteAppName := fmt.Sprintf("%s-%s-%s", parsedURL.ApplicationName, localApp.Name.ValueString(), localApp.Endpoint.ValueString())
+	remoteApp.Name = types.StringValue(remoteAppName)
+	return []nestedApplication{localApp, remoteApp}, nil
 }
 
 func handleIntegrationNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
@@ -587,9 +542,9 @@ func modelNameAndEndpointsFromID(ID string) (string, string, string, diag.Diagno
 }
 
 type offer struct {
-	url             string
-	endpoint        string
-	remoteAppSuffix string
+	url      string
+	endpoint string
+	name     string
 }
 
 // This function can be used to parse the terraform data into usable juju endpoints
@@ -599,16 +554,15 @@ func parseEndpoints(apps []nestedApplication) (endpoints []string, of *offer, ap
 		name := app.Name.ValueString()
 		offerURL := app.OfferURL.ValueString()
 		endpoint := app.Endpoint.ValueString()
-		appSuffix := app.AppSuffix.ValueString()
 
-		//Here we check if the endpoint is empty and pass just the application name, this allows juju to attempt to infer endpoints
-		//If the endpoint is specified we pass the format <applicationName>:<endpoint>
-		//first check if we have an offer_url, in this case don't return the endpoint
+		// Here we check if the endpoint is empty and pass just the application name, this allows juju to attempt to infer endpoints
+		// If the endpoint is specified we pass the format <applicationName>:<endpoint>
+		// first check if we have an offer_url, in this case don't return the endpoint
 		if offerURL != "" {
 			of = &offer{
-				url:             offerURL,
-				endpoint:        endpoint,
-				remoteAppSuffix: appSuffix,
+				url:      offerURL,
+				endpoint: endpoint,
+				name:     name,
 			}
 			continue
 		}
@@ -630,39 +584,6 @@ func parseEndpoints(apps []nestedApplication) (endpoints []string, of *offer, ap
 	return endpoints, of, appNames, nil
 }
 
-func (stateApps integrationApps) mergeJujuData(apps []juju.Application) ([]nestedApplication, error) {
-	switch len(stateApps) {
-	case 0:
-		// empty state, normal during an import.
-	case 2:
-		// expected case when we have data.
-	default:
-		return nil, fmt.Errorf("expected either 2 or 0 applications in relation, got %d", len(stateApps))
-	}
-
-	applications, err := parseApplications(apps)
-	if err != nil {
-		return nil, err
-	}
-
-	// Now we match the offer URLs to copy over the app suffix.
-	// This is some ugly code to map between 2 sets where we combine the
-	// data from Juju which inferred the endpoints involved in the relation,
-	// with our local data which has the app suffix for cross-model relations.
-	for i, app := range applications {
-		if app.OfferURL.ValueString() != "" {
-			for _, localApp := range stateApps {
-				if localApp.OfferURL.ValueString() == app.OfferURL.ValueString() {
-					app.AppSuffix = localApp.AppSuffix
-					applications[i] = app
-				}
-			}
-		}
-	}
-
-	return applications, nil
-}
-
 func parseApplications(apps []juju.Application) ([]nestedApplication, error) {
 	applications := make([]nestedApplication, 2)
 
@@ -673,6 +594,7 @@ func parseApplications(apps []juju.Application) ([]nestedApplication, error) {
 			url := *app.OfferURL
 			a.OfferURL = types.StringValue(url)
 			a.Endpoint = types.StringValue(app.Endpoint)
+			a.Name = types.StringValue(app.Name)
 		} else {
 			a.Endpoint = types.StringValue(app.Endpoint)
 			a.Name = types.StringValue(app.Name)
