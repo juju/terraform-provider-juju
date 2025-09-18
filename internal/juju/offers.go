@@ -145,7 +145,7 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 		return nil, errs
 	}
 
-	endpoints := make([]crossmodel.EndpointFilterTerm, len(input.Endpoints))
+	endpoints := make([]crossmodel.EndpointFilterTerm, 0, len(input.Endpoints))
 	for _, endpoint := range input.Endpoints {
 		endpoints = append(endpoints, crossmodel.EndpointFilterTerm{Name: endpoint})
 	}
