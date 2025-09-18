@@ -72,10 +72,6 @@ Optional:
 - `name` (String) The name of the application. This attribute may not be used at the same time as the offer_url.
 - `offer_url` (String) The URL of a remote application. This attribute may not be used at the same time as name and endpoint.
 
-Read-Only:
-
-- `app_suffix` (String) A suffix appended to the SAAS application created in cross-model relations. This is computed by the provider and avoids relating multiple local apps to a single remote app.
-
 
 ### Notes
 When creating this resource the `offer_url` property will show `(known after apply)` if a `name` or
@@ -131,6 +127,9 @@ flowchart LR
 Import is supported using the following syntax:
 
 ```shell
-# Integrations can be imported by using the format: model_name:provider_app_name:endpoint:requirer_app_name:endpoint, for example:
+# Integrations can be imported by using the format: model_name:provider_app_name:endpoint:requirer_app_name:endpoint.
+# For integrations with an offer url, replace the requirer_app_name with the remote application name. The remote app
+# name can be found by running `juju status` and looking for the SAAS heading.
+# For example:
 $ terraform import juju_integration.wordpress_db development:percona-cluster:server:wordpress:db
 ```

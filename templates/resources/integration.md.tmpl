@@ -73,10 +73,4 @@ flowchart LR
 Import is supported using the following syntax:
 
 {{codefile "shell" "examples/resources/juju_integration/import.sh"}}
-
-Note that when importing an integration involving an offer URL, the remote application name
-**must** begin with the name of the application in the offer URL. If an alias is used it must 
-still conform to this but may include an additional suffix. For example, when consuming an
-offer URL of `admin/dbModel.mysql` any alias must begin with `mysql`, e.g. `mysql` or `mysql-two`
-in order for imports to the provider to work.
 {{- end }}
