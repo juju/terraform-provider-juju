@@ -4,7 +4,10 @@
 package juju
 
 import (
+	"errors"
+
 	"github.com/juju/juju/api/client/storage"
+	"github.com/juju/juju/rpc/params"
 )
 
 type storageClient struct {
@@ -18,8 +21,8 @@ func newStorageClient(sc SharedClient) *storageClient {
 }
 
 // CreatePool creates pool with specified parameters.
-func (c *storageClient) CreatePool(pname, provider string, attrs map[string]interface{}) error {
-	conn, err := c.GetConnection(nil)
+func (c *storageClient) CreatePool(modelname, pname, provider string, attrs map[string]interface{}) error {
+	conn, err := c.GetConnection(&modelname)
 	if err != nil {
 		return err
 	}
@@ -31,8 +34,8 @@ func (c *storageClient) CreatePool(pname, provider string, attrs map[string]inte
 }
 
 // UpdatePool updates a pool with specified parameters.
-func (c *storageClient) UpdatePool(pname, provider string, attrs map[string]interface{}) error {
-	conn, err := c.GetConnection(nil)
+func (c *storageClient) UpdatePool(modelname, pname, provider string, attrs map[string]interface{}) error {
+	conn, err := c.GetConnection(&modelname)
 	if err != nil {
 		return err
 	}
@@ -44,8 +47,8 @@ func (c *storageClient) UpdatePool(pname, provider string, attrs map[string]inte
 }
 
 // RemovePool removes the named pool.
-func (c *storageClient) RemovePool(pname string) error {
-	conn, err := c.GetConnection(nil)
+func (c *storageClient) RemovePool(modelname, pname string) error {
+	conn, err := c.GetConnection(&modelname)
 	if err != nil {
 		return err
 	}
@@ -54,4 +57,25 @@ func (c *storageClient) RemovePool(pname string) error {
 	client := storage.NewClient(conn)
 
 	return client.RemovePool(pname)
+}
+
+// GetPool gets a pool by name.
+func (c *storageClient) GetPool(modelname, provider, pname string) (params.StoragePool, error) {
+	conn, err := c.GetConnection(&modelname)
+	if err != nil {
+		return params.StoragePool{}, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := storage.NewClient(conn)
+
+	providers, err := client.ListPools([]string{provider}, []string{pname})
+	if err != nil {
+		return params.StoragePool{}, err
+	}
+	if len(providers) == 0 {
+		return params.StoragePool{}, errors.New("no such provider")
+	}
+
+	return providers[0], nil
 }
