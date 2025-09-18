@@ -1,0 +1,17 @@
+# This workflow is just a placeholder to not forget about the TIOBE scan,
+# running in the actual repo: https://github.com/canonical/juju-terraform-provider-tics-scan
+# The reason we can't run the TIOBE scan here is that we don't have access to tiobe runners,
+# inside the juju org.
+
+name: TIOBE scan run on juju/terraform-provider-juju
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * 1" # Runs every Monday at 00:00 UTC.
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - run: echo "Check out https://github.com/canonical/juju-terraform-provider-tics-scan where the tiobe scan is actually run."
