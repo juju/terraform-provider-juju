@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -145,19 +146,13 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 		return nil, errs
 	}
 
-	endpoints := make([]crossmodel.EndpointFilterTerm, 0, len(input.Endpoints))
-	for _, endpoint := range input.Endpoints {
-		endpoints = append(endpoints, crossmodel.EndpointFilterTerm{Name: endpoint})
-	}
-
 	filter := crossmodel.ApplicationOfferFilter{
 		OfferName: offerName,
 		ModelName: input.ModelName,
 		OwnerName: input.ModelOwner,
-		Endpoints: endpoints,
 	}
 
-	offer, err := findApplicationOffers(client, filter)
+	offer, err := findApplicationOffers(client, filter, input.Endpoints)
 	if err != nil {
 		return nil, append(errs, err)
 	}
@@ -252,11 +247,45 @@ func (c offersClient) DestroyOffer(input *DestroyOfferInput) error {
 	return nil
 }
 
-func findApplicationOffers(client *applicationoffers.Client, filter crossmodel.ApplicationOfferFilter) (*crossmodel.ApplicationOfferDetails, error) {
+// filterByEndpoints is filtering offers that match exactly the endpoints' names provided.
+// If no endpoints are provided, all offers are returned to match the API behaviour.
+// The reason why we rely on this custom filtering and not the API filtering is that
+// the API filtering doesn't work as expected when multiple endpoints filters are provided.
+// An endpoint filter is composed of three fields: Name, Interface and Role.
+// If we try to filter by two endpoints' names, the API will return no offers, because the internal
+// logic is doing an AND on the different fields of the endpoints filter. Specifying two fields with the same
+// field (ex. Name) will always result in no matches.
+func filterByEndpoints(offers []*crossmodel.ApplicationOfferDetails, endpoints []string) []*crossmodel.ApplicationOfferDetails {
+	if len(endpoints) == 0 {
+		return offers
+	}
+	slices.Sort(endpoints)
+
+	filtered := []*crossmodel.ApplicationOfferDetails{}
+	for _, offer := range offers {
+		if len(offer.Endpoints) != len(endpoints) {
+			continue
+		}
+		endpointsNames := make([]string, 0, len(offer.Endpoints))
+		for _, endpoint := range offer.Endpoints {
+			endpointsNames = append(endpointsNames, endpoint.Name)
+		}
+		slices.Sort(endpointsNames)
+
+		if slices.Equal(endpointsNames, endpoints) {
+			filtered = append(filtered, offer)
+		}
+	}
+	return filtered
+}
+
+func findApplicationOffers(client *applicationoffers.Client, filter crossmodel.ApplicationOfferFilter, endpoints []string) (*crossmodel.ApplicationOfferDetails, error) {
 	offers, err := client.FindApplicationOffers(filter)
 	if err != nil {
 		return nil, err
 	}
+
+	offers = filterByEndpoints(offers, endpoints)
 
 	if len(offers) == 0 {
 		return nil, fmt.Errorf("unable to find offer after creation")
