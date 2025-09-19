@@ -39,10 +39,10 @@ type storagePoolResource struct {
 }
 
 type storagePoolResourceModel struct {
-	Name       types.String `tfsdk:"name"`
-	Model      types.String `tfsdk:"model"`
-	Provider   types.String `tfsdk:"provider"`
-	Attributes types.Map    `tfsdk:"attributes"`
+	Name            types.String `tfsdk:"name"`
+	Model           types.String `tfsdk:"model"`
+	StorageProvider types.String `tfsdk:"storageprovider"`
+	Attributes      types.Map    `tfsdk:"attributes"`
 
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
@@ -74,6 +74,13 @@ func (r *storagePoolResource) Schema(ctx context.Context, req resource.SchemaReq
 	resp.Schema = schema.Schema{
 		Description: "A resource that represents a Juju storage pool.",
 		Attributes: map[string]schema.Attribute{
+			// ID required by the testing framework
+			"id": schema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
 			"name": schema.StringAttribute{
 				Description: "The name of the storage pool.",
 				Required:    true,
@@ -95,7 +102,7 @@ func (r *storagePoolResource) Schema(ctx context.Context, req resource.SchemaReq
 				},
 			},
 
-			"provider": schema.StringAttribute{
+			"storageprovider": schema.StringAttribute{
 				Description: "The storage provider type (e.g., 'rootfs', 'tmpfs', 'loop', or a cloud specific provider).",
 				Required:    true,
 				Validators: []validator.String{
@@ -131,22 +138,22 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	// Adhere to client on "any".
-	var providerAttrs map[string]any
-	resp.Diagnostics.Append(plan.Attributes.ElementsAs(ctx, &providerAttrs, false)...)
+	var storageProviderAttrs map[string]any
+	resp.Diagnostics.Append(plan.Attributes.ElementsAs(ctx, &storageProviderAttrs, false)...)
 
 	if err := r.client.Storage.CreatePool(
 		plan.Model.ValueString(),
 		plan.Name.ValueString(),
-		plan.Provider.ValueString(),
-		providerAttrs,
+		plan.StorageProvider.ValueString(),
+		storageProviderAttrs,
 	); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create storage pool resource, got error: %s", err))
 		return
 	}
 	r.trace("created storage pool", map[string]interface{}{
-		"name":     plan.Name.ValueString(),
-		"model":    plan.Model.ValueString(),
-		"provider": plan.Provider.ValueString(),
+		"name":            plan.Name.ValueString(),
+		"model":           plan.Model.ValueString(),
+		"storageprovider": plan.StorageProvider.ValueString(),
 	})
 
 	plan.ID = types.StringValue(
@@ -171,7 +178,7 @@ func (r *storagePoolResource) Read(ctx context.Context, req resource.ReadRequest
 
 	pool, err := r.client.Storage.GetPool(
 		state.Model.ValueString(),
-		state.Provider.ValueString(),
+		state.StorageProvider.ValueString(),
 		state.Name.ValueString(),
 	)
 	if err != nil {
@@ -187,7 +194,7 @@ func (r *storagePoolResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 
 	state.Name = types.StringValue(pool.Name)
-	state.Provider = types.StringValue(pool.Provider)
+	state.StorageProvider = types.StringValue(pool.Provider)
 	state.Attributes = convertedAttrs
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -216,36 +223,30 @@ func (r *storagePoolResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	// Adhere to client on "any".
-	var newProviderAttrs map[string]any
-	resp.Diagnostics.Append(plan.Attributes.ElementsAs(ctx, &newProviderAttrs, false)...)
+	var newStorageProviderAttrs map[string]any
+	resp.Diagnostics.Append(plan.Attributes.ElementsAs(ctx, &newStorageProviderAttrs, false)...)
 
 	if err := r.client.Storage.UpdatePool(
 		state.Model.ValueString(),
 		state.Name.ValueString(),
-		state.Provider.ValueString(),
-		newProviderAttrs,
+		state.StorageProvider.ValueString(),
+		newStorageProviderAttrs,
 	); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update storage pool resource, got error: %s", err))
 		return
 	}
 	r.trace("updated storage pool", map[string]interface{}{
-		"name":     plan.Name.ValueString(),
-		"model":    plan.Model.ValueString(),
-		"provider": plan.Provider.ValueString(),
+		"name":            plan.Name.ValueString(),
+		"model":           plan.Model.ValueString(),
+		"storageprovider": plan.StorageProvider.ValueString(),
 	})
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// Delete is called when the provider must delete the resource. Config
-// values may be read from the DeleteRequest.
-//
-// If execution completes without error, the framework will automatically
-// call DeleteResponse.State.RemoveResource(), so it can be omitted
-// from provider logic.
 func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	if r.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "storagepool", "create")
+		addClientNotConfiguredError(&resp.Diagnostics, "storagepool", "delete")
 		return
 	}
 
@@ -264,9 +265,9 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 	r.trace("deleted storage pool", map[string]interface{}{
-		"name":     state.Name.ValueString(),
-		"model":    state.Model.ValueString(),
-		"provider": state.Provider.ValueString(),
+		"name":            state.Name.ValueString(),
+		"model":           state.Model.ValueString(),
+		"storageprovider": state.StorageProvider.ValueString(),
 	})
 }
 
