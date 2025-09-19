@@ -247,15 +247,15 @@ func (c offersClient) DestroyOffer(input *DestroyOfferInput) error {
 	return nil
 }
 
-// filterByEndpoints is filtering offers that match exactly the endpoints' names provided.
+// matchByEndpoints is returning offers that match exactly the endpoints' names provided.
 // If no endpoints are provided, all offers are returned to match the API behaviour.
-// The reason why we rely on this custom filtering and not the API filtering is that
+// The reason why we rely on this custom matching and not the API filtering is that
 // the API filtering doesn't work as expected when multiple endpoints filters are provided.
 // An endpoint filter is composed of three fields: Name, Interface and Role.
 // If we try to filter by two endpoints' names, the API will return no offers, because the internal
 // logic is doing an AND on the different fields of the endpoints filter. Specifying two fields with the same
 // field (ex. Name) will always result in no matches.
-func filterByEndpoints(offers []*crossmodel.ApplicationOfferDetails, endpoints []string) []*crossmodel.ApplicationOfferDetails {
+func matchByEndpoints(offers []*crossmodel.ApplicationOfferDetails, endpoints []string) []*crossmodel.ApplicationOfferDetails {
 	if len(endpoints) == 0 {
 		return offers
 	}
@@ -285,7 +285,7 @@ func findApplicationOffers(client *applicationoffers.Client, filter crossmodel.A
 		return nil, err
 	}
 
-	offers = filterByEndpoints(offers, endpoints)
+	offers = matchByEndpoints(offers, endpoints)
 
 	if len(offers) == 0 {
 		return nil, fmt.Errorf("unable to find offer after creation")

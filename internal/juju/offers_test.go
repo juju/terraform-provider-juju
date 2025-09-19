@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestFilterByEndpoints(t *testing.T) {
+func TestMatchByEndpoints(t *testing.T) {
 	testCases := []struct {
 		name           string
 		endpoints      []string
@@ -33,7 +33,7 @@ func TestFilterByEndpoints(t *testing.T) {
 			},
 		},
 		{
-			name:      "filter by single endpoint",
+			name:      "match by single endpoint",
 			endpoints: []string{"db"},
 			offers: []*crossmodel.ApplicationOfferDetails{
 				{
@@ -59,7 +59,7 @@ func TestFilterByEndpoints(t *testing.T) {
 			},
 		},
 		{
-			name:      "filter by multiple endpoints",
+			name:      "match by multiple endpoints",
 			endpoints: []string{"db", "cache"},
 			offers: []*crossmodel.ApplicationOfferDetails{
 				{
@@ -130,8 +130,8 @@ func TestFilterByEndpoints(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			filtered := filterByEndpoints(tc.offers, tc.endpoints)
-			assert.Equal(t, tc.expectedOffers, filtered, "expected offers %v, got %v", tc.expectedOffers, filtered)
+			matched := matchByEndpoints(tc.offers, tc.endpoints)
+			assert.Equal(t, tc.expectedOffers, matched, "expected offers %v, got %v", tc.expectedOffers, matched)
 		})
 	}
 }
