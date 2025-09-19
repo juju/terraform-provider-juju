@@ -26,6 +26,7 @@ import (
 	charmhub "github.com/juju/juju/charmhub"
 	transport "github.com/juju/juju/charmhub/transport"
 	cloud "github.com/juju/juju/cloud"
+	arch "github.com/juju/juju/core/arch"
 	constraints "github.com/juju/juju/core/constraints"
 	model "github.com/juju/juju/core/model"
 	resources0 "github.com/juju/juju/core/resources"
@@ -86,6 +87,20 @@ func (mr *MockSharedClientMockRecorder) Debugf(msg any, additionalFields ...any)
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{msg}, additionalFields...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Debugf", reflect.TypeOf((*MockSharedClient)(nil).Debugf), varargs...)
+}
+
+// DefaultTestModelArchitecture mocks base method.
+func (m *MockSharedClient) DefaultTestModelArchitecture() arch.Arch {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DefaultTestModelArchitecture")
+	ret0, _ := ret[0].(arch.Arch)
+	return ret0
+}
+
+// DefaultTestModelArchitecture indicates an expected call of DefaultTestModelArchitecture.
+func (mr *MockSharedClientMockRecorder) DefaultTestModelArchitecture() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DefaultTestModelArchitecture", reflect.TypeOf((*MockSharedClient)(nil).DefaultTestModelArchitecture))
 }
 
 // Errorf mocks base method.
