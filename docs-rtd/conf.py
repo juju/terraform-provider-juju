@@ -292,14 +292,15 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx_sitemap",
     # our own:
-    'sphinx_design',
+    "sphinx_design",
     # Make it possible to link to related RTD projects using their internal anchors
     # with, e.g., {external+ops:ref}`manage-configurations`:
-    'sphinxext.rediraffe',
+    "sphinxext.rediraffe",
     # Display an external link icon and open link in new tab:
     # new_tab_link_show_external_link_icon must also be set to True
-    'sphinx_new_tab_link',
-    'sphinxcontrib.lightbox2',
+    "sphinx_new_tab_link",
+    "sphinxcontrib.lightbox2",
+    "sphinxcontrib.mermaid",
     ]
 
 # Extension configs:

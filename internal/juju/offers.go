@@ -5,12 +5,13 @@ package juju
 
 import (
 	"context"
-	"errors"
+	stderr "errors"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/juju/errors"
 	apiapplication "github.com/juju/juju/api/client/application"
 	"github.com/juju/juju/api/client/applicationoffers"
 	apiclient "github.com/juju/juju/api/client/client"
@@ -28,10 +29,15 @@ const (
 	OfferApiTickWait = time.Second * 5
 )
 
+// RemoteAppNotFoundError is returned when a remote app
+// cannot be found when contacting the Juju API.
+var RemoteAppNotFoundError = errors.ConstError("remote-app-not-found")
+
 type offersClient struct {
 	SharedClient
 }
 
+// CreateOfferInput represents input for creating an offer.
 type CreateOfferInput struct {
 	ApplicationName string
 	Endpoints       []string
@@ -41,15 +47,18 @@ type CreateOfferInput struct {
 	Name            string
 }
 
+// CreateOfferResponse represents the response from creating an offer.
 type CreateOfferResponse struct {
 	Name     string
 	OfferURL string
 }
 
+// ReadOfferInput represents input for reading an offer.
 type ReadOfferInput struct {
 	OfferURL string
 }
 
+// ReadOfferResponse represents the response from reading an offer.
 type ReadOfferResponse struct {
 	ApplicationName string
 	Endpoints       []string
@@ -59,22 +68,37 @@ type ReadOfferResponse struct {
 	Users           []crossmodel.OfferUserDetails
 }
 
+// DestroyOfferInput represents input for destroying an offer.
 type DestroyOfferInput struct {
 	OfferURL string
 }
 
+// ConsumeRemoteOfferInput represents input for consuming a remote offer.
 type ConsumeRemoteOfferInput struct {
-	ModelName string
-	OfferURL  string
+	ModelName      string
+	OfferURL       string
+	RemoteAppAlias string
 }
 
+// ConsumeRemoteOfferResponse represents the response from consuming a remote offer.
 type ConsumeRemoteOfferResponse struct {
 	SAASName string
 }
 
-type RemoveRemoteOfferInput struct {
-	ModelName string
-	OfferURL  string
+// ReadRemoteAppInput represents input for reading a remote app.
+type ReadRemoteAppInput struct {
+	ModelName     string
+	RemoteAppName string
+}
+
+// ReadRemoteAppResponse represents the response from reading a remote app.
+type ReadRemoteAppResponse struct {
+}
+
+// RemoveRemoteAppInput represents input for removing a remote app.
+type RemoveRemoteAppInput struct {
+	ModelName     string
+	RemoteAppName string
 }
 
 // GrantRevokeOfferInput represents input for granting or revoking access to an offer.
@@ -224,6 +248,7 @@ func (c offersClient) DestroyOffer(input *DestroyOfferInput) error {
 	//This code loops until it detects 0 connections in the offer or 3 minutes elapses
 	if len(offer.Connections) > 0 {
 		end := time.Now().Add(5 * time.Minute)
+		c.Tracef(fmt.Sprintf("offer %q has %d connections, waiting for them to be removed before destroying", offer.OfferURL, len(offer.Connections)))
 		for ok := true; ok; ok = len(offer.Connections) > 0 {
 			//if we have been failing to destroy offer for 5 minutes then force destroy
 			//TODO: investigate cleaner solution (acceptance tests fail even if timeout set to 20m)
@@ -300,6 +325,16 @@ func findApplicationOffers(client *applicationoffers.Client, filter crossmodel.A
 
 // ConsumeRemoteOffer allows the integration resource to consume the offers managed by the offer resource.
 func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*ConsumeRemoteOfferResponse, error) {
+	if input.ModelName == "" {
+		return nil, fmt.Errorf("missing model when attemtpting to consume an offer")
+	}
+	if input.OfferURL == "" {
+		return nil, fmt.Errorf("missing offer URL when attempting to consume an offer")
+	}
+	if input.RemoteAppAlias == "" {
+		return nil, fmt.Errorf("missing remote app alias when consuming an offer")
+	}
+
 	modelConn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return nil, err
@@ -346,7 +381,7 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 
 	consumeArgs := crossmodel.ConsumeApplicationArgs{
 		Offer:            *consumeDetails.Offer,
-		ApplicationAlias: consumeDetails.Offer.OfferName,
+		ApplicationAlias: input.RemoteAppAlias,
 		Macaroon:         consumeDetails.Macaroon,
 	}
 	if consumeDetails.ControllerInfo != nil {
@@ -388,13 +423,46 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 	return &response, nil
 }
 
-// RemoveRemoteOffer allows the integration resource to destroy the offers managed by the offer resource.
-func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
-	var errors []error
+// ReadRemoteApp allows for reading details of a consumed offer
+// i.e. reading a SAAS (remote-app).
+//
+// The naming is confusing here as the `juju status --format yaml` output shows
+// these objects under "application-endpoints", the API calls them RemoteApplications
+// and `juju status` shows them under the "SAAS" heading.
+func (c offersClient) ReadRemoteApp(input *ReadRemoteAppInput) (*ReadRemoteAppResponse, error) {
+	modelConn, err := c.GetConnection(&input.ModelName)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = modelConn.Close() }()
+
+	clientAPIClient := apiclient.NewClient(modelConn, c.JujuLogger())
+
+	status, err := clientAPIClient.Status(nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch model status: %w", err)
+	}
+
+	remoteApplications := status.RemoteApplications
+
+	if len(remoteApplications) == 0 {
+		return nil, errors.WithType(errors.New("remote app not found"), RemoteAppNotFoundError)
+	}
+
+	for appName := range remoteApplications {
+		if appName == input.RemoteAppName {
+			return &ReadRemoteAppResponse{}, nil
+		}
+	}
+
+	return nil, errors.WithType(errors.New("remote app not found"), RemoteAppNotFoundError)
+}
+
+// RemoveRemoteApp allows the integration resource to destroy the offers managed by the offer resource.
+func (c offersClient) RemoveRemoteApp(input *RemoveRemoteAppInput) error {
 	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
-		errors = append(errors, err)
-		return errors
+		return err
 	}
 	defer func() { _ = conn.Close() }()
 
@@ -403,55 +471,45 @@ func (c offersClient) RemoveRemoteOffer(input *RemoveRemoteOfferInput) []error {
 
 	status, err := clientAPIClient.Status(nil)
 	if err != nil {
-		errors = append(errors, err)
-		return errors
+		return err
 	}
 
 	remoteApplications := status.RemoteApplications
 
 	if len(remoteApplications) == 0 {
-		errors = append(errors, fmt.Errorf("no offers found in model"))
-		return errors
+		return fmt.Errorf("no offers found in model")
 	}
 
 	var offerName string
-	for _, v := range remoteApplications {
-		if v.Err != nil {
-			errors = append(errors, v.Err)
-			return errors
+	for appName := range remoteApplications {
+		if appName == input.RemoteAppName {
+			offerName = appName
+			break
 		}
-		url, err := removeOfferURLSource(v.OfferURL)
-		if err != nil {
-			errors = append(errors, err)
-			return errors
-		}
-		if url != input.OfferURL {
-			continue
-		}
-		offerName = v.OfferName
 	}
 
+	if offerName == "" {
+		return fmt.Errorf("remote-app %q not found in model", input.RemoteAppName)
+	}
+
+	// This is a bulk call but we only want to remove one remote app
+	// so we expect only a single error to be returned if it fails.
 	returnErrors, err := client.DestroyConsumedApplication(apiapplication.DestroyConsumedApplicationParams{
 		SaasNames: []string{
 			offerName,
 		},
 	})
 	if err != nil {
-		errors = append(errors, err)
-		return errors
+		return err
 	}
 
+	var errors []error
 	for _, v := range returnErrors {
 		if v.Error != nil {
 			errors = append(errors, v.Error)
 		}
 	}
-
-	if len(errors) > 0 {
-		return errors
-	}
-
-	return nil
+	return stderr.Join(errors...)
 }
 
 // GrantOffer adds access to an offer managed by the access offer resource.

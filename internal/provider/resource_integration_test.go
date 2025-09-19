@@ -50,6 +50,27 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceIntegrationUpdateIntegration(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-integration")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		CheckDestroy:             testAccCheckIntegrationDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testUpdateIntegrationToAppWithSameInterface(modelName, false),
+			},
+			{
+				Config: testUpdateIntegrationToAppWithSameInterface(modelName, true),
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
@@ -67,7 +88,7 @@ func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
 				Config: testAccResourceIntegrationWithVia(srcModelName, "base = \"ubuntu@22.04\"", dstModelName, "base = \"ubuntu@22.04\"", via),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.a", "model", srcModelName),
-					resource.TestCheckResourceAttr("juju_integration.a", "id", fmt.Sprintf("%v:%v:%v", srcModelName, "a:source", "b:sink")),
+					resource.TestCheckResourceAttr("juju_integration.a", "id", fmt.Sprintf("%v:%v:%v", srcModelName, "a:source", "b-a-source:sink")),
 					resource.TestCheckResourceAttr("juju_integration.a", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.a", "application.*", map[string]string{"name": "a", "endpoint": "source"}),
 					resource.TestCheckResourceAttr("juju_integration.a", "via", via),
@@ -156,6 +177,62 @@ resource "juju_integration" "this" {
 `, modelName, osOne, osTwo)
 }
 
+func testUpdateIntegrationToAppWithSameInterface(modelName string, relateToNewApp bool) string {
+	appToRelate := "two"
+	if relateToNewApp {
+		appToRelate = "three"
+	}
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_application" "one" {
+	model = juju_model.this.name
+	name  = "one" 
+	
+	charm {
+		name = "juju-qa-dummy-sink"
+		base = "ubuntu@22.04"
+	}
+}
+
+resource "juju_application" "two" {
+	model = juju_model.this.name
+	name  = "two"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		base = "ubuntu@22.04"
+	}
+}
+
+resource "juju_application" "three" {
+	model = juju_model.this.name
+	name  = "three"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		base = "ubuntu@22.04"
+	}
+}
+
+resource "juju_integration" "this" {
+	model = juju_model.this.name
+
+	application {
+		name     = juju_application.one.name
+		endpoint = "source"
+	}
+
+	application {
+		name = juju_application.%s.name
+		endpoint = "sink"
+	}
+}
+`, modelName, appToRelate)
+}
+
 // testAccResourceIntegrationWithVia generates a plan where a
 // postgresql:source relates to a pgbouncer:backend-source using
 // and offer of pgbouncer.
@@ -231,11 +308,11 @@ func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
 				},
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.b1.0", "model", dstModelName),
-					resource.TestCheckResourceAttr("juju_integration.b1.0", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "a:source", "b1:sink")),
+					resource.TestCheckResourceAttr("juju_integration.b1.0", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "a-b1-sink:source", "b1:sink")),
 					resource.TestCheckResourceAttr("juju_integration.b1.0", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.b1.0", "application.*", map[string]string{"name": "b1", "endpoint": "sink"}),
 					resource.TestCheckResourceAttr("juju_integration.b2.0", "model", dstModelName),
-					resource.TestCheckResourceAttr("juju_integration.b2.0", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "a:source", "b2:sink")),
+					resource.TestCheckResourceAttr("juju_integration.b2.0", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "a-b2-sink:source", "b2:sink")),
 					resource.TestCheckResourceAttr("juju_integration.b2.0", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.b2.0", "application.*", map[string]string{"name": "b2", "endpoint": "sink"}),
 				),
@@ -248,7 +325,7 @@ func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
 				},
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.b1.0", "model", dstModelName),
-					resource.TestCheckResourceAttr("juju_integration.b1.0", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "a:source", "b1:sink")),
+					resource.TestCheckResourceAttr("juju_integration.b1.0", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "a-b1-sink:source", "b1:sink")),
 					resource.TestCheckResourceAttr("juju_integration.b1.0", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.b1.0", "application.*", map[string]string{"name": "b1", "endpoint": "sink"}),
 				),
@@ -279,9 +356,9 @@ func TestAcc_ResourceIntegrationWithMultipleIntegrationsSameEndpoint(t *testing.
 				Config: testAccResourceIntegrationMultipleIntegrationsSameEndpoint(srcModelName, dstModelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", dstModelName),
-					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "apptwo:source", "appzero:sink")),
+					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "apptwo:source", "appzero-apptwo-source:sink")),
 					resource.TestCheckResourceAttr("juju_integration.this2", "model", dstModelName),
-					resource.TestCheckResourceAttr("juju_integration.this2", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "apptwo:source", "appone:sink")),
+					resource.TestCheckResourceAttr("juju_integration.this2", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "apptwo:source", "appone-apptwo-source:sink")),
 				),
 			},
 		},

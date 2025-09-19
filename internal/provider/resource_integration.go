@@ -21,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/juju/juju/core/crossmodel"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/wait"
@@ -97,7 +98,10 @@ func (r *integrationResource) ValidateConfig(ctx context.Context, req resource.V
 	}
 
 	var apps []nestedApplication
-	configData.Application.ElementsAs(ctx, &apps, false)
+	resp.Diagnostics.Append(configData.Application.ElementsAs(ctx, &apps, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	for _, app := range apps {
 		if app.Name.IsNull() && app.OfferURL.IsNull() {
 			resp.Diagnostics.AddAttributeError(path.Root("applications"), "Attribute Error", "one and only one of \"name\" or \"offer_url\" fields must be provided.")
@@ -118,10 +122,16 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"model": schema.StringAttribute{
 				Description: "The name of the model to operate in.",
 				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"via": schema.StringAttribute{
 				Description: "A comma separated list of CIDRs for outbound traffic.",
 				Optional:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"id": schema.StringAttribute{
 				Computed: true,
@@ -143,6 +153,10 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Description: "The name of the application. This attribute may not be used at the" +
 								" same time as the offer_url.",
 							Optional: true,
+							Computed: true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.RequiresReplace(),
+							},
 							Validators: []validator.String{
 								stringvalidator.ConflictsWith(path.Expressions{
 									path.MatchRelative().AtParent().AtName("offer_url"),
@@ -152,6 +166,9 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 						"endpoint": schema.StringAttribute{
 							Description: "The endpoint name. This attribute may not be used at the" +
 								" same time as the offer_url.",
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.RequiresReplace(),
+							},
 							Optional: true,
 							Computed: true,
 						},
@@ -161,6 +178,7 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Optional: true,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
+								stringplanmodifier.RequiresReplace(),
 							},
 							Validators: []validator.String{
 								stringvalidator.ConflictsWith(path.Expressions{
@@ -191,13 +209,19 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 	modelName := plan.ModelName.ValueString()
 
-	var apps []nestedApplication
-	resp.Diagnostics.Append(plan.Application.ElementsAs(ctx, &apps, false)...)
+	var parsedApplications []nestedApplication
+	resp.Diagnostics.Append(plan.Application.ElementsAs(ctx, &parsedApplications, false)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	endpoints, offer, appNames, err := parseEndpoints(apps)
+	parsedApplications, err := createRemoteAppName(parsedApplications)
+	if err != nil {
+		resp.Diagnostics.AddError("Provider Error", err.Error())
+		return
+	}
+
+	endpoints, offer, appNames, err := parseEndpoints(parsedApplications)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse endpoints, got error: %s", err))
 		return
@@ -206,8 +230,9 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	// If we have an offer URL, we need to consume it before creating the integration.
 	if offer != nil {
 		offerResponse, err := r.client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
-			ModelName: modelName,
-			OfferURL:  offer.url,
+			ModelName:      modelName,
+			OfferURL:       offer.url,
+			RemoteAppAlias: offer.name,
 		})
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to consume remote offer, got error: %s", err))
@@ -239,7 +264,7 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 	r.trace(fmt.Sprintf("integration created on Juju between %q at %q on model %q", appNames, endpoints, modelName))
 
-	parsedApplications, err := parseApplications(response.Applications)
+	parsedApplications, err = parseApplications(response.Applications)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse applications, got error: %s", err))
 		return
@@ -318,118 +343,11 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update is a no-op, as all fields force replacement.
 func (r *integrationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// Prevent panic if the provider has not been configured.
-	if r.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "integration", "update")
-		return
-	}
-	var plan, state integrationResourceModel
-
-	// Read Terraform prior state data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	modelName := plan.ModelName.ValueString()
-
-	var oldEndpoints, endpoints []string
-	var oldOffer, offer *offer
-	var err error
-
-	if !plan.Application.Equal(state.Application) {
-		var oldApps []nestedApplication
-		state.Application.ElementsAs(ctx, &oldApps, false)
-		oldEndpoints, oldOffer, _, err = parseEndpoints(oldApps)
-		if err != nil {
-			resp.Diagnostics.AddError("Provider Error", err.Error())
-			return
-		}
-
-		var newApps []nestedApplication
-		plan.Application.ElementsAs(ctx, &newApps, false)
-		endpoints, offer, _, err = parseEndpoints(newApps)
-		if err != nil {
-			resp.Diagnostics.AddError("Provider Error", err.Error())
-			return
-		}
-	}
-
-	var offerResponse *juju.ConsumeRemoteOfferResponse
-	// check if the offer url has been deleted or the URL has been changed.
-	if oldOffer != nil && (offer == nil || offer.url != oldOffer.url) {
-		// Destroy old remote offer. This is not automatically handled by the `requires_replace` logic,
-		// because it is a special case where the offer URL has been specified in an integration resource.
-		errs := r.client.Offers.RemoveRemoteOffer(&juju.RemoveRemoteOfferInput{
-			ModelName: modelName,
-			OfferURL:  oldOffer.url,
-		})
-		if len(errs) > 0 {
-			for _, v := range errs {
-				resp.Diagnostics.AddError("Client Error", v.Error())
-			}
-			return
-		}
-		r.trace(fmt.Sprintf("removed offer on Juju: %q", oldOffer.url))
-	}
-	// check if the offer url has been added or the URL has been changed.
-	if offer != nil && (oldOffer == nil || offer.url != oldOffer.url) {
-		offerResponse, err = r.client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
-			ModelName: modelName,
-			OfferURL:  offer.url,
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Client Error", err.Error())
-			return
-		}
-		// If the offer has a SAASName, we append it to the endpoints list
-		// If the endpoint is not empty, we append it in the format <SAASName>:<endpoint>
-		// If the endpoint is empty, we append just the SAASName and Juju will infer the endpoint.
-		if offerResponse.SAASName != "" {
-			if offer.endpoint != "" {
-				endpoints = append(endpoints, fmt.Sprintf("%s:%s", offerResponse.SAASName, offer.endpoint))
-			} else {
-				endpoints = append(endpoints, offerResponse.SAASName)
-			}
-		}
-		r.trace(fmt.Sprintf("added offer on Juju: %q", offer.url))
-	}
-
-	viaCIDRs := plan.Via.ValueString()
-	input := &juju.UpdateIntegrationInput{
-		ModelName:    modelName,
-		Endpoints:    endpoints,
-		OldEndpoints: oldEndpoints,
-		ViaCIDRs:     viaCIDRs,
-	}
-	response, err := r.client.Integrations.UpdateIntegration(input)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", err.Error())
-		return
-	}
-
-	applications, err := parseApplications(response.Applications)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse applications, got error: %s", err))
-		return
-	}
-
-	appType := req.State.Schema.GetBlocks()["application"].(schema.SetNestedBlock).NestedObject.Type()
-	apps, aErr := types.SetValueFrom(ctx, appType, applications)
-	if aErr.HasError() {
-		resp.Diagnostics.Append(aErr...)
-		return
-	}
-	plan.Application = apps
-	newId := types.StringValue(newIDForIntegrationResource(modelName, response.Applications))
-	plan.ID = newId
-	r.trace(fmt.Sprintf("Updated integration resource: %q", newId))
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the integration and, if it was cross-model, the consumed offer.
 func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Prevent panic if the provider has not been configured.
 	if r.client == nil {
@@ -483,10 +401,101 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 				errSummary,
 				errDetail,
 			)
+			return
 		}
+	}
+
+	r.trace(fmt.Sprintf("Deleted integration resource: %q", state.ID.ValueString()))
+
+	var offer *offer
+	var apps []nestedApplication
+	resp.Diagnostics.Append(state.Application.ElementsAs(ctx, &apps, false)...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
-	r.trace(fmt.Sprintf("Deleted integration resource: %q", state.ID.ValueString()))
+	_, offer, _, err = parseEndpoints(apps)
+	if err != nil {
+		resp.Diagnostics.AddError("Provider Error", err.Error())
+		return
+	}
+
+	// check if the integration had consumed an offer.
+	if offer == nil {
+		return
+	}
+
+	// Destroy consumed offer.
+	err = r.client.Offers.RemoveRemoteApp(&juju.RemoveRemoteAppInput{
+		ModelName:     modelName,
+		RemoteAppName: offer.name,
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", err.Error())
+		return
+	}
+
+	err = wait.WaitForError(
+		wait.WaitForErrorCfg[*juju.ReadRemoteAppInput, *juju.ReadRemoteAppResponse]{
+			Context: ctx,
+			GetData: r.client.Offers.ReadRemoteApp,
+			Input: &juju.ReadRemoteAppInput{
+				ModelName:     modelName,
+				RemoteAppName: offer.name,
+			},
+			ExpectedErr:    juju.RemoteAppNotFoundError,
+			RetryAllErrors: true,
+		},
+	)
+	if err != nil {
+		errSummary := "Client Error"
+		errDetail := fmt.Sprintf("Unable to complete remote-app %q deletion in model %q: %v\n", offer.name, modelName, err)
+		if r.config.SkipFailedDeletion {
+			resp.Diagnostics.AddWarning(
+				errSummary,
+				errDetail+"There might be dangling resources requiring manual intervion.\n",
+			)
+		} else {
+			resp.Diagnostics.AddError(
+				errSummary,
+				errDetail,
+			)
+			return
+		}
+	}
+
+	r.trace(fmt.Sprintf("removed remote app %q", offer.name))
+}
+
+// createRemoteAppName checks if one of the applications is a cross-model offer
+// and if so, sets a custom name for the remote application.
+//
+// As background, the Juju API allows a user to consume an offer with a
+// specified alias. The Terraform provider does not expose this to the user,
+// and instead generates a unique name for each consumed offer.
+//
+// The name has the format "<remoteApp>-<localApp>-<endpoint>".
+// This function returns a new slice of applications with remote app name set.
+func createRemoteAppName(apps []nestedApplication) ([]nestedApplication, error) {
+	var localApp, remoteApp nestedApplication
+	var crossModel bool
+	for _, app := range apps {
+		if app.OfferURL.ValueString() != "" {
+			crossModel = true
+			remoteApp = app
+			continue
+		}
+		localApp = app
+	}
+	if !crossModel {
+		return apps, nil
+	}
+	parsedURL, err := crossmodel.ParseOfferURL(remoteApp.OfferURL.ValueString())
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse offer URL %q: %w", remoteApp.OfferURL.ValueString(), err)
+	}
+	remoteAppName := fmt.Sprintf("%s-%s-%s", parsedURL.ApplicationName, localApp.Name.ValueString(), localApp.Endpoint.ValueString())
+	remoteApp.Name = types.StringValue(remoteAppName)
+	return []nestedApplication{localApp, remoteApp}, nil
 }
 
 func handleIntegrationNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
@@ -535,6 +544,7 @@ func modelNameAndEndpointsFromID(ID string) (string, string, string, diag.Diagno
 type offer struct {
 	url      string
 	endpoint string
+	name     string
 }
 
 // This function can be used to parse the terraform data into usable juju endpoints
@@ -545,13 +555,14 @@ func parseEndpoints(apps []nestedApplication) (endpoints []string, of *offer, ap
 		offerURL := app.OfferURL.ValueString()
 		endpoint := app.Endpoint.ValueString()
 
-		//Here we check if the endpoint is empty and pass just the application name, this allows juju to attempt to infer endpoints
-		//If the endpoint is specified we pass the format <applicationName>:<endpoint>
-		//first check if we have an offer_url, in this case don't return the endpoint
+		// Here we check if the endpoint is empty and pass just the application name, this allows juju to attempt to infer endpoints
+		// If the endpoint is specified we pass the format <applicationName>:<endpoint>
+		// first check if we have an offer_url, in this case don't return the endpoint
 		if offerURL != "" {
 			of = &offer{
 				url:      offerURL,
 				endpoint: endpoint,
+				name:     name,
 			}
 			continue
 		}
@@ -583,6 +594,7 @@ func parseApplications(apps []juju.Application) ([]nestedApplication, error) {
 			url := *app.OfferURL
 			a.OfferURL = types.StringValue(url)
 			a.Endpoint = types.StringValue(app.Endpoint)
+			a.Name = types.StringValue(app.Name)
 		} else {
 			a.Endpoint = types.StringValue(app.Endpoint)
 			a.Name = types.StringValue(app.Name)
