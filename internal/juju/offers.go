@@ -37,6 +37,7 @@ type offersClient struct {
 	SharedClient
 }
 
+// CreateOfferInput represents input for creating an offer.
 type CreateOfferInput struct {
 	ApplicationName string
 	Endpoints       []string
@@ -46,15 +47,18 @@ type CreateOfferInput struct {
 	Name            string
 }
 
+// CreateOfferResponse represents the response from creating an offer.
 type CreateOfferResponse struct {
 	Name     string
 	OfferURL string
 }
 
+// ReadOfferInput represents input for reading an offer.
 type ReadOfferInput struct {
 	OfferURL string
 }
 
+// ReadOfferResponse represents the response from reading an offer.
 type ReadOfferResponse struct {
 	ApplicationName string
 	Endpoints       []string
@@ -64,28 +68,34 @@ type ReadOfferResponse struct {
 	Users           []crossmodel.OfferUserDetails
 }
 
+// DestroyOfferInput represents input for destroying an offer.
 type DestroyOfferInput struct {
 	OfferURL string
 }
 
+// ConsumeRemoteOfferInput represents input for consuming a remote offer.
 type ConsumeRemoteOfferInput struct {
 	ModelName      string
 	OfferURL       string
 	RemoteAppAlias string
 }
 
+// ConsumeRemoteOfferResponse represents the response from consuming a remote offer.
 type ConsumeRemoteOfferResponse struct {
 	SAASName string
 }
 
+// ReadRemoteAppInput represents input for reading a remote app.
 type ReadRemoteAppInput struct {
 	ModelName     string
 	RemoteAppName string
 }
 
+// ReadRemoteAppResponse represents the response from reading a remote app.
 type ReadRemoteAppResponse struct {
 }
 
+// RemoveRemoteAppInput represents input for removing a remote app.
 type RemoveRemoteAppInput struct {
 	ModelName     string
 	RemoteAppName string

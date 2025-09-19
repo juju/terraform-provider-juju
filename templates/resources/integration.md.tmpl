@@ -39,7 +39,7 @@ bits of data together.
 
 #### Cross-model relations
 
-From v0.23 of the provider, when integrating with an offer (i.e. when specifying the `offer_url`), the provider will create a remote application name with the format `<remote-app>-<local-app>-<interface>`. For example,
+From v0.23, when integrating with an offer (i.e. when specifying the `offer_url`), the provider will create a remote application name with the format `<remote-app>-<local-app>-<interface>`. For example,
 when relating a local application called `discourse` with an offer url of the form `admin/dbModel.postgresql`, using the `database` interface, the remote application will have the name `postgresql-discourse-database`.
 
 In previous versions of the provider, the remote application would always have the same name as the application in the offer url, i.e. `postgresql` in the example above.
