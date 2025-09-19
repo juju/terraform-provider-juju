@@ -72,7 +72,10 @@ func (r *storagePoolResource) Metadata(ctx context.Context, req resource.Metadat
 
 func (r *storagePoolResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A resource that represents a Juju storage pool.",
+		Description: `A resource that represents a Juju storage pool.
+		
+To learn more about storage pools, please visit: https://documentation.ubuntu.com/juju/3.6/reference/storage/#storage-pool
+		`,
 		Attributes: map[string]schema.Attribute{
 			// ID required by the testing framework
 			"id": schema.StringAttribute{
