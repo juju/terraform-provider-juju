@@ -138,14 +138,20 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	// Adhere to client on "any".
-	var storageProviderAttrs map[string]any
+	var storageProviderAttrs map[string]string = make(map[string]string)
 	resp.Diagnostics.Append(plan.Attributes.ElementsAs(ctx, &storageProviderAttrs, false)...)
+
+	// Convert map[string]string to map[any]any
+	storageProviderAttrsAny := make(map[string]any, len(storageProviderAttrs))
+	for k, v := range storageProviderAttrs {
+		storageProviderAttrsAny[k] = v
+	}
 
 	if err := r.client.Storage.CreatePool(
 		plan.Model.ValueString(),
 		plan.Name.ValueString(),
 		plan.StorageProvider.ValueString(),
-		storageProviderAttrs,
+		storageProviderAttrsAny,
 	); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create storage pool resource, got error: %s", err))
 		return

@@ -31,7 +31,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
 					resource.TestCheckResourceAttr(resourceFullName, "model", modelName),
-					resource.TestCheckResourceAttr(resourceFullName, "provider", storageProviderName),
+					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", storageProviderName),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.a", "b"),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.c", "d"),
 				),
