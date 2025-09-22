@@ -1,3 +1,38 @@
+## 0.23.0 (September 22, 2025)
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.4 release.
+
+ENHANCEMENTS
+
+* Issue errors instead of warnings by default on failed resource deletion by @kian99 in [#877](https://github.com/juju/terraform-provider-juju/pull/877) - See the new provider config `skip_failed_deletion` to revert to the previous behavior - more information is available in the provider documentation.
+* Allow changing charm channel and revision together by @luci1900 in [#899](https://github.com/juju/terraform-provider-juju/pull/889)
+
+BUG FIXES
+
+* Fix for [#881](https://github.com/juju/terraform-provider-juju/issues/881) by @SimoneDutto in [#890](https://github.com/juju/terraform-provider-juju/pull/890)
+* Fix for the offer and integration resource logic by @kian99 in [#893](https://github.com/juju/terraform-provider-juju/pull/893)
+* Fix for reading offer resources by @SimoneDutto in [#906](https://github.com/juju/terraform-provider-juju/pull/906)
+* Fix for [#473](https://github.com/juju/terraform-provider-juju/issues/473) and [#235](https://github.com/juju/terraform-provider-juju/issues/235) by @kian99 in [#898](https://github.com/juju/terraform-provider-juju/pull/898)
+
+DOCUMENTATION
+
+* Add channel and revision example and clarification to the charms by @tmihoc in [#892](https://github.com/juju/terraform-provider-juju/pull/892)
+* Managing model migration documentation by @kian99 in [#895](https://github.com/juju/terraform-provider-juju/pull/895)
+
+CI & MAINTENANCE
+
+* Use of concurrency in workflows by @kian99 in [#894](https://github.com/juju/terraform-provider-juju/pull/894)
+* Addition of the security scan workflow by @alesstimec in [#902](https://github.com/juju/terraform-provider-juju/pull/902)
+* Addition of the `SECURITY.md` by @alesstimec in [#904](https://github.com/juju/terraform-provider-juju/pull/904)
+* Addition of the tiobe scan workflow to point to the repo where it is run by @SimoneDutto in [#907](https://github.com/juju/terraform-provider-juju/pull/907)
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v1.0.0-beta1...v0.23.0-rc1
+
 ## 0.22.0 (August 18, 2025)
 
 NOTES:
