@@ -43,18 +43,46 @@ NOTES:
 
 ENHANCEMENTS
 
-* An improvement of sematic comparison for constraints by @kian99 in [829](https://github.com/juju/terraform-provider-juju/pull/829).
+* Added the `secret_uri` computed field to the secret resource by @alesstimec in [#850](https://github.com/juju/terraform-provider-juju/pull/850)
+* Waiting for model resource to be deleted before returning by @SimoneDutto in [#743](https://github.com/juju/terraform-provider-juju/pull/743)
+* Support `null` values in model config by @SimoneDutto in [#851](https://github.com/juju/terraform-provider-juju/pull/851)
+* Support `null` values app config by @SimoneDutto in [#864](https://github.com/juju/terraform-provider-juju/pull/864)
+* Added custom create timeout for the machine resource by @kian99 in [#868](https://github.com/juju/terraform-provider-juju/pull/868)
+* Issue errors instead of warnings by default on failed resource deletion by @kian99 in [#877](https://github.com/juju/terraform-provider-juju/pull/877) - See the new provider config `skip_failed_deletion` to revert to the previous behavior - more information is available in the provider documentation.
+* Allow changing charm channel and revision together by @luci1900 in [#889](https://github.com/juju/terraform-provider-juju/pull/889)
 
 BUG FIXES
 
-* A fix for SSH key resource ID handling by @kian99 in [824](https://github.com/juju/terraform-provider-juju/pull/824).
-* A fix for removal of multiple integrations with the same endpoint by @SimoneDutto in [814](https://github.com/juju/terraform-provider-juju/pull/814).
+* Change for the `applications` field from list to set in the `juju_access_secret` resource by @alesstimec in [#848](https://github.com/juju/terraform-provider-juju/pull/848)
+* Change for the `users` field from list to set in the `juju_access_model` resource by @alesstimec in [#849](https://github.com/juju/terraform-provider-juju/pull/849)
+* Fix for [#267](https://github.com/juju/terraform-provider-juju/issues/267) affecting the `ssh-key` resource by @SimoneDutto in [#844](https://github.com/juju/terraform-provider-juju/pull/844)
+* Fix for [#662](https://github.com/juju/terraform-provider-juju/issues/662) by @alesstimec in [#831](https://github.com/juju/terraform-provider-juju/pull/831)
+* Clarification of the  error when reading application offers by @claudiubelu in [#872](https://github.com/juju/terraform-provider-juju/pull/872)
+* Fix for [#881](https://github.com/juju/terraform-provider-juju/issues/881) by @SimoneDutto in [#890](https://github.com/juju/terraform-provider-juju/pull/890)
+* Fix for the offer and integration resource logic by @kian99 in [#893](https://github.com/juju/terraform-provider-juju/pull/893)
+* Fix for finding offers based on endpoints by @SimoneDutto in [#906](https://github.com/juju/terraform-provider-juju/pull/906)
+* Fix for [#473](https://github.com/juju/terraform-provider-juju/issues/473) and [#235](https://github.com/juju/terraform-provider-juju/issues/235) by @kian99 in [#898](https://github.com/juju/terraform-provider-juju/pull/898)
+
 
 DOCUMENTATION
 
-* Addition of related links by @tmihoc in [825](https://github.com/juju/terraform-provider-juju/pull/825).
-* Clarification of cloud and controller authorization and improvement to documentation navigation by @tmihoc in [831](https://github.com/juju/terraform-provider-juju/pull/832).
-* Update to the documentation starter pack by @tmihoc in [836](https://github.com/juju/terraform-provider-juju/pull/836).
+* Add channel and revision example and clarification to the charms by @tmihoc in [#892](https://github.com/juju/terraform-provider-juju/pull/892)
+* Add doc on managing model migrations by @kian99 in [#895](https://github.com/juju/terraform-provider-juju/pull/895)
+
+CI AND MAINTENANCE 
+
+* Added wait-for and add unit tests in CI by @SimoneDutto in [#852](https://github.com/juju/terraform-provider-juju/pull/852)
+* Remove microk8s setup for jaas test and refactor tests by @SimoneDutto in [#861](https://github.com/juju/terraform-provider-juju/pull/861)
+* Re-enable the machine with placement test by @alesstimec in [#840](https://github.com/juju/terraform-provider-juju/pull/840)
+* Added a script to generate env file from switched controller by @SimoneDutto in [#879](https://github.com/juju/terraform-provider-juju/pull/879)
+* Use concurrency in workflows by @kian99 in [#894](https://github.com/juju/terraform-provider-juju/pull/894)
+* Added the security scan workflow by @alesstimec in [#902](https://github.com/juju/terraform-provider-juju/pull/902)
+* Added `SECURITY.md` by @alesstimec in [#904](https://github.com/juju/terraform-provider-juju/pull/904)
+* Added tiobe scan workflow to point to the repo where we run it by @SimoneDutto in [#907](https://github.com/juju/terraform-provider-juju/pull/907)
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v0.22.0...v0.23.0-rc1
+
 
 ## 0.21.1 (August 4, 2025)
 
