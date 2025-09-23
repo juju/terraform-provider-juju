@@ -1,6 +1,6 @@
 resource "juju_storage_pool" "mypool" {
   name            = "mypool"
-  model           = juju_model.development.name
+  model_uuid      = juju_model.development.uuid
   storageprovider = "tmpfs"
   attributes = {
     a = "b"

@@ -18,7 +18,7 @@ To learn more about storage pools, please visit: https://documentation.ubuntu.co
 ```terraform
 resource "juju_storage_pool" "mypool" {
   name            = "mypool"
-  model           = juju_model.development.name
+  model_uuid      = juju_model.development.uuid
   storageprovider = "tmpfs"
   attributes = {
     a = "b"
@@ -32,7 +32,7 @@ resource "juju_storage_pool" "mypool" {
 
 ### Required
 
-- `model` (String) The name of the model where the storage pool will be created.
+- `model_uuid` (String) The UUID of the model where the storage pool will be created.
 - `name` (String) The name of the storage pool.
 - `storageprovider` (String) The storage provider type (e.g., 'rootfs', 'tmpfs', 'loop', or a cloud specific provider).
 

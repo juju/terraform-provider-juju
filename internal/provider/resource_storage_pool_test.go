@@ -37,7 +37,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
-					resource.TestCheckResourceAttr(resourceFullName, "model", modelName),
+					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", "rootfs"),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.a", "b"),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.c", "d"),
@@ -57,7 +57,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
-					resource.TestCheckResourceAttr(resourceFullName, "model", modelName),
+					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", storageProviderName),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.a", "b"),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.c", "d"),
@@ -81,7 +81,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
-					resource.TestCheckResourceAttr(resourceFullName, "model", modelName),
+					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", storageProviderName),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.a", "b"),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.c", "d"),
@@ -102,7 +102,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
-					resource.TestCheckResourceAttr(resourceFullName, "model", modelName),
+					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", storageProviderName),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.a", "benedict"),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.charlie", "d"),
@@ -120,7 +120,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
-					resource.TestCheckResourceAttr(resourceFullName, "model", modelName),
+					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", storageProviderName),
 				),
 			},
@@ -137,7 +137,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
-					resource.TestCheckResourceAttr(resourceFullName, "model", modelName),
+					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", storageProviderName),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.alice", "ourtrueuser0"),
 				),
@@ -148,7 +148,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 
 // Tests that creating a pool with no attributes (nulled in state) works as expected when updated to a value.
 func TestAcc_ResourceStoragePool_CreateNoAttributes(t *testing.T) {
-	modelName := "test-model"
+	modelName := acctest.RandomWithPrefix("test-model")
 	poolName := "test-pool"
 	storageProviderName := "tmpfs"
 
@@ -168,7 +168,7 @@ func TestAcc_ResourceStoragePool_CreateNoAttributes(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
-					resource.TestCheckResourceAttr(resourceFullName, "model", modelName),
+					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", storageProviderName),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.%", "0"),
 				),
@@ -188,7 +188,7 @@ func TestAcc_ResourceStoragePool_CreateNoAttributes(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
-					resource.TestCheckResourceAttr(resourceFullName, "model", modelName),
+					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", storageProviderName),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.a", "benedict"),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.charlie", "d"),
@@ -207,7 +207,7 @@ resource "juju_model" "{{.ModelName}}" {
 
 resource "juju_storage_pool" "{{.PoolName}}" {
 	name = "{{.PoolName}}"
-	model = juju_model.{{.ModelName}}.name
+	model_uuid = juju_model.{{.ModelName}}.uuid
 	storageprovider = "{{.StorageProviderName}}"
 	attributes = {
 	{{- range $key, $value := .PoolAttributes }}
@@ -232,7 +232,7 @@ resource "juju_model" "{{.ModelName}}" {
 
 resource "juju_storage_pool" "{{.PoolName}}" {
 	name = "{{.PoolName}}"
-	model = juju_model.{{.ModelName}}.name
+	model_uuid = juju_model.{{.ModelName}}.uuid
 	storageprovider = "{{.StorageProviderName}}"
 }
 

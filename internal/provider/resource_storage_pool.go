@@ -40,7 +40,6 @@ type storagePoolWaitForInput struct {
 
 type storagePoolResource struct {
 	client *juju.Client
-	config juju.Config
 
 	// context for the logging subsystem.
 	subCtx context.Context
@@ -48,7 +47,7 @@ type storagePoolResource struct {
 
 type storagePoolResourceModel struct {
 	Name            types.String `tfsdk:"name"`
-	Model           types.String `tfsdk:"model"`
+	ModelUUID       types.String `tfsdk:"model_uuid"`
 	StorageProvider types.String `tfsdk:"storageprovider"`
 	Attributes      types.Map    `tfsdk:"attributes"`
 
@@ -61,16 +60,15 @@ func (r *storagePoolResource) Configure(ctx context.Context, req resource.Config
 		return
 	}
 
-	provider, ok := req.ProviderData.(juju.ProviderData)
+	client, ok := req.ProviderData.(*juju.Client)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *juju.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
-	r.client = provider.Client
-	r.config = provider.Config
+	r.client = client
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceStoragePool)
 }
 
@@ -102,8 +100,8 @@ To learn more about storage pools, please visit: https://documentation.ubuntu.co
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"model": schema.StringAttribute{
-				Description: "The name of the model where the storage pool will be created.",
+			"model_uuid": schema.StringAttribute{
+				Description: "The UUID of the model where the storage pool will be created.",
 				Required:    true,
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
@@ -155,7 +153,7 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	if err := r.client.Storage.CreatePool(
-		plan.Model.ValueString(),
+		plan.ModelUUID.ValueString(),
 		plan.Name.ValueString(),
 		plan.StorageProvider.ValueString(),
 		storageProviderAttrsAny,
@@ -175,7 +173,7 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 				)
 			},
 			Input: storagePoolWaitForInput{
-				modelname: plan.Model.ValueString(),
+				modelname: plan.ModelUUID.ValueString(),
 				pname:     plan.Name.ValueString(),
 			},
 			DataAssertions: []wait.Assert[params.StoragePool]{
@@ -194,12 +192,12 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 
 	r.trace("created storage pool", map[string]interface{}{
 		"name":            plan.Name.ValueString(),
-		"model":           plan.Model.ValueString(),
+		"model":           plan.ModelUUID.ValueString(),
 		"storageprovider": plan.StorageProvider.ValueString(),
 	})
 
 	plan.ID = types.StringValue(
-		fmt.Sprintf("%s-%s", plan.Model.ValueString(), plan.Name.ValueString()),
+		fmt.Sprintf("%s-%s", plan.ModelUUID.ValueString(), plan.Name.ValueString()),
 	)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -219,7 +217,7 @@ func (r *storagePoolResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 
 	pool, err := r.client.Storage.GetPool(
-		state.Model.ValueString(),
+		state.ModelUUID.ValueString(),
 		state.Name.ValueString(),
 	)
 	if err != nil {
@@ -274,7 +272,7 @@ func (r *storagePoolResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	if err := r.client.Storage.UpdatePool(
-		state.Model.ValueString(),
+		state.ModelUUID.ValueString(),
 		state.Name.ValueString(),
 		state.StorageProvider.ValueString(),
 		newStorageProviderAttrsAny,
@@ -294,7 +292,7 @@ func (r *storagePoolResource) Update(ctx context.Context, req resource.UpdateReq
 				)
 			},
 			Input: storagePoolWaitForInput{
-				modelname: plan.Model.ValueString(),
+				modelname: plan.ModelUUID.ValueString(),
 				pname:     plan.Name.ValueString(),
 			},
 			DataAssertions: []wait.Assert[params.StoragePool]{
@@ -328,7 +326,7 @@ func (r *storagePoolResource) Update(ctx context.Context, req resource.UpdateReq
 
 	r.trace("updated storage pool", map[string]interface{}{
 		"name":            plan.Name.ValueString(),
-		"model":           plan.Model.ValueString(),
+		"model":           plan.ModelUUID.ValueString(),
 		"storageprovider": plan.StorageProvider.ValueString(),
 	})
 
@@ -349,7 +347,7 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	if err := r.client.Storage.RemovePool(
-		state.Model.ValueString(),
+		state.ModelUUID.ValueString(),
 		state.Name.ValueString(),
 	); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete storage pool resource, got error: %s", err))
@@ -361,7 +359,7 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 		wait.WaitForErrorCfg[storagePoolWaitForInput, params.StoragePool]{
 			Context: ctx,
 			Input: storagePoolWaitForInput{
-				modelname: state.Model.ValueString(),
+				modelname: state.ModelUUID.ValueString(),
 				pname:     state.Name.ValueString(),
 			},
 			GetData: func(input storagePoolWaitForInput) (params.StoragePool, error) {
@@ -370,7 +368,7 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 					input.pname,
 				)
 			},
-			ExpectedErr: juju.NoSuchProviderError,
+			ErrorToWait: juju.NoSuchProviderError,
 		},
 	); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for storage pool, got error: %s", err))
@@ -378,7 +376,7 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 	r.trace("deleted storage pool", map[string]interface{}{
 		"name":            state.Name.ValueString(),
-		"model":           state.Model.ValueString(),
+		"model":           state.ModelUUID.ValueString(),
 		"storageprovider": state.StorageProvider.ValueString(),
 	})
 }
