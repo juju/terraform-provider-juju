@@ -282,7 +282,7 @@ resource "juju_offer" "this" {
 
 func TestAcc_ResourceOfferMultipleEndpoints(t *testing.T) {
 	if testingCloud != MicroK8sTesting {
-		t.Skip(t.Name() + " only runs with LXD")
+		t.Skip(t.Name() + " only runs with Microk8s")
 	}
 	modelName1 := acctest.RandomWithPrefix("tf-test-offer")
 	modelName2 := acctest.RandomWithPrefix("tf-test-offer")

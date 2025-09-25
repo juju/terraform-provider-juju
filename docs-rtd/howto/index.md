@@ -59,4 +59,3 @@ Deploy, configure, integrate, scale, etc., charmed applications. This will autom
 - {ref}`manage-units`
 - {ref}`manage-secrets`
 - {ref}`manage-machines`
-

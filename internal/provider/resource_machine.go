@@ -46,6 +46,7 @@ func NewMachineResource() resource.Resource {
 
 type machineResource struct {
 	client *juju.Client
+	config juju.Config
 
 	// subCtx is the context created with the new tflog subsystem for applications.
 	subCtx context.Context
@@ -93,16 +94,17 @@ func (r *machineResource) Configure(ctx context.Context, req resource.ConfigureR
 		return
 	}
 
-	client, ok := req.ProviderData.(*juju.Client)
+	provider, ok := req.ProviderData.(juju.ProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *juju.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
 
-	r.client = client
+	r.client = provider.Client
+	r.config = provider.Config
 	// Create the local logging subsystem here, using the TF context when creating it.
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceMachine)
 }
@@ -578,13 +580,23 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 			ModelUUID: modelUUID,
 			ID:        machineID,
 		},
-		ErrorToWait:    juju.MachineNotFoundError,
-		NonFatalErrors: []error{juju.RetryReadError},
+		ExpectedErr:    juju.MachineNotFoundError,
+		RetryAllErrors: true,
 	}); err != nil {
-		resp.Diagnostics.AddError(
-			"Wait Error",
-			fmt.Sprintf("Timeout reached waiting for machine %q deletion, got error: %s. Make sure no application units or containers are still running on the machine", machineID, err),
-		)
+		errSummary := "Wait Error"
+		errDetail := fmt.Sprintf("Timeout reached waiting for machine %q deletion, got error: %s.\n"+
+			"Make sure no application units or containers are still running on the machine", machineID, err)
+		if r.config.SkipFailedDeletion {
+			resp.Diagnostics.AddWarning(
+				errSummary,
+				errDetail,
+			)
+		} else {
+			resp.Diagnostics.AddError(
+				errSummary,
+				errDetail,
+			)
+		}
 	}
 }
 

@@ -283,7 +283,7 @@ func (c *modelsClient) ReadModelStatus(modelUUID string) (*ReadModelStatusRespon
 		return nil, err
 	}
 	if len(modelStatus) < 1 {
-		return nil, errors.WithType(err, ModelNotFoundError)
+		return nil, errors.WithType(errors.New("no models found"), ModelNotFoundError)
 	}
 	if len(modelStatus) > 1 {
 		return nil, fmt.Errorf("more than one model returned for UUID: %s", modelUUID)

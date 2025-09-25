@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 # These jobs are small independent tasks which are required, but do not
 # gate any integration or unit tests.
 jobs:

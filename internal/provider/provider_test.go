@@ -207,6 +207,25 @@ func TestProviderAllowsEmptyCACert(t *testing.T) {
 	assert.Equal(t, "x509: certificate signed by unknown authority", err.Summary())
 }
 
+func TestProviderSetWarnOnDeletionErrors(t *testing.T) {
+	jujuProvider := NewJujuProvider("dev", true)
+	t.Setenv(SkipFailedDeletionEnvKey, "false")
+	confResp := configureProvider(t, jujuProvider)
+	providerData, ok := confResp.ResourceData.(juju.ProviderData)
+	require.Truef(t, ok, "ResourceData, not of type juju ProviderData")
+	require.NotNil(t, providerData)
+
+	assert.Equal(t, providerData.Config.SkipFailedDeletion, false)
+
+	t.Setenv(SkipFailedDeletionEnvKey, "true")
+	confResp = configureProvider(t, jujuProvider)
+	providerData, ok = confResp.ResourceData.(juju.ProviderData)
+	require.Truef(t, ok, "ResourceData, not of type juju client")
+	require.NotNil(t, providerData)
+
+	assert.Equal(t, providerData.Config.SkipFailedDeletion, true)
+}
+
 func testAccPreCheck(t *testing.T) {
 	setupAccTestsOnce.Do(func() {
 		setupAcceptanceTests(t)
@@ -224,9 +243,9 @@ func setupAcceptanceTests(t *testing.T) {
 	}
 	confResp := configureProvider(t, Provider)
 	require.Equal(t, confResp.Diagnostics.HasError(), false, fmt.Sprintf("provider configuration failed: %v", confResp.Diagnostics.Errors()))
-	testClient, ok := confResp.ResourceData.(*juju.Client)
-	require.Truef(t, ok, "ResourceData, not of type juju client")
-	TestClient = testClient
+	providerData, ok := confResp.ResourceData.(juju.ProviderData)
+	require.Truef(t, ok, "ResourceData, not of type ProviderData")
+	TestClient = providerData.Client
 	createCloudCredential(t)
 }
 
@@ -328,34 +347,38 @@ func validateJujuTestConfig(t *testing.T) {
 }
 
 func configureProvider(t *testing.T, p provider.Provider) provider.ConfigureResponse {
-	schemaResp := provider.SchemaResponse{}
-	Provider.Schema(context.Background(), provider.SchemaRequest{}, &schemaResp)
-	assert.Equal(t, schemaResp.Diagnostics.HasError(), false)
-
 	conf := jujuProviderModel{}
-
-	mapTypes := map[string]attr.Type{
-		JujuController:   types.StringType,
-		JujuUsername:     types.StringType,
-		JujuPassword:     types.StringType,
-		JujuCACert:       types.StringType,
-		JujuClientID:     types.StringType,
-		JujuClientSecret: types.StringType,
-	}
-
-	val, confObjErr := types.ObjectValueFrom(context.Background(), mapTypes, conf)
-	assert.Equal(t, confObjErr.HasError(), false)
-
-	tfval, tfValErr := val.ToTerraformValue(context.Background())
-	assert.Equal(t, tfValErr, nil)
-
-	c := tfsdk.Config{Schema: schemaResp.Schema, Raw: tfval}
-	confReq := provider.ConfigureRequest{Config: c}
+	confReq := newConfigureRequest(t, conf)
 	confResp := provider.ConfigureResponse{Diagnostics: diag.Diagnostics{}}
 
 	p.Configure(context.Background(), confReq, &confResp)
 
 	return confResp
+}
+
+func newConfigureRequest(t *testing.T, conf jujuProviderModel) provider.ConfigureRequest {
+	schemaResp := provider.SchemaResponse{}
+	Provider.Schema(context.Background(), provider.SchemaRequest{}, &schemaResp)
+	assert.Equal(t, schemaResp.Diagnostics.HasError(), false)
+
+	mapTypes := map[string]attr.Type{
+		JujuController:     types.StringType,
+		JujuUsername:       types.StringType,
+		JujuPassword:       types.StringType,
+		JujuCACert:         types.StringType,
+		JujuClientID:       types.StringType,
+		JujuClientSecret:   types.StringType,
+		SkipFailedDeletion: types.BoolType,
+	}
+
+	val, confObjErr := types.ObjectValueFrom(context.Background(), mapTypes, conf)
+	assert.Equalf(t, confObjErr.HasError(), false, "failed to create config object: %v", confObjErr)
+
+	tfval, tfValErr := val.ToTerraformValue(context.Background())
+	assert.Equal(t, tfValErr, nil)
+
+	c := tfsdk.Config{Schema: schemaResp.Schema, Raw: tfval}
+	return provider.ConfigureRequest{Config: c}
 }
 
 func TestFrameworkProviderSchema(t *testing.T) {
@@ -365,7 +388,144 @@ func TestFrameworkProviderSchema(t *testing.T) {
 	resp := provider.SchemaResponse{}
 	jujuProvider.Schema(context.Background(), req, &resp)
 	assert.Equal(t, resp.Diagnostics.HasError(), false)
-	assert.Len(t, resp.Schema.Attributes, 6)
+	assert.Len(t, resp.Schema.Attributes, 7)
+}
+
+// TestGetJujuProviderModel tests the getJujuProviderModel function.
+// Note that getJujuProviderModel falls back to "live discovery" if
+// required configuration are missing. This means that testing for
+// missing required fields may/may not work depending on the
+// environment the tests are run in.
+func TestGetJujuProviderModel(t *testing.T) {
+	// Skip this test when running under JAAS
+	// as the JAAS provided env vars interfere.
+	SkipJAAS(t)
+	tests := []struct {
+		name           string
+		plan           jujuProviderModel
+		setEnv         func(t *testing.T)
+		wantErr        bool
+		wantErrSummary string
+		wantValues     jujuProviderModel
+	}{
+		{
+			name: "ValidPlanData",
+			plan: jujuProviderModel{
+				ControllerAddrs:    types.StringValue("localhost:17070"),
+				UserName:           types.StringValue("user"),
+				Password:           types.StringValue("pass"),
+				CACert:             types.StringValue("cert"),
+				SkipFailedDeletion: types.BoolValue(true),
+			},
+			wantErr: false,
+			wantValues: jujuProviderModel{
+				ControllerAddrs:    types.StringValue("localhost:17070"),
+				UserName:           types.StringValue("user"),
+				Password:           types.StringValue("pass"),
+				CACert:             types.StringValue("cert"),
+				SkipFailedDeletion: types.BoolValue(true),
+			},
+		},
+		{
+			name: "BothLoginMethodsSet",
+			plan: jujuProviderModel{
+				ControllerAddrs: types.StringValue("localhost:17070"),
+				UserName:        types.StringValue("user"),
+				Password:        types.StringValue("pass"),
+				ClientID:        types.StringValue("clientid"),
+				ClientSecret:    types.StringValue("clientsecret"),
+			},
+			wantErr:        true,
+			wantErrSummary: "Only username and password OR client id and client secret may be used.",
+		},
+		{
+			name: "EnvVarsUsed",
+			plan: jujuProviderModel{},
+			setEnv: func(t *testing.T) {
+				t.Setenv(JujuControllerEnvKey, "env-controller:17070")
+				t.Setenv(JujuUsernameEnvKey, "env-user")
+				t.Setenv(JujuPasswordEnvKey, "env-pass")
+				t.Setenv(JujuCACertEnvKey, "env-cert")
+				t.Setenv(SkipFailedDeletionEnvKey, "false")
+			},
+			wantErr: false,
+			wantValues: jujuProviderModel{
+				ControllerAddrs:    types.StringValue("env-controller:17070"),
+				UserName:           types.StringValue("env-user"),
+				Password:           types.StringValue("env-pass"),
+				CACert:             types.StringValue("env-cert"),
+				SkipFailedDeletion: types.BoolValue(false),
+			},
+		},
+		{
+			name: "MixPlanAndEnvVars",
+			plan: jujuProviderModel{
+				ControllerAddrs: types.StringValue("localhost:17070"),
+				UserName:        types.StringValue("user"),
+				CACert:          types.StringValue("cert"),
+			},
+			setEnv: func(t *testing.T) {
+				t.Setenv(JujuPasswordEnvKey, "env-pass")
+				t.Setenv(SkipFailedDeletionEnvKey, "true")
+			},
+			wantErr: false,
+			wantValues: jujuProviderModel{
+				ControllerAddrs:    types.StringValue("localhost:17070"),
+				UserName:           types.StringValue("user"),
+				Password:           types.StringValue("env-pass"),
+				CACert:             types.StringValue("cert"),
+				SkipFailedDeletion: types.BoolValue(true),
+			},
+		},
+		{
+			name: "ConfigOverridesEnvVars",
+			plan: jujuProviderModel{
+				ControllerAddrs:    types.StringValue("localhost:17070"),
+				UserName:           types.StringValue("user"),
+				Password:           types.StringValue("pass"),
+				CACert:             types.StringValue("cert"),
+				SkipFailedDeletion: types.BoolValue(false),
+			},
+			setEnv: func(t *testing.T) {
+				t.Setenv(JujuUsernameEnvKey, "env-user")
+				t.Setenv(JujuPasswordEnvKey, "env-pass")
+			},
+			wantErr: false,
+			wantValues: jujuProviderModel{
+				ControllerAddrs:    types.StringValue("localhost:17070"),
+				UserName:           types.StringValue("user"),
+				Password:           types.StringValue("pass"),
+				CACert:             types.StringValue("cert"),
+				SkipFailedDeletion: types.BoolValue(false),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setEnv != nil {
+				tt.setEnv(t)
+			}
+
+			confReq := newConfigureRequest(t, tt.plan)
+			model, diags := getJujuProviderModel(context.Background(), confReq)
+
+			if tt.wantErrSummary != "" {
+				require.True(t, diags.HasError())
+				found := false
+				for _, err := range diags.Errors() {
+					if err.Summary() == tt.wantErrSummary {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "Expected error for %s", tt.name)
+			} else {
+				require.False(t, diags.HasError(), "Unexpected error :%v", diags.Errors())
+				assert.Equal(t, tt.wantValues, model)
+			}
+		})
+	}
 }
 
 func expectedResourceOwner() string {

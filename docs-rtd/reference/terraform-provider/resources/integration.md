@@ -92,11 +92,44 @@ When creating this resource the `offer_url` property will show `(known after app
 This is due to an integration requiring a name/endpoint combination or an offer_url, but not both
 bits of data together.
 
+#### Cross-model relations
+
+From v0.23, when integrating with an offer (i.e. when specifying the `offer_url`), the provider will create a remote application name with the format `<remote-app>-<local-app>-<interface>`. For example,
+when relating a local application called `discourse` with an offer url of the form `admin/dbModel.postgresql`, using the `database` interface, the remote application will have the name `postgresql-discourse-database`.
+
+In previous versions of the provider, the remote application would always have the same name as the application in the offer url, i.e. `postgresql` in the example above.
+
+This ensures that local applications have a 1:1 relation with remote applications.
+
+This change is backwards compatible and existing integrations will continue to work. However, take care when destroying integrations created by previous versions of the provider. If two apps relate the same remote application (e.g. if the offer provides multiple endpoints or two apps rely on the same offer/endpoint) and one of the integrations is removed, the other will also be affected.
+
+Before v0.23:
+```{mermaid}
+flowchart LR
+    A[App A] -->|Integrate| C(Remote APP)
+    B[App B] -->|Integrate| C
+    C -->|Cross Model| D[Offer]
+    D--> E[App C]
+```
+
+After v0.23:
+```{mermaid}
+flowchart LR
+    A[App A] -->|Integrate| C(Remote App 1)
+    B[App B] -->|Integrate| D(Remote App 2)
+    C -->|Cross Model| E[Offer]
+    D -->|Cross Model| E[Offer]
+    E--> F[App C]
+```
+
 ## Import
 
 Import is supported using the following syntax:
 
 ```shell
-# Integrations can be imported by using the format: model_uuid:provider_app_name:endpoint:requirer_app_name:endpoint, for example:
+# Integrations can be imported by using the format: model_uuid:provider_app_name:endpoint:requirer_app_name:endpoint.
+# For integrations with an offer url, replace the requirer_app_name with the remote application name. The remote app
+# name can be found by running `juju status` and looking for the SAAS heading.
+# For example:
 $ terraform import juju_integration.wordpress_db 4b6bd192-13bb-489d-b7a7-06f6efc2928d:percona-cluster:server:wordpress:db
 ```
