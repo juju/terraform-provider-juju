@@ -50,17 +50,17 @@ func (m *MockConnection) EXPECT() *MockConnectionMockRecorder {
 }
 
 // APICall mocks base method.
-func (m *MockConnection) APICall(objType string, version int, id, request string, params, response any) error {
+func (m *MockConnection) APICall(objType string, arg1 int, id, request string, params, response any) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "APICall", objType, version, id, request, params, response)
+	ret := m.ctrl.Call(m, "APICall", objType, arg1, id, request, params, response)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // APICall indicates an expected call of APICall.
-func (mr *MockConnectionMockRecorder) APICall(objType, version, id, request, params, response any) *gomock.Call {
+func (mr *MockConnectionMockRecorder) APICall(objType, arg1, id, request, params, response any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "APICall", reflect.TypeOf((*MockConnection)(nil).APICall), objType, version, id, request, params, response)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "APICall", reflect.TypeOf((*MockConnection)(nil).APICall), objType, arg1, id, request, params, response)
 }
 
 // APIHostPorts mocks base method.
