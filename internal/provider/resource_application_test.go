@@ -1598,8 +1598,8 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "this" {
-  model = juju_model.this.name
-  name = "test-app"
+  model_uuid = juju_model.this.uuid
+  name       = "test-app"
   charm {
     name     = "juju-qa-test"
 	channel  = "%s"
@@ -1724,8 +1724,8 @@ func testAccResourceApplicationUpdatesCharmWithRevision(modelName string, channe
 		}
 
 		resource "juju_application" "this" {
-		  model = juju_model.this.name
-		  name = "test-app"
+		  model_uuid = juju_model.this.uuid
+		  name       = "test-app"
 		  charm {
 			name    = "juju-qa-test"
 			channel = "{{.Channel}}"
