@@ -74,7 +74,8 @@ func NewApplicationResource() resource.Resource {
 }
 
 type applicationResource struct {
-	client *juju.Client
+	client         *juju.Client
+	providerConfig juju.Config
 
 	// subCtx is the context created with the new tflog subsystem for applications.
 	subCtx context.Context
@@ -127,16 +128,17 @@ func (r *applicationResource) Configure(ctx context.Context, req resource.Config
 		return
 	}
 
-	client, ok := req.ProviderData.(*juju.Client)
+	provider, ok := req.ProviderData.(juju.ProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *juju.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
 
-	r.client = client
+	r.client = provider.Client
+	r.providerConfig = provider.Config
 	// Create the local logging subsystem here, using the TF context when creating it.
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceApplication)
 }
@@ -935,13 +937,18 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 		planCharm := planCharms[0]
 		stateCharm := stateCharms[0]
-		if !planCharm.Channel.Equal(stateCharm.Channel) && !planCharm.Revision.Equal(stateCharm.Revision) {
-			resp.Diagnostics.AddWarning("Not Supported", "Changing an application's revision and channel at the same time.")
-		} else if !planCharm.Channel.Equal(stateCharm.Channel) {
+		if !planCharm.Channel.Equal(stateCharm.Channel) {
 			updateApplicationInput.Channel = planCharm.Channel.ValueString()
-		} else if !planCharm.Revision.Equal(stateCharm.Revision) {
-			updateApplicationInput.Revision = intPtr(planCharm.Revision)
+		} else {
+			updateApplicationInput.Channel = stateCharm.Channel.ValueString()
 		}
+
+		if !planCharm.Revision.Equal(stateCharm.Revision) {
+			updateApplicationInput.Revision = intPtr(planCharm.Revision)
+		} else {
+			updateApplicationInput.Revision = intPtr(stateCharm.Revision)
+		}
+
 		if !planCharm.Base.Equal(stateCharm.Base) {
 			updateApplicationInput.Base = planCharm.Base.ValueString()
 		}
@@ -1324,16 +1331,24 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 				ModelUUID: modelUUID,
 				AppName:   appName,
 			},
-			ErrorToWait:    juju.ApplicationNotFoundError,
-			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError, juju.StorageNotFoundError},
+			ExpectedErr:    juju.ApplicationNotFoundError,
+			RetryAllErrors: true,
 		},
 	)
 	if err != nil {
-		// AddWarning is used instead of AddError to make sure that the resource is removed from state.
-		resp.Diagnostics.AddWarning(
-			"Client Error",
-			fmt.Sprintf(`Unable to complete application %s deletion due to error %v, there might be dangling resources. 
-Make sure to manually delete them.`, appName, err))
+		errSummary := "Client Error"
+		errDetail := fmt.Sprintf("Unable to complete application %q deletion: %v\n", appName, err)
+		if r.providerConfig.SkipFailedDeletion {
+			resp.Diagnostics.AddWarning(
+				errSummary,
+				errDetail+"There might be dangling resources requiring manual intervion.\n",
+			)
+		} else {
+			resp.Diagnostics.AddError(
+				errSummary,
+				errDetail,
+			)
+		}
 		return
 	}
 

@@ -114,7 +114,10 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 		return nil, err
 	}
 
-	applications := parseApplications(status.RemoteApplications, response.Endpoints)
+	applications, err := parseApplications(status.RemoteApplications, response.Endpoints)
+	if err != nil {
+		return nil, err
+	}
 	c.Debugf("related apps", map[string]any{"apps": applications})
 
 	return &CreateIntegrationResponse{
@@ -176,59 +179,12 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 		return nil, NewIntegrationNotFoundError(modelUUID.Id())
 	}
 
-	applications := parseApplications(status.RemoteApplications, integration.Endpoints)
+	applications, err := parseApplications(status.RemoteApplications, integration.Endpoints)
+	if err != nil {
+		return nil, err
+	}
 
 	return &ReadIntegrationResponse{
-		Applications: applications,
-	}, nil
-}
-
-func (c integrationsClient) UpdateIntegration(input *UpdateIntegrationInput) (*UpdateIntegrationResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	client := apiapplication.NewClient(conn)
-
-	listViaCIDRs := splitCommaDelimitedList(input.ViaCIDRs)
-	response, err := client.AddRelation(
-		input.Endpoints,
-		listViaCIDRs,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	//TODO: check integration status
-
-	//If the length of this slice is only 1 then the integration has already been destroyed by the remote offer being removed
-	//If the length is 2 we need to destroy the integration
-	if len(input.OldEndpoints) == 2 {
-		var force bool = false
-		var timeout time.Duration = 30 * time.Second
-		err = client.DestroyRelation(
-			&force,
-			&timeout,
-			input.OldEndpoints...,
-		)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	//TODO: check deletion success and force?
-
-	//integration is updated - fetch the status in order to validate
-	status, err := c.ModelStatus(input.ModelUUID, conn)
-	if err != nil {
-		return nil, err
-	}
-
-	applications := parseApplications(status.RemoteApplications, response.Endpoints)
-
-	return &UpdateIntegrationResponse{
 		Applications: applications,
 	}, nil
 }
@@ -255,25 +211,31 @@ func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
 }
 
 // This function takes remote applications and endpoint status and combines them into a more usable format to return to the provider
-func parseApplications(remoteApplications map[string]params.RemoteApplicationStatus, src interface{}) []Application {
+func parseApplications(remoteApplications map[string]params.RemoteApplicationStatus, src interface{}) ([]Application, error) {
 	applications := make([]Application, 0, 2)
 
 	switch endpoints := src.(type) {
 	case []params.EndpointStatus:
-		if len(remoteApplications) != 0 {
-			for index, endpoint := range endpoints {
-				if remote, exists := remoteApplications[endpoint.ApplicationName]; exists {
-					a := Application{
-						Name:     endpoint.ApplicationName,
-						Endpoint: endpoint.Name,
-						Role:     endpoint.Role,
-						OfferURL: &remote.OfferURL,
+		for index, endpoint := range endpoints {
+			if remote, exists := remoteApplications[endpoint.ApplicationName]; exists {
+				if remote.OfferURL != "" {
+					url, err := removeOfferURLSource(remote.OfferURL)
+					if err != nil {
+						return nil, err
 					}
-					applications = append(applications, a)
-
-					endpoints[index] = endpoints[len(endpoints)-1]
-					endpoints = endpoints[:len(endpoints)-1]
+					remote.OfferURL = url
 				}
+
+				a := Application{
+					Name:     endpoint.ApplicationName,
+					Endpoint: endpoint.Name,
+					Role:     endpoint.Role,
+					OfferURL: &remote.OfferURL,
+				}
+				applications = append(applications, a)
+
+				endpoints[index] = endpoints[len(endpoints)-1]
+				endpoints = endpoints[:len(endpoints)-1]
 			}
 		}
 		for _, endpoint := range endpoints {
@@ -312,5 +274,5 @@ func parseApplications(remoteApplications map[string]params.RemoteApplicationSta
 		}
 	}
 
-	return applications
+	return applications, nil
 }

@@ -16,6 +16,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Ensure project builds before running testing matrix
   # This is a small job better suited to github runners, due to
@@ -87,6 +91,9 @@ jobs:
           sudo lxc network create public-br ipv4.address=10.170.80.1/24 ipv4.nat=true ipv6.address=none ipv6.nat=false
       - name: "Set environment to configure provider"
         # language=bash
+        # JUJU_SKIP_FAILED_DELETION is set to avoid issues with tests failing
+        # on resource deletion. The issue in Juju is unclear but models and apps
+        # fail to be removed sometimes.
         run: |
           CONTROLLER=$(juju whoami --format yaml | yq .controller)
 
@@ -99,6 +106,7 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
           echo "TEST_MANAGEMENT_BR=10.150.40.0/24" >> $GITHUB_ENV
           echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
+          echo "JUJU_SKIP_FAILED_DELETION=true" >> $GITHUB_ENV
       - name: "Set additional environment for LXD"
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
         # language=bash

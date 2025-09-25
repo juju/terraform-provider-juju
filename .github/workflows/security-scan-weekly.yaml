@@ -1,0 +1,109 @@
+name: Security Scan Weekly
+
+on:
+  schedule:
+    - cron: "0 0 * * 1" # Runs every Monday at 00:00 UTC.
+  workflow_dispatch:
+
+jobs:
+  repo-security-scan:
+    runs-on: [ubuntu-latest]
+    name: Repo Security Scan
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      #########
+      # Trivy #
+      #########
+      - name: Run Trivy vulnerability scanner in repo mode
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          scan-type: 'fs'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+        env:
+          TRIVY_DB_REPOSITORY: ghcr.io/canonical/comsys-build-tools/trivy-db:2
+  
+      - name: Upload trivy scan results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-security-scan-results
+          path: 'trivy-results.sarif'
+  
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+  
+      ##########
+      # Govuln #
+      ##########
+      - name: Go Vulnerability Check
+        id: govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          output-format: 'sarif'
+          output-file: 'govuln-results.sarif'
+          go-version-file: go.mod
+          repo-checkout: false
+  
+      - name: Upload govuln scan results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: govuln-security-scan-results
+          path: 'govuln-results.sarif'
+      
+      # Filter the SARIF to exclude rules that cause
+      # a large threadflow count and prevent the file
+      # from being uploaded to the Security tab.
+      # See https://github.com/github/codeql-action/issues/1245
+      - name: filter-sarif
+        uses: advanced-security/filter-sarif@v1
+        with:
+          patterns: |
+            -go.mod:GO-2024-3010
+            -go.mod:GO-2024-3040
+            -go.mod:GO-2024-3175
+          input: 'govuln-results.sarif'
+          output: 'govuln-results-filtered.sarif'
+  
+      - name: Upload govuln scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'govuln-results-filtered.sarif'
+      
+      #############
+      # KEV Check #
+      #############
+
+      - name: Fetch KEV list from CISA
+        shell: bash
+        run: |
+          curl --fail --retry 3 -s -o ./kev.json https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
+
+      - name: Compare Trivy results with KEV list
+        run: ./tools/compare_kev_vulnerabilities.sh 2>&1 | tee kev-trivy-fs-scan.txt
+        shell: bash
+        env:
+          VULN_REPORT_FILE: trivy-results.sarif
+          KNOWN_CVES_FILE: kev.json
+
+      - name: Upload KEV Trivy scan results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kev-trivy-fs-scan-results
+          path: 'kev-trivy-fs-scan.txt'
+
+      - name: Compare govuln results with KEV list
+        run: ./tools/compare_kev_vulnerabilities.sh 2>&1 | tee kev-govuln-scan.txt
+        shell: bash
+        env:
+          VULN_REPORT_FILE: govuln-results.sarif
+          KNOWN_CVES_FILE: kev.json
+
+      - name: Upload KEV Govuln scan results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kev-govuln-scan-results
+          path: 'kev-govuln-scan.txt'

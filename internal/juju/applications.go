@@ -1533,7 +1533,8 @@ func (c applicationsClient) computeCharmID(
 		// the ID. This needs to be fixed in Juju.
 		newOrigin.ID = ""
 		newOrigin.Hash = ""
-	} else if input.Channel != "" {
+	}
+	if input.Channel != "" {
 		parsedChannel, err := charm.ParseChannel(input.Channel)
 		if err != nil {
 			return apiapplication.CharmID{}, err
@@ -1573,7 +1574,8 @@ func (c applicationsClient) computeCharmID(
 		// The idea is that deploying with ID and Hash set to "" will force Juju to find the revision set by the user.
 		oldOrigin.ID = newOrigin.ID
 		oldOrigin.Hash = newOrigin.Hash
-	} else if input.Channel != "" {
+	}
+	if input.Channel != "" {
 		oldOrigin.Track = newOrigin.Track
 		oldOrigin.Risk = newOrigin.Risk
 		oldOrigin.Branch = newOrigin.Branch

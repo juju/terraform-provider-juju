@@ -234,9 +234,9 @@ redirects = {}
 
 linkcheck_ignore = [
     "http://127.0.0.1:8000",
-    "https://github.com/canonical/ACME/*"
+    "https://github.com/canonical/ACME/*",
+    "https://developer.hashicorp.com/terraform/*",
     ]
-
 
 # A regex list of URLs where anchors are ignored by 'make linkcheck'
 
@@ -245,6 +245,7 @@ linkcheck_anchors_ignore_for_url = [
     r"https://juju\.is/.*",
     r"https://matrix\.to/.*",
     r"https://registry\.terraform\.io/.*",
+    r"https://developer\.hashicorp\.com/.*",
 ]
 
 # give linkcheck multiple tries on failure
@@ -291,14 +292,15 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx_sitemap",
     # our own:
-    'sphinx_design',
+    "sphinx_design",
     # Make it possible to link to related RTD projects using their internal anchors
     # with, e.g., {external+ops:ref}`manage-configurations`:
-    'sphinxext.rediraffe',
+    "sphinxext.rediraffe",
     # Display an external link icon and open link in new tab:
     # new_tab_link_show_external_link_icon must also be set to True
-    'sphinx_new_tab_link',
-    'sphinxcontrib.lightbox2',
+    "sphinx_new_tab_link",
+    "sphinxcontrib.lightbox2",
+    "sphinxcontrib.mermaid",
     ]
 
 # Extension configs:

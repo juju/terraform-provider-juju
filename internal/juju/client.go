@@ -52,6 +52,7 @@ type ControllerConfiguration struct {
 	ClientSecret        string
 }
 
+// Client holds the various juju api clients used to interact with the juju controller.
 type Client struct {
 	Applications applicationsClient
 	Machines     *machinesClient
@@ -68,6 +69,26 @@ type Client struct {
 
 	isJAAS   func() bool
 	username string
+}
+
+// Config holds configuration options for the Juju provider.
+type Config struct {
+	// SkipFailedDeletion indicates whether the provider should issue warnings
+	// instead of errors and continue on failed deletions.
+	//
+	// This config acts as an escape hatch for scenarios where bugs exist in Juju that prevent
+	// a resource from being deleted. If set, the resource is removed from state but might
+	// leave dangling resources in the Juju controller left for the user to clean up.
+	// This avoids making the user manipulate Terraform state manually to get rid of the resource.
+	SkipFailedDeletion bool
+}
+
+// ProviderData holds data provided to resources and data sources.
+//
+// It holds the Juju client and other configuration options.
+type ProviderData struct {
+	Client *Client
+	Config Config
 }
 
 // ConnectionRefusedError is a global variable that can be used to check

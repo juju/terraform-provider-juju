@@ -352,7 +352,6 @@ func TestAcc_ResourceJaasAccessModel_UpgradeProvider(t *testing.T) {
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccResourceJaasAccessModelTwoUsers(modelName, "writer", userOne, userTwo),
-				PlanOnly:                 true,
 			},
 		},
 	})

@@ -340,6 +340,41 @@ func TestAcc_CharmUpdates(t *testing.T) {
 	})
 }
 
+func TestAcc_CharmUpdatesWithRevision(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-charmupdates")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationUpdatesCharmWithRevision(modelName, "2.0/stable", ""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "2.0/stable"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "22"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationUpdatesCharmWithRevision(modelName, "2.0/edge", "23"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "2.0/edge"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "23"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationUpdatesCharmWithRevision(modelName, "2.0/stable", "22"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "2.0/stable"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "22"),
+				),
+			},
+		},
+	})
+}
+
 func TestAcc_CharmUpdateBase(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-charmbaseupdates")
 
@@ -670,6 +705,14 @@ func TestAcc_CustomResourcesRemovedFromPlanMicrok8s(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
+			},
+			{
+				// Add a dummy final step to allow the app to settle before destroying the environment.
+				PreConfig: func() {
+					fmt.Println("Final wait before destroying the model")
+					time.Sleep(30 * time.Second)
+				},
+				RefreshState: true,
 			},
 		},
 	})
@@ -1063,7 +1106,6 @@ func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccResourceApplicationBasic(modelName, appName),
-				PlanOnly:                 true,
 			},
 		},
 	})
@@ -1228,14 +1270,6 @@ func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application."+appName, "storage.0.pool", "lxd"),
 				),
 			},
-			{
-				Config: testAccResourceApplicationStorageLXD(modelName, appName, storageConstraints),
-				PreConfig: func() {
-					// This sleep is necessary because issuing a destroy on a newly created application,
-					// can put Juju in a state where the application is stucked in "waiting" and it cannot be destroyed.
-					time.Sleep(1 * time.Minute)
-				},
-			},
 		},
 	})
 }
@@ -1314,6 +1348,22 @@ func TestAcc_ResourceApplication_UnsetConfigUsingNull(t *testing.T) {
 			},
 		},
 	})
+}
+
+func TestAcc_ResourceApplicationChangingChannel(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationWithChannelAndRevision(modelName, "latest/candidate", 20),
+			},
+			{
+				Config: testAccResourceApplicationWithChannelAndRevision(modelName, "latest/stable", 20),
+			},
+		}})
 }
 
 func testAccApplicationConfigNull(modelName, appName, configValue string, includeConfig bool) string {
@@ -1541,6 +1591,24 @@ resource "juju_application" "this" {
 `, modelName, channel, resourceName, customResource)
 }
 
+func testAccResourceApplicationWithChannelAndRevision(modelName, channel string, revision int) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model = juju_model.this.name
+  name = "test-app"
+  charm {
+    name     = "juju-qa-test"
+	channel  = "%s"
+	revision = %d
+  }
+}
+`, modelName, channel, revision)
+}
+
 func testAccResourceApplicationWithoutCustomResources(modelName, channel string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
@@ -1647,6 +1715,30 @@ func testAccResourceApplicationUpdatesCharm(modelName string, channel string) st
 		}
 		`, modelName, channel)
 	}
+}
+
+func testAccResourceApplicationUpdatesCharmWithRevision(modelName string, channel string, revision string) string {
+	return internaltesting.GetStringFromTemplateWithData("testAccResourceApplicationUpdatesCharm", `
+		resource "juju_model" "this" {
+		  name = "{{.ModelName}}"
+		}
+
+		resource "juju_application" "this" {
+		  model = juju_model.this.name
+		  name = "test-app"
+		  charm {
+			name    = "juju-qa-test"
+			channel = "{{.Channel}}"
+			{{- if .Revision }}
+			revision = "{{.Revision}}"
+			{{- end }}
+		  }
+		}
+		`, internaltesting.TemplateData{
+		"ModelName": modelName,
+		"Channel":   channel,
+		"Revision":  revision,
+	})
 }
 
 func testAccApplicationUpdateBaseCharm(modelName string, base string) string {

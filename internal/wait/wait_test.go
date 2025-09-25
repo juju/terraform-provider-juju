@@ -136,7 +136,7 @@ func TestWaitForError(t *testing.T) {
 		Context:        t.Context(),
 		GetData:        testFunc,
 		Input:          "test",
-		ErrorToWait:    juju.ApplicationNotFoundError,
+		ExpectedErr:    juju.ApplicationNotFoundError,
 		NonFatalErrors: []error{juju.RetryReadError},
 		RetryConf: &wait.RetryConf{
 			MaxDuration: 60 * time.Second,
@@ -153,7 +153,45 @@ func TestWaitForError(t *testing.T) {
 	}
 }
 
-func TestWaitForErrorMaxDuration(t *testing.T) {
+func TestWaitForError_RetryAllErrors(t *testing.T) {
+	autoAdvancingClock := createAutoAdvancingClock(time.Now())
+	counter := atomic.Int32{}
+	testFunc := func(string) (string, error) {
+		switch counter.Load() {
+		case 0:
+			counter.Add(1)
+			return "", juju.RetryReadError
+		case 1:
+			counter.Add(1)
+			return "", errors.New("some other error")
+		case 2:
+			counter.Add(1)
+			return "", errors.New("yet another error")
+		}
+		return "", juju.ApplicationNotFoundError
+	}
+	err := wait.WaitForError(wait.WaitForErrorCfg[string, string]{
+		Context:        t.Context(),
+		GetData:        testFunc,
+		Input:          "test",
+		ExpectedErr:    juju.ApplicationNotFoundError,
+		RetryAllErrors: true,
+		RetryConf: &wait.RetryConf{
+			MaxDuration: 60 * time.Second,
+			Delay:       1 * time.Second,
+			Clock:       autoAdvancingClock,
+			MaxDelay:    time.Second,
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if counter.Load() != 3 {
+		t.Fatalf("expected 3 calls, got %d", counter.Load())
+	}
+}
+
+func TestWaitForError_MaxDuration(t *testing.T) {
 	now := time.Now()
 	autoAdvancingClock := createAutoAdvancingClock(now)
 	testFunc := func(string) (string, error) {
@@ -163,7 +201,7 @@ func TestWaitForErrorMaxDuration(t *testing.T) {
 		Context:        t.Context(),
 		GetData:        testFunc,
 		Input:          "test",
-		ErrorToWait:    juju.ApplicationNotFoundError,
+		ExpectedErr:    juju.ApplicationNotFoundError,
 		NonFatalErrors: []error{juju.RetryReadError},
 		RetryConf: &wait.RetryConf{
 			MaxDuration: 1 * time.Second,
