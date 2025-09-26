@@ -21,24 +21,23 @@ type sshKeysClient struct {
 
 type CreateSSHKeyInput struct {
 	Username  string
-	ModelName string
+	ModelUUID string
 	Payload   string
 }
 
 type ReadSSHKeyInput struct {
 	Username      string
-	ModelName     string
+	ModelUUID     string
 	KeyIdentifier string
 }
 
 type ReadSSHKeyOutput struct {
-	ModelName string
-	Payload   string
+	Payload string
 }
 
 type DeleteSSHKeyInput struct {
 	Username      string
-	ModelName     string
+	ModelUUID     string
 	KeyIdentifier string
 }
 
@@ -52,7 +51,7 @@ func newSSHKeysClient(sc SharedClient) *sshKeysClient {
 func (c *sshKeysClient) CreateSSHKey(input *CreateSSHKeyInput) error {
 	c.KeyLock.Lock()
 	defer c.KeyLock.Unlock()
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -86,7 +85,7 @@ func (c *sshKeysClient) CreateSSHKey(input *CreateSSHKeyInput) error {
 func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, error) {
 	c.KeyLock.RLock()
 	defer c.KeyLock.RUnlock()
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +94,7 @@ func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, e
 	client := keymanager.NewClient(conn)
 
 	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
-	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.<
+	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
 	returnedKeys, err := client.ListKeys(ssh.FullKeys, input.Username)
 	if err != nil {
 		return nil, err
@@ -109,8 +108,7 @@ func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, e
 			}
 			if input.KeyIdentifier == fingerprint || input.KeyIdentifier == comment {
 				return &ReadSSHKeyOutput{
-					ModelName: input.ModelName,
-					Payload:   k,
+					Payload: k,
 				}, nil
 			}
 		}
@@ -122,7 +120,7 @@ func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, e
 func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	c.KeyLock.Lock()
 	defer c.KeyLock.Unlock()
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
 	}

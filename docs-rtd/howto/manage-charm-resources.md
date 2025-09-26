@@ -13,7 +13,7 @@ To specify the resource(s) to be deployed with your charm, in your Terraform pla
 ```terraform
 resource "juju_application" "application_one" {
   name = "my-application"
-  model = juju_model.testmodel.name
+  model_uuid = juju_model.testmodel.uuid
 
   charm {
     name = "juju-qa-test"

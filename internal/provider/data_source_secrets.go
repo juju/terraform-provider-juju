@@ -9,9 +9,11 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
+	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -32,8 +34,8 @@ type secretDataSource struct {
 // secretDataSourceModel is the juju data stored by terraform.
 // tfsdk must match secret data source schema attribute names.
 type secretDataSourceModel struct {
-	// Model to which the secret belongs.
-	Model types.String `tfsdk:"model"`
+	// ModelUUID to which the secret belongs.
+	ModelUUID types.String `tfsdk:"model_uuid"`
 	// Name of the secret in the model.
 	Name types.String `tfsdk:"name"`
 	// SecretId is the ID of the secret.
@@ -50,9 +52,12 @@ func (d *secretDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 	resp.Schema = schema.Schema{
 		Description: "A data source representing a Juju Secret.",
 		Attributes: map[string]schema.Attribute{
-			"model": schema.StringAttribute{
-				Description: "The name of the model containing the secret.",
+			"model_uuid": schema.StringAttribute{
+				Description: "The uuid of the model containing the secret.",
 				Required:    true,
+				Validators: []validator.String{
+					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
+				},
 			},
 			"name": schema.StringAttribute{
 				Description: "The name of the secret.",
@@ -107,7 +112,7 @@ func (d *secretDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	}
 
 	readSecretInput := juju.ReadSecretInput{
-		ModelName: data.Model.ValueString(),
+		ModelUUID: data.ModelUUID.ValueString(),
 	}
 	if data.SecretId.ValueString() == "" {
 		readSecretInput.Name = data.Name.ValueStringPointer()

@@ -15,10 +15,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
+	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -26,6 +28,7 @@ import (
 var _ resource.Resource = &offerResource{}
 var _ resource.ResourceWithConfigure = &offerResource{}
 var _ resource.ResourceWithImportState = &offerResource{}
+var _ resource.ResourceWithUpgradeState = &offerResource{}
 
 func NewOfferResource() resource.Resource {
 	return &offerResource{}
@@ -38,24 +41,30 @@ type offerResource struct {
 	subCtx context.Context
 }
 
-type offerResourceModelV0 struct {
-	ModelName       types.String `tfsdk:"model"`
+type offerResourceModel struct {
 	OfferName       types.String `tfsdk:"name"`
 	ApplicationName types.String `tfsdk:"application_name"`
-	EndpointName    types.String `tfsdk:"endpoint"`
 	URL             types.String `tfsdk:"url"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
 
+type offerResourceModelV0 struct {
+	offerResourceModel
+	ModelName    types.String `tfsdk:"model"`
+	EndpointName types.String `tfsdk:"endpoint"`
+}
+
 type offerResourceModelV1 struct {
-	ModelName       types.String `tfsdk:"model"`
-	OfferName       types.String `tfsdk:"name"`
-	ApplicationName types.String `tfsdk:"application_name"`
-	Endpoints       types.Set    `tfsdk:"endpoints"`
-	URL             types.String `tfsdk:"url"`
-	// ID required by the testing framework
-	ID types.String `tfsdk:"id"`
+	offerResourceModel
+	ModelName types.String `tfsdk:"model"`
+	Endpoints types.Set    `tfsdk:"endpoints"`
+}
+
+type offerResourceModelV2 struct {
+	offerResourceModel
+	ModelUUID types.String `tfsdk:"model_uuid"`
+	Endpoints types.Set    `tfsdk:"endpoints"`
 }
 
 func (o *offerResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -64,14 +73,18 @@ func (o *offerResource) Metadata(_ context.Context, req resource.MetadataRequest
 
 func (o *offerResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		Version:     2,
 		Description: "A resource that represent a Juju Offer.",
 		Attributes: map[string]schema.Attribute{
-			"model": schema.StringAttribute{
-				Description: "The name of the model to operate in. Changing this value will cause the" +
+			"model_uuid": schema.StringAttribute{
+				Description: "The UUID of the model to operate in. Changing this value will cause the" +
 					" offer to be destroyed and recreated by terraform.",
 				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
 				},
 			},
 			"name": schema.StringAttribute{
@@ -116,7 +129,6 @@ func (o *offerResource) Schema(_ context.Context, req resource.SchemaRequest, re
 				},
 			},
 		},
-		Version: 1,
 	}
 }
 
@@ -127,7 +139,7 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	var plan offerResourceModelV1
+	var plan offerResourceModelV2
 
 	// Read Terraform configuration from the request into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -135,17 +147,7 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	modelName := plan.ModelName.ValueString()
-	modelInfo, err := o.client.Models.GetModelByName(modelName)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model %q, got error: %s", modelName, err))
-		return
-	}
-	// TODO (cderici): Leaking Juju info here:
-	// 1 - GetModelByName above returns *params.ModelInfo
-	// 2 - we don't return tag trimmed so provider has to know juju.PrefixUser etc. Make a Tag type and have a Tag.
-	// Id() method.
-	modelOwner := strings.TrimPrefix(modelInfo.OwnerTag, juju.PrefixUser)
+	modelUUID := plan.ModelUUID.ValueString()
 
 	//here we verify if the name property is set, if not, set it to the application name
 	offerName := plan.OfferName.ValueString()
@@ -161,8 +163,7 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 
 	response, errs := o.client.Offers.CreateOffer(&juju.CreateOfferInput{
-		ModelName:       modelName,
-		ModelOwner:      modelOwner,
+		ModelUUID:       modelUUID,
 		Name:            offerName,
 		ApplicationName: plan.ApplicationName.ValueString(),
 		Endpoints:       endpoints,
@@ -196,7 +197,7 @@ func (o *offerResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		addClientNotConfiguredError(&resp.Diagnostics, "offer", "read")
 		return
 	}
-	var state offerResourceModelV1
+	var state offerResourceModelV2
 
 	// Get the Terraform state from the request into the plan
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -204,7 +205,8 @@ func (o *offerResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 	response, err := o.client.Offers.ReadOffer(&juju.ReadOfferInput{
-		OfferURL: state.ID.ValueString(),
+		OfferURL:     state.ID.ValueString(),
+		GetModelUUID: true,
 	})
 	if err != nil {
 		resp.Diagnostics.Append(handleOfferNotFoundError(ctx, err, &resp.State)...)
@@ -213,7 +215,7 @@ func (o *offerResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	o.trace(fmt.Sprintf("read offer %q at %q", response.Name, response.OfferURL))
 
-	state.ModelName = types.StringValue(response.ModelName)
+	state.ModelUUID = types.StringValue(response.ModelUUID)
 	state.OfferName = types.StringValue(response.Name)
 	state.ApplicationName = types.StringValue(response.ApplicationName)
 	endpointSet, diags := types.SetValueFrom(ctx, types.StringType, response.Endpoints)
@@ -247,7 +249,7 @@ func (o *offerResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		addClientNotConfiguredError(&resp.Diagnostics, "offer", "delete")
 		return
 	}
-	var plan offerResourceModelV1
+	var plan offerResourceModelV2
 
 	// Get the Terraform state from the request into the plan
 	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
@@ -285,6 +287,8 @@ func (o *offerResource) Configure(ctx context.Context, req resource.ConfigureReq
 	o.subCtx = tflog.NewSubsystem(ctx, LogResourceOffer)
 }
 
+// ImportState imports the resource state from the given ID.
+// The ID is expected to be `offer_url`.
 func (o *offerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
@@ -318,62 +322,131 @@ func handleOfferNotFoundError(ctx context.Context, err error, st *tfsdk.State) d
 
 // UpgradeState upgrades the state of the offer resource.
 // This is used to handle changes in the resource schema between versions.
+// V0->V1: Convert attribute `endpoint` to `endpoints`.
+// V1->V2: Convert attribute `model` to `model_uuid`.
 func (o *offerResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
 	return map[int64]resource.StateUpgrader{
 		// Upgrade from `endpoint` to `endpoints` attribute.
 		0: {
-			PriorSchema: &schema.Schema{
-				Attributes: map[string]schema.Attribute{
-					"model": schema.StringAttribute{
-						Required: true,
-					},
-					"name": schema.StringAttribute{
-						Optional: true,
-						Computed: true,
-					},
-					"application_name": schema.StringAttribute{
-						Required: true,
-					},
-					"endpoint": schema.StringAttribute{
-						Optional: true,
-					},
-					"url": schema.StringAttribute{
-						Computed: true,
-					},
-					"id": schema.StringAttribute{
-						Computed: true,
-					},
-				},
-			},
+			PriorSchema: offerV0Schema(),
 			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-				var priorStateData offerResourceModelV0
-
-				resp.Diagnostics.Append(req.State.Get(ctx, &priorStateData)...)
-
+				var offerV0 offerResourceModelV0
+				resp.Diagnostics.Append(req.State.Get(ctx, &offerV0)...)
 				if resp.Diagnostics.HasError() {
 					return
 				}
 
-				endpoints := []string{}
-				if !priorStateData.EndpointName.IsNull() {
-					endpoints = append(endpoints, priorStateData.EndpointName.ValueString())
-				}
-
-				endpointsSet, diags := types.SetValueFrom(ctx, types.StringType, endpoints)
-				if diags.HasError() {
-					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to convert endpoints to set, got error: %s", diags))
+				offerV1 := o.offerV0ToV1(offerV0)
+				offerV2 := o.offerV1ToV2(offerV1, resp)
+				if resp.Diagnostics.HasError() {
 					return
 				}
-				upgradedStateData := offerResourceModelV1{
-					ModelName:       priorStateData.ModelName,
-					OfferName:       priorStateData.OfferName,
-					ApplicationName: priorStateData.ApplicationName,
-					Endpoints:       endpointsSet,
-					URL:             priorStateData.URL,
-					ID:              priorStateData.ID,
+
+				resp.Diagnostics.Append(resp.State.Set(ctx, offerV2)...)
+			},
+		},
+		1: {
+			PriorSchema: offerV1Schema(),
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				offerV1 := offerResourceModelV1{}
+				resp.Diagnostics.Append(req.State.Get(ctx, &offerV1)...)
+				if resp.Diagnostics.HasError() {
+					return
 				}
 
-				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
+				offerV2 := o.offerV1ToV2(offerV1, resp)
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				resp.Diagnostics.Append(resp.State.Set(ctx, offerV2)...)
+			},
+		},
+	}
+}
+
+// offerV0ToV1 converts an offer resource model from v0 to v1.
+// It converts the `endpoint` attribute to the `endpoints` attribute.
+func (o *offerResource) offerV0ToV1(offerV0 offerResourceModelV0) offerResourceModelV1 {
+	endpoints := []string{}
+	if !offerV0.EndpointName.IsNull() {
+		endpoints = append(endpoints, offerV0.EndpointName.ValueString())
+	}
+
+	endpointsSet, _ := types.SetValueFrom(context.Background(), types.StringType, endpoints)
+
+	return offerResourceModelV1{
+		ModelName:          offerV0.ModelName,
+		Endpoints:          endpointsSet,
+		offerResourceModel: offerV0.offerResourceModel,
+	}
+}
+
+// offerV1ToV2 converts an offer resource model from v1 to v2.
+// It converts the `model` attribute to `model_uuid` and ensures the model UUID is
+// fetched using the Juju client.
+func (o *offerResource) offerV1ToV2(offerV1 offerResourceModelV1, resp *resource.UpgradeStateResponse) offerResourceModelV2 {
+	modelUUID, err := o.client.Models.ModelUUID(offerV1.ModelName.ValueString(), "")
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", offerV1.ModelName.ValueString(), err))
+		return offerResourceModelV2{}
+	}
+
+	return offerResourceModelV2{
+		ModelUUID:          types.StringValue(modelUUID),
+		Endpoints:          offerV1.Endpoints,
+		offerResourceModel: offerV1.offerResourceModel,
+	}
+}
+
+func offerV0Schema() *schema.Schema {
+	return &schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"model": schema.StringAttribute{
+				Required: true,
+			},
+			"name": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"application_name": schema.StringAttribute{
+				Required: true,
+			},
+			"endpoint": schema.StringAttribute{
+				Optional: true,
+			},
+			"url": schema.StringAttribute{
+				Computed: true,
+			},
+			"id": schema.StringAttribute{
+				Computed: true,
+			},
+		},
+	}
+}
+
+func offerV1Schema() *schema.Schema {
+	return &schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"model": schema.StringAttribute{
+				Required: true,
+			},
+			"name": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"application_name": schema.StringAttribute{
+				Required: true,
+			},
+			"endpoints": schema.SetAttribute{
+				ElementType: types.StringType,
+				Required:    true,
+			},
+			"url": schema.StringAttribute{
+				Computed: true,
+			},
+			"id": schema.StringAttribute{
+				Computed: true,
 			},
 		},
 	}

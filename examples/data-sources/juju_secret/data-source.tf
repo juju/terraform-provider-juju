@@ -3,13 +3,13 @@ data "juju_model" "my_model" {
 }
 
 data "juju_secret" "my_secret_data_source" {
-  name  = "my_secret"
-  model = data.juju_model.my_model.name
+  name       = "my_secret"
+  model_uuid = data.juju_model.my_model.uuid
 }
 
 resource "juju_application" "ubuntu" {
-  model = data.juju_model.my_model.name
-  name  = "ubuntu"
+  model_uuid = data.juju_model.my_model.uuid
+  name       = "ubuntu"
 
   charm {
     name = "ubuntu"
@@ -21,7 +21,7 @@ resource "juju_application" "ubuntu" {
 }
 
 resource "juju_access_secret" "my_secret_access" {
-  model = data.juju_model.my_model.name
+  model_uuid = data.juju_model.my_model.uuid
   applications = [
     juju_application.ubuntu.name
   ]

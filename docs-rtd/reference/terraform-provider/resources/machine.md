@@ -13,7 +13,7 @@ A resource that represents a Juju machine deployment. Refer to the juju add-mach
 ## Example Usage
 ```terraform
 resource "juju_machine" "this_machine" {
-  model       = juju_model.development.name
+  model_uuid  = juju_model.development.uuid
   base        = "ubuntu@22.04"
   name        = "this_machine"
   constraints = "tags=my-machine-tag"
@@ -34,7 +34,7 @@ resource "juju_machine" "this_machine" {
 
 ### Required
 
-- `model` (String) The Juju model in which to add a new machine. Changing this value will cause the machine to be destroyed and recreated by terraform.
+- `model_uuid` (String) The Juju model's UUID to specify the model in which to add a new machine. Changing this value will cause the machine to be destroyed and recreated by terraform.
 
 ### Optional
 
@@ -46,7 +46,6 @@ resource "juju_machine" "this_machine" {
 - `placement` (String) Additional information about how to allocate the machine in the cloud. Changing this value will cause the application to be destroyed and recreated by terraform.
 - `private_key_file` (String) The file path to read the private key from.
 - `public_key_file` (String) The file path to read the public key from.
-- `series` (String, Deprecated) The operating system series to install on the new machine(s). Changing this value will cause the machine to be destroyed and recreated by terraform.
 - `ssh_address` (String) The user@host directive for manual provisioning an existing machine via ssh. Requires public_key_file & private_key_file arguments. Changing this value will cause the machine to be destroyed and recreated by terraform.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `wait_for_hostname` (Boolean) If true, waits for the machine's hostname to be set during creation. A side effect is that this also waits for the machine to reach 'active' state in Juju.
@@ -74,10 +73,10 @@ Juju will automatically remove a machine if all application units deployed to th
 Import is supported using the following syntax:
 
 ```shell
-# Machines can be imported using the format: `model_name:machine_id:machine_name`.
+# Machines can be imported using the format: `model_uuid:machine_id:machine_name`.
 # The value of machine_id is the Juju Machine ID. machine_name is an optional 
 # name you can define in Terraform for the machine. It is not used in Juju.
-# Here is an example to import a machine from the development model with 
-# machine ID 1 and a name "machine_one":
-$ terraform import juju_machine.machine_one `development:1:machine_one`
+# Here is an example to import a machine from a model with machine ID 1 and a 
+# name "machine_one":
+$ terraform import juju_machine.machine_one 4ffb2226-6ced-458b-8b38-5143ca190f75:1:machine_one
 ```

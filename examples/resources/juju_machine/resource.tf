@@ -1,5 +1,5 @@
 resource "juju_machine" "this_machine" {
-  model       = juju_model.development.name
+  model_uuid  = juju_model.development.uuid
   base        = "ubuntu@22.04"
   name        = "this_machine"
   constraints = "tags=my-machine-tag"

@@ -21,7 +21,7 @@ resource "juju_model" "development" {
 resource "juju_application" "wordpress" {
   name = "wordpress"
 
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   charm {
     name = "wordpress"
@@ -33,7 +33,7 @@ resource "juju_application" "wordpress" {
 resource "juju_application" "percona-cluster" {
   name = "percona-cluster"
 
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   charm {
     name = "percona-cluster"
@@ -43,7 +43,7 @@ resource "juju_application" "percona-cluster" {
 }
 
 resource "juju_integration" "wp_to_percona" {
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   application {
     name     = juju_application.wordpress.name

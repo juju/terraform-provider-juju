@@ -49,7 +49,7 @@ const (
 )
 
 type CreateSecretInput struct {
-	ModelName string
+	ModelUUID string
 	Name      string
 	Value     map[string]string
 	Info      string
@@ -62,7 +62,7 @@ type CreateSecretOutput struct {
 
 type ReadSecretInput struct {
 	SecretId  string
-	ModelName string
+	ModelUUID string
 	Name      *string
 	Revision  *int
 }
@@ -78,7 +78,7 @@ type ReadSecretOutput struct {
 
 type UpdateSecretInput struct {
 	SecretId  string
-	ModelName string
+	ModelUUID string
 	Name      *string
 	Value     *map[string]string
 	AutoPrune *bool
@@ -87,12 +87,12 @@ type UpdateSecretInput struct {
 
 type DeleteSecretInput struct {
 	SecretId  string
-	ModelName string
+	ModelUUID string
 }
 
 type GrantRevokeAccessSecretInput struct {
 	SecretId     string
-	ModelName    string
+	ModelUUID    string
 	Applications []string
 }
 
@@ -120,7 +120,7 @@ func newSecretsClient(sc SharedClient) *secretsClient {
 
 // CreateSecret creates a new secret.
 func (c *secretsClient) CreateSecret(input *CreateSecretInput) (CreateSecretOutput, error) {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return CreateSecretOutput{}, err
 	}
@@ -150,7 +150,7 @@ func (c *secretsClient) CreateSecret(input *CreateSecretInput) (CreateSecretOutp
 
 // ReadSecret reads a secret.
 func (c *secretsClient) ReadSecret(input *ReadSecretInput) (ReadSecretOutput, error) {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return ReadSecretOutput{}, err
 	}
@@ -205,7 +205,7 @@ func (c *secretsClient) ReadSecret(input *ReadSecretInput) (ReadSecretOutput, er
 
 // UpdateSecret updates a secret.
 func (c *secretsClient) UpdateSecret(input *UpdateSecretInput) error {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -266,7 +266,7 @@ func (c *secretsClient) UpdateSecret(input *UpdateSecretInput) error {
 
 // DeleteSecret deletes a secret.
 func (c *secretsClient) DeleteSecret(input *DeleteSecretInput) error {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -287,7 +287,7 @@ func (c *secretsClient) DeleteSecret(input *DeleteSecretInput) error {
 
 // UpdateAccessSecret updates access to a secret.
 func (c *secretsClient) UpdateAccessSecret(input *GrantRevokeAccessSecretInput, op AccessSecretAction) error {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
 	}

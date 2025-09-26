@@ -1,5 +1,5 @@
 resource "juju_offer" "myoffer" {
-  model            = juju_model.development.name
+  model_uuid       = juju_model.development.uuid
   application_name = juju_application.percona-cluster.name
   endpoints        = ["server"]
 }

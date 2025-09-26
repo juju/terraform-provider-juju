@@ -41,8 +41,7 @@ type offersClient struct {
 type CreateOfferInput struct {
 	ApplicationName string
 	Endpoints       []string
-	ModelName       string
-	ModelOwner      string
+	ModelUUID       string
 	OfferOwner      string
 	Name            string
 }
@@ -56,13 +55,18 @@ type CreateOfferResponse struct {
 // ReadOfferInput represents input for reading an offer.
 type ReadOfferInput struct {
 	OfferURL string
+	// GetModelUUID, if set, will populate the ModelUUID field in the response.
+	// Only set this if you know the user has at least read access to
+	// the model. E.g. if you are creating the offer you can be sure
+	// that the user has read access to the model.
+	GetModelUUID bool
 }
 
 // ReadOfferResponse represents the response from reading an offer.
 type ReadOfferResponse struct {
 	ApplicationName string
 	Endpoints       []string
-	ModelName       string
+	ModelUUID       string
 	Name            string
 	OfferURL        string
 	Users           []crossmodel.OfferUserDetails
@@ -75,7 +79,7 @@ type DestroyOfferInput struct {
 
 // ConsumeRemoteOfferInput represents input for consuming a remote offer.
 type ConsumeRemoteOfferInput struct {
-	ModelName      string
+	ModelUUID      string
 	OfferURL       string
 	RemoteAppAlias string
 }
@@ -87,7 +91,7 @@ type ConsumeRemoteOfferResponse struct {
 
 // ReadRemoteAppInput represents input for reading a remote app.
 type ReadRemoteAppInput struct {
-	ModelName     string
+	ModelUUID     string
 	RemoteAppName string
 }
 
@@ -97,7 +101,7 @@ type ReadRemoteAppResponse struct {
 
 // RemoveRemoteAppInput represents input for removing a remote app.
 type RemoveRemoteAppInput struct {
-	ModelName     string
+	ModelUUID     string
 	RemoteAppName string
 }
 
@@ -132,7 +136,7 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 	}
 
 	// connect to the corresponding model
-	modelConn, err := c.GetConnection(&input.ModelName)
+	modelConn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, append(errs, err)
 	}
@@ -148,12 +152,7 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 		return nil, append(errs, errors.New("the application was not available to be offered"))
 	}
 
-	modelUUID, err := c.ModelUUID(input.ModelName)
-	if err != nil {
-		return nil, append(errs, err)
-	}
-
-	result, err := client.Offer(modelUUID, input.ApplicationName, input.Endpoints, input.OfferOwner, offerName, "")
+	result, err := client.Offer(input.ModelUUID, input.ApplicationName, input.Endpoints, input.OfferOwner, offerName, "")
 	if err != nil {
 		return nil, append(errs, err)
 	}
@@ -170,10 +169,15 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 		return nil, errs
 	}
 
+	modelOwner, modelName, err := c.SharedClient.ModelOwnerAndName(input.ModelUUID)
+	if err != nil {
+		return nil, append(errs, fmt.Errorf("unable to get model name for model UUID %q: %w", input.ModelUUID, err))
+	}
+
 	filter := crossmodel.ApplicationOfferFilter{
 		OfferName: offerName,
-		ModelName: input.ModelName,
-		OwnerName: input.ModelOwner,
+		ModelName: modelName,
+		OwnerName: modelOwner,
 	}
 
 	offer, err := findApplicationOffers(client, filter, input.Endpoints)
@@ -182,7 +186,7 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 	}
 
 	resp := CreateOfferResponse{
-		Name:     offer.OfferName,
+		Name:     offerName,
 		OfferURL: offer.OfferURL,
 	}
 	return &resp, nil
@@ -223,9 +227,14 @@ func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, erro
 	}
 	response.Users = result.Users
 
-	//no model name is returned but it can be parsed from the resulting offer URL to ensure parity
-	//TODO: verify if we can fetch information another way
-	response.ModelName = resultURL.ModelName
+	if input.GetModelUUID {
+		// TODO(JUJU-8299): The modelUUID method needs to be changed to also use the model owner.
+		// Do this after all resources reference models by UUID and we can clean up the model cache.
+		response.ModelUUID, err = c.ModelUUID(resultURL.ModelName, resultURL.User)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get model UUID for model %q: %w", resultURL.ModelName, err)
+		}
+	}
 
 	return &response, nil
 }
@@ -325,7 +334,7 @@ func findApplicationOffers(client *applicationoffers.Client, filter crossmodel.A
 
 // ConsumeRemoteOffer allows the integration resource to consume the offers managed by the offer resource.
 func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*ConsumeRemoteOfferResponse, error) {
-	if input.ModelName == "" {
+	if input.ModelUUID == "" {
 		return nil, fmt.Errorf("missing model when attemtpting to consume an offer")
 	}
 	if input.OfferURL == "" {
@@ -335,7 +344,7 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 		return nil, fmt.Errorf("missing remote app alias when consuming an offer")
 	}
 
-	modelConn, err := c.GetConnection(&input.ModelName)
+	modelConn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -430,7 +439,7 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 // these objects under "application-endpoints", the API calls them RemoteApplications
 // and `juju status` shows them under the "SAAS" heading.
 func (c offersClient) ReadRemoteApp(input *ReadRemoteAppInput) (*ReadRemoteAppResponse, error) {
-	modelConn, err := c.GetConnection(&input.ModelName)
+	modelConn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -460,7 +469,7 @@ func (c offersClient) ReadRemoteApp(input *ReadRemoteAppInput) (*ReadRemoteAppRe
 
 // RemoveRemoteApp allows the integration resource to destroy the offers managed by the offer resource.
 func (c offersClient) RemoveRemoteApp(input *RemoveRemoteAppInput) error {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
 	}

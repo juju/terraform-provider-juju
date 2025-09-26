@@ -9,9 +9,11 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
+	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -32,7 +34,7 @@ type applicationDataSource struct {
 
 type applicationDataSourceModel struct {
 	ApplicationName types.String `tfsdk:"name"`
-	ModelName       types.String `tfsdk:"model"`
+	ModelUUID       types.String `tfsdk:"model_uuid"`
 }
 
 // Metadata returns the full data source name as used in terraform plans.
@@ -49,9 +51,12 @@ func (d *applicationDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 				Description: "Name of the application.",
 				Required:    true,
 			},
-			"model": schema.StringAttribute{
-				Description: "The name of the model where the application is deployed.",
+			"model_uuid": schema.StringAttribute{
+				Description: "The uuid of the model where the application is deployed.",
 				Required:    true,
+				Validators: []validator.String{
+					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
+				},
 			},
 		},
 	}
@@ -99,14 +104,14 @@ func (d *applicationDataSource) Read(ctx context.Context, req datasource.ReadReq
 	}
 
 	appName := data.ApplicationName.ValueString()
-	modelName := data.ModelName.ValueString()
+	modelUUID := data.ModelUUID.ValueString()
 	d.trace("Read", map[string]interface{}{
-		"Model": modelName,
-		"Name":  appName,
+		"ModelUUID": modelUUID,
+		"Name":      appName,
 	})
 
 	response, err := d.client.Applications.ReadApplication(&juju.ReadApplicationInput{
-		ModelName: modelName,
+		ModelUUID: modelUUID,
 		AppName:   appName,
 	})
 	if err != nil {
@@ -119,7 +124,7 @@ func (d *applicationDataSource) Read(ctx context.Context, req datasource.ReadReq
 	d.trace("read application", map[string]interface{}{"resource": appName, "response": response})
 
 	data.ApplicationName = types.StringValue(appName)
-	data.ModelName = types.StringValue(modelName)
+	data.ModelUUID = types.StringValue(modelUUID)
 
 	d.trace("Found", applicationDataSourceModelForLogging(ctx, &data))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -136,7 +141,7 @@ func (d *applicationDataSource) trace(msg string, additionalFields ...map[string
 func applicationDataSourceModelForLogging(_ context.Context, app *applicationDataSourceModel) map[string]interface{} {
 	value := map[string]interface{}{
 		"application-name": app.ApplicationName.ValueString(),
-		"model":            app.ModelName.ValueString(),
+		"modelUUID":        app.ModelUUID.ValueString(),
 	}
 	return value
 }

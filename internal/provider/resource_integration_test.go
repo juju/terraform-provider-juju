@@ -5,12 +5,16 @@ package provider
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
 func TestAcc_ResourceIntegration(t *testing.T) {
@@ -18,6 +22,7 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-integration")
+	idCheck := regexp.MustCompile(fmt.Sprintf(".+:%v:%v", "one:source", "two:sink"))
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -25,13 +30,15 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 		CheckDestroy:             testAccCheckIntegrationDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceIntegration(modelName, "base = \"ubuntu@22.04\"", "base = \"ubuntu@22.04\""),
+				Config: testAccResourceIntegration(modelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_integration.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "one", "endpoint": "source"}),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("juju_integration.this", tfjsonpath.New("id"), knownvalue.StringRegexp(idCheck)),
+				},
 			},
 			{
 				ImportStateVerify: true,
@@ -39,12 +46,14 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 				ResourceName:      "juju_integration.this",
 			},
 			{
-				Config: testAccResourceIntegration(modelName, "base = \"ubuntu@22.04\"", "base = \"ubuntu@22.04\""),
+				Config: testAccResourceIntegration(modelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_integration.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("juju_integration.this", tfjsonpath.New("id"), knownvalue.StringRegexp(idCheck)),
+				},
 			},
 		},
 	})
@@ -78,6 +87,7 @@ func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
 	srcModelName := acctest.RandomWithPrefix("tf-test-integration")
 	dstModelName := acctest.RandomWithPrefix("tf-test-integration-dst")
 	via := "127.0.0.1/32,127.0.0.3/32"
+	idCheck := regexp.MustCompile(fmt.Sprintf(".+:%v:%v", "a:source", "b-a-source:sink"))
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -87,11 +97,55 @@ func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
 			{
 				Config: testAccResourceIntegrationWithVia(srcModelName, "base = \"ubuntu@22.04\"", dstModelName, "base = \"ubuntu@22.04\"", via),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.a", "model", srcModelName),
-					resource.TestCheckResourceAttr("juju_integration.a", "id", fmt.Sprintf("%v:%v:%v", srcModelName, "a:source", "b-a-source:sink")),
+					resource.TestCheckResourceAttrPair("juju_model.a", "uuid", "juju_integration.a", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_integration.a", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.a", "application.*", map[string]string{"name": "a", "endpoint": "source"}),
 					resource.TestCheckResourceAttr("juju_integration.a", "via", via),
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("juju_integration.a", tfjsonpath.New("id"), knownvalue.StringRegexp(idCheck)),
+				},
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceIntegration_UpgradeV0ToV1(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-integration")
+	idCheck := regexp.MustCompile(fmt.Sprintf(".+:%v:%v", "one:source", "two:sink"))
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		CheckDestroy: testAccCheckIntegrationDestroy,
+		Steps: []resource.TestStep{
+			{
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"juju": {
+						VersionConstraint: TestProviderPreV1Version,
+						Source:            "juju/juju",
+					},
+				},
+				Config: testAccResourceIntegrationV0(modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
+					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
+					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "one", "endpoint": "source"}),
+				),
+			},
+			{
+				ProtoV6ProviderFactories: frameworkProviderFactories,
+				Config:                   testAccResourceIntegration(modelName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("juju_integration.this", tfjsonpath.New("id"), knownvalue.StringRegexp(idCheck)),
+				},
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_integration.this", "model_uuid"),
+					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "one", "endpoint": "source"}),
 				),
 			},
 		},
@@ -99,6 +153,8 @@ func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
 }
 
 func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
+	t.Skip("This test currently fails due to the breaking change in the provider schema. " +
+		"Remove the skip after the v1 release of the provider.")
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -115,7 +171,7 @@ func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
 						Source:            "juju/juju",
 					},
 				},
-				Config: testAccResourceIntegration(modelName, "series = \"jammy\"", "series = \"jammy\""),
+				Config: testAccResourceIntegration(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
@@ -125,7 +181,7 @@ func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
 			},
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceIntegration(modelName, "series = \"jammy\"", "series = \"jammy\""),
+				Config:                   testAccResourceIntegration(modelName),
 			},
 		},
 	})
@@ -135,7 +191,49 @@ func testAccCheckIntegrationDestroy(s *terraform.State) error {
 	return nil
 }
 
-func testAccResourceIntegration(modelName, osOne, osTwo string) string {
+func testAccResourceIntegration(modelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_application" "one" {
+	model_uuid = juju_model.this.uuid
+	name  = "one" 
+	
+	charm {
+		name = "juju-qa-dummy-sink"
+		base = "ubuntu@22.04"
+	}
+}
+
+resource "juju_application" "two" {
+	model_uuid = juju_model.this.uuid
+	name  = "two"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		base = "ubuntu@22.04"
+	}
+}
+
+resource "juju_integration" "this" {
+	model_uuid = juju_model.this.uuid
+
+	application {
+		name     = juju_application.one.name
+		endpoint = "source"
+	}
+
+	application {
+		name = juju_application.two.name
+		endpoint = "sink"
+	}
+}
+`, modelName)
+}
+
+func testAccResourceIntegrationV0(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
@@ -147,7 +245,7 @@ resource "juju_application" "one" {
 	
 	charm {
 		name = "juju-qa-dummy-sink"
-		%s
+		base = "ubuntu@22.04"
 	}
 }
 
@@ -157,7 +255,7 @@ resource "juju_application" "two" {
 
 	charm {
 		name = "juju-qa-dummy-source"
-		%s
+		base = "ubuntu@22.04"
 	}
 }
 
@@ -174,7 +272,7 @@ resource "juju_integration" "this" {
 		endpoint = "sink"
 	}
 }
-`, modelName, osOne, osTwo)
+`, modelName)
 }
 
 func testUpdateIntegrationToAppWithSameInterface(modelName string, relateToNewApp bool) string {
@@ -188,8 +286,8 @@ resource "juju_model" "this" {
 }
 
 resource "juju_application" "one" {
-	model = juju_model.this.name
-	name  = "one" 
+	model_uuid = juju_model.this.uuid
+	name       = "one" 
 	
 	charm {
 		name = "juju-qa-dummy-sink"
@@ -198,8 +296,8 @@ resource "juju_application" "one" {
 }
 
 resource "juju_application" "two" {
-	model = juju_model.this.name
-	name  = "two"
+	model_uuid = juju_model.this.uuid
+	name       = "two"
 
 	charm {
 		name = "juju-qa-dummy-source"
@@ -208,8 +306,8 @@ resource "juju_application" "two" {
 }
 
 resource "juju_application" "three" {
-	model = juju_model.this.name
-	name  = "three"
+	model_uuid = juju_model.this.uuid
+	name       = "three"
 
 	charm {
 		name = "juju-qa-dummy-source"
@@ -218,7 +316,7 @@ resource "juju_application" "three" {
 }
 
 resource "juju_integration" "this" {
-	model = juju_model.this.name
+	model_uuid = juju_model.this.uuid
 
 	application {
 		name     = juju_application.one.name
@@ -243,7 +341,7 @@ resource "juju_model" "a" {
 }
 
 resource "juju_application" "a" {
-	model = juju_model.a.name
+	model_uuid = juju_model.a.uuid
 	name  = "a" 
 	
 	charm {
@@ -257,7 +355,7 @@ resource "juju_model" "b" {
 }
 
 resource "juju_application" "b" {
-	model = juju_model.b.name
+	model_uuid = juju_model.b.uuid
 	name  = "b"
 	
 	charm {
@@ -267,13 +365,13 @@ resource "juju_application" "b" {
 }
 
 resource "juju_offer" "b" {
-	model            = juju_model.b.name
+	model_uuid       = juju_model.b.uuid
 	application_name = juju_application.b.name
-	endpoints         = ["sink"]
+	endpoints        = ["sink"]
 }
 
 resource "juju_integration" "a" {
-	model = juju_model.a.name
+	model_uuid = juju_model.a.uuid
 	via = %q
 
 	application {
@@ -294,6 +392,8 @@ func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
 	}
 	srcModelName := acctest.RandomWithPrefix("tf-test-integration")
 	dstModelName := acctest.RandomWithPrefix("tf-test-integration-dst")
+	id1Check := regexp.MustCompile(fmt.Sprintf(".+:%v:%v", "a-b1-sink:source", "b1:sink"))
+	id2Check := regexp.MustCompile(fmt.Sprintf(".+:%v:%v", "a-b2-sink:source", "b2:sink"))
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -307,15 +407,17 @@ func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
 					"enable-b2-consumer": config.BoolVariable(true),
 				},
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.b1.0", "model", dstModelName),
-					resource.TestCheckResourceAttr("juju_integration.b1.0", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "a-b1-sink:source", "b1:sink")),
+					resource.TestCheckResourceAttrPair("juju_model.b", "uuid", "juju_integration.b1.0", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_integration.b1.0", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.b1.0", "application.*", map[string]string{"name": "b1", "endpoint": "sink"}),
-					resource.TestCheckResourceAttr("juju_integration.b2.0", "model", dstModelName),
-					resource.TestCheckResourceAttr("juju_integration.b2.0", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "a-b2-sink:source", "b2:sink")),
+					resource.TestCheckResourceAttrPair("juju_model.b", "uuid", "juju_integration.b2.0", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_integration.b2.0", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.b2.0", "application.*", map[string]string{"name": "b2", "endpoint": "sink"}),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("juju_integration.b1[0]", tfjsonpath.New("id"), knownvalue.StringRegexp(id1Check)),
+					statecheck.ExpectKnownValue("juju_integration.b2[0]", tfjsonpath.New("id"), knownvalue.StringRegexp(id2Check)),
+				},
 			},
 			{
 				Config: testAccResourceIntegrationMultipleConsumers(srcModelName, dstModelName),
@@ -324,11 +426,13 @@ func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
 					"enable-b2-consumer": config.BoolVariable(false),
 				},
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.b1.0", "model", dstModelName),
-					resource.TestCheckResourceAttr("juju_integration.b1.0", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "a-b1-sink:source", "b1:sink")),
+					resource.TestCheckResourceAttrPair("juju_model.b", "uuid", "juju_integration.b1.0", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_integration.b1.0", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.b1.0", "application.*", map[string]string{"name": "b1", "endpoint": "sink"}),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("juju_integration.b1[0]", tfjsonpath.New("id"), knownvalue.StringRegexp(id1Check)),
+				},
 			},
 			{
 				Config: testAccResourceIntegrationMultipleConsumers(srcModelName, dstModelName),
@@ -347,6 +451,8 @@ func TestAcc_ResourceIntegrationWithMultipleIntegrationsSameEndpoint(t *testing.
 	}
 	srcModelName := acctest.RandomWithPrefix("tf-test-integration-offering")
 	dstModelName := acctest.RandomWithPrefix("tf-test-integration-consuming")
+	idOneCheck := regexp.MustCompile(fmt.Sprintf(".+:%v:%v", "apptwo:source", "appzero-apptwo-source:sink"))
+	idTwoCheck := regexp.MustCompile(fmt.Sprintf(".+:%v:%v", "apptwo:source", "appone-apptwo-source:sink"))
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -355,11 +461,13 @@ func TestAcc_ResourceIntegrationWithMultipleIntegrationsSameEndpoint(t *testing.
 			{
 				Config: testAccResourceIntegrationMultipleIntegrationsSameEndpoint(srcModelName, dstModelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.this", "model", dstModelName),
-					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "apptwo:source", "appzero-apptwo-source:sink")),
-					resource.TestCheckResourceAttr("juju_integration.this2", "model", dstModelName),
-					resource.TestCheckResourceAttr("juju_integration.this2", "id", fmt.Sprintf("%v:%v:%v", dstModelName, "apptwo:source", "appone-apptwo-source:sink")),
+					resource.TestCheckResourceAttrPair("juju_model.consuming", "uuid", "juju_integration.this", "model_uuid"),
+					resource.TestCheckResourceAttrPair("juju_model.consuming", "uuid", "juju_integration.this2", "model_uuid"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("juju_integration.this", tfjsonpath.New("id"), knownvalue.StringRegexp(idOneCheck)),
+					statecheck.ExpectKnownValue("juju_integration.this2", tfjsonpath.New("id"), knownvalue.StringRegexp(idTwoCheck)),
+				},
 			},
 		},
 	})
@@ -374,7 +482,7 @@ resource "juju_model" "a" {
 }
 
 resource "juju_application" "a" {
-        model = juju_model.a.name
+        model_uuid = juju_model.a.uuid
         name  = "a"
 
         charm {
@@ -383,9 +491,9 @@ resource "juju_application" "a" {
 }
 
 resource "juju_offer" "a" {
-        model            = juju_model.a.name
+        model_uuid       = juju_model.a.uuid
         application_name = juju_application.a.name
-        endpoints         = ["source"]
+        endpoints        = ["source"]
 }
 
 resource "juju_model" "b" {
@@ -393,7 +501,7 @@ resource "juju_model" "b" {
 }
 
 resource "juju_application" "b1" {
-        model = juju_model.b.name
+        model_uuid = juju_model.b.uuid
         name  = "b1"
 
         charm {
@@ -403,7 +511,7 @@ resource "juju_application" "b1" {
 
 resource "juju_integration" "b1" {
 	count = var.enable-b1-consumer ? 1 : 0
-        model = juju_model.b.name
+        model_uuid = juju_model.b.uuid
 
         application {
                 name     = juju_application.b1.name
@@ -416,7 +524,7 @@ resource "juju_integration" "b1" {
 }
 
 resource "juju_application" "b2" {
-        model = juju_model.b.name
+        model_uuid = juju_model.b.uuid
         name  = "b2"
 
         charm {
@@ -426,7 +534,7 @@ resource "juju_application" "b2" {
 
 resource "juju_integration" "b2" {
 	count = var.enable-b2-consumer ? 1 : 0
-        model = juju_model.b.name
+        model_uuid = juju_model.b.uuid
 
         application {
                 name     = juju_application.b2.name
@@ -458,7 +566,7 @@ resource "juju_model" "offering" {
 
 resource "juju_application" "appzero" {
   name  = "appzero"
-  model = juju_model.offering.name
+  model_uuid = juju_model.offering.uuid
 
   charm {
     name = "juju-qa-dummy-source"
@@ -470,7 +578,7 @@ resource "juju_application" "appzero" {
 
 resource "juju_application" "appone" {
   name  = "appone"
-  model = juju_model.offering.name
+  model_uuid = juju_model.offering.uuid
 
   charm {
     name = "juju-qa-dummy-source"
@@ -481,13 +589,13 @@ resource "juju_application" "appone" {
 }
 
 resource "juju_offer" "appzero_endpoint" {
-  model            = juju_model.offering.name
+  model_uuid       = juju_model.offering.uuid
   application_name = juju_application.appzero.name
   endpoints        = ["sink"]
 }
 
 resource "juju_offer" "appone_endpoint" {
-  model            = juju_model.offering.name
+  model_uuid       = juju_model.offering.uuid
   application_name = juju_application.appone.name
   endpoints        = ["sink"]
 }
@@ -497,8 +605,8 @@ resource "juju_model" "consuming" {
 }
 
 resource "juju_application" "apptwo" {
-  name  = "apptwo"
-  model = juju_model.consuming.name
+  name       = "apptwo"
+  model_uuid = juju_model.consuming.uuid
 
   charm {
     name = "juju-qa-dummy-sink"
@@ -509,7 +617,7 @@ resource "juju_application" "apptwo" {
 }
 
 resource "juju_integration" "this" {
-  model = juju_model.consuming.name
+  model_uuid = juju_model.consuming.uuid
 
   application {
     name     = juju_application.apptwo.name
@@ -522,7 +630,7 @@ resource "juju_integration" "this" {
 }
 
 resource "juju_integration" "this2" {
-  model = juju_model.consuming.name
+  model_uuid = juju_model.consuming.uuid
 
   application {
     name     = juju_application.apptwo.name

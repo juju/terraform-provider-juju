@@ -106,7 +106,7 @@ resource "juju_model" "modelone" {
 }
 
 resource "juju_application" "appone" {
-	model = juju_model.modelone.name
+	model_uuid = juju_model.modelone.uuid
 	name  = "appone"
 
 	charm {
@@ -116,9 +116,9 @@ resource "juju_application" "appone" {
 }
 
 resource "juju_offer" "offerone" {
-	model            = juju_model.modelone.name
+	model_uuid       = juju_model.modelone.uuid
 	application_name = juju_application.appone.name
-	endpoints         = ["sink"]
+	endpoints        = ["sink"]
 }
 
 resource "juju_jaas_role" "test" {

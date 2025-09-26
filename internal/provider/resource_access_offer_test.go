@@ -188,7 +188,7 @@ name = "{{.ModelName}}"
 
 resource "juju_application" "appone" {
   name  = "appone"
-  model = juju_model.{{.ModelName}}.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
 
   charm {
     name = "juju-qa-dummy-source"
@@ -197,9 +197,9 @@ resource "juju_application" "appone" {
 }
 
 resource "juju_offer" "appone_endpoint" {
-  model            = juju_model.{{.ModelName}}.name
+  model_uuid       = juju_model.{{.ModelName}}.uuid
   application_name = juju_application.appone.name
-  endpoints         = ["sink"]
+  endpoints        = ["sink"]
 }
 
 resource "juju_access_offer" "test" {
@@ -240,7 +240,7 @@ resource "juju_user" "read_operator" {
 
 resource "juju_application" "appone" {
   name  = "appone"
-  model = juju_model.{{.ModelName}}.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
 
   charm {
     name = "juju-qa-dummy-source"
@@ -249,9 +249,9 @@ resource "juju_application" "appone" {
 }
 
 resource "juju_offer" "appone_endpoint" {
-  model            = juju_model.{{.ModelName}}.name
+  model_uuid       = juju_model.{{.ModelName}}.uuid
   application_name = juju_application.appone.name
-  endpoints         = ["sink"]
+  endpoints        = ["sink"]
 }
 
 resource "juju_access_offer" "access_appone_endpoint" {

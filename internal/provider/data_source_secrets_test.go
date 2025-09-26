@@ -37,7 +37,7 @@ func TestAcc_DataSourceSecret(t *testing.T) {
 			{
 				Config: testAccDataSourceSecret(modelName, secretName, secretValue),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.juju_secret.secret_data_source", "model", modelName),
+					resource.TestCheckResourceAttrPair("data.juju_secret.secret_data_source", "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr("data.juju_secret.secret_data_source", "name", secretName),
 					resource.TestCheckResourceAttrPair("data.juju_secret.secret_data_source", "secretID", "juju_secret.secret_resource", "secretID"),
 				),
@@ -55,7 +55,7 @@ resource "juju_model" "{{.ModelName}}" {
 }
 
 resource "juju_secret" "secret_resource" {
-  model = juju_model.{{.ModelName}}.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
   name  = "{{.SecretName}}"
   value =  {
     {{- range $key, $value := .SecretValue }}
@@ -65,8 +65,8 @@ resource "juju_secret" "secret_resource" {
 }
 
 data "juju_secret" "secret_data_source" {
-  name = juju_secret.secret_resource.name
-  model = juju_model.{{.ModelName}}.name
+  name       = juju_secret.secret_resource.name
+  model_uuid = juju_model.{{.ModelName}}.uuid
 }
 `, internaltesting.TemplateData{
 			"ModelName":   modelName,

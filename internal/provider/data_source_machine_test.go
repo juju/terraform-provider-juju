@@ -22,59 +22,29 @@ func TestAcc_DataSourceMachine_Edge(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccDataSourceMachine(modelName, "base = \"ubuntu@22.04\""),
+				Config: testAccDataSourceMachine(modelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.juju_machine.machine", "model", modelName),
+					resource.TestCheckResourceAttrPair("juju_model.model", "uuid", "data.juju_machine.machine", "model_uuid"),
 				),
 			},
 		},
 	})
 }
 
-func TestAcc_DataSourceMachine_UpgradeProvider(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-	modelName := acctest.RandomWithPrefix("tf-datasource-machine-test-model")
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-
-		Steps: []resource.TestStep{
-			{
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						VersionConstraint: TestProviderStableVersion,
-						Source:            "juju/juju",
-					},
-				},
-				Config: testAccDataSourceMachine(modelName, "series = \"jammy\""),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("data.juju_machine.machine", "model", modelName),
-				),
-			},
-			{
-				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccDataSourceMachine(modelName, "series = \"jammy\""),
-			},
-		},
-	})
-}
-
-func testAccDataSourceMachine(modelName, os string) string {
+func testAccDataSourceMachine(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "model" {
   name = %q
 }
 
 resource "juju_machine" "machine" {
-  model = juju_model.model.name
+  model_uuid = juju_model.model.uuid
   name = "machine"
-  %s
+  base = "ubuntu@22.04"
 }
 
 data "juju_machine" "machine" {
-  model = juju_model.model.name
+  model_uuid = juju_model.model.uuid
   machine_id = juju_machine.machine.machine_id
-}`, modelName, os)
+}`, modelName)
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/juju/core/crossmodel"
+	"github.com/juju/names/v5"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/wait"
@@ -46,11 +47,22 @@ type integrationResource struct {
 }
 
 type integrationResourceModel struct {
-	ModelName   types.String `tfsdk:"model"`
 	Via         types.String `tfsdk:"via"`
 	Application types.Set    `tfsdk:"application"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
+}
+
+type integrationResourceModelV0 struct {
+	integrationResourceModel
+
+	ModelName types.String `tfsdk:"model"`
+}
+
+type integrationResourceModelV1 struct {
+	integrationResourceModel
+
+	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
 // nestedApplication represents an element in an Application set of an
@@ -89,7 +101,7 @@ func (r *integrationResource) Configure(ctx context.Context, req resource.Config
 // Called during terraform validate through ValidateResourceConfig RPC
 // Validates the logic in the application block in the Schema
 func (r *integrationResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	var configData integrationResourceModel
+	var configData integrationResourceModelV1
 
 	// Read Terraform configuration from the request into the model
 	resp.Diagnostics.Append(req.Config.Get(ctx, &configData)...)
@@ -117,11 +129,15 @@ func (r *integrationResource) Metadata(_ context.Context, req resource.MetadataR
 
 func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		Version:     1,
 		Description: "A resource that represents a Juju Integration.",
 		Attributes: map[string]schema.Attribute{
-			"model": schema.StringAttribute{
-				Description: "The name of the model to operate in.",
+			"model_uuid": schema.StringAttribute{
+				Description: "The UUID of the model to operate in.",
 				Required:    true,
+				Validators: []validator.String{
+					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
+				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -200,14 +216,14 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	var plan integrationResourceModel
+	var plan integrationResourceModelV1
 
 	// Read Terraform configuration from the request into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	modelName := plan.ModelName.ValueString()
+	modelUUID := plan.ModelUUID.ValueString()
 
 	var parsedApplications []nestedApplication
 	resp.Diagnostics.Append(plan.Application.ElementsAs(ctx, &parsedApplications, false)...)
@@ -230,7 +246,7 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	// If we have an offer URL, we need to consume it before creating the integration.
 	if offer != nil {
 		offerResponse, err := r.client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
-			ModelName:      modelName,
+			ModelUUID:      modelUUID,
 			OfferURL:       offer.url,
 			RemoteAppAlias: offer.name,
 		})
@@ -253,7 +269,7 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 
 	viaCIDRs := plan.Via.ValueString()
 	response, err := r.client.Integrations.CreateIntegration(&juju.IntegrationInput{
-		ModelName: modelName,
+		ModelUUID: modelUUID,
 		Apps:      appNames,
 		Endpoints: endpoints,
 		ViaCIDRs:  viaCIDRs,
@@ -262,7 +278,7 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create integration, got error: %s", err))
 		return
 	}
-	r.trace(fmt.Sprintf("integration created on Juju between %q at %q on model %q", appNames, endpoints, modelName))
+	r.trace(fmt.Sprintf("integration created on Juju between %q at %q on model %q", appNames, endpoints, modelUUID))
 
 	parsedApplications, err = parseApplications(response.Applications)
 	if err != nil {
@@ -278,7 +294,7 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 	plan.Application = parsedApps
 
-	id := newIDForIntegrationResource(modelName, response.Applications)
+	id := newIDForIntegrationResource(modelUUID, response.Applications)
 	plan.ID = types.StringValue(id)
 
 	r.trace(fmt.Sprintf("integration resource created: %q", id))
@@ -293,7 +309,7 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	var state integrationResourceModel
+	var state integrationResourceModelV1
 
 	// Read Terraform configuration from the request into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -301,14 +317,14 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	modelName, endpointA, endpointB, idErr := modelNameAndEndpointsFromID(state.ID.ValueString())
+	modelUUID, endpointA, endpointB, idErr := modelUUIDAndEndpointsFromID(state.ID.ValueString())
 	if idErr.HasError() {
 		resp.Diagnostics.Append(idErr...)
 		return
 	}
 
 	integration := &juju.IntegrationInput{
-		ModelName: modelName,
+		ModelUUID: modelUUID,
 		Endpoints: []string{
 			endpointA,
 			endpointB,
@@ -322,7 +338,7 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 	r.trace(fmt.Sprintf("found integration: %v", integration))
 
-	state.ModelName = types.StringValue(modelName)
+	state.ModelUUID = types.StringValue(modelUUID)
 
 	applications, err := parseApplications(response.Applications)
 	if err != nil {
@@ -355,20 +371,20 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 
-	var state integrationResourceModel
+	var state integrationResourceModelV1
 	// Read Terraform configuration from the request into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	modelName, endpointA, endpointB, idErr := modelNameAndEndpointsFromID(state.ID.ValueString())
+	modelUUID, endpointA, endpointB, idErr := modelUUIDAndEndpointsFromID(state.ID.ValueString())
 	if idErr.HasError() {
 		resp.Diagnostics.Append(idErr...)
 		return
 	}
 	endpoints := []string{endpointA, endpointB}
 	err := r.client.Integrations.DestroyIntegration(&juju.IntegrationInput{
-		ModelName: modelName,
+		ModelUUID: modelUUID,
 		Endpoints: endpoints,
 	})
 	if err != nil {
@@ -381,7 +397,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 			Context: ctx,
 			GetData: r.client.Integrations.ReadIntegration,
 			Input: &juju.IntegrationInput{
-				ModelName: modelName,
+				ModelUUID: modelUUID,
 				Endpoints: endpoints,
 			},
 			ExpectedErr:    juju.IntegrationNotFoundError,
@@ -390,7 +406,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 	)
 	if err != nil {
 		errSummary := "Client Error"
-		errDetail := fmt.Sprintf("Unable to complete integration deletion (endpoints %v) in model %q: %v\n", endpoints, modelName, err)
+		errDetail := fmt.Sprintf("Unable to complete integration deletion (endpoints %v) in model %q: %v\n", endpoints, modelUUID, err)
 		if r.config.SkipFailedDeletion {
 			resp.Diagnostics.AddWarning(
 				errSummary,
@@ -426,7 +442,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 
 	// Destroy consumed offer.
 	err = r.client.Offers.RemoveRemoteApp(&juju.RemoveRemoteAppInput{
-		ModelName:     modelName,
+		ModelUUID:     modelUUID,
 		RemoteAppName: offer.name,
 	})
 	if err != nil {
@@ -439,7 +455,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 			Context: ctx,
 			GetData: r.client.Offers.ReadRemoteApp,
 			Input: &juju.ReadRemoteAppInput{
-				ModelName:     modelName,
+				ModelUUID:     modelUUID,
 				RemoteAppName: offer.name,
 			},
 			ExpectedErr:    juju.RemoteAppNotFoundError,
@@ -448,7 +464,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 	)
 	if err != nil {
 		errSummary := "Client Error"
-		errDetail := fmt.Sprintf("Unable to complete remote-app %q deletion in model %q: %v\n", offer.name, modelName, err)
+		errDetail := fmt.Sprintf("Unable to complete remote-app %q deletion in model %q: %v\n", offer.name, modelUUID, err)
 		if r.config.SkipFailedDeletion {
 			resp.Diagnostics.AddWarning(
 				errSummary,
@@ -498,6 +514,44 @@ func createRemoteAppName(apps []nestedApplication) ([]nestedApplication, error) 
 	return []nestedApplication{localApp, remoteApp}, nil
 }
 
+// UpgradeState upgrades the state of the integration resource.
+// This is used to handle changes in the resource schema between versions.
+// V0->V1: The model name is replaced with the model UUID.
+func (r *integrationResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
+	return map[int64]resource.StateUpgrader{
+		0: {
+			PriorSchema: integrationV0Schema(),
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				integrationV0 := integrationResourceModelV0{}
+				resp.Diagnostics.Append(req.State.Get(ctx, &integrationV0)...)
+
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				modelUUID, err := r.client.Models.ModelUUID(integrationV0.ModelName.ValueString(), "")
+				if err != nil {
+					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", integrationV0.ModelName.ValueString(), err))
+					return
+				}
+
+				newID := strings.Replace(integrationV0.ID.ValueString(), integrationV0.ModelName.ValueString(), modelUUID, 1)
+
+				upgradedStateData := integrationResourceModelV1{
+					integrationResourceModel: integrationResourceModel{
+						Via:         integrationV0.Via,
+						ID:          types.StringValue(newID),
+						Application: integrationV0.Application,
+					},
+					ModelUUID: types.StringValue(modelUUID),
+				}
+
+				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
+			},
+		},
+	}
+}
+
 func handleIntegrationNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
 	if errors.Is(err, juju.IntegrationNotFoundError) {
 		// Integration manually removed
@@ -509,7 +563,7 @@ func handleIntegrationNotFoundError(ctx context.Context, err error, st *tfsdk.St
 	return diags
 }
 
-func newIDForIntegrationResource(modelName string, apps []juju.Application) string {
+func newIDForIntegrationResource(modelUUID string, apps []juju.Application) string {
 	//In order to generate a stable iterable order we sort the endpoints keys by the role value (provider is always first to match `juju status` output)
 	//TODO: verify we always get only 2 endpoints and that the role value is consistent
 	keys := make([]int, len(apps))
@@ -521,7 +575,7 @@ func newIDForIntegrationResource(modelName string, apps []juju.Application) stri
 		}
 	}
 
-	id := modelName
+	id := modelUUID
 	for _, key := range keys {
 		ep := apps[key]
 		id = fmt.Sprintf("%s:%s:%s", id, ep.Name, ep.Endpoint)
@@ -530,12 +584,12 @@ func newIDForIntegrationResource(modelName string, apps []juju.Application) stri
 	return id
 }
 
-func modelNameAndEndpointsFromID(ID string) (string, string, string, diag.Diagnostics) {
+func modelUUIDAndEndpointsFromID(ID string) (string, string, string, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	id := strings.Split(ID, ":")
 	if len(id) != 5 {
 		diags.AddError("Malformed ID",
-			fmt.Sprintf("unable to parse model and application name from provided ID: %q", ID))
+			fmt.Sprintf("unable to parse model UUID and application name from provided ID: %q", ID))
 		return "", "", "", diags
 	}
 	return id[0], fmt.Sprintf("%v:%v", id[1], id[2]), fmt.Sprintf("%v:%v", id[3], id[4]), diags
@@ -614,4 +668,39 @@ func (r *integrationResource) trace(msg string, additionalFields ...map[string]i
 	// Output:
 	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
 	tflog.SubsystemTrace(r.subCtx, LogResourceIntegration, msg, additionalFields...)
+}
+
+func integrationV0Schema() *schema.Schema {
+	return &schema.Schema{
+		Description: "A resource that represents a Juju Integration.",
+		Attributes: map[string]schema.Attribute{
+			"model": schema.StringAttribute{
+				Required: true,
+			},
+			"via": schema.StringAttribute{
+				Optional: true,
+			},
+			"id": schema.StringAttribute{
+				Computed: true,
+			},
+		},
+		Blocks: map[string]schema.Block{
+			"application": schema.SetNestedBlock{
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							Optional: true,
+						},
+						"endpoint": schema.StringAttribute{
+							Optional: true,
+							Computed: true,
+						},
+						"offer_url": schema.StringAttribute{
+							Optional: true,
+						},
+					},
+				},
+			},
+		},
+	}
 }

@@ -25,7 +25,7 @@ type TemplateData map[string]any
 //
 //	resource "juju_application" "{{.AppName}}" {
 //	 name  = "{{.AppName}}"
-//	 model = juju_model.this.name
+//	 model_uuid = juju_model.this.uuid
 //
 //	 charm {
 //	   name     = "{{.AppName}}"
@@ -57,7 +57,7 @@ type TemplateData map[string]any
 //
 //	resource "juju_application" "test-app" {
 //	  name  = "test-app"
-//	  model = juju_model.this.name
+//	  model_uuid = juju_model.this.uuid
 //
 //	  charm {
 //	    name     = "test-app"

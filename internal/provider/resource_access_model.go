@@ -20,6 +20,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
+	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -41,7 +42,6 @@ type accessModelResource struct {
 }
 
 type accessModelResourceModel struct {
-	Model  types.String `tfsdk:"model"`
 	Access types.String `tfsdk:"access"`
 
 	// ID required by the testing framework
@@ -50,14 +50,20 @@ type accessModelResourceModel struct {
 
 type accessModelResourceModelV0 struct {
 	accessModelResourceModel
-
-	Users types.List `tfsdk:"users"`
+	Users types.List   `tfsdk:"users"`
+	Model types.String `tfsdk:"model"`
 }
 
 type accessModelResourceModelV1 struct {
 	accessModelResourceModel
+	Users types.Set    `tfsdk:"users"`
+	Model types.String `tfsdk:"model"`
+}
 
-	Users types.Set `tfsdk:"users"`
+type accessModelResourceModelV2 struct {
+	accessModelResourceModel
+	Users     types.Set    `tfsdk:"users"`
+	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
 func (a *accessModelResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -73,13 +79,17 @@ func (r *accessModelResource) ConfigValidators(ctx context.Context) []resource.C
 
 func (a *accessModelResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		Version:     2,
 		Description: "A resource that represent a Juju Access Model.",
 		Attributes: map[string]schema.Attribute{
-			"model": schema.StringAttribute{
-				Description: "The name of the model for access management",
+			"model_uuid": schema.StringAttribute{
+				Description: "The uuid of the model for access management",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
 				},
 			},
 			"users": schema.SetAttribute{
@@ -133,7 +143,7 @@ func (a *accessModelResource) Create(ctx context.Context, req resource.CreateReq
 		addClientNotConfiguredError(&resp.Diagnostics, "access model", "create")
 		return
 	}
-	var plan accessModelResourceModelV1
+	var plan accessModelResourceModelV2
 
 	// Read Terraform configuration from the request into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -148,21 +158,21 @@ func (a *accessModelResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	modelNameStr := plan.Model.ValueString()
+	modelUUIDStr := plan.ModelUUID.ValueString()
 	accessStr := plan.Access.ValueString()
 	// Call Models.GrantModel
 	for _, user := range users {
 		err := a.client.Models.GrantModel(juju.GrantModelInput{
-			User:            user,
-			Access:          accessStr,
-			ModelIdentifier: modelNameStr,
+			User:      user,
+			Access:    accessStr,
+			ModelUUID: modelUUIDStr,
 		})
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access model resource, got error: %s", err))
 			return
 		}
 	}
-	plan.ID = types.StringValue(newAccessModelIDFrom(modelNameStr, accessStr, users))
+	plan.ID = types.StringValue(newAccessModelIDFrom(modelUUIDStr, accessStr, users))
 
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -174,7 +184,7 @@ func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest
 		addClientNotConfiguredError(&resp.Diagnostics, "access model", "read")
 		return
 	}
-	var plan accessModelResourceModelV1
+	var plan accessModelResourceModelV2
 
 	// Get the Terraform state from the request into the plan
 	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
@@ -182,18 +192,18 @@ func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	modelName, access, stateUsers := retrieveAccessModelDataFromID(ctx, plan.ID, plan.Users, &resp.Diagnostics)
+	modelUUID, access, stateUsers := retrieveAccessModelDataFromID(ctx, plan.ID, plan.Users, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	response, err := a.client.Users.ModelUserInfo(modelName)
+	response, err := a.client.Users.ModelUserInfo(modelUUID)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read access model resource, got error: %s", err))
 		return
 	}
 
-	plan.Model = types.StringValue(modelName)
+	plan.ModelUUID = types.StringValue(modelUUID)
 	plan.Access = types.StringValue(access)
 
 	var users []string
@@ -232,7 +242,7 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	var plan, state accessModelResourceModelV1
+	var plan, state accessModelResourceModelV2
 
 	// Get the Terraform state from the request into the plan
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -286,24 +296,24 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	modelName, oldAccess, _ := retrieveAccessModelDataFromID(ctx, state.ID, state.Users, &resp.Diagnostics)
+	modelUUID, oldAccess, _ := retrieveAccessModelDataFromID(ctx, state.ID, state.Users, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	err := a.client.Models.UpdateAccessModel(juju.UpdateAccessModelInput{
-		ModelIdentifier: modelName,
-		OldAccess:       oldAccess,
-		Grant:           addedUserList,
-		Revoke:          missingUserList,
-		Access:          access,
+		ModelUUID: modelUUID,
+		OldAccess: oldAccess,
+		Grant:     addedUserList,
+		Revoke:    missingUserList,
+		Access:    access,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access model resource, got error: %s", err))
 	}
-	a.trace(fmt.Sprintf("updated access model resource for model %q", modelName))
+	a.trace(fmt.Sprintf("updated access model resource for model %q", modelUUID))
 
-	plan.ID = types.StringValue(newAccessModelIDFrom(modelName, access, planUsers))
+	plan.ID = types.StringValue(newAccessModelIDFrom(modelUUID, access, planUsers))
 
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -316,7 +326,7 @@ func (a *accessModelResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 
-	var plan accessModelResourceModelV1
+	var plan accessModelResourceModelV2
 
 	// Get the Terraform state from the request into the plan
 	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
@@ -332,9 +342,9 @@ func (a *accessModelResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	err := a.client.Models.DestroyAccessModel(juju.DestroyAccessModelInput{
-		ModelIdentifier: plan.Model.ValueString(),
-		Revoke:          stateUsers,
-		Access:          plan.Access.ValueString(),
+		ModelUUID: plan.ModelUUID.ValueString(),
+		Revoke:    stateUsers,
+		Access:    plan.Access.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete access model resource, got error: %s", err))
@@ -381,7 +391,7 @@ func (a *accessModelResource) ImportState(ctx context.Context, req resource.Impo
 		resp.Diagnostics.AddError(
 			"ImportState Failure",
 			fmt.Sprintf("Malformed AccessModel ID %q, "+
-				"please use format '<modelname>:<access>:<user1,user1>'", IDstr),
+				"please use format '<modeluuid>:<access>:<user1,user1>'", IDstr),
 		)
 		return
 	}
@@ -399,8 +409,8 @@ func (a *accessModelResource) trace(msg string, additionalFields ...map[string]i
 	tflog.SubsystemTrace(a.subCtx, LogResourceAccessModel, msg, additionalFields...)
 }
 
-func newAccessModelIDFrom(modelNameStr string, accessStr string, users []string) string {
-	return fmt.Sprintf("%s:%s:%s", modelNameStr, accessStr, strings.Join(users, ","))
+func newAccessModelIDFrom(modelUUIDStr string, accessStr string, users []string) string {
+	return fmt.Sprintf("%s:%s:%s", modelUUIDStr, accessStr, strings.Join(users, ","))
 }
 
 func retrieveAccessModelDataFromID(ctx context.Context, ID types.String, users types.Set, diag *diag.Diagnostics) (string, string,
@@ -408,7 +418,7 @@ func retrieveAccessModelDataFromID(ctx context.Context, ID types.String, users t
 	resID := strings.Split(ID.ValueString(), ":")
 	if len(resID) < 2 {
 		diag.AddError("Malformed ID", fmt.Sprintf("AccessModel ID %q is malformed, "+
-			"please use the format '<modelname>:<access>:<user1,user1>'", resID))
+			"please use the format '<modeluuid>:<access>:<user1,user1>'", resID))
 		return "", "", nil
 	}
 	stateUsers := []string{}
@@ -452,38 +462,106 @@ func (o *accessModelResource) UpgradeState(ctx context.Context) map[int64]resour
 						Computed: true,
 					},
 				},
-				Version: 0,
 			},
 			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-				var priorStateData accessModelResourceModelV0
+				var stateDataV0 accessModelResourceModelV0
 
-				resp.Diagnostics.Append(req.State.Get(ctx, &priorStateData)...)
+				resp.Diagnostics.Append(req.State.Get(ctx, &stateDataV0)...)
 				if resp.Diagnostics.HasError() {
 					return
 				}
 
-				users := []string{}
-				if !priorStateData.Users.IsNull() {
-					resp.Diagnostics.Append(priorStateData.Users.ElementsAs(ctx, &users, false)...)
-				}
-
-				usersSet, diags := types.SetValueFrom(ctx, types.StringType, users)
-				if diags.HasError() {
-					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to convert users to set, got error: %s", diags))
+				stateDataV1 := o.stateDataV0ToV1(ctx, resp, stateDataV0)
+				if resp.Diagnostics.HasError() {
 					return
 				}
 
-				upgradedStateData := accessModelResourceModelV1{
-					accessModelResourceModel: accessModelResourceModel{
-						Model:  priorStateData.Model,
-						Access: priorStateData.Access,
-						ID:     priorStateData.ID,
-					},
-					Users: usersSet,
+				stateDataV2 := o.stateDataV1ToV2(ctx, resp, stateDataV1)
+				if resp.Diagnostics.HasError() {
+					return
 				}
 
-				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
+				resp.Diagnostics.Append(resp.State.Set(ctx, stateDataV2)...)
 			},
 		},
+		// Upgrade from model to model_uuid
+		1: {
+			PriorSchema: &schema.Schema{
+				Attributes: map[string]schema.Attribute{
+					"model": schema.StringAttribute{
+						Required: true,
+					},
+					"users": schema.SetAttribute{
+						Required:    true,
+						ElementType: types.StringType,
+					},
+					"access": schema.StringAttribute{
+						Required: true,
+					},
+					"id": schema.StringAttribute{
+						Computed: true,
+					},
+				},
+			},
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				var stateDataV1 accessModelResourceModelV1
+
+				resp.Diagnostics.Append(req.State.Get(ctx, &stateDataV1)...)
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				stateDataV2 := o.stateDataV1ToV2(ctx, resp, stateDataV1)
+
+				resp.Diagnostics.Append(resp.State.Set(ctx, stateDataV2)...)
+			},
+		},
+	}
+}
+
+func (o *accessModelResource) stateDataV0ToV1(ctx context.Context, resp *resource.UpgradeStateResponse, priorStateData accessModelResourceModelV0) accessModelResourceModelV1 {
+	users := []string{}
+	if !priorStateData.Users.IsNull() {
+		resp.Diagnostics.Append(priorStateData.Users.ElementsAs(ctx, &users, false)...)
+	}
+
+	usersSet, diags := types.SetValueFrom(ctx, types.StringType, users)
+	if diags.HasError() {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to convert users to set, got error: %s", diags))
+		return accessModelResourceModelV1{}
+	}
+
+	return accessModelResourceModelV1{
+		accessModelResourceModel: accessModelResourceModel{
+			Access: priorStateData.Access,
+			ID:     priorStateData.ID,
+		},
+		Model: priorStateData.Model,
+		Users: usersSet,
+	}
+}
+
+func (o *accessModelResource) stateDataV1ToV2(ctx context.Context, resp *resource.UpgradeStateResponse, priorStateData accessModelResourceModelV1) accessModelResourceModelV2 {
+	modelStr := priorStateData.Model.ValueString()
+	modelUUID, err := o.client.Models.ModelUUID(modelStr, "")
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", modelStr, err))
+		return accessModelResourceModelV2{}
+	}
+
+	users := []string{}
+	if !priorStateData.Users.IsNull() {
+		resp.Diagnostics.Append(priorStateData.Users.ElementsAs(ctx, &users, false)...)
+	}
+
+	newID := newAccessModelIDFrom(modelUUID, priorStateData.Access.ValueString(), users)
+
+	return accessModelResourceModelV2{
+		accessModelResourceModel: accessModelResourceModel{
+			Access: priorStateData.Access,
+			ID:     types.StringValue(newID),
+		},
+		ModelUUID: types.StringValue(modelUUID),
+		Users:     priorStateData.Users,
 	}
 }

@@ -58,7 +58,7 @@ func (s *SecretSuite) TestCreateSecret() {
 
 	client := s.getSecretsClient()
 	output, err := client.CreateSecret(&CreateSecretInput{
-		ModelName: *s.testModelName,
+		ModelUUID: *s.testModelName,
 		Name:      "test-secret",
 		Value:     decodedValue,
 		Info:      "test info",
@@ -84,7 +84,7 @@ func (s *SecretSuite) TestCreateSecretError() {
 
 	client := s.getSecretsClient()
 	output, err := client.CreateSecret(&CreateSecretInput{
-		ModelName: *s.testModelName,
+		ModelUUID: *s.testModelName,
 		Name:      "test-secret",
 		Value:     decodedValue,
 		Info:      "test info",
@@ -131,7 +131,7 @@ func (s *SecretSuite) TestReadSecret() {
 	client := s.getSecretsClient()
 	output, err := client.ReadSecret(&ReadSecretInput{
 		SecretId:  secretId,
-		ModelName: *s.testModelName,
+		ModelUUID: *s.testModelName,
 		Name:      &secretName,
 		Revision:  &secretRevision,
 	})
@@ -163,7 +163,7 @@ func (s *SecretSuite) TestReadSecretError() {
 	client := s.getSecretsClient()
 	output, err := client.ReadSecret(&ReadSecretInput{
 		SecretId:  secretId,
-		ModelName: *s.testModelName,
+		ModelUUID: *s.testModelName,
 	})
 	s.Require().Error(err)
 
@@ -193,7 +193,7 @@ func (s *SecretSuite) TestUpdateSecretWithRenaming() {
 	client := s.getSecretsClient()
 	err = client.UpdateSecret(&UpdateSecretInput{
 		SecretId:  secretId,
-		ModelName: *s.testModelName,
+		ModelUUID: *s.testModelName,
 		Name:      &newSecretName,
 		Value:     &decodedValue,
 		AutoPrune: &autoPrune,
@@ -222,7 +222,7 @@ func (s *SecretSuite) TestUpdateSecretWithRenaming() {
 	// read secret and check if value is updated
 	output, err := client.ReadSecret(&ReadSecretInput{
 		SecretId:  secretId,
-		ModelName: *s.testModelName,
+		ModelUUID: *s.testModelName,
 	})
 	s.Require().NoError(err)
 
@@ -250,7 +250,7 @@ func (s *SecretSuite) TestUpdateSecret() {
 	client := s.getSecretsClient()
 	err = client.UpdateSecret(&UpdateSecretInput{
 		SecretId:  secretId,
-		ModelName: *s.testModelName,
+		ModelUUID: *s.testModelName,
 		Value:     &decodedValue,
 		AutoPrune: &autoPrune,
 		Info:      &secretInfo,
@@ -279,7 +279,7 @@ func (s *SecretSuite) TestUpdateSecret() {
 	// read secret and check if secret info is updated
 	output, err := client.ReadSecret(&ReadSecretInput{
 		SecretId:  secretId,
-		ModelName: *s.testModelName,
+		ModelUUID: *s.testModelName,
 	})
 	s.Require().NoError(err)
 
@@ -300,7 +300,7 @@ func (s *SecretSuite) TestDeleteSecret() {
 	client := s.getSecretsClient()
 	err = client.DeleteSecret(&DeleteSecretInput{
 		SecretId:  secretId,
-		ModelName: *s.testModelName,
+		ModelUUID: *s.testModelName,
 	})
 	s.Assert().NoError(err)
 }
@@ -321,14 +321,14 @@ func (s *SecretSuite) TestUpdateAccessSecret() {
 	client := s.getSecretsClient()
 	err = client.UpdateAccessSecret(&GrantRevokeAccessSecretInput{
 		SecretId:     secretId,
-		ModelName:    *s.testModelName,
+		ModelUUID:    *s.testModelName,
 		Applications: applications,
 	}, GrantAccess)
 	s.Require().NoError(err)
 
 	err = client.UpdateAccessSecret(&GrantRevokeAccessSecretInput{
 		SecretId:     secretId,
-		ModelName:    *s.testModelName,
+		ModelUUID:    *s.testModelName,
 		Applications: applications,
 	}, RevokeAccess)
 	s.Require().NoError(err)

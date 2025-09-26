@@ -50,7 +50,7 @@ type Offer struct {
 }
 
 type IntegrationInput struct {
-	ModelName string
+	ModelUUID string
 	Apps      []string
 	Endpoints []string
 	ViaCIDRs  string
@@ -69,7 +69,7 @@ type UpdateIntegrationResponse struct {
 }
 
 type UpdateIntegrationInput struct {
-	ModelName    string
+	ModelUUID    string
 	Endpoints    []string
 	OldEndpoints []string
 	ViaCIDRs     string
@@ -82,7 +82,7 @@ func newIntegrationsClient(sc SharedClient) *integrationsClient {
 }
 
 func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateIntegrationResponse, error) {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 	}
 
 	// integration is created - fetch the status in order to validate
-	status, err := c.ModelStatus(input.ModelName, conn)
+	status, err := c.ModelStatus(input.ModelUUID, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -126,16 +126,16 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 }
 
 func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadIntegrationResponse, error) {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = conn.Close() }()
 	modelUUID, ok := conn.ModelTag()
 	if !ok {
-		return nil, errors.Errorf("Unable to get model uuid for %q", input.ModelName)
+		return nil, errors.Errorf("Unable to get model uuid for %q", input.ModelUUID)
 	}
-	status, err := c.ModelStatus(input.ModelName, conn)
+	status, err := c.ModelStatus(input.ModelUUID, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 }
 
 func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
 	}

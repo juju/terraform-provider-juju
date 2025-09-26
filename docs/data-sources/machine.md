@@ -14,7 +14,7 @@ A data source representing a Juju Machine.
 
 ```terraform
 data "juju_machine" "this" {
-  model      = juju_model.development.name
+  model_uuid = juju_model.development.uuid
   machine_id = "2"
 }
 ```
@@ -25,7 +25,7 @@ data "juju_machine" "this" {
 ### Required
 
 - `machine_id` (String) The Juju id of the machine.
-- `model` (String) The name of the model.
+- `model_uuid` (String) The UUID of the model.
 
 ### Read-Only
 

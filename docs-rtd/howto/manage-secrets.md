@@ -16,8 +16,8 @@ To reference a user secret you've created outside of the current Terraform plan,
 
 ```terraform
 data "juju_secret" "my_secret_data_source" {
-  name  = "my_secret"
-  model = data.juju_model.my_model.name
+  name       = "my_secret"
+  model_uuid = data.juju_model.my_model.uuid
 }
 ```
 
@@ -49,7 +49,7 @@ Given a model that contains both your (user) secret and the application(s) that 
 
 ```
 resource "juju_access_secret" "my-secret-access" {
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 
   # Use the secret_id from your secret resource or data source.
   secret_id = juju_secret.my-secret.secret_id

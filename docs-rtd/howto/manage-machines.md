@@ -15,7 +15,7 @@ To reference a machine that you've already provisioned outside of the current Te
 
 ```terraform
 data "juju_machine" "this" {
-  model      = juju_model.development.name
+  model_uuid = juju_model.development.uuid
   machine_id = "2"
 }
 ```
@@ -29,7 +29,7 @@ To add a machine to a model, in your Terraform plan add a resource of the `juju_
 
 ```terraform
 resource "juju_machine" "machine_0" {
-  model       = juju_model.development.name
+  model_uuid = juju_model.development.uuid
 }
 ```
 
@@ -45,7 +45,7 @@ To set constraints for a machine, in your Terraform plan, in the machine resourc
 
 ```terraform
 resource "juju_machine" "machine_0" {
-  model       = juju_model.development.name
+  model_uuid = juju_model.development.uuid
   name        = "machine_0"
   constraints = "tags=my-machine-tag"
 }
