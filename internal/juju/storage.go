@@ -72,8 +72,8 @@ func (c *storageClient) CreatePool(input CreateStoragePoolInput) error {
 }
 
 // UpdatePool updates a pool with specified parameters.
-func (c *storageClient) UpdatePool(modelname, pname, provider string, attrs map[string]interface{}) error {
-	conn, err := c.GetConnection(&modelname)
+func (c *storageClient) UpdatePool(modeluuid, pname, provider string, attrs map[string]interface{}) error {
+	conn, err := c.GetConnection(&modeluuid)
 	if err != nil {
 		return err
 	}
