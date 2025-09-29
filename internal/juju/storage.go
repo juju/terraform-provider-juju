@@ -19,6 +19,7 @@ type storageClient struct {
 	SharedClient
 }
 
+// CreateStoragePoolInput is the input to CreatePool.
 type CreateStoragePoolInput struct {
 	ModelUUID string
 	PoolName  string
@@ -26,6 +27,7 @@ type CreateStoragePoolInput struct {
 	Attrs     map[string]interface{}
 }
 
+// UpdateStoragePoolInput is the input to UpdatePool.
 type UpdateStoragePoolInput struct {
 	ModelUUID string
 	PoolName  string
@@ -33,16 +35,19 @@ type UpdateStoragePoolInput struct {
 	Attrs     map[string]interface{}
 }
 
+// RemoveStoragePoolInput is the input to RemovePool.
 type RemoveStoragePoolInput struct {
 	ModelUUID string
 	PoolName  string
 }
 
+// GetStoragePoolInput is the input to GetPool.
 type GetStoragePoolInput struct {
 	ModelUUID string
 	PoolName  string
 }
 
+// GetStoragePoolResponse is the response from GetPool.
 type GetStoragePoolResponse struct {
 	Pool params.StoragePool
 }
