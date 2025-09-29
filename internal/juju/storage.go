@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	// NoSuchProviderError is returned when a storage provider does not exist.
-	NoSuchProviderError = errors.New("no such provider")
+	// StoragePoolNotFoundError is returned when a storage pool does not exist.
+	StoragePoolNotFoundError = errors.New("storage pool not found")
 )
 
 type storageClient struct {
@@ -20,26 +20,26 @@ type storageClient struct {
 }
 
 type CreateStoragePoolInput struct {
-	ModelName string
+	ModelUUID string
 	PoolName  string
 	Provider  string
 	Attrs     map[string]interface{}
 }
 
 type UpdateStoragePoolInput struct {
-	ModelName string
+	ModelUUID string
 	PoolName  string
 	Provider  string
 	Attrs     map[string]interface{}
 }
 
 type RemoveStoragePoolInput struct {
-	ModelName string
+	ModelUUID string
 	PoolName  string
 }
 
 type GetStoragePoolInput struct {
-	ModelName string
+	ModelUUID string
 	PoolName  string
 }
 
@@ -55,7 +55,7 @@ func newStorageClient(sc SharedClient) *storageClient {
 
 // CreatePool creates pool with specified parameters.
 func (c *storageClient) CreatePool(input CreateStoragePoolInput) error {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func (c *storageClient) UpdatePool(modelname, pname, provider string, attrs map[
 
 // RemovePool removes the named pool.
 func (c *storageClient) RemovePool(input RemoveStoragePoolInput) error {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (c *storageClient) RemovePool(input RemoveStoragePoolInput) error {
 
 // GetPool gets a pool by name.
 func (c *storageClient) GetPool(input GetStoragePoolInput) (GetStoragePoolResponse, error) {
-	conn, err := c.GetConnection(&input.ModelName)
+	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return GetStoragePoolResponse{}, err
 	}
@@ -107,7 +107,7 @@ func (c *storageClient) GetPool(input GetStoragePoolInput) (GetStoragePoolRespon
 		return GetStoragePoolResponse{}, err
 	}
 	if len(pools) == 0 {
-		return GetStoragePoolResponse{}, NoSuchProviderError
+		return GetStoragePoolResponse{}, StoragePoolNotFoundError
 	}
 
 	return GetStoragePoolResponse{Pool: pools[0]}, nil

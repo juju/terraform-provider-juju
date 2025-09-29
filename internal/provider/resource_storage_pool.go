@@ -1,4 +1,4 @@
-// Copyright 2023 Canonical Ltd.
+// Copyright 2025 Canonical Ltd.
 // Licensed under the Apache License, Version 2.0, see LICENCE file for details.
 
 package provider
@@ -25,9 +25,6 @@ import (
 var _ resource.Resource = &storagePoolResource{}
 var _ resource.ResourceWithConfigure = &storagePoolResource{}
 
-// I don't think importing storage pools makes sense because we cannot also import the storage already produced from it with it.
-// var _ resource.ResourceWithImportState = &storagePoolResource{}
-
 // NewStoragePoolResource returns a new instance of the storage pool resource.
 func NewStoragePoolResource() resource.Resource {
 	return &storagePoolResource{}
@@ -48,13 +45,14 @@ type storagePoolResource struct {
 type storagePoolResourceModel struct {
 	Name            types.String `tfsdk:"name"`
 	ModelUUID       types.String `tfsdk:"model_uuid"`
-	StorageProvider types.String `tfsdk:"storageprovider"`
+	StorageProvider types.String `tfsdk:"storage_provider"`
 	Attributes      types.Map    `tfsdk:"attributes"`
 
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
 
+// Configure implements resource.ResourceWithConfigure.
 func (r *storagePoolResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
@@ -72,10 +70,12 @@ func (r *storagePoolResource) Configure(ctx context.Context, req resource.Config
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceStoragePool)
 }
 
+// Metadata implements resource.Resource.
 func (r *storagePoolResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_storage_pool"
 }
 
+// Schema implements resource.Resource.
 func (r *storagePoolResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: `A resource that represents a Juju storage pool.
@@ -111,7 +111,7 @@ To learn more about storage pools, please visit: https://documentation.ubuntu.co
 				},
 			},
 
-			"storageprovider": schema.StringAttribute{
+			"storage_provider": schema.StringAttribute{
 				Description: "The storage provider type (e.g., 'rootfs', 'tmpfs', 'loop', or a cloud specific provider).",
 				Required:    true,
 				Validators: []validator.String{
@@ -133,6 +133,7 @@ To learn more about storage pools, please visit: https://documentation.ubuntu.co
 	}
 }
 
+// Create implements resource.Resource.
 func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if r.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "storagepool", "create")
@@ -154,7 +155,7 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 
 	if err := r.client.Storage.CreatePool(
 		juju.CreateStoragePoolInput{
-			ModelName: plan.ModelUUID.ValueString(),
+			ModelUUID: plan.ModelUUID.ValueString(),
 			PoolName:  plan.Name.ValueString(),
 			Provider:  plan.StorageProvider.ValueString(),
 			Attrs:     storageProviderAttrsAny,
@@ -171,7 +172,7 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 			GetData: func(input storagePoolWaitForInput) (juju.GetStoragePoolResponse, error) {
 				return r.client.Storage.GetPool(
 					juju.GetStoragePoolInput{
-						ModelName: input.modelname,
+						ModelUUID: input.modelname,
 						PoolName:  input.pname,
 					},
 				)
@@ -195,9 +196,9 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	r.trace("created storage pool", map[string]interface{}{
-		"name":            plan.Name.ValueString(),
-		"model":           plan.ModelUUID.ValueString(),
-		"storageprovider": plan.StorageProvider.ValueString(),
+		"name":             plan.Name.ValueString(),
+		"model":            plan.ModelUUID.ValueString(),
+		"storage_provider": plan.StorageProvider.ValueString(),
 	})
 
 	plan.ID = generateResourceID(plan)
@@ -205,6 +206,7 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Read implements resource.Resource.
 func (r *storagePoolResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	if r.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "storagepool", "read")
@@ -220,7 +222,7 @@ func (r *storagePoolResource) Read(ctx context.Context, req resource.ReadRequest
 
 	getPoolResp, err := r.client.Storage.GetPool(
 		juju.GetStoragePoolInput{
-			ModelName: state.ModelUUID.ValueString(),
+			ModelUUID: state.ModelUUID.ValueString(),
 			PoolName:  state.Name.ValueString(),
 		},
 	)
@@ -247,6 +249,7 @@ func (r *storagePoolResource) Read(ctx context.Context, req resource.ReadRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update implements resource.Resource.
 func (r *storagePoolResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	if r.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "storagepool", "update")
@@ -288,7 +291,7 @@ func (r *storagePoolResource) Update(ctx context.Context, req resource.UpdateReq
 			GetData: func(input storagePoolWaitForInput) (juju.GetStoragePoolResponse, error) {
 				return r.client.Storage.GetPool(
 					juju.GetStoragePoolInput{
-						ModelName: input.modelname,
+						ModelUUID: input.modelname,
 						PoolName:  input.pname,
 					},
 				)
@@ -327,14 +330,15 @@ func (r *storagePoolResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	r.trace("updated storage pool", map[string]interface{}{
-		"name":            plan.Name.ValueString(),
-		"model":           plan.ModelUUID.ValueString(),
-		"storageprovider": plan.StorageProvider.ValueString(),
+		"name":             plan.Name.ValueString(),
+		"model":            plan.ModelUUID.ValueString(),
+		"storage_provider": plan.StorageProvider.ValueString(),
 	})
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete implements resource.Resource.
 func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	if r.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "storagepool", "delete")
@@ -350,7 +354,7 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 
 	if err := r.client.Storage.RemovePool(
 		juju.RemoveStoragePoolInput{
-			ModelName: state.ModelUUID.ValueString(),
+			ModelUUID: state.ModelUUID.ValueString(),
 			PoolName:  state.Name.ValueString(),
 		},
 	); err != nil {
@@ -369,21 +373,21 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 			GetData: func(input storagePoolWaitForInput) (juju.GetStoragePoolResponse, error) {
 				return r.client.Storage.GetPool(
 					juju.GetStoragePoolInput{
-						ModelName: input.modelname,
+						ModelUUID: input.modelname,
 						PoolName:  input.pname,
 					},
 				)
 			},
-			ErrorToWait: juju.NoSuchProviderError,
+			ErrorToWait: juju.StoragePoolNotFoundError,
 		},
 	); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for storage pool, got error: %s", err))
 		return
 	}
 	r.trace("deleted storage pool", map[string]interface{}{
-		"name":            state.Name.ValueString(),
-		"model":           state.ModelUUID.ValueString(),
-		"storageprovider": state.StorageProvider.ValueString(),
+		"name":             state.Name.ValueString(),
+		"model":            state.ModelUUID.ValueString(),
+		"storage_provider": state.StorageProvider.ValueString(),
 	})
 }
 

@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
@@ -38,7 +39,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
 					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
-					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", "rootfs"),
+					resource.TestCheckResourceAttr(resourceFullName, "storage_provider", "rootfs"),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.a", "b"),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.c", "d"),
 				),
@@ -58,7 +59,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
 					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
-					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", storageProviderName),
+					resource.TestCheckResourceAttr(resourceFullName, "storage_provider", storageProviderName),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.a", "b"),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.c", "d"),
 				),
@@ -79,7 +80,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
 					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
-					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", storageProviderName),
+					resource.TestCheckResourceAttr(resourceFullName, "storage_provider", storageProviderName),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.a", "benedict"),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.charlie", "d"),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.alpha", "delta"),
@@ -97,7 +98,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
 					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
-					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", storageProviderName),
+					resource.TestCheckResourceAttr(resourceFullName, "storage_provider", storageProviderName),
 				),
 			},
 			// Add attributes back from null attributes:
@@ -114,7 +115,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
 					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
-					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", storageProviderName),
+					resource.TestCheckResourceAttr(resourceFullName, "storage_provider", storageProviderName),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.alice", "ourtrueuser0"),
 				),
 			},
@@ -145,7 +146,7 @@ func TestAcc_ResourceStoragePool_CreateNoAttributes(t *testing.T) {
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
 					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
-					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", storageProviderName),
+					resource.TestCheckResourceAttr(resourceFullName, "storage_provider", storageProviderName),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.%", "0"),
 				),
 			},
@@ -165,7 +166,7 @@ func TestAcc_ResourceStoragePool_CreateNoAttributes(t *testing.T) {
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
 					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
-					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", storageProviderName),
+					resource.TestCheckResourceAttr(resourceFullName, "storage_provider", storageProviderName),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.a", "benedict"),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.charlie", "d"),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.alpha", "delta"),
@@ -184,7 +185,7 @@ resource "juju_model" "{{.ModelName}}" {
 resource "juju_storage_pool" "{{.PoolName}}" {
 	name = "{{.PoolName}}"
 	model_uuid = juju_model.{{.ModelName}}.uuid
-	storageprovider = "{{.StorageProviderName}}"
+	storage_provider = "{{.StorageProviderName}}"
 	attributes = {
 	{{- range $key, $value := .PoolAttributes }}
 	{{$key}} = "{{$value}}"
@@ -209,7 +210,7 @@ resource "juju_model" "{{.ModelName}}" {
 resource "juju_storage_pool" "{{.PoolName}}" {
 	name = "{{.PoolName}}"
 	model_uuid = juju_model.{{.ModelName}}.uuid
-	storageprovider = "{{.StorageProviderName}}"
+	storage_provider = "{{.StorageProviderName}}"
 }
 
 `, internaltesting.TemplateData{
