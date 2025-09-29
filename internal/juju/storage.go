@@ -19,6 +19,34 @@ type storageClient struct {
 	SharedClient
 }
 
+type CreateStoragePoolInput struct {
+	ModelName string
+	PoolName  string
+	Provider  string
+	Attrs     map[string]interface{}
+}
+
+type UpdateStoragePoolInput struct {
+	ModelName string
+	PoolName  string
+	Provider  string
+	Attrs     map[string]interface{}
+}
+
+type RemoveStoragePoolInput struct {
+	ModelName string
+	PoolName  string
+}
+
+type GetStoragePoolInput struct {
+	ModelName string
+	PoolName  string
+}
+
+type GetStoragePoolResponse struct {
+	Pool params.StoragePool
+}
+
 func newStorageClient(sc SharedClient) *storageClient {
 	return &storageClient{
 		SharedClient: sc,
@@ -26,8 +54,8 @@ func newStorageClient(sc SharedClient) *storageClient {
 }
 
 // CreatePool creates pool with specified parameters.
-func (c *storageClient) CreatePool(modelname, pname, provider string, attrs map[string]interface{}) error {
-	conn, err := c.GetConnection(&modelname)
+func (c *storageClient) CreatePool(input CreateStoragePoolInput) error {
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return err
 	}
@@ -35,7 +63,7 @@ func (c *storageClient) CreatePool(modelname, pname, provider string, attrs map[
 
 	client := storage.NewClient(conn)
 
-	return client.CreatePool(pname, provider, attrs)
+	return client.CreatePool(input.PoolName, input.Provider, input.Attrs)
 }
 
 // UpdatePool updates a pool with specified parameters.
@@ -52,8 +80,8 @@ func (c *storageClient) UpdatePool(modelname, pname, provider string, attrs map[
 }
 
 // RemovePool removes the named pool.
-func (c *storageClient) RemovePool(modelname, pname string) error {
-	conn, err := c.GetConnection(&modelname)
+func (c *storageClient) RemovePool(input RemoveStoragePoolInput) error {
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
 		return err
 	}
@@ -61,26 +89,26 @@ func (c *storageClient) RemovePool(modelname, pname string) error {
 
 	client := storage.NewClient(conn)
 
-	return client.RemovePool(pname)
+	return client.RemovePool(input.PoolName)
 }
 
 // GetPool gets a pool by name.
-func (c *storageClient) GetPool(modelname, pname string) (params.StoragePool, error) {
-	conn, err := c.GetConnection(&modelname)
+func (c *storageClient) GetPool(input GetStoragePoolInput) (GetStoragePoolResponse, error) {
+	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
-		return params.StoragePool{}, err
+		return GetStoragePoolResponse{}, err
 	}
 	defer func() { _ = conn.Close() }()
 
 	client := storage.NewClient(conn)
 
-	pools, err := client.ListPools([]string{}, []string{pname})
+	pools, err := client.ListPools([]string{}, []string{input.PoolName})
 	if err != nil {
-		return params.StoragePool{}, err
+		return GetStoragePoolResponse{}, err
 	}
 	if len(pools) == 0 {
-		return params.StoragePool{}, NoSuchProviderError
+		return GetStoragePoolResponse{}, NoSuchProviderError
 	}
 
-	return pools[0], nil
+	return GetStoragePoolResponse{Pool: pools[0]}, nil
 }

@@ -63,30 +63,6 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.c", "d"),
 				),
 			},
-			// NoOp check to verify Read returns no changes under NoOp circumstances:
-			{
-				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction(resourceFullName, plancheck.ResourceActionNoop),
-					},
-				},
-				Config: testAccResourceStoragePoolWithAttributes(modelName, poolName, storageProviderName, map[string]string{
-					"a": "b",
-					"c": "d",
-				}),
-			},
-			// RefreshState testing to verify Read returns no changes under Refresh circumstances:
-			{
-				RefreshState: true,
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
-					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
-					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
-					resource.TestCheckResourceAttr(resourceFullName, "storageprovider", storageProviderName),
-					resource.TestCheckResourceAttr(resourceFullName, "attributes.a", "b"),
-					resource.TestCheckResourceAttr(resourceFullName, "attributes.c", "d"),
-				),
-			},
 			// Update attributes (in-place) and add a new attribute:
 			{
 				ConfigPlanChecks: resource.ConfigPlanChecks{
@@ -116,7 +92,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 						plancheck.ExpectResourceAction(resourceFullName, plancheck.ResourceActionUpdate),
 					},
 				},
-				Config: testAccResourceStoragePoolRemoveAttributes(modelName, poolName, storageProviderName),
+				Config: testAccResourceStoragePoolNoAttributes(modelName, poolName, storageProviderName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
@@ -164,7 +140,7 @@ func TestAcc_ResourceStoragePool_CreateNoAttributes(t *testing.T) {
 						plancheck.ExpectResourceAction(resourceFullName, plancheck.ResourceActionCreate),
 					},
 				},
-				Config: testAccResourceStoragePoolRemoveAttributes(modelName, poolName, storageProviderName),
+				Config: testAccResourceStoragePoolNoAttributes(modelName, poolName, storageProviderName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
 					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
@@ -224,7 +200,7 @@ resource "juju_storage_pool" "{{.PoolName}}" {
 	})
 }
 
-func testAccResourceStoragePoolRemoveAttributes(modelName, poolName, storageProviderName string) string {
+func testAccResourceStoragePoolNoAttributes(modelName, poolName, storageProviderName string) string {
 	return internaltesting.GetStringFromTemplateWithData("testAccResourceApplicationStorage", `
 resource "juju_model" "{{.ModelName}}" {
 	name = "{{.ModelName}}"

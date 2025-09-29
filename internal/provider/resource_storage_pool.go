@@ -18,7 +18,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
-	"github.com/juju/juju/rpc/params"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/wait"
 )
@@ -154,10 +153,12 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	if err := r.client.Storage.CreatePool(
-		plan.ModelUUID.ValueString(),
-		plan.Name.ValueString(),
-		plan.StorageProvider.ValueString(),
-		storageProviderAttrsAny,
+		juju.CreateStoragePoolInput{
+			ModelName: plan.ModelUUID.ValueString(),
+			PoolName:  plan.Name.ValueString(),
+			Provider:  plan.StorageProvider.ValueString(),
+			Attrs:     storageProviderAttrsAny,
+		},
 	); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create storage pool resource, got error: %s", err))
 		return
@@ -165,21 +166,23 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 
 	// Wait for the pool to be created.
 	if _, err := wait.WaitFor(
-		wait.WaitForCfg[storagePoolWaitForInput, params.StoragePool]{
+		wait.WaitForCfg[storagePoolWaitForInput, juju.GetStoragePoolResponse]{
 			Context: ctx,
-			GetData: func(input storagePoolWaitForInput) (params.StoragePool, error) {
+			GetData: func(input storagePoolWaitForInput) (juju.GetStoragePoolResponse, error) {
 				return r.client.Storage.GetPool(
-					input.modelname,
-					input.pname,
+					juju.GetStoragePoolInput{
+						ModelName: input.modelname,
+						PoolName:  input.pname,
+					},
 				)
 			},
 			Input: storagePoolWaitForInput{
 				modelname: plan.ModelUUID.ValueString(),
 				pname:     plan.Name.ValueString(),
 			},
-			DataAssertions: []wait.Assert[params.StoragePool]{
-				func(data params.StoragePool) error {
-					if data.Name != plan.Name.ValueString() {
+			DataAssertions: []wait.Assert[juju.GetStoragePoolResponse]{
+				func(data juju.GetStoragePoolResponse) error {
+					if data.Pool.Name != plan.Name.ValueString() {
 						return juju.NewRetryReadError("waiting for storage pool to be created")
 					}
 					return nil
@@ -215,20 +218,22 @@ func (r *storagePoolResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	pool, err := r.client.Storage.GetPool(
-		state.ModelUUID.ValueString(),
-		state.Name.ValueString(),
+	getPoolResp, err := r.client.Storage.GetPool(
+		juju.GetStoragePoolInput{
+			ModelName: state.ModelUUID.ValueString(),
+			PoolName:  state.Name.ValueString(),
+		},
 	)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read storage pool resource, got error: %s", err))
 		return
 	}
-	r.trace(fmt.Sprintf("read storage pool resource %q", pool.Name))
+	r.trace(fmt.Sprintf("read storage pool resource %q", getPoolResp.Pool.Name))
 
 	// If user removes the attribute block entirely during an update, we want to maintain the null value in state.
 	// So, if the map has values, we set it, otherwise we leave it as null.
-	if len(pool.Attrs) > 0 {
-		convertedAttrs, diagErrs := types.MapValueFrom(ctx, types.StringType, pool.Attrs)
+	if len(getPoolResp.Pool.Attrs) > 0 {
+		convertedAttrs, diagErrs := types.MapValueFrom(ctx, types.StringType, getPoolResp.Pool.Attrs)
 		resp.Diagnostics.Append(diagErrs...)
 		if resp.Diagnostics.HasError() {
 			return
@@ -236,8 +241,8 @@ func (r *storagePoolResource) Read(ctx context.Context, req resource.ReadRequest
 		state.Attributes = convertedAttrs
 	}
 
-	state.Name = types.StringValue(pool.Name)
-	state.StorageProvider = types.StringValue(pool.Provider)
+	state.Name = types.StringValue(getPoolResp.Pool.Name)
+	state.StorageProvider = types.StringValue(getPoolResp.Pool.Provider)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -278,23 +283,25 @@ func (r *storagePoolResource) Update(ctx context.Context, req resource.UpdateReq
 
 	// Wait for the pool to be updated.
 	if _, err := wait.WaitFor(
-		wait.WaitForCfg[storagePoolWaitForInput, params.StoragePool]{
+		wait.WaitForCfg[storagePoolWaitForInput, juju.GetStoragePoolResponse]{
 			Context: ctx,
-			GetData: func(input storagePoolWaitForInput) (params.StoragePool, error) {
+			GetData: func(input storagePoolWaitForInput) (juju.GetStoragePoolResponse, error) {
 				return r.client.Storage.GetPool(
-					input.modelname,
-					input.pname,
+					juju.GetStoragePoolInput{
+						ModelName: input.modelname,
+						PoolName:  input.pname,
+					},
 				)
 			},
 			Input: storagePoolWaitForInput{
 				modelname: plan.ModelUUID.ValueString(),
 				pname:     plan.Name.ValueString(),
 			},
-			DataAssertions: []wait.Assert[params.StoragePool]{
-				func(data params.StoragePool) error {
+			DataAssertions: []wait.Assert[juju.GetStoragePoolResponse]{
+				func(data juju.GetStoragePoolResponse) error {
 					// If the attributes are removed, or {}, Juju always returns an empty map, so we check for an empty map.
 					if plan.Attributes.IsNull() || plan.Attributes.IsUnknown() || len(plan.Attributes.Elements()) == 0 {
-						if len(data.Attrs) == 0 {
+						if len(data.Pool.Attrs) == 0 {
 							return nil
 						}
 						return juju.NewRetryReadError("waiting for storage pool attributes to be removed")
@@ -306,7 +313,7 @@ func (r *storagePoolResource) Update(ctx context.Context, req resource.UpdateReq
 					}
 
 					// Attributes cannot be nested, so a simple maps.Equal is sufficient.
-					if !maps.Equal(planAttributesMapAny, data.Attrs) {
+					if !maps.Equal(planAttributesMapAny, data.Pool.Attrs) {
 						return juju.NewRetryReadError("waiting for storage pool attributes to be updated")
 					}
 
@@ -342,8 +349,10 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	if err := r.client.Storage.RemovePool(
-		state.ModelUUID.ValueString(),
-		state.Name.ValueString(),
+		juju.RemoveStoragePoolInput{
+			ModelName: state.ModelUUID.ValueString(),
+			PoolName:  state.Name.ValueString(),
+		},
 	); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete storage pool resource, got error: %s", err))
 		return
@@ -351,16 +360,18 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 
 	// Wait for the pool to be deleted.
 	if err := wait.WaitForError(
-		wait.WaitForErrorCfg[storagePoolWaitForInput, params.StoragePool]{
+		wait.WaitForErrorCfg[storagePoolWaitForInput, juju.GetStoragePoolResponse]{
 			Context: ctx,
 			Input: storagePoolWaitForInput{
 				modelname: state.ModelUUID.ValueString(),
 				pname:     state.Name.ValueString(),
 			},
-			GetData: func(input storagePoolWaitForInput) (params.StoragePool, error) {
+			GetData: func(input storagePoolWaitForInput) (juju.GetStoragePoolResponse, error) {
 				return r.client.Storage.GetPool(
-					input.modelname,
-					input.pname,
+					juju.GetStoragePoolInput{
+						ModelName: input.modelname,
+						PoolName:  input.pname,
+					},
 				)
 			},
 			ErrorToWait: juju.NoSuchProviderError,
