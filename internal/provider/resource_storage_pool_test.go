@@ -23,7 +23,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
-			// Create with wrong storage provider:
+			// Create with intentionally incorrect storage provider:
 			{
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{

@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/juju/juju/rpc/params"
@@ -196,9 +197,7 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 		"storageprovider": plan.StorageProvider.ValueString(),
 	})
 
-	plan.ID = types.StringValue(
-		fmt.Sprintf("%s-%s", plan.ModelUUID.ValueString(), plan.Name.ValueString()),
-	)
+	plan.ID = generateResourceID(plan)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -258,10 +257,6 @@ func (r *storagePoolResource) Update(ctx context.Context, req resource.UpdateReq
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	if plan.Attributes.Equal(state.Attributes) {
 		return
 	}
 
@@ -403,4 +398,10 @@ func (s storagePoolResourceModel) getAttributesAsGoMap(ctx context.Context) (map
 	}
 
 	return planAttributesMapAny, nil
+}
+
+func generateResourceID(plan storagePoolResourceModel) basetypes.StringValue {
+	return types.StringValue(
+		fmt.Sprintf("%s-%s", plan.ModelUUID.ValueString(), plan.Name.ValueString()),
+	)
 }
