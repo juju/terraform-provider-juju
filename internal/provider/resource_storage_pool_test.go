@@ -4,11 +4,13 @@
 package provider
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
@@ -171,6 +173,47 @@ func TestAcc_ResourceStoragePool_CreateNoAttributes(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.charlie", "d"),
 					resource.TestCheckResourceAttr(resourceFullName, "attributes.alpha", "delta"),
 				),
+			},
+		},
+	})
+}
+
+// Tests that creating a pool with no attributes (nulled in state) works as expected when updated to a value.
+func TestAcc_ResourceStoragePool_ImportState(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("test-model")
+	poolName := "test-pool"
+	storageProviderName := "tmpfs"
+
+	resourceFullName := "juju_storage_pool." + poolName
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			// Create with pool attributes:
+			{
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceFullName, plancheck.ResourceActionCreate),
+					},
+				},
+				Config: testAccResourceStoragePoolNoAttributes(modelName, poolName, storageProviderName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
+					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
+					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
+					resource.TestCheckResourceAttr(resourceFullName, "storage_provider", storageProviderName),
+					resource.TestCheckResourceAttr(resourceFullName, "attributes.%", "0"),
+				),
+			},
+			{
+				ResourceName: resourceFullName,
+				ImportState:  true,
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					rs := s.RootModule().Resources[resourceFullName]
+					modelUUID := rs.Primary.Attributes["model_uuid"]
+					return fmt.Sprintf("%s:%s", modelUUID, poolName), nil
+				},
+				ImportStateVerify: true,
 			},
 		},
 	})
