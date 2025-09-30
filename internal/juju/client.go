@@ -66,6 +66,7 @@ type Client struct {
 	Secrets      secretsClient
 	Jaas         jaasClient
 	Annotations  annotationsClient
+	Storage      storageClient
 
 	isJAAS   func() bool
 	username string
@@ -174,6 +175,7 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 		Secrets:      *newSecretsClient(sc),
 		Jaas:         *newJaasClient(sc),
 		Annotations:  *newAnnotationsClient(sc),
+		Storage:      *newStorageClient(sc),
 		isJAAS:       func() bool { return sc.IsJAAS(defaultJAASCheck) },
 		username:     user,
 	}, nil
