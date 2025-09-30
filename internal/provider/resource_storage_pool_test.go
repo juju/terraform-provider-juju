@@ -19,7 +19,13 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("test-model")
 
 	poolName := "test-pool"
+
 	storageProviderName := "tmpfs"
+
+	// Rootfs, tmpfs and loop are currently not "listable" on k8s (3.6.9) when listing them.
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
 
 	resourceFullName := "juju_storage_pool." + poolName
 	resource.ParallelTest(t, resource.TestCase{
@@ -130,6 +136,10 @@ func TestAcc_ResourceStoragePool_ImportState(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("test-model")
 	poolName := "test-pool"
 	storageProviderName := "tmpfs"
+
+	if testingCloud != LXDCloudTesting {
+		storageProviderName = "kubernetes"
+	}
 
 	resourceFullName := "juju_storage_pool." + poolName
 	resource.ParallelTest(t, resource.TestCase{
