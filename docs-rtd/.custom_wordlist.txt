@@ -115,3 +115,6 @@ offer_url
 public_key_file
 private_key_file
 wait_for_hostname
+hardcoded
+tmpfs
+rootfs

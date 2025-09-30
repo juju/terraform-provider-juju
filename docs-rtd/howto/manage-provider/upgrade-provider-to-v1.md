@@ -85,7 +85,7 @@ The `juju_offer` data source no longer contains the computed `model` field.
 
 Several deprecated fields have been removed from the `juju_application` resource:
 
-- **`placement`** - Use `machines` instead. This is epected to cause resource replacement.
+- **`placement`** - Use `machines` instead. This is expected to cause resource replacement.
 - **`principle`** - Field was unused and has been removed.
 - **`series`** - Use `base` instead.
 
