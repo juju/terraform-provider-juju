@@ -85,6 +85,18 @@ func NewRetryReadError(msg string) error {
 	return errors.WithType(errors.Errorf("retrying: %s", msg), RetryReadError)
 }
 
+type ApplicationPartiallyCreatedError struct {
+	AppName string
+}
+
+func (e ApplicationPartiallyCreatedError) Error() string {
+	return "application " + e.AppName + " was partially created"
+}
+
+func newApplicationPartiallyCreatedError(appName string) error {
+	return ApplicationPartiallyCreatedError{AppName: appName}
+}
+
 type applicationsClient struct {
 	SharedClient
 	controllerVersion version.Number
@@ -374,27 +386,26 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 			return nil, err
 		}
 	} else {
-		err = c.legacyDeploy(ctx, conn, applicationAPIClient, transformedInput)
-		err = jujuerrors.Annotate(err, "legacy deploy method")
-	}
-	if err != nil {
-		return nil, err
+		err := c.legacyDeploy(ctx, conn, applicationAPIClient, transformedInput)
+		if err != nil {
+			return nil, jujuerrors.Annotate(err, "legacy deploy method")
+		}
 	}
 
 	// If we have managed to deploy something, now we have
 	// to check if we have to expose something
 	err = c.processExpose(applicationAPIClient, transformedInput.applicationName, transformedInput.expose)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", newApplicationPartiallyCreatedError(transformedInput.applicationName), err)
 	}
 	modelType, err := c.ModelType(input.ModelUUID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", newApplicationPartiallyCreatedError(transformedInput.applicationName), err)
 	}
 	return &CreateApplicationResponse{
 		AppName:   transformedInput.applicationName,
 		ModelType: modelType.String(),
-	}, err
+	}, nil
 }
 
 func (c applicationsClient) deployFromRepository(applicationAPIClient ApplicationAPIClient, resourceAPIClient ResourceAPIClient, transformedInput transformedCreateApplicationInput) error {
@@ -429,7 +440,7 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient Applicatio
 	uploadErr := uploadExistingPendingResources(deployInfo.Name, localPendingResources, fileSystem, resourceAPIClient)
 
 	if uploadErr != nil {
-		return uploadErr
+		return fmt.Errorf("%w: %w", newApplicationPartiallyCreatedError(transformedInput.applicationName), uploadErr)
 	}
 	return nil
 }

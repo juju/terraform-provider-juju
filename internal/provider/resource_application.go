@@ -586,6 +586,15 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 			StorageConstraints: storageConstraints,
 		},
 	)
+	// If the application was partially created, record it to state
+	// and return with an error so that TF marks it as tainted.
+	var partialApp juju.ApplicationPartiallyCreatedError
+	if errors.As(err, &partialApp) {
+		plan.ID = types.StringValue(newAppID(plan.ModelUUID.ValueString(), partialApp.AppName))
+		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Application partially created then failed, got error: %s", err))
+		return
+	}
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create application, got error: %s", err))
 		return

@@ -83,9 +83,12 @@ func (s *ApplicationSuite) setupMocks(t *testing.T) *gomock.Controller {
 	log := func(msg string, additionalFields ...map[string]interface{}) {
 		s.T().Logf("logging from shared client %q, %+v", msg, additionalFields)
 	}
+	logErr := func(err error, msg string) {
+		s.T().Logf("error logging from shared client %q: %v", msg, err)
+	}
 	s.mockSharedClient = NewMockSharedClient(ctlr)
 	s.mockSharedClient.EXPECT().Debugf(gomock.Any(), gomock.Any()).Do(log).AnyTimes()
-	s.mockSharedClient.EXPECT().Errorf(gomock.Any(), gomock.Any()).Do(log).AnyTimes()
+	s.mockSharedClient.EXPECT().Errorf(gomock.Any(), gomock.Any()).Do(logErr).AnyTimes()
 	s.mockSharedClient.EXPECT().Tracef(gomock.Any(), gomock.Any()).Do(log).AnyTimes()
 	s.mockSharedClient.EXPECT().JujuLogger().Return(&jujuLoggerShim{}).AnyTimes()
 	s.mockSharedClient.EXPECT().GetConnection(&s.testModelUUID).Return(s.mockConnection, nil).AnyTimes()
@@ -696,6 +699,33 @@ func (s *ApplicationSuite) TestUploadExistingPendingResourcesInvalidFileNameRetu
 	fileSystem := osFilesystem{}
 	err := uploadExistingPendingResources(appName, pendingResources, fileSystem, s.mockResourceAPIClient)
 	s.Assert().Equal("unable to open resource custom-image: filepath or registry path:  not valid", err.Error(), "Error is expected.")
+}
+
+// TestPartialApplicationDeployError tests the case where deployFromRepository returns pending resources to upload
+// and uploadExistingPendingResources fails. We verify that the error can be unwrapped to an ApplicationPartiallyCreatedError
+// indicating to the caller that the application was partially created.
+func (s *ApplicationSuite) TestPartialApplicationDeployError() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	appName := "testapplication"
+	resourceName := "myResource"
+	client := s.getApplicationsClient()
+
+	s.mockApplicationClient.EXPECT().DeployFromRepository(gomock.Any()).Return(
+		apiapplication.DeployInfo{Name: appName},
+		[]apiapplication.PendingResourceUpload{
+			{
+				Name:     resourceName,
+				Filename: "./doesnotexist.txt",
+				Type:     "oci-image",
+			},
+		}, nil)
+
+	err := client.deployFromRepository(s.mockApplicationClient, s.mockResourceAPIClient, transformedCreateApplicationInput{
+		applicationName: appName,
+		resources:       map[string]string{"myResource": "./doesnotexist.txt"},
+	})
+	s.Assert().ErrorAs(err, &ApplicationPartiallyCreatedError{})
 }
 
 func (s *ApplicationSuite) TestIsSubordinate() {
