@@ -43,3 +43,12 @@ resource "juju_storage_pool" "mypool" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Storage pools can be imported with the UUID of the model and the name of the pool.
+$ terraform import juju_storage_pool.my_pool 1d10a751-02c1-43d5-b46b-d84fe04d6fde:my_pool
+```

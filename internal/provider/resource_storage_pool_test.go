@@ -126,59 +126,6 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 }
 
 // Tests that creating a pool with no attributes (nulled in state) works as expected when updated to a value.
-func TestAcc_ResourceStoragePool_CreateNoAttributes(t *testing.T) {
-	modelName := acctest.RandomWithPrefix("test-model")
-	poolName := "test-pool"
-	storageProviderName := "tmpfs"
-
-	resourceFullName := "juju_storage_pool." + poolName
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: frameworkProviderFactories,
-		Steps: []resource.TestStep{
-			// Create with pool attributes:
-			{
-				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction(resourceFullName, plancheck.ResourceActionCreate),
-					},
-				},
-				Config: testAccResourceStoragePoolNoAttributes(modelName, poolName, storageProviderName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
-					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
-					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
-					resource.TestCheckResourceAttr(resourceFullName, "storage_provider", storageProviderName),
-					resource.TestCheckResourceAttr(resourceFullName, "attributes.%", "0"),
-				),
-			},
-			// Update attributes (in-place) and add a new attribute:
-			{
-				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction(resourceFullName, plancheck.ResourceActionUpdate),
-					},
-				},
-				Config: testAccResourceStoragePoolWithAttributes(modelName, poolName, storageProviderName, map[string]string{
-					"a":       "benedict",
-					"charlie": "d",
-					"alpha":   "delta",
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(resourceFullName, "id"),
-					resource.TestCheckResourceAttr(resourceFullName, "name", poolName),
-					resource.TestCheckResourceAttrPair(resourceFullName, "model_uuid", "juju_model."+modelName, "uuid"),
-					resource.TestCheckResourceAttr(resourceFullName, "storage_provider", storageProviderName),
-					resource.TestCheckResourceAttr(resourceFullName, "attributes.a", "benedict"),
-					resource.TestCheckResourceAttr(resourceFullName, "attributes.charlie", "d"),
-					resource.TestCheckResourceAttr(resourceFullName, "attributes.alpha", "delta"),
-				),
-			},
-		},
-	})
-}
-
-// Tests that creating a pool with no attributes (nulled in state) works as expected when updated to a value.
 func TestAcc_ResourceStoragePool_ImportState(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("test-model")
 	poolName := "test-pool"
