@@ -14,7 +14,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
 	apispaces "github.com/juju/juju/api/client/spaces"
@@ -713,6 +717,36 @@ func TestAcc_CustomResourcesRemovedFromPlanMicrok8s(t *testing.T) {
 					time.Sleep(30 * time.Second)
 				},
 				RefreshState: true,
+			},
+		},
+	})
+}
+
+func TestAcc_CustomResourceFile(t *testing.T) {
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with Microk8s")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-custom-resource-file")
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// Deploy charm with a custom file resource that doesn't exist.
+				Config:      testAccResourceApplicationWithCustomResources(modelName, "latest/edge", "coredns-image", "./doesnotexist.txt"),
+				ExpectError: regexp.MustCompile(`Application partially created then failed`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("juju_application.this", tfjsonpath.New("status"), knownvalue.StringExact("tainted")),
+				},
+			},
+			{
+				// Deploy charm with a registry file resource.
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("juju_application.this", plancheck.ResourceActionReplace),
+					},
+				},
+				Config: testAccResourceApplicationWithCustomResources(modelName, "latest/edge", "coredns-image", "./testdata/privateregistry.txt"),
 			},
 		},
 	})
