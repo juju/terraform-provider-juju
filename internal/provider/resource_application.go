@@ -293,6 +293,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 			},
 			ResourceKey: schema.MapAttribute{
 				Optional:    true,
+				Description: "Charm resources, can be one of a) resource revision, b) OCI image URL c) file path.",
 				ElementType: types.StringType,
 				Validators: []validator.Map{
 					StringIsResourceKeyValidator{},

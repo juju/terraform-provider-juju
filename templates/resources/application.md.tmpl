@@ -17,6 +17,26 @@ description: |-
 
 {{ .SchemaMarkdown | trimspace }}
 
+## Charm resources
+
+The charm resources map supports the following formats:
+- Resource revision: e.g. "my-resource": "5"
+- OCI image URL: e.g. "my-image": "ghcr.io/canonical/test:latest"
+- File path: e.g. "my-file": "/path/to/file" or "my-file": "${path.module}/file.txt" or "my-file": abspath("${path.module}/file.txt")
+
+When using a resource revision, the revision must exist in Charmhub for the specified charm.
+When using an OCI image URL, the image must be publicly accessible.
+When using a file path, the file must exist on the local filesystem where Terraform is being run. The Terraform helper functions listed above may help with specifying the correct path.
+
+To deploy an image from a private registry, use a file path with a file that has the following fields,
+```
+registrypath: <registry_path> # e.g. ghcr.io/canonical/test:latest
+username: <registry_username>
+password: <registry_password>
+```
+
+If the deploy fails due to e.g. a missing file, the application may be partially created but will be marked as tainted in Terraform.
+The tainted resource will be recreated when you next run `terraform apply`. See more information on resource taints [here](https://developer.hashicorp.com/terraform/cli/commands/taint).
 
 {{ if .HasImport -}}
 ## Import
