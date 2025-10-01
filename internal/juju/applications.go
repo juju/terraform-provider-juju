@@ -39,7 +39,6 @@ import (
 	"github.com/juju/juju/charmhub"
 	"github.com/juju/juju/charmhub/transport"
 	"github.com/juju/juju/cmd/juju/application/utils"
-	resourcecmd "github.com/juju/juju/cmd/juju/resource"
 	corebase "github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
@@ -178,7 +177,7 @@ type CreateApplicationInput struct {
 	Machines           []string
 	Constraints        constraints.Value
 	EndpointBindings   map[string]string
-	Resources          map[string]string
+	Resources          map[string]CharmResource
 	StorageConstraints map[string]jujustorage.Constraints
 }
 
@@ -289,7 +288,7 @@ type transformedCreateApplicationInput struct {
 	units            int
 	trust            bool
 	endpointBindings map[string]string
-	resources        map[string]string
+	resources        map[string]CharmResource
 	storage          map[string]jujustorage.Constraints
 }
 
@@ -340,7 +339,7 @@ type UpdateApplicationInput struct {
 	Constraints        *constraints.Value
 	EndpointBindings   map[string]string
 	StorageConstraints map[string]jujustorage.Constraints
-	Resources          map[string]string
+	Resources          map[string]CharmResource
 	AddMachines        []string
 	RemoveMachines     []string
 }
@@ -427,7 +426,7 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient Applicatio
 		Placement:        transformedInput.placement,
 		Revision:         &transformedInput.charmRevision,
 		Trust:            transformedInput.trust,
-		Resources:        transformedInput.resources,
+		Resources:        resourcesAsStringMap(transformedInput.resources),
 		Storage:          transformedInput.storage,
 	})
 
@@ -435,14 +434,28 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient Applicatio
 		return stderrors.Join(errs...)
 	}
 
-	fileSystem := osFilesystem{}
 	// Upload the provided local resources to Juju
-	uploadErr := uploadExistingPendingResources(deployInfo.Name, localPendingResources, fileSystem, resourceAPIClient)
+	uploadErr := uploadExistingPendingResources(deployInfo.Name, localPendingResources, transformedInput.resources, resourceAPIClient)
 
 	if uploadErr != nil {
 		return fmt.Errorf("%w: %w", newApplicationPartiallyCreatedError(transformedInput.applicationName), uploadErr)
 	}
 	return nil
+}
+
+// resourcesAsStringMap converts our strongly typed resource map into one appropriate
+// for use with the Juju API. The string map holds "<resoure-name>":"<value>"
+// where the value is either a revision number or an arbitrary string.
+//
+// In the `DeployFromRepository` API, if the value is not a revision number, Juju will return
+// the arbitrary string back to us in the "filename" field of the resourcesToUpload since
+// the Juju CLI conventionally fetches this information from a local file.
+func resourcesAsStringMap(resources map[string]CharmResource) map[string]string {
+	result := map[string]string{}
+	for resourceName, resource := range resources {
+		result[resourceName] = resource.String()
+	}
+	return result
 }
 
 // TODO (hml) 23-Feb-2024
@@ -793,7 +806,7 @@ func splitCommaDelimitedList(list string) []string {
 
 // processResources is a helper function to process the charm
 // metadata and request the download of any additional resource.
-func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string, resourcesToUse map[string]string) (map[string]string, error) {
+func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string, resourcesToUse map[string]CharmResource) (map[string]string, error) {
 	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL)
 	if err != nil {
 		return nil, typedError(err)
@@ -1630,7 +1643,7 @@ func strPtr(in string) *string {
 	return &in
 }
 
-func (c applicationsClient) updateResources(appName string, resources map[string]string, charmsAPIClient *apicharms.Client,
+func (c applicationsClient) updateResources(appName string, resources map[string]CharmResource, charmsAPIClient *apicharms.Client,
 	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient) (map[string]string, error) {
 	meta, err := utils.GetMetaResources(charmID.URL, charmsAPIClient)
 	if err != nil {
@@ -1641,7 +1654,7 @@ func (c applicationsClient) updateResources(appName string, resources map[string
 		charmsAPIClient,
 		resourcesAPIClient,
 		appName,
-		resources,
+		resourcesAsStringMap(resources),
 		meta,
 	)
 	if err != nil {
@@ -1654,7 +1667,7 @@ func (c applicationsClient) updateResources(appName string, resources map[string
 	return addPendingResources(appName, filtered, resources, charmID, resourcesAPIClient)
 }
 
-func addPendingResources(appName string, charmResourcesToAdd map[string]charmresources.Meta, resourcesToUse map[string]string,
+func addPendingResources(appName string, charmResourcesToAdd map[string]charmresources.Meta, resourcesToUse map[string]CharmResource,
 	charmID apiapplication.CharmID, resourceAPIClient ResourceAPIClient) (map[string]string, error) {
 	pendingResourcesforAdd := []charmresources.Resource{}
 	resourceIDs := map[string]string{}
@@ -1672,11 +1685,11 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 			continue
 		}
 
-		deployValue, ok := resourcesToUse[resourceMeta.Name]
+		resource, ok := resourcesToUse[resourceMeta.Name]
 		if !ok {
 			continue
 		}
-		if providedRev, err := strconv.Atoi(deployValue); err == nil {
+		if providedRev, err := strconv.Atoi(resource.String()); err == nil {
 			// A resource revision is provided
 			resourceFromCharmhub := charmresources.Resource{
 				Meta:   resourceMeta,
@@ -1695,16 +1708,19 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 			Meta:   resourceMeta,
 			Origin: charmresources.OriginUpload,
 		}
-		fileSystem := osFilesystem{}
 		t, typeParseErr := charmresources.ParseType(resourceMeta.Type.String())
 		if typeParseErr != nil {
 			return nil, typedError(typeParseErr)
 		}
-		r, openResErr := resourcecmd.OpenResource(deployValue, t, fileSystem.Open)
-		if openResErr != nil {
-			return nil, typedError(openResErr)
+		if t != charmresources.TypeContainerImage {
+			// We don't support uploading non-container resources.
+			return nil, fmt.Errorf("only container resources can be uploaded; resource %q is of type %q", resourceMeta.Name, t.String())
 		}
-		toRequestUpload, err := resourceAPIClient.UploadPendingResource(appName, localResource, deployValue, r)
+		r, err := resource.ToResourceReader()
+		if err != nil {
+			return nil, typedError(err)
+		}
+		toRequestUpload, err := resourceAPIClient.UploadPendingResource(appName, localResource, resource.String(), r)
 		if err != nil {
 			return nil, typedError(err)
 		}

@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/dustin/go-humanize"
@@ -81,6 +82,11 @@ type applicationResource struct {
 	subCtx context.Context
 }
 
+type registryDetails struct {
+	User     types.String `tfsdk:"username"`
+	Password types.String `tfsdk:"password"`
+}
+
 type applicationResourceModel struct {
 	ApplicationName   types.String           `tfsdk:"name"`
 	Charm             types.List             `tfsdk:"charm"`
@@ -112,7 +118,8 @@ type applicationResourceModelV0 struct {
 // tfsdk must match user resource schema attribute names.
 type applicationResourceModelV1 struct {
 	applicationResourceModel
-	ModelUUID types.String `tfsdk:"model_uuid"`
+	ImageRegistries map[string]registryDetails `tfsdk:"image_registries"`
+	ModelUUID       types.String               `tfsdk:"model_uuid"`
 }
 
 func (r *applicationResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -288,6 +295,22 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Validators: []validator.Set{
 					setNestedIsAttributeUniqueValidator{
 						PathExpressions: path.MatchRelative().AtAnySetValue().MergeExpressions(path.MatchRelative().AtName("endpoint")),
+					},
+				},
+			},
+			"image_registries": schema.MapNestedAttribute{
+				// The key of this map is the registry URL.
+				Optional: true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"username": schema.StringAttribute{
+							Description: "The username for authenticating to the registry (if required).",
+							Required:    true,
+						},
+						"password": schema.StringAttribute{
+							Description: "The password for authenticating to the registry (if required).",
+							Required:    true,
+						},
 					},
 				},
 			},
@@ -567,6 +590,12 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		unitCount = len(machines)
 	}
 
+	charmResources, err := createCharmResources(resourceRevisions, plan.ImageRegistries)
+	if err != nil {
+		resp.Diagnostics.AddError("Input Error", fmt.Sprintf("Unable to process charm resources, got error: %s", err))
+		return
+	}
+
 	modelUUID := plan.ModelUUID.ValueString()
 	createResp, err := r.client.Applications.CreateApplication(ctx,
 		&juju.CreateApplicationInput{
@@ -583,7 +612,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 			Expose:             expose,
 			Machines:           machines,
 			EndpointBindings:   endpointBindings,
-			Resources:          resourceRevisions,
+			Resources:          charmResources,
 			StorageConstraints: storageConstraints,
 		},
 	)
@@ -667,6 +696,59 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	r.trace("Created", applicationResourceModelForLogging(ctx, &plan))
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// createCharmResources processes the resources map specified
+// and combines it with information on image registries.
+// Each resource can be either a revision number or an OCI image URL.
+// If the resource is a revision number, it is used as the charmRevision.
+// If the resource is an OCI image URL, it is used as the ociImageURL.
+// If the OCI image URL's registry matches one in the imageRegistries map,
+// the corresponding username and password are used for authentication.
+func createCharmResources(planResources map[string]string, imageRegistries map[string]registryDetails) (juju.CharmResources, error) {
+	jujuResources := make(juju.CharmResources, len(planResources))
+	for name, resource := range planResources {
+		var charmRevision, ociImageURL, registryUser, registryPassword string
+
+		if resource == "" {
+			return nil, fmt.Errorf("resource for %q is an empty string", name)
+		}
+
+		if _, err := strconv.Atoi(resource); err == nil {
+			charmRevision = resource
+		} else {
+			// Registry path matching is done based on a partial match.
+			// An image with URL "registry.example.com:5000/path/image:tag"
+			// will match a registry entry with key "registry.example.com:5000/path"
+			// but not "registry.example.com:5000" nor "registry.example.com".
+			//
+			// This allows for different credentials to be used for different paths
+			// within the same registry host e.g. github.com/canonical vs github.com/juju.
+			// This ASSUMES that multiple images from the same org/namespace can use the same credentials.
+			//
+			// If no match is found, no authentication is used.
+			ociImageURL = resource
+			imageIndex := strings.LastIndex(ociImageURL, "/")
+			registryPath := ociImageURL[:imageIndex]
+			if registryDetails, ok := imageRegistries[registryPath]; ok {
+				if !registryDetails.User.IsNull() {
+					registryUser = registryDetails.User.ValueString()
+				}
+				if !registryDetails.Password.IsNull() {
+					registryPassword = registryDetails.Password.ValueString()
+				}
+			}
+		}
+
+		jujuResources[name] = juju.NewCharmResource(
+			charmRevision,
+			ociImageURL,
+			registryUser,
+			registryPassword,
+		)
+	}
+
+	return jujuResources, nil
 }
 
 func transformSizeToHumanizedFormat(size uint64) string {
@@ -1022,44 +1104,58 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 	}
 
+	planResourceRevisions := make(map[string]string)
+	resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &planResourceRevisions, false)...)
+	stateResourceRevisions := make(map[string]string)
+	resp.Diagnostics.Append(state.Resources.ElementsAs(ctx, &stateResourceRevisions, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	planResources, err := createCharmResources(planResourceRevisions, plan.ImageRegistries)
+	if err != nil {
+		resp.Diagnostics.AddError("Input Error", fmt.Sprintf("Unable to process charm resources, got error: %s", err))
+		return
+	}
+	stateResources, err := createCharmResources(stateResourceRevisions, state.ImageRegistries)
+	if err != nil {
+		resp.Diagnostics.AddError("Input Error", fmt.Sprintf("Unable to process charm resources, got error: %s", err))
+		return
+	}
+
 	// if resources in the plan are equal to resources stored in the state,
 	// we pass on the resources specified in the plan, which tells the provider
 	// NOT to update resources, because we want resources fixed to those
 	// specified in the plan.
-	if plan.Resources.Equal(state.Resources) {
+	if planResources.Equal(stateResources) {
 		planResourceMap := make(map[string]string)
 		resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &planResourceMap, false)...)
-		updateApplicationInput.Resources = planResourceMap
+		updateApplicationInput.Resources = planResources
 	} else {
-		planResourceMap := make(map[string]string)
-		stateResourceMap := make(map[string]string)
-		resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &planResourceMap, false)...)
-		resp.Diagnostics.Append(state.Resources.ElementsAs(ctx, &stateResourceMap, false)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-
 		// what happens when the plan suddenly does not specify resource
 		// revisions, but state does.
-		for k, v := range planResourceMap {
-			if stateResourceMap[k] != v {
+		for k, v := range planResources {
+			if !stateResources[k].Equal(v) {
 				if updateApplicationInput.Resources == nil {
 					// initialize just in case
-					updateApplicationInput.Resources = make(map[string]string)
+					updateApplicationInput.Resources = make(juju.CharmResources)
 				}
 				updateApplicationInput.Resources[k] = v
 			}
 		}
-		// Resources are removed
+		// Check for any removed resources.
 		// Then, the resources get updated to the latest resource revision according to channel
-		if len(planResourceMap) == 0 && len(stateResourceMap) != 0 {
-			for k := range stateResourceMap {
-				if updateApplicationInput.Resources == nil {
-					// initialize the resources
-					updateApplicationInput.Resources = make(map[string]string)
-					// Set resource revision to zero gets the latest resource revision from CharmHub
-					updateApplicationInput.Resources[k] = "-1"
-				}
+		for k := range stateResources {
+			if _, found := planResources[k]; found {
+				continue
+			}
+			if updateApplicationInput.Resources == nil {
+				// initialize the resources
+				updateApplicationInput.Resources = make(juju.CharmResources)
+			}
+			// Set resource revision to zero gets the latest resource revision from CharmHub
+			updateApplicationInput.Resources[k] = juju.CharmResource{
+				RevisionNumber: "-1",
 			}
 		}
 	}
