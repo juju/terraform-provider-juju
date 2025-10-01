@@ -40,6 +40,8 @@ type kubernetesCloudResourceModel struct {
 	ParentCloudName            types.String `tfsdk:"parent_cloud_name"`
 	ParentCloudRegion          types.String `tfsdk:"parent_cloud_region"`
 	SkipServiceAccountCreation types.Bool   `tfsdk:"skip_service_account_creation"`
+	StorageClassName           types.String `tfsdk:"storage_class_name"`
+
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -113,6 +115,11 @@ func (r *kubernetesCloudResource) Schema(_ context.Context, req resource.SchemaR
 					"This way it does not need to connect to the K8s API when adding a k8s cloud.",
 				Optional: true,
 			},
+			"storage_class_name": schema.StringAttribute{
+				Description: "Specify the Kubernetes storage class name for workload and operator storage.",
+				Optional:    true,
+			},
+			// ID is required by the testing framework.
 			"id": schema.StringAttribute{
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
@@ -147,6 +154,7 @@ func (r *kubernetesCloudResource) Create(ctx context.Context, req resource.Creat
 			ParentCloudName:      plan.ParentCloudName.ValueString(),
 			ParentCloudRegion:    plan.ParentCloudRegion.ValueString(),
 			CreateServiceAccount: !plan.SkipServiceAccountCreation.ValueBool(),
+			StorageClassName:     plan.StorageClassName.ValueString(),
 		},
 	)
 	if err != nil {
