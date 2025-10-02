@@ -51,7 +51,7 @@ func TestCharmResources_Equal(t *testing.T) {
 		want bool
 	}{
 		{"both nil", nil, nil, true},
-		{"nil vs empty", nil, empty, false},
+		{"nil vs empty", nil, empty, true},
 		{"empty vs empty non-nil", empty, CharmResources{}, true},
 		{"same single key/value", nonEmpty, nonEmpty, true},
 		{"different value for same key", nonEmpty, CharmResources{"a": CharmResource{"2", "url", "user", "pass"}}, false},

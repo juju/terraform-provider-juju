@@ -50,13 +50,13 @@ const (
 	UnitsKey            = "units"
 
 	imageRegistriesMarkdownDescription = `
-	Image registry credentials for OCI images specified in the charm resources. The map key is the registry URL.
+	OCI image registry credentials for OCI images specified in the charm resources. The map key is the registry URL.
 	
 	If the charm resource requires authentication, supply a username and password that will be passed to the Juju API and added to the Kubernetes cluster.
 
-	The registry credentials will only be used if the URL of the registry is a partial match for the image URL specified in the charm resources.
-	An image URL is considered a match for a registry URL if the URL without the image name matches the registry URL. For example, 
-	an image with URL "registry.example.com:5000/path/image:tag" will match a registry entry with key "registry.example.com:5000/path" 
+	The registry credentials will only be used if the URL of the registry is a partial match for the OCI image URL specified in the charm resources.
+	An OCI image URL is considered a match for a registry URL if the URL without the OCI image tag matches the registry URL. For example, 
+	an OCI image with URL "registry.example.com:5000/path/image:tag" will match a registry entry with key "registry.example.com:5000/path" 
 	but not "registry.example.com:5000" nor "registry.example.com".
 
 `
@@ -316,11 +316,11 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"username": schema.StringAttribute{
-							Description: "The username for authenticating to the registry (if required).",
+							Description: "The username for authenticating to the registry.",
 							Required:    true,
 						},
 						"password": schema.StringAttribute{
-							Description: "The password for authenticating to the registry (if required).",
+							Description: "The password for authenticating to the registry.",
 							Required:    true,
 						},
 					},

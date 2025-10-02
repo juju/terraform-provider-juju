@@ -1712,7 +1712,7 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 		if typeParseErr != nil {
 			return nil, typedError(typeParseErr)
 		}
-		if t != charmresources.TypeContainerImage {
+		if t != charmresources.TypeContainerImage { // Uploading a container image implies uploading image metadata.
 			// We don't support uploading non-container resources.
 			return nil, fmt.Errorf("only container resources can be uploaded; resource %q is of type %q", resourceMeta.Name, t.String())
 		}

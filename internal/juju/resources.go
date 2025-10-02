@@ -5,6 +5,7 @@ package juju
 
 import (
 	"bytes"
+	"maps"
 
 	charmresources "github.com/juju/charm/v12/resource"
 	jujuerrors "github.com/juju/errors"
@@ -14,6 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// CharmResource represents a resource associated with a charm.
 type CharmResource struct {
 	RevisionNumber   string
 	OCIImageURL      string
@@ -35,59 +37,22 @@ func (cr CharmResource) String() string {
 
 // Equal checks if two CharmResource instances are equal.
 func (cr CharmResource) Equal(in CharmResource) bool {
-	if cr.RevisionNumber != in.RevisionNumber {
-		return false
-	}
-	if cr.OCIImageURL != in.OCIImageURL {
-		return false
-	}
-	if cr.RegistryUser != in.RegistryUser {
-		return false
-	}
-	if cr.RegistryPassword != in.RegistryPassword {
-		return false
-	}
-	return true
+	return cr == in
 }
 
+// CharmResources is a map of resource names to CharmResource instances.
 type CharmResources map[string]CharmResource
 
 // Equal checks if two CharmResources maps are equal.
 func (cr CharmResources) Equal(other CharmResources) bool {
-	// Both nil
-	if cr == nil && other == nil {
-		return true
-	}
-	// Since both are not nil, if either is nil they are not equal.
-	if cr == nil || other == nil {
-		return false
-	}
-	// Different lengths, not equal
-	if len(cr) != len(other) {
-		return false
-	}
-	// Compare each key/value pair
-	for k, v := range cr {
-		ov, found := other[k]
-		if !found {
-			return false
-		}
-		if !v.Equal(ov) {
-			return false
-		}
-	}
-	return true
-}
-
-type charmResourceReadSeeker struct {
-	*bytes.Reader
+	return maps.Equal(cr, other)
 }
 
 // ToResourceReader converts the CharmResource to a reader that can be used
 // to upload the resource to Juju. It returns an error if the conversion fails.
-func (cr CharmResource) ToResourceReader() (charmResourceReadSeeker, error) {
+func (cr CharmResource) ToResourceReader() (*bytes.Reader, error) {
 	if cr.OCIImageURL == "" {
-		return charmResourceReadSeeker{}, jujuerrors.New("OCIImageURL is required to create a resource reader")
+		return nil, jujuerrors.New("OCIImageURL is required to create a resource reader")
 	}
 
 	registryDetails := resources.DockerImageDetails{
@@ -101,9 +66,9 @@ func (cr CharmResource) ToResourceReader() (charmResourceReadSeeker, error) {
 	}
 	details, err := yaml.Marshal(registryDetails)
 	if err != nil {
-		return charmResourceReadSeeker{}, err
+		return nil, err
 	}
-	return charmResourceReadSeeker{bytes.NewReader([]byte(details))}, nil
+	return bytes.NewReader([]byte(details)), nil
 }
 
 // UploadExistingPendingResources uploads local resources. Used
@@ -124,7 +89,7 @@ func uploadExistingPendingResources(
 			return jujuerrors.Annotatef(typeParseErr, "invalid type %v for pending resource %v",
 				pendingResUpload.Type, pendingResUpload.Name)
 		}
-		if t != charmresources.TypeContainerImage {
+		if t != charmresources.TypeContainerImage { // Uploading a container image implies uploading image metadata.
 			// Non-docker resources are not supported for local upload.
 			return jujuerrors.NotSupportedf("uploading local resource of type %v for resource %v",
 				t, pendingResUpload.Name)
