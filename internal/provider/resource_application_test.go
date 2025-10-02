@@ -8,19 +8,18 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
-	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
-	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
-	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
+	"github.com/juju/juju/api/client/resources"
 	apispaces "github.com/juju/juju/api/client/spaces"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
@@ -722,34 +721,137 @@ func TestAcc_CustomResourcesRemovedFromPlanMicrok8s(t *testing.T) {
 	})
 }
 
-func TestAcc_CustomResourceFile(t *testing.T) {
+func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-custom-resource-file")
+	appName := "test-app"
+	appResourceFullName := "juju_application." + appName
+	// - Remove the custom resource.
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				// Deploy charm with a custom file resource that doesn't exist.
-				Config:      testAccResourceApplicationWithCustomResources(modelName, "latest/edge", "coredns-image", "./doesnotexist.txt"),
-				ExpectError: regexp.MustCompile(`Application partially created then failed`),
-				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue("juju_application.this", tfjsonpath.New("status"), knownvalue.StringExact("tainted")),
-				},
+				// A custom resource from a private registry.
+				Config: testAccResourceApplicationFromPrivateRegistry(modelName, appName, "user", "pass", "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
+						fingerprint: "1b94afe549b44328f2350ae24633b31265a01e466cf0469faa798acb9c637bea30c3c711f25937795eff34d2f920e074",
+						origin:      "upload",
+						revision:    "0",
+					}),
+				),
 			},
 			{
-				// Deploy charm with a registry file resource.
+				// A custom resource and changed registry credentials.
+				Config: testAccResourceApplicationFromPrivateRegistry(modelName, appName, "user2", "pass2", "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction("juju_application.this", plancheck.ResourceActionReplace),
+						plancheck.ExpectResourceAction(appResourceFullName, plancheck.ResourceActionUpdate),
 					},
 				},
-				Config: testAccResourceApplicationWithCustomResources(modelName, "latest/edge", "coredns-image", "./testdata/privateregistry.txt"),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
+						fingerprint: "953991156cf1e0a601f52b2b2b16c7042ad13bf765655c024f384385306404b7eb30bf72bdfcfda3c570b076b3aa96dc",
+						origin:      "upload",
+						revision:    "0",
+					}),
+				),
+			},
+			{
+				// A custom resource and removed registry credentials.
+				Config: testAccResourceApplicationFromPrivateRegistry(modelName, appName, "", "", "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(appResourceFullName, plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
+						fingerprint: "591c30e2a2730c206d65771cfa2302c90a2c90b0860207d82f041d24b7c16409e35465d2be987c4bf562734b9e62f248",
+						origin:      "upload",
+						revision:    "0",
+					}),
+				),
+			},
+			{
+				// Remove the custom resource.
+				Config: testAccResourceApplicationFromPrivateRegistry(modelName, appName, "", "", "74"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(appResourceFullName, plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
+						fingerprint: "398048a2c483cd10a5e358f0d45ed8e21ed077079779fecce58772d443a3c9b53e871cf43dba94fcb3463adee154c440",
+						origin:      "store",
+						revision:    "74",
+					}),
+				),
 			},
 		},
 	})
+}
+
+type charmResourceChecks struct {
+	// fingerprint is a SHA356 fingerprint of the resource.
+	fingerprint string
+	// origin is either "store" or "upload".
+	origin string
+	// revision is "0" when origin is "store", otherwise it's the revision number.
+	revision string
+}
+
+func testAccCheckApplicationResource(appResource string, checks charmResourceChecks) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		// retrieve the resource by name from state
+		rs, ok := s.RootModule().Resources[appResource]
+		if !ok {
+			return fmt.Errorf("Not found: %s", appResource)
+		}
+
+		model_uuid, ok := rs.Primary.Attributes["model_uuid"]
+		if !ok {
+			return fmt.Errorf("model_uuid is not set")
+		}
+		appName, ok := rs.Primary.Attributes["name"]
+		if !ok {
+			return fmt.Errorf("name is not set")
+		}
+
+		conn, err := TestClient.Models.GetConnection(&model_uuid)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = conn.Close() }()
+		jc, err := resources.NewClient(conn)
+		if err != nil {
+			return err
+		}
+
+		resources, err := jc.ListResources([]string{appName})
+		if err != nil {
+			return err
+		}
+		if len(resources) != 1 || len(resources[0].Resources) != 1 {
+			return fmt.Errorf("expected one resource for application %q, got %d", appName, len(resources))
+		}
+		resource := resources[0].Resources[0]
+		if resource.Fingerprint.String() != checks.fingerprint {
+			return fmt.Errorf("expected fingerprint %q, got %q", checks.fingerprint, resource.Fingerprint)
+		}
+		if resource.Origin.String() != checks.origin {
+			return fmt.Errorf("expected origin %q, got %q", checks.origin, resource.Origin)
+		}
+		if strconv.Itoa(resource.Revision) != checks.revision {
+			return fmt.Errorf("expected revision %q, got %q", checks.revision, resource.Revision)
+		}
+		return nil
+	}
 }
 
 func TestAcc_ResourceApplication_Minimal(t *testing.T) {
@@ -1596,6 +1698,51 @@ resource "juju_application" "{{.AppName}}" {
 			"Revision":              revision,
 			"ConfigParamName":       configParamName,
 			"ResourceParamName":     resourceName,
+			"ResourceParamRevision": resourceRevision,
+		})
+}
+
+func testAccResourceApplicationFromPrivateRegistry(modelName, appName, username, password string, resourceRevision string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceApplicationFromPrivateRegistry",
+		`
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_application" "{{.AppName}}" {
+  name  = "{{.AppName}}"
+  model_uuid = juju_model.{{.ModelName}}.uuid
+
+  charm {
+    name     = "coredns"
+    revision = 191
+    channel  = "latest/stable"
+  }
+
+  {{ if .UsePrivateRegistry }}
+  image_registries = {
+    "ghcr.io/canonical" = {
+      username = "{{.Username}}"
+      password = "{{.Password}}"
+    }
+  }
+  {{ end }}
+
+  {{ if ne .ResourceParamRevision "" }}
+  resources = {
+    "coredns-image" = "{{.ResourceParamRevision}}"
+  }
+  {{ end }}
+
+  units = 1
+}
+`, internaltesting.TemplateData{
+			"ModelName":             modelName,
+			"AppName":               appName,
+			"UsePrivateRegistry":    (username != "" && password != ""),
+			"Username":              username,
+			"Password":              password,
 			"ResourceParamRevision": resourceRevision,
 		})
 }
