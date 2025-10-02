@@ -9,8 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Only keep tests for exported functions/types
-
 func TestCharmResource_String(t *testing.T) {
 	cr := CharmResource{RevisionNumber: "5", OCIImageURL: "oci-url"}
 	assert.Equal(t, "5", cr.String(), "String() should return RevisionNumber if set")

@@ -1,3 +1,0 @@
-registrypath: ghcr.io/canonical/test:6a873fb35b0170dfe49ed27ba8ee6feb8e475131
-username: token
-password: token
