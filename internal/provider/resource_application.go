@@ -49,6 +49,17 @@ const (
 	StorageKey          = "storage"
 	UnitsKey            = "units"
 
+	imageRegistriesMarkdownDescription = `
+	Image registry credentials for OCI images specified in the charm resources. The map key is the registry URL.
+	
+	If the charm resource requires authentication, supply a username and password that will be passed to the Juju API and added to the Kubernetes cluster.
+
+	The registry credentials will only be used if the URL of the registry is a partial match for the image URL specified in the charm resources.
+	An image URL is considered a match for a registry URL if the URL without the image name matches the registry URL. For example, 
+	an image with URL "registry.example.com:5000/path/image:tag" will match a registry entry with key "registry.example.com:5000/path" 
+	but not "registry.example.com:5000" nor "registry.example.com".
+
+`
 	resourceKeyMarkdownDescription = `
 Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
 Specify a resource other than the default for a charm. Note that not all charms have resources.
@@ -300,7 +311,8 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 			},
 			"image_registries": schema.MapNestedAttribute{
 				// The key of this map is the registry URL.
-				Optional: true,
+				Optional:            true,
+				MarkdownDescription: imageRegistriesMarkdownDescription,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"username": schema.StringAttribute{
@@ -316,7 +328,6 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 			},
 			ResourceKey: schema.MapAttribute{
 				Optional:    true,
-				Description: "Charm resources, can be one of a) resource revision, b) OCI image URL c) file path.",
 				ElementType: types.StringType,
 				Validators: []validator.Map{
 					StringIsResourceKeyValidator{},

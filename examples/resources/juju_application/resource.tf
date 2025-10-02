@@ -26,3 +26,24 @@ resource "juju_application" "this" {
     external-hostname = "..."
   }
 }
+
+# K8s application with resource from private registry
+resource "juju_application" "this" {
+  model_uuid = juju_model.this.uuid
+  name       = "test-app"
+  charm {
+    name    = "coredns"
+    channel = "latest/stable"
+  }
+  trust = true
+  expose {}
+  image_registries = {
+    "ghcr.io/canonical" = {
+      username = "username"
+      password = "password"
+    }
+  }
+  resources = {
+    "coredns-image" : "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"
+  }
+}
