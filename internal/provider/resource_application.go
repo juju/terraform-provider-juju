@@ -751,12 +751,12 @@ func createCharmResources(planResources map[string]string, imageRegistries map[s
 			}
 		}
 
-		jujuResources[name] = juju.NewCharmResource(
-			charmRevision,
-			ociImageURL,
-			registryUser,
-			registryPassword,
-		)
+		jujuResources[name] = juju.CharmResource{
+			RevisionNumber:   charmRevision,
+			OCIImageURL:      ociImageURL,
+			RegistryUser:     registryUser,
+			RegistryPassword: registryPassword,
+		}
 	}
 
 	return jujuResources, nil

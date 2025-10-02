@@ -83,16 +83,6 @@ type charmResourceReadSeeker struct {
 	*bytes.Reader
 }
 
-// NewCharmResource creates a new CharmResource instance.
-func NewCharmResource(revisionNumber, ociImageURL, registryUser, registryPass string) CharmResource {
-	return CharmResource{
-		RevisionNumber:   revisionNumber,
-		OCIImageURL:      ociImageURL,
-		RegistryUser:     registryUser,
-		RegistryPassword: registryPass,
-	}
-}
-
 // ToResourceReader converts the CharmResource to a reader that can be used
 // to upload the resource to Juju. It returns an error if the conversion fails.
 func (cr CharmResource) ToResourceReader() (charmResourceReadSeeker, error) {

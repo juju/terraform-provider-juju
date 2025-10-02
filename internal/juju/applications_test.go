@@ -710,7 +710,9 @@ func (s *ApplicationSuite) TestApplicationUploadOCIResource() {
 	client := s.getApplicationsClient()
 
 	charmResource := CharmResource{
-		OCIImageURL: "some-url",
+		OCIImageURL:      "some-url",
+		RegistryUser:     "username",
+		RegistryPassword: "password",
 	}
 	r, err := charmResource.ToResourceReader()
 	s.Assert().NoError(err)
@@ -737,9 +739,51 @@ func (s *ApplicationSuite) TestApplicationUploadOCIResource() {
 
 	err = client.deployFromRepository(s.mockApplicationClient, s.mockResourceAPIClient, transformedCreateApplicationInput{
 		applicationName: appName,
-		resources: map[string]CharmResource{"myResource": {
-			OCIImageURL: "some-url",
-		}},
+		resources:       map[string]CharmResource{"myResource": charmResource},
+	})
+	s.Assert().NoError(err)
+}
+
+func (s *ApplicationSuite) TestApplicationForbidFileUpload() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	appName := "testapplication"
+	resourceName := "myResource"
+	client := s.getApplicationsClient()
+
+	s.mockApplicationClient.EXPECT().DeployFromRepository(gomock.Any()).Return(
+		apiapplication.DeployInfo{Name: appName},
+		[]apiapplication.PendingResourceUpload{
+			{
+				Name:     resourceName,
+				Filename: "arbitrary-path",
+				Type:     "file",
+			},
+		}, nil)
+
+	err := client.deployFromRepository(s.mockApplicationClient, s.mockResourceAPIClient, transformedCreateApplicationInput{
+		applicationName: appName,
+		resources:       map[string]CharmResource{"myResource": {}},
+	})
+	s.Assert().ErrorContains(err, "uploading local resource of type file for resource myResource not supported")
+}
+
+func (s *ApplicationSuite) TestApplicationDeployWithRevision() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	appName := "testapplication"
+	client := s.getApplicationsClient()
+
+	charmResource := CharmResource{
+		RevisionNumber: "10",
+	}
+
+	s.mockApplicationClient.EXPECT().DeployFromRepository(gomock.Any()).Return(
+		apiapplication.DeployInfo{Name: appName}, nil, nil)
+
+	err := client.deployFromRepository(s.mockApplicationClient, s.mockResourceAPIClient, transformedCreateApplicationInput{
+		applicationName: appName,
+		resources:       map[string]CharmResource{"myResource": charmResource},
 	})
 	s.Assert().NoError(err)
 }
