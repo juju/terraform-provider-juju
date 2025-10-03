@@ -21,13 +21,13 @@ import (
 )
 
 const (
-	// WorkloadStorageKey is the model config attribute used to specify
+	// workloadStorageKey is the model config attribute used to specify
 	// the storage class for provisioning workload storage.
-	WorkloadStorageKey = "workload-storage"
+	workloadStorageKey = "workload-storage"
 
-	// OperatorStorageKey is the model config attribute used to specify
+	// operatorStorageKey is the model config attribute used to specify
 	// the storage class for provisioning operator storage.
-	OperatorStorageKey = "operator-storage"
+	operatorStorageKey = "operator-storage"
 )
 
 type kubernetesCloudsClient struct {
@@ -117,32 +117,11 @@ func (c *kubernetesCloudsClient) CreateKubernetesCloud(input *CreateKubernetesCl
 		return "", errors.Trace(err)
 	}
 
-	// Setup storage.
-	//
-	// The Juju CLI's add-k8s command performs intelligent storage class selection when adding
-	// a Kubernetes cloud. If a storage class is specified via --storage flag, Juju
-	// validates that the named storage class exists in the cluster and uses it for BOTH
-	// operator storage and workload storage.
-	// If no storage class is specified, Juju automatically selects the best available
-	// storage classes based on cloud provider preferences (e.g., 'gp2' for AWS, 'standard'
-	// for GCE). We are not going to implement this intelligent selection as it requires
-	// direct communication with the Kubernetes cluster in question to be added as a cloud.
-	// That is, when running terraform and attempting to add a Kubernetes cloud, the caller
-	// would need network connectivity to the cluster.
-	//
-	// Instead, we expect users to explicitly define the storage class names to use for
-	// operator and workload storage.
-	//
-	// Furthermore, there's no need to worry when updating Kubernetes cloud defintions as
-	// Juju does not allow for this.
-	//
-	// Lastly, we check for the existence of the key and are keeping it optional as Juju
-	// has a --skip-storage key. In effect, we skip storage by not supplying
-	// the [CreateKubernetesCloudInput.StorageClassName].
+	// For the details of storage class skippage, see [provider.StorageClassNameMarkdownDescription].
 	if input.StorageClassName != "" {
 		newCloud.Config = make(map[string]interface{})
-		newCloud.Config[OperatorStorageKey] = input.StorageClassName
-		newCloud.Config[WorkloadStorageKey] = input.StorageClassName
+		newCloud.Config[operatorStorageKey] = input.StorageClassName
+		newCloud.Config[workloadStorageKey] = input.StorageClassName
 	}
 
 	err = kubernetesAPIClient.AddCloud(newCloud, false)

@@ -46,6 +46,33 @@ type kubernetesCloudResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
+const StorageClassNameMarkdownDescription = `Specify the Kubernetes storage class name for workload and operator storage.
+
+When adding K8S clouds via the Terraform Provider, it strays in behaviour from the Juju CLI.
+
+The Juju CLI's add-k8s command has a --storage flag which allows users to specify
+a storage class name to be used for both operator and workload storage.
+
+The Juju CLI also has a --skip-storage flag which prevents Juju from configuring any
+storage class names on the cloud definition. By default, this is false.
+
+When adding a K8S cloud via the Juju CLI, it intelligently selects storage classes
+based on cloud provider preferences (e.g., 'gp2' for AWS, 'standard' for GCE) if no
+storage class is specified via the --storage flag.
+
+This intelligent selection is not implemented in the Terraform Provider as it requires
+direct communication with the Kubernetes cluster in question to be added as a cloud.
+That is, when running terraform and attempting to add a Kubernetes cloud, the caller
+would need network connectivity to the cluster.
+
+Instead, we expect users to explicitly define the storage class name to use for
+operator and workload storage via this attribute and default to no storage class specified 
+otherwise (equivalent to --skip-storage=true in the Juju CLI).
+
+To find this information, users can query their cluster directly, e.g. via:
+  kubectl get storageclass
+`
+
 // Configure is used to configure the kubernetes cloud resource.
 func (r *kubernetesCloudResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
@@ -116,8 +143,9 @@ func (r *kubernetesCloudResource) Schema(_ context.Context, req resource.SchemaR
 				Optional: true,
 			},
 			"storage_class_name": schema.StringAttribute{
-				Description: "Specify the Kubernetes storage class name for workload and operator storage.",
-				Optional:    true,
+				Description:         "Specify the Kubernetes storage class name for workload and operator storage.",
+				MarkdownDescription: StorageClassNameMarkdownDescription,
+				Optional:            true,
 			},
 			// ID is required by the testing framework.
 			"id": schema.StringAttribute{
@@ -144,6 +172,14 @@ func (r *kubernetesCloudResource) Create(ctx context.Context, req resource.Creat
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	if plan.StorageClassName.ValueString() == "" {
+		resp.Diagnostics.AddWarning(
+			"Storage Class Name Not Set",
+			"No storage class name has been set. "+
+				"This may lead to issues if no storage is unsuitable for your environment. "+
+				"Consider setting the storage_class_name attribute to ensure proper storage configuration.")
 	}
 
 	// Create the kubernetes cloud.
