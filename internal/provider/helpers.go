@@ -21,6 +21,7 @@ const (
 	LogDataSourceModel       = "datasource-model"
 	LogDataSourceOffer       = "datasource-offer"
 	LogDataSourceSecret      = "datasource-secret"
+	LogDataSourceStoragePool = "datasource-storage-pool"
 
 	LogResourceApplication     = "resource-application"
 	LogResourceAccessModel     = "resource-access-model"
