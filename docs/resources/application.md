@@ -51,7 +51,7 @@ resource "juju_application" "this" {
   }
   trust = true
   expose {}
-  image_registries = {
+  registry_credentials = {
     "ghcr.io/canonical" = {
       username = "username"
       password = "password"
@@ -77,16 +77,16 @@ resource "juju_application" "this" {
 - `constraints` (String) Constraints imposed on this application. Changing this value will cause the application to be destroyed and recreated by terraform.
 - `endpoint_bindings` (Attributes Set) Configure endpoint bindings (see [below for nested schema](#nestedatt--endpoint_bindings))
 - `expose` (Block List) Makes an application publicly available over the network (see [below for nested schema](#nestedblock--expose))
-- `image_registries` (Attributes Map) Image registry credentials for OCI images specified in the charm resources. The map key is the registry URL.
+- `machines` (Set of String) Specify the target machines for the application's units. The number of machines in the set indicates the unit count for the application. Removing a machine from the set will remove the application's unit residing on it. `machines` is mutually exclusive with `units`.
+- `name` (String) A custom name for the application deployment. If empty, uses the charm's name.Changing this value will cause the application to be destroyed and recreated by terraform.
+- `registry_credentials` (Attributes Map) OCI image registry credentials for OCI images specified in the charm resources. The map key is the registry URL.
 	
 	If the charm resource requires authentication, supply a username and password that will be passed to the Juju API and added to the Kubernetes cluster.
 
-	The registry credentials will only be used if the URL of the registry is a partial match for the image URL specified in the charm resources.
-	An image URL is considered a match for a registry URL if the URL without the image name matches the registry URL. For example, 
-	an image with URL "registry.example.com:5000/path/image:tag" will match a registry entry with key "registry.example.com:5000/path" 
-	but not "registry.example.com:5000" nor "registry.example.com". (see [below for nested schema](#nestedatt--image_registries))
-- `machines` (Set of String) Specify the target machines for the application's units. The number of machines in the set indicates the unit count for the application. Removing a machine from the set will remove the application's unit residing on it. `machines` is mutually exclusive with `units`.
-- `name` (String) A custom name for the application deployment. If empty, uses the charm's name.Changing this value will cause the application to be destroyed and recreated by terraform.
+	The registry credentials will only be used if the URL of the registry is a partial match for the OCI image URL specified in the charm resources.
+	An OCI image URL is considered a match for a registry URL if the URL without the OCI image tag matches the registry URL. For example, 
+	an OCI image with URL "registry.example.com:5000/path/image:tag" will match a registry entry with key "registry.example.com:5000/path" 
+	but not "registry.example.com:5000" nor "registry.example.com". (see [below for nested schema](#nestedatt--registry_credentials))
 - `resources` (Map of String) Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
 Specify a resource other than the default for a charm. Note that not all charms have resources.
 
@@ -141,13 +141,13 @@ Optional:
 - `spaces` (String) A comma-delimited list of spaces that should be able to access the application ports once exposed.
 
 
-<a id="nestedatt--image_registries"></a>
-### Nested Schema for `image_registries`
+<a id="nestedatt--registry_credentials"></a>
+### Nested Schema for `registry_credentials`
 
 Required:
 
-- `password` (String) The password for authenticating to the registry (if required).
-- `username` (String) The username for authenticating to the registry (if required).
+- `password` (String, Sensitive) The password for authenticating to the registry.
+- `username` (String) The username for authenticating to the registry.
 
 
 <a id="nestedatt--storage"></a>

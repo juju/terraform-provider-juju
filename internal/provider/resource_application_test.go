@@ -1721,7 +1721,7 @@ resource "juju_application" "{{.AppName}}" {
   }
 
   {{ if .UsePrivateRegistry }}
-  image_registries = {
+  registry_credentials = {
     "ghcr.io/canonical" = {
       username = "{{.Username}}"
       password = "{{.Password}}"

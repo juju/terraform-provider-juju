@@ -58,7 +58,6 @@ const (
 	An OCI image URL is considered a match for a registry URL if the URL without the OCI image tag matches the registry URL. For example, 
 	an OCI image with URL "registry.example.com:5000/path/image:tag" will match a registry entry with key "registry.example.com:5000/path" 
 	but not "registry.example.com:5000" nor "registry.example.com".
-
 `
 	resourceKeyMarkdownDescription = `
 Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
@@ -129,8 +128,8 @@ type applicationResourceModelV0 struct {
 // tfsdk must match user resource schema attribute names.
 type applicationResourceModelV1 struct {
 	applicationResourceModel
-	ImageRegistries map[string]registryDetails `tfsdk:"image_registries"`
-	ModelUUID       types.String               `tfsdk:"model_uuid"`
+	RegistryCredentials map[string]registryDetails `tfsdk:"registry_credentials"`
+	ModelUUID           types.String               `tfsdk:"model_uuid"`
 }
 
 func (r *applicationResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -309,7 +308,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 					},
 				},
 			},
-			"image_registries": schema.MapNestedAttribute{
+			"registry_credentials": schema.MapNestedAttribute{
 				// The key of this map is the registry URL.
 				Optional:            true,
 				MarkdownDescription: imageRegistriesMarkdownDescription,
@@ -322,6 +321,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 						"password": schema.StringAttribute{
 							Description: "The password for authenticating to the registry.",
 							Required:    true,
+							Sensitive:   true,
 						},
 					},
 				},
@@ -601,7 +601,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		unitCount = len(machines)
 	}
 
-	charmResources, err := createCharmResources(resourceRevisions, plan.ImageRegistries)
+	charmResources, err := createCharmResources(resourceRevisions, plan.RegistryCredentials)
 	if err != nil {
 		resp.Diagnostics.AddError("Input Error", fmt.Sprintf("Unable to process charm resources, got error: %s", err))
 		return
@@ -1123,12 +1123,12 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	planResources, err := createCharmResources(planResourceRevisions, plan.ImageRegistries)
+	planResources, err := createCharmResources(planResourceRevisions, plan.RegistryCredentials)
 	if err != nil {
 		resp.Diagnostics.AddError("Input Error", fmt.Sprintf("Unable to process charm resources, got error: %s", err))
 		return
 	}
-	stateResources, err := createCharmResources(stateResourceRevisions, state.ImageRegistries)
+	stateResources, err := createCharmResources(stateResourceRevisions, state.RegistryCredentials)
 	if err != nil {
 		resp.Diagnostics.AddError("Input Error", fmt.Sprintf("Unable to process charm resources, got error: %s", err))
 		return

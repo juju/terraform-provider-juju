@@ -37,7 +37,7 @@ resource "juju_application" "this" {
   }
   trust = true
   expose {}
-  image_registries = {
+  registry_credentials = {
     "ghcr.io/canonical" = {
       username = "username"
       password = "password"
