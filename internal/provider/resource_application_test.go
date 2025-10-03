@@ -7,11 +7,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -2555,4 +2557,139 @@ resource "juju_application" "this" {
 			},
 		},
 	})
+}
+
+func TestCreateCharmResources(t *testing.T) {
+	tests := []struct {
+		name          string
+		planResources map[string]string
+		registryCreds map[string]registryDetails
+		expected      juju.CharmResources
+		expectError   bool
+	}{
+		{
+			name: "Valid charm revision",
+			planResources: map[string]string{
+				"charm1": "123",
+			},
+			registryCreds: map[string]registryDetails{},
+			expected: juju.CharmResources{
+				"charm1": {
+					RevisionNumber: "123",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid OCI image URL with path",
+			planResources: map[string]string{
+				"charm2": "registry.example.com/path/image:tag",
+			},
+			registryCreds: map[string]registryDetails{
+				"registry.example.com/path": {
+					User:     types.StringValue("user"),
+					Password: types.StringValue("pass"),
+				},
+			},
+			expected: juju.CharmResources{
+				"charm2": {
+					OCIImageURL:      "registry.example.com/path/image:tag",
+					RegistryUser:     "user",
+					RegistryPassword: "pass",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid OCI image URL with path that doesn't match registry",
+			planResources: map[string]string{
+				"charm2": "registry.example.com/path/image:tag",
+			},
+			registryCreds: map[string]registryDetails{
+				"registry.example.com/anotherpath": {
+					User:     types.StringValue("user"),
+					Password: types.StringValue("pass"),
+				},
+			},
+			expected: juju.CharmResources{
+				"charm2": {
+					OCIImageURL: "registry.example.com/path/image:tag",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Multiple OCI images with different registries",
+			planResources: map[string]string{
+				"charm2": "registry.example.com/path/image:tag",
+				"charm3": "another-registry.com/otherpath/image:tag",
+			},
+			registryCreds: map[string]registryDetails{
+				"registry.example.com/path": {
+					User:     types.StringValue("user"),
+					Password: types.StringValue("pass"),
+				},
+				"another-registry.com/otherpath": {
+					User:     types.StringValue("user2"),
+					Password: types.StringValue("pass2"),
+				},
+			},
+			expected: juju.CharmResources{
+				"charm2": {
+					OCIImageURL:      "registry.example.com/path/image:tag",
+					RegistryUser:     "user",
+					RegistryPassword: "pass",
+				},
+				"charm3": {
+					OCIImageURL:      "another-registry.com/otherpath/image:tag",
+					RegistryUser:     "user2",
+					RegistryPassword: "pass2",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid OCI image URL without path",
+			planResources: map[string]string{
+				"charm2": "registry.example.com/image:tag",
+			},
+			registryCreds: map[string]registryDetails{
+				"registry.example.com": {
+					User:     types.StringValue("user"),
+					Password: types.StringValue("pass"),
+				},
+			},
+			expected: juju.CharmResources{
+				"charm2": {
+					OCIImageURL:      "registry.example.com/image:tag",
+					RegistryUser:     "user",
+					RegistryPassword: "pass",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Empty resource error",
+			planResources: map[string]string{
+				"charm3": "",
+			},
+			registryCreds: map[string]registryDetails{},
+			expected:      nil,
+			expectError:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := createCharmResources(tt.planResources, tt.registryCreds)
+			if (err != nil) != tt.expectError {
+				t.Errorf("createCharmResources() error = %v, expectError %v", err, tt.expectError)
+				return
+			}
+
+			if !reflect.DeepEqual(got, tt.expected) {
+				t.Errorf("createCharmResources() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
 }
