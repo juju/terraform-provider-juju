@@ -26,7 +26,7 @@ func TestAcc_DataSourceStoragePool(t *testing.T) {
 		"key2": "value2",
 	}
 	dataSourceName := acctest.RandomWithPrefix("tf-datasource-storage-pool")
-	// yolo
+
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
