@@ -714,9 +714,7 @@ func (s *ApplicationSuite) TestApplicationUploadOCIResource() {
 		RegistryUser:     "username",
 		RegistryPassword: "password",
 	}
-	r, err := charmResource.ToResourceReader()
-	s.Assert().NoError(err)
-	resourceContent, err := io.ReadAll(r)
+	resourceContent, err := charmResource.MarhsalYaml()
 	s.Assert().NoError(err)
 
 	s.mockApplicationClient.EXPECT().DeployFromRepository(gomock.Any()).Return(

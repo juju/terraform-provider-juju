@@ -800,7 +800,10 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 }
 
 type charmResourceChecks struct {
-	// fingerprint is a SHA356 fingerprint of the resource.
+	// fingerprint is a SHA356 fingerprint of the resource
+	// composed from the image URL, username and password.
+	// If we start uploading files, this would represent
+	// the fingerprint of the file.
 	fingerprint string
 	// origin is either "store" or "upload".
 	origin string

@@ -51,12 +51,12 @@ const (
 
 	imageRegistriesMarkdownDescription = `
 	OCI image registry credentials for OCI images specified in the charm resources. The map key is the registry URL.
-	
+
 	If the charm resource requires authentication, supply a username and password that will be passed to the Juju API and added to the Kubernetes cluster.
 
 	The registry credentials will only be used if the URL of the registry is a partial match for the OCI image URL specified in the charm resources.
 	An OCI image URL is considered a match for a registry URL if the URL without the OCI image tag matches the registry URL. For example, 
-	an OCI image with URL "registry.example.com:5000/path/image:tag" will match a registry entry with key "registry.example.com:5000/path" 
+	a charm OCI resource specified as "registry.example.com:5000/path/image:tag" will match a registry entry with key "registry.example.com:5000/path" 
 	but not "registry.example.com:5000" nor "registry.example.com".
 `
 	resourceKeyMarkdownDescription = `
@@ -1146,7 +1146,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		// what happens when the plan suddenly does not specify resource
 		// revisions, but state does.
 		for k, v := range planResources {
-			if !stateResources[k].Equal(v) {
+			if stateResources[k] != v {
 				if updateApplicationInput.Resources == nil {
 					// initialize just in case
 					updateApplicationInput.Resources = make(juju.CharmResources)

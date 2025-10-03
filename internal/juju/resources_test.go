@@ -17,30 +17,6 @@ func TestCharmResource_String(t *testing.T) {
 	assert.Equal(t, "oci-url", cr.String(), "String() should return OCIImageURL if RevisionNumber is empty")
 }
 
-func TestCharmResource_Equal(t *testing.T) {
-	tests := []struct {
-		name string
-		a    CharmResource
-		b    CharmResource
-		want bool
-	}{
-		{"both zero values", CharmResource{}, CharmResource{}, true},
-		{"different revision", CharmResource{RevisionNumber: "1"}, CharmResource{RevisionNumber: "2"}, false},
-		{"same revision different OCI", CharmResource{RevisionNumber: "1", OCIImageURL: "url1"}, CharmResource{RevisionNumber: "1", OCIImageURL: "url2"}, false},
-		{"same OCI different registry user", CharmResource{OCIImageURL: "url", RegistryUser: "u1"}, CharmResource{OCIImageURL: "url", RegistryUser: "u2"}, false},
-		{"same OCI different registry password", CharmResource{OCIImageURL: "url", RegistryPassword: "p1"}, CharmResource{OCIImageURL: "url", RegistryPassword: "p2"}, false},
-		{"identical full resource", CharmResource{RevisionNumber: "5", OCIImageURL: "oci", RegistryUser: "u", RegistryPassword: "p"}, CharmResource{RevisionNumber: "5", OCIImageURL: "oci", RegistryUser: "u", RegistryPassword: "p"}, true},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.a.Equal(tc.b); got != tc.want {
-				t.Fatalf("case %q: expected %v, got %v (a=%+v, b=%+v)", tc.name, tc.want, got, tc.a, tc.b)
-			}
-		})
-	}
-}
-
 func TestCharmResources_Equal(t *testing.T) {
 	empty := CharmResources{}
 	nonEmpty := CharmResources{"a": CharmResource{"1", "url", "user", "pass"}}

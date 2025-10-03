@@ -1716,11 +1716,11 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 			// We don't support uploading non-container resources.
 			return nil, fmt.Errorf("only container resources can be uploaded; resource %q is of type %q", resourceMeta.Name, t.String())
 		}
-		r, err := resource.ToResourceReader()
+		details, err := resource.MarhsalYaml()
 		if err != nil {
 			return nil, typedError(err)
 		}
-		toRequestUpload, err := resourceAPIClient.UploadPendingResource(appName, localResource, resource.String(), r)
+		toRequestUpload, err := resourceAPIClient.UploadPendingResource(appName, localResource, resource.String(), bytes.NewReader(details))
 		if err != nil {
 			return nil, typedError(err)
 		}

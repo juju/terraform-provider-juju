@@ -35,11 +35,6 @@ func (cr CharmResource) String() string {
 	return cr.OCIImageURL
 }
 
-// Equal checks if two CharmResource instances are equal.
-func (cr CharmResource) Equal(in CharmResource) bool {
-	return cr == in
-}
-
 // CharmResources is a map of resource names to CharmResource instances.
 type CharmResources map[string]CharmResource
 
@@ -48,13 +43,9 @@ func (cr CharmResources) Equal(other CharmResources) bool {
 	return maps.Equal(cr, other)
 }
 
-// ToResourceReader converts the CharmResource to a reader that can be used
-// to upload the resource to Juju. It returns an error if the conversion fails.
-func (cr CharmResource) ToResourceReader() (*bytes.Reader, error) {
-	if cr.OCIImageURL == "" {
-		return nil, jujuerrors.New("OCIImageURL is required to create a resource reader")
-	}
-
+// MarhsalYaml marshals the CharmResource into a YAML representation
+// suitable for uploading to Juju as a resource.
+func (cr CharmResource) MarhsalYaml() ([]byte, error) {
 	registryDetails := resources.DockerImageDetails{
 		RegistryPath: cr.OCIImageURL,
 		ImageRepoDetails: docker.ImageRepoDetails{
@@ -64,11 +55,7 @@ func (cr CharmResource) ToResourceReader() (*bytes.Reader, error) {
 			},
 		},
 	}
-	details, err := yaml.Marshal(registryDetails)
-	if err != nil {
-		return nil, err
-	}
-	return bytes.NewReader([]byte(details)), nil
+	return yaml.Marshal(registryDetails)
 }
 
 // UploadExistingPendingResources uploads local resources. Used
@@ -99,12 +86,11 @@ func uploadExistingPendingResources(
 		if !ok {
 			return jujuerrors.NotFoundf("resource %v not found in input resources", pendingResUpload.Name)
 		}
-
-		r, err := localResource.ToResourceReader()
+		details, err := localResource.MarhsalYaml()
 		if err != nil {
 			return jujuerrors.Trace(err)
 		}
-		uploadErr := resourceAPIClient.Upload(appName, pendingResUpload.Name, pendingResUpload.Filename, "", r)
+		uploadErr := resourceAPIClient.Upload(appName, pendingResUpload.Name, pendingResUpload.Filename, "", bytes.NewReader(details))
 		if uploadErr != nil {
 			return jujuerrors.Trace(uploadErr)
 		}
