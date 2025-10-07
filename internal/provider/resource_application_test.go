@@ -7,16 +7,21 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
+	"github.com/juju/juju/api/client/resources"
 	apispaces "github.com/juju/juju/api/client/spaces"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
@@ -716,6 +721,142 @@ func TestAcc_CustomResourcesRemovedFromPlanMicrok8s(t *testing.T) {
 			},
 		},
 	})
+}
+
+func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with Microk8s")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-custom-resource-file")
+	appName := "test-app"
+	appResourceFullName := "juju_application." + appName
+	// - Remove the custom resource.
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// A custom resource from a private registry.
+				Config: testAccResourceApplicationFromPrivateRegistry(modelName, appName, "user", "pass", "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
+						fingerprint: "1b94afe549b44328f2350ae24633b31265a01e466cf0469faa798acb9c637bea30c3c711f25937795eff34d2f920e074",
+						origin:      "upload",
+						revision:    "0",
+					}),
+				),
+			},
+			{
+				// A custom resource and changed registry credentials.
+				Config: testAccResourceApplicationFromPrivateRegistry(modelName, appName, "user2", "pass2", "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(appResourceFullName, plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
+						fingerprint: "953991156cf1e0a601f52b2b2b16c7042ad13bf765655c024f384385306404b7eb30bf72bdfcfda3c570b076b3aa96dc",
+						origin:      "upload",
+						revision:    "0",
+					}),
+				),
+			},
+			{
+				// A custom resource and removed registry credentials.
+				Config: testAccResourceApplicationFromPrivateRegistry(modelName, appName, "", "", "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(appResourceFullName, plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
+						fingerprint: "591c30e2a2730c206d65771cfa2302c90a2c90b0860207d82f041d24b7c16409e35465d2be987c4bf562734b9e62f248",
+						origin:      "upload",
+						revision:    "0",
+					}),
+				),
+			},
+			{
+				// Remove the custom resource.
+				Config: testAccResourceApplicationFromPrivateRegistry(modelName, appName, "", "", "74"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(appResourceFullName, plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
+						fingerprint: "398048a2c483cd10a5e358f0d45ed8e21ed077079779fecce58772d443a3c9b53e871cf43dba94fcb3463adee154c440",
+						origin:      "store",
+						revision:    "74",
+					}),
+				),
+			},
+		},
+	})
+}
+
+type charmResourceChecks struct {
+	// fingerprint is a SHA356 fingerprint of the resource
+	// composed from the image URL, username and password.
+	// If we start uploading files, this would represent
+	// the fingerprint of the file.
+	fingerprint string
+	// origin is either "store" or "upload".
+	origin string
+	// revision is "0" when origin is "store", otherwise it's the revision number.
+	revision string
+}
+
+func testAccCheckApplicationResource(appResource string, checks charmResourceChecks) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		// retrieve the resource by name from state
+		rs, ok := s.RootModule().Resources[appResource]
+		if !ok {
+			return fmt.Errorf("Not found: %s", appResource)
+		}
+
+		model_uuid, ok := rs.Primary.Attributes["model_uuid"]
+		if !ok {
+			return fmt.Errorf("model_uuid is not set")
+		}
+		appName, ok := rs.Primary.Attributes["name"]
+		if !ok {
+			return fmt.Errorf("name is not set")
+		}
+
+		conn, err := TestClient.Models.GetConnection(&model_uuid)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = conn.Close() }()
+		jc, err := resources.NewClient(conn)
+		if err != nil {
+			return err
+		}
+
+		resources, err := jc.ListResources([]string{appName})
+		if err != nil {
+			return err
+		}
+		if len(resources) != 1 || len(resources[0].Resources) != 1 {
+			return fmt.Errorf("expected one resource for application %q, got %d", appName, len(resources))
+		}
+		resource := resources[0].Resources[0]
+		if resource.Fingerprint.String() != checks.fingerprint {
+			return fmt.Errorf("expected fingerprint %q, got %q", checks.fingerprint, resource.Fingerprint)
+		}
+		if resource.Origin.String() != checks.origin {
+			return fmt.Errorf("expected origin %q, got %q", checks.origin, resource.Origin)
+		}
+		if strconv.Itoa(resource.Revision) != checks.revision {
+			return fmt.Errorf("expected revision %q, got %q", checks.revision, resource.Revision)
+		}
+		return nil
+	}
 }
 
 func TestAcc_ResourceApplication_Minimal(t *testing.T) {
@@ -1566,6 +1707,51 @@ resource "juju_application" "{{.AppName}}" {
 		})
 }
 
+func testAccResourceApplicationFromPrivateRegistry(modelName, appName, username, password string, resourceRevision string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceApplicationFromPrivateRegistry",
+		`
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_application" "{{.AppName}}" {
+  name  = "{{.AppName}}"
+  model_uuid = juju_model.{{.ModelName}}.uuid
+
+  charm {
+    name     = "coredns"
+    revision = 191
+    channel  = "latest/stable"
+  }
+
+  {{ if .UsePrivateRegistry }}
+  registry_credentials = {
+    "ghcr.io/canonical" = {
+      username = "{{.Username}}"
+      password = "{{.Password}}"
+    }
+  }
+  {{ end }}
+
+  {{ if ne .ResourceParamRevision "" }}
+  resources = {
+    "coredns-image" = "{{.ResourceParamRevision}}"
+  }
+  {{ end }}
+
+  units = 1
+}
+`, internaltesting.TemplateData{
+			"ModelName":             modelName,
+			"AppName":               appName,
+			"UsePrivateRegistry":    (username != "" && password != ""),
+			"Username":              username,
+			"Password":              password,
+			"ResourceParamRevision": resourceRevision,
+		})
+}
+
 func testAccResourceApplicationWithCustomResources(modelName, channel string, resourceName string, customResource string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
@@ -2374,4 +2560,139 @@ resource "juju_application" "this" {
 			},
 		},
 	})
+}
+
+func TestCreateCharmResources(t *testing.T) {
+	tests := []struct {
+		name          string
+		planResources map[string]string
+		registryCreds map[string]registryDetails
+		expected      juju.CharmResources
+		expectError   bool
+	}{
+		{
+			name: "Valid charm revision",
+			planResources: map[string]string{
+				"charm1": "123",
+			},
+			registryCreds: map[string]registryDetails{},
+			expected: juju.CharmResources{
+				"charm1": {
+					RevisionNumber: "123",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid OCI image URL with path",
+			planResources: map[string]string{
+				"charm2": "registry.example.com/path/image:tag",
+			},
+			registryCreds: map[string]registryDetails{
+				"registry.example.com/path": {
+					User:     types.StringValue("user"),
+					Password: types.StringValue("pass"),
+				},
+			},
+			expected: juju.CharmResources{
+				"charm2": {
+					OCIImageURL:      "registry.example.com/path/image:tag",
+					RegistryUser:     "user",
+					RegistryPassword: "pass",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid OCI image URL with path that doesn't match registry",
+			planResources: map[string]string{
+				"charm2": "registry.example.com/path/image:tag",
+			},
+			registryCreds: map[string]registryDetails{
+				"registry.example.com/anotherpath": {
+					User:     types.StringValue("user"),
+					Password: types.StringValue("pass"),
+				},
+			},
+			expected: juju.CharmResources{
+				"charm2": {
+					OCIImageURL: "registry.example.com/path/image:tag",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Multiple OCI images with different registries",
+			planResources: map[string]string{
+				"charm2": "registry.example.com/path/image:tag",
+				"charm3": "another-registry.com/otherpath/image:tag",
+			},
+			registryCreds: map[string]registryDetails{
+				"registry.example.com/path": {
+					User:     types.StringValue("user"),
+					Password: types.StringValue("pass"),
+				},
+				"another-registry.com/otherpath": {
+					User:     types.StringValue("user2"),
+					Password: types.StringValue("pass2"),
+				},
+			},
+			expected: juju.CharmResources{
+				"charm2": {
+					OCIImageURL:      "registry.example.com/path/image:tag",
+					RegistryUser:     "user",
+					RegistryPassword: "pass",
+				},
+				"charm3": {
+					OCIImageURL:      "another-registry.com/otherpath/image:tag",
+					RegistryUser:     "user2",
+					RegistryPassword: "pass2",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid OCI image URL without path",
+			planResources: map[string]string{
+				"charm2": "registry.example.com/image:tag",
+			},
+			registryCreds: map[string]registryDetails{
+				"registry.example.com": {
+					User:     types.StringValue("user"),
+					Password: types.StringValue("pass"),
+				},
+			},
+			expected: juju.CharmResources{
+				"charm2": {
+					OCIImageURL:      "registry.example.com/image:tag",
+					RegistryUser:     "user",
+					RegistryPassword: "pass",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Empty resource error",
+			planResources: map[string]string{
+				"charm3": "",
+			},
+			registryCreds: map[string]registryDetails{},
+			expected:      nil,
+			expectError:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := createCharmResources(tt.planResources, tt.registryCreds)
+			if (err != nil) != tt.expectError {
+				t.Errorf("createCharmResources() error = %v, expectError %v", err, tt.expectError)
+				return
+			}
+
+			if !reflect.DeepEqual(got, tt.expected) {
+				t.Errorf("createCharmResources() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
 }

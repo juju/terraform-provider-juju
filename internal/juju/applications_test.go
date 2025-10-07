@@ -7,6 +7,7 @@ package juju
 import (
 	"context"
 	"fmt"
+	"io"
 	"testing"
 
 	charmresources "github.com/juju/charm/v12/resource"
@@ -413,8 +414,8 @@ func (s *ApplicationSuite) TestAddPendingResourceCustomImageResourceProvidedChar
 	ausfResourceID := "1111222"
 	charmResourcesToAdd := make(map[string]charmresources.Meta)
 	charmResourcesToAdd["ausf-image"] = meta
-	resourcesToUse := make(map[string]string)
-	resourcesToUse["ausf-image"] = "gatici/sdcore-ausf:1.4"
+	resourcesToUse := make(map[string]CharmResource)
+	resourcesToUse["ausf-image"] = CharmResource{OCIImageURL: "gatici/sdcore-ausf:1.4"}
 	revision := 433
 	track := "1.5"
 	url := "ch:amd64/jammy/sdcore-ausf-k8s-433"
@@ -460,8 +461,8 @@ func (s *ApplicationSuite) TestAddPendingResourceCustomImageResourceProvidedNoCh
 
 	appName := "testapplication"
 	charmResourcesToAdd := make(map[string]charmresources.Meta)
-	resourcesToUse := make(map[string]string)
-	resourcesToUse["ausf-image"] = "gatici/sdcore-ausf:1.4"
+	resourcesToUse := make(map[string]CharmResource)
+	resourcesToUse["ausf-image"] = CharmResource{OCIImageURL: "gatici/sdcore-ausf:1.4"}
 	revision := 433
 	track := "1.5"
 	url := "ch:amd64/jammy/sdcore-ausf-k8s-433"
@@ -521,9 +522,9 @@ func (s *ApplicationSuite) TestAddPendingResourceOneCustomResourceOneRevisionPro
 	charmResourcesToAdd := make(map[string]charmresources.Meta)
 	charmResourcesToAdd["ausf-image"] = metaUdm
 	charmResourcesToAdd["udm-image"] = metaAusf
-	resourcesToUse := make(map[string]string)
-	resourcesToUse["ausf-image"] = "gatici/sdcore-ausf:1.4"
-	resourcesToUse["udm-image"] = "3"
+	resourcesToUse := make(map[string]CharmResource)
+	resourcesToUse["ausf-image"] = CharmResource{OCIImageURL: "gatici/sdcore-ausf:1.4"}
+	resourcesToUse["udm-image"] = CharmResource{RevisionNumber: "3"}
 	revision := 433
 	track := "1.5"
 	url := "ch:amd64/jammy/sdcore-ausf-k8s-433"
@@ -586,8 +587,8 @@ func (s *ApplicationSuite) TestAddPendingResourceOneRevisionProvidedMultipleChar
 	charmResourcesToAdd := make(map[string]charmresources.Meta)
 	charmResourcesToAdd["ausf-image"] = metaUdm
 	charmResourcesToAdd["udm-image"] = metaAusf
-	resourcesToUse := make(map[string]string)
-	resourcesToUse["udm-image"] = "3"
+	resourcesToUse := make(map[string]CharmResource)
+	resourcesToUse["udm-image"] = CharmResource{RevisionNumber: "3"}
 	revision := 433
 	track := "1.5"
 	url := "ch:amd64/jammy/sdcore-ausf-k8s-433"
@@ -635,11 +636,17 @@ func (s *ApplicationSuite) TestUploadExistingPendingResourcesUploadSuccessful() 
 	}
 	var pendingResources []apiapplication.PendingResourceUpload
 	pendingResources = append(pendingResources, resource)
-	fileSystem := osFilesystem{}
+	charmResources := map[string]CharmResource{
+		"custom-image": {
+			OCIImageURL:      "some-url",
+			RegistryUser:     "username",
+			RegistryPassword: "password",
+		},
+	}
 	aExp := s.mockResourceAPIClient.EXPECT()
 	aExp.Upload(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 
-	err := uploadExistingPendingResources(appName, pendingResources, fileSystem, s.mockResourceAPIClient)
+	err := uploadExistingPendingResources(appName, pendingResources, charmResources, s.mockResourceAPIClient)
 	s.Assert().Equal(nil, err, "Error is not expected.")
 }
 
@@ -657,11 +664,17 @@ func (s *ApplicationSuite) TestUploadExistingPendingResourcesUploadFailedReturnE
 	}
 	var pendingResources []apiapplication.PendingResourceUpload
 	pendingResources = append(pendingResources, resource)
-	fileSystem := osFilesystem{}
+	charmResources := map[string]CharmResource{
+		"custom-image": {
+			OCIImageURL:      "some-url",
+			RegistryUser:     "username",
+			RegistryPassword: "password",
+		},
+	}
 	aExp := s.mockResourceAPIClient.EXPECT()
 	aExp.Upload(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("upload failed for %s", fileName))
 
-	err := uploadExistingPendingResources(appName, pendingResources, fileSystem, s.mockResourceAPIClient)
+	err := uploadExistingPendingResources(appName, pendingResources, charmResources, s.mockResourceAPIClient)
 	s.Assert().Equal("upload failed for my-image", err.Error(), "Error is expected.")
 }
 
@@ -678,27 +691,99 @@ func (s *ApplicationSuite) TestUploadExistingPendingResourcesResourceTypeUnknown
 		Type:     "unknown",
 	}
 	pendingResources = append(pendingResources, resource)
-	fileSystem := osFilesystem{}
-	err := uploadExistingPendingResources(appName, pendingResources, fileSystem, s.mockResourceAPIClient)
+	charmResources := map[string]CharmResource{
+		"custom-image": {
+			OCIImageURL:      "some-url",
+			RegistryUser:     "username",
+			RegistryPassword: "password",
+		},
+	}
+	err := uploadExistingPendingResources(appName, pendingResources, charmResources, s.mockResourceAPIClient)
 	s.Assert().Equal("invalid type unknown for pending resource custom-image: unsupported resource type \"unknown\"", err.Error(), "Error is expected.")
 }
 
-// TestUploadExistingPendingResourcesInvalidFileNameReturnError tests the case where file path is not valid.
-// ResourceAPIClient.Upload is not called and returns error that unable to open resource.
-func (s *ApplicationSuite) TestUploadExistingPendingResourcesInvalidFileNameReturnError() {
+func (s *ApplicationSuite) TestApplicationUploadOCIResource() {
 	defer s.setupMocks(s.T()).Finish()
 	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 	appName := "testapplication"
-	var pendingResources []apiapplication.PendingResourceUpload
-	resource := apiapplication.PendingResourceUpload{
-		Name:     "custom-image",
-		Filename: "",
-		Type:     "oci-image",
+	resourceName := "myResource"
+	client := s.getApplicationsClient()
+
+	charmResource := CharmResource{
+		OCIImageURL:      "some-url",
+		RegistryUser:     "username",
+		RegistryPassword: "password",
 	}
-	pendingResources = append(pendingResources, resource)
-	fileSystem := osFilesystem{}
-	err := uploadExistingPendingResources(appName, pendingResources, fileSystem, s.mockResourceAPIClient)
-	s.Assert().Equal("unable to open resource custom-image: filepath or registry path:  not valid", err.Error(), "Error is expected.")
+	resourceContent, err := charmResource.MarhsalYaml()
+	s.Assert().NoError(err)
+
+	s.mockApplicationClient.EXPECT().DeployFromRepository(gomock.Any()).Return(
+		apiapplication.DeployInfo{Name: appName},
+		[]apiapplication.PendingResourceUpload{
+			{
+				Name:     resourceName,
+				Filename: "arbitrary-path",
+				Type:     "oci-image",
+			},
+		}, nil)
+
+	s.mockResourceAPIClient.EXPECT().Upload(appName, resourceName, "arbitrary-path", "", gomock.Any()).
+		DoAndReturn(func(s1, s2, s3, s4 string, rs io.ReadSeeker) error {
+			uploadedContent, err := io.ReadAll(rs)
+			s.Assert().NoError(err)
+			s.Assert().Equal(resourceContent, uploadedContent)
+			return nil
+		})
+
+	err = client.deployFromRepository(s.mockApplicationClient, s.mockResourceAPIClient, transformedCreateApplicationInput{
+		applicationName: appName,
+		resources:       map[string]CharmResource{"myResource": charmResource},
+	})
+	s.Assert().NoError(err)
+}
+
+func (s *ApplicationSuite) TestApplicationForbidFileUpload() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	appName := "testapplication"
+	resourceName := "myResource"
+	client := s.getApplicationsClient()
+
+	s.mockApplicationClient.EXPECT().DeployFromRepository(gomock.Any()).Return(
+		apiapplication.DeployInfo{Name: appName},
+		[]apiapplication.PendingResourceUpload{
+			{
+				Name:     resourceName,
+				Filename: "arbitrary-path",
+				Type:     "file",
+			},
+		}, nil)
+
+	err := client.deployFromRepository(s.mockApplicationClient, s.mockResourceAPIClient, transformedCreateApplicationInput{
+		applicationName: appName,
+		resources:       map[string]CharmResource{"myResource": {}},
+	})
+	s.Assert().ErrorContains(err, "uploading local resource of type file for resource myResource not supported")
+}
+
+func (s *ApplicationSuite) TestApplicationDeployWithRevision() {
+	defer s.setupMocks(s.T()).Finish()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	appName := "testapplication"
+	client := s.getApplicationsClient()
+
+	charmResource := CharmResource{
+		RevisionNumber: "10",
+	}
+
+	s.mockApplicationClient.EXPECT().DeployFromRepository(gomock.Any()).Return(
+		apiapplication.DeployInfo{Name: appName}, nil, nil)
+
+	err := client.deployFromRepository(s.mockApplicationClient, s.mockResourceAPIClient, transformedCreateApplicationInput{
+		applicationName: appName,
+		resources:       map[string]CharmResource{"myResource": charmResource},
+	})
+	s.Assert().NoError(err)
 }
 
 // TestPartialApplicationDeployError tests the case where deployFromRepository returns pending resources to upload
@@ -716,14 +801,19 @@ func (s *ApplicationSuite) TestPartialApplicationDeployError() {
 		[]apiapplication.PendingResourceUpload{
 			{
 				Name:     resourceName,
-				Filename: "./doesnotexist.txt",
+				Filename: "arbitrary-path",
 				Type:     "oci-image",
 			},
 		}, nil)
 
+	s.mockResourceAPIClient.EXPECT().Upload(appName, resourceName, "arbitrary-path", "", gomock.Any()).
+		Return(fmt.Errorf("upload failed"))
+
 	err := client.deployFromRepository(s.mockApplicationClient, s.mockResourceAPIClient, transformedCreateApplicationInput{
 		applicationName: appName,
-		resources:       map[string]string{"myResource": "./doesnotexist.txt"},
+		resources: map[string]CharmResource{"myResource": {
+			OCIImageURL: "some-url",
+		}},
 	})
 	s.Assert().ErrorAs(err, &ApplicationPartiallyCreatedError{})
 }

@@ -75,6 +75,6 @@ The Terraform Provider for Juju is a member of the Ubuntu family. It’s an open
 
 * [Contribute](https://github.com/juju/terraform-provider-juju/blob/main/CONTRIBUTING.md)
 
-* [Visit our careers page](https://juju.is/careers)
+* [Visit our careers page](https://canonical.com/careers)
 
 Thinking about using Juju for your next project? [Get in touch!](https://canonical.com/contact-us)
