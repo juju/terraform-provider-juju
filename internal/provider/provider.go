@@ -429,6 +429,7 @@ func (p *jujuProvider) DataSources(_ context.Context) []func() datasource.DataSo
 		func() datasource.DataSource { return NewSecretDataSource() },
 		func() datasource.DataSource { return NewJAASGroupDataSource() },
 		func() datasource.DataSource { return NewJAASRoleDataSource() },
+		func() datasource.DataSource { return NewStoragePoolDataSource() },
 	}
 }
 
