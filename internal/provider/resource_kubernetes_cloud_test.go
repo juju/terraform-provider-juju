@@ -165,6 +165,7 @@ resource "juju_kubernetes_cloud" "{{.CloudName}}" {
  {{ if .NoServiceAccount }}
  skip_service_account_creation = true
  {{ end }}
+ storage_class_name = "default"
 }
 
 resource "juju_model" "{{.CloudName}}-model" {

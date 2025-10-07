@@ -40,6 +40,31 @@ resource "juju_model" "my-model" {
 - `parent_cloud_name` (String) The parent cloud name, for adding a k8s cluster from an existing cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.
 - `parent_cloud_region` (String) The parent cloud region name, for adding a k8s cluster from an existing cloud. Changing this value will cause the cloud to be destroyed and recreated by terraform. *Note* that this value must be set when running against a JAAS controller.
 - `skip_service_account_creation` (Boolean) If set to true, the Juju Terraform provider will not create a service account and associated role within the K8s cluster and override the authentication info in the K8s config. This way it does not need to connect to the K8s API when adding a k8s cloud.
+- `storage_class_name` (String) Specify the Kubernetes storage class name for workload and operator storage.
+
+When adding K8S clouds via the Terraform Provider, it strays in behaviour from the Juju CLI.
+
+The Juju CLI's add-k8s command has a --storage flag which allows users to specify
+a storage class name to be used for both operator and workload storage.
+
+The Juju CLI also has a --skip-storage flag which prevents Juju from configuring any
+storage class names on the cloud definition. By default, this is false.
+
+When adding a K8S cloud via the Juju CLI, it intelligently selects storage classes
+based on cloud provider preferences (e.g., 'gp2' for AWS, 'standard' for GCE) if no
+storage class is specified via the --storage flag.
+
+This intelligent selection is not implemented in the Terraform Provider as it requires
+direct communication with the Kubernetes cluster in question to be added as a cloud.
+That is, when running terraform and attempting to add a Kubernetes cloud, the caller
+would need network connectivity to the cluster.
+
+Instead, we expect users to explicitly define the storage class name to use for
+operator and workload storage via this attribute and default to no storage class specified 
+otherwise (equivalent to --skip-storage=true in the Juju CLI).
+
+To find this information, users can query their cluster directly, e.g. via:
+  kubectl get storageclass
 
 ### Read-Only
 

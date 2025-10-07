@@ -20,6 +20,16 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
+const (
+	// workloadStorageKey is the model config attribute used to specify
+	// the storage class for provisioning workload storage.
+	workloadStorageKey = "workload-storage"
+
+	// operatorStorageKey is the model config attribute used to specify
+	// the storage class for provisioning operator storage.
+	operatorStorageKey = "operator-storage"
+)
+
 type kubernetesCloudsClient struct {
 	SharedClient
 
@@ -32,6 +42,7 @@ type CreateKubernetesCloudInput struct {
 	ParentCloudName      string
 	ParentCloudRegion    string
 	CreateServiceAccount bool
+	StorageClassName     string
 }
 
 type ReadKubernetesCloudInput struct {
@@ -104,6 +115,13 @@ func (c *kubernetesCloudsClient) CreateKubernetesCloud(input *CreateKubernetesCl
 	)
 	if err != nil {
 		return "", errors.Trace(err)
+	}
+
+	// For the details of storage class skippage, see [provider.StorageClassNameMarkdownDescription].
+	if input.StorageClassName != "" {
+		newCloud.Config = make(map[string]interface{})
+		newCloud.Config[operatorStorageKey] = input.StorageClassName
+		newCloud.Config[workloadStorageKey] = input.StorageClassName
 	}
 
 	err = kubernetesAPIClient.AddCloud(newCloud, false)
