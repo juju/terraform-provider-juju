@@ -226,7 +226,8 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 			ConstraintsKey: schema.StringAttribute{
 				CustomType: CustomConstraintsType{},
 				Description: "Constraints imposed on this application. Changing this value will cause the" +
-					" application to be destroyed and recreated by terraform.",
+					" application to be destroyed and recreated by terraform. Multiple constraints can" +
+					" be provided as a space-separated list.",
 				Optional: true,
 				// Set as "computed" to pre-populate and preserve any implicit constraints
 				Computed: true,
@@ -238,7 +239,10 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"storage_directives": schema.MapAttribute{
 				Description: "Storage directives (constraints) for the juju application." +
 					" The map key is the label of the storage defined by the charm," +
-					" the map value is the storage directive in the form <pool>,<count>,<size>." +
+					" the map value is the storage directive in the form [<pool>,][<count>,][<size>] " +
+					" where at least one constraint must be specified." +
+					" See https://documentation.ubuntu.com/juju/3.6/reference/storage/ for more details." +
+					" If a pool is not specified, the model's default pool will be used." +
 					" Changing an existing key/value pair will cause the application to be replaced." +
 					" Adding a new key/value pair will add storage to the application on upgrade.",
 				ElementType: types.StringType,
