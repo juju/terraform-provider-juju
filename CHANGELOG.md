@@ -32,6 +32,16 @@ includes the model resource.
 * The `series` field has been removed from the application resource - use `base` instead.
 * The `series` field has been removed from the machine resource - use `base` instead.
 
+ENHANCEMENTS
+
+* Allow deploying OCI charm resources from private registries in [#924](https://github.com/juju/terraform-provider-juju/pull/924).
+* Handle partial app deployments in [#926](https://github.com/juju/terraform-provider-juju/pull/926).
+* Add a storage pool resource in [#908](https://github.com/juju/terraform-provider-juju/pull/908).
+
+BUG FIXES
+
+* Fix for [#671](https://github.com/juju/terraform-provider-juju/issues/671) by @ale8k in [#925](https://github.com/juju/terraform-provider-juju/pull/925)
+
 ## 0.23.0 (September 22, 2025)
 
 NOTES:
