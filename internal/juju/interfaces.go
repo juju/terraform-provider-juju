@@ -16,6 +16,7 @@ import (
 	apisecrets "github.com/juju/juju/api/client/secrets"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
 	jujucloud "github.com/juju/juju/cloud"
+	"github.com/juju/juju/core/arch"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/resources"
@@ -39,6 +40,7 @@ type SharedClient interface {
 
 	JujuLogger() *jujuLoggerShim
 	WaitForResource() bool
+	DefaultTestModelArchitecture() arch.Arch
 }
 
 type ClientAPIClient interface {
