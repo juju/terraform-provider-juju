@@ -189,6 +189,59 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 	}, nil
 }
 
+func (c integrationsClient) UpdateIntegration(input *UpdateIntegrationInput) (*UpdateIntegrationResponse, error) {
+	conn, err := c.GetConnection(&input.ModelName)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := apiapplication.NewClient(conn)
+
+	listViaCIDRs := splitCommaDelimitedList(input.ViaCIDRs)
+	response, err := client.AddRelation(
+		input.Endpoints,
+		listViaCIDRs,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	//TODO: check integration status
+
+	//If the length of this slice is only 1 then the integration has already been destroyed by the remote offer being removed
+	//If the length is 2 we need to destroy the integration
+	if len(input.OldEndpoints) == 2 {
+		var force bool = false
+		var timeout time.Duration = 30 * time.Second
+		err = client.DestroyRelation(
+			&force,
+			&timeout,
+			input.OldEndpoints...,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	//TODO: check deletion success and force?
+
+	//integration is updated - fetch the status in order to validate
+	status, err := c.ModelStatus(input.ModelName, conn)
+	if err != nil {
+		return nil, err
+	}
+
+	applications, err := parseApplications(status.RemoteApplications, response.Endpoints)
+	if err != nil {
+		return nil, err
+	}
+
+	return &UpdateIntegrationResponse{
+		Applications: applications,
+	}, nil
+}
+
 func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
 	conn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
