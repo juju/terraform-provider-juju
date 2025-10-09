@@ -331,9 +331,7 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 	if input.OfferURL == "" {
 		return nil, fmt.Errorf("missing offer URL when attempting to consume an offer")
 	}
-	if input.RemoteAppAlias == "" {
-		return nil, fmt.Errorf("missing remote app alias when consuming an offer")
-	}
+	// input.RemoteAppAlias can be empty to use the default offer name.
 
 	modelConn, err := c.GetConnection(&input.ModelName)
 	if err != nil {
