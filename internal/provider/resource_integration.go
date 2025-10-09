@@ -97,7 +97,10 @@ func (r *integrationResource) ValidateConfig(ctx context.Context, req resource.V
 	}
 
 	var apps []nestedApplication
-	configData.Application.ElementsAs(ctx, &apps, false)
+	resp.Diagnostics.Append(configData.Application.ElementsAs(ctx, &apps, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	for _, app := range apps {
 		if app.Name.IsNull() && app.OfferURL.IsNull() {
 			resp.Diagnostics.AddAttributeError(path.Root("applications"), "Attribute Error", "one and only one of \"name\" or \"offer_url\" fields must be provided.")
@@ -118,10 +121,16 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"model": schema.StringAttribute{
 				Description: "The name of the model to operate in.",
 				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"via": schema.StringAttribute{
 				Description: "A comma separated list of CIDRs for outbound traffic.",
 				Optional:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"id": schema.StringAttribute{
 				Computed: true,
@@ -143,6 +152,10 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Description: "The name of the application. This attribute may not be used at the" +
 								" same time as the offer_url.",
 							Optional: true,
+							Computed: true,
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.RequiresReplace(),
+							},
 							Validators: []validator.String{
 								stringvalidator.ConflictsWith(path.Expressions{
 									path.MatchRelative().AtParent().AtName("offer_url"),
@@ -152,6 +165,9 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 						"endpoint": schema.StringAttribute{
 							Description: "The endpoint name. This attribute may not be used at the" +
 								" same time as the offer_url.",
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.RequiresReplace(),
+							},
 							Optional: true,
 							Computed: true,
 						},
@@ -161,6 +177,7 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Optional: true,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
+								stringplanmodifier.RequiresReplace(),
 							},
 							Validators: []validator.String{
 								stringvalidator.ConflictsWith(path.Expressions{
@@ -203,7 +220,8 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	// If we have an offer URL, we need to consume it before creating the integration.
+	// If we have an offer URL, we need to consume it (creating a remote-app) before creating the integration.
+	// If the remote-app already exists, we will re-use it (see `ConsumeRemoteOffer` for more details).
 	if offer != nil {
 		offerResponse, err := r.client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
 			ModelName: modelName,
@@ -318,118 +336,12 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update is a no-op, as all fields force replacement.
 func (r *integrationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// Prevent panic if the provider has not been configured.
-	if r.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "integration", "update")
-		return
-	}
-	var plan, state integrationResourceModel
-
-	// Read Terraform prior state data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	modelName := plan.ModelName.ValueString()
-
-	var oldEndpoints, endpoints []string
-	var oldOffer, offer *offer
-	var err error
-
-	if !plan.Application.Equal(state.Application) {
-		var oldApps []nestedApplication
-		state.Application.ElementsAs(ctx, &oldApps, false)
-		oldEndpoints, oldOffer, _, err = parseEndpoints(oldApps)
-		if err != nil {
-			resp.Diagnostics.AddError("Provider Error", err.Error())
-			return
-		}
-
-		var newApps []nestedApplication
-		plan.Application.ElementsAs(ctx, &newApps, false)
-		endpoints, offer, _, err = parseEndpoints(newApps)
-		if err != nil {
-			resp.Diagnostics.AddError("Provider Error", err.Error())
-			return
-		}
-	}
-
-	var offerResponse *juju.ConsumeRemoteOfferResponse
-	// check if the offer url has been deleted or the URL has been changed.
-	if oldOffer != nil && (offer == nil || offer.url != oldOffer.url) {
-		// Destroy old remote offer. This is not automatically handled by the `requires_replace` logic,
-		// because it is a special case where the offer URL has been specified in an integration resource.
-		errs := r.client.Offers.RemoveRemoteOffer(&juju.RemoveRemoteOfferInput{
-			ModelName: modelName,
-			OfferURL:  oldOffer.url,
-		})
-		if len(errs) > 0 {
-			for _, v := range errs {
-				resp.Diagnostics.AddError("Client Error", v.Error())
-			}
-			return
-		}
-		r.trace(fmt.Sprintf("removed offer on Juju: %q", oldOffer.url))
-	}
-	// check if the offer url has been added or the URL has been changed.
-	if offer != nil && (oldOffer == nil || offer.url != oldOffer.url) {
-		offerResponse, err = r.client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
-			ModelName: modelName,
-			OfferURL:  offer.url,
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("Client Error", err.Error())
-			return
-		}
-		// If the offer has a SAASName, we append it to the endpoints list
-		// If the endpoint is not empty, we append it in the format <SAASName>:<endpoint>
-		// If the endpoint is empty, we append just the SAASName and Juju will infer the endpoint.
-		if offerResponse.SAASName != "" {
-			if offer.endpoint != "" {
-				endpoints = append(endpoints, fmt.Sprintf("%s:%s", offerResponse.SAASName, offer.endpoint))
-			} else {
-				endpoints = append(endpoints, offerResponse.SAASName)
-			}
-		}
-		r.trace(fmt.Sprintf("added offer on Juju: %q", offer.url))
-	}
-
-	viaCIDRs := plan.Via.ValueString()
-	input := &juju.UpdateIntegrationInput{
-		ModelName:    modelName,
-		Endpoints:    endpoints,
-		OldEndpoints: oldEndpoints,
-		ViaCIDRs:     viaCIDRs,
-	}
-	response, err := r.client.Integrations.UpdateIntegration(input)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", err.Error())
-		return
-	}
-
-	applications, err := parseApplications(response.Applications)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse applications, got error: %s", err))
-		return
-	}
-
-	appType := req.State.Schema.GetBlocks()["application"].(schema.SetNestedBlock).NestedObject.Type()
-	apps, aErr := types.SetValueFrom(ctx, appType, applications)
-	if aErr.HasError() {
-		resp.Diagnostics.Append(aErr...)
-		return
-	}
-	plan.Application = apps
-	newId := types.StringValue(newIDForIntegrationResource(modelName, response.Applications))
-	plan.ID = newId
-	r.trace(fmt.Sprintf("Updated integration resource: %q", newId))
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// Delete removes the integration and intentionally avoids deleting any consumed offers
+// in case multiple apps are using the same consumed offer (remote app).
 func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Prevent panic if the provider has not been configured.
 	if r.client == nil {
@@ -483,8 +395,8 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 				errSummary,
 				errDetail,
 			)
+			return
 		}
-		return
 	}
 	r.trace(fmt.Sprintf("Deleted integration resource: %q", state.ID.ValueString()))
 }
@@ -545,9 +457,9 @@ func parseEndpoints(apps []nestedApplication) (endpoints []string, of *offer, ap
 		offerURL := app.OfferURL.ValueString()
 		endpoint := app.Endpoint.ValueString()
 
-		//Here we check if the endpoint is empty and pass just the application name, this allows juju to attempt to infer endpoints
-		//If the endpoint is specified we pass the format <applicationName>:<endpoint>
-		//first check if we have an offer_url, in this case don't return the endpoint
+		// Here we check if the endpoint is empty and pass just the application name, this allows juju to attempt to infer endpoints
+		// If the endpoint is specified we pass the format <applicationName>:<endpoint>
+		// first check if we have an offer_url, in this case don't return the endpoint
 		if offerURL != "" {
 			of = &offer{
 				url:      offerURL,
