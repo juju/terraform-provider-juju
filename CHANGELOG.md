@@ -1,3 +1,18 @@
+## 0.23.1 (October 9, 2025)
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.4 release.
+
+BUG FIXES
+
+* Partial revert of new behaviour related to cross-model relations by @kian99 in [#938](https://github.com/juju/terraform-provider-juju/pull/938) that exposed a Juju bug, see [#20818](https://github.com/juju/juju/issues/20818).
+  * Multiple saas apps for the same offer URL surface an issue where relations to the additional saas apps don't work correctly. See the Juju issue for more details on the problem and how to resolve it.
+
+See our docs for more information https://documentation.ubuntu.com/terraform-provider-juju/latest/reference/terraform-provider/resources/integration/#cross-model-relations on the provider's approach to cross-model relations.
+
 ## 0.23.0 (September 22, 2025)
 
 NOTES:
