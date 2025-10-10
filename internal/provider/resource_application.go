@@ -250,9 +250,13 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 					mapplanmodifier.RequiresReplaceIf(storageDirectivesMapRequiresReplace, "", ""),
 				},
 			},
+			// Currently "storage" isn't used by the provider other than tracking. We don't model
+			// unattached storage, nor allow direct manipulation of storage, but should we
+			// ever model storage, this would need updating to reflect the unattached storage we wish
+			// to attach to this "application". I put "application" in quotes as it is unit specific
+			// and currently we don't model units.
 			"storage": schema.SetNestedAttribute{
 				Description: "Storage used by the application.",
-				Optional:    true,
 				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
