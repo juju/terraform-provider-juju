@@ -95,7 +95,6 @@ Notes:
 * A resource can be added or changed at any time. If the charm has resources and None is specified in the plan, Juju will use the resource defined in the charm's specified channel.
 * If a charm is refreshed, by changing the charm revision or channel and if the resource is specified by a revision in the plan, Juju will use the resource defined in the plan.
 * Resources specified by URL to an OCI image repository will never be refreshed (upgraded) by juju during a charm refresh unless explicitly changed in the plan.
-- `storage` (Attributes Set) Storage used by the application. (see [below for nested schema](#nestedatt--storage))
 - `storage_directives` (Map of String) Storage directives (constraints) for the juju application. The map key is the label of the storage defined by the charm, the map value is the storage directive in the form <pool>,<count>,<size>. Changing an existing key/value pair will cause the application to be replaced. Adding a new key/value pair will add storage to the application on upgrade.
 - `trust` (Boolean) Set the trust for the application.
 - `units` (Number) The number of application units to deploy for the charm.
@@ -104,6 +103,7 @@ Notes:
 
 - `id` (String) The ID of this resource.
 - `model_type` (String) The type of the model where the application is deployed. It is a computed field and is needed to determine if the application should be replaced or updated in case of base updates.
+- `storage` (Attributes Set) Storage used by the application. (see [below for nested schema](#nestedatt--storage))
 
 <a id="nestedblock--charm"></a>
 ### Nested Schema for `charm`
