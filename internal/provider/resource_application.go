@@ -252,7 +252,6 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 			},
 			"storage": schema.SetNestedAttribute{
 				Description: "Storage used by the application.",
-				Optional:    true,
 				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
