@@ -37,7 +37,7 @@ resource "juju_application" "this" {
     # or
     "pgdata" = "2,4G" # 2 instances of 4 gigabytes of storage for pgdata using the model's default storage pool
     # or
-    "pgdata" = "ebs,2,4G" # 2 instances of 4 gigabytes of ebs storage for pgdata on the ebs storage pool
+    "pgdata" = "ebs,2,4G" # 2 instances of 4 gigabytes of storage for pgdata on the ebs storage pool
   }
 }
 
@@ -52,7 +52,7 @@ resource "juju_machine" "all_machines" {
   # The following lifecycle directive instructs Terraform to update 
   # any dependent resources before destroying the machine - in the 
   # case of applications this means that application units get 
-  # removed from units before Terraform attempts to destroy the 
+  # removed before Terraform attempts to destroy the 
   # machine.
   lifecycle {
     create_before_destroy = true

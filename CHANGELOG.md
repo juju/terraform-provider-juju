@@ -34,9 +34,9 @@ includes the model resource.
 
 ENHANCEMENTS
 
-* Allow deploying OCI charm resources from private registries in [#924](https://github.com/juju/terraform-provider-juju/pull/924).
-* Handle partial app deployments in [#926](https://github.com/juju/terraform-provider-juju/pull/926).
-* Add a storage pool resource in [#908](https://github.com/juju/terraform-provider-juju/pull/908).
+* Allow deploying OCI charm resources from private registries by @kian99 in [#924](https://github.com/juju/terraform-provider-juju/pull/924).
+* Handle partial app deployments by @kian99 in [#926](https://github.com/juju/terraform-provider-juju/pull/926).
+* Add a storage pool resource by @ale8k in [#908](https://github.com/juju/terraform-provider-juju/pull/908).
 
 BUG FIXES
 
