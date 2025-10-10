@@ -7,6 +7,7 @@
 :maxdepth: 2
 :hidden:
 
+create-deployment-dependencies
 manage-the-terraform-provider-for-juju
 manage-controllers
 manage-clouds
@@ -51,6 +52,7 @@ Set up SSH keys. Add users, service accounts, roles, and groups and control thei
 
 Deploy, configure, integrate, scale, etc., charmed applications. This will automatically provision infrastructure, but you can customise it before, during, or after deploy too.
 
+- {ref}`create-deployment-dependencies`
 - {ref}`manage-charms`
 - {ref}`manage-charm-resources`
 - {ref}`manage-applications`
