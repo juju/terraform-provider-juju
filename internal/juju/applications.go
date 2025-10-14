@@ -16,6 +16,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1673,7 +1674,8 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 	resourceIDs := map[string]string{}
 
 	for _, resourceMeta := range charmResourcesToAdd {
-		if resourcesToUse == nil {
+		resource, ok := resourcesToUse[resourceMeta.Name]
+		if !ok {
 			// If there are no resource revisions, the Charm is deployed with
 			// default resources according to channel.
 			resourceFromCharmhub := charmresources.Resource{
@@ -1685,10 +1687,6 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 			continue
 		}
 
-		resource, ok := resourcesToUse[resourceMeta.Name]
-		if !ok {
-			continue
-		}
 		if providedRev, err := strconv.Atoi(resource.String()); err == nil {
 			// A resource revision is provided
 			resourceFromCharmhub := charmresources.Resource{
@@ -1731,6 +1729,12 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 	if len(pendingResourcesforAdd) == 0 {
 		return resourceIDs, nil
 	}
+
+	// Sort the resources by name to ensure consistent ordering.
+	// Two resources cannot have the same name.
+	slices.SortFunc(pendingResourcesforAdd, func(a, b charmresources.Resource) int {
+		return strings.Compare(a.Meta.Name, b.Meta.Name)
+	})
 
 	resourcesReqforAdd := apiresources.AddPendingResourcesArgs{
 		ApplicationID: appName,
