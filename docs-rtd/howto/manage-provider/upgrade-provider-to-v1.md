@@ -23,7 +23,6 @@ The most significant change is the replacement of the `model` field with `model_
 - `juju_machine`
 
 **Affected data sources:**
-- `juju_model`
 - `juju_application`
 - `juju_secret`
 - `juju_machine`
@@ -40,8 +39,9 @@ resource "juju_application" "app" {
   }
 }
 
-data "juju_model" "existing" {
-  name = "my-model"
+data "juju_application" "existing" {
+  model = "my-model"
+  name  = "my-app"
 }
 ```
 
@@ -55,8 +55,9 @@ resource "juju_application" "app" {
   }
 }
 
-data "juju_model" "existing" {
-  uuid = "model-uuid-here" # <--
+data "juju_application" "existing" {
+  model_uuid = "model-uuid-here" # <--
+  name       = "my-app"
 }
 ```
 
@@ -77,11 +78,22 @@ terraform import juju_application.myapp model-name:application-name
 terraform import juju_application.myapp model-uuid:application-name
 ```
 
-### 3. Offer data source changes
+### 3. Model data source changes
+
+The `model` data source has a new `owner` field. This field must be set in addition to the `name`
+field in order to lookup a model.
+Use the model data source to obtain a model's UUID where it is more convenient.
+
+The data-source has also changed the `uuid` field. It is no longer read-only, allowing model-lookup
+by UUID instead of name + owner.
+
+Note that the `uuid` field cannot be set at the same time as the `name`/`owner`.
+
+### 4. Offer data source changes
 
 The `juju_offer` data source no longer contains the computed `model` field.
 
-### 4. Application resource
+### 5. Application resource changes
 
 Several deprecated fields have been removed from the `juju_application` resource:
 
@@ -89,7 +101,7 @@ Several deprecated fields have been removed from the `juju_application` resource
 - **`principle`** - Field was unused and has been removed.
 - **`series`** - Use `base` instead.
 
-### 5. Machine resource
+### 6. Machine resource changes
 
 The deprecated `series` field has been removed from the `juju_machine` resource. Use `base` instead.
 
