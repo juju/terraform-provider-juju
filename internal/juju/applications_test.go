@@ -14,6 +14,7 @@ import (
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
 	apiapplication "github.com/juju/juju/api/client/application"
+	apiresources "github.com/juju/juju/api/client/resources"
 	apicharm "github.com/juju/juju/api/common/charm"
 	"github.com/juju/juju/charmhub/transport"
 	corebase "github.com/juju/juju/core/base"
@@ -583,10 +584,11 @@ func (s *ApplicationSuite) TestAddPendingResourceOneRevisionProvidedMultipleChar
 		Type: charmresources.TypeContainerImage,
 		Path: pathUdm,
 	}
+	ausfResourceID := "1111222"
 	udmResourceID := "1111444"
 	charmResourcesToAdd := make(map[string]charmresources.Meta)
-	charmResourcesToAdd["ausf-image"] = metaUdm
-	charmResourcesToAdd["udm-image"] = metaAusf
+	charmResourcesToAdd["ausf-image"] = metaAusf
+	charmResourcesToAdd["udm-image"] = metaUdm
 	resourcesToUse := make(map[string]CharmResource)
 	resourcesToUse["udm-image"] = CharmResource{RevisionNumber: "3"}
 	revision := 433
@@ -615,8 +617,29 @@ func (s *ApplicationSuite) TestAddPendingResourceOneRevisionProvidedMultipleChar
 	}
 
 	aExp := s.mockResourceAPIClient.EXPECT()
-	expectedResourceIDs := map[string]string{"udm-image": udmResourceID}
-	aExp.AddPendingResources(gomock.Any()).Return([]string{udmResourceID}, nil)
+	expectedResourceIDs := map[string]string{
+		"udm-image":  udmResourceID,
+		"ausf-image": ausfResourceID,
+	}
+	aExp.AddPendingResources(apiresources.AddPendingResourcesArgs{
+		ApplicationID: appName,
+		CharmID: apiresources.CharmID{
+			URL:    charmID.URL,
+			Origin: charmID.Origin,
+		},
+		Resources: []charmresources.Resource{
+			{
+				Meta:     metaAusf,
+				Origin:   charmresources.OriginStore,
+				Revision: -1,
+			},
+			{
+				Meta:     metaUdm,
+				Origin:   charmresources.OriginStore,
+				Revision: 3,
+			},
+		},
+	}).Return([]string{ausfResourceID, udmResourceID}, nil)
 
 	resourceIDs, err := addPendingResources(appName, charmResourcesToAdd, resourcesToUse, charmID, s.mockResourceAPIClient)
 	s.Assert().Equal(resourceIDs, expectedResourceIDs, "Resource IDs does not match.")
