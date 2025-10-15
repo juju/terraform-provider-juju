@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -112,5 +113,33 @@ func TestDiscoverTerraformFiles(t *testing.T) {
 				assert.NotContains(t, file, "_upgraded", "found file with '_upgraded' in results: %s", file)
 			}
 		})
+	}
+}
+
+func TestTerraformZeroVersionRegex(t *testing.T) {
+	re := regexp.MustCompile(version0Regex)
+
+	tests := []struct {
+		input   string
+		matches bool
+	}{
+		{`version = "0.1.2"`, true},
+		{`version = "~>0.1.2"`, true},
+		{`version = ">=0.1.2"`, true},
+		{`version = "<0.1.2"`, true},
+		{`version = "!=0.1.2"`, true},
+		{`version = "<=0.1.2"`, true},
+		{`version = ">0.1.2"`, true},
+		{`version = ">0.1.2-beta"`, true},
+		{`version = "1.0.0"`, false},
+		{`version = ">=1.0.0"`, false},
+		{`version = "1.0.0-beta3"`, false},
+		{`version = "2.3.4"`, false},
+	}
+
+	for _, test := range tests {
+		if got := re.MatchString(test.input); got != test.matches {
+			t.Errorf("input: %q, expected match: %v, got: %v", test.input, test.matches, got)
+		}
 	}
 }
