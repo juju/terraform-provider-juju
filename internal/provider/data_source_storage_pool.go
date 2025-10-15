@@ -7,8 +7,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/datasourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -30,8 +32,10 @@ type storagePoolDataSource struct {
 }
 
 type storagePoolDataSourceModel struct {
-	Name      types.String `tfsdk:"name"`
-	ModelUUID types.String `tfsdk:"model_uuid"`
+	Name       types.String `tfsdk:"name"`
+	ModelName  types.String `tfsdk:"model_name"`
+	ModelOwner types.String `tfsdk:"model_owner"`
+	ModelUUID  types.String `tfsdk:"model_uuid"`
 }
 
 // Metadata implements datasource.DataSourceWithConfigure.Metadata.
@@ -43,19 +47,56 @@ func (d *storagePoolDataSource) Metadata(_ context.Context, req datasource.Metad
 func (d *storagePoolDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A data source representing a Juju Storage Pool.",
+		MarkdownDescription: "Use the storage pool data source to retrieve information about an existing Juju storage pool. " +
+			"This is useful when you need to reference storage pool attributes such as the pool attributes in other resources. " +
+			"Storage pools can be looked up by their name with a model UUID or a model owner and model name e.g. admin/myModel. " +
+			"The owner is the user that created the model and can be found with the 'juju show-model' command.",
 		Attributes: map[string]schema.Attribute{
+			"name": schema.StringAttribute{
+				Description: "The name of the storage pool.",
+				Optional:    true,
+			},
 			"model_uuid": schema.StringAttribute{
 				Description: "The uuid of the model containing the storage pool.",
-				Required:    true,
+				Optional:    true,
 				Validators: []validator.String{
 					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
 				},
 			},
-			"name": schema.StringAttribute{
-				Description: "The name of the storage pool.",
-				Required:    true,
+			"model_name": schema.StringAttribute{
+				Description: "The name of the model.",
+				Optional:    true,
+			},
+			"model_owner": schema.StringAttribute{
+				Description: "The owner of the model.",
+				Optional:    true,
 			},
 		},
+	}
+}
+
+// ConfigValidators returns the validators used to ensure the configuration is
+// valid prior to running the data source.
+// For the storage pool data source either model_name + model_owner must be specified together
+// or model_uuid specified alone.
+func (r *storagePoolDataSource) ConfigValidators(ctx context.Context) []datasource.ConfigValidator {
+	return []datasource.ConfigValidator{
+		datasourcevalidator.RequiredTogether(
+			path.MatchRoot("model_name"),
+			path.MatchRoot("model_owner"),
+		),
+		datasourcevalidator.Conflicting(
+			path.MatchRoot("model_name"),
+			path.MatchRoot("model_uuid"),
+		),
+		datasourcevalidator.Conflicting(
+			path.MatchRoot("model_owner"),
+			path.MatchRoot("model_uuid"),
+		),
+		datasourcevalidator.AtLeastOneOf(
+			path.MatchRoot("model_name"),
+			path.MatchRoot("model_uuid"),
+		),
 	}
 }
 
@@ -92,8 +133,24 @@ func (d *storagePoolDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
+	var modelUUID string
+	if data.ModelUUID.ValueString() != "" {
+		modelUUID = data.ModelUUID.ValueString()
+	} else {
+		if data.ModelName.ValueString() == "" || data.ModelOwner.ValueString() == "" {
+			resp.Diagnostics.AddError("Invalid Attribute Combination", "When looking up a model by name, both the name and owner attributes must be set.")
+			return
+		}
+		uuid, err := d.client.Models.ModelUUID(data.ModelName.ValueString(), data.ModelOwner.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model by name and owner, got error: %s", err))
+			return
+		}
+		modelUUID = uuid
+	}
+
 	input := juju.GetStoragePoolInput{
-		ModelUUID: data.ModelUUID.ValueString(),
+		ModelUUID: modelUUID,
 		PoolName:  data.Name.ValueString(),
 	}
 	output, err := d.client.Storage.GetPool(input)

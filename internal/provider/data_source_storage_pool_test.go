@@ -5,6 +5,7 @@ package provider
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -31,19 +32,36 @@ func TestAcc_DataSourceStoragePool(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
+			// Lookup by model UUID
 			{
-				Config: testAccDataSourceStoragePool(modelName, poolName, "tmpfs", dataSourceName, poolAttributes),
+				Config: testAccDataSourceStoragePoolByModelUUID(true, false, modelName, "", poolName, "tmpfs", dataSourceName, poolAttributes),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("data.juju_storage_pool."+dataSourceName, "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr("data.juju_storage_pool."+dataSourceName, "name", poolName),
 				),
 			},
+			// Lookup by model name + owner
+			{
+				Config: testAccDataSourceStoragePoolByModelUUID(false, true, modelName, expectedResourceOwner(), poolName, "tmpfs", dataSourceName, poolAttributes),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("data.juju_storage_pool."+dataSourceName, "model_uuid", "juju_model."+modelName, "uuid"),
+					resource.TestCheckResourceAttr("data.juju_storage_pool."+dataSourceName, "name", poolName),
+				),
+			},
+			// Lookup with only model name set, no owner (fail)
+			{
+				Config:      testAccDataSourceStoragePoolByModelUUID(false, true, modelName, "", poolName, "tmpfs", dataSourceName, poolAttributes),
+				ExpectError: regexp.MustCompile(`When looking up a model by name, both the name and owner attributes`),
+			},
 		},
 	})
 }
 
-func testAccDataSourceStoragePool(
+func testAccDataSourceStoragePoolByModelUUID(
+	lookupByModelUUID bool,
+	lookupByModelName bool,
 	modelName,
+	ownerName,
 	poolName,
 	storageProviderName,
 	dataSourceName string,
@@ -66,11 +84,22 @@ resource "juju_storage_pool" "{{.PoolName}}" {
 
 data "juju_storage_pool" "{{.DataSourceName}}" {
   name       = juju_storage_pool.{{.PoolName}}.name
+
+{{- if .LookupByModelUUID}}
   model_uuid = juju_model.{{.ModelName}}.uuid
+{{- end }}
+
+{{ if .LookupByModelName}}
+  model_name = juju_model.{{.ModelName}}.name
+  model_owner = "{{.ModelOwner}}"
+{{- end }}
 }
 
 `, internaltesting.TemplateData{
+		"LookupByModelUUID":   lookupByModelUUID,
+		"LookupByModelName":   lookupByModelName,
 		"ModelName":           modelName,
+		"ModelOwner":          ownerName,
 		"PoolName":            poolName,
 		"StorageProviderName": storageProviderName,
 		"PoolAttributes":      poolAttributes,
