@@ -39,16 +39,22 @@ bits of data together.
 
 #### Cross-model relations
 
-From v0.23, when integrating with an offer (i.e. when specifying the `offer_url`), the provider will create a remote application name with the format `<remote-app>-<local-app>-<interface>`. For example,
+Version 0.23.0 of the provider introduced a change when integrating with an offer (i.e. when specifying the `offer_url`). 
+The provider will create a remote application name with the format `<remote-app>-<local-app>-<interface>`. For example,
 when relating a local application called `discourse` with an offer url of the form `admin/dbModel.postgresql`, using the `database` interface, the remote application will have the name `postgresql-discourse-database`.
 
 In previous versions of the provider, the remote application would always have the same name as the application in the offer url, i.e. `postgresql` in the example above.
 
-This ensures that local applications have a 1:1 relation with remote applications.
+While change is backwards compatible, it uncovered a Juju bug that will cause an issue when relating to the same offer
+multiple times, see https://github.com/juju/juju/issues/20818 for more details.
+For this reason, the change is being reverted in v0.23.1 of the provider. 
 
-This change is backwards compatible and existing integrations will continue to work. However, take care when destroying integrations created by previous versions of the provider. If two apps relate the same remote application (e.g. if the offer provides multiple endpoints or two apps rely on the same offer/endpoint) and one of the integrations is removed, the other will also be affected.
+While deployments made using v0.23.0 will continue to work, you may have noticed `saas` applications with the name `<remote-app>-<local-app>-<interface>`. After upgrading to v0.23.1, these apps will continue
+to exist and work as expected but newly consumed offers will follow the previous naming convention.
 
-Before v0.23:
+See the diagrams below for a comparison of the changes.
+
+Before v0.23.0:
 ```{mermaid}
 flowchart LR
     A[App A] -->|Integrate| C(Remote APP)
@@ -57,7 +63,7 @@ flowchart LR
     D--> E[App C]
 ```
 
-After v0.23:
+v0.23.0:
 ```{mermaid}
 flowchart LR
     A[App A] -->|Integrate| C(Remote App 1)
@@ -66,6 +72,10 @@ flowchart LR
     D -->|Cross Model| E[Offer]
     E--> F[App C]
 ```
+
+v0.23.1:
+Same as before v0.23.0.
+
 
 {{ if .HasImport -}}
 ## Import

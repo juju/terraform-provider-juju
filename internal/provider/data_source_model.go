@@ -7,11 +7,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/datasourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
+	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -30,7 +34,9 @@ type modelDataSource struct {
 }
 
 type modelDataSourceModel struct {
-	UUID types.String `tfsdk:"uuid"`
+	Name  types.String `tfsdk:"name"`
+	Owner types.String `tfsdk:"owner"`
+	UUID  types.String `tfsdk:"uuid"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -44,16 +50,56 @@ func (d *modelDataSource) Metadata(_ context.Context, req datasource.MetadataReq
 func (d *modelDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A data source representing a Juju Model.",
+		MarkdownDescription: "Use the model data source to retrieve information about an existing Juju model. " +
+			"This is useful when you need to reference model attributes such as the model UUID in other resources. " +
+			"Models can be looked up either by their UUID or a combination of name and owner e.g. admin/myModel. " +
+			"The owner is the user that created the model and can be found with the 'juju show-model' command.",
 		Attributes: map[string]schema.Attribute{
+			"name": schema.StringAttribute{
+				Description: "The name of the model.",
+				Optional:    true,
+			},
+			"owner": schema.StringAttribute{
+				Description: "The owner of the model.",
+				Optional:    true,
+			},
 			"uuid": schema.StringAttribute{
 				Description: "The UUID of the model.",
-				Required:    true,
+				Optional:    true,
+				Validators: []validator.String{
+					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
+				},
 			},
 			// ID required by the testing framework
 			"id": schema.StringAttribute{
 				Computed: true,
 			},
 		},
+	}
+}
+
+// ConfigValidators returns the validators used to ensure the configuration is
+// valid prior to running the data source.
+// For the model data source either name + owner must be specified together
+// or uuid specified alone.
+func (r *modelDataSource) ConfigValidators(ctx context.Context) []datasource.ConfigValidator {
+	return []datasource.ConfigValidator{
+		datasourcevalidator.RequiredTogether(
+			path.MatchRoot("name"),
+			path.MatchRoot("owner"),
+		),
+		datasourcevalidator.Conflicting(
+			path.MatchRoot("name"),
+			path.MatchRoot("uuid"),
+		),
+		datasourcevalidator.Conflicting(
+			path.MatchRoot("owner"),
+			path.MatchRoot("uuid"),
+		),
+		datasourcevalidator.AtLeastOneOf(
+			path.MatchRoot("name"),
+			path.MatchRoot("uuid"),
+		),
 	}
 }
 
@@ -97,17 +143,41 @@ func (d *modelDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
+	var modelUUID string
+	if data.UUID.ValueString() != "" {
+		modelUUID = data.UUID.ValueString()
+	} else {
+		if data.Name.ValueString() == "" || data.Owner.ValueString() == "" {
+			resp.Diagnostics.AddError("Invalid Attribute Combination", "When looking up a model by name, both the name and owner attributes must be set.")
+			return
+		}
+		uuid, err := d.client.Models.ModelUUID(data.Name.ValueString(), data.Owner.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model by name and owner, got error: %s", err))
+			return
+		}
+		modelUUID = uuid
+	}
+
 	// Get current juju model data source values.
-	model, err := d.client.Models.GetModel(data.UUID.ValueString())
+	model, err := d.client.Models.GetModel(modelUUID)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model by UUID, got error: %s", err))
 		return
 	}
 	d.trace(fmt.Sprintf("read juju model %q data source", data.UUID))
 
+	owner, err := names.ParseUserTag(model.OwnerTag)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse model owner tag %q, got error: %s", model.OwnerTag, err))
+		return
+	}
+
 	// Save data into Terraform state
 	data.UUID = types.StringValue(model.UUID)
 	data.ID = types.StringValue(model.UUID)
+	data.Name = types.StringValue(model.Name)
+	data.Owner = types.StringValue(owner.Id())
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 

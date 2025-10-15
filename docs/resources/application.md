@@ -12,6 +12,7 @@ A resource that represents a single Juju application deployment from a charm. De
 
 ## Example Usage
 ```terraform
+# An application with config, multiple units and constraints
 resource "juju_application" "this" {
   name = "my-application"
 
@@ -19,44 +20,91 @@ resource "juju_application" "this" {
 
   charm {
     name     = "ubuntu"
-    channel  = "edge"
+    channel  = "latest/stable"
     revision = 24
-    series   = "trusty"
-  }
-
-  resources = {
-    gosherve-image = "gatici/gosherve:1.0"
+    base     = "ubuntu@24.04"
   }
 
   units = 3
 
-  placement = "0,1,2"
-
-  storage_directives = {
-    files = "101M"
-  }
+  constraints = "mem=4G cores=2"
 
   config = {
     external-hostname = "..."
   }
 }
 
-# K8s application with resource from private registry
+# An application with storage directives
 resource "juju_application" "this" {
+  name = "my-application"
+
+  model_uuid = juju_model.development.uuid
+
+  charm {
+    name    = "postgresql"
+    channel = "14/stable"
+    base    = "ubuntu@22.04"
+  }
+
+  storage_directives = {
+    "pgdata" = "4G" # 4 gigabytes of storage for pgdata using the model's default storage pool
+    # or
+    "pgdata" = "2,4G" # 2 instances of 4 gigabytes of storage for pgdata using the model's default storage pool
+    # or
+    "pgdata" = "ebs,2,4G" # 2 instances of 4 gigabytes of storage for pgdata on the ebs storage pool
+  }
+}
+
+# An application deployed to specific machines
+# This example creates a set of machines and deploys an application to those machines.
+resource "juju_machine" "all_machines" {
+  count      = 5
+  model_uuid = juju_model.model.uuid
+  base       = "ubuntu@22.04"
+  name       = "machine_${count.index}"
+
+  # The following lifecycle directive instructs Terraform to create 
+  # new machines before destroying existing ones.
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "juju_application" "testapp" {
+  name       = "juju-qa-test"
+  model_uuid = juju_model.model.uuid
+
+
+  machines = toset(juju_machine.all_machines[*].machine_id)
+
+  charm {
+    name    = "ubuntu"
+    channel = "latest/stable"
+    base    = "ubuntu@22.04"
+  }
+}
+
+# K8s application with an OCI image resource from a private registry
+resource "juju_application" "this" {
+  name = "test-app"
+
   model_uuid = juju_model.this.uuid
-  name       = "test-app"
+
   charm {
     name    = "coredns"
     channel = "latest/stable"
   }
+
   trust = true
   expose {}
+
   registry_credentials = {
     "ghcr.io/canonical" = {
       username = "username"
       password = "password"
     }
   }
+
   resources = {
     "coredns-image" : "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"
   }
@@ -74,7 +122,7 @@ resource "juju_application" "this" {
 
 - `charm` (Block List) The charm installed from Charmhub. (see [below for nested schema](#nestedblock--charm))
 - `config` (Map of String) Application specific configuration. Must evaluate to a string, integer or boolean.
-- `constraints` (String) Constraints imposed on this application. Changing this value will cause the application to be destroyed and recreated by terraform.
+- `constraints` (String) Constraints imposed on this application. Changing this value will cause the application to be destroyed and recreated by terraform. Multiple constraints can be provided as a space-separated list.
 - `endpoint_bindings` (Attributes Set) Configure endpoint bindings (see [below for nested schema](#nestedatt--endpoint_bindings))
 - `expose` (Block List) Makes an application publicly available over the network (see [below for nested schema](#nestedblock--expose))
 - `machines` (Set of String) Specify the target machines for the application's units. The number of machines in the set indicates the unit count for the application. Removing a machine from the set will remove the application's unit residing on it. `machines` is mutually exclusive with `units`.
@@ -95,7 +143,7 @@ Notes:
 * A resource can be added or changed at any time. If the charm has resources and None is specified in the plan, Juju will use the resource defined in the charm's specified channel.
 * If a charm is refreshed, by changing the charm revision or channel and if the resource is specified by a revision in the plan, Juju will use the resource defined in the plan.
 * Resources specified by URL to an OCI image repository will never be refreshed (upgraded) by juju during a charm refresh unless explicitly changed in the plan.
-- `storage_directives` (Map of String) Storage directives (constraints) for the juju application. The map key is the label of the storage defined by the charm, the map value is the storage directive in the form <pool>,<count>,<size>. Changing an existing key/value pair will cause the application to be replaced. Adding a new key/value pair will add storage to the application on upgrade.
+- `storage_directives` (Map of String) Storage directives (constraints) for the juju application. The map key is the label of the storage defined by the charm, the map value is the storage directive in the form [<pool>,][<count>,][<size>]  where at least one constraint must be specified. See https://documentation.ubuntu.com/juju/3.6/reference/storage/ for more details. If a pool is not specified, the model's default pool will be used. Changing an existing key/value pair will cause the application to be replaced. Adding a new key/value pair will add storage to the application on upgrade.
 - `trust` (Boolean) Set the trust for the application.
 - `units` (Number) The number of application units to deploy for the charm.
 
