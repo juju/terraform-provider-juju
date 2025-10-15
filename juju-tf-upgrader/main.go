@@ -15,6 +15,8 @@ import (
 	"github.com/hashicorp/hcl/v2/hclwrite"
 )
 
+const version0Regex = `version\s*=\s*"\s*([~><=!]*\s*)?0\.\d+\.\d+(?:-[^"]+)?"`
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: juju-tf-upgrader <terraform-file-or-directory>")
@@ -428,7 +430,7 @@ func processTerraformBlock(block *hclwrite.Block, _ string, upgraded *bool) {
 	attrStr := getAttributeString(jujuAttr)
 
 	// Use regex to replace version values containing 0.x with ~> 1.0
-	versionRegex := regexp.MustCompile(`version\s*=\s*"[^"]*0\.[^"]*"`)
+	versionRegex := regexp.MustCompile(version0Regex)
 	if versionRegex.MatchString(attrStr) {
 		updatedContent := versionRegex.ReplaceAllString(attrStr, `version = "~> 1.0"`)
 
