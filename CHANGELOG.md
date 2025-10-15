@@ -9,7 +9,6 @@ NOTES:
 BREAKING CHANGES:
 
 * The following resources have had the `model` field replaced with `model_uuid` [791](https://github.com/juju/terraform-provider-juju/issues/791). Users will need to update their plans and modules to refer to models by UUID. Further details are available at the linked issue.
-  * Model data source
   * Application data source
   * Offer data source
   * Secret data source
@@ -22,6 +21,9 @@ BREAKING CHANGES:
   * Model Access resource
   * Secret Access resource
   * Secret resource
+* The `model` data-source has a new `owner` field. The data-source requires the `owner` field
+is set in addition to the `name`. Alternatively you can lookup a model by UUID. 
+Note that the `uuid` field cannot be set alongside `name`/`owner`.
 * Related to the above, all resources that import a model-scoped resource have had their import
 syntax changed to require a model UUID instead of a model name. This includes most of the resources
 in the above list with some exceptions (e.g. offer import requires the offer URL) and additionally
