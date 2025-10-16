@@ -399,14 +399,20 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						EndpointsKey: schema.StringAttribute{
+							CustomType:  CustomCommaDelimitedStringType{},
 							Description: "Expose only the ports that charms have opened for this comma-delimited list of endpoints",
 							Optional:    true,
+							PlanModifiers: []planmodifier.String{
+								CommaDelimitedStringModifier(),
+							},
 						},
 						SpacesKey: schema.StringAttribute{
+							CustomType:  CustomCommaDelimitedStringType{},
 							Description: "A comma-delimited list of spaces that should be able to access the application ports once exposed.",
 							Optional:    true,
 						},
 						CidrsKey: schema.StringAttribute{
+							CustomType:  CustomCommaDelimitedStringType{},
 							Description: "A comma-delimited list of CIDRs that should be able to access the application ports once exposed.",
 							Optional:    true,
 						},
@@ -432,9 +438,9 @@ type nestedCharm struct {
 // nestedExpose represents the single element of expose ListNestedBlock
 // of the in the application resource schema
 type nestedExpose struct {
-	Endpoints types.String `tfsdk:"endpoints"`
-	Spaces    types.String `tfsdk:"spaces"`
-	Cidrs     types.String `tfsdk:"cidrs"`
+	Endpoints CustomCommaDelimitedStringValue `tfsdk:"endpoints"`
+	Spaces    CustomCommaDelimitedStringValue `tfsdk:"spaces"`
+	Cidrs     CustomCommaDelimitedStringValue `tfsdk:"cidrs"`
 }
 
 func (n nestedExpose) transformToMapStringInterface() map[string]interface{} {
@@ -458,13 +464,13 @@ func parseNestedExpose(value map[string]interface{}) nestedExpose {
 	// the values are optional.
 	resp := nestedExpose{}
 	if cidrs, ok := value[CidrsKey]; ok && cidrs != "" {
-		resp.Cidrs = types.StringValue(cidrs.(string))
+		resp.Cidrs = NewCustomCommaDelimitedStringValue(cidrs.(string))
 	}
 	if endpoints, ok := value[EndpointsKey]; ok && endpoints != "" {
-		resp.Endpoints = types.StringValue(endpoints.(string))
+		resp.Endpoints = NewCustomCommaDelimitedStringValue(endpoints.(string))
 	}
 	if spaces, ok := value[SpacesKey]; ok && spaces != "" {
-		resp.Spaces = types.StringValue(spaces.(string))
+		resp.Spaces = NewCustomCommaDelimitedStringValue(spaces.(string))
 	}
 	return resp
 }
@@ -1355,27 +1361,55 @@ func (r *applicationResource) computeExposeDeltas(ctx context.Context, stateExpo
 		return nil, []string{}, diags
 	}
 
-	toExpose := make(map[string]interface{})
+	planEndpoints := strings.Split(planNestedExpose[0].Endpoints.ValueString(), ",")
+	stateEndpoints := strings.Split(stateNestedExpose[0].Endpoints.ValueString(), ",")
+
+	planSpaces := strings.Split(planNestedExpose[0].Spaces.ValueString(), ",")
+	stateSpaces := strings.Split(stateNestedExpose[0].Spaces.ValueString(), ",")
+
+	planCIDRs := strings.Split(planNestedExpose[0].Cidrs.ValueString(), ",")
+	stateCIDRs := strings.Split(stateNestedExpose[0].Cidrs.ValueString(), ",")
+
+	spacesAndCIDRsChaged := !slices.Equal(planSpaces, stateSpaces) || !slices.Equal(planCIDRs, stateCIDRs)
+
 	toUnexpose := make([]string, 0)
 
-	plan := planNestedExpose[0].transformToMapStringInterface()
-	state := stateNestedExpose[0].transformToMapStringInterface()
-
+	exposeEndpoints := []string{}
 	// if we have plan endpoints we have to expose them
-	for endpoint, v := range plan {
-		_, found := state[endpoint]
-		if found {
+	for _, endpoint := range planEndpoints {
+		if slices.Contains(stateEndpoints, endpoint) {
 			// this was already set
 			// If it is different, unexpose and then expose
-			if v != state[endpoint] {
+			if spacesAndCIDRsChaged {
 				toUnexpose = append(toUnexpose, endpoint)
-				toExpose[endpoint] = v
+				exposeEndpoints = append(exposeEndpoints, endpoint)
 			}
 		} else {
 			// this was not set, expose it
-			toExpose[endpoint] = v
+			exposeEndpoints = append(exposeEndpoints, endpoint)
 		}
 	}
+	for _, endpoint := range stateEndpoints {
+		if !slices.Contains(planEndpoints, endpoint) {
+			// this was unset in the plan, unexpose it
+			toUnexpose = append(toUnexpose, endpoint)
+		}
+	}
+
+	exposeEndpointsString := ""
+	if len(exposeEndpoints) > 0 {
+		exposeEndpointsString = strings.Join(exposeEndpoints, ",")
+	}
+
+	var toExpose map[string]interface{}
+	if exposeEndpointsString != "" || spacesAndCIDRsChaged {
+		toExpose = map[string]interface{}{
+			"endpoints": exposeEndpointsString,
+			"spaces":    planNestedExpose[0].Spaces.ValueString(),
+			"cidrs":     planNestedExpose[0].Cidrs.ValueString(),
+		}
+	}
+
 	return toExpose, toUnexpose, diags
 }
 
