@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
+	"github.com/zclconf/go-cty/cty"
 )
 
 const version0Regex = `version\s*=\s*"\s*([~><=!]*\s*)?0\.\d+\.\d+(?:-[^"]+)?"`
@@ -112,6 +113,7 @@ func transformTerraformFile(src []byte, filename string) (*transformationResult,
 			processVariableBlock(block, filename, srcBlockMap, blockKey, &warnings)
 		case "data":
 			processDataBlock(block, filename, &upgraded, srcBlockMap, blockKey, &warnings)
+			processModelDataSource(block, filename, &upgraded, srcBlockMap, blockKey, &warnings)
 		case "terraform":
 			processTerraformBlock(block, filename, &upgraded)
 		}
@@ -326,7 +328,6 @@ func processDataBlock(block *hclwrite.Block, filename string, upgraded *bool, sr
 
 	// Define data source type transformations: source_field -> target_field
 	supportedDataSources := map[string]map[string]string{
-		"juju_model":       {"name": "uuid"},
 		"juju_application": {"model": "model_uuid"},
 		"juju_secret":      {"model": "model_uuid"},
 		"juju_machine":     {"model": "model_uuid"},
@@ -410,6 +411,32 @@ func processDataBlock(block *hclwrite.Block, filename string, upgraded *bool, sr
 			fmt.Printf("  ✓ Upgraded %s.%s: %s -> %s (variable reference)\n", dataSourceType, block.Labels()[1], sourceField, targetField)
 		}
 	}
+}
+
+// processModelDataSource handles model data sources that need to add the "owner" field.
+func processModelDataSource(block *hclwrite.Block, filename string, upgraded *bool, srcBlockMap map[string]*hclsyntax.Block, blockKey string, warnings *int) {
+	// Only operate on data "juju_model" blocks
+	if len(block.Labels()) < 2 || block.Labels()[0] != "juju_model" {
+		return
+	}
+
+	// If the owner attribute already exists, do nothing
+	if block.Body().GetAttribute("owner") != nil {
+		return
+	}
+
+	// Add the owner attribute with a placeholder value
+	block.Body().SetAttributeValue("owner", cty.StringVal("### FILL IN OWNER"))
+	*upgraded = true
+
+	// Get line number from source block
+	lineNum := 0
+	if srcBlock, exists := srcBlockMap[blockKey]; exists {
+		lineNum = srcBlock.DefRange().Start.Line
+	}
+
+	*warnings++
+	fmt.Printf("  ⚠️  WARNING: %s:%d:1 - data.juju_model.%s missing required 'owner' field. Added placeholder, please update with correct value.\n", filename, lineNum, block.Labels()[1])
 }
 
 // processTerraformBlock handles terraform blocks that need provider version upgrades
