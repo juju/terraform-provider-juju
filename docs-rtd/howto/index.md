@@ -26,6 +26,7 @@ manage-offers
 manage-units
 manage-secrets
 manage-machines
+use-the-juju-cli
 ```
 
 ## Set up the Terraform Provider for Juju
@@ -61,3 +62,4 @@ Deploy, configure, integrate, scale, etc., charmed applications. This will autom
 - {ref}`manage-units`
 - {ref}`manage-secrets`
 - {ref}`manage-machines`
+- {ref}`use-the-juju-cli-in-terraform`
