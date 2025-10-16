@@ -4,5 +4,6 @@ resource "juju_model" "test" {
 }
 
 data "juju_model" "test" {
-  uuid = juju_model.test.uuid
+  name  = juju_model.test.name
+  owner = "### FILL IN OWNER"
 }

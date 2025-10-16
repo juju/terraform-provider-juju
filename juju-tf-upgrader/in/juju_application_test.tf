@@ -1,8 +1,4 @@
 # Test file for juju_application resource transformations
-data "juju_model" "production" {
-  name = "production-env"
-}
-
 resource "juju_model" "development" {
   name = "dev-environment"
 }

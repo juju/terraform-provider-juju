@@ -1,8 +1,4 @@
 # Test file for juju_secret data source transformations
-data "juju_model" "existing" {
-  name = "existing-model"
-}
-
 resource "juju_model" "test" {
   name = "test-model"
 }
