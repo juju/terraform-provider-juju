@@ -97,6 +97,70 @@ func TestAcc_ResourceApplication(t *testing.T) {
 	})
 }
 
+func testAccResourceApplicationExpose(modelName, endpoints string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "app" {
+  name     = "app"
+  model_uuid    = juju_model.this.uuid
+  expose {
+    endpoints = %q
+  }
+  charm {
+    name     = "apache2"
+    channel  = "latest/stable"
+    revision = 64
+    base     = "ubuntu@22.04"
+  }
+}
+		`, modelName, endpoints)
+}
+
+func TestAcc_ResourceApplication_Expose(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-application-expose")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationExpose(modelName, "website"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.app", "model_uuid"),
+					resource.TestCheckResourceAttr("juju_application.app", "name", "app"),
+					resource.TestCheckResourceAttr("juju_application.app", "charm.#", "1"),
+					resource.TestCheckResourceAttr("juju_application.app", "charm.0.name", "apache2"),
+					resource.TestCheckResourceAttr("juju_application.app", "expose.#", "1"),
+					resource.TestCheckResourceAttr("juju_application.app", "expose.0.endpoints", "website"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationExpose(modelName, "apache-website,website"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.app", "model_uuid"),
+					resource.TestCheckResourceAttr("juju_application.app", "name", "app"),
+					resource.TestCheckResourceAttr("juju_application.app", "charm.#", "1"),
+					resource.TestCheckResourceAttr("juju_application.app", "charm.0.name", "apache2"),
+					resource.TestCheckResourceAttr("juju_application.app", "expose.#", "1"),
+					resource.TestCheckResourceAttr("juju_application.app", "expose.0.endpoints", "apache-website,website"),
+				),
+			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      "juju_application.app",
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceApplication_ConstraintsNormalization(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
@@ -1815,7 +1879,7 @@ resource "juju_application" "this" {
 }
 
 func testAccResourceApplicationUpdates(modelName string, units int, expose bool, hostname string) string {
-	exposeStr := "expose{}"
+	exposeStr := `expose {}`
 	if !expose {
 		exposeStr = ""
 	}
