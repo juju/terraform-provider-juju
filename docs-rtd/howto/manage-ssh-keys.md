@@ -31,7 +31,7 @@ terraform {
 }
 
 provider "github" {
-  owner = "SimoneDutto"
+  owner = "<name>"
 }
 
 provider "juju" {}
@@ -79,7 +79,7 @@ resource "juju_model" "test" {
 }
 
 data "http" "launchpad_keys" {
-  url = "https://launchpad.net/~simonedutto/+sshkeys"
+  url = "https://launchpad.net/~<username>/+sshkeys"
 }
 
 # Split the keys into a list by line
