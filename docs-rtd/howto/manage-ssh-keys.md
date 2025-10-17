@@ -14,9 +14,10 @@ resource "juju_ssh_key" "mykey" {
 }
 ```
 
-````{dropdown} Example: Add an SSH key for GitHub
+````{dropdown} Example: Add an SSH key from GitHub
 
-```text
+```terraform
+
 terraform {
   required_providers {
     juju = {
@@ -50,9 +51,9 @@ resource "juju_ssh_key" "name" {
 
 ````
 
-````{dropdown} Example: Add an SSH key for Launchpad
+````{dropdown} Example: Add an SSH key from Launchpad
 
-```text
+```terraform
 
 terraform {
   required_providers {
