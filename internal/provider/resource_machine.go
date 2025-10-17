@@ -53,19 +53,20 @@ type machineResource struct {
 }
 
 type machineResourceModel struct {
-	Annotations     types.Map              `tfsdk:"annotations"`
-	Name            types.String           `tfsdk:"name"`
-	Constraints     CustomConstraintsValue `tfsdk:"constraints"`
-	Disks           types.String           `tfsdk:"disks"`
-	Base            types.String           `tfsdk:"base"`
-	Placement       types.String           `tfsdk:"placement"`
-	MachineID       types.String           `tfsdk:"machine_id"`
-	SSHAddress      types.String           `tfsdk:"ssh_address"`
-	Timeouts        timeouts.Value         `tfsdk:"timeouts"`
-	PublicKeyFile   types.String           `tfsdk:"public_key_file"`
-	PrivateKeyFile  types.String           `tfsdk:"private_key_file"`
-	Hostname        types.String           `tfsdk:"hostname"`
-	WaitForHostname types.Bool             `tfsdk:"wait_for_hostname"`
+	Annotations          types.Map              `tfsdk:"annotations"`
+	Name                 types.String           `tfsdk:"name"`
+	Constraints          CustomConstraintsValue `tfsdk:"constraints"`
+	Disks                types.String           `tfsdk:"disks"`
+	Base                 types.String           `tfsdk:"base"`
+	Placement            types.String           `tfsdk:"placement"`
+	MachineID            types.String           `tfsdk:"machine_id"`
+	SSHAddress           types.String           `tfsdk:"ssh_address"`
+	Timeouts             timeouts.Value         `tfsdk:"timeouts"`
+	PublicKeyFile        types.String           `tfsdk:"public_key_file"`
+	PrivateKeyFile       types.String           `tfsdk:"private_key_file"`
+	UbuntuUserPrivateKey types.String           `tfsdk:"ubuntu_user_private_key"`
+	Hostname             types.String           `tfsdk:"hostname"`
+	WaitForHostname      types.Bool             `tfsdk:"wait_for_hostname"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -110,15 +111,35 @@ func (r *machineResource) Configure(ctx context.Context, req resource.ConfigureR
 }
 
 const (
-	NameKey           = "name"
-	ConstraintsKey    = "constraints"
-	DisksKey          = "disks"
-	PlacementKey      = "placement"
-	BaseKey           = "base"
-	MachineIDKey      = "machine_id"
-	SSHAddressKey     = "ssh_address"
-	PrivateKeyFileKey = "private_key_file"
-	PublicKeyFileKey  = "public_key_file"
+	NameKey              = "name"
+	ConstraintsKey       = "constraints"
+	DisksKey             = "disks"
+	PlacementKey         = "placement"
+	BaseKey              = "base"
+	MachineIDKey         = "machine_id"
+	SSHAddressKey        = "ssh_address"
+	PrivateKeyFileKey    = "private_key_file"
+	PublicKeyFileKey     = "public_key_file"
+	UbuntuUserPrivateKey = "ubuntu_user_private_key"
+)
+
+const (
+	SSHAddressKeyMarkdownDescription = `
+SSH Address is used to manually provision an existing machine via SSH. It should be in the format 'user@host'.
+
+The 'user' must be an existing user on the machine. If the 'user' is not 'ubuntu' (i.e., root@host), the provider will attempt to 
+create the 'ubuntu' user for Juju to use. If you wish for the provider to create the 'ubuntu' user, you must provide the 
+'public_key_file', 'private_key_file', and 'ubuntu_user_private_key' attributes.
+
+If the user is 'ubuntu' (i.e., ubuntu@host), the provider will use the existing 'ubuntu' user. In this mode, you must only
+provide the 'ubuntu_user_private_key' attribute.
+
+For clarity:
+- 'public_key_file' is the public key that will be placed in the 'ubuntu' user's ~/.ssh/authorized_keys file.
+- 'private_key_file' is the private key corresponding to the user who will be creating the 'ubuntu' user, i.e., root's private key.
+- 'ubuntu_user_private_key' is the private key that will be used to connect to the machine as the 'ubuntu' user for provisioning and hardware checks.
+	it is also the key that will be required to perform juju ssh.
+`
 )
 
 func (r *machineResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -219,9 +240,9 @@ func (r *machineResource) Schema(ctx context.Context, req resource.SchemaRequest
 			},
 			SSHAddressKey: schema.StringAttribute{
 				Description: "The user@host directive for manual provisioning an existing machine via ssh. " +
-					"Requires public_key_file & private_key_file arguments. Changing this value will cause the" +
-					" machine to be destroyed and recreated by terraform.",
-				Optional: true,
+					"Changing this value will cause the machine to be destroyed and recreated by terraform.",
+				MarkdownDescription: SSHAddressKeyMarkdownDescription,
+				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 				},
@@ -231,13 +252,12 @@ func (r *machineResource) Schema(ctx context.Context, req resource.SchemaRequest
 						path.MatchRoot(ConstraintsKey),
 					}...),
 					stringvalidator.AlsoRequires(path.Expressions{
-						path.MatchRoot(PublicKeyFileKey),
-						path.MatchRoot(PrivateKeyFileKey),
+						path.MatchRoot(UbuntuUserPrivateKey),
 					}...),
 				},
 			},
 			PublicKeyFileKey: schema.StringAttribute{
-				Description: "The file path to read the public key from.",
+				Description: "The public key to place under the ubuntu user's ~/.ssh/authorized_keys on the target machine.",
 				Optional:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
@@ -245,12 +265,11 @@ func (r *machineResource) Schema(ctx context.Context, req resource.SchemaRequest
 				Validators: []validator.String{
 					stringvalidator.AlsoRequires(path.Expressions{
 						path.MatchRoot(SSHAddressKey),
-						path.MatchRoot(PrivateKeyFileKey),
 					}...),
 				},
 			},
 			PrivateKeyFileKey: schema.StringAttribute{
-				Description: "The file path to read the private key from.",
+				Description: "The private key of the user who will be creating the ubuntu user.",
 				Optional:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
@@ -258,6 +277,20 @@ func (r *machineResource) Schema(ctx context.Context, req resource.SchemaRequest
 				Validators: []validator.String{
 					stringvalidator.AlsoRequires(path.Expressions{
 						path.MatchRoot(PublicKeyFileKey),
+					}...),
+				},
+			},
+			UbuntuUserPrivateKey: schema.StringAttribute{
+				Description: "The private key to use when connecting to the machine as the ubuntu user for provisioning and hardware checks. " +
+					"It is used to verify the machine is reachable under the \"ubuntu\" user, to determine hardware characteristics and to run the provisioning script." +
+					"Additionally, this is the user that will be used for SSH purposes, and this key is the ONLY way to SSH to the machine.",
+				Optional:  true,
+				Sensitive: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplaceIfConfigured(),
+				},
+				Validators: []validator.String{
+					stringvalidator.AlsoRequires(path.Expressions{
 						path.MatchRoot(SSHAddressKey),
 					}...),
 				},
@@ -310,14 +343,15 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	response, err := r.client.Machines.CreateMachine(ctx, &juju.CreateMachineInput{
-		Constraints:    plan.Constraints.ValueString(),
-		ModelUUID:      plan.ModelUUID.ValueString(),
-		Disks:          plan.Disks.ValueString(),
-		Base:           plan.Base.ValueString(),
-		SSHAddress:     plan.SSHAddress.ValueString(),
-		Placement:      plan.Placement.ValueString(),
-		PublicKeyFile:  plan.PublicKeyFile.ValueString(),
-		PrivateKeyFile: plan.PrivateKeyFile.ValueString(),
+		Constraints:          plan.Constraints.ValueString(),
+		ModelUUID:            plan.ModelUUID.ValueString(),
+		Disks:                plan.Disks.ValueString(),
+		Base:                 plan.Base.ValueString(),
+		SSHAddress:           plan.SSHAddress.ValueString(),
+		Placement:            plan.Placement.ValueString(),
+		PublicKeyFile:        plan.PublicKeyFile.ValueString(),
+		PrivateKeyFile:       plan.PrivateKeyFile.ValueString(),
+		UbuntuUserPrivateKey: plan.UbuntuUserPrivateKey.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create machine, got error: %s", err))
