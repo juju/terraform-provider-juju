@@ -44,10 +44,24 @@ resource "juju_machine" "this_machine" {
 - `disks` (String) Storage constraints for disks to attach to the machine(s). Changing this value will cause the machine to be destroyed and recreated by terraform.
 - `name` (String) A name for the machine resource in Terraform.
 - `placement` (String) Additional information about how to allocate the machine in the cloud. Changing this value will cause the application to be destroyed and recreated by terraform.
-- `private_key_file` (String) The file path to read the private key from.
-- `public_key_file` (String) The file path to read the public key from.
-- `ssh_address` (String) The user@host directive for manual provisioning an existing machine via ssh. Requires public_key_file & private_key_file arguments. Changing this value will cause the machine to be destroyed and recreated by terraform.
+- `private_key_file` (String) The private key of the user who will be creating the ubuntu user.
+- `public_key_file` (String) The public key to place under the ubuntu user's ~/.ssh/authorized_keys on the target machine.
+- `ssh_address` (String) SSH Address is used to manually provision an existing machine via SSH. It should be in the format 'user@host'.
+
+The 'user' must be an existing user on the machine. If the 'user' is not 'ubuntu' (i.e., root@host), the provider will attempt to 
+create the 'ubuntu' user for Juju to use. If you wish for the provider to create the 'ubuntu' user, you must provide the 
+'public_key_file', 'private_key_file', and 'ubuntu_user_private_key' attributes.
+
+If the user is 'ubuntu' (i.e., ubuntu@host), the provider will use the existing 'ubuntu' user. In this mode, you must only
+provide the 'ubuntu_user_private_key' attribute.
+
+For clarity:
+- 'public_key_file' is the public key that will be placed in the 'ubuntu' user's ~/.ssh/authorized_keys file.
+- 'private_key_file' is the private key corresponding to the user who will be creating the 'ubuntu' user, i.e., root's private key.
+- 'ubuntu_user_private_key' is the private key that will be used to connect to the machine as the 'ubuntu' user for provisioning and hardware checks.
+	it is also the key that will be required to perform juju ssh.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
+- `ubuntu_user_private_key` (String, Sensitive) The private key to use when connecting to the machine as the ubuntu user for provisioning and hardware checks. It is used to verify the machine is reachable under the "ubuntu" user, to determine hardware characteristics and to run the provisioning script.Additionally, this is the user that will be used for SSH purposes, and this key is the ONLY way to SSH to the machine.
 - `wait_for_hostname` (Boolean) If true, waits for the machine's hostname to be set during creation. A side effect is that this also waits for the machine to reach 'active' state in Juju.
 
 ### Read-Only
