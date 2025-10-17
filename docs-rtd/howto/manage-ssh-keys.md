@@ -14,7 +14,91 @@ resource "juju_ssh_key" "mykey" {
 }
 ```
 
+````{dropdown} Example: Add an SSH key from GitHub
+
+```terraform
+
+terraform {
+  required_providers {
+    juju = {
+      source  = "juju/juju"
+    }
+    github = {
+       source = "integrations/github"
+      version = "6.6.0"
+    }
+  }
+}
+
+provider "github" {
+  owner = "<name>"
+}
+
+provider "juju" {}
+
+resource "juju_model" "test" {
+  name = "test-target"
+}
+
+data "github_ssh_keys" "name" {}
+
+resource "juju_ssh_key" "name" {
+  for_each = toset(data.github_ssh_keys.name.keys)
+  model    = juju_model.test.name
+  payload = each.key
+}
+```
+
+````
+
+````{dropdown} Example: Add an SSH key from Launchpad
+
+```terraform
+
+terraform {
+  required_providers {
+     juju = {
+      source  = "juju/juju"
+    }
+    http = {
+      source = "hashicorp/http"
+      version = "3.5.0"
+    }
+  }
+}
+
+provider "http" {
+  # Configuration options
+}
+
+provider "juju" {
+}
+
+resource "juju_model" "test" {
+  name = "test-target"
+}
+
+data "http" "launchpad_keys" {
+  url = "https://launchpad.net/~<username>/+sshkeys"
+}
+
+# Split the keys into a list by line
+locals {
+  ssh_keys = [for k in split("\n", trimspace(data.http.launchpad_keys.response_body)) : k if length(trimspace(k)) > 0]
+}
+
+# Create the resource for each key
+resource "juju_ssh_key" "name" {
+  for_each = toset(local.ssh_keys)
+  model    = juju_model.test.name
+  payload  = each.key
+}
+```
+
+````
+
 > See more: [`juju_ssh_key` (resource)](../reference/terraform-provider/resources/ssh_key)
+
 
 ## Remove an SSH key
 
