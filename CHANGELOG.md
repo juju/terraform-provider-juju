@@ -1,4 +1,4 @@
-## 1.0.0 (WIP)
+## 1.0.0
 
 NOTES:
 
@@ -34,15 +34,42 @@ includes the model resource.
 * The `series` field has been removed from the application resource - use `base` instead.
 * The `series` field has been removed from the machine resource - use `base` instead.
 
+UPGRADING PLANS:
+
+We realize any breaking changes are painful, but a move from v0.23.0 to v1.0.0 is one of the few opportunities we have to do them. To make this transition easier we have developed an upgrader advisory tool that will take an existing tf file as input and replace references to model names with model uuids. 
+This tool is intended as an advisory tool, although we have extensively tested the tool, make sure to carefully review proposed changes before committing to them.
+
+The tool is located [here](https://github.com/juju/terraform-provider-juju/tree/main/juju-tf-upgrader) and to use it, one simply runs:
+```
+go run github.com/juju/terraform-provider-juju/juju-tf-upgrader path/to/file.tf
+```
+
+As always, please read the [README.md](https://github.com/juju/terraform-provider-juju/blob/main/juju-tf-upgrader/README.md) first and in case of any issues contact the team in our public [Matrix channel](https://matrix.to/#/#terraform-provider-juju:ubuntu.com). 
+
 ENHANCEMENTS
 
 * Allow deploying OCI charm resources from private registries by @kian99 in [#924](https://github.com/juju/terraform-provider-juju/pull/924).
 * Handle partial app deployments by @kian99 in [#926](https://github.com/juju/terraform-provider-juju/pull/926).
 * Add a storage pool resource by @ale8k in [#908](https://github.com/juju/terraform-provider-juju/pull/908).
+* Add a storage pool data source by @ale8k in [#928]( https://github.com/juju/terraform-provider-juju/pull/928)
 
 BUG FIXES
 
 * Fix for [#671](https://github.com/juju/terraform-provider-juju/issues/671) by @ale8k in [#925](https://github.com/juju/terraform-provider-juju/pull/925)
+* Making `storage` field in `juju_application` read only by @ale8k in [#943](https://github.com/juju/terraform-provider-juju/pull/943)
+* Fix for resource update in `juju_application` by @kian99 in [#947](https://github.com/juju/terraform-provider-juju/pull/947)
+    
+DOCUMENTATION
+
+* Documentation on plan upgrade to provider v1.0.0 by @kian99 in [#883]( https://github.com/juju/terraform-provider-juju/pull/883)
+* Documentation on creating dependency in deployment by @yanksyoon in [#927](https://github.com/juju/terraform-provider-juju/pull/927)
+* Update to `juju_application` resource examples by @kian99 in [#939](https://github.com/juju/terraform-provider-juju/pull/939)
+* How to use Juju CLI in Terraform plans by @kian99 in [#949](https://github.com/juju/terraform-provider-juju/pull/949)
+* Examples for `juju_ssh_key` from Github and Launchpad by @tmihoc in [#953](https://github.com/juju/terraform-provider-juju/pull/953)
+
+CI & MAINTENANCE
+
+* SBOM generation in CI by @alesstimec in [#919](https://github.com/juju/terraform-provider-juju/pull/919)
 
 ## 0.23.1 (October 9, 2025)
 
