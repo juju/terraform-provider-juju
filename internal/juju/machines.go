@@ -52,14 +52,33 @@ type CreateMachineInput struct {
 	Placement   string
 	InstanceId  string
 
-	// SSHAddress is the host address of a machine for manual provisioning
-	// Note that it has the user too, e.g. user@host
+	// SSHAddress applies only to the manual provisioning of machines.
+	//
+	// SSHAddress is the address (including the user) of a machine to be provisioned
+	// into a Juju Machine. I.e., my-prexisting-user@10.0.0.1. "my-prexisting-user"
+	// must be authenticated via [CreateMachineInput.PrivateKeyFile]. On SSH manual
+	// provision, this user will then be used to create a "ubuntu" user on the same machine.
+	//
+	// If the user is named "ubuntu", no additional user will be created, and the existing
+	// user will be used.
+	//
+	// After the user has been created, the [CreateMachineInput.PublicKeyFile] will be used to
+	// populate the "ubuntu" user's ~/.ssh/authorized_keys file.
+	//
+	// If SSHAddress is empty, Juju will create a machine using the provider.
 	SSHAddress string
 
-	// PublicKey is the file path to read the public key from
+	// PublicKey is the file path to read the public key from for populating
+	// the authorized_keys of the "ubuntu" user on the target machine.
 	PublicKeyFile string
 
-	// PrivateKey is the file path to read the private key from
+	// UbuntuUserPrivateKey is the private key corresponding to [CreateMachineInput.PublicKeyFile].
+	// It is used to verify the machine is reachable under the "ubuntu" user, to determine hardware
+	// characteristics and to run the provisioning script.
+	UbuntuUserPrivateKey string
+
+	// PrivateKey is the file path to read the private key from when initialising
+	// the "ubuntu" user. This is the key for the user present in the [CreateMachineInput.SSHAddress].
 	PrivateKeyFile string
 }
 
@@ -155,8 +174,14 @@ func (c *machinesClient) createMachine(conn api.Connection, input *CreateMachine
 		if err != nil {
 			return "", errors.Trace(err)
 		}
-		return manualProvision(machineAPIClient, cfg,
-			input.SSHAddress, input.PublicKeyFile, input.PrivateKeyFile)
+		return manualProvision(
+			machineAPIClient,
+			cfg,
+			input.SSHAddress,
+			input.PublicKeyFile,
+			input.PrivateKeyFile,
+			input.UbuntuUserPrivateKey,
+		)
 	}
 
 	var machineParams params.AddMachineParams
@@ -275,9 +300,14 @@ func fromLegacyCentosChannel(series string) string {
 // manualProvision calls the sshprovisioner.ProvisionMachine on the Juju side
 // to provision an existing machine using ssh_address, public_key and
 // private_key in the CreateMachineInput.
-func manualProvision(client manual.ProvisioningClientAPI,
-	config *config.Config, sshAddress string, publicKey string,
-	privateKey string) (string, error) {
+func manualProvision(
+	client manual.ProvisioningClientAPI,
+	config *config.Config,
+	sshAddress string,
+	publicKey string,
+	privateKey string,
+	ubuntuUserPrivateKey string,
+) (string, error) {
 	// Read the public keys
 	cmdCtx, err := cmd.DefaultContext()
 	if err != nil {
@@ -299,14 +329,15 @@ func manualProvision(client manual.ProvisioningClientAPI,
 
 	// Prep args for the ProvisionMachine call
 	provisionArgs := manual.ProvisionMachineArgs{
-		Host:           host,
-		User:           user,
-		Client:         client,
-		Stdin:          os.Stdin,
-		Stdout:         os.Stdout,
-		Stderr:         os.Stderr,
-		AuthorizedKeys: authKeys,
-		PrivateKey:     privateKey,
+		Host:                 host,
+		User:                 user,
+		Client:               client,
+		Stdin:                os.Stdin,
+		Stdout:               os.Stdout,
+		Stderr:               os.Stderr,
+		AuthorizedKeys:       authKeys,
+		PrivateKey:           privateKey,
+		UbuntuUserPrivateKey: ubuntuUserPrivateKey,
 		UpdateBehavior: &params.UpdateBehavior{
 			EnableOSRefreshUpdate: config.EnableOSRefreshUpdate(),
 			EnableOSUpgrade:       config.EnableOSUpgrade(),
