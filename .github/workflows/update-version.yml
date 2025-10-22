@@ -1,0 +1,59 @@
+# Terraform Provider release workflow.
+name: Update current version
+
+# This GitHub action creates a release when a tag that matches the pattern
+# "v[1-9].[0-9].[0-9]" (e.g. v1.1.0) is created.
+# This is to ensure that only tags that strictly follow semantic versioning
+# trigger this workflow, avoiding pre-releases or build metadata.
+# Note: we exclude v0.x.x versions from triggering this workflow.
+on:
+  push:
+    tags:
+      - 'v[1-9].[0-9].[0-9]'
+
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get latest tag and calculate next version
+        id: version
+        run: |
+          # Get the latest tag
+          LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+          
+          # Extract version numbers
+          VERSION=${LATEST_TAG#v}
+          MAJOR=$(echo $VERSION | cut -d. -f1)
+          MINOR=$(echo $VERSION | cut -d. -f2)
+          PATCH=$(echo $VERSION | cut -d. -f3)
+          
+          # Increment patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          
+          echo "next_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update Makefile
+        run: |
+          sed -i 's/EDGE_VERSION ?= .*/EDGE_VERSION ?= ${{ steps.version.outputs.next_version }}/' Makefile
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(version): EDGE_VERSION to ${{ steps.version.outputs.next_version }}"
+          title: "Update EDGE_VERSION to ${{ steps.version.outputs.next_version }}"
+          body: |
+            Automated update of EDGE_VERSION in Makefile based on latest git tag.
+            
+            Previous version: ${{ github.ref_name }}
+            New version: ${{ steps.version.outputs.next_version }}
+          branch: update-edge-version-${{ steps.version.outputs.next_version }}
+          base: main
