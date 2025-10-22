@@ -1107,7 +1107,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	if appStatus.Exposed {
 		// rebuild
 		exposed = make(map[string]interface{}, 0)
-		endpoints := []string{""}
+		endpoints := []string{}
 		spaces := ""
 		cidrs := ""
 		for epName, value := range appStatus.ExposedEndpoints {
@@ -1125,7 +1125,12 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 				cidrs = strings.Join(aux, ",")
 			}
 		}
-		exposed["endpoints"] = strings.Join(endpoints, ",")
+		if len(endpoints) > 0 {
+			slices.Sort(endpoints)
+			exposed["endpoints"] = strings.Join(endpoints, ",")
+		} else {
+			exposed["endpoints"] = ""
+		}
 		exposed["spaces"] = spaces
 		exposed["cidrs"] = cidrs
 	}
