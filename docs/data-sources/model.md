@@ -3,16 +3,26 @@
 page_title: "juju_model Data Source - terraform-provider-juju"
 subcategory: ""
 description: |-
-  Use the model data source to retrieve information about an existing Juju model. This is useful when you need to reference model attributes such as the model UUID in other resources. Models can be looked up either by their UUID or a combination of name and owner e.g. admin/myModel. The owner is the user that created the model and can be found with the 'juju show-model' command.
+  Use the model data source to retrieve information about an existing Juju model. This is useful when you need to reference model attributes such as the model UUID in other resources.
+  Models can be looked up either by their UUID or a combination of name and owner e.g. admin/myModel. The owner is the user that created the model and can be found with the 'juju show-model' command.
 ---
 
 # juju_model (Data Source)
 
-Use the model data source to retrieve information about an existing Juju model. This is useful when you need to reference model attributes such as the model UUID in other resources. Models can be looked up either by their UUID or a combination of name and owner e.g. admin/myModel. The owner is the user that created the model and can be found with the 'juju show-model' command.
+Use the model data source to retrieve information about an existing Juju model. This is useful when you need to reference model attributes such as the model UUID in other resources.
+
+Models can be looked up either by their UUID or a combination of name and owner e.g. admin/myModel. The owner is the user that created the model and can be found with the 'juju show-model' command.
 
 ## Example Usage
 
 ```terraform
+# Reference a model by name and owner
+data "juju_model" "this" {
+  owner = "admin"
+  name  = "database"
+}
+
+# Reference a model by UUID
 data "juju_model" "this" {
   uuid = "1d10a751-02c1-43d5-b46b-d84fe04d6fde"
 }

@@ -6,7 +6,7 @@ resource "juju_offer" "myoffer" {
 
 // an offer can then be used in an cross model integration as below:
 resource "juju_integration" "myintegration" {
-  model = juju_model.development-destination.name
+  model_uuid = juju_model.development-destination.name
 
   application {
     name     = juju_application.wordpress.name
