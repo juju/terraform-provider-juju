@@ -179,7 +179,6 @@ func TestAcc_ResourceMachine_UpgradeV0ToV1(t *testing.T) {
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccResourceMachine(modelName),
-				PlanOnly:                 true,
 			},
 		},
 	})
