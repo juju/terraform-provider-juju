@@ -51,7 +51,7 @@ func (d *modelDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 	resp.Schema = schema.Schema{
 		Description: "A data source representing a Juju Model.",
 		MarkdownDescription: "Use the model data source to retrieve information about an existing Juju model. " +
-			"This is useful when you need to reference model attributes such as the model UUID in other resources. " +
+			"This is useful when you need to reference model attributes such as the model UUID in other resources.\n\n" +
 			"Models can be looked up either by their UUID or a combination of name and owner e.g. admin/myModel. " +
 			"The owner is the user that created the model and can be found with the 'juju show-model' command.",
 		Attributes: map[string]schema.Attribute{
