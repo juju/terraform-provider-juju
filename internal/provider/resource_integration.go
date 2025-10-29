@@ -21,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/juju/juju/core/crossmodel"
 	"github.com/juju/names/v5"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -67,9 +68,10 @@ type integrationResourceModelV1 struct {
 // nestedApplication represents an element in an Application set of an
 // integration resource
 type nestedApplication struct {
-	Name     types.String `tfsdk:"name"`
-	Endpoint types.String `tfsdk:"endpoint"`
-	OfferURL types.String `tfsdk:"offer_url"`
+	Name               types.String `tfsdk:"name"`
+	Endpoint           types.String `tfsdk:"endpoint"`
+	OfferURL           types.String `tfsdk:"offer_url"`
+	ExternalController types.String `tfsdk:"external_controller"`
 }
 
 func (r *integrationResource) ImportState(ctx context.Context, req resource.ImportStateRequest,
@@ -201,6 +203,11 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 								}...),
 							},
 						},
+						"external_controller": schema.StringAttribute{
+							Description: "The name of the external controller where the remote application is hosted. " +
+								"This is required when using offer_url to consume an offer from a different controller.",
+							Optional: true,
+						},
 					},
 				},
 			},
@@ -240,8 +247,9 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	// If the remote-app already exists, we will re-use it (see `ConsumeRemoteOffer` for more details).
 	if offer != nil {
 		offerResponse, err := r.client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
-			ModelUUID: modelUUID,
-			OfferURL:  offer.url,
+			ModelUUID:          modelUUID,
+			OfferURL:           offer.url,
+			ExternalController: offer.externalController,
 		})
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to consume remote offer, got error: %s", err))
@@ -499,8 +507,9 @@ func modelUUIDAndEndpointsFromID(ID string) (string, string, string, diag.Diagno
 }
 
 type offer struct {
-	url      string
-	endpoint string
+	url                string
+	endpoint           string
+	externalController string
 }
 
 // This function can be used to parse the terraform data into usable juju endpoints
@@ -510,14 +519,16 @@ func parseEndpoints(apps []nestedApplication) (endpoints []string, of *offer, ap
 		name := app.Name.ValueString()
 		offerURL := app.OfferURL.ValueString()
 		endpoint := app.Endpoint.ValueString()
+		externalController := app.ExternalController.ValueString()
 
 		// Here we check if the endpoint is empty and pass just the application name, this allows juju to attempt to infer endpoints
 		// If the endpoint is specified we pass the format <applicationName>:<endpoint>
 		// first check if we have an offer_url, in this case don't return the endpoint
 		if offerURL != "" {
 			of = &offer{
-				url:      offerURL,
-				endpoint: endpoint,
+				url:                offerURL,
+				endpoint:           endpoint,
+				externalController: externalController,
 			}
 			continue
 		}
@@ -546,8 +557,12 @@ func parseApplications(apps []juju.Application) ([]nestedApplication, error) {
 		a := nestedApplication{}
 
 		if app.OfferURL != nil {
-			url := *app.OfferURL
-			a.OfferURL = types.StringValue(url)
+			url, err := crossmodel.ParseOfferURL(*app.OfferURL)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse offer URL %q: %w", *app.OfferURL, err)
+			}
+			a.OfferURL = types.StringValue(url.AsLocal().String())
+			a.ExternalController = types.StringValue(url.Source)
 			a.Endpoint = types.StringValue(app.Endpoint)
 		} else {
 			a.Endpoint = types.StringValue(app.Endpoint)

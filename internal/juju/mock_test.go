@@ -59,6 +59,44 @@ func (m *MockSharedClient) EXPECT() *MockSharedClientMockRecorder {
 	return m.recorder
 }
 
+// AddExternalControllerConf mocks base method.
+func (m *MockSharedClient) AddExternalControllerConf(name string, conf ControllerConfiguration) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddExternalControllerConf", name, conf)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddExternalControllerConf indicates an expected call of AddExternalControllerConf.
+func (mr *MockSharedClientMockRecorder) AddExternalControllerConf(name, conf any) *MockSharedClientAddExternalControllerConfCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddExternalControllerConf", reflect.TypeOf((*MockSharedClient)(nil).AddExternalControllerConf), name, conf)
+	return &MockSharedClientAddExternalControllerConfCall{Call: call}
+}
+
+// MockSharedClientAddExternalControllerConfCall wrap *gomock.Call
+type MockSharedClientAddExternalControllerConfCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSharedClientAddExternalControllerConfCall) Return(arg0 error) *MockSharedClientAddExternalControllerConfCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSharedClientAddExternalControllerConfCall) Do(f func(string, ControllerConfiguration) error) *MockSharedClientAddExternalControllerConfCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSharedClientAddExternalControllerConfCall) DoAndReturn(f func(string, ControllerConfiguration) error) *MockSharedClientAddExternalControllerConfCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // AddModel mocks base method.
 func (m *MockSharedClient) AddModel(modelName, modelOwner, modelUUID string, modelType model.ModelType) {
 	m.ctrl.T.Helper()
@@ -207,6 +245,45 @@ func (c *MockSharedClientGetConnectionCall) Do(f func(*string) (api.Connection, 
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockSharedClientGetConnectionCall) DoAndReturn(f func(*string) (api.Connection, error)) *MockSharedClientGetConnectionCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// GetExternalControllerConn mocks base method.
+func (m *MockSharedClient) GetExternalControllerConn(name string) (api.Connection, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetExternalControllerConn", name)
+	ret0, _ := ret[0].(api.Connection)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetExternalControllerConn indicates an expected call of GetExternalControllerConn.
+func (mr *MockSharedClientMockRecorder) GetExternalControllerConn(name any) *MockSharedClientGetExternalControllerConnCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExternalControllerConn", reflect.TypeOf((*MockSharedClient)(nil).GetExternalControllerConn), name)
+	return &MockSharedClientGetExternalControllerConnCall{Call: call}
+}
+
+// MockSharedClientGetExternalControllerConnCall wrap *gomock.Call
+type MockSharedClientGetExternalControllerConnCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSharedClientGetExternalControllerConnCall) Return(arg0 api.Connection, arg1 error) *MockSharedClientGetExternalControllerConnCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSharedClientGetExternalControllerConnCall) Do(f func(string) (api.Connection, error)) *MockSharedClientGetExternalControllerConnCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSharedClientGetExternalControllerConnCall) DoAndReturn(f func(string) (api.Connection, error)) *MockSharedClientGetExternalControllerConnCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

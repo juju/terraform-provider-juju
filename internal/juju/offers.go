@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
 	"github.com/juju/juju/api/client/applicationoffers"
 	apiclient "github.com/juju/juju/api/client/client"
@@ -79,9 +80,10 @@ type DestroyOfferInput struct {
 
 // ConsumeRemoteOfferInput represents input for consuming a remote offer.
 type ConsumeRemoteOfferInput struct {
-	ModelUUID      string
-	OfferURL       string
-	RemoteAppAlias string
+	ModelUUID          string
+	OfferURL           string
+	RemoteAppAlias     string
+	ExternalController string
 }
 
 // ConsumeRemoteOfferResponse represents the response from consuming a remote offer.
@@ -341,31 +343,33 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 		return nil, fmt.Errorf("missing offer URL when attempting to consume an offer")
 	}
 	// input.RemoteAppAlias can be empty to use the default offer name.
-
+	url, err := crossmodel.ParseOfferURL(input.OfferURL)
+	if err != nil {
+		return nil, err
+	}
 	modelConn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = modelConn.Close() }()
-	conn, err := c.GetConnection(nil)
+	var conn api.Connection
+	if input.ExternalController != "" {
+		conn, err = c.GetExternalControllerConn(input.ExternalController)
+	} else {
+		conn, err = c.GetConnection(nil)
+	}
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = conn.Close() }()
 
-	offersClient := applicationoffers.NewClient(conn)
-	client := apiapplication.NewClient(modelConn)
-
-	url, err := crossmodel.ParseOfferURL(input.OfferURL)
-	if err != nil {
-		return nil, err
-	}
+	sourceOffersClient := applicationoffers.NewClient(conn)
+	consumeClient := apiapplication.NewClient(modelConn)
 
 	if url.HasEndpoint() {
 		return nil, fmt.Errorf("saas offer %q shouldn't include endpoint", input.OfferURL)
 	}
-
-	consumeDetails, err := offersClient.GetConsumeDetails(url.AsLocal().String())
+	consumeDetails, err := sourceOffersClient.GetConsumeDetails(url.AsLocal().String())
 	if err != nil {
 		return nil, err
 	}
@@ -374,16 +378,9 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 	if err != nil {
 		return nil, err
 	}
-
-	// The offer URL should not have a source, as that would indicate a cross-controller
-	// relation which is not strictly supported. Support for cross-controller relations
-	// would require some changes above to identify if the URL is pointing to a different
-	// controller than the one we are currently connected to and fetch the consume details
-	// from there instead.
-	if offerURL.Source != "" {
-		return nil, fmt.Errorf("offer URL %q should not have a source", consumeDetails.Offer.OfferURL)
+	if input.ExternalController != "" {
+		offerURL.Source = input.ExternalController
 	}
-
 	consumeDetails.Offer.OfferURL = offerURL.String()
 
 	consumeArgs := crossmodel.ConsumeApplicationArgs{
@@ -404,7 +401,7 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 		}
 	}
 
-	localName, err := client.Consume(consumeArgs)
+	localName, err := consumeClient.Consume(consumeArgs)
 	if err != nil {
 		// Check if SAAS is already created. If so return offer response instead of error
 		// TODO: Understand why jujuerrors.AlreadyExists is not working and use
