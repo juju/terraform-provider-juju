@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
@@ -308,6 +309,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	_ = testConn.Close()
 
 	resp.ResourceData = providerData
+	resp.EphemeralResourceData = providerData
 	resp.DataSourceData = providerData
 }
 
@@ -430,6 +432,17 @@ func (p *jujuProvider) DataSources(_ context.Context) []func() datasource.DataSo
 		func() datasource.DataSource { return NewJAASGroupDataSource() },
 		func() datasource.DataSource { return NewJAASRoleDataSource() },
 		func() datasource.DataSource { return NewStoragePoolDataSource() },
+	}
+}
+
+// EphemeralResources returns a slice of functions to instantiate each EphemeralResource
+// implementation.
+//
+// The ephemeral resource type name is determined by the EphemeralResource implementing
+// the Metadata method. All ephemeral resources must have unique names.
+func (p *jujuProvider) EphemeralResources(_ context.Context) []func() ephemeral.EphemeralResource {
+	return []func() ephemeral.EphemeralResource{
+		func() ephemeral.EphemeralResource { return NewExternalControllerEphemeral() },
 	}
 }
 
