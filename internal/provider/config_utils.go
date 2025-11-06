@@ -12,9 +12,9 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-// newConfig converts a types.Map (from state or plan) to a map[string]string.
+// newStringMap converts a types.Map (from state or plan) to a map[string]string.
 // nil values in the types.Map are ignored.
-func newConfig(ctx context.Context, configPlan types.Map) (map[string]string, diag.Diagnostics) {
+func newStringMap(ctx context.Context, configPlan types.Map) (map[string]string, diag.Diagnostics) {
 	diags := diag.Diagnostics{}
 	var config map[string]*string
 	diags.Append(configPlan.ElementsAs(ctx, &config, false)...)
