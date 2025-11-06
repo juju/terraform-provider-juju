@@ -530,7 +530,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		revision = int(planCharm.Revision.ValueInt64())
 	}
 
-	config, diags := newConfig(ctx, plan.Config)
+	config, diags := newStringMap(ctx, plan.Config)
 	if diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
