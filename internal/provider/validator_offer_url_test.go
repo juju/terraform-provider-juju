@@ -28,7 +28,7 @@ func TestValidatorOfferURL(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "valid offer URL with user and model",
+			name:        "valid offer URL with non-admin user",
 			value:       types.StringValue("user/modelname.offername"),
 			expectError: false,
 		},

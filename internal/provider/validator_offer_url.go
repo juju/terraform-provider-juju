@@ -53,7 +53,7 @@ func (v validatorOfferURL) ValidateString(ctx context.Context, request validator
 	if parsedURL.Source != "" {
 		response.Diagnostics.Append(validatordiag.InvalidAttributeValueDiagnostic(
 			request.Path,
-			"offer URL must not include a source controller (cross-controller relations are not supported). "+
+			"offer URL must not include a source controller. "+
 				"Remove the controller prefix from the offer URL (e.g., use 'admin/model.offer' instead of 'controller:admin/model.offer')",
 			value,
 		))
