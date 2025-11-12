@@ -71,6 +71,7 @@ Optional:
 - `endpoint` (String) The endpoint name. This attribute may not be used at the same time as the offer_url.
 - `name` (String) The name of the application. This attribute may not be used at the same time as the offer_url.
 - `offer_url` (String) The URL of a remote application. This attribute may not be used at the same time as name and endpoint.
+- `offering_controller` (String) The name of the offering controller where the remote application is hosted. This is required when using offer_url to consume an offer from a different controller.
 
 
 ### Notes

@@ -107,6 +107,15 @@ install-dependencies: install-snap-dependencies
 check: juju-unit-test
 
 generate-env-file:
-## populate-env: Populate the test.env file with current juju controller details.
+## generate-env-file: Populate the test.env file with current juju controller details.
 	@echo "Populating the test.env file with current juju controller details"
 	@./tools/generate_env_file.sh
+
+generate-env-file-with-offering-controller:
+## generate-env-file-with-offering-controller: Populate the test.env file with current juju controller details and a specified offering controller. Usage: make generate-env-file-with-offering-controller <controller-name>
+	@echo "Populating the test.env file with current juju controller details and offering controller"
+	@./tools/generate_env_file.sh --offering-controller=$(filter-out $@,$(MAKECMDGOALS))
+
+%:
+	@:
+

@@ -72,6 +72,7 @@ JAAS
 JIMM
 juju
 kubeconfig
+kubectl
 config
 ubuntu
 oci
@@ -89,6 +90,7 @@ natively
 Terraform
 terraform
 SREs
+storageclass
 TLS
 Unexpose
 unexpose

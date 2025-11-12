@@ -156,9 +156,9 @@ TODO: test command 2
 
 ## Documentation
 
-ACME's documentation is stored in the `DOCDIR` directory of the repository. It is based on the [Canonical starter pack](https://canonical-starter-pack.readthedocs-hosted.com/latest/) and hosted on [Read the Docs](https://about.readthedocs.com/).
+ACME's documentation is stored in the `DOCDIR` directory of the repository. It is based on the [Canonical starter pack](https://canonical-starter-pack.readthedocs-hosted.com/stable/) and hosted on [Read the Docs](https://about.readthedocs.com/).
 
-For general guidance, refer to the [starter pack guide](https://canonical-starter-pack.readthedocs-hosted.com/latest/).
+For general guidance, refer to the [starter pack guide](https://canonical-starter-pack.readthedocs-hosted.com/stable/).
 
 For syntax help and guidelines, refer to the [Canonical style guides](https://canonical-documentation-with-sphinx-and-readthedocscom.readthedocs-hosted.com/style-guide/).
 

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
 	"github.com/juju/juju/api/client/applicationoffers"
 	apiclient "github.com/juju/juju/api/client/client"
@@ -79,9 +80,10 @@ type DestroyOfferInput struct {
 
 // ConsumeRemoteOfferInput represents input for consuming a remote offer.
 type ConsumeRemoteOfferInput struct {
-	ModelUUID      string
-	OfferURL       string
-	RemoteAppAlias string
+	ModelUUID          string
+	OfferURL           string
+	RemoteAppAlias     string
+	OfferingController string
 }
 
 // ConsumeRemoteOfferResponse represents the response from consuming a remote offer.
@@ -342,30 +344,33 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 	}
 	// input.RemoteAppAlias can be empty to use the default offer name.
 
+	url, err := crossmodel.ParseOfferURL(input.OfferURL)
+	if err != nil {
+		return nil, err
+	}
 	modelConn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = modelConn.Close() }()
-	conn, err := c.GetConnection(nil)
+	var conn api.Connection
+	if input.OfferingController != "" {
+		conn, err = c.GetOfferingControllerConn(input.OfferingController)
+	} else {
+		conn, err = c.GetConnection(nil)
+	}
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = conn.Close() }()
 
-	offersClient := applicationoffers.NewClient(conn)
-	client := apiapplication.NewClient(modelConn)
-
-	url, err := crossmodel.ParseOfferURL(input.OfferURL)
-	if err != nil {
-		return nil, err
-	}
+	offeringControllerClient := applicationoffers.NewClient(conn)
+	consumingClient := apiapplication.NewClient(modelConn)
 
 	if url.HasEndpoint() {
 		return nil, fmt.Errorf("saas offer %q shouldn't include endpoint", input.OfferURL)
 	}
-
-	consumeDetails, err := offersClient.GetConsumeDetails(url.AsLocal().String())
+	consumeDetails, err := offeringControllerClient.GetConsumeDetails(url.AsLocal().String())
 	if err != nil {
 		return nil, err
 	}
@@ -374,16 +379,9 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 	if err != nil {
 		return nil, err
 	}
-
-	// The offer URL should not have a source, as that would indicate a cross-controller
-	// relation which is not strictly supported. Support for cross-controller relations
-	// would require some changes above to identify if the URL is pointing to a different
-	// controller than the one we are currently connected to and fetch the consume details
-	// from there instead.
-	if offerURL.Source != "" {
-		return nil, fmt.Errorf("offer URL %q should not have a source", consumeDetails.Offer.OfferURL)
+	if input.OfferingController != "" {
+		offerURL.Source = input.OfferingController
 	}
-
 	consumeDetails.Offer.OfferURL = offerURL.String()
 
 	consumeArgs := crossmodel.ConsumeApplicationArgs{
@@ -404,7 +402,7 @@ func (c offersClient) ConsumeRemoteOffer(input *ConsumeRemoteOfferInput) (*Consu
 		}
 	}
 
-	localName, err := client.Consume(consumeArgs)
+	localName, err := consumingClient.Consume(consumeArgs)
 	if err != nil {
 		// Check if SAAS is already created. If so return offer response instead of error
 		// TODO: Understand why jujuerrors.AlreadyExists is not working and use
@@ -568,22 +566,4 @@ func (c offersClient) RevokeOffer(input *GrantRevokeOfferInput) error {
 	}
 
 	return nil
-}
-
-// removeOfferURLSource removes the source field from the offer URL.
-// The source represents the source controller of the offer.
-//
-// The Juju CLI sets the source field on the offer URL string when the offer is consumed.
-// The Terraform provider leaves this field empty since it is does not support
-// cross-controller relations.
-//
-// Until that changes, we clean the URL to assist in scenarios where an offer URL
-// has the source field set.
-func removeOfferURLSource(offerURL string) (string, error) {
-	url, err := crossmodel.ParseOfferURL(offerURL)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse offer URL %q: %w", offerURL, err)
-	}
-	url.Source = ""
-	return url.String(), nil
 }

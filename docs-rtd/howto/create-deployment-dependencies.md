@@ -8,7 +8,7 @@
 
 The Terraform Provider for Juju does not support waiting for a particular charm status before
 creating other resources. However, you can use Terraform native
-[provisioner's local-exec](local-exec-ref), Terraform's [null_resource](null-resource-ref), Juju
+[provisioner local-exec](local-exec-ref), Terraform's [null_resource](null-resource-ref), Juju
 CLI's [`wait-for` command](juju-wait-for-ref) altogether to create a dependency in resource
 creations.
 This is particularly useful when the charm may not be holistic and requires a step-by-step approach

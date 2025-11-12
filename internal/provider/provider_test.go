@@ -30,6 +30,19 @@ const (
 	isJaasEnvKey              = "IS_JAAS"
 )
 
+var offeringControllersMapElemsType = map[string]attr.Type{
+	JujuController: types.StringType,
+	JujuUsername:   types.StringType,
+	JujuPassword:   types.StringType,
+	JujuCACert:     types.StringType,
+}
+
+var offeringControllersMapType = types.MapType{
+	ElemType: types.ObjectType{
+		AttrTypes: offeringControllersMapElemsType,
+	},
+}
+
 // providerFactories are used to instantiate the Framework provider during
 // acceptance testing.
 var frameworkProviderFactories map[string]func() (tfprotov6.ProviderServer, error)
@@ -68,6 +81,14 @@ func init() {
 func SkipJAAS(t *testing.T) {
 	if _, ok := os.LookupEnv("IS_JAAS"); ok {
 		t.Skip("Skipping test when running against JAAS")
+	}
+}
+
+// OnlyCrossController should be called at the top of any tests that are
+// specific to cross-controller functionality.
+func OnlyCrossController(t *testing.T) {
+	if _, ok := os.LookupEnv("CROSS_CONTROLLERS_TESTS"); !ok {
+		t.Skip("Skipping cross-controller specific test")
 	}
 }
 
@@ -348,6 +369,7 @@ func validateJujuTestConfig(t *testing.T) {
 
 func configureProvider(t *testing.T, p provider.Provider) provider.ConfigureResponse {
 	conf := jujuProviderModel{}
+	conf.OfferingControllers = types.MapNull(offeringControllersMapType.ElemType)
 	confReq := newConfigureRequest(t, conf)
 	confResp := provider.ConfigureResponse{Diagnostics: diag.Diagnostics{}}
 
@@ -362,13 +384,14 @@ func newConfigureRequest(t *testing.T, conf jujuProviderModel) provider.Configur
 	assert.Equal(t, schemaResp.Diagnostics.HasError(), false)
 
 	mapTypes := map[string]attr.Type{
-		JujuController:     types.StringType,
-		JujuUsername:       types.StringType,
-		JujuPassword:       types.StringType,
-		JujuCACert:         types.StringType,
-		JujuClientID:       types.StringType,
-		JujuClientSecret:   types.StringType,
-		SkipFailedDeletion: types.BoolType,
+		JujuController:          types.StringType,
+		JujuUsername:            types.StringType,
+		JujuPassword:            types.StringType,
+		JujuCACert:              types.StringType,
+		JujuClientID:            types.StringType,
+		JujuClientSecret:        types.StringType,
+		SkipFailedDeletion:      types.BoolType,
+		JujuOfferingControllers: offeringControllersMapType,
 	}
 
 	val, confObjErr := types.ObjectValueFrom(context.Background(), mapTypes, conf)
@@ -388,7 +411,36 @@ func TestFrameworkProviderSchema(t *testing.T) {
 	resp := provider.SchemaResponse{}
 	jujuProvider.Schema(context.Background(), req, &resp)
 	assert.Equal(t, resp.Diagnostics.HasError(), false)
-	assert.Len(t, resp.Schema.Attributes, 7)
+	assert.Len(t, resp.Schema.Attributes, 8)
+}
+
+func createOfferingControllerMap(t *testing.T, extControllers map[string]map[string]attr.Value) types.Map {
+	controllerObjects := make(map[string]attr.Value)
+	for controllerName, controllerData := range extControllers {
+		// Create the offering controller object
+		offeringControllerObj, objDiags := types.ObjectValue(
+			offeringControllersMapElemsType,
+			controllerData,
+		)
+		if objDiags.HasError() {
+			t.Fatalf("failed to create offering controller object for controller %s: %v", controllerName, objDiags)
+			return types.MapNull(offeringControllersMapType.ElemType)
+		}
+
+		controllerObjects[controllerName] = offeringControllerObj
+	}
+
+	// Create the map with all controllers
+	offeringControllersMap, mapDiags := types.MapValue(
+		offeringControllersMapType.ElemType,
+		controllerObjects,
+	)
+	if mapDiags.HasError() {
+		t.Fatalf("failed to create offering controllers map: %v", mapDiags)
+		return types.MapNull(offeringControllersMapType.ElemType)
+	}
+
+	return offeringControllersMap
 }
 
 // TestGetJujuProviderModel tests the getJujuProviderModel function.
@@ -416,6 +468,14 @@ func TestGetJujuProviderModel(t *testing.T) {
 				Password:           types.StringValue("pass"),
 				CACert:             types.StringValue("cert"),
 				SkipFailedDeletion: types.BoolValue(true),
+				OfferingControllers: createOfferingControllerMap(t, map[string]map[string]attr.Value{
+					"ext-controller-1": {
+						JujuController: types.StringValue("ext-localhost:17070"),
+						JujuUsername:   types.StringValue("ext-user"),
+						JujuPassword:   types.StringValue("ext-pass"),
+						JujuCACert:     types.StringValue("ext-cert"),
+					},
+				}),
 			},
 			wantErr: false,
 			wantValues: jujuProviderModel{
@@ -424,23 +484,34 @@ func TestGetJujuProviderModel(t *testing.T) {
 				Password:           types.StringValue("pass"),
 				CACert:             types.StringValue("cert"),
 				SkipFailedDeletion: types.BoolValue(true),
+				OfferingControllers: createOfferingControllerMap(t, map[string]map[string]attr.Value{
+					"ext-controller-1": {
+						JujuController: types.StringValue("ext-localhost:17070"),
+						JujuUsername:   types.StringValue("ext-user"),
+						JujuPassword:   types.StringValue("ext-pass"),
+						JujuCACert:     types.StringValue("ext-cert"),
+					},
+				}),
 			},
 		},
 		{
 			name: "BothLoginMethodsSet",
 			plan: jujuProviderModel{
-				ControllerAddrs: types.StringValue("localhost:17070"),
-				UserName:        types.StringValue("user"),
-				Password:        types.StringValue("pass"),
-				ClientID:        types.StringValue("clientid"),
-				ClientSecret:    types.StringValue("clientsecret"),
+				ControllerAddrs:     types.StringValue("localhost:17070"),
+				UserName:            types.StringValue("user"),
+				Password:            types.StringValue("pass"),
+				ClientID:            types.StringValue("clientid"),
+				ClientSecret:        types.StringValue("clientsecret"),
+				OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
 			},
 			wantErr:        true,
 			wantErrSummary: "Only username and password OR client id and client secret may be used.",
 		},
 		{
 			name: "EnvVarsUsed",
-			plan: jujuProviderModel{},
+			plan: jujuProviderModel{
+				OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
+			},
 			setEnv: func(t *testing.T) {
 				t.Setenv(JujuControllerEnvKey, "env-controller:17070")
 				t.Setenv(JujuUsernameEnvKey, "env-user")
@@ -450,19 +521,21 @@ func TestGetJujuProviderModel(t *testing.T) {
 			},
 			wantErr: false,
 			wantValues: jujuProviderModel{
-				ControllerAddrs:    types.StringValue("env-controller:17070"),
-				UserName:           types.StringValue("env-user"),
-				Password:           types.StringValue("env-pass"),
-				CACert:             types.StringValue("env-cert"),
-				SkipFailedDeletion: types.BoolValue(false),
+				ControllerAddrs:     types.StringValue("env-controller:17070"),
+				UserName:            types.StringValue("env-user"),
+				Password:            types.StringValue("env-pass"),
+				CACert:              types.StringValue("env-cert"),
+				SkipFailedDeletion:  types.BoolValue(false),
+				OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
 			},
 		},
 		{
 			name: "MixPlanAndEnvVars",
 			plan: jujuProviderModel{
-				ControllerAddrs: types.StringValue("localhost:17070"),
-				UserName:        types.StringValue("user"),
-				CACert:          types.StringValue("cert"),
+				ControllerAddrs:     types.StringValue("localhost:17070"),
+				UserName:            types.StringValue("user"),
+				CACert:              types.StringValue("cert"),
+				OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
 			},
 			setEnv: func(t *testing.T) {
 				t.Setenv(JujuPasswordEnvKey, "env-pass")
@@ -470,11 +543,12 @@ func TestGetJujuProviderModel(t *testing.T) {
 			},
 			wantErr: false,
 			wantValues: jujuProviderModel{
-				ControllerAddrs:    types.StringValue("localhost:17070"),
-				UserName:           types.StringValue("user"),
-				Password:           types.StringValue("env-pass"),
-				CACert:             types.StringValue("cert"),
-				SkipFailedDeletion: types.BoolValue(true),
+				ControllerAddrs:     types.StringValue("localhost:17070"),
+				UserName:            types.StringValue("user"),
+				Password:            types.StringValue("env-pass"),
+				CACert:              types.StringValue("cert"),
+				SkipFailedDeletion:  types.BoolValue(true),
+				OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
 			},
 		},
 		{
@@ -485,6 +559,14 @@ func TestGetJujuProviderModel(t *testing.T) {
 				Password:           types.StringValue("pass"),
 				CACert:             types.StringValue("cert"),
 				SkipFailedDeletion: types.BoolValue(false),
+				OfferingControllers: createOfferingControllerMap(t, map[string]map[string]attr.Value{
+					"ext-controller-1": {
+						JujuController: types.StringValue("ext-localhost:17070"),
+						JujuUsername:   types.StringValue("ext-user"),
+						JujuPassword:   types.StringValue("ext-pass"),
+						JujuCACert:     types.StringValue("ext-cert"),
+					},
+				}),
 			},
 			setEnv: func(t *testing.T) {
 				t.Setenv(JujuUsernameEnvKey, "env-user")
@@ -497,6 +579,14 @@ func TestGetJujuProviderModel(t *testing.T) {
 				Password:           types.StringValue("pass"),
 				CACert:             types.StringValue("cert"),
 				SkipFailedDeletion: types.BoolValue(false),
+				OfferingControllers: createOfferingControllerMap(t, map[string]map[string]attr.Value{
+					"ext-controller-1": {
+						JujuController: types.StringValue("ext-localhost:17070"),
+						JujuUsername:   types.StringValue("ext-user"),
+						JujuPassword:   types.StringValue("ext-pass"),
+						JujuCACert:     types.StringValue("ext-cert"),
+					},
+				}),
 			},
 		},
 	}
