@@ -1,4 +1,4 @@
-// Copyright 2024 Canonical Ltd.
+// Copyright 2025 Canonical Ltd.
 // Licensed under the Apache License, Version 2.0, see LICENCE file for details.
 
 package provider
@@ -15,9 +15,9 @@ var _ validator.String = validatorOfferURL{}
 
 type validatorOfferURL struct{}
 
-// ValidatorOfferURL returns a validator which ensures that the offer URL is valid
+// NewValidatorOfferURL returns a validator which ensures that the offer URL is valid
 // and does not contain a source controller field.
-func ValidatorOfferURL() validator.String {
+func NewValidatorOfferURL() validator.String {
 	return validatorOfferURL{}
 }
 

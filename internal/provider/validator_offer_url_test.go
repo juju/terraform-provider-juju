@@ -1,4 +1,4 @@
-// Copyright 2024 Canonical Ltd.
+// Copyright 2025 Canonical Ltd.
 // Licensed under the Apache License, Version 2.0, see LICENCE file for details.
 
 package provider
@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestValidatorOfferURL(t *testing.T) {
@@ -68,19 +69,17 @@ func TestValidatorOfferURL(t *testing.T) {
 			}
 			response := validator.StringResponse{}
 
-			ValidatorOfferURL().ValidateString(context.Background(), request, &response)
+			NewValidatorOfferURL().ValidateString(context.Background(), request, &response)
 
 			valueStr := "<null or unknown>"
 			if !tc.value.IsNull() && !tc.value.IsUnknown() {
 				valueStr = tc.value.ValueString()
 			}
 
-			if tc.expectError && !response.Diagnostics.HasError() {
-				t.Errorf("Expected error for value %s, but got none", valueStr)
-			}
-
-			if !tc.expectError && response.Diagnostics.HasError() {
-				t.Errorf("Expected no error for value %s, but got: %v", valueStr, response.Diagnostics)
+			if tc.expectError {
+				assert.True(t, response.Diagnostics.HasError(), "Expected error for value %s, but got none", valueStr)
+			} else {
+				assert.False(t, response.Diagnostics.HasError(), "Expected no error for value %s, but got: %v", valueStr, response.Diagnostics)
 			}
 		})
 	}
