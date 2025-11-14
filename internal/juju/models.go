@@ -299,6 +299,30 @@ func createJujuModel(conn jujuapi.Connection,
 	return resp, nil
 }
 
+func (c *modelsClient) ListModels() ([]string, error) {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := modelmanager.NewClient(conn)
+	models, err := client.ListModels(c.GetUser())
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0, len(models))
+	for _, model := range models {
+		if model.Name == "controller" {
+			continue
+		}
+		ids = append(ids, model.UUID)
+	}
+
+	return ids, nil
+}
+
 func (c *modelsClient) ReadModel(modelUUID string) (*ReadModelResponse, error) {
 	modelmanagerConn, err := c.GetConnection(nil)
 	if err != nil {

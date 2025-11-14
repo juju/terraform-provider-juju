@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
@@ -35,6 +36,7 @@ import (
 var _ resource.Resource = &modelResource{}
 var _ resource.ResourceWithConfigure = &modelResource{}
 var _ resource.ResourceWithImportState = &modelResource{}
+var _ resource.ResourceWithIdentity = &modelResource{}
 
 func NewModelResource() resource.Resource {
 	return &modelResource{}
@@ -62,10 +64,24 @@ type modelResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
+type modelResourceIdentityModel struct {
+	ID types.String `tfsdk:"id"`
+}
+
 // nestedCloud represents an element in a Cloud list of a model resource
 type nestedCloud struct {
 	Name   types.String `tfsdk:"name"`
 	Region types.String `tfsdk:"region"`
+}
+
+func (r *modelResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
+	resp.IdentitySchema = identityschema.Schema{
+		Attributes: map[string]identityschema.Attribute{
+			"id": identityschema.StringAttribute{
+				RequiredForImport: true, // must be set during import by the practitioner
+			},
+		},
+	}
 }
 
 func (r *modelResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -205,7 +221,18 @@ func (r *modelResource) Metadata(_ context.Context, req resource.MetadataRequest
 }
 
 func (r *modelResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	if req.ID != "" {
+		resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+		return
+	}
+
+	var identityData modelResourceIdentityModel
+	resp.Diagnostics.Append(req.Identity.Get(ctx, &identityData)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), identityData.ID)...)
 }
 
 func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -326,6 +353,11 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	// Write the state plan into the Response.State
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+
+	identity := modelResourceIdentityModel{
+		ID: types.StringValue(response.UUID),
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
