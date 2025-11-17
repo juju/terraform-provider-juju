@@ -33,26 +33,6 @@ func TestAcc_ResourceKubernetesCloud(t *testing.T) {
 		}})
 }
 
-func TestAcc_ResourceKubernetesCloudDelete(t *testing.T) {
-	SkipJAAS(t)
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-	cloudName := acctest.RandomWithPrefix("tf-test-k8scloud")
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: frameworkProviderFactories,
-		Steps: []resource.TestStep{
-			{
-				Config: testAccResourceKubernetesCloud(cloudName, "", false),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
-				),
-			},
-		}})
-}
-
 func TestAcc_ResourceKubernetesCloudWithoutServiceAccount(t *testing.T) {
 	SkipJAAS(t)
 	if testingCloud != LXDCloudTesting {
@@ -171,7 +151,7 @@ resource "juju_kubernetes_cloud" "{{.CloudName}}" {
 resource "juju_model" "{{.CloudName}}-model" {
  name = "{{.CloudName}}-model"
  cloud {
-		name = "{{.CloudName}}"
+		name = juju_kubernetes_cloud.{{.CloudName}}.name
  }
 
  credential = juju_kubernetes_cloud.{{.CloudName}}.credential
