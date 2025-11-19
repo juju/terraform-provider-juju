@@ -45,6 +45,7 @@ jobs:
         action-operator:
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "2.9" }
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "3" }
+          - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "4" }
           - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.32-strict", juju: "3" }
     timeout-minutes: 90
     steps:
