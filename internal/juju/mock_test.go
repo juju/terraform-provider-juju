@@ -32,6 +32,7 @@ import (
 	secrets0 "github.com/juju/juju/core/secrets"
 	params0 "github.com/juju/juju/rpc/params"
 	names "github.com/juju/names/v5"
+	version "github.com/juju/version/v2"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -207,6 +208,44 @@ func (c *MockSharedClientGetConnectionCall) Do(f func(*string) (api.Connection, 
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockSharedClientGetConnectionCall) DoAndReturn(f func(*string) (api.Connection, error)) *MockSharedClientGetConnectionCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// GetControllerVersion mocks base method.
+func (m *MockSharedClient) GetControllerVersion() version.Number {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetControllerVersion")
+	ret0, _ := ret[0].(version.Number)
+	return ret0
+}
+
+// GetControllerVersion indicates an expected call of GetControllerVersion.
+func (mr *MockSharedClientMockRecorder) GetControllerVersion() *MockSharedClientGetControllerVersionCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetControllerVersion", reflect.TypeOf((*MockSharedClient)(nil).GetControllerVersion))
+	return &MockSharedClientGetControllerVersionCall{Call: call}
+}
+
+// MockSharedClientGetControllerVersionCall wrap *gomock.Call
+type MockSharedClientGetControllerVersionCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSharedClientGetControllerVersionCall) Return(arg0 version.Number) *MockSharedClientGetControllerVersionCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSharedClientGetControllerVersionCall) Do(f func() version.Number) *MockSharedClientGetControllerVersionCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSharedClientGetControllerVersionCall) DoAndReturn(f func() version.Number) *MockSharedClientGetControllerVersionCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
 	"github.com/juju/utils/cache"
+	"github.com/juju/version/v2"
 )
 
 const (
@@ -120,8 +121,9 @@ func (j jujuModel) String() string {
 }
 
 type sharedClient struct {
-	controllerConfig ControllerConfiguration
-	waitForResources bool
+	controllerConfig  ControllerConfiguration
+	controllerVersion version.Number
+	waitForResources  bool
 
 	modelCacheOnce sync.Once
 	modelUUIDcache map[string]jujuModel
@@ -160,6 +162,11 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 	user := config.Username
 	if config.ClientID != "" && !strings.HasSuffix(config.ClientID, serviceAccountSuffix) {
 		user = fmt.Sprintf("%s%s", config.ClientID, serviceAccountSuffix)
+	}
+
+	err := sc.setControllerVersion()
+	if err != nil {
+		return nil, err
 	}
 
 	return &Client{
@@ -204,6 +211,23 @@ func (sc *sharedClient) IsJAAS(defaultVal bool) bool {
 		}
 	})
 	return sc.isJAAS
+}
+
+// setControllerVersion sets the controller version in the sharedClient struct.
+func (sc *sharedClient) setControllerVersion() error {
+	conn, err := sc.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	// The reason why we can ignore the boolean return value is that
+	// ServerVersion always returns a valid version number after login.
+	sc.controllerVersion, _ = conn.ServerVersion()
+	return nil
+}
+
+func (sc *sharedClient) GetControllerVersion() version.Number {
+	return sc.controllerVersion
 }
 
 func getConnectionTimeout() time.Duration {

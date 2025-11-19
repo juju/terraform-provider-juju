@@ -52,7 +52,6 @@ import (
 	"github.com/juju/loggo"
 	"github.com/juju/names/v5"
 	"github.com/juju/retry"
-	"github.com/juju/version/v2"
 	goyaml "gopkg.in/yaml.v2"
 )
 
@@ -99,7 +98,6 @@ func newApplicationPartiallyCreatedError(appName string) error {
 
 type applicationsClient struct {
 	SharedClient
-	controllerVersion version.Number
 
 	getApplicationAPIClient func(base.APICallCloser) ApplicationAPIClient
 	getClientAPIClient      func(api.Connection) ClientAPIClient
@@ -464,9 +462,6 @@ func resourcesAsStringMap(resources map[string]CharmResource) map[string]string 
 // once the provider no longer supports a version of juju
 // before 3.3.
 func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connection, applicationAPIClient *apiapplication.Client, transformedInput transformedCreateApplicationInput) error {
-	// Version needed for operating system selection.
-	c.controllerVersion, _ = conn.ServerVersion()
-
 	charmsAPIClient := apicharms.NewClient(conn)
 	modelconfigAPIClient := apimodelconfig.NewClient(conn)
 
@@ -648,7 +643,7 @@ func (c applicationsClient) supportedWorkloadBase(imageStream string) ([]corebas
 	if err != nil {
 		return nil, err
 	}
-	if c.controllerVersion.Major > 2 {
+	if c.GetControllerVersion().Major > 2 {
 		// SupportedBases include those supported with juju 3.x; juju 2.9.x
 		// supports more. If we have a juju 2.9.x controller add them back.
 		additionallySupported := []corebase.Base{
@@ -1050,7 +1045,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 
 	var appStatus params.ApplicationStatus
 	var storageDirectives map[string]jujustorage.Constraints
-	if c.controllerVersion.Major == 4 {
+	if c.GetControllerVersion().Major == 4 {
 		// With Juju 4 we have to manually filter storage/volumes/filesystems of an application.
 		appStatus, storageDirectives, err = c.getApplicationStatusAndStorageDirectives4(conn, input.AppName)
 		if err != nil {

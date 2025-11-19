@@ -94,6 +94,7 @@ func (s *ApplicationSuite) setupMocks(t *testing.T) *gomock.Controller {
 	s.mockSharedClient.EXPECT().Tracef(gomock.Any(), gomock.Any()).Do(log).AnyTimes()
 	s.mockSharedClient.EXPECT().JujuLogger().Return(&jujuLoggerShim{}).AnyTimes()
 	s.mockSharedClient.EXPECT().GetConnection(&s.testModelUUID).Return(s.mockConnection, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().GetControllerVersion().Return(version.Number{Major: 3, Minor: 6, Patch: 11}).AnyTimes()
 
 	s.mockCharmhubClient = NewMockCharmhubClient(ctlr)
 	return ctlr
@@ -101,8 +102,7 @@ func (s *ApplicationSuite) setupMocks(t *testing.T) *gomock.Controller {
 
 func (s *ApplicationSuite) getApplicationsClient() applicationsClient {
 	return applicationsClient{
-		SharedClient:      s.mockSharedClient,
-		controllerVersion: version.Number{},
+		SharedClient: s.mockSharedClient,
 		getApplicationAPIClient: func(_ base.APICallCloser) ApplicationAPIClient {
 			return s.mockApplicationClient
 		},

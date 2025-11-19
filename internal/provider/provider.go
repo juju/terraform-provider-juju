@@ -286,7 +286,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	}
 	client, err := juju.NewClient(ctx, controllerConfig, p.waitForResources)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create juju client, got error: %s", err))
+		resp.Diagnostics.Append(checkClientErr(err, controllerConfig)...)
 		return
 	}
 	config := juju.Config{
@@ -297,15 +297,6 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		Client: client,
 		Config: config,
 	}
-
-	// Here we are testing that we can connect successfully to the Juju server
-	// this prevents having logic to check the connection is OK in every function
-	testConn, err := providerData.Client.Models.GetConnection(nil)
-	if err != nil {
-		resp.Diagnostics.Append(checkClientErr(err, controllerConfig)...)
-		return
-	}
-	_ = testConn.Close()
 
 	resp.ResourceData = providerData
 	resp.DataSourceData = providerData
