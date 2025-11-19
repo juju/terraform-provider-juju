@@ -22,6 +22,7 @@ import (
 	"github.com/juju/juju/core/secrets"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
+	"github.com/juju/version/v2"
 )
 
 type SharedClient interface {
@@ -43,6 +44,9 @@ type SharedClient interface {
 
 	JujuLogger() *jujuLoggerShim
 	WaitForResource() bool
+
+	// GetControllerVersion returns the version number of the connected controller.
+	GetControllerVersion() version.Number
 }
 
 type ClientAPIClient interface {
