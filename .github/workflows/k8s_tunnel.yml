@@ -177,8 +177,8 @@ jobs:
           }
 
           resource \"juju_application\" \"testapp\" {
-            name = \"juju-qa-test\"
-            model = juju_model.testmodel.name
+            name       = \"juju-qa-test\"
+            model_uuid = juju_model.testmodel.uuid
 
             charm {
               name = \"juju-qa-test\"

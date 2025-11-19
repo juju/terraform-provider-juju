@@ -9,14 +9,6 @@ on:
       - "project-docs/**"
       - ".github/ISSUE_TEMPLATE/**"
       - ".github/PULL_REQUEST_TEMPLATE.md"
-  push:
-    branches:
-      - "main"
-    paths-ignore:
-      - "README.md"
-      - "project-docs/**"
-      - ".github/ISSUE_TEMPLATE/**"
-      - ".github/PULL_REQUEST_TEMPLATE.md"
   workflow_dispatch:
 
 # Testing needs read permission and access to Github's container registry to pull JIMM.
@@ -59,19 +51,8 @@ jobs:
         with:
           terraform_version: "1.11.*"
           terraform_wrapper: false
-      - name: Install Docker Compose plugin.
-        run: |
-          sudo apt-get update -y
-          sudo apt-get -y install ca-certificates curl 
-          sudo install -m 0755 -d /etc/apt/keyrings
-          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-          sudo chmod a+r /etc/apt/keyrings/docker.asc
-          echo \
-            "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
-            $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
-            sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-          sudo apt-get update -y
-          sudo apt-get install -y docker-compose-plugin
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v1
       # Starting JAAS will start the JIMM controller and dependencies and create a Juju controller on LXD and connect it to JIMM.
       - name: Setup JAAS
         uses: canonical/jimm/.github/actions/test-server@v3
@@ -104,5 +85,5 @@ jobs:
       - env:
           TF_ACC: "1"
           TEST_CLOUD: "lxd"
-        run: go test -parallel 3 -timeout 90m -v -cover ./internal/provider/
+        run: go test -parallel 4 -timeout 90m -v -cover ./internal/provider/
         timeout-minutes: 90

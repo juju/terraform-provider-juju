@@ -199,6 +199,7 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 								stringvalidator.ConflictsWith(path.Expressions{
 									path.MatchRelative().AtParent().AtName("name"),
 								}...),
+								NewValidatorOfferURL(),
 							},
 						},
 					},
