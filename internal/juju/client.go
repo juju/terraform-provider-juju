@@ -134,6 +134,8 @@ type sharedClient struct {
 
 	checkJAASOnce sync.Once
 	isJAAS        bool
+
+	offeringControllerConfigs map[string]ControllerConfiguration
 }
 
 // NewClient returns a client which can talk to the juju controller
@@ -144,11 +146,12 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 		return nil, errors.NotValidf("missing context")
 	}
 	sc := &sharedClient{
-		controllerConfig: config,
-		waitForResources: waitForResources,
-		modelUUIDcache:   make(map[string]jujuModel),
-		modelStatusCache: cache.New(defaultModelStatusCacheInterval),
-		subCtx:           tflog.NewSubsystem(ctx, LogJujuClient),
+		controllerConfig:          config,
+		waitForResources:          waitForResources,
+		modelUUIDcache:            make(map[string]jujuModel),
+		modelStatusCache:          cache.New(defaultModelStatusCacheInterval),
+		subCtx:                    tflog.NewSubsystem(ctx, LogJujuClient),
+		offeringControllerConfigs: map[string]ControllerConfiguration{},
 	}
 	// Client ID and secret are only set when connecting to JAAS. Use this as a fallback
 	// value if connecting to the controller fails.
@@ -225,23 +228,44 @@ func (sc *sharedClient) WaitForResource() bool {
 	return sc.waitForResources
 }
 
+// GetOfferingControllerConn returns a connection to a controller
+// specified in the offering_controllers configuration.
+func (sc *sharedClient) GetOfferingControllerConn(name string) (api.Connection, error) {
+	controllerConfig, ok := sc.offeringControllerConfigs[name]
+	if !ok {
+		return nil, errors.NotFoundf("offering controller configuration for %q", name)
+	}
+	return sc.connect(connector.SimpleConfig{
+		ControllerAddresses: controllerConfig.ControllerAddresses,
+		Username:            controllerConfig.Username,
+		Password:            controllerConfig.Password,
+		CACert:              controllerConfig.CACert,
+	})
+}
+
+// AddOfferingController adds an offering controller configuration
+// to the sharedClient.
+func (sc *sharedClient) AddOfferingController(name string, conf ControllerConfiguration) error {
+	sc.offeringControllerConfigs[name] = conf
+	// Test the connection
+	conn, err := sc.GetOfferingControllerConn(name)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+	return nil
+}
+
 // GetConnection returns a juju connection for use creating juju
 // api clients. A model UUID can optionally be provided to connect
 // to a specific model.
 func (sc *sharedClient) GetConnection(modelUUID *string) (api.Connection, error) {
-	dialOptions := func(do *api.DialOpts) {
-		//this is set as a const above, in case we need to use it elsewhere to manage connection timings
-		do.Timeout = getConnectionTimeout()
-		//default is 2 seconds, as we are changing the overall timeout it makes sense to reduce this as well
-		do.RetryDelay = 1 * time.Second
-	}
-
 	var modelUUIDStr string
 	if modelUUID != nil {
 		modelUUIDStr = *modelUUID
 	}
 
-	connr, err := connector.NewSimple(connector.SimpleConfig{
+	conn, err := sc.connect(connector.SimpleConfig{
 		ControllerAddresses: sc.controllerConfig.ControllerAddresses,
 		Username:            sc.controllerConfig.Username,
 		Password:            sc.controllerConfig.Password,
@@ -249,7 +273,22 @@ func (sc *sharedClient) GetConnection(modelUUID *string) (api.Connection, error)
 		ClientSecret:        sc.controllerConfig.ClientSecret,
 		CACert:              sc.controllerConfig.CACert,
 		ModelUUID:           modelUUIDStr,
-	}, dialOptions)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
+func (sc *sharedClient) connect(conf connector.SimpleConfig) (api.Connection, error) {
+	dialOptions := func(do *api.DialOpts) {
+		//this is set as a const above, in case we need to use it elsewhere to manage connection timings
+		do.Timeout = getConnectionTimeout()
+		//default is 2 seconds, as we are changing the overall timeout it makes sense to reduce this as well
+		do.RetryDelay = 1 * time.Second
+	}
+
+	connr, err := connector.NewSimple(conf, dialOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +422,8 @@ func (sc *sharedClient) RemoveModel(modelUUID string) {
 func (sc *sharedClient) AddModel(modelName, modelOwner, modelUUID string, modelType model.ModelType) {
 	if modelName == "" || !names.IsValidModel(modelUUID) || modelType.String() == "" {
 		sc.Tracef("Missing data, failed to add to the cache.", map[string]interface{}{
-			"modelName": modelName, "modelUUID": modelUUID, "modelType": modelType.String()})
+			"modelName": modelName, "modelUUID": modelUUID, "modelType": modelType.String(),
+		})
 		return
 	}
 
@@ -392,7 +432,8 @@ func (sc *sharedClient) AddModel(modelName, modelOwner, modelUUID string, modelT
 	if m, ok := sc.modelUUIDcache[modelUUID]; ok {
 		sc.Warnf("Attempting to add an existing model to the cache.", map[string]interface{}{
 			"existing model in cache": m, "new modelName": modelName, "new modelUUID": modelUUID,
-			"new modelType": modelType.String()})
+			"new modelType": modelType.String(),
+		})
 		return
 	}
 	sc.modelUUIDcache[modelUUID] = jujuModel{
@@ -445,7 +486,7 @@ func (sc *sharedClient) ModelStatus(modelUUID string, conn api.Connection) (*par
 const LogJujuClient = "client"
 
 func (sc *sharedClient) Debugf(msg string, additionalFields ...map[string]interface{}) {
-	//SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
+	// SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
 	// Output:
 	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
 	tflog.SubsystemDebug(sc.subCtx, LogJujuClient, msg, additionalFields...)

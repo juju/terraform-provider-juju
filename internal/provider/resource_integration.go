@@ -21,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/juju/juju/core/crossmodel"
 	"github.com/juju/names/v5"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -63,13 +64,19 @@ type integrationResourceModelV1 struct {
 
 	ModelUUID types.String `tfsdk:"model_uuid"`
 }
+type nestedApplicationV0 struct {
+	Name     types.String `tfsdk:"name"`
+	Endpoint types.String `tfsdk:"endpoint"`
+	OfferURL types.String `tfsdk:"offer_url"`
+}
 
 // nestedApplication represents an element in an Application set of an
 // integration resource
 type nestedApplication struct {
-	Name     types.String `tfsdk:"name"`
-	Endpoint types.String `tfsdk:"endpoint"`
-	OfferURL types.String `tfsdk:"offer_url"`
+	Name               types.String `tfsdk:"name"`
+	Endpoint           types.String `tfsdk:"endpoint"`
+	OfferURL           types.String `tfsdk:"offer_url"`
+	OfferingController types.String `tfsdk:"offering_controller"`
 }
 
 func (r *integrationResource) ImportState(ctx context.Context, req resource.ImportStateRequest,
@@ -202,6 +209,24 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 								NewValidatorOfferURL(),
 							},
 						},
+						"offering_controller": schema.StringAttribute{
+							Description: "The name of the offering controller where the remote application is hosted. " +
+								"This is required when using offer_url to consume an offer from a different controller.",
+							Optional: true,
+							PlanModifiers: []planmodifier.String{
+								// RequiresReplace because the most likely scenario when the name is changed is that it's a different controller,
+								// so we need to re-consume the offer.
+								// In case it was the same controller with a different name, we will just recreate the integration, which is not
+								// harmful.
+								stringplanmodifier.RequiresReplace(),
+							},
+							Validators: []validator.String{
+								stringvalidator.ConflictsWith(path.Expressions{
+									path.MatchRelative().AtParent().AtName("name"),
+								}...),
+								stringvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("offer_url")),
+							},
+						},
 					},
 				},
 			},
@@ -241,8 +266,9 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	// If the remote-app already exists, we will re-use it (see `ConsumeRemoteOffer` for more details).
 	if offer != nil {
 		offerResponse, err := r.client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
-			ModelUUID: modelUUID,
-			OfferURL:  offer.url,
+			ModelUUID:          modelUUID,
+			OfferURL:           offer.url,
+			OfferingController: offer.offeringController,
 		})
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to consume remote offer, got error: %s", err))
@@ -273,8 +299,12 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	r.trace(fmt.Sprintf("integration created on Juju between %q at %q on model %q", appNames, endpoints, modelUUID))
-
-	parsedApplications, err := parseApplications(response.Applications)
+	isExternal, diags := isExternalOffer(plan.Application)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+	parsedApplications, err := parseApplications(response.Applications, isExternal)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse applications, got error: %s", err))
 		return
@@ -333,8 +363,12 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 	r.trace(fmt.Sprintf("found integration: %v", integration))
 
 	state.ModelUUID = types.StringValue(modelUUID)
-
-	applications, err := parseApplications(response.Applications)
+	isExternalOffer, diagErr := isExternalOffer(state.Application)
+	if diagErr.HasError() {
+		resp.Diagnostics.Append(diagErr...)
+		return
+	}
+	applications, err := parseApplications(response.Applications, isExternalOffer)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse applications, got error: %s", err))
 		return
@@ -351,6 +385,23 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 	r.trace(fmt.Sprintf("read integration resource: %v", state.ID.ValueString()))
 	// Set the state onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+// isExternalOffer checks if at least one of the applications in the integration
+// is from an external controller by inspecting the offering_controller field.
+// If at least one application has offering_controller set, it returns true.
+func isExternalOffer(appsSet types.Set) (bool, diag.Diagnostics) {
+	var apps []nestedApplication
+	diags := appsSet.ElementsAs(context.Background(), &apps, false)
+	if diags.HasError() {
+		return false, diags
+	}
+	for _, app := range apps {
+		if !app.OfferingController.IsNull() {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // Update is a no-op, as all fields force replacement.
@@ -420,7 +471,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 
 // UpgradeState upgrades the state of the integration resource.
 // This is used to handle changes in the resource schema between versions.
-// V0->V1: The model name is replaced with the model UUID.
+// V0->V2: The model name is replaced with the model UUID and offering_controller field is added.
 func (r *integrationResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
 	return map[int64]resource.StateUpgrader{
 		0: {
@@ -441,11 +492,37 @@ func (r *integrationResource) UpgradeState(ctx context.Context) map[int64]resour
 
 				newID := strings.Replace(integrationV0.ID.ValueString(), integrationV0.ModelName.ValueString(), modelUUID, 1)
 
+				// Parse old applications and reconstruct with new schema including offering_controller field
+				var oldApps []nestedApplicationV0
+				resp.Diagnostics.Append(integrationV0.Application.ElementsAs(ctx, &oldApps, false)...)
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				// Reconstruct applications with the new structure
+				upgradedApps := make([]nestedApplication, len(oldApps))
+				for i, app := range oldApps {
+					upgradedApps[i] = nestedApplication{
+						Name:               app.Name,
+						Endpoint:           app.Endpoint,
+						OfferURL:           app.OfferURL,
+						OfferingController: types.StringNull(),
+					}
+				}
+
+				// Create the new Application set with the current schema type
+				appsType := resp.State.Schema.GetBlocks()["application"].(schema.SetNestedBlock).NestedObject.Type()
+				upgradedAppsSet, errDiag := types.SetValueFrom(ctx, appsType, upgradedApps)
+				resp.Diagnostics.Append(errDiag...)
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
 				upgradedStateData := integrationResourceModelV1{
 					integrationResourceModel: integrationResourceModel{
 						Via:         integrationV0.Via,
 						ID:          types.StringValue(newID),
-						Application: integrationV0.Application,
+						Application: upgradedAppsSet,
 					},
 					ModelUUID: types.StringValue(modelUUID),
 				}
@@ -500,8 +577,9 @@ func modelUUIDAndEndpointsFromID(ID string) (string, string, string, diag.Diagno
 }
 
 type offer struct {
-	url      string
-	endpoint string
+	url                string
+	endpoint           string
+	offeringController string
 }
 
 // This function can be used to parse the terraform data into usable juju endpoints
@@ -511,14 +589,16 @@ func parseEndpoints(apps []nestedApplication) (endpoints []string, of *offer, ap
 		name := app.Name.ValueString()
 		offerURL := app.OfferURL.ValueString()
 		endpoint := app.Endpoint.ValueString()
+		offeringController := app.OfferingController.ValueString()
 
 		// Here we check if the endpoint is empty and pass just the application name, this allows juju to attempt to infer endpoints
 		// If the endpoint is specified we pass the format <applicationName>:<endpoint>
 		// first check if we have an offer_url, in this case don't return the endpoint
 		if offerURL != "" {
 			of = &offer{
-				url:      offerURL,
-				endpoint: endpoint,
+				url:                offerURL,
+				endpoint:           endpoint,
+				offeringController: offeringController,
 			}
 			continue
 		}
@@ -540,15 +620,29 @@ func parseEndpoints(apps []nestedApplication) (endpoints []string, of *offer, ap
 	return endpoints, of, appNames, nil
 }
 
-func parseApplications(apps []juju.Application) ([]nestedApplication, error) {
+// parseApplications converts Juju applications into nestedApplication structs for the resource state
+// If isExternalController is true, it means at least one of the applications is from an external controller,
+// so we need to include the offering_controller field when parsing the applications.
+// This is required because if an offer is created via the CLI, the offer URL contains the external controller even
+// if the remote app is on the same controller.
+func parseApplications(apps []juju.Application, isExternalController bool) ([]nestedApplication, error) {
 	applications := make([]nestedApplication, 2)
 
 	for i, app := range apps {
 		a := nestedApplication{}
 
 		if app.OfferURL != nil {
-			url := *app.OfferURL
-			a.OfferURL = types.StringValue(url)
+			url, err := crossmodel.ParseOfferURL(*app.OfferURL)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse offer URL %q: %w", *app.OfferURL, err)
+			}
+			a.OfferURL = types.StringValue(url.AsLocal().String())
+			if isExternalController {
+				if url.Source == "" {
+					return nil, fmt.Errorf("offering controller is required for offer URL %q", *app.OfferURL)
+				}
+				a.OfferingController = types.StringValue(url.Source)
+			}
 			a.Endpoint = types.StringValue(app.Endpoint)
 		} else {
 			a.Endpoint = types.StringValue(app.Endpoint)

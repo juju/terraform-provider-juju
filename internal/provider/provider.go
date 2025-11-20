@@ -36,13 +36,14 @@ const (
 	JujuClientSecretEnvKey   = "JUJU_CLIENT_SECRET"
 	SkipFailedDeletionEnvKey = "JUJU_SKIP_FAILED_DELETION"
 
-	JujuController     = "controller_addresses"
-	JujuUsername       = "username"
-	JujuPassword       = "password"
-	JujuClientID       = "client_id"
-	JujuClientSecret   = "client_secret"
-	JujuCACert         = "ca_certificate"
-	SkipFailedDeletion = "skip_failed_deletion"
+	JujuController          = "controller_addresses"
+	JujuUsername            = "username"
+	JujuPassword            = "password"
+	JujuClientID            = "client_id"
+	JujuClientSecret        = "client_secret"
+	JujuCACert              = "ca_certificate"
+	SkipFailedDeletion      = "skip_failed_deletion"
+	JujuOfferingControllers = "offering_controllers"
 
 	TwoSourcesAuthWarning = "Two sources of identity for controller login"
 )
@@ -119,6 +120,13 @@ type jujuProvider struct {
 	waitForResources bool
 }
 
+type offeringControllerModel struct {
+	ControllerAddrs types.String `tfsdk:"controller_addresses"`
+	UserName        types.String `tfsdk:"username"`
+	Password        types.String `tfsdk:"password"`
+	CACert          types.String `tfsdk:"ca_certificate"`
+}
+
 type jujuProviderModel struct {
 	ControllerAddrs types.String `tfsdk:"controller_addresses"`
 	UserName        types.String `tfsdk:"username"`
@@ -128,6 +136,8 @@ type jujuProviderModel struct {
 	ClientSecret    types.String `tfsdk:"client_secret"`
 
 	SkipFailedDeletion types.Bool `tfsdk:"skip_failed_deletion"`
+
+	OfferingControllers types.Map `tfsdk:"offering_controllers"`
 }
 
 func (j jujuProviderModel) loginViaUsername() bool {
@@ -257,6 +267,31 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 				Description: fmt.Sprintf("Whether to issue a warning instead of an error and continue if a resource deletion fails. This can also be set by the `%s` environment variable. Defaults to false.", SkipFailedDeletionEnvKey),
 				Optional:    true,
 			},
+			JujuOfferingControllers: schema.MapNestedAttribute{
+				Description: "Additional controller details for cross-model integrations. The map key is the controller name.",
+				Optional:    true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						JujuController: schema.StringAttribute{
+							Description: "Controller addresses to connect to. Multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,....",
+							Required:    true,
+						},
+						JujuUsername: schema.StringAttribute{
+							Description: "Username registered with the controller.",
+							Required:    true,
+						},
+						JujuPassword: schema.StringAttribute{
+							Description: "Password for the controller username.",
+							Sensitive:   true,
+							Required:    true,
+						},
+						JujuCACert: schema.StringAttribute{
+							Description: "CA certificate for the controller if using a self-signed certificate.",
+							Optional:    true,
+						},
+					},
+				},
+			},
 		},
 	}
 }
@@ -306,6 +341,44 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 	_ = testConn.Close()
+
+	// Register additional offering controllers if configured
+	if !data.OfferingControllers.IsNull() && !data.OfferingControllers.IsUnknown() {
+		var offeringControllers map[string]offeringControllerModel
+		diags := data.OfferingControllers.ElementsAs(ctx, &offeringControllers, false)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+
+		for controllerName, controller := range offeringControllers {
+			tflog.Info(ctx, "Registering offering offering controller", map[string]interface{}{
+				"controller_name": controllerName,
+			})
+
+			err := providerData.Client.Offers.AddOfferingController(
+				controllerName,
+				juju.ControllerConfiguration{
+					ControllerAddresses: strings.Split(controller.ControllerAddrs.ValueString(), ","),
+					Username:            controller.UserName.ValueString(),
+					Password:            controller.Password.ValueString(),
+					CACert:              controller.CACert.ValueString(),
+				},
+			)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Error Registering Additional Offering Controller",
+					fmt.Sprintf("An error was encountered while registering additional offering controller '%s': %s",
+						controllerName, err.Error()),
+				)
+				return
+			}
+
+			tflog.Info(ctx, "Successfully registered additional offering controller", map[string]interface{}{
+				"controller_name": controllerName,
+			})
+		}
+	}
 
 	resp.ResourceData = providerData
 	resp.DataSourceData = providerData

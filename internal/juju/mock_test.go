@@ -95,6 +95,44 @@ func (c *MockSharedClientAddModelCall) DoAndReturn(f func(string, string, string
 	return c
 }
 
+// AddOfferingController mocks base method.
+func (m *MockSharedClient) AddOfferingController(name string, conf ControllerConfiguration) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddOfferingController", name, conf)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddOfferingController indicates an expected call of AddOfferingController.
+func (mr *MockSharedClientMockRecorder) AddOfferingController(name, conf any) *MockSharedClientAddOfferingControllerCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOfferingController", reflect.TypeOf((*MockSharedClient)(nil).AddOfferingController), name, conf)
+	return &MockSharedClientAddOfferingControllerCall{Call: call}
+}
+
+// MockSharedClientAddOfferingControllerCall wrap *gomock.Call
+type MockSharedClientAddOfferingControllerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSharedClientAddOfferingControllerCall) Return(arg0 error) *MockSharedClientAddOfferingControllerCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSharedClientAddOfferingControllerCall) Do(f func(string, ControllerConfiguration) error) *MockSharedClientAddOfferingControllerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSharedClientAddOfferingControllerCall) DoAndReturn(f func(string, ControllerConfiguration) error) *MockSharedClientAddOfferingControllerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Debugf mocks base method.
 func (m *MockSharedClient) Debugf(msg string, additionalFields ...map[string]any) {
 	m.ctrl.T.Helper()
@@ -207,6 +245,45 @@ func (c *MockSharedClientGetConnectionCall) Do(f func(*string) (api.Connection, 
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockSharedClientGetConnectionCall) DoAndReturn(f func(*string) (api.Connection, error)) *MockSharedClientGetConnectionCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// GetOfferingControllerConn mocks base method.
+func (m *MockSharedClient) GetOfferingControllerConn(name string) (api.Connection, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOfferingControllerConn", name)
+	ret0, _ := ret[0].(api.Connection)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOfferingControllerConn indicates an expected call of GetOfferingControllerConn.
+func (mr *MockSharedClientMockRecorder) GetOfferingControllerConn(name any) *MockSharedClientGetOfferingControllerConnCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOfferingControllerConn", reflect.TypeOf((*MockSharedClient)(nil).GetOfferingControllerConn), name)
+	return &MockSharedClientGetOfferingControllerConnCall{Call: call}
+}
+
+// MockSharedClientGetOfferingControllerConnCall wrap *gomock.Call
+type MockSharedClientGetOfferingControllerConnCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSharedClientGetOfferingControllerConnCall) Return(arg0 api.Connection, arg1 error) *MockSharedClientGetOfferingControllerConnCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSharedClientGetOfferingControllerConnCall) Do(f func(string) (api.Connection, error)) *MockSharedClientGetOfferingControllerConnCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSharedClientGetOfferingControllerConnCall) DoAndReturn(f func(string) (api.Connection, error)) *MockSharedClientGetOfferingControllerConnCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

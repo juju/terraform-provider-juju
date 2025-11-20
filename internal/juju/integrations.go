@@ -218,14 +218,6 @@ func parseApplications(remoteApplications map[string]params.RemoteApplicationSta
 	case []params.EndpointStatus:
 		for index, endpoint := range endpoints {
 			if remote, exists := remoteApplications[endpoint.ApplicationName]; exists {
-				if remote.OfferURL != "" {
-					url, err := removeOfferURLSource(remote.OfferURL)
-					if err != nil {
-						return nil, err
-					}
-					remote.OfferURL = url
-				}
-
 				a := Application{
 					Name:     endpoint.ApplicationName,
 					Endpoint: endpoint.Name,

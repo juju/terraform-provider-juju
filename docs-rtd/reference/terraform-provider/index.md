@@ -281,9 +281,23 @@ resource "juju_integration" "wp_to_percona" {
 - `client_id` (String) If using JAAS: This is the client ID (OAuth2.0, created by the external identity provider) to be used. This can also be set by the `JUJU_CLIENT_ID` environment variable
 - `client_secret` (String, Sensitive) If using JAAS: This is the client secret (OAuth2.0, created by the external identity provider) to be used. This can also be set by the `JUJU_CLIENT_SECRET` environment variable
 - `controller_addresses` (String) This is the controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `JUJU_CONTROLLER_ADDRESSES` environment variable.
+- `offering_controllers` (Attributes Map) Additional controller details for cross-model integrations. The map key is the controller name. (see [below for nested schema](#nestedatt--offering_controllers))
 - `password` (String, Sensitive) This is the password of the username to be used. This can also be set by the `JUJU_PASSWORD` environment variable
 - `skip_failed_deletion` (Boolean) Whether to issue a warning instead of an error and continue if a resource deletion fails. This can also be set by the `JUJU_SKIP_FAILED_DELETION` environment variable. Defaults to false.
 - `username` (String) This is the username registered with the controller to be used. This can also be set by the `JUJU_USERNAME` environment variable
+
+<a id="nestedatt--offering_controllers"></a>
+### Nested Schema for `offering_controllers`
+
+Required:
+
+- `controller_addresses` (String) Controller addresses to connect to. Multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,....
+- `password` (String, Sensitive) Password for the controller username.
+- `username` (String) Username registered with the controller.
+
+Optional:
+
+- `ca_certificate` (String) CA certificate for the controller if using a self-signed certificate.
 
 
 [0]: https://juju.is "Juju | An open source application orchestration engine"
