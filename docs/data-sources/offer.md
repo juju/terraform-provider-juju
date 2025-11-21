@@ -25,6 +25,10 @@ data "juju_offer" "this" {
 
 - `url` (String) The offer URL.
 
+### Optional
+
+- `offering_controller` (String) The name of the controller offering the offer.
+
 ### Read-Only
 
 - `application_name` (String) The name of the application.

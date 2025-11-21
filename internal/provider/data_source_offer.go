@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
@@ -32,10 +33,11 @@ type offerDataSource struct {
 // offerDataSourceModel is the juju data stored by terraform.
 // tfsdk must match offer data source schema attribute names.
 type offerDataSourceModel struct {
-	ApplicationName types.String `tfsdk:"application_name"`
-	Endpoints       types.Set    `tfsdk:"endpoints"`
-	OfferName       types.String `tfsdk:"name"`
-	OfferURL        types.String `tfsdk:"url"`
+	ApplicationName    types.String `tfsdk:"application_name"`
+	Endpoints          types.Set    `tfsdk:"endpoints"`
+	OfferName          types.String `tfsdk:"name"`
+	OfferURL           types.String `tfsdk:"url"`
+	OfferingController types.String `tfsdk:"offering_controller"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -51,6 +53,13 @@ func (d *offerDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 			"url": schema.StringAttribute{
 				Description: "The offer URL.",
 				Required:    true,
+				Validators: []validator.String{
+					NewValidatorOfferURL(),
+				},
+			},
+			"offering_controller": schema.StringAttribute{
+				Description: "The name of the controller offering the offer.",
+				Optional:    true,
 			},
 			"name": schema.StringAttribute{
 				Description: "The name of the offer.",
@@ -109,7 +118,8 @@ func (d *offerDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 
 	// Get current juju machine data source values .
 	offer, err := d.client.Offers.ReadOffer(&juju.ReadOfferInput{
-		OfferURL: data.OfferURL.ValueString(),
+		OfferURL:           data.OfferURL.ValueString(),
+		OfferingController: data.OfferingController.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read offer, got error: %s", err))

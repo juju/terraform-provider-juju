@@ -55,7 +55,8 @@ type CreateOfferResponse struct {
 
 // ReadOfferInput represents input for reading an offer.
 type ReadOfferInput struct {
-	OfferURL string
+	OfferURL           string
+	OfferingController string
 	// GetModelUUID, if set, will populate the ModelUUID field in the response.
 	// Only set this if you know the user has at least read access to
 	// the model. E.g. if you are creating the offer you can be sure
@@ -196,12 +197,17 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 
 // ReadOffer reads offer managed by the offer resource.
 func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, error) {
-	conn, err := c.GetConnection(nil)
+	var conn api.Connection
+	var err error
+	if input.OfferingController != "" {
+		conn, err = c.GetOfferingControllerConn(input.OfferingController)
+	} else {
+		conn, err = c.GetConnection(nil)
+	}
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = conn.Close() }()
-
 	client := applicationoffers.NewClient(conn)
 	result, err := client.ApplicationOffer(input.OfferURL)
 	if err != nil {
