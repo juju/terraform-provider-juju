@@ -299,12 +299,8 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	r.trace(fmt.Sprintf("integration created on Juju between %q at %q on model %q", appNames, endpoints, modelUUID))
-	isExternal, diags := isExternalOffer(plan.Application)
-	if diags.HasError() {
-		resp.Diagnostics.Append(diags...)
-		return
-	}
-	parsedApplications, err := parseApplications(response.Applications, isExternal)
+
+	parsedApplications, err := r.parseApplications(response.Applications)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse applications, got error: %s", err))
 		return
@@ -363,12 +359,8 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 	r.trace(fmt.Sprintf("found integration: %v", integration))
 
 	state.ModelUUID = types.StringValue(modelUUID)
-	isExternalOffer, diagErr := isExternalOffer(state.Application)
-	if diagErr.HasError() {
-		resp.Diagnostics.Append(diagErr...)
-		return
-	}
-	applications, err := parseApplications(response.Applications, isExternalOffer)
+
+	applications, err := r.parseApplications(response.Applications)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse applications, got error: %s", err))
 		return
@@ -385,23 +377,6 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 	r.trace(fmt.Sprintf("read integration resource: %v", state.ID.ValueString()))
 	// Set the state onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
-}
-
-// isExternalOffer checks if at least one of the applications in the integration
-// is from an external controller by inspecting the offering_controller field.
-// If at least one application has offering_controller set, it returns true.
-func isExternalOffer(appsSet types.Set) (bool, diag.Diagnostics) {
-	var apps []nestedApplication
-	diags := appsSet.ElementsAs(context.Background(), &apps, false)
-	if diags.HasError() {
-		return false, diags
-	}
-	for _, app := range apps {
-		if !app.OfferingController.IsNull() {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 // Update is a no-op, as all fields force replacement.
@@ -625,7 +600,7 @@ func parseEndpoints(apps []nestedApplication) (endpoints []string, of *offer, ap
 // so we need to include the offering_controller field when parsing the applications.
 // This is required because if an offer is created via the CLI, the offer URL contains the external controller even
 // if the remote app is on the same controller.
-func parseApplications(apps []juju.Application, isExternalController bool) ([]nestedApplication, error) {
+func (r *integrationResource) parseApplications(apps []juju.Application) ([]nestedApplication, error) {
 	applications := make([]nestedApplication, 2)
 
 	for i, app := range apps {
@@ -637,10 +612,10 @@ func parseApplications(apps []juju.Application, isExternalController bool) ([]ne
 				return nil, fmt.Errorf("failed to parse offer URL %q: %w", *app.OfferURL, err)
 			}
 			a.OfferURL = types.StringValue(url.AsLocal().String())
-			if isExternalController {
-				if url.Source == "" {
-					return nil, fmt.Errorf("offering controller is required for offer URL %q", *app.OfferURL)
-				}
+			// Determine if the controller on the offer is one of the provider's
+			// configured `offering_controllers`.
+			// If so, we assume this is a cross-controller integration.
+			if r.client.Offers.IsOfferingController(url.Source) {
 				a.OfferingController = types.StringValue(url.Source)
 			}
 			a.Endpoint = types.StringValue(app.Endpoint)
