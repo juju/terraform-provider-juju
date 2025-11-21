@@ -37,9 +37,6 @@ resource "juju_offer" "percona-cluster" {
 (integrate-with-an-offer)=
 ## Integrate with an offer
 
-Because of the way the Terraform Provider for Juju works, the procedure differs depending whether the
-offer comes from the controller you are connecting to or from an external offering controller.
-
 ### Integrate with an offer from the same controller
 
 > Who: User with {external+juju:ref}`offer consume access <user-access-offer-consume>`.
@@ -75,13 +72,13 @@ resource "juju_integration" "wordpress-db" {
 
 > See more: [`juju_integration` (resource)](../reference/terraform-provider/resources/integration)
 
-(cross-controller-integration)=
-### Integrate with an offer from an external offering controller
+(integrate-with-an-offer-from-a-different-controller)=
+### Integrate with an offer from a different controller
 
-To integrate with an offer coming from a different controller, in your Terraform plan create a `juju_integration` resource as usual by specifying two application blocks and a `lifecycle > replace_triggered_by block`. 
-Finally, take care of the offering controller bit: 
-- in the `provider` definition add an `offering_controllers` block 
-- in the `juju_integration.application` definition set the `offering_controller` attribute. 
+The Juju Terraform provider is configured to connect to a single controller; however we support the consuming of cross controller offers. 
+To integrate with an offer coming from a different controller: 
+- In the `provider` definition specify the `offering_controllers` block.
+- In the `juju_integration` resource, in the definition of the application representing the offer, specify the `offer_url` and the `offering_controller`. In the `lifecycle > replace_triggered_by_block` only include triggers for the regular application (not the offer).
 
 For example:
 ```terraform

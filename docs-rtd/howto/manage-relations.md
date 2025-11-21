@@ -70,7 +70,7 @@ resource "juju_integration" "this" {
 
 In a cross-model relation there is also an 'offering' model and a 'consuming' model. The admin of the 'offering' model 'offers' an application for consumption outside of the model and grants an external user access to it. The user on the 'consuming' model can then find an offer to use, consume the offer, and integrate an application on their model with the 'offer' via the same `integrate` command as in the same-model case (just that the offer must be specified in terms of its offer URL or its consume alias). This creates a local proxy for the offer in the consuming model, and the application is subsequently treated as any other application in the model.
 
-> See more: {ref}`cross-controller-integration`
+> See more: {ref}`integrate-with-an-offer-from-a-different-controller`
 
 ## Remove a relation
 
