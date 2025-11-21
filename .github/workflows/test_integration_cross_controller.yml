@@ -95,5 +95,5 @@ jobs:
           TEST_CLOUD: ${{ matrix.action-operator.cloud }}
           CROSS_CONTROLLERS_TESTS: "1"
         run: |
-          go test -parallel 3 -timeout 90m -v -cover -run "^TestAcc_ResourceIntegration_CrossControllers" ./internal/provider/
+          go test -parallel 3 -timeout 90m -v -cover -run "^TestAcc_(ResourceIntegration|DataOffer)_CrossControllers" ./internal/provider/
         timeout-minutes: 90
