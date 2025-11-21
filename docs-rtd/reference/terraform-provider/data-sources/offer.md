@@ -27,7 +27,7 @@ data "juju_offer" "this" {
 
 ### Optional
 
-- `offering_controller` (String) The name of the controller offering the offer.
+- `offering_controller` (String) The name of the offering controller.
 
 ### Read-Only
 
