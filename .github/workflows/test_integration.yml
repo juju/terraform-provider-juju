@@ -176,6 +176,9 @@ jobs:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.cloud }}
         run: |
+          # TODO(ale8k): Update me ubuntu user's private key. Loading the keys into the ssh-agent won't be neccessary then.
+          # We also require two tests, one for where the ubuntu user already exists and one for where it doesn't and we provide
+          # a root user.
           # generate a new key pair and add it to the agent
           ssh-keygen -t rsa -N "" -f ./test-add-machine
           eval "$(ssh-agent -s)"
