@@ -256,6 +256,8 @@ func (sc *sharedClient) AddOfferingController(name string, conf ControllerConfig
 	return nil
 }
 
+// IsOfferingController returns true if the given controller name is of one of the
+// added offering controllers.
 func (sc *sharedClient) IsOfferingController(name string) bool {
 	_, ok := sc.offeringControllerConfigs[name]
 	return ok

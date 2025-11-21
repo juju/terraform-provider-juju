@@ -379,23 +379,6 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// isExternalOffer checks if at least one of the applications in the integration
-// is from an external controller by inspecting the offering_controller field.
-// If at least one application has offering_controller set, it returns true.
-func isExternalOffer(appsSet types.Set) (bool, diag.Diagnostics) {
-	var apps []nestedApplication
-	diags := appsSet.ElementsAs(context.Background(), &apps, false)
-	if diags.HasError() {
-		return false, diags
-	}
-	for _, app := range apps {
-		if !app.OfferingController.IsNull() {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 // Update is a no-op, as all fields force replacement.
 func (r *integrationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 }
