@@ -256,6 +256,11 @@ func (sc *sharedClient) AddOfferingController(name string, conf ControllerConfig
 	return nil
 }
 
+func (sc *sharedClient) IsOfferingController(name string) bool {
+	_, ok := sc.offeringControllerConfigs[name]
+	return ok
+}
+
 // GetConnection returns a juju connection for use creating juju
 // api clients. A model UUID can optionally be provided to connect
 // to a specific model.

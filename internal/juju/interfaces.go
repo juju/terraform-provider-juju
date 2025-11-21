@@ -29,6 +29,7 @@ type SharedClient interface {
 	GetConnection(modelUUID *string) (api.Connection, error)
 	GetOfferingControllerConn(name string) (api.Connection, error)
 	AddOfferingController(name string, conf ControllerConfiguration) error
+	IsOfferingController(name string) bool
 	ModelType(modelUUID string) (model.ModelType, error)
 	ModelOwnerAndName(modelUUID string) (string, string, error)
 	ModelStatus(modelUUID string, conn api.Connection) (*params.FullStatus, error)

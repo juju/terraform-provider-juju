@@ -288,6 +288,44 @@ func (c *MockSharedClientGetOfferingControllerConnCall) DoAndReturn(f func(strin
 	return c
 }
 
+// IsOfferingController mocks base method.
+func (m *MockSharedClient) IsOfferingController(name string) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsOfferingController", name)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsOfferingController indicates an expected call of IsOfferingController.
+func (mr *MockSharedClientMockRecorder) IsOfferingController(name any) *MockSharedClientIsOfferingControllerCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsOfferingController", reflect.TypeOf((*MockSharedClient)(nil).IsOfferingController), name)
+	return &MockSharedClientIsOfferingControllerCall{Call: call}
+}
+
+// MockSharedClientIsOfferingControllerCall wrap *gomock.Call
+type MockSharedClientIsOfferingControllerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSharedClientIsOfferingControllerCall) Return(arg0 bool) *MockSharedClientIsOfferingControllerCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSharedClientIsOfferingControllerCall) Do(f func(string) bool) *MockSharedClientIsOfferingControllerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSharedClientIsOfferingControllerCall) DoAndReturn(f func(string) bool) *MockSharedClientIsOfferingControllerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // JujuLogger mocks base method.
 func (m *MockSharedClient) JujuLogger() *jujuLoggerShim {
 	m.ctrl.T.Helper()
