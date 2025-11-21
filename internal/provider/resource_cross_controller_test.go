@@ -34,6 +34,24 @@ func TestAcc_ResourceIntegration_CrossControllers_Basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccResourceIntegrationCrossController(consumerModel, getOfferingControllerDataFromEnv(t)),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("juju_model.consumer", "uuid", "juju_integration.a", "model_uuid"),
+					resource.TestCheckResourceAttr("juju_integration.a", "application.0.name", "consumer"),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": consumerModel, "endpoint": "source"}),
+				),
+			},
+			{
+				ImportStateVerify: true,
+				ImportState:       true,
+				ResourceName:      "juju_integration.a",
+			},
+			{
+				Config: testAccResourceIntegrationCrossController(consumerModel, getOfferingControllerDataFromEnv(t)),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("juju_model.consumer", "uuid", "juju_integration.a", "model_uuid"),
+					resource.TestCheckResourceAttr("juju_integration.a", "application.0.name", "consumer"),
+					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": consumerModel, "endpoint": "source"}),
+				),
 			},
 		},
 	})
