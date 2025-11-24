@@ -1456,8 +1456,11 @@ func (c applicationsClient) UpdateCharmAndResources(
 		charmID.Origin = origin
 	}
 
+	// Fetch latest resources and update them if the charm is being refreshed
+	// or if there are resources to update.
+	// Pinned resources will be kept as is.
 	var resourceIds map[string]string
-	if len(input.Resources) != 0 {
+	if updateCharm || len(input.Resources) > 0 {
 		resourceIds, err = c.updateResources(input.AppName, input.Resources, charmsAPIClient, charmID, resourcesAPIClient)
 		if err != nil {
 			return err
