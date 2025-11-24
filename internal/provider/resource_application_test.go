@@ -291,6 +291,109 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 	})
 }
 
+// TestAcc_ResourceApplication_RefreshCharmUpdatesResources
+// verifies that when an application does not specify resource revisions,
+// an update to the charm revision will update the resource revisions to
+// the latest available ones.
+func TestAcc_ResourceApplication_RefreshCharmUpdatesResources(t *testing.T) {
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with Microk8s")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-application")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationRefreshCharmUpdatesResources(modelName, 165),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
+					// Use a check to grab the model UUID and update the application's resource
+					// to a specific revision.
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources["juju_model.this"]
+						if !ok {
+							return fmt.Errorf("not found: juju_model.this")
+						}
+						modelUUID := rs.Primary.Attributes["uuid"]
+						// Use application client to update the application's resource image
+						input := internaljuju.UpdateApplicationInput{
+							ModelUUID: modelUUID,
+							AppName:   "test-app",
+							Resources: map[string]internaljuju.CharmResource{
+								"coredns-image": {
+									RevisionNumber: "60",
+								},
+							},
+						}
+						err := TestClient.Applications.UpdateApplication(&input)
+						if err != nil {
+							return err
+						}
+						// Read the application to verify the resource revision is set to 60
+						// and the charm revision is 165.
+						readInput := internaljuju.ReadApplicationInput{
+							ModelUUID: modelUUID,
+							AppName:   "test-app",
+						}
+						readRes, err := TestClient.Applications.ReadApplication(&readInput)
+						if err != nil {
+							return err
+						}
+						if readRes.Revision != 165 {
+							return fmt.Errorf("expected charm revision to be 165, got %d", readRes.Revision)
+						}
+						coreDNSImage, ok := readRes.Resources["coredns-image"]
+						if !ok {
+							return fmt.Errorf("coredns-image resource not found")
+						}
+						if coreDNSImage != "60" {
+							return fmt.Errorf("expected coredns-image resource revision to be 60, got %s", coreDNSImage)
+						}
+						return nil
+					},
+				),
+			},
+			{
+				Config: testAccResourceApplicationRefreshCharmUpdatesResources(modelName, 166),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "166"),
+					// Use a check to grab the model UUID and verify that the application's
+					// resource revision has been updated to the latest (greater than 60).
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources["juju_model.this"]
+						if !ok {
+							return fmt.Errorf("not found: juju_model.this")
+						}
+						modelUUID := rs.Primary.Attributes["uuid"]
+						input := internaljuju.ReadApplicationInput{
+							ModelUUID: modelUUID,
+							AppName:   "test-app",
+						}
+						res, err := TestClient.Applications.ReadApplication(&input)
+						if err != nil {
+							return err
+						}
+						coreDNSImage, ok := res.Resources["coredns-image"]
+						if !ok {
+							return fmt.Errorf("coredns-image resource not found")
+						}
+						imgRevision, err := strconv.Atoi(coreDNSImage)
+						if err != nil {
+							return err
+						}
+						if imgRevision <= 60 {
+							return fmt.Errorf("expected coredns-image resource revision to be greater than 60, got %d", imgRevision)
+						}
+						return nil
+					},
+				),
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceApplication_UpdateImportedSubordinate(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
@@ -1920,6 +2023,26 @@ func testAccResourceApplicationUpdates(modelName string, units int, expose bool,
 		}
 		`, modelName, units, exposeStr, hostname)
 	}
+}
+
+func testAccResourceApplicationRefreshCharmUpdatesResources(modelName string, revision int) string {
+	return fmt.Sprintf(`
+		resource "juju_model" "this" {
+		  name = %q
+		}
+		
+		resource "juju_application" "this" {
+		  model_uuid = juju_model.this.uuid
+		  name = "test-app"
+		  charm {
+			name     = "coredns"
+			revision = %d
+		  }
+		  config = {
+			juju-external-hostname="myhostname"
+		  }
+		}
+		`, modelName, revision)
 }
 
 func testAccResourceApplicationUpdatesCharm(modelName string, channel string) string {

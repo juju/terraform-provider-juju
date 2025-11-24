@@ -1178,7 +1178,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 				// initialize the resources
 				updateApplicationInput.Resources = make(juju.CharmResources)
 			}
-			// Set resource revision to zero gets the latest resource revision from CharmHub
+			// Set resource revision to -1 gets the latest resource revision from CharmHub
 			updateApplicationInput.Resources[k] = juju.CharmResource{
 				RevisionNumber: "-1",
 			}
