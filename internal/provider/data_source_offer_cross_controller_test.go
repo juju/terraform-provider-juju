@@ -37,8 +37,13 @@ provider "juju" {
   offering_controllers = {
     {{.ControllerName}} = {
 		controller_addresses = "{{.ControllerAddr}}"
+		{{if .ControllerClientID}}
+		client_id = "{{.ControllerClientID}}"
+		client_secret = "{{.ControllerClientSecret}}"
+		{{else}}
 		username = "{{.ControllerUser}}"
 		password = "{{.ControllerPass}}"
+		{{end}}
 		ca_certificate = <<EOF
 {{.ControllerCert}}
 EOF
@@ -48,14 +53,20 @@ EOF
   
 data "juju_offer" "this" {
 	offering_controller = "{{.ControllerName}}"
+	{{if .ControllerClientID}}
+	url = "jimm-test@canonical.com/offering-model.dummy-source"
+	{{else}}
 	url = "admin/offering-model.dummy-source" # offer url from offering controller
+	{{end}}
 } 
 `, internaltesting.TemplateData{
-			"ConsumerModel":  ConsumerModel,
-			"ControllerName": offeringController.ControllerName,
-			"ControllerAddr": offeringController.ControllerAddr,
-			"ControllerUser": offeringController.ControllerUser,
-			"ControllerPass": offeringController.ControllerPass,
-			"ControllerCert": offeringController.ControllerCert,
+			"ConsumerModel":          ConsumerModel,
+			"ControllerName":         offeringController.ControllerName,
+			"ControllerAddr":         offeringController.ControllerAddr,
+			"ControllerUser":         offeringController.ControllerUser,
+			"ControllerPass":         offeringController.ControllerPass,
+			"ControllerCert":         offeringController.ControllerCert,
+			"ControllerClientID":     offeringController.ControllerClientID,
+			"ControllerClientSecret": offeringController.ControllerClientSecret,
 		})
 }

@@ -17,11 +17,13 @@ import (
 // on how to set up the environment.
 
 type offeringControllerData struct {
-	ControllerName string
-	ControllerAddr string
-	ControllerUser string
-	ControllerPass string
-	ControllerCert string
+	ControllerName         string
+	ControllerAddr         string
+	ControllerUser         string
+	ControllerPass         string
+	ControllerCert         string
+	ControllerClientID     string
+	ControllerClientSecret string
 }
 
 func TestAcc_ResourceIntegration_CrossControllers_Basic(t *testing.T) {
@@ -54,8 +56,13 @@ provider "juju" {
   offering_controllers = {
     {{.ControllerName}} = {
 		controller_addresses = "{{.ControllerAddr}}"
+		{{if .ControllerClientID}}
+		client_id = "{{.ControllerClientID}}"
+		client_secret = "{{.ControllerClientSecret}}"
+		{{else}}
 		username = "{{.ControllerUser}}"
 		password = "{{.ControllerPass}}"
+		{{end}}
 		ca_certificate = <<EOF
 {{.ControllerCert}}
 EOF
@@ -87,16 +94,22 @@ resource "juju_integration" "a" {
 	
 	application {
 		offering_controller = "{{.ControllerName}}"
+		{{if .ControllerClientID}}
+		offer_url = "jimm-test@canonical.com/offering-model.dummy-source"
+		{{else}}
 		offer_url = "admin/offering-model.dummy-source" # offer url from offering controller
+		{{end}}
 	}
 }
 `, internaltesting.TemplateData{
-			"ConsumerModel":  ConsumerModel,
-			"ControllerName": offeringController.ControllerName,
-			"ControllerAddr": offeringController.ControllerAddr,
-			"ControllerUser": offeringController.ControllerUser,
-			"ControllerPass": offeringController.ControllerPass,
-			"ControllerCert": offeringController.ControllerCert,
+			"ConsumerModel":          ConsumerModel,
+			"ControllerName":         offeringController.ControllerName,
+			"ControllerAddr":         offeringController.ControllerAddr,
+			"ControllerUser":         offeringController.ControllerUser,
+			"ControllerPass":         offeringController.ControllerPass,
+			"ControllerCert":         offeringController.ControllerCert,
+			"ControllerClientID":     offeringController.ControllerClientID,
+			"ControllerClientSecret": offeringController.ControllerClientSecret,
 		})
 }
 
@@ -111,26 +124,38 @@ func getOfferingControllerDataFromEnv(t *testing.T) offeringControllerData {
 		t.Fatalf("OFFERING_CONTROLLER_ADDRESSES environment variable not set")
 	}
 
-	controllerUser, ok := os.LookupEnv("OFFERING_CONTROLLER_USERNAME")
-	if !ok {
-		t.Fatalf("OFFERING_CONTROLLER_USERNAME environment variable not set")
-	}
-
-	controllerPass, ok := os.LookupEnv("OFFERING_CONTROLLER_PASSWORD")
-	if !ok {
-		t.Fatalf("OFFERING_CONTROLLER_PASSWORD environment variable not set")
-	}
-
 	controllerCert, ok := os.LookupEnv("OFFERING_CONTROLLER_CA_CERT")
 	if !ok {
 		t.Fatalf("OFFERING_CONTROLLER_CA_CERT environment variable not set")
 	}
 
+	controllerUser, _ := os.LookupEnv("OFFERING_CONTROLLER_USERNAME")
+	controllerPass, _ := os.LookupEnv("OFFERING_CONTROLLER_PASSWORD")
+	if controllerUser != "" && controllerPass != "" {
+		return offeringControllerData{
+			ControllerName: controllerName,
+			ControllerAddr: controllerAddr,
+			ControllerUser: controllerUser,
+			ControllerPass: controllerPass,
+			ControllerCert: controllerCert,
+		}
+	}
+
+	controllerClientID, ok := os.LookupEnv("OFFERING_CONTROLLER_CLIENT_ID")
+	if !ok {
+		t.Fatalf("OFFERING_CONTROLLER_CLIENT_ID environment variable not set")
+	}
+
+	controllerClientSecret, ok := os.LookupEnv("OFFERING_CONTROLLER_CLIENT_SECRET")
+	if !ok {
+		t.Fatalf("OFFERING_CONTROLLER_CLIENT_SECRET environment variable not set")
+	}
+
 	return offeringControllerData{
-		ControllerName: controllerName,
-		ControllerAddr: controllerAddr,
-		ControllerUser: controllerUser,
-		ControllerPass: controllerPass,
-		ControllerCert: controllerCert,
+		ControllerName:         controllerName,
+		ControllerAddr:         controllerAddr,
+		ControllerCert:         controllerCert,
+		ControllerClientID:     controllerClientID,
+		ControllerClientSecret: controllerClientSecret,
 	}
 }

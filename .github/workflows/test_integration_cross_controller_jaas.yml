@@ -1,0 +1,108 @@
+# Terraform Provider testing workflow using different terraform versions
+# and clouds.
+name: Integration tests with cross controller relations with JAAS
+
+# This GitHub action runs your tests for each pull request.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  #    paths-ignore:
+  #     DON'T SET - these are "required" so they need to run on every PR
+  push:
+    branches:
+      - "main"
+
+# Testing only needs permissions to read the repository contents.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Run acceptance tests in a matrix with Terraform CLI versions
+  test:
+    name: Integration
+    runs-on: [self-hosted, jammy, x64]
+    strategy:
+      fail-fast: false
+      matrix:
+        terraform: ["1.11.*"]
+        action-operator:
+          - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "2.9" }
+          - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "3" }
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ matrix.terraform }}
+          terraform_wrapper: false
+
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v1
+
+      - name: Setup JAAS as offering controller
+        uses: canonical/jimm/.github/actions/test-server@v3
+        id: jaas
+        with:
+          juju-channel: ${{ matrix.action-operator.juju }}
+          jimm-version: v3.3.8
+          ghcr-pat: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup the main controller
+        run: |
+          juju bootstrap lxd consuming-controller
+      - name: Setup the offer
+        run: |
+          juju switch jimm
+          juju add-model offering-model
+          juju deploy juju-qa-dummy-source
+          juju offer dummy-source:sink
+      
+      - name: "Set environment to configure provider"
+        # language=bash
+        # JUJU_SKIP_FAILED_DELETION is set to avoid issues with tests failing
+        # on resource deletion. The issue in Juju is unclear but models and apps
+        # fail to be removed sometimes.
+        # CONTROLLER_NAME is set by the charmed-kubernetes/actions-operator
+        run: |
+          MAIN_CONTROLLER=consuming-controller
+          juju switch $MAIN_CONTROLLER
+          # Set main controller environment variables
+          echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq .$MAIN_CONTROLLER.details.api-endpoints | yq -r '. | join(",")')" >> $GITHUB_ENV
+          echo "JUJU_USERNAME=$(juju show-controller | yq .$MAIN_CONTROLLER.account.user)" >> $GITHUB_ENV
+          echo "JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$MAIN_CONTROLLER.password)" >> $GITHUB_ENV
+          echo "JUJU_CA_CERT<<EOF" >> $GITHUB_ENV
+          juju show-controller | yq .$MAIN_CONTROLLER.details.ca-cert >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          
+          # Set offering controller environment variables
+          OFFERING_CONTROLLER="jimm"
+          juju switch $OFFERING_CONTROLLER
+          echo "OFFERING_CONTROLLER_IS_JAAS=true" >> $GITHUB_ENV
+          echo "OFFERING_CONTROLLER_NAME=$OFFERING_CONTROLLER" >> $GITHUB_ENV
+          echo "OFFERING_CONTROLLER_ADDRESSES=$(juju show-controller | yq .$OFFERING_CONTROLLER.details.api-endpoints | yq -r '. | join(",")')" >> $GITHUB_ENV
+          echo "OFFERING_CONTROLLER_CLIENT_ID=${{ steps.jaas.outputs.client-id }}"  >> $GITHUB_ENV
+          echo "OFFERING_CONTROLLER_CLIENT_SECRET=${{ steps.jaas.outputs.client-secret }}"  >> $GITHUB_ENV
+          echo "OFFERING_CONTROLLER_CA_CERT<<EOF" >> $GITHUB_ENV
+          echo "${{ steps.jaas.outputs.ca-cert }}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "JUJU_SKIP_FAILED_DELETION=true" >> $GITHUB_ENV
+
+          # switch back to main controller, this is not strictly necessary, but it is to make we are not using
+          # the offering controller.
+          juju switch $MAIN_CONTROLLER
+      - env:
+          TF_ACC: "1"
+          TEST_CLOUD: ${{ matrix.action-operator.cloud }}
+          CROSS_CONTROLLERS_TESTS: "1"
+        run: |
+          go test -parallel 3 -timeout 90m -v -cover -run "^TestAcc_(ResourceIntegration|DataOffer)_CrossControllers" ./internal/provider/
+        timeout-minutes: 90

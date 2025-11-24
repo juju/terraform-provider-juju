@@ -240,6 +240,8 @@ func (sc *sharedClient) GetOfferingControllerConn(name string) (api.Connection, 
 		Username:            controllerConfig.Username,
 		Password:            controllerConfig.Password,
 		CACert:              controllerConfig.CACert,
+		ClientID:            controllerConfig.ClientID,
+		ClientSecret:        controllerConfig.ClientSecret,
 	})
 }
 
