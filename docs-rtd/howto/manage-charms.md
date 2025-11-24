@@ -65,6 +65,8 @@ resource "juju_application" "this" {
 
 The Terraform provider does not support refreshing the charm when the revision is not specified. When unset, the revision number is determined during application creation. If you wish to keep the revision unset, you can refresh the application manually using the `juju` CLI. However, note that setting both `channel` and `revision` makes for a more reproducible deployment.
 
+When the charm is changed, its resources will also be updated unless pinned.
+
 > See more: [`juju_application` > `charm` > nested schema ](../reference/terraform-provider/resources/application)
 
 ## Remove a charm
