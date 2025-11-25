@@ -144,3 +144,73 @@ Import is supported using the following syntax:
 # For example:
 $ terraform import juju_integration.wordpress_db 4b6bd192-13bb-489d-b7a7-06f6efc2928d:percona-cluster:server:wordpress:db
 ```
+
+Alternatively, it's possible to use the `import` block in your plan with an offer URL. For example:
+```tf
+import {
+  to = juju_integration.this
+  id = "${data.juju_model.development.uuid}:percona-cluster:server:wordpress:db"
+}
+```
+
+### Cross-controller integration import
+
+It's also possible to import an integration between models on different controllers. For example:
+
+```tf
+provider "juju" {
+  # In addition to the default controller, configure the offering one
+  offering_controllers = {
+    "db-controller" = {
+      controller_addresses = "..."
+      username             = "..."
+      password             = "..."
+      ca_certificate       = "..."
+    }
+  }
+}
+resource "juju_integration" "this" {
+  model_uuid = juju_model.development.uuid
+  via        = "10.0.0.0/24,10.0.1.0/24"
+  application {
+    # Controller name must match the name set up in the `provider`s `offering_controllers` block
+    offering_controller = "db-controller"
+    offer_url           = "owner/db-model.db"
+    endpoint            = "db"
+  }
+  application {
+    name     = juju_application.percona-cluster.name
+    endpoint = "server"
+  }
+}
+import {
+  to = juju_integration.this
+  # UUID obtained through a data source
+  id = "${data.juju_model.development.uuid}:percona-cluster:server:wordpress:db"
+}
+```
+
+To verify that you'll get the result you want, check the output of terraform plan -- it should 
+show resources being imported and none destroyed and recreated. For example:
+
+```shell
+Terraform will perform the following actions:
+
+  # juju_integration.sink-source will be imported
+    resource "juju_integration" "db" {
+        id         = "...:ppercona-cluster:server:wordpress:db"
+        model_uuid = "..."
+
+        application {
+            endpoint            = "db"
+            offer_url           = "owner/db-model.db"
+            offering_controller = "db-controller"
+        }
+        application {
+            endpoint = "source"
+            name     = "server"
+        }
+    }
+
+Plan: 1 to import, 0 to add, 0 to change, 0 to destroy.
+```

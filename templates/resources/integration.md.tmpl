@@ -83,4 +83,44 @@ Same as before v0.23.0.
 Import is supported using the following syntax:
 
 {{codefile "shell" "examples/resources/juju_integration/import.sh"}}
+
+Alternatively, it's possible to use the `import` block in your plan with an offer URL. For example:
+```tf
+import {
+  to = juju_integration.this
+  id = "${data.juju_model.development.uuid}:percona-cluster:server:wordpress:db"
+}
+```
+
+### Cross-controller integration import
+
+It's also possible to import an integration between models on different controllers. For example:
+
+{{codefile "tf" "examples/resources/juju_integration/cross_controller_import.tf"}}
+
+To verify that you'll get the result you want, check the output of terraform plan -- it should 
+show resources being imported and none destroyed and recreated. For example:
+
+```shell
+Terraform will perform the following actions:
+
+  # juju_integration.sink-source will be imported
+    resource "juju_integration" "db" {
+        id         = "...:ppercona-cluster:server:wordpress:db"
+        model_uuid = "..."
+
+        application {
+            endpoint            = "db"
+            offer_url           = "owner/db-model.db"
+            offering_controller = "db-controller"
+        }
+        application {
+            endpoint = "source"
+            name     = "server"
+        }
+    }
+
+Plan: 1 to import, 0 to add, 0 to change, 0 to destroy.
+```
+
 {{- end }}
