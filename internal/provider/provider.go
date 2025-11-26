@@ -125,6 +125,8 @@ type offeringControllerModel struct {
 	UserName        types.String `tfsdk:"username"`
 	Password        types.String `tfsdk:"password"`
 	CACert          types.String `tfsdk:"ca_certificate"`
+	ClientID        types.String `tfsdk:"client_id"`
+	ClientSecret    types.String `tfsdk:"client_secret"`
 }
 
 type jujuProviderModel struct {
@@ -278,16 +280,61 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 						},
 						JujuUsername: schema.StringAttribute{
 							Description: "Username registered with the controller.",
-							Required:    true,
+							Optional:    true,
+							Validators: []validator.String{
+								stringvalidator.AlsoRequires(path.Expressions{
+									path.MatchRelative().AtParent().AtName(JujuPassword),
+								}...),
+								stringvalidator.ConflictsWith(path.Expressions{
+									path.MatchRelative().AtParent().AtName(JujuClientID),
+									path.MatchRelative().AtParent().AtName(JujuClientSecret),
+								}...),
+							},
 						},
 						JujuPassword: schema.StringAttribute{
 							Description: "Password for the controller username.",
 							Sensitive:   true,
-							Required:    true,
+							Optional:    true,
+							Validators: []validator.String{
+								stringvalidator.AlsoRequires(path.Expressions{
+									path.MatchRelative().AtParent().AtName(JujuUsername),
+								}...),
+								stringvalidator.ConflictsWith(path.Expressions{
+									path.MatchRelative().AtParent().AtName(JujuClientID),
+									path.MatchRelative().AtParent().AtName(JujuClientSecret),
+								}...),
+							},
 						},
 						JujuCACert: schema.StringAttribute{
 							Description: "CA certificate for the controller if using a self-signed certificate.",
 							Optional:    true,
+						},
+						JujuClientID: schema.StringAttribute{
+							Description: "The client ID (OAuth2.0, created by the external identity provider) to be used.",
+							Optional:    true,
+							Validators: []validator.String{
+								stringvalidator.AlsoRequires(path.Expressions{
+									path.MatchRelative().AtParent().AtName(JujuClientSecret),
+								}...),
+								stringvalidator.ConflictsWith(path.Expressions{
+									path.MatchRelative().AtParent().AtName(JujuUsername),
+									path.MatchRelative().AtParent().AtName(JujuPassword),
+								}...),
+							},
+						},
+						JujuClientSecret: schema.StringAttribute{
+							Description: "The client secret (OAuth2.0, created by the external identity provider) to be used.",
+							Sensitive:   true,
+							Optional:    true,
+							Validators: []validator.String{
+								stringvalidator.AlsoRequires(path.Expressions{
+									path.MatchRelative().AtParent().AtName(JujuClientID),
+								}...),
+								stringvalidator.ConflictsWith(path.Expressions{
+									path.MatchRelative().AtParent().AtName(JujuUsername),
+									path.MatchRelative().AtParent().AtName(JujuPassword),
+								}...),
+							},
 						},
 					},
 				},
@@ -363,6 +410,8 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 					Username:            controller.UserName.ValueString(),
 					Password:            controller.Password.ValueString(),
 					CACert:              controller.CACert.ValueString(),
+					ClientID:            controller.ClientID.ValueString(),
+					ClientSecret:        controller.ClientSecret.ValueString(),
 				},
 			)
 			if err != nil {
