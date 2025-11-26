@@ -145,7 +145,7 @@ Import is supported using the following syntax:
 $ terraform import juju_integration.wordpress_db 4b6bd192-13bb-489d-b7a7-06f6efc2928d:percona-cluster:server:wordpress:db
 ```
 
-Alternatively, it's possible to use the `import` block in your plan with an offer URL. For example:
+Alternatively, it's possible to use the `import` block in your plan. For example:
 ```tf
 import {
   to = juju_integration.this
@@ -198,7 +198,7 @@ Terraform will perform the following actions:
 
   # juju_integration.sink-source will be imported
     resource "juju_integration" "db" {
-        id         = "...:ppercona-cluster:server:wordpress:db"
+        id         = "...:percona-cluster:server:wordpress:db"
         model_uuid = "..."
 
         application {
