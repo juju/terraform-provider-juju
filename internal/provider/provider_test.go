@@ -31,10 +31,12 @@ const (
 )
 
 var offeringControllersMapElemsType = map[string]attr.Type{
-	JujuController: types.StringType,
-	JujuUsername:   types.StringType,
-	JujuPassword:   types.StringType,
-	JujuCACert:     types.StringType,
+	JujuController:   types.StringType,
+	JujuUsername:     types.StringType,
+	JujuPassword:     types.StringType,
+	JujuCACert:       types.StringType,
+	JujuClientID:     types.StringType,
+	JujuClientSecret: types.StringType,
 }
 
 var offeringControllersMapType = types.MapType{
@@ -466,14 +468,18 @@ func TestGetJujuProviderModel(t *testing.T) {
 				ControllerAddrs:    types.StringValue("localhost:17070"),
 				UserName:           types.StringValue("user"),
 				Password:           types.StringValue("pass"),
+				ClientID:           types.StringUnknown(),
+				ClientSecret:       types.StringUnknown(),
 				CACert:             types.StringValue("cert"),
 				SkipFailedDeletion: types.BoolValue(true),
 				OfferingControllers: createOfferingControllerMap(t, map[string]map[string]attr.Value{
 					"ext-controller-1": {
-						JujuController: types.StringValue("ext-localhost:17070"),
-						JujuUsername:   types.StringValue("ext-user"),
-						JujuPassword:   types.StringValue("ext-pass"),
-						JujuCACert:     types.StringValue("ext-cert"),
+						JujuController:   types.StringValue("ext-localhost:17070"),
+						JujuUsername:     types.StringValue("ext-user"),
+						JujuPassword:     types.StringValue("ext-pass"),
+						JujuCACert:       types.StringValue("ext-cert"),
+						JujuClientID:     types.StringUnknown(),
+						JujuClientSecret: types.StringUnknown(),
 					},
 				}),
 			},
@@ -486,10 +492,12 @@ func TestGetJujuProviderModel(t *testing.T) {
 				SkipFailedDeletion: types.BoolValue(true),
 				OfferingControllers: createOfferingControllerMap(t, map[string]map[string]attr.Value{
 					"ext-controller-1": {
-						JujuController: types.StringValue("ext-localhost:17070"),
-						JujuUsername:   types.StringValue("ext-user"),
-						JujuPassword:   types.StringValue("ext-pass"),
-						JujuCACert:     types.StringValue("ext-cert"),
+						JujuController:   types.StringValue("ext-localhost:17070"),
+						JujuUsername:     types.StringValue("ext-user"),
+						JujuPassword:     types.StringValue("ext-pass"),
+						JujuCACert:       types.StringValue("ext-cert"),
+						JujuClientID:     types.StringUnknown(),
+						JujuClientSecret: types.StringUnknown(),
 					},
 				}),
 			},
@@ -500,8 +508,8 @@ func TestGetJujuProviderModel(t *testing.T) {
 				ControllerAddrs:     types.StringValue("localhost:17070"),
 				UserName:            types.StringValue("user"),
 				Password:            types.StringValue("pass"),
-				ClientID:            types.StringValue("clientid"),
-				ClientSecret:        types.StringValue("clientsecret"),
+				ClientID:            types.StringValue("client-id"),
+				ClientSecret:        types.StringValue("client-secret"),
 				OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
 			},
 			wantErr:        true,
@@ -560,11 +568,13 @@ func TestGetJujuProviderModel(t *testing.T) {
 				CACert:             types.StringValue("cert"),
 				SkipFailedDeletion: types.BoolValue(false),
 				OfferingControllers: createOfferingControllerMap(t, map[string]map[string]attr.Value{
-					"ext-controller-1": {
-						JujuController: types.StringValue("ext-localhost:17070"),
-						JujuUsername:   types.StringValue("ext-user"),
-						JujuPassword:   types.StringValue("ext-pass"),
-						JujuCACert:     types.StringValue("ext-cert"),
+					"ext-controller-4": {
+						JujuController:   types.StringValue("ext-localhost:17070"),
+						JujuUsername:     types.StringValue("ext-user"),
+						JujuPassword:     types.StringValue("ext-pass"),
+						JujuCACert:       types.StringValue("ext-cert"),
+						JujuClientID:     types.StringUnknown(),
+						JujuClientSecret: types.StringUnknown(),
 					},
 				}),
 			},
@@ -580,11 +590,13 @@ func TestGetJujuProviderModel(t *testing.T) {
 				CACert:             types.StringValue("cert"),
 				SkipFailedDeletion: types.BoolValue(false),
 				OfferingControllers: createOfferingControllerMap(t, map[string]map[string]attr.Value{
-					"ext-controller-1": {
-						JujuController: types.StringValue("ext-localhost:17070"),
-						JujuUsername:   types.StringValue("ext-user"),
-						JujuPassword:   types.StringValue("ext-pass"),
-						JujuCACert:     types.StringValue("ext-cert"),
+					"ext-controller-4": {
+						JujuController:   types.StringValue("ext-localhost:17070"),
+						JujuUsername:     types.StringValue("ext-user"),
+						JujuPassword:     types.StringValue("ext-pass"),
+						JujuCACert:       types.StringValue("ext-cert"),
+						JujuClientID:     types.StringUnknown(),
+						JujuClientSecret: types.StringUnknown(),
 					},
 				}),
 			},

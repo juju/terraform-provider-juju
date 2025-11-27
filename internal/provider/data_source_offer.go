@@ -58,7 +58,7 @@ func (d *offerDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 				},
 			},
 			"offering_controller": schema.StringAttribute{
-				Description: "The name of the controller offering the offer.",
+				Description: "The name of the offering controller.",
 				Optional:    true,
 			},
 			"name": schema.StringAttribute{

@@ -292,12 +292,14 @@ resource "juju_integration" "wp_to_percona" {
 Required:
 
 - `controller_addresses` (String) Controller addresses to connect to. Multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,....
-- `password` (String, Sensitive) Password for the controller username.
-- `username` (String) Username registered with the controller.
 
 Optional:
 
 - `ca_certificate` (String) CA certificate for the controller if using a self-signed certificate.
+- `client_id` (String) The client ID (OAuth2.0, created by the external identity provider) to be used.
+- `client_secret` (String, Sensitive) The client secret (OAuth2.0, created by the external identity provider) to be used.
+- `password` (String, Sensitive) Password for the controller username.
+- `username` (String) Username registered with the controller.
 
 
 [0]: https://juju.is "Juju | An open source application orchestration engine"

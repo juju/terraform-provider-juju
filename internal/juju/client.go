@@ -240,6 +240,8 @@ func (sc *sharedClient) GetOfferingControllerConn(name string) (api.Connection, 
 		Username:            controllerConfig.Username,
 		Password:            controllerConfig.Password,
 		CACert:              controllerConfig.CACert,
+		ClientID:            controllerConfig.ClientID,
+		ClientSecret:        controllerConfig.ClientSecret,
 	})
 }
 
@@ -254,6 +256,13 @@ func (sc *sharedClient) AddOfferingController(name string, conf ControllerConfig
 	}
 	defer func() { _ = conn.Close() }()
 	return nil
+}
+
+// IsOfferingController returns true if the given controller name is of one of the
+// added offering controllers.
+func (sc *sharedClient) IsOfferingController(name string) bool {
+	_, ok := sc.offeringControllerConfigs[name]
+	return ok
 }
 
 // GetConnection returns a juju connection for use creating juju

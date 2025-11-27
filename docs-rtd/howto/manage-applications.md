@@ -209,6 +209,7 @@ resource "juju_application" "application_three" {
 ## Upgrade an application
 
 To upgrade an application, update its charm.
+When the charm is updated, its resources will also be updated unless pinned.
 
 > See more: {ref}`update-a-charm`
 

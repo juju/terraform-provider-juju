@@ -37,9 +37,11 @@ resource "juju_offer" "percona-cluster" {
 (integrate-with-an-offer)=
 ## Integrate with an offer
 
+### Integrate with an offer from the same controller
+
 > Who: User with {external+juju:ref}`offer consume access <user-access-offer-consume>`.
 
-To integrate with an offer, in your Terraform plan create a `juju_integration` resource as usual by specifying two application blocks and a `lifecycle > replace_triggered_by` block, but for the application representing the offer specify the `offer_url`, and in the `lifecycle` block list triggers only for the regular application (not the offer). For example:
+To integrate with an offer coming from the same controller, in your Terraform plan create a `juju_integration` resource as usual by specifying two application blocks and a `lifecycle > replace_triggered_by` block, but for the application representing the offer specify the `offer_url`, and in the `lifecycle` block list triggers only for the regular application (not the offer). For example:
 
 ```terraform
 resource "juju_integration" "wordpress-db" {
@@ -69,6 +71,63 @@ resource "juju_integration" "wordpress-db" {
 ```
 
 > See more: [`juju_integration` (resource)](../reference/terraform-provider/resources/integration)
+
+(integrate-with-an-offer-from-a-different-controller)=
+### Integrate with an offer from a different controller
+
+The Juju Terraform provider is configured to connect to a single controller; however we support the consuming of cross controller offers. 
+To integrate with an offer coming from a different controller: 
+- In the `provider` definition specify the `offering_controllers` block.
+- In the `juju_integration` resource, in the definition of the application representing the offer, specify the `offer_url` and the `offering_controller`. In the `lifecycle > replace_triggered_by_block` only include triggers for the regular application (not the offer).
+
+For example:
+```terraform
+locals {
+  external_controller_name = "my-controller"
+}
+provider "juju" {
+  offering_controllers = {
+    (local.external_controller_name) = {
+      controller_addresses = "<ip>"
+      username             = "<username>"
+      password             = "<password>"
+      ca_certificate       = file("<ca-cer-path>")
+    }
+  }
+}
+resource "juju_model" "model" {
+  name = "test"
+}
+resource "juju_application" "juju-qa-dummy-sink" {
+  name  = "juju-qa-dummy-sink"
+  trust = true
+  charm {
+    name = "juju-qa-dummy-sink"
+  }
+  model_uuid = juju_model.model.uuid
+}
+resource "juju_integration" "sink-source" {
+  application {
+    offering_controller = local.external_controller_name
+    offer_url           = "admin/offering-model.dummy-source"
+  }
+  application {
+    name     = juju_application.juju-qa-dummy-sink.name
+    endpoint = "source"
+  }
+  model_uuid = juju_model.model.uuid
+}
+
+  lifecycle {
+    replace_triggered_by = [
+      juju_application.juju-qa-dummy-sink.name,
+      juju_application.juju-qa-dummy-sink.model,
+      juju_application.juju-qa-dummy-sink.constraints,
+      juju_application.juju-qa-dummy-sink.placement,
+      juju_application.juju-qa-dummy-sink.charm.name,
+    ]
+  }
+```
 
 ## Allow traffic from an integrated offer
 > Who: User with {external+juju:ref}`offer admin access <user-access-offer-admin>`.
