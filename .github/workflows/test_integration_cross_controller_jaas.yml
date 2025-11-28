@@ -23,15 +23,8 @@ concurrency:
 jobs:
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
-    name: Integration
+    name: Integration-Cross-Controller-JAAS
     runs-on: [self-hosted, jammy, x64]
-    strategy:
-      fail-fast: false
-      matrix:
-        terraform: ["1.11.*"]
-        action-operator:
-          - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "2.9" }
-          - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "3" }
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -42,7 +35,7 @@ jobs:
           cache: true
       - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: ${{ matrix.terraform }}
+          terraform_version: "1.11.*"
           terraform_wrapper: false
 
       - name: Set up Docker Compose
@@ -52,7 +45,7 @@ jobs:
         uses: canonical/jimm/.github/actions/test-server@v3
         id: jaas
         with:
-          juju-channel: ${{ matrix.action-operator.juju }}
+          juju-channel: 3/stable
           jimm-version: v3.3.8
           ghcr-pat: ${{ secrets.GITHUB_TOKEN }}
 
@@ -101,7 +94,7 @@ jobs:
           juju switch $MAIN_CONTROLLER
       - env:
           TF_ACC: "1"
-          TEST_CLOUD: ${{ matrix.action-operator.cloud }}
+          TEST_CLOUD: "lxd"
           CROSS_CONTROLLERS_TESTS: "1"
         run: |
           go test -parallel 3 -timeout 90m -v -cover -run "^TestAcc_(ResourceIntegration|DataOffer)_CrossControllers" ./internal/provider/
