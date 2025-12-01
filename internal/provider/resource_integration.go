@@ -32,7 +32,6 @@ import (
 var _ resource.Resource = &integrationResource{}
 var _ resource.ResourceWithConfigure = &integrationResource{}
 var _ resource.ResourceWithImportState = &integrationResource{}
-var _ resource.ResourceWithValidateConfig = &integrationResource{}
 
 func NewIntegrationResource() resource.Resource {
 	return &integrationResource{}
@@ -104,31 +103,6 @@ func (r *integrationResource) Configure(ctx context.Context, req resource.Config
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceIntegration)
 }
 
-// Called during terraform validate through ValidateResourceConfig RPC
-// Validates the logic in the application block in the Schema
-func (r *integrationResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	var configData integrationResourceModelV1
-
-	// Read Terraform configuration from the request into the model
-	resp.Diagnostics.Append(req.Config.Get(ctx, &configData)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	var apps []nestedApplication
-	resp.Diagnostics.Append(configData.Application.ElementsAs(ctx, &apps, false)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	for _, app := range apps {
-		if app.Name.IsNull() && app.OfferURL.IsNull() {
-			resp.Diagnostics.AddAttributeError(path.Root("applications"), "Attribute Error", "one and only one of \"name\" or \"offer_url\" fields must be provided.")
-		} else if !app.OfferURL.IsNull() && !app.Name.IsNull() {
-			resp.Diagnostics.AddAttributeError(path.Root("applications"), "Attribute Error", "the \"offer_url\" and \"name\" fields are mutually exclusive.")
-		}
-	}
-}
-
 func (r *integrationResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_integration"
 }
@@ -183,6 +157,10 @@ func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest
 								stringvalidator.ConflictsWith(path.Expressions{
 									path.MatchRelative().AtParent().AtName("offer_url"),
 								}...),
+								// Either this attribute (name) or offer_url must be set.
+								stringvalidator.AtLeastOneOf(
+									path.MatchRelative().AtParent().AtName("offer_url"),
+								),
 							},
 						},
 						"endpoint": schema.StringAttribute{
