@@ -23,7 +23,7 @@ concurrency:
 jobs:
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
-    name: Integration
+    name: Integration-Cross-Controller
     runs-on: [ubuntu-latest]
     strategy:
       fail-fast: false
