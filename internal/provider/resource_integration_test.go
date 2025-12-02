@@ -59,6 +59,46 @@ func TestAcc_ResourceIntegration(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceIntegrationWithNullConfig(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-integration")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		CheckDestroy:             testAccCheckIntegrationDestroy,
+		Steps: []resource.TestStep{
+			{
+				// Setting both an offer URL and name should error.
+				Config: testAccResourceIntegrationWithNullVars(modelName),
+				ConfigVariables: config.Variables{
+					"set-offer-url": config.StringVariable("Y"),
+					"set-name":      config.StringVariable("Y"),
+				},
+				ExpectError: regexp.MustCompile(`Invalid Attribute Combination`),
+			},
+			{
+				// Setting neither an offer URL or name should error.
+				Config:          testAccResourceIntegrationWithNullVars(modelName),
+				ConfigVariables: config.Variables{},
+				ExpectError:     regexp.MustCompile(`Invalid Attribute Combination`),
+			},
+			{
+				// Setting only name should work, while the other variable is null.
+				Config: testAccResourceIntegrationWithNullVars(modelName),
+				ConfigVariables: config.Variables{
+					"set-name": config.StringVariable("Y"),
+				},
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_integration.this", "model_uuid"),
+				),
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceIntegrationUpdateIntegration(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
@@ -228,6 +268,60 @@ resource "juju_integration" "this" {
 	application {
 		name = juju_application.two.name
 		endpoint = "sink"
+	}
+}
+`, modelName)
+}
+
+func testAccResourceIntegrationWithNullVars(modelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_application" "one" {
+	model_uuid = juju_model.this.uuid
+	name  = "one" 
+	
+	charm {
+		name = "juju-qa-dummy-sink"
+		base = "ubuntu@22.04"
+	}
+}
+
+resource "juju_application" "two" {
+	model_uuid = juju_model.this.uuid
+	name  = "two"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		base = "ubuntu@22.04"
+	}
+}
+
+variable "set-offer-url" {
+  type = string
+  default = null
+  description = "A placeholder variable."
+}
+
+variable "set-name"{
+  type = string
+  default = null
+  description = "Another placeholder variable."
+}
+
+resource "juju_integration" "this" {
+	model_uuid = juju_model.this.uuid
+
+	application {
+		name     = juju_application.one.name
+		endpoint = "source"
+	}
+
+	application {
+        offer_url = var.set-offer-url != null ? "some-url" : null
+        name      = var.set-name != null ? juju_application.two.name : null
 	}
 }
 `, modelName)
