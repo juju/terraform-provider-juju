@@ -1544,6 +1544,38 @@ func (c applicationsClient) removeUnits(input *UpdateApplicationInput, client Ap
 	return nil
 }
 
+type GetApplicationStorageInput struct {
+	ModelUUID       string
+	ApplicationName string
+}
+
+type GetApplicationStorageResponse struct {
+	StorageDirectives map[string]jujustorage.Constraints
+}
+
+func (c applicationsClient) GetApplicationStorage(input *GetApplicationStorageInput) (*GetApplicationStorageResponse, error) {
+	conn, err := c.GetConnection(&input.ModelUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	applicationAPIClient := c.getApplicationAPIClient(conn)
+	asi, err := applicationAPIClient.GetApplicationStorage(input.ApplicationName)
+	if err != nil {
+		return nil, fmt.Errorf("error getting application storage info: %w", err)
+	}
+	c.Debugf("GetApplicationStorage response", map[string]interface{}{"ApplicationStorageInfo": asi})
+
+	if asi.Error != nil {
+		return nil, fmt.Errorf("error getting application storage info in response: %w", asi.Error)
+	}
+
+	return &GetApplicationStorageResponse{
+		StorageDirectives: asi.StorageConstraints,
+	}, nil
+}
+
 // UpdateCharmAndResources is a helper function to update the charm and resources
 // of an application. It will update the charm or fetch the current one, and
 // update the resources if required.

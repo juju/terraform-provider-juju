@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	charmresources "github.com/juju/charm/v12/resource"
+	"github.com/juju/errors"
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
 	apiapplication "github.com/juju/juju/api/client/application"
@@ -23,6 +24,7 @@ import (
 	"github.com/juju/juju/core/resources"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
+	"github.com/juju/juju/storage"
 	"github.com/juju/names/v5"
 	"github.com/juju/utils/v3"
 	"github.com/juju/version/v2"
@@ -909,6 +911,105 @@ maintainers:
 		s.Assert().Equal(nil, err, "Error is not expected.")
 		s.Assert().Equal(test.subordinate, isSubordinate, "expectedValue")
 	}
+}
+
+func (s *ApplicationSuite) TestGetApplicationStorage() {
+	defer s.setupMocks(s.T()).Finish()
+
+	client := s.getApplicationsClient()
+
+	s.mockSharedClient.
+		EXPECT().
+		GetConnection(&s.testModelUUID).
+		Return(s.mockConnection, nil).
+		AnyTimes()
+
+	s.mockApplicationClient.EXPECT().
+		GetApplicationStorage("Doom-K8S").
+		Return(
+			apiapplication.ApplicationStorageInfo{
+				StorageConstraints: map[string]storage.Constraints{
+					"fallen-demons": {
+						Pool:  "argent-energy-storage",
+						Size:  uint64(777),
+						Count: uint64(666),
+					},
+				},
+			},
+			nil,
+		)
+
+	res, err := client.GetApplicationStorage(&GetApplicationStorageInput{
+		ModelUUID:       s.testModelUUID,
+		ApplicationName: "Doom-K8S",
+	})
+	s.Assert().NoError(err)
+
+	s.NotNil(res.StorageDirectives)
+	s.Assert().Equal(res.StorageDirectives, map[string]storage.Constraints{
+		"fallen-demons": {
+			Pool:  "argent-energy-storage",
+			Size:  uint64(777),
+			Count: uint64(666),
+		},
+	})
+}
+
+func (s *ApplicationSuite) TestGetApplicationStorage_RequestError() {
+	defer s.setupMocks(s.T()).Finish()
+
+	client := s.getApplicationsClient()
+
+	s.mockSharedClient.
+		EXPECT().
+		GetConnection(&s.testModelUUID).
+		Return(s.mockConnection, nil).
+		AnyTimes()
+
+	s.mockApplicationClient.EXPECT().
+		GetApplicationStorage("Doom-K8S").
+		Return(
+			apiapplication.ApplicationStorageInfo{},
+			errors.New("the demons ate all of your storage"),
+		)
+
+	_, err := client.GetApplicationStorage(&GetApplicationStorageInput{
+		ModelUUID:       s.testModelUUID,
+		ApplicationName: "Doom-K8S",
+	})
+	s.Assert().
+		ErrorContains(
+			err,
+			"error getting application storage info: the demons ate all of your storage",
+		)
+}
+
+func (s *ApplicationSuite) TestGetApplicationStorage_ResponseError() {
+	defer s.setupMocks(s.T()).Finish()
+
+	client := s.getApplicationsClient()
+
+	s.mockSharedClient.
+		EXPECT().
+		GetConnection(&s.testModelUUID).
+		Return(s.mockConnection, nil).
+		AnyTimes()
+
+	s.mockApplicationClient.EXPECT().
+		GetApplicationStorage("Doom-K8S").
+		Return(
+			apiapplication.ApplicationStorageInfo{
+				StorageConstraints: map[string]storage.Constraints{},
+				Error:              errors.New("the demons corrupted your storage info"),
+			},
+			nil,
+		)
+
+	_, err := client.GetApplicationStorage(&GetApplicationStorageInput{
+		ModelUUID:       s.testModelUUID,
+		ApplicationName: "Doom-K8S",
+	})
+	s.Assert().ErrorContains(err, "error getting application storage info in response: the demons corrupted your storage info", err.Error())
 }
 
 // In order for 'go test' to run this suite, we need to create

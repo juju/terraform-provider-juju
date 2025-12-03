@@ -1075,6 +1075,45 @@ func (c *MockApplicationAPIClientGetCall) DoAndReturn(f func(string, string) (*p
 	return c
 }
 
+// GetApplicationStorage mocks base method.
+func (m *MockApplicationAPIClient) GetApplicationStorage(applicationName string) (application.ApplicationStorageInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetApplicationStorage", applicationName)
+	ret0, _ := ret[0].(application.ApplicationStorageInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetApplicationStorage indicates an expected call of GetApplicationStorage.
+func (mr *MockApplicationAPIClientMockRecorder) GetApplicationStorage(applicationName any) *MockApplicationAPIClientGetApplicationStorageCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetApplicationStorage", reflect.TypeOf((*MockApplicationAPIClient)(nil).GetApplicationStorage), applicationName)
+	return &MockApplicationAPIClientGetApplicationStorageCall{Call: call}
+}
+
+// MockApplicationAPIClientGetApplicationStorageCall wrap *gomock.Call
+type MockApplicationAPIClientGetApplicationStorageCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockApplicationAPIClientGetApplicationStorageCall) Return(arg0 application.ApplicationStorageInfo, arg1 error) *MockApplicationAPIClientGetApplicationStorageCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockApplicationAPIClientGetApplicationStorageCall) Do(f func(string) (application.ApplicationStorageInfo, error)) *MockApplicationAPIClientGetApplicationStorageCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockApplicationAPIClientGetApplicationStorageCall) DoAndReturn(f func(string) (application.ApplicationStorageInfo, error)) *MockApplicationAPIClientGetApplicationStorageCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // GetCharmURLOrigin mocks base method.
 func (m *MockApplicationAPIClient) GetCharmURLOrigin(branchName, applicationName string) (*charm.URL, charm0.Origin, error) {
 	m.ctrl.T.Helper()
