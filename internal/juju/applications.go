@@ -907,119 +907,6 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 	return output, retryErr
 }
 
-func (c *applicationsClient) applicationStorageDirectives(status params.FullStatus, appStatus params.ApplicationStatus) map[string]jujustorage.Constraints {
-	// first we collect all application units
-	appUnits := make(map[string]bool)
-	for unitTag := range appStatus.Units {
-		appUnits[unitTag] = true
-	}
-
-	// then do the filtering
-	storageDetailsSlice := []params.StorageDetails{}
-	filesystemDetailsSlice := []params.FilesystemDetails{}
-	volumeDetailsSlice := []params.VolumeDetails{}
-	for _, storageDetails := range status.Storage {
-		isAppStorage := false
-		for unitTag := range storageDetails.Attachments {
-			if appUnits[unitTag] {
-				isAppStorage = true
-				break
-			}
-		}
-		if isAppStorage {
-			storageDetailsSlice = append(storageDetailsSlice, storageDetails)
-		}
-	}
-
-	for _, filesystemDetails := range status.Filesystems {
-		isAppFilesystem := false
-		for unitTag := range filesystemDetails.UnitAttachments {
-			if appUnits[unitTag] {
-				isAppFilesystem = true
-				break
-			}
-		}
-		if isAppFilesystem {
-			filesystemDetailsSlice = append(filesystemDetailsSlice, filesystemDetails)
-		}
-	}
-
-	for _, volumeDetails := range status.Volumes {
-		isAppVolume := false
-		for unitTag := range volumeDetails.UnitAttachments {
-			if appUnits[unitTag] {
-				isAppVolume = true
-				break
-			}
-		}
-		if isAppVolume {
-			volumeDetailsSlice = append(volumeDetailsSlice, volumeDetails)
-		}
-	}
-
-	return c.transformToStorageDirectives(storageDetailsSlice, filesystemDetailsSlice, volumeDetailsSlice)
-}
-
-func (c *applicationsClient) transformToStorageDirectives(
-	storageDetailsSlice []params.StorageDetails,
-	filesystemDetailsSlice []params.FilesystemDetails,
-	volumeDetailsSlice []params.VolumeDetails,
-) map[string]jujustorage.Constraints {
-	storageDirectives := make(map[string]jujustorage.Constraints)
-	for _, storageDetails := range storageDetailsSlice {
-		// switch base on storage kind
-		storageCounters := make(map[string]uint64)
-		switch storageDetails.Kind.String() {
-		case "filesystem":
-			for _, fd := range filesystemDetailsSlice {
-				if fd.Storage == nil {
-					c.Debugf("nil storage pointer for filesystems",
-						map[string]interface{}{
-							storageDetails.StorageTag: storageDetails.Status.Status.String(),
-							fd.FilesystemTag:          fd.Status.Status.String(),
-						})
-					continue
-				}
-				if fd.Storage.StorageTag == storageDetails.StorageTag {
-					// Cut PrefixStorage from the storage tag and `-NUMBER` suffix
-					storageLabel := getStorageLabel(storageDetails.StorageTag)
-					storageCounters[storageLabel]++
-					storageDirectives[storageLabel] = jujustorage.Constraints{
-						Pool:  fd.Info.Pool,
-						Size:  fd.Info.Size,
-						Count: storageCounters[storageLabel],
-					}
-				}
-			}
-		case "block":
-			for _, vd := range volumeDetailsSlice {
-				if vd.Storage == nil {
-					c.Debugf("nil storage pointer for volumes",
-						map[string]interface{}{
-							storageDetails.StorageTag: storageDetails.Status.Status.String(),
-							vd.VolumeTag:              vd.Status.Status.String(),
-						})
-					continue
-				}
-				if vd.Storage.StorageTag == storageDetails.StorageTag {
-					storageLabel := getStorageLabel(storageDetails.StorageTag)
-					storageCounters[storageLabel]++
-					storageDirectives[storageLabel] = jujustorage.Constraints{
-						Pool:  vd.Info.Pool,
-						Size:  vd.Info.Size,
-						Count: storageCounters[storageLabel],
-					}
-				}
-			}
-		}
-	}
-	return storageDirectives
-}
-
-func getStorageLabel(storageTag string) string {
-	return strings.TrimSuffix(strings.TrimPrefix(storageTag, PrefixStorage), "-0")
-}
-
 func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadApplicationResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
@@ -1049,18 +936,19 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	appInfo := apps[0].Result
 
 	var appStatus params.ApplicationStatus
-	var storageDirectives map[string]jujustorage.Constraints
+	var statusErr error
 	if c.controllerVersion.Major == 4 {
-		// With Juju 4 we have to manually filter storage/volumes/filesystems of an application.
-		appStatus, storageDirectives, err = c.getApplicationStatusAndStorageDirectives4(conn, input.AppName)
-		if err != nil {
-			return nil, err
-		}
+		appStatus, statusErr = c.getApplicationStatus(conn, input.AppName, true)
 	} else {
-		appStatus, storageDirectives, err = c.getApplicationStatusAndStorageDirectives(conn, input.AppName)
-		if err != nil {
-			return nil, err
-		}
+		appStatus, statusErr = c.getApplicationStatus(conn, input.AppName, false)
+	}
+	if statusErr != nil {
+		return nil, err
+	}
+
+	storageDirectives, err := c.getApplicationStorage(conn, input.AppName)
+	if err != nil {
+		return nil, err
 	}
 
 	allocatedMachines := set.NewStrings()
@@ -1251,58 +1139,46 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	return response, nil
 }
 
-func (c applicationsClient) getApplicationStatusAndStorageDirectives4(conn api.Connection, appName string) (params.ApplicationStatus, map[string]jujustorage.Constraints, error) {
+func (c applicationsClient) getApplicationStatus(
+	conn api.Connection,
+	appName string,
+	fullStatus bool,
+) (params.ApplicationStatus, error) {
 	clientAPIClient := c.getClientAPIClient(conn)
 
-	// Fetch status. Storage is not provided by application,
-	// rather storage data buries a unit name deep
-	// in the structure.
-	// TODO(alesstimec): Switch to using GetApplicationStorage once juju 4 implements it.
-	status, err := clientAPIClient.Status(&apiclient.StatusArgs{
-		IncludeStorage: true,
-	})
+	statusArgs := &apiclient.StatusArgs{}
+
+	if !fullStatus {
+		statusArgs.Patterns = []string{appName}
+	}
+
+	status, err := clientAPIClient.Status(statusArgs)
 	if err != nil {
 		c.Errorf(err, "failed to get status")
-		return params.ApplicationStatus{}, nil, err
+		return params.ApplicationStatus{}, err
 	}
 
 	var appStatus params.ApplicationStatus
 	var exists bool
 	if appStatus, exists = status.Applications[appName]; !exists {
-		return params.ApplicationStatus{}, nil, fmt.Errorf("no status returned for application: %s", appName)
+		return params.ApplicationStatus{}, fmt.Errorf("no status returned for application: %s", appName)
 	}
 
-	return appStatus, c.applicationStorageDirectives(*status, appStatus), nil
+	return appStatus, nil
 }
 
-func (c applicationsClient) getApplicationStatusAndStorageDirectives(conn api.Connection, appName string) (params.ApplicationStatus, map[string]jujustorage.Constraints, error) {
-	clientAPIClient := c.getClientAPIClient(conn)
+func (c applicationsClient) getApplicationStorage(
+	conn api.Connection,
+	appName string,
+) (map[string]jujustorage.Constraints, error) {
+	applicationAPIClient := c.getApplicationAPIClient(conn)
 
-	// Fetch data only about the application being read. This helps to limit
-	// the data on storage to the specific application too. Storage is not
-	// provided by application, rather storage data buries a unit name deep
-	// in the structure.
-	status, err := clientAPIClient.Status(&apiclient.StatusArgs{
-		Patterns:       []string{appName},
-		IncludeStorage: true,
-	})
+	storage, err := applicationAPIClient.GetApplicationStorage(appName)
 	if err != nil {
-		if strings.Contains(err.Error(), "filesystem for storage instance") ||
-			strings.Contains(err.Error(), "volume for storage instance") ||
-			strings.Contains(err.Error(), "cannot convert storage details") {
-			// Retry if we get this error. It means the storage is not ready yet.
-			return params.ApplicationStatus{}, nil, NewStorageNotFoundError(appName)
-		}
-		c.Errorf(err, "failed to get status")
-		return params.ApplicationStatus{}, nil, err
-	}
-	var appStatus params.ApplicationStatus
-	var exists bool
-	if appStatus, exists = status.Applications[appName]; !exists {
-		return params.ApplicationStatus{}, nil, fmt.Errorf("no status returned for application: %s", appName)
+		return nil, NewStorageNotFoundError(appName)
 	}
 
-	return appStatus, c.transformToStorageDirectives(status.Storage, status.Filesystems, status.Volumes), nil
+	return storage.StorageConstraints, nil
 }
 
 // removeDefaultCidrs is an auxiliar function to remove
