@@ -938,6 +938,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	var appStatus params.ApplicationStatus
 	var statusErr error
 	if c.controllerVersion.Major == 4 {
+		// Juju 4.0.0 doesn't support status patterns, so we set fullStatus=true to workaround this.
 		appStatus, statusErr = c.getApplicationStatus(conn, input.AppName, true)
 	} else {
 		appStatus, statusErr = c.getApplicationStatus(conn, input.AppName, false)
@@ -1420,15 +1421,18 @@ func (c applicationsClient) removeUnits(input *UpdateApplicationInput, client Ap
 	return nil
 }
 
+// GetApplicationStorageInput are the input parameters for GetApplicationStorage.
 type GetApplicationStorageInput struct {
 	ModelUUID       string
 	ApplicationName string
 }
 
+// GetApplicationStorageResponse are the output parameters for GetApplicationStorage.
 type GetApplicationStorageResponse struct {
 	StorageDirectives map[string]jujustorage.Constraints
 }
 
+// GetApplicationStorage retrieves the storage directives for a given application.
 func (c applicationsClient) GetApplicationStorage(input *GetApplicationStorageInput) (*GetApplicationStorageResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
