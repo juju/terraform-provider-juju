@@ -252,20 +252,20 @@ func (resource *genericJAASAccessResource) Update(ctx context.Context, req resou
 }
 
 func diffModels(plan, state objectsWithAccess, diag *diag.Diagnostics) (toAdd, toRemove objectsWithAccess) {
-	newUsers := diffSet(plan.Users, state.Users, diag)
-	newGroups := diffSet(plan.Groups, state.Groups, diag)
-	newRoles := diffSet(plan.Roles, state.Roles, diag)
-	newServiceAccounts := diffSet(plan.ServiceAccounts, state.ServiceAccounts, diag)
+	newUsers := diffStringSets(plan.Users, state.Users, diag)
+	newGroups := diffStringSets(plan.Groups, state.Groups, diag)
+	newRoles := diffStringSets(plan.Roles, state.Roles, diag)
+	newServiceAccounts := diffStringSets(plan.ServiceAccounts, state.ServiceAccounts, diag)
 	toAdd.Users = newUsers
 	toAdd.Groups = newGroups
 	toAdd.Roles = newRoles
 	toAdd.ServiceAccounts = newServiceAccounts
 	toAdd.Access = plan.Access
 
-	removedUsers := diffSet(state.Users, plan.Users, diag)
-	removedGroups := diffSet(state.Groups, plan.Groups, diag)
-	removedRoles := diffSet(state.Roles, plan.Roles, diag)
-	removedServiceAccounts := diffSet(state.ServiceAccounts, plan.ServiceAccounts, diag)
+	removedUsers := diffStringSets(state.Users, plan.Users, diag)
+	removedGroups := diffStringSets(state.Groups, plan.Groups, diag)
+	removedRoles := diffStringSets(state.Roles, plan.Roles, diag)
+	removedServiceAccounts := diffStringSets(state.ServiceAccounts, plan.ServiceAccounts, diag)
 	toRemove.Users = removedUsers
 	toRemove.Groups = removedGroups
 	toRemove.Roles = removedRoles
@@ -275,8 +275,19 @@ func diffModels(plan, state objectsWithAccess, diag *diag.Diagnostics) (toAdd, t
 	return
 }
 
-// diffSet returns the elements in the target set that are not present in the current set.
-func diffSet(current, target basetypes.SetValue, diag *diag.Diagnostics) basetypes.SetValue {
+// diffStringSets returns the elements in the target set that are not present in the current set.
+func diffStringSets(current, target basetypes.SetValue, diag *diag.Diagnostics) basetypes.SetValue {
+	// Validate that both sets have string element type (or nil element type)
+	currentIsValid := current.ElementType(context.Background()) == nil || current.ElementType(context.Background()).Equal(basetypes.StringType{})
+	if !currentIsValid {
+		diag.AddError("Internal Error", "Mismatched set element types for set diffing")
+		return basetypes.SetValue{}
+	}
+	targetIsValid := target.ElementType(context.Background()) == nil || target.ElementType(context.Background()).Equal(basetypes.StringType{})
+	if !targetIsValid {
+		diag.AddError("Internal Error", "Mismatched set element types for set diffing")
+		return basetypes.SetValue{}
+	}
 	var diff []attr.Value
 	for _, source := range current.Elements() {
 		found := false
@@ -289,7 +300,7 @@ func diffSet(current, target basetypes.SetValue, diag *diag.Diagnostics) basetyp
 			diff = append(diff, source)
 		}
 	}
-	newSet, diags := basetypes.NewSetValue(current.ElementType(context.Background()), diff)
+	newSet, diags := basetypes.NewSetValue(basetypes.StringType{}, diff)
 	diag.Append(diags...)
 	return newSet
 }
