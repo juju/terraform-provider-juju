@@ -135,7 +135,7 @@ func testAccCheckAttributeNotEmpty(check fetchComputedAttribute) resource.TestCh
 	}
 }
 
-// testAccCheckJaasResourceAccess verifies that no direct relations exist
+// testAccCheckJaasResourceAccess verifies whether relations exist
 // between the object and target.
 // Object and target are expected to be Juju tags of the form <resource-type>:<id>
 // Use newCheckAttribute to fetch and format resource tags from computed resources.
@@ -297,5 +297,4 @@ func TestDiffStringSets_Validation(t *testing.T) {
 		diff.ElementsAs(ctx, &resultSlice, false)
 		assert.ElementsMatch(t, []string{"a"}, resultSlice)
 	})
-
 }
