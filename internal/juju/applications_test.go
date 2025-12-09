@@ -159,6 +159,7 @@ func (s *ApplicationSuite) TestReadApplicationRetry() {
 		EndpointBindings:  nil,
 	}
 	aExp.Get("master", appName).Return(getResult, nil)
+	aExp.GetApplicationStorage(appName).Return(apiapplication.ApplicationStorageInfo{}, nil)
 	statusResult := &params.FullStatus{
 		Applications: map[string]params.ApplicationStatus{appName: {
 			Charm: "ch:amd64/jammy/testcharm-5",
@@ -235,6 +236,7 @@ func (s *ApplicationSuite) TestReadApplicationRetryWaitForMachines() {
 		EndpointBindings:  nil,
 	}
 	aExp.Get("master", appName).Return(getResult, nil).Times(2)
+	aExp.GetApplicationStorage(appName).Return(apiapplication.ApplicationStorageInfo{}, nil).Times(2)
 
 	statusResult := &params.FullStatus{
 		Applications: map[string]params.ApplicationStatus{appName: {
@@ -310,6 +312,7 @@ func (s *ApplicationSuite) TestReadApplicationRetrySubordinate() {
 		EndpointBindings:  nil,
 	}
 	aExp.Get("master", appName).Return(getResult, nil)
+	aExp.GetApplicationStorage(appName).Return(apiapplication.ApplicationStorageInfo{}, nil)
 	statusResult := &params.FullStatus{
 		Applications: map[string]params.ApplicationStatus{appName: {
 			Charm: "ch:amd64/jammy/testcharm-5",
@@ -373,6 +376,7 @@ func (s *ApplicationSuite) TestReadApplicationRetryNotFoundStorageNotFoundError(
 		EndpointBindings:  nil,
 	}
 	aExp.Get("master", appName).Return(getResult, nil)
+	aExp.GetApplicationStorage(appName).Return(apiapplication.ApplicationStorageInfo{}, nil)
 	statusResult := &params.FullStatus{
 		Applications: map[string]params.ApplicationStatus{appName: {
 			Charm: "ch:amd64/jammy/testcharm-5",
