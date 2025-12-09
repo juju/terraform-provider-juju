@@ -4,12 +4,16 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/canonical/jimm-go-sdk/v3/api"
 	"github.com/canonical/jimm-go-sdk/v3/api/params"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/stretchr/testify/assert"
@@ -175,4 +179,123 @@ func testAccCheckJaasResourceAccess(relation string, object, target *string, exp
 		}
 		return nil
 	}
+}
+
+func TestDiffStringSets(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		desc     string
+		current  []string
+		target   []string
+		expected []string
+	}{
+		{
+			desc:     "Empty sets",
+			current:  []string{},
+			target:   []string{},
+			expected: []string{},
+		},
+		{
+			desc:     "Identical sets",
+			current:  []string{"a", "b"},
+			target:   []string{"a", "b"},
+			expected: []string{},
+		},
+		{
+			desc:     "Disjoint sets",
+			current:  []string{"a", "b"},
+			target:   []string{"c", "d"},
+			expected: []string{"a", "b"},
+		},
+		{
+			desc:     "Overlapping sets",
+			current:  []string{"a", "b", "c"},
+			target:   []string{"b", "c", "d"},
+			expected: []string{"a"},
+		},
+		{
+			desc:     "Subset",
+			current:  []string{"a", "b"},
+			target:   []string{"a", "b", "c"},
+			expected: []string{},
+		},
+		{
+			desc:     "Superset",
+			current:  []string{"a", "b", "c"},
+			target:   []string{"a", "b"},
+			expected: []string{"c"},
+		},
+	}
+
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			currentSet, _ := basetypes.NewSetValueFrom(ctx, types.StringType, tC.current)
+			targetSet, _ := basetypes.NewSetValueFrom(ctx, types.StringType, tC.target)
+			var diags diag.Diagnostics
+
+			result := diffStringSets(currentSet, targetSet, &diags)
+
+			assert.False(t, diags.HasError())
+
+			var resultSlice []string
+			result.ElementsAs(ctx, &resultSlice, false)
+			assert.ElementsMatch(t, tC.expected, resultSlice)
+		})
+	}
+}
+
+func TestDiffStringSets_Validation(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("Invalid current set type", func(t *testing.T) {
+		currentSet, _ := basetypes.NewSetValueFrom(ctx, types.Int64Type, []int64{1, 2})
+		targetSet, _ := basetypes.NewSetValueFrom(ctx, types.StringType, []string{"a"})
+		var diags diag.Diagnostics
+
+		diffStringSets(currentSet, targetSet, &diags)
+
+		assert.True(t, diags.HasError())
+		assert.Equal(t, "Internal Error", diags[0].Summary())
+		assert.Equal(t, "Mismatched set element types for set diffing", diags[0].Detail())
+	})
+
+	t.Run("Invalid target set type", func(t *testing.T) {
+		currentSet, _ := basetypes.NewSetValueFrom(ctx, types.StringType, []string{"a"})
+		targetSet, _ := basetypes.NewSetValueFrom(ctx, types.Int64Type, []int64{1, 2})
+		var diags diag.Diagnostics
+
+		diffStringSets(currentSet, targetSet, &diags)
+
+		assert.True(t, diags.HasError())
+		assert.Equal(t, "Internal Error", diags[0].Summary())
+		assert.Equal(t, "Mismatched set element types for set diffing", diags[0].Detail())
+	})
+
+	t.Run("Nil current set type", func(t *testing.T) {
+		currentSet := types.SetNull(nil)
+		targetSet, _ := basetypes.NewSetValueFrom(ctx, types.StringType, []string{"a"})
+		var diags diag.Diagnostics
+
+		diff := diffStringSets(currentSet, targetSet, &diags)
+
+		assert.False(t, diags.HasError())
+		var resultSlice []string
+		diff.ElementsAs(ctx, &resultSlice, false)
+		assert.ElementsMatch(t, []string{}, resultSlice)
+	})
+
+	t.Run("Nil target set type", func(t *testing.T) {
+		currentSet, _ := basetypes.NewSetValueFrom(ctx, types.StringType, []string{"a"})
+		targetSet := types.SetNull(nil)
+		var diags diag.Diagnostics
+
+		diff := diffStringSets(currentSet, targetSet, &diags)
+
+		assert.False(t, diags.HasError())
+		var resultSlice []string
+		diff.ElementsAs(ctx, &resultSlice, false)
+		assert.ElementsMatch(t, []string{"a"}, resultSlice)
+	})
+
 }
