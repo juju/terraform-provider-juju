@@ -218,6 +218,8 @@ Import is supported using the following syntax:
 $ terraform import juju_application.wordpress abe22490-a845-4a4d-ba52-7ec80a60aff5:wordpress
 ```
 
-## Note on Subordinate Applications and Units
 
-For subordinate applications (such as those that attach to a principal charm), Juju always reports `units = 0` because subordinates do not have standalone units. In provider versions before 0.19.0, you could explicitly set `units = 0` for subordinates. Starting with version 0.19.0 (when the `machines` feature was introduced for the application resource), the provider will show `units = 1` in state for subordinates if the `units` field is omitted, for backward compatibility. If you explicitly set `units = 0` for a subordinate, the provider will respect this and show `units = 0` in state. If you upgrade from an older version and encounter state mismatches or errors, remove the `units` field from subordinate application configurations and let the provider handle it automatically. This avoids confusion and ensures state matches Juju's actual value.
+## Note on Subordinate Applications and Units
+For subordinate applications (such as those that attach to a principal charm). Starting with version 0.19.0, remove the units field from your subordinate application.
+
+The provider will show units = 1 in state for subordinates if the units field is omitted, this is expected and for backwards compatibility.
