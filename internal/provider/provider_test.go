@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 
@@ -296,7 +297,7 @@ func createCloudCredential(t *testing.T) {
 	if TestClient == nil {
 		t.Fatal("TestClient is not set")
 	}
-	cloudName := canonicalCloudName(os.Getenv(TestCloudEnvKey))
+	cloudName := canonicalCloudName(strings.ToLower(os.Getenv(TestCloudEnvKey)))
 
 	// List controller credentials to bail out early if one already exists.
 	controllerCreds, _ := TestClient.Credentials.ListControllerCredentials()
