@@ -213,7 +213,7 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	var config map[string]string
 	var diags diag.Diagnostics
-	config, diags = newConfig(ctx, plan.Config)
+	config, diags = newStringMap(ctx, plan.Config)
 	if diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
