@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"runtime"
 	"sync"
 	"testing"
@@ -18,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -386,6 +388,7 @@ func newConfigureRequest(t *testing.T, conf jujuProviderModel) provider.Configur
 	assert.Equal(t, schemaResp.Diagnostics.HasError(), false)
 
 	mapTypes := map[string]attr.Type{
+		ControllerMode:          types.BoolType,
 		JujuController:          types.StringType,
 		JujuUsername:            types.StringType,
 		JujuPassword:            types.StringType,
@@ -413,7 +416,7 @@ func TestFrameworkProviderSchema(t *testing.T) {
 	resp := provider.SchemaResponse{}
 	jujuProvider.Schema(context.Background(), req, &resp)
 	assert.Equal(t, resp.Diagnostics.HasError(), false)
-	assert.Len(t, resp.Schema.Attributes, 8)
+	assert.Len(t, resp.Schema.Attributes, 9)
 }
 
 func createOfferingControllerMap(t *testing.T, extControllers map[string]map[string]attr.Value) types.Map {
@@ -638,4 +641,33 @@ func expectedResourceOwner() string {
 		clientId = clientId + "@serviceaccount"
 	}
 	return username + clientId
+}
+
+func TestAcc_ProviderControllerMode(t *testing.T) {
+	// This test needs a local provider factory because changing the provider.controller_mode
+	// flag was persisted between tests when using the global frameworkProviderFactories.
+	localProviderFactory := map[string]func() (tfprotov6.ProviderServer, error){
+		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev", true)),
+	}
+	resource.ParallelTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: localProviderFactory,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccProviderControllerMode(),
+				ExpectError: regexp.MustCompile(`.*missing schema for juju_model.test_model.*`),
+			},
+		},
+	})
+}
+
+func testAccProviderControllerMode() string {
+	return `
+provider "juju" {
+  controller_mode = true
+}
+
+resource "juju_model" "test_model" {
+  name = "test-model-bootstrap-only"
+}
+`
 }

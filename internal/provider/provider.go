@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/boolvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -36,6 +37,7 @@ const (
 	JujuClientSecretEnvKey   = "JUJU_CLIENT_SECRET"
 	SkipFailedDeletionEnvKey = "JUJU_SKIP_FAILED_DELETION"
 
+	ControllerMode          = "controller_mode"
 	JujuController          = "controller_addresses"
 	JujuUsername            = "username"
 	JujuPassword            = "password"
@@ -118,6 +120,8 @@ type jujuProvider struct {
 	// waitForResources is used to determine if the provider should wait for
 	// resources to be created/destroyed before proceeding.
 	waitForResources bool
+
+	ControllerMode bool
 }
 
 type offeringControllerModel struct {
@@ -130,6 +134,7 @@ type offeringControllerModel struct {
 }
 
 type jujuProviderModel struct {
+	ControllerMode  types.Bool   `tfsdk:"controller_mode"`
 	ControllerAddrs types.String `tfsdk:"controller_addresses"`
 	UserName        types.String `tfsdk:"username"`
 	Password        types.String `tfsdk:"password"`
@@ -215,6 +220,15 @@ func (p *jujuProvider) Metadata(_ context.Context, _ provider.MetadataRequest, r
 func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
+			ControllerMode: schema.BoolAttribute{
+				Description: "If set to true, the provider will only allow managing `juju_controller` resources.",
+				Optional:    true,
+				Validators: []validator.Bool{
+					boolvalidator.ConflictsWith(
+						path.Expressions{path.MatchRoot(JujuController)}...,
+					),
+				},
+			},
 			JujuController: schema.StringAttribute{
 				Description: fmt.Sprintf("This is the controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `%s` environment variable.", JujuControllerEnvKey),
 				Optional:    true,
@@ -358,6 +372,11 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
+	if data.ControllerMode.ValueBool() {
+		p.ControllerMode = true
+		return
+	}
+
 	controllerConfig := juju.ControllerConfiguration{
 		ControllerAddresses: strings.Split(data.ControllerAddrs.ValueString(), ","),
 		Username:            data.UserName.ValueString(),
@@ -445,7 +464,6 @@ func getJujuProviderModel(ctx context.Context, req provider.ConfigureRequest) (j
 	if diags.HasError() {
 		return planData, diags
 	}
-
 	// If validation failed because we have both username/password
 	// and client ID/secret combinations in the plan. Exit now.
 	if planData.UserName.ValueString() != "" && planData.ClientID.ValueString() != "" {
@@ -511,6 +529,9 @@ func getJujuProviderModel(ctx context.Context, req provider.ConfigureRequest) (j
 // The resource type name is determined by the Resource implementing
 // the Metadata method. All resources must have unique names.
 func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
+	if p.ControllerMode {
+		return []func() resource.Resource{}
+	}
 	return []func() resource.Resource{
 		func() resource.Resource { return NewAccessModelResource() },
 		func() resource.Resource { return NewAccessOfferResource() },
@@ -543,6 +564,9 @@ func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
 // The data source type name is determined by the DataSource implementing
 // the Metadata method. All data sources must have unique names.
 func (p *jujuProvider) DataSources(_ context.Context) []func() datasource.DataSource {
+	if p.ControllerMode {
+		return []func() datasource.DataSource{}
+	}
 	return []func() datasource.DataSource{
 		func() datasource.DataSource { return NewApplicationDataSource() },
 		func() datasource.DataSource { return NewMachineDataSource() },
