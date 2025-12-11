@@ -70,6 +70,7 @@ type ApplicationAPIClient interface {
 	UnsetApplicationConfig(branchName, application string, keys []string) error
 	SetConstraints(application string, constraints constraints.Value) error
 	Unexpose(application string, endpoints []string) error
+	GetApplicationStorage(applicationName string) (apiapplication.ApplicationStorageInfo, error)
 }
 
 type ModelConfigAPIClient interface {
