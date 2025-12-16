@@ -29,3 +29,22 @@ Import is supported using the following syntax:
 
 {{codefile "shell" "examples/resources/juju_machine/import.sh"}}
 {{- end }}
+
+## Manually Provisioned Machines
+
+Juju has two modes for manually provisioned machines via the manual provider:
+1. A "provisioning user" mode, where an existing user on the target machine is used to SSH into the machine and create
+   a new `ubuntu` user for Juju to use going forward.
+2. A "direct ubuntu user" mode, where the `ubuntu` user already exists on the target machine and Juju can SSH directly into
+   that user.
+
+### Provisioning User Mode
+The Terraform Provider does supports the provisioning user mode, via the public_key_file and private_key_file attributes.
+The public_key_file attribute specifies the public key for the ubuntu user that will be created by the provisioning user.
+The private_key_file attribute specifies the provisioning user's private key file path.
+
+### Ubuntu User Mode
+The Terraform Provider does not "directly" support the direct ubuntu user mode, but it can be achieved by setting the 
+public_key_file and private_key_file attributes to arbritrary values and the user of the ssh_address to "ubuntu".
+The Terraform Provider, like the Juju CLI, will then check the local ~/.ssh directory from where the apply is called,
+for SSH keys that can be used to connectto the ubuntu user on the target machine. 
