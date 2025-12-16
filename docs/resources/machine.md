@@ -97,7 +97,6 @@ $ terraform import juju_machine.machine_one 4ffb2226-6ced-458b-8b38-5143ca190f75
 ```
 
 ## Manually Provisioned Machines
-
 Juju has two modes for manually provisioned machines via the manual provider:
 1. A "provisioning user" mode, where an existing user on the target machine is used to SSH into the machine and create
    a new `ubuntu` user for Juju to use going forward.
@@ -111,6 +110,6 @@ The private_key_file attribute specifies the provisioning user's private key fil
 
 ### Ubuntu User Mode
 The Terraform Provider does not "directly" support the direct ubuntu user mode, but it can be achieved by setting the 
-public_key_file and private_key_file attributes to arbritrary values and the user of the ssh_address to "ubuntu".
+public_key_file and private_key_file attributes to arbitrary values and the user of the ssh_address to "ubuntu".
 The Terraform Provider, like the Juju CLI, will then check the local ~/.ssh directory from where the apply is called,
-for SSH keys that can be used to connectto the ubuntu user on the target machine. 
+for SSH keys that can be used to connect to the ubuntu user on the target machine. 
