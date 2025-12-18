@@ -110,8 +110,8 @@ type JaasAPIClient interface {
 	RemoveRole(req *jaasparams.RemoveRoleRequest) error
 }
 
-// KubernetesCloudAPIClient defines the set of methods that the Kubernetes cloud API provides.
-type KubernetesCloudAPIClient interface {
+// CloudAPIClient defines the methods the Juju API client provides for clouds.
+type CloudAPIClient interface {
 	AddCloud(cloud jujucloud.Cloud, force bool) error
 	Cloud(tag names.CloudTag) (jujucloud.Cloud, error)
 	UpdateCloud(cloud jujucloud.Cloud) error
