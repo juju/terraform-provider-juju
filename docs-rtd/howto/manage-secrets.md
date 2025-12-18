@@ -31,7 +31,7 @@ To add a (user) secret on the controller specified in the juju provider definiti
 
 ```terraform
 resource "juju_secret" "my-secret" {
-  model = juju_model.development.name
+  model_uuid = juju_model.development.uuid
   name  = "my_secret_name"
   value = {
     key1 = "value1"

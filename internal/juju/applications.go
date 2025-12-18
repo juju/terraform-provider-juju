@@ -1375,11 +1375,16 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	}
 
 	if len(input.UnsetConfig) > 0 {
-		// these are config entries to be unset
-		c.Debugf("Detected config keys to be unset.")
-		if err := applicationAPIClient.UnsetApplicationConfig(model.GenerationMaster, input.AppName, input.UnsetConfig); err != nil {
-			c.Errorf(err, "unsetting config")
-			return err
+		// unset config keys one by one, so we can swallow the `unknown option` error,
+		// which means the key was set in the state but is no longer valid (e.g. removed in a new charm revision).
+		// We don't want to fail the whole update.
+		for _, key := range input.UnsetConfig {
+			if err := applicationAPIClient.UnsetApplicationConfig(model.GenerationMaster, input.AppName, []string{key}); err != nil {
+				if strings.Contains(err.Error(), "unknown option") {
+					continue
+				}
+				return err
+			}
 		}
 	}
 
