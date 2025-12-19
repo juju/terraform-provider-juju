@@ -177,6 +177,7 @@ type RemoveCloudInput struct {
 	Name string
 }
 
+// CreateKubernetesCloudInput creates a new Kubernetes cloud with juju cloud facade.
 type CreateKubernetesCloudInput struct {
 	Name                 string
 	KubernetesConfig     string
@@ -186,10 +187,12 @@ type CreateKubernetesCloudInput struct {
 	StorageClassName     string
 }
 
+// ReadKubernetesCloudInput reads a Kubernetes cloud with juju cloud facade.
 type ReadKubernetesCloudInput struct {
 	Name string
 }
 
+// ReadKubernetesCloudOutput is the output parameters for reading a Kubernetes cloud.
 type ReadKubernetesCloudOutput struct {
 	Name              string
 	CredentialName    string
@@ -197,6 +200,7 @@ type ReadKubernetesCloudOutput struct {
 	ParentCloudRegion string
 }
 
+// UpdateKubernetesCloudInput updates a Kubernetes cloud with juju cloud facade.
 type UpdateKubernetesCloudInput struct {
 	Name                 string
 	KubernetesConfig     string
@@ -215,6 +219,7 @@ func newCloudsClient(sc SharedClient) *cloudsClient {
 }
 
 // CreateKubernetesCloud creates a new Kubernetes cloud with juju cloud facade.
+// The credential name for this cloud is returned.
 func (c *cloudsClient) CreateKubernetesCloud(input *CreateKubernetesCloudInput) (string, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
@@ -222,7 +227,6 @@ func (c *cloudsClient) CreateKubernetesCloud(input *CreateKubernetesCloudInput) 
 	}
 	defer func() { _ = conn.Close() }()
 
-	cloudClient := c.getCloudAPIClient(conn)
 	k8sConf, err := createKubernetesConfig([]byte(input.KubernetesConfig), input.CreateServiceAccount)
 	if err != nil {
 		return "", errors.Annotate(err, "parsing kubernetes configuration data")
@@ -253,6 +257,7 @@ func (c *cloudsClient) CreateKubernetesCloud(input *CreateKubernetesCloudInput) 
 		newCloud.Config[workloadStorageKey] = input.StorageClassName
 	}
 
+	cloudClient := c.getCloudAPIClient(conn)
 	err = cloudClient.AddCloud(newCloud, false)
 	if err != nil {
 		return "", errors.Annotate(err, "adding kubernetes cloud")
