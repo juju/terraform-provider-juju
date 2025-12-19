@@ -299,8 +299,8 @@ func (r *kubernetesCloudResource) Delete(ctx context.Context, req resource.Delet
 	}
 
 	// Remove the kubernetes cloud.
-	err := r.client.Clouds.RemoveKubernetesCloud(
-		juju.DestroyKubernetesCloudInput{
+	err := r.client.Clouds.RemoveCloud(
+		juju.RemoveCloudInput{
 			Name: plan.CloudName.ValueString(),
 		},
 	)
