@@ -275,7 +275,6 @@ myst_heading_anchors = 4
 # https://www.sphinx-doc.org/en/master/usage/extensions/index.html
 
 # NOTE: The canonical_sphinx extension is required for the starter pack.
-#       It automatically enables the following extensions:
 
 extensions = [
     "canonical_sphinx",
@@ -329,12 +328,12 @@ exclude_patterns = [
 # Adds custom CSS files, located under 'html_static_path'
 html_css_files = [
     "css/pdf.css",
-        'css/cookie-banner.css'
+    'css/cookie-banner.css',
 ]
 
 # Adds custom JavaScript files, located under 'html_static_path'
 html_js_files = [
-        'js/bundle.js',
+    'js/bundle.js',
 ]
 
 # Specifies a reST snippet to be appended to each .rst file
