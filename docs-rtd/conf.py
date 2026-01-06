@@ -151,6 +151,7 @@ html_context = {
     "sequential_nav": "both",
 }
 
+
 # TODO: To enable the edit button on pages, uncomment and change the link to a
 # public repository on GitHub or Launchpad. Any of the following link domains
 # are accepted:
@@ -268,48 +269,46 @@ myst_enable_extensions = {
     'colon_fence',
 }
 
+myst_heading_anchors = 4
+
 # Custom Sphinx extensions; see
 # https://www.sphinx-doc.org/en/master/usage/extensions/index.html
 
 # NOTE: The canonical_sphinx extension is required for the starter pack.
 #       It automatically enables the following extensions:
-#       - custom-rst-roles
-#       - myst_parser
-#       - notfound.extension
-#       - related-links
-#       - sphinx_copybutton
-#       - sphinx_design
-#       - sphinx_reredirects
-#       - sphinx_tabs.tabs
-#       - sphinxcontrib.jquery
-#       - sphinxext.opengraph
-#       - terminal-output
-#       - youtube-links
 
 extensions = [
-    # from upstream:
     "canonical_sphinx",
+    "notfound.extension",
+    "sphinx_design",
+    "sphinx_reredirects",
+    "sphinx_tabs.tabs",
+    "sphinxcontrib.jquery",
+    "sphinxext.opengraph",
+    "sphinx_config_options",
+    "sphinx_contributor_listing",
+    "sphinx_filtered_toctree",
+    "sphinx_related_links",
+    "sphinx_roles",
+    "sphinx_terminal",
+    "sphinx_ubuntu_images",
+    "sphinx_youtube_links",
     "sphinxcontrib.cairosvgconverter",
     "sphinx_last_updated_by_git",
     "sphinx.ext.intersphinx",
     "sphinx_sitemap",
-    # our own:
-    "sphinx_design",
-    # Make it possible to link to related RTD projects using their internal anchors
-    # with, e.g., {external+ops:ref}`manage-configurations`:
+    # Specific to this project:
     "sphinxext.rediraffe",
-    # Display an external link icon and open link in new tab:
-    # new_tab_link_show_external_link_icon must also be set to True
     "sphinx_new_tab_link",
     "sphinxcontrib.lightbox2",
     "sphinxcontrib.mermaid",
-    ]
+]
 
 # Extension configs:
 # - sphinx.ext.intersphinx:
 intersphinx_mapping = {
     'juju': ('https://documentation.ubuntu.com/juju/3.6', None),
-    # 'tfjuju': ('https://documentation.ubuntu.com/terraform-provider-juju/latest/', None),
+    # 'tfjuju': ('https://documentation.ubuntu.com/terraform-provider-juju/latest/', None)
     'pyjuju': ('https://pythonlibjuju.readthedocs.io/en/latest/', None),
     'jaas': ('https://documentation.ubuntu.com/jaas/latest/', None),
     'charmcraft': ('https://documentation.ubuntu.com/charmcraft/stable/', None),
@@ -330,12 +329,12 @@ exclude_patterns = [
 # Adds custom CSS files, located under 'html_static_path'
 html_css_files = [
     "css/pdf.css",
-	'css/cookie-banner.css'
+        'css/cookie-banner.css'
 ]
 
 # Adds custom JavaScript files, located under 'html_static_path'
 html_js_files = [
-	'js/bundle.js',
+        'js/bundle.js',
 ]
 
 # Specifies a reST snippet to be appended to each .rst file
