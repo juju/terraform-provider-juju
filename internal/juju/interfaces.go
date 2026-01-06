@@ -97,6 +97,7 @@ type SecretAPIClient interface {
 
 // JaasAPIClient defines the set of methods that the JAAS API provides.
 type JaasAPIClient interface {
+	AddModelToController(req *jaasparams.AddModelToControllerRequest) (params.ModelInfo, error)
 	ListRelationshipTuples(req *jaasparams.ListRelationshipTuplesRequest) (*jaasparams.ListRelationshipTuplesResponse, error)
 	AddRelation(req *jaasparams.AddRelationRequest) error
 	RemoveRelation(req *jaasparams.RemoveRelationRequest) error
