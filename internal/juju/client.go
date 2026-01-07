@@ -165,13 +165,15 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 		user = fmt.Sprintf("%s%s", config.ClientID, serviceAccountSuffix)
 	}
 
+	isJAAS := sc.IsJAAS(defaultJAASCheck)
+
 	return &Client{
 		Applications: *newApplicationClient(sc),
 		Clouds:       *newCloudsClient(sc),
 		Credentials:  *newCredentialsClient(sc),
 		Integrations: *newIntegrationsClient(sc),
 		Machines:     newMachinesClient(sc),
-		Models:       *newModelsClient(sc),
+		Models:       *newModelsClient(sc, isJAAS),
 		Offers:       *newOffersClient(sc),
 		SSHKeys:      *newSSHKeysClient(sc),
 		Users:        *newUsersClient(sc),

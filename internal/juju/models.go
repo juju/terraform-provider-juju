@@ -30,6 +30,10 @@ var ModelNotFoundError = errors.ConstError("model-not-found")
 
 type modelsClient struct {
 	SharedClient
+	createModel func(conn jujuapi.Connection,
+		name, owner, cloud, cloudRegion string,
+		cloudCredential names.CloudCredentialTag,
+		config map[string]interface{}, targetController string) (CreateModelResponse, error)
 }
 
 type CreateModelInput struct {
@@ -95,9 +99,16 @@ type DestroyAccessModelInput struct {
 	Access    string
 }
 
-func newModelsClient(sc SharedClient) *modelsClient {
+func newModelsClient(sc SharedClient, isJAAS bool) *modelsClient {
+	if isJAAS {
+		return &modelsClient{
+			SharedClient: sc,
+			createModel:  createJAASModel,
+		}
+	}
 	return &modelsClient{
 		SharedClient: sc,
+		createModel:  createJujuModel,
 	}
 }
 
@@ -171,11 +182,7 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 
 	targetController := input.TargetController
 
-	if targetController != "" {
-		resp, err = c.createJAASModel(conn, modelName, currentUser, cloudName, cloudRegion, *cloudCredTag, configValues, targetController)
-	} else {
-		resp, err = c.createJujuModel(conn, modelName, currentUser, cloudName, cloudRegion, *cloudCredTag, configValues)
-	}
+	resp, err = c.createModel(conn, modelName, currentUser, cloudName, cloudRegion, *cloudCredTag, configValues, targetController)
 	if err != nil {
 		// When we create multiple models concurrently, it can happen that Juju returns an error
 		// that the transaction was aborted. We return a specific error here,
@@ -213,7 +220,7 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 
 // createJAASModel creates a Juju model using the JAAS API client.
 // This is required to support creating models on a specific controller.
-func (c *modelsClient) createJAASModel(conn jujuapi.Connection,
+func createJAASModel(conn jujuapi.Connection,
 	name, owner, cloud, cloudRegion string,
 	cloudCredential names.CloudCredentialTag,
 	config map[string]interface{}, targetController string) (CreateModelResponse, error) {
@@ -267,10 +274,14 @@ func (c *modelsClient) createJAASModel(conn jujuapi.Connection,
 }
 
 // createJujuModel creates a Juju model using Juju's modelmanager client.
-func (c *modelsClient) createJujuModel(conn jujuapi.Connection,
+func createJujuModel(conn jujuapi.Connection,
 	name, owner, cloud, cloudRegion string,
 	cloudCredential names.CloudCredentialTag,
-	config map[string]interface{}) (CreateModelResponse, error) {
+	config map[string]interface{}, targetController string) (CreateModelResponse, error) {
+	if targetController != "" {
+		return CreateModelResponse{}, fmt.Errorf("targetController parameter is not supported for Juju model creation")
+	}
+
 	var resp CreateModelResponse
 
 	client := modelmanager.NewClient(conn)
