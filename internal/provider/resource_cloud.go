@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/defaults"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -51,8 +52,6 @@ type cloudResourceModel struct {
 	StorageEndpoint  types.String `tfsdk:"storage_endpoint"`
 	CACertificates   types.List   `tfsdk:"ca_certificates"`
 	Regions          types.List   `tfsdk:"regions"`
-	Config           types.Map    `tfsdk:"config"`
-	RegionConfig     types.Map    `tfsdk:"region_config"`
 
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
@@ -121,30 +120,12 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 				Optional:    true,
 				Sensitive:   true,
 			},
-			"config": schema.MapAttribute{
-				Description: "Cloud-wide configuration options.",
-				ElementType: types.StringType,
-				Optional:    true,
-				Computed:    true,
-			},
-			"region_config": schema.MapNestedAttribute{
-				Description: "Region-specific configuration. Each key is a region name, and its value is a map of configuration key-value pairs for that region.",
-				Optional:    true,
-				Computed:    true,
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"config": schema.MapAttribute{
-							Description: "Configuration key-value pairs for the region.",
-							ElementType: types.StringType,
-							Optional:    true,
-							Computed:    true,
-						},
-					},
-				},
-			},
+			// All clouds must have at least one default region. We want to allow users to optionally use
+			// the default region, as such, we're adhering to the Juju requirement here.
 			"regions": schema.ListNestedAttribute{
 				Description: "List of regions for the cloud. The first entry is the default region.",
-				Required:    true,
+				Computed:    true,
+				Optional:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name":              schema.StringAttribute{Required: true, Description: "Name of the region."},
@@ -153,6 +134,7 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 						"storage_endpoint":  schema.StringAttribute{Optional: true, Description: "Region-specific storage endpoint."},
 					},
 				},
+				Default: defaultRegionForCloud{},
 			},
 			"id": schema.StringAttribute{
 				Computed: true,
@@ -162,6 +144,70 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 			},
 		},
 	}
+}
+
+type defaultRegionForCloud struct{}
+
+// DefaultList implements [defaults.List.DefaultList] for a default cloud region.
+func (d defaultRegionForCloud) DefaultList(ctx context.Context, _ defaults.ListRequest, res *defaults.ListResponse) {
+	elemType := types.ObjectType{
+		AttrTypes: map[string]attr.Type{
+			"name":              types.StringType,
+			"endpoint":          types.StringType,
+			"identity_endpoint": types.StringType,
+			"storage_endpoint":  types.StringType,
+		},
+	}
+
+	obj, diags := types.ObjectValue(
+		elemType.AttrTypes,
+		map[string]attr.Value{
+			"name":              types.StringValue(string(jujucloud.DefaultCloudRegion)),
+			"endpoint":          types.StringNull(),
+			"identity_endpoint": types.StringNull(),
+			"storage_endpoint":  types.StringNull(),
+		},
+	)
+	res.Diagnostics.Append(diags...)
+	if res.Diagnostics.HasError() {
+		return
+	}
+
+	list, diags := types.ListValue(elemType, []attr.Value{obj})
+	res.Diagnostics.Append(diags...)
+	if res.Diagnostics.HasError() {
+		return
+	}
+
+	res.PlanValue = list
+}
+
+// Description implements [defaults.Describer.Description].
+//
+// Description should describe the default in plain text formatting.
+// This information is used by provider logging and provider tooling such
+// as documentation generation.
+//
+// The description should:
+//   - Begin with a lowercase or other character suitable for the middle of
+//     a sentence.
+//   - End without punctuation.
+func (d defaultRegionForCloud) Description(ctx context.Context) string {
+	return "all clouds must have at least one default region and by default, the region named 'default' will be used"
+}
+
+// MarkdownDescription implements [defaults.Describer.MarkdownDescription].
+//
+// MarkdownDescription should describe the default in Markdown
+// formatting. This information is used by provider logging and provider
+// tooling such as documentation generation.
+//
+// The description should:
+//   - Begin with a lowercase or other character suitable for the middle of
+//     a sentence.
+//   - End without punctuation.
+func (d defaultRegionForCloud) MarkdownDescription(ctx context.Context) string {
+	return "all clouds must have at least one default region and by default, the region named 'default' will be used"
 }
 
 // Create adds a new cloud to the controller.
@@ -250,21 +296,44 @@ func (r *cloudResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	state.Name = types.StringValue(out.Name)
 	state.Type = types.StringValue(out.Type)
-	state.Endpoint = types.StringValue(out.Endpoint)
-	state.IdentityEndpoint = types.StringValue(out.IdentityEndpoint)
-	state.StorageEndpoint = types.StringValue(out.StorageEndpoint)
 
-	// auth types
-	state.AuthTypes, _ = types.ListValueFrom(ctx, types.StringType, out.AuthTypes)
-	// regions
+	var dErr diag.Diagnostics
+	state.AuthTypes, dErr = types.ListValueFrom(ctx, types.StringType, out.AuthTypes)
+	if dErr.HasError() {
+		resp.Diagnostics.Append(dErr...)
+		return
+	}
+
+	state.CACertificates, dErr = types.ListValueFrom(ctx, types.StringType, out.CACertificates)
+	if dErr.HasError() {
+		resp.Diagnostics.Append(dErr...)
+		return
+	}
+
+	// Alex: Must be a better way than this?
 	if lst, d := flattenRegions(ctx, out.Regions); !d.HasError() {
 		state.Regions = lst
 	} else {
 		resp.Diagnostics.Append(d...)
 		return
 	}
-	// ca certs
-	state.CACertificates, _ = types.ListValueFrom(ctx, types.StringType, out.CACertificates)
+
+	// Check for "" and maintain nullability.
+	if out.Endpoint == "" {
+		state.Endpoint = types.StringNull()
+	} else {
+		state.Endpoint = types.StringValue(out.Endpoint)
+	}
+	if out.IdentityEndpoint == "" {
+		state.IdentityEndpoint = types.StringNull()
+	} else {
+		state.IdentityEndpoint = types.StringValue(out.IdentityEndpoint)
+	}
+	if out.StorageEndpoint == "" {
+		state.StorageEndpoint = types.StringNull()
+	} else {
+		state.StorageEndpoint = types.StringValue(out.StorageEndpoint)
+	}
 
 	state.ID = types.StringValue(out.Name)
 
@@ -357,9 +426,8 @@ func expandStringList(ctx context.Context, l types.List) ([]string, diag.Diagnos
 	if l.IsNull() || l.IsUnknown() {
 		return result, nil
 	}
-	var d diag.Diagnostics
-	d = l.ElementsAs(ctx, &result, false)
-	return result, d
+
+	return result, l.ElementsAs(ctx, &result, false)
 }
 
 func expandRegions(ctx context.Context, list types.List) ([]jujucloud.Region, diag.Diagnostics) {
@@ -386,19 +454,39 @@ func expandRegions(ctx context.Context, list types.List) ([]jujucloud.Region, di
 
 func flattenRegions(ctx context.Context, regions []jujucloud.Region) (types.List, diag.Diagnostics) {
 	items := make([]cloudRegionModel, 0, len(regions))
+
 	for _, r := range regions {
 		items = append(items, cloudRegionModel{
-			Name:             types.StringValue(r.Name),
-			Endpoint:         types.StringValue(r.Endpoint),
-			IdentityEndpoint: types.StringValue(r.IdentityEndpoint),
-			StorageEndpoint:  types.StringValue(r.StorageEndpoint),
+			Name: types.StringValue(r.Name),
+			Endpoint: func() types.String {
+				if r.Endpoint == "" {
+					return types.StringNull()
+				}
+				return types.StringValue(r.Endpoint)
+			}(),
+			IdentityEndpoint: func() types.String {
+				if r.IdentityEndpoint == "" {
+					return types.StringNull()
+				}
+				return types.StringValue(r.IdentityEndpoint)
+			}(),
+			StorageEndpoint: func() types.String {
+				if r.StorageEndpoint == "" {
+					return types.StringNull()
+				}
+				return types.StringValue(r.StorageEndpoint)
+			}(),
 		})
 	}
-	lst, d := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: map[string]attr.Type{
-		"name":              types.StringType,
-		"endpoint":          types.StringType,
-		"identity_endpoint": types.StringType,
-		"storage_endpoint":  types.StringType,
-	}}, items)
-	return lst, d
+
+	lst, diags := types.ListValueFrom(ctx, types.ObjectType{
+		AttrTypes: map[string]attr.Type{
+			"name":              types.StringType,
+			"endpoint":          types.StringType,
+			"identity_endpoint": types.StringType,
+			"storage_endpoint":  types.StringType,
+		},
+	}, items)
+
+	return lst, diags
 }
