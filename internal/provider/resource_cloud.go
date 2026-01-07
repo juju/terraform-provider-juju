@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/defaults"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
@@ -115,10 +116,13 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 				Optional:    true,
 			},
 			"ca_certificates": schema.ListAttribute{
-				Description: "List of base64-encoded X509 certificates for the cloud.",
+				Description: "List of PEM-encoded X509 certificates for the cloud.",
 				ElementType: types.StringType,
 				Optional:    true,
 				Sensitive:   true,
+				// Juju doesn't validate the certificates on add/update, but we can at least
+				// ensure they are valid PEM-encoded certs here.
+				Validators: []validator.List{ValidateCACertificatesPEM()},
 			},
 			// All clouds must have at least one default region. We want to allow users to optionally use
 			// the default region, as such, we're adhering to the Juju requirement here.
@@ -144,70 +148,6 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 			},
 		},
 	}
-}
-
-type defaultRegionForCloud struct{}
-
-// DefaultList implements [defaults.List.DefaultList] for a default cloud region.
-func (d defaultRegionForCloud) DefaultList(ctx context.Context, _ defaults.ListRequest, res *defaults.ListResponse) {
-	elemType := types.ObjectType{
-		AttrTypes: map[string]attr.Type{
-			"name":              types.StringType,
-			"endpoint":          types.StringType,
-			"identity_endpoint": types.StringType,
-			"storage_endpoint":  types.StringType,
-		},
-	}
-
-	obj, diags := types.ObjectValue(
-		elemType.AttrTypes,
-		map[string]attr.Value{
-			"name":              types.StringValue(string(jujucloud.DefaultCloudRegion)),
-			"endpoint":          types.StringNull(),
-			"identity_endpoint": types.StringNull(),
-			"storage_endpoint":  types.StringNull(),
-		},
-	)
-	res.Diagnostics.Append(diags...)
-	if res.Diagnostics.HasError() {
-		return
-	}
-
-	list, diags := types.ListValue(elemType, []attr.Value{obj})
-	res.Diagnostics.Append(diags...)
-	if res.Diagnostics.HasError() {
-		return
-	}
-
-	res.PlanValue = list
-}
-
-// Description implements [defaults.Describer.Description].
-//
-// Description should describe the default in plain text formatting.
-// This information is used by provider logging and provider tooling such
-// as documentation generation.
-//
-// The description should:
-//   - Begin with a lowercase or other character suitable for the middle of
-//     a sentence.
-//   - End without punctuation.
-func (d defaultRegionForCloud) Description(ctx context.Context) string {
-	return "all clouds must have at least one default region and by default, the region named 'default' will be used"
-}
-
-// MarkdownDescription implements [defaults.Describer.MarkdownDescription].
-//
-// MarkdownDescription should describe the default in Markdown
-// formatting. This information is used by provider logging and provider
-// tooling such as documentation generation.
-//
-// The description should:
-//   - Begin with a lowercase or other character suitable for the middle of
-//     a sentence.
-//   - End without punctuation.
-func (d defaultRegionForCloud) MarkdownDescription(ctx context.Context) string {
-	return "all clouds must have at least one default region and by default, the region named 'default' will be used"
 }
 
 // Create adds a new cloud to the controller.
@@ -304,10 +244,16 @@ func (r *cloudResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	state.CACertificates, dErr = types.ListValueFrom(ctx, types.StringType, out.CACertificates)
-	if dErr.HasError() {
-		resp.Diagnostics.Append(dErr...)
-		return
+	// Maintain nullability: if no CA certs are set server-side after create, and we planned with no ca certs,
+	// keep this attribute null so Terraform does not plan a change from null -> [] or vice versa.
+	if len(out.CACertificates) == 0 {
+		state.CACertificates = types.ListNull(types.StringType)
+	} else {
+		state.CACertificates, dErr = types.ListValueFrom(ctx, types.StringType, out.CACertificates)
+		if dErr.HasError() {
+			resp.Diagnostics.Append(dErr...)
+			return
+		}
 	}
 
 	// Alex: Must be a better way than this?
@@ -489,4 +435,68 @@ func flattenRegions(ctx context.Context, regions []jujucloud.Region) (types.List
 	}, items)
 
 	return lst, diags
+}
+
+type defaultRegionForCloud struct{}
+
+// DefaultList implements [defaults.List.DefaultList] for a default cloud region.
+func (d defaultRegionForCloud) DefaultList(ctx context.Context, _ defaults.ListRequest, res *defaults.ListResponse) {
+	elemType := types.ObjectType{
+		AttrTypes: map[string]attr.Type{
+			"name":              types.StringType,
+			"endpoint":          types.StringType,
+			"identity_endpoint": types.StringType,
+			"storage_endpoint":  types.StringType,
+		},
+	}
+
+	obj, diags := types.ObjectValue(
+		elemType.AttrTypes,
+		map[string]attr.Value{
+			"name":              types.StringValue(string(jujucloud.DefaultCloudRegion)),
+			"endpoint":          types.StringNull(),
+			"identity_endpoint": types.StringNull(),
+			"storage_endpoint":  types.StringNull(),
+		},
+	)
+	res.Diagnostics.Append(diags...)
+	if res.Diagnostics.HasError() {
+		return
+	}
+
+	list, diags := types.ListValue(elemType, []attr.Value{obj})
+	res.Diagnostics.Append(diags...)
+	if res.Diagnostics.HasError() {
+		return
+	}
+
+	res.PlanValue = list
+}
+
+// Description implements [defaults.Describer.Description].
+//
+// Description should describe the default in plain text formatting.
+// This information is used by provider logging and provider tooling such
+// as documentation generation.
+//
+// The description should:
+//   - Begin with a lowercase or other character suitable for the middle of
+//     a sentence.
+//   - End without punctuation.
+func (d defaultRegionForCloud) Description(ctx context.Context) string {
+	return "all clouds must have at least one default region and by default, the region named 'default' will be used"
+}
+
+// MarkdownDescription implements [defaults.Describer.MarkdownDescription].
+//
+// MarkdownDescription should describe the default in Markdown
+// formatting. This information is used by provider logging and provider
+// tooling such as documentation generation.
+//
+// The description should:
+//   - Begin with a lowercase or other character suitable for the middle of
+//     a sentence.
+//   - End without punctuation.
+func (d defaultRegionForCloud) MarkdownDescription(ctx context.Context) string {
+	return "all clouds must have at least one default region and by default, the region named 'default' will be used"
 }
