@@ -49,14 +49,15 @@ type modelResource struct {
 }
 
 type modelResourceModel struct {
-	Name        types.String `tfsdk:"name"`
-	Cloud       types.List   `tfsdk:"cloud"`
-	Config      types.Map    `tfsdk:"config"`
-	Constraints types.String `tfsdk:"constraints"`
-	Annotations types.Map    `tfsdk:"annotations"`
-	Credential  types.String `tfsdk:"credential"`
-	Type        types.String `tfsdk:"type"`
-	UUID        types.String `tfsdk:"uuid"`
+	Name             types.String `tfsdk:"name"`
+	Cloud            types.List   `tfsdk:"cloud"`
+	TargetController types.String `tfsdk:"target_controller"`
+	Config           types.Map    `tfsdk:"config"`
+	Constraints      types.String `tfsdk:"constraints"`
+	Annotations      types.Map    `tfsdk:"annotations"`
+	Credential       types.String `tfsdk:"credential"`
+	Type             types.String `tfsdk:"type"`
+	UUID             types.String `tfsdk:"uuid"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -130,6 +131,15 @@ func (r *modelResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"target_controller": schema.StringAttribute{
+				Description: "Only useful with JAAS - the backing controller where the model will be created. If not set, a" +
+					" random controller the user has access to supporting the desired cloud will be used.",
+				Optional: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 		},
 		Blocks: map[string]schema.Block{
 			"cloud": schema.ListNestedBlock{
@@ -159,6 +169,15 @@ func (r *modelResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 		},
+	}
+}
+
+// ConfigValidators sets validators for the resource.
+func (r *modelResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		NewFieldsRequireJAASValidator(r.client,
+			path.MatchRoot("target_controller"),
+		),
 	}
 }
 
@@ -220,6 +239,7 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	credential := plan.Credential.ValueString()
 	readConstraints := plan.Constraints.ValueString()
+	targetController := plan.TargetController.ValueString()
 
 	parsedConstraints := constraints.Value{}
 	var err error
@@ -243,12 +263,13 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 	response, err := retry.RetryOnErrors(retry.RetryOnErrorsCfg[juju.CreateModelInput, juju.CreateModelResponse]{
 		Context: ctx,
 		Input: juju.CreateModelInput{
-			Name:        modelName,
-			CloudName:   cloudNameInput,
-			CloudRegion: cloudRegionInput,
-			Config:      config,
-			Constraints: parsedConstraints,
-			Credential:  credential,
+			Name:             modelName,
+			CloudName:        cloudNameInput,
+			CloudRegion:      cloudRegionInput,
+			Config:           config,
+			Constraints:      parsedConstraints,
+			Credential:       credential,
+			TargetController: targetController,
 		},
 		Do:              r.client.Models.CreateModel,
 		RetriableErrors: []error{juju.TransactionError, juju.ConnectionRefusedError},

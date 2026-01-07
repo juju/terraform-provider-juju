@@ -77,7 +77,7 @@ type objectsWithAccess struct {
 // ConfigValidators sets validators for the resource.
 func (r *genericJAASAccessResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
 	return []resource.ConfigValidator{
-		NewRequiresJAASValidator(r.client),
+		NewResourceRequiresJAASValidator(r.client),
 		resourcevalidator.AtLeastOneOf(
 			path.MatchRoot("users"),
 			path.MatchRoot("groups"),

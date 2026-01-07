@@ -8,7 +8,10 @@ import (
 	"strings"
 	"time"
 
+	jaasapi "github.com/canonical/jimm-go-sdk/v3/api"
+	jaasparams "github.com/canonical/jimm-go-sdk/v3/api/params"
 	"github.com/juju/errors"
+	jujuapi "github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/client/modelmanager"
@@ -27,15 +30,20 @@ var ModelNotFoundError = errors.ConstError("model-not-found")
 
 type modelsClient struct {
 	SharedClient
+	createModel func(conn jujuapi.Connection,
+		name, owner, cloud, cloudRegion string,
+		cloudCredential names.CloudCredentialTag,
+		config map[string]interface{}, targetController string) (CreateModelResponse, error)
 }
 
 type CreateModelInput struct {
-	Name        string
-	CloudName   string
-	CloudRegion string
-	Config      map[string]string
-	Credential  string
-	Constraints constraints.Value
+	Name             string
+	CloudName        string
+	CloudRegion      string
+	Config           map[string]string
+	Credential       string
+	Constraints      constraints.Value
+	TargetController string
 }
 
 type CreateModelResponse struct {
@@ -91,9 +99,16 @@ type DestroyAccessModelInput struct {
 	Access    string
 }
 
-func newModelsClient(sc SharedClient) *modelsClient {
+func newModelsClient(sc SharedClient, isJAAS bool) *modelsClient {
+	if isJAAS {
+		return &modelsClient{
+			SharedClient: sc,
+			createModel:  createJAASModel,
+		}
+	}
 	return &modelsClient{
 		SharedClient: sc,
+		createModel:  createJujuModel,
 	}
 }
 
@@ -147,8 +162,6 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 
 	currentUser := getCurrentJujuUser(conn)
 
-	client := modelmanager.NewClient(conn)
-
 	cloudName := input.CloudName
 	cloudRegion := input.CloudRegion
 
@@ -167,7 +180,9 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 		configValues[key] = configVal
 	}
 
-	modelInfo, err := client.CreateModel(modelName, currentUser, cloudName, cloudRegion, *cloudCredTag, configValues)
+	targetController := input.TargetController
+
+	resp, err = c.createModel(conn, modelName, currentUser, cloudName, cloudRegion, *cloudCredTag, configValues, targetController)
 	if err != nil {
 		// When we create multiple models concurrently, it can happen that Juju returns an error
 		// that the transaction was aborted. We return a specific error here,
@@ -178,14 +193,8 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 		return resp, err
 	}
 
-	resp.Cloud = modelInfo.Cloud
-	resp.CloudRegion = modelInfo.CloudRegion
-	resp.CloudCredentialName = names.NewCloudCredentialTag(modelInfo.CloudCredential).Name()
-	resp.Type = modelInfo.Type.String()
-	resp.UUID = modelInfo.UUID
-
 	// Add a model object on the client internal to the provider
-	c.AddModel(modelInfo.Name, modelInfo.Owner, modelInfo.UUID, modelInfo.Type)
+	c.AddModel(modelName, currentUser, resp.UUID, model.ModelType(resp.Type))
 
 	// set constraints when required
 	if input.Constraints.String() == "" {
@@ -194,7 +203,7 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 
 	// we have to set constraints ...
 	// establish a new connection with the created model through the modelconfig api to set constraints
-	connModel, err := c.GetConnection(&modelInfo.UUID)
+	connModel, err := c.GetConnection(&resp.UUID)
 	if err != nil {
 		return resp, err
 	}
@@ -206,6 +215,87 @@ func (c *modelsClient) CreateModel(input CreateModelInput) (CreateModelResponse,
 		return resp, err
 	}
 
+	return resp, nil
+}
+
+// createJAASModel creates a Juju model using the JAAS API client.
+// This is required to support creating models on a specific controller.
+func createJAASModel(conn jujuapi.Connection,
+	name, owner, cloud, cloudRegion string,
+	cloudCredential names.CloudCredentialTag,
+	config map[string]interface{}, targetController string) (CreateModelResponse, error) {
+	var resp CreateModelResponse
+
+	if !names.IsValidUser(owner) {
+		return resp, fmt.Errorf("%q is not a valid user name", owner)
+	}
+	var cloudTag string
+	if cloud != "" {
+		if !names.IsValidCloud(cloud) {
+			return resp, fmt.Errorf("%q is not a valid cloud name", cloud)
+		}
+		cloudTag = names.NewCloudTag(cloud).String()
+	}
+
+	client := jaasapi.NewClient(conn)
+
+	modelInfo, err := client.AddModelToController(&jaasparams.AddModelToControllerRequest{
+		ModelCreateArgs: params.ModelCreateArgs{
+			Name:               name,
+			OwnerTag:           names.NewUserTag(owner).String(),
+			CloudTag:           cloudTag,
+			CloudRegion:        cloudRegion,
+			CloudCredentialTag: cloudCredential.String(),
+			Config:             config,
+		},
+		ControllerName: targetController,
+	})
+	if err != nil {
+		return resp, err
+	}
+
+	cloudTagResult, err := names.ParseCloudTag(modelInfo.CloudTag)
+	if err != nil {
+		return resp, err
+	}
+
+	cloudCredentialTag, err := names.ParseCloudCredentialTag(modelInfo.CloudCredentialTag)
+	if err != nil {
+		return resp, err
+	}
+
+	resp.Cloud = cloudTagResult.Id()
+	resp.CloudRegion = modelInfo.CloudRegion
+	resp.CloudCredentialName = cloudCredentialTag.Name()
+	resp.Type = modelInfo.Type
+	resp.UUID = modelInfo.UUID
+
+	return resp, nil
+}
+
+// createJujuModel creates a Juju model using Juju's modelmanager client.
+func createJujuModel(conn jujuapi.Connection,
+	name, owner, cloud, cloudRegion string,
+	cloudCredential names.CloudCredentialTag,
+	config map[string]interface{}, targetController string) (CreateModelResponse, error) {
+	if targetController != "" {
+		return CreateModelResponse{}, fmt.Errorf("targetController parameter is not supported for Juju model creation")
+	}
+
+	var resp CreateModelResponse
+
+	client := modelmanager.NewClient(conn)
+
+	modelInfo, err := client.CreateModel(name, owner, cloud, cloudRegion, cloudCredential, config)
+	if err != nil {
+		return resp, err
+	}
+
+	resp.Cloud = modelInfo.Cloud
+	resp.CloudRegion = modelInfo.CloudRegion
+	resp.CloudCredentialName = names.NewCloudCredentialTag(modelInfo.CloudCredential).Name()
+	resp.Type = modelInfo.Type.String()
+	resp.UUID = modelInfo.UUID
 	return resp, nil
 }
 
