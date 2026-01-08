@@ -74,6 +74,7 @@ jobs:
           lxd-channel: ${{ matrix.action-operator.lxd-channel }}
       - name: Setup operator environment retry 1
         id: setup-op-1
+        continue-on-error: true
         if: steps.setup-op-0.outcome == 'failure'
         uses: charmed-kubernetes/actions-operator@main
         with:
@@ -83,6 +84,7 @@ jobs:
           lxd-channel: ${{ matrix.action-operator.lxd-channel }}
       - name: Setup operator environment retry 2
         id: setup-op-2
+        continue-on-error: true
         if: steps.setup-op-0.outcome == 'failure'
         uses: charmed-kubernetes/actions-operator@main
         with:
