@@ -112,18 +112,26 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 					stringvalidator.LengthAtLeast(1),
 				},
 			},
+			// Juju bug is why this cannot be nulled.
 			"identity_endpoint": schema.StringAttribute{
-				Description: "Optional global identity endpoint for the cloud.",
+				Description: "Optional global identity endpoint for the cloud. This field cannot be set to a null value once previously set.",
 				Optional:    true,
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
 				},
+				PlanModifiers: []planmodifier.String{
+					DisallowUnsetIfSet("identity_endpoint cannot be unset once set"),
+				},
 			},
+			// Juju bug is why this cannot be nulled.
 			"storage_endpoint": schema.StringAttribute{
-				Description: "Optional global storage endpoint for the cloud.",
+				Description: "Optional global storage endpoint for the cloud. This field cannot be set to a null value once previously set.",
 				Optional:    true,
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
+				},
+				PlanModifiers: []planmodifier.String{
+					DisallowUnsetIfSet("storage_endpoint cannot be unset once set"),
 				},
 			},
 			"ca_certificates": schema.ListAttribute{
@@ -265,6 +273,27 @@ func (r *cloudResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	if dErr.HasError() {
 		resp.Diagnostics.Append(dErr...)
 		return
+	}
+
+	// Normalize optional global endpoints: Juju may return empty strings; we store null to avoid drift.
+	// We can't do this right now though as when trying to set IdentityEndpoint or StorageEndpoint to "", Juju isn't
+	// returning an error, but instead the previous values they were set to.
+	if out.Endpoint == "" {
+		state.Endpoint = types.StringNull()
+	} else {
+		state.Endpoint = types.StringValue(out.Endpoint)
+	}
+
+	if out.IdentityEndpoint == "" {
+		state.IdentityEndpoint = types.StringNull()
+	} else {
+		state.IdentityEndpoint = types.StringValue(out.IdentityEndpoint)
+	}
+
+	if out.StorageEndpoint == "" {
+		state.StorageEndpoint = types.StringNull()
+	} else {
+		state.StorageEndpoint = types.StringValue(out.StorageEndpoint)
 	}
 
 	// Juju orders the response for regions, we re-order them back to match what was written during the update to
