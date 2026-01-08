@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -15,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
@@ -106,14 +108,23 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 			"endpoint": schema.StringAttribute{
 				Description: "Optional global endpoint for the cloud.",
 				Optional:    true,
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
 			},
 			"identity_endpoint": schema.StringAttribute{
 				Description: "Optional global identity endpoint for the cloud.",
 				Optional:    true,
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
 			},
 			"storage_endpoint": schema.StringAttribute{
 				Description: "Optional global storage endpoint for the cloud.",
 				Optional:    true,
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
 			},
 			"ca_certificates": schema.ListAttribute{
 				Description: "List of PEM-encoded X509 certificates for the cloud.",
@@ -132,10 +143,22 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 				Optional:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						"name":              schema.StringAttribute{Required: true, Description: "Name of the region."},
-						"endpoint":          schema.StringAttribute{Optional: true, Description: "Region-specific endpoint."},
-						"identity_endpoint": schema.StringAttribute{Optional: true, Description: "Region-specific identity endpoint."},
-						"storage_endpoint":  schema.StringAttribute{Optional: true, Description: "Region-specific storage endpoint."},
+						"name": schema.StringAttribute{Required: true, Description: "Name of the region."},
+						"endpoint": schema.StringAttribute{
+							Optional:    true,
+							Description: "Region-specific endpoint.",
+							Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
+						},
+						"identity_endpoint": schema.StringAttribute{
+							Optional:    true,
+							Description: "Region-specific identity endpoint.",
+							Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
+						},
+						"storage_endpoint": schema.StringAttribute{
+							Optional:    true,
+							Description: "Region-specific storage endpoint.",
+							Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
+						},
 					},
 				},
 				Default: defaultRegionForCloud{},
