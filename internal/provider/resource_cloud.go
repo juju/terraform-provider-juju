@@ -244,41 +244,34 @@ func (r *cloudResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	// Maintain nullability: if no CA certs are set server-side after create, and we planned with no ca certs,
-	// keep this attribute null so Terraform does not plan a change from null -> [] or vice versa.
-	if len(out.CACertificates) == 0 {
-		state.CACertificates = types.ListNull(types.StringType)
-	} else {
-		state.CACertificates, dErr = types.ListValueFrom(ctx, types.StringType, out.CACertificates)
-		if dErr.HasError() {
-			resp.Diagnostics.Append(dErr...)
-			return
+	// Juju orders the response for regions, we re-order them back to match what was written during the update to
+	// prevent drift.
+	reorderedRegions := make([]jujucloud.Region, 0, len(out.Regions))
+	regionMap := make(map[string]jujucloud.Region, len(out.Regions))
+	for _, r := range out.Regions {
+		regionMap[r.Name] = r
+	}
+
+	expandedRegions, diags := expandRegions(ctx, state.Regions)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	for _, r := range expandedRegions { // iterate over state's set order (the order we want)
+		if jujuR, ok := regionMap[r.Name]; ok {
+			reorderedRegions = append(reorderedRegions, jujuR)
+		} else {
+			// region missing from Juju response, just append the state copy (shouldn't ever happen I don't think)
+			reorderedRegions = append(reorderedRegions, r)
 		}
 	}
 
-	// Alex: Must be a better way than this?
-	if lst, d := flattenRegions(ctx, out.Regions); !d.HasError() {
+	if lst, d := flattenRegions(ctx, reorderedRegions); !d.HasError() {
 		state.Regions = lst
 	} else {
 		resp.Diagnostics.Append(d...)
 		return
-	}
-
-	// Check for "" and maintain nullability.
-	if out.Endpoint == "" {
-		state.Endpoint = types.StringNull()
-	} else {
-		state.Endpoint = types.StringValue(out.Endpoint)
-	}
-	if out.IdentityEndpoint == "" {
-		state.IdentityEndpoint = types.StringNull()
-	} else {
-		state.IdentityEndpoint = types.StringValue(out.IdentityEndpoint)
-	}
-	if out.StorageEndpoint == "" {
-		state.StorageEndpoint = types.StringNull()
-	} else {
-		state.StorageEndpoint = types.StringValue(out.StorageEndpoint)
 	}
 
 	state.ID = types.StringValue(out.Name)
