@@ -49,8 +49,6 @@ jobs:
     timeout-minutes: 31
     steps:
       - uses: actions/checkout@v4
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
       - uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
