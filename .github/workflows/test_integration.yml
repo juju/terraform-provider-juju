@@ -59,9 +59,11 @@ jobs:
           terraform_wrapper: false
       - name: Check transparent hugepages
         run: |
-          cat /sys/kernel/mm/transparent_hugepage/enabled
+          cat /sys/kernel/mm/transparent_hugepage/enabled 
       - name: Setup tmate session
         uses: canonical/action-tmate@main
+        with:
+          detached: true
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
