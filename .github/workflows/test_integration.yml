@@ -60,6 +60,8 @@ jobs:
       - name: Check transparent hugepages
         run: |
           cat /sys/kernel/mm/transparent_hugepage/enabled
+      - name: Setup tmate session
+        uses: canonical/action-tmate@main
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
