@@ -191,41 +191,16 @@ func TestAcc_ResourceCloud(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "regions.3.name", "us-west-1"),
 				),
 			},
-			// Now remove the the zeroed fields entirely.
+			// We don't allow unsetting identity or storage endpoints, so verify our plan validator runs.
 			{
-				Config: testAccResourceCloud_OpenStack_Minimal(cloudName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "name", cloudName),
-					resource.TestCheckResourceAttr(resourceName, "type", "openstack"),
-					resource.TestCheckResourceAttr(resourceName, "regions.#", "1"),
-					resource.TestCheckResourceAttr(resourceName, "regions.0.name", "default"),
-					resource.TestCheckNoResourceAttr(resourceName, "regions.0.endpoint"),
-					resource.TestCheckNoResourceAttr(resourceName, "regions.0.identity_endpoint"),
-					resource.TestCheckNoResourceAttr(resourceName, "regions.0.storage_endpoint"),
+				Config:   testAccResourceCloud_OpenStack_Minimal(cloudName),
+				PlanOnly: true,
+				ExpectError: regexp.MustCompile(
+					`(?s)Unsupported change.*(identity_endpoint|storage_endpoint) cannot be unset once set \(workaround for a Juju limitation\)`,
 				),
 			},
 		},
 	})
-}
-
-func testAccCheckCloudDestroy(cloudName string) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		if TestClient == nil {
-			return fmt.Errorf("TestClient is not configured")
-		}
-
-		_, err := TestClient.Clouds.ReadCloud(juju.ReadCloudInput{Name: cloudName})
-		if err == nil {
-			return fmt.Errorf("cloud %q still exists", cloudName)
-		}
-
-		// Juju not-found errors come back wrapped; treat any NotFound as successful destroy.
-		if errors.IsNotFound(err) {
-			return nil
-		}
-
-		return fmt.Errorf("error checking whether cloud %q was destroyed: %v", cloudName, err)
-	}
 }
 
 func TestAcc_ResourceCloud_CACertsValidation(t *testing.T) {
@@ -331,7 +306,7 @@ func hclList(stringsList []string) string {
 }
 
 func hclCACerts(certList []string) string {
-	if certList == nil || len(certList) == 0 {
+	if len(certList) == 0 {
 		return ""
 	}
 	b := &strings.Builder{}
@@ -347,7 +322,7 @@ func hclCACerts(certList []string) string {
 }
 
 func hclRegions(regions []map[string]string) string {
-	if regions == nil || len(regions) == 0 {
+	if len(regions) == 0 {
 		return ""
 	}
 	b := &strings.Builder{}
@@ -408,4 +383,24 @@ func newTestCA(t *testing.T, cn string) string {
 	})
 
 	return string(pemCert)
+}
+
+func testAccCheckCloudDestroy(cloudName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		if TestClient == nil {
+			return fmt.Errorf("TestClient is not configured")
+		}
+
+		_, err := TestClient.Clouds.ReadCloud(juju.ReadCloudInput{Name: cloudName})
+		if err == nil {
+			return fmt.Errorf("cloud %q still exists", cloudName)
+		}
+
+		// Juju not-found errors come back wrapped; treat any NotFound as successful destroy.
+		if errors.Is(err, errors.NotFound) {
+			return nil
+		}
+
+		return fmt.Errorf("error checking whether cloud %q was destroyed: %v", cloudName, err)
+	}
 }

@@ -64,9 +64,9 @@ resource "juju_cloud" "this" {
 
 - `ca_certificates` (List of String, Sensitive) List of PEM-encoded X509 certificates for the cloud.
 - `endpoint` (String) Optional global endpoint for the cloud.
-- `identity_endpoint` (String) Optional global identity endpoint for the cloud.
+- `identity_endpoint` (String) Optional global identity endpoint for the cloud. This field cannot be set to a null value once previously set.
 - `regions` (Attributes List) List of regions for the cloud. The first entry is the default region. (see [below for nested schema](#nestedatt--regions))
-- `storage_endpoint` (String) Optional global storage endpoint for the cloud.
+- `storage_endpoint` (String) Optional global storage endpoint for the cloud. This field cannot be set to a null value once previously set.
 
 ### Read-Only
 
