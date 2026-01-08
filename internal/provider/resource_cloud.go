@@ -97,7 +97,7 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 				},
 			},
 			"type": schema.StringAttribute{
-				Description: "The type of the cloud (e.g., 'openstack', 'aws', 'maas').",
+				Description: "The type of the cloud.",
 				Required:    true,
 			},
 			"auth_types": schema.ListAttribute{
