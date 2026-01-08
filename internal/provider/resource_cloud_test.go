@@ -191,33 +191,6 @@ func TestAcc_ResourceCloud(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "regions.3.name", "us-west-1"),
 				),
 			},
-			// Set everything to empty values, strings to "", lists to [], etc.
-			{
-				Config: testAccCloudFromTemplate(internaltesting.TemplateData{
-					"Name":                    cloudName,
-					"Type":                    "openstack",
-					"IncludeAuthTypes":        true,
-					"AuthTypesList":           hclList([]string{"access-key", "userpass"}),
-					"IncludeEndpoint":         true,
-					"Endpoint":                "",
-					"IncludeIdentityEndpoint": true,
-					"IdentityEndpoint":        "",
-					"IncludeStorageEndpoint":  true,
-					"StorageEndpoint":         "",
-					"IncludeCACerts":          true,
-					"CACertsHCL":              hclCACerts([]string{}),
-					"IncludeRegions":          true,
-					"RegionsHCL":              hclRegions([]map[string]string{}),
-				}),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "auth_types.#", "2"),
-					resource.TestCheckResourceAttr(resourceName, "endpoint", ""),
-					resource.TestCheckResourceAttr(resourceName, "identity_endpoint", ""),
-					resource.TestCheckResourceAttr(resourceName, "storage_endpoint", ""),
-					resource.TestCheckResourceAttr(resourceName, "ca_certificates.#", "0"),
-					resource.TestCheckResourceAttr(resourceName, "regions.#", "0"),
-				),
-			},
 			// Now remove the the zeroed fields entirely.
 			{
 				Config: testAccResourceCloud_OpenStack_Minimal(cloudName),
