@@ -58,7 +58,7 @@ resource "juju_cloud" "this" {
 
 - `auth_types` (List of String) List of supported authentication types by the cloud.
 - `name` (String) The name of the cloud for Juju. Changing this value will cause the cloud to be destroyed and recreated by terraform.
-- `type` (String) The type of the cloud (e.g., 'openstack', 'aws', 'maas').
+- `type` (String) The type of the cloud.
 
 ### Optional
 
