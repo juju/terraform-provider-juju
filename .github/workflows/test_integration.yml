@@ -71,6 +71,10 @@ jobs:
           channel: ${{ matrix.action-operator.cloud-channel }}
           juju-channel: ${{ matrix.action-operator.juju }}
           lxd-channel: ${{ matrix.action-operator.lxd-channel }}
+      - name: Print logs
+        run: |
+          sudo journalctl -u snap.juju-db.mongod
+          sudo snap logs juju-db    
       - name: In case of LXD setup also microk8s
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
         run: |
