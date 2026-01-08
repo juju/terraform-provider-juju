@@ -140,10 +140,14 @@ func (s *CloudSuite) TestAddCloud() {
 	s.mockSharedClient.EXPECT().GetConnection(gomock.Any()).Return(s.mockConnection, nil).AnyTimes()
 	s.mockConnection.EXPECT().Close().Return(nil).AnyTimes()
 
-	// Expect default region to be set.
-	s.mockCloudClient.EXPECT().AddCloud(jujucloud.Cloud{
-		Regions: []jujucloud.Region{{Name: jujucloud.DefaultCloudRegion}},
-	}, false).Return(nil).AnyTimes()
+	// Expect default region to be set when Regions is omitted.
+	s.mockCloudClient.EXPECT().AddCloud(gomock.Any(), false).
+		DoAndReturn(func(cloud jujucloud.Cloud, force bool) error {
+			s.Require().Len(cloud.Regions, 1)
+			s.Require().Equal(jujucloud.DefaultCloudRegion, cloud.Regions[0].Name)
+			return nil
+		}).
+		Times(1)
 
 	err := cc.AddCloud(AddCloudInput{})
 
