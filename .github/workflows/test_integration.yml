@@ -65,6 +65,25 @@ jobs:
         with:
           detached: true
       - name: Setup operator environment
+        id: setup-op-0
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: ${{ matrix.action-operator.cloud }}
+          channel: ${{ matrix.action-operator.cloud-channel }}
+          juju-channel: ${{ matrix.action-operator.juju }}
+          lxd-channel: ${{ matrix.action-operator.lxd-channel }}
+      - name: Setup operator environment retry 1
+        id: setup-op-1
+        if: steps.setup-op-0.outcome == 'failure'
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: ${{ matrix.action-operator.cloud }}
+          channel: ${{ matrix.action-operator.cloud-channel }}
+          juju-channel: ${{ matrix.action-operator.juju }}
+          lxd-channel: ${{ matrix.action-operator.lxd-channel }}
+      - name: Setup operator environment retry 2
+        id: setup-op-2
+        if: steps.setup-op-0.outcome == 'failure'
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: ${{ matrix.action-operator.cloud }}
