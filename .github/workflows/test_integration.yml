@@ -58,7 +58,7 @@ jobs:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
       # This step fails intermittently on Juju 2.9 (mongodb fails to start up).
-      # In that case, it's set up to retry a little to improve CI UX.
+      # In that case, it'll retry a little in order to improve CI UX.
       - name: Setup operator environment
         id: setup-op-0
         continue-on-error: true
