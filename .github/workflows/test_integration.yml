@@ -57,9 +57,6 @@ jobs:
         with:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
-      - name: Check transparent hugepages
-        run: |
-          cat /sys/kernel/mm/transparent_hugepage/enabled 
       - name: Setup tmate session
         uses: canonical/action-tmate@main
         with:
