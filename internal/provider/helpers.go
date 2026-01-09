@@ -36,6 +36,7 @@ const (
 	LogResourceSecret          = "resource-secret"
 	LogResourceAccessSecret    = "resource-access-secret"
 	LogResourceStoragePool     = "resource-storage-pool"
+	LogResourceCloud           = "resource-cloud"
 
 	LogDataSourceJAASGroup = "datasource-jaas-group"
 	LogDataSourceJAASRole  = "datasource-jaas-role"
