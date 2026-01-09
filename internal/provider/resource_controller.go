@@ -6,8 +6,10 @@ package provider
 import (
 	"context"
 	"fmt"
+	"maps"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -29,10 +31,10 @@ import (
 type JujuCommand interface {
 	// Bootstrap creates a new controller and returns connection information.
 	Bootstrap(ctx context.Context, model juju.BootstrapArguments) (*juju.ControllerConnectionInformation, error)
-	// UpdateConfig updates controller configuration.
-	UpdateConfig(ctx context.Context, connInfo *juju.ControllerConnectionInformation, config map[string]string) error
-	// Config retrieves controller configuration settings.
-	Config(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (map[string]string, error)
+	// UpdateConfig updates controller and controller-model configuration.
+	UpdateConfig(ctx context.Context, connInfo *juju.ControllerConnectionInformation, controllerConfig, controllerModelConfig map[string]string) error
+	// Config retrieves controller configuration and controller-model configuration settings.
+	Config(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (map[string]string, map[string]string, error)
 	// Destroy removes the controller.
 	Destroy(ctx context.Context, connInfo *juju.ControllerConnectionInformation) error
 }
@@ -42,29 +44,30 @@ var _ resource.ResourceWithConfigure = &controllerResource{}
 var _ resource.ResourceWithImportState = &controllerResource{}
 
 type controllerResourceModel struct {
-	JujuBinary           types.String `tfsdk:"juju_binary"`
-	Name                 types.String `tfsdk:"name"`
-	Cloud                types.Object `tfsdk:"cloud"`
-	CloudCredential      types.Object `tfsdk:"cloud_credential"`
+	JujuBinary      types.String `tfsdk:"juju_binary"`
+	Name            types.String `tfsdk:"name"`
+	Cloud           types.Object `tfsdk:"cloud"`
+	CloudCredential types.Object `tfsdk:"cloud_credential"`
+
+	// Flags for bootstrap command
 	AgentVersion         types.String `tfsdk:"agent_version"`
 	BootstrapBase        types.String `tfsdk:"bootstrap_base"`
 	BootstrapConstraints types.Map    `tfsdk:"bootstrap_constraints"`
-	BootstrapTimeout     types.String `tfsdk:"bootstrap_timeout"`
-	Config               types.Map    `tfsdk:"config"`
 	ModelDefault         types.Map    `tfsdk:"model_default"`
 	ModelConstraints     types.Map    `tfsdk:"model_constraints"`
-	StoragePool          types.Map    `tfsdk:"storage_pool"`
+	StoragePool          types.Object `tfsdk:"storage_pool"`
 
-	APIAddresses              types.List   `tfsdk:"api_addresses"`
-	AdminSecret               types.String `tfsdk:"admin_secret"`
-	CACert                    types.String `tfsdk:"ca_cert"`
-	CAPrivateKey              types.String `tfsdk:"ca_private_key"`
-	ControllerExternalIPAddrs types.List   `tfsdk:"controller_external_ip_addresses"`
-	ControllerExternalName    types.String `tfsdk:"controller_external_name"`
-	ControllerServiceType     types.String `tfsdk:"controller_service_type"`
-	SSHServerHostKey          types.String `tfsdk:"ssh_server_host_key"`
-	Username                  types.String `tfsdk:"username"`
-	Password                  types.String `tfsdk:"password"`
+	// Config that can be set at bootstrap
+	BootstrapConfig       types.Map `tfsdk:"bootstrap_config"`
+	ControllerConfig      types.Map `tfsdk:"controller_config"`
+	ControllerModelConfig types.Map `tfsdk:"controller_model_config"`
+
+	// Controller details
+	APIAddresses types.List   `tfsdk:"api_addresses"`
+	AdminSecret  types.String `tfsdk:"admin_secret"`
+	CACert       types.String `tfsdk:"ca_cert"`
+	Username     types.String `tfsdk:"username"`
+	Password     types.String `tfsdk:"password"`
 
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
@@ -94,6 +97,13 @@ type nestedCloudRegionModel struct {
 type nestedCloudCredentialModel struct {
 	Name       types.String `tfsdk:"name"`
 	AuthType   types.String `tfsdk:"auth_type"`
+	Attributes types.Map    `tfsdk:"attributes"`
+}
+
+// nestedStoragePoolModel represents storage pool configuration
+type nestedStoragePoolModel struct {
+	Name       types.String `tfsdk:"name"`
+	Type       types.String `tfsdk:"type"`
 	Attributes types.Map    `tfsdk:"attributes"`
 }
 
@@ -157,34 +167,32 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 					mapplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"bootstrap_timeout": schema.StringAttribute{
-				Description: "The timeout for the bootstrap operation.",
-				Optional:    true,
-			},
 			"ca_cert": schema.StringAttribute{
 				Description: "CA certificate for the controller.",
 				Computed:    true,
 				Sensitive:   false,
 			},
-			"ca_private_key": schema.StringAttribute{
-				Description: "CA private key for the controller.",
-				Sensitive:   true,
+			"storage_pool": schema.SingleNestedAttribute{
+				Description: "Options for the initial storage pool",
 				Optional:    true,
-			},
-			"controller_external_ip_addresses": schema.ListAttribute{
-				Description: "External IP addresses for the controller.",
-				Optional:    true,
-				ElementType: types.StringType,
-			},
-			"controller_external_name": schema.StringAttribute{
-				Description: "External name for the controller.",
-				Optional:    true,
-			},
-			"controller_service_type": schema.StringAttribute{
-				Description: "Kubernetes service type for Juju controller. Valid values are one of cluster, loadbalancer and external.",
-				Optional:    true,
-				Validators: []validator.String{
-					stringvalidator.OneOfCaseInsensitive("cluster", "loadbalancer", "external"),
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.RequiresReplace(),
+					objectplanmodifier.UseStateForUnknown(),
+				},
+				Attributes: map[string]schema.Attribute{
+					"name": schema.StringAttribute{
+						Description: "The name of the storage pool.",
+						Required:    true,
+					},
+					"type": schema.StringAttribute{
+						Description: "The storage pool type",
+						Required:    true,
+					},
+					"attributes": schema.MapAttribute{
+						Description: "Additional storage pool attributes.",
+						Optional:    true,
+						ElementType: types.StringType,
+					},
 				},
 			},
 			"cloud": schema.SingleNestedAttribute{
@@ -280,7 +288,31 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 					},
 				},
 			},
-			"config": schema.MapAttribute{
+
+			// The configuration options below are applied during bootstrap.
+			// Only certain values in controller_config and controller_model_config
+			// can be changed after bootstrap. The use of a map[string]string
+			// allows flexibility but will require normalisation when comparing
+			// values between the user's plan and the controller's state.
+
+			"bootstrap_config": schema.MapAttribute{
+				Description: "Configuration options that apply during the bootstrap process.",
+				Optional:    true,
+				ElementType: types.StringType,
+				PlanModifiers: []planmodifier.Map{
+					mapplanmodifier.UseStateForUnknown(),
+					mapplanmodifier.RequiresReplace(),
+				},
+			},
+			"controller_model_config": schema.MapAttribute{
+				Description: "Configuration options to be set for the controller model.",
+				Optional:    true,
+				ElementType: types.StringType,
+				PlanModifiers: []planmodifier.Map{
+					mapplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"controller_config": schema.MapAttribute{
 				Description: "Configuration options for the bootstrapped controller.",
 				Optional:    true,
 				ElementType: types.StringType,
@@ -335,20 +367,6 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Description: "Admin password for the controller.",
 				Computed:    true,
 				Sensitive:   true,
-			},
-			"ssh_server_host_key": schema.StringAttribute{
-				Description: "SSH server host key for the controller.",
-				Optional:    true,
-				Sensitive:   true,
-			},
-			"storage_pool": schema.MapAttribute{
-				Description: "Options for the initial storage pool (name and type are required plus any additional attributes).",
-				Optional:    true,
-				ElementType: types.StringType,
-				PlanModifiers: []planmodifier.Map{
-					mapplanmodifier.RequiresReplace(),
-					mapplanmodifier.UseStateForUnknown(),
-				},
 			},
 			"username": schema.StringAttribute{
 				Description: "Admin username for the controller.",
@@ -461,14 +479,6 @@ func (r *controllerResource) Create(ctx context.Context, req resource.CreateRequ
 		}
 	}
 
-	var config map[string]string
-	if !plan.Config.IsNull() && !plan.Config.IsUnknown() {
-		resp.Diagnostics.Append(plan.Config.ElementsAs(ctx, &config, false)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-	}
-
 	var modelDefault map[string]string
 	if !plan.ModelDefault.IsNull() && !plan.ModelDefault.IsUnknown() {
 		resp.Diagnostics.Append(plan.ModelDefault.ElementsAs(ctx, &modelDefault, false)...)
@@ -485,39 +495,50 @@ func (r *controllerResource) Create(ctx context.Context, req resource.CreateRequ
 		}
 	}
 
-	var storagePool map[string]string
+	storagePool := make(map[string]string)
 	if !plan.StoragePool.IsNull() && !plan.StoragePool.IsUnknown() {
-		resp.Diagnostics.Append(plan.StoragePool.ElementsAs(ctx, &storagePool, false)...)
+		var storagePoolModel nestedStoragePoolModel
+		resp.Diagnostics.Append(plan.StoragePool.As(ctx, &storagePoolModel, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		storagePool["name"] = storagePoolModel.Name.ValueString()
+		storagePool["type"] = storagePoolModel.Type.ValueString()
+		var attributes map[string]string
+		resp.Diagnostics.Append(storagePoolModel.Attributes.ElementsAs(ctx, &attributes, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		maps.Copy(storagePool, attributes)
+	}
+
+	var controllerConfig map[string]string
+	if !plan.ControllerConfig.IsNull() && !plan.ControllerConfig.IsUnknown() {
+		resp.Diagnostics.Append(plan.ControllerConfig.ElementsAs(ctx, &controllerConfig, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 	}
 
-	var controllerExternalIPAddrs []string
-	if !plan.ControllerExternalIPAddrs.IsNull() && !plan.ControllerExternalIPAddrs.IsUnknown() {
-		resp.Diagnostics.Append(plan.ControllerExternalIPAddrs.ElementsAs(ctx, &controllerExternalIPAddrs, false)...)
+	var bootstrapConfig map[string]string
+	if !plan.BootstrapConfig.IsNull() && !plan.BootstrapConfig.IsUnknown() {
+		resp.Diagnostics.Append(plan.BootstrapConfig.ElementsAs(ctx, &bootstrapConfig, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	var controllerModelConfig map[string]string
+	if !plan.ControllerModelConfig.IsNull() && !plan.ControllerModelConfig.IsUnknown() {
+		resp.Diagnostics.Append(plan.ControllerModelConfig.ElementsAs(ctx, &controllerModelConfig, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 	}
 
 	bootstrapArgs := juju.BootstrapArguments{
-		AdminSecret:               plan.AdminSecret.ValueString(),
-		AgentVersion:              plan.AgentVersion.ValueString(),
-		BootstrapBase:             plan.BootstrapBase.ValueString(),
-		BootstrapConstraints:      bootstrapConstraints,
-		BootstrapTimeout:          plan.BootstrapTimeout.ValueString(),
-		CAPrivateKey:              plan.CAPrivateKey.ValueString(),
-		Config:                    config,
-		ControllerExternalIPAddrs: controllerExternalIPAddrs,
-		ControllerExternalName:    plan.ControllerExternalName.ValueString(),
-		ControllerServiceType:     plan.ControllerServiceType.ValueString(),
-		JujuBinary:                plan.JujuBinary.ValueString(),
-		ModelConstraints:          modelConstraints,
-		ModelDefault:              modelDefault,
-		Name:                      plan.Name.ValueString(),
-		SSHServerHostKey:          plan.SSHServerHostKey.ValueString(),
-		StoragePool:               storagePool,
+		Name:       plan.Name.ValueString(),
+		JujuBinary: plan.JujuBinary.ValueString(),
 		Cloud: juju.BootstrapCloudArgument{
 			Name:            cloudModel.Name.ValueString(),
 			AuthTypes:       authTypes,
@@ -532,6 +553,19 @@ func (r *controllerResource) Create(ctx context.Context, req resource.CreateRequ
 			Name:       credentialModel.Name.ValueString(),
 			AuthType:   credentialModel.AuthType.ValueString(),
 			Attributes: credentialAttributes,
+		},
+		Config: juju.BootstrapConfig{
+			ControllerConfig:      controllerConfig,
+			ControllerModelConfig: controllerModelConfig,
+			BootstrapConfig:       bootstrapConfig,
+		},
+		Flags: juju.BootstrapFlags{
+			AgentVersion:         plan.AgentVersion.ValueString(),
+			BootstrapBase:        plan.BootstrapBase.ValueString(),
+			BootstrapConstraints: buildStringListFromMap(bootstrapConstraints),
+			ModelConstraints:     buildStringListFromMap(modelConstraints),
+			ModelDefault:         buildStringListFromMap(modelDefault),
+			StoragePool:          buildStringListFromMap(storagePool),
 		},
 	}
 
@@ -599,7 +633,7 @@ func (r *controllerResource) Read(ctx context.Context, req resource.ReadRequest,
 		)
 		return
 	}
-	controllerConfig, err := command.Config(ctx, connInfo)
+	controllerConfig, controllerModelConfig, err := command.Config(ctx, connInfo)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Controller Read Error",
@@ -614,7 +648,16 @@ func (r *controllerResource) Read(ctx context.Context, req resource.ReadRequest,
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		state.Config = configMap
+		state.ControllerConfig = configMap
+	}
+
+	if len(controllerModelConfig) > 0 {
+		configMap, diags := types.MapValueFrom(ctx, types.StringType, controllerModelConfig)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		state.ControllerModelConfig = configMap
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -648,29 +691,13 @@ func (r *controllerResource) Update(ctx context.Context, req resource.UpdateRequ
 		Password:  state.Password.ValueString(),
 	}
 
-	var currentConfig map[string]string
-	if !state.Config.IsNull() && !state.Config.IsUnknown() {
-		resp.Diagnostics.Append(state.Config.ElementsAs(ctx, &currentConfig, false)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-	} else {
-		currentConfig = make(map[string]string)
+	updatedControllerConfig := mergedStringMapFromStateAndPlan(ctx, &resp.Diagnostics, state.ControllerConfig, plan.ControllerConfig)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-
-	var newConfig map[string]string
-	if !plan.Config.IsNull() && !plan.Config.IsUnknown() {
-		resp.Diagnostics.Append(plan.Config.ElementsAs(ctx, &newConfig, false)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-	} else {
-		newConfig = make(map[string]string)
-	}
-
-	updatedConfig := currentConfig
-	for k, v := range newConfig {
-		updatedConfig[k] = v
+	updatedControllerModelConfig := mergedStringMapFromStateAndPlan(ctx, &resp.Diagnostics, state.ControllerModelConfig, plan.ControllerModelConfig)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	command, err := r.newJujuCommand(state.JujuBinary.ValueString())
@@ -681,7 +708,7 @@ func (r *controllerResource) Update(ctx context.Context, req resource.UpdateRequ
 		)
 		return
 	}
-	err = command.UpdateConfig(ctx, connInfo, updatedConfig)
+	err = command.UpdateConfig(ctx, connInfo, updatedControllerConfig, updatedControllerModelConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Controller Update Error",
@@ -690,13 +717,20 @@ func (r *controllerResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
-	// Update the state with the new config
-	config, diags := types.MapValueFrom(ctx, types.StringType, updatedConfig)
-	if diags.HasError() {
-		resp.Diagnostics.Append(diags...)
+	// Update the state with the new config(s)
+	controllerConfig, diags := types.MapValueFrom(ctx, types.StringType, updatedControllerConfig)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
-	state.Config = config
+	state.ControllerConfig = controllerConfig
+
+	controllerModelConfig, diags := types.MapValueFrom(ctx, types.StringType, updatedControllerModelConfig)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	state.ControllerModelConfig = controllerModelConfig
 
 	r.trace(fmt.Sprintf("controller updated: %q", plan.Name.ValueString()))
 
@@ -741,6 +775,54 @@ func (r *controllerResource) Delete(ctx context.Context, req resource.DeleteRequ
 		)
 		return
 	}
+}
+
+// buildStringListFromMap converts a map to a list of key=value strings.
+func buildStringListFromMap(constraints map[string]string) []string {
+	if len(constraints) == 0 {
+		return nil
+	}
+	parts := make([]string, 0, len(constraints))
+	for k, v := range constraints {
+		parts = append(parts, fmt.Sprintf("%s=%s", k, v))
+	}
+	return parts
+}
+
+func mergedStringMapFromStateAndPlan(ctx context.Context, diags *diag.Diagnostics, stateMap, planMap types.Map) map[string]string {
+	current := stringMapFromTerraformMap(ctx, diags, stateMap)
+	if diags.HasError() {
+		return nil
+	}
+	incoming := stringMapFromTerraformMap(ctx, diags, planMap)
+	if diags.HasError() {
+		return nil
+	}
+
+	// TODO(JUJU-8931): Handle config removal.
+
+	updated := make(map[string]string, len(current)+len(incoming))
+	for k, v := range current {
+		updated[k] = v
+	}
+	for k, v := range incoming {
+		updated[k] = v
+	}
+	return updated
+}
+
+func stringMapFromTerraformMap(ctx context.Context, diags *diag.Diagnostics, m types.Map) map[string]string {
+	if m.IsNull() || m.IsUnknown() {
+		return map[string]string{}
+	}
+
+	out := map[string]string{}
+	d := m.ElementsAs(ctx, &out, false)
+	diags.Append(d...)
+	if diags.HasError() {
+		return nil
+	}
+	return out
 }
 
 func (r *controllerResource) trace(msg string, additionalFields ...map[string]interface{}) {

@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/stretchr/testify/require"
 	gomock "go.uber.org/mock/gomock"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -24,13 +25,8 @@ func TestAcc_ResourceController(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	mockJujuCommand.EXPECT().Bootstrap(gomock.Any(), juju.BootstrapArguments{
-		AdminSecret:      "test-admin-secret",
-		AgentVersion:     "3.6.12",
-		BootstrapBase:    "test-base",
-		BootstrapTimeout: "15m",
-		CAPrivateKey:     "test-ca-private-key",
-		Name:             controllerName,
-		JujuBinary:       "/snap/bin/juju",
+		Name:       controllerName,
+		JujuBinary: "/snap/bin/juju",
 		Cloud: juju.BootstrapCloudArgument{
 			Name:           testingCloud.CloudName(),
 			AuthTypes:      []string{"certificate"},
@@ -57,14 +53,26 @@ func TestAcc_ResourceController(t *testing.T) {
 				"ca_cert":     "test ca cert",
 			},
 		},
-		Config: map[string]string{
-			"config_key_1": "config_value_1",
-			"config_key_2": "config_value_2",
+		Config: juju.BootstrapConfig{
+			BootstrapConfig: map[string]string{
+				"controller_service_type":          "Loadbalancer",
+				"controller_external_name":         "test-external-name",
+				"controller_external_ip_addresses": "[\"127.0.0.1\", \"127.0.0.2\"]",
+			},
+			ControllerConfig: map[string]string{
+				"agent-logfile-max-backups": "3",
+				"audit-log-capture-args":    "true",
+				"autocert-dns-name":         "test-external-name",
+			},
+			ControllerModelConfig: map[string]string{
+				"enable-os-refresh-update": "false",
+				"http-proxy":               "fake-proxy",
+			},
 		},
-		ControllerExternalIPAddrs: []string{"127.0.0.1", "127.0.0.2"},
-		ControllerExternalName:    "test-external-name",
-		ControllerServiceType:     "Loadbalancer",
-		SSHServerHostKey:          "test-ssh-server-host-key",
+		Flags: juju.BootstrapFlags{
+			AgentVersion:  "3.6.12",
+			BootstrapBase: "test-base",
+		},
 	}).Return(&juju.ControllerConnectionInformation{
 		Addresses: []string{"127.0.0.1:17070"},
 		CACert:    "test controller CA cert",
@@ -81,8 +89,12 @@ func TestAcc_ResourceController(t *testing.T) {
 			Password:  "password",
 		},
 	).Return(map[string]string{
-		"config_key_1": "config_value_1",
-		"config_key_2": "config_value_2",
+		"agent-logfile-max-backups": "3",
+		"audit-log-capture-args":    "true",
+		"autocert-dns-name":         "test-external-name",
+	}, map[string]string{
+		"enable-os-refresh-update": "false",
+		"http-proxy":               "fake-proxy",
 	}, nil).AnyTimes()
 
 	mockJujuCommand.EXPECT().Destroy(
@@ -122,24 +134,27 @@ func testAccResourceController(controllerName, cloudName string) string {
 	return fmt.Sprintf(`
 resource "juju_controller" "controller" {
   agent_version = "3.6.12"
-  name        = %q
+  name          = %q
 
-  juju_binary = "/snap/bin/juju"
-
-  admin_secret = "test-admin-secret"
-  controller_external_ip_addresses = ["127.0.0.1", "127.0.0.2"]
-  controller_external_name = "test-external-name"
-  controller_service_type = "Loadbalancer"
-  ssh_server_host_key = "test-ssh-server-host-key"
-  ca_private_key = "test-ca-private-key"
-  
-  bootstrap_timeout = "15m"
+  juju_binary     = "/snap/bin/juju"
   bootstrap_base  = "test-base"
+  
+  bootstrap_config = {
+	"controller_service_type"          = "Loadbalancer"
+	"controller_external_name"         = "test-external-name"
+    "controller_external_ip_addresses" = "[\"127.0.0.1\", \"127.0.0.2\"]"
+  }
 
-  config = {
-	"config_key_1" = "config_value_1"
-	"config_key_2" = "config_value_2"
-  }	
+  controller_config = {
+  	"agent-logfile-max-backups" = "3"
+	"audit-log-capture-args"    = "true"
+	"autocert-dns-name"         = "test-external-name"
+  }
+
+  controller_model_config = {
+	"enable-os-refresh-update" = "false"
+	"http-proxy"               = "fake-proxy"
+  }
 
   cloud = {
     name   = %q
@@ -152,10 +167,10 @@ resource "juju_controller" "controller" {
 	endpoint = "https://test-endpoint.local"
 
 	region = {
-	  name     = "local"
-	  endpoint = "https://test-endpoint.local/local"
-	  identity_endpoint = "https://test-endpoint.local/local/identity"
+	  name              = "local"
+	  endpoint          = "https://test-endpoint.local/local"
 	  storage_endpoint  = "https://test-endpoint.local/local/storage"
+	  identity_endpoint = "https://test-endpoint.local/local/identity"
 	}
 
 	type   = "test-type"
@@ -174,4 +189,41 @@ resource "juju_controller" "controller" {
   }
 }
 `, controllerName, cloudName)
+}
+
+func TestBuildStringListFromMap(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]string
+		expected []string
+	}{
+		{
+			name:     "empty map",
+			input:    map[string]string{},
+			expected: []string{},
+		},
+		{
+			name: "single entry",
+			input: map[string]string{
+				"key1": "value1",
+			},
+			expected: []string{"key1=value1"},
+		},
+		{
+			name: "multiple entries",
+			input: map[string]string{
+				"key1": "value1",
+				"key2": "value2",
+				"key3": "value3",
+			},
+			expected: []string{"key1=value1", "key2=value2", "key3=value3"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := buildStringListFromMap(tt.input)
+			require.ElementsMatch(t, tt.expected, result)
+		})
+	}
 }
