@@ -101,9 +101,6 @@ jobs:
           else
              exit 1
           fi
-      - name: Print logs
-        run: |
-          sudo journalctl -u snap.juju-db.mongod
       - name: In case of LXD setup also microk8s
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
         run: |
