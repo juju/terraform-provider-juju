@@ -88,7 +88,7 @@ jobs:
           channel: ${{ matrix.action-operator.cloud-channel }}
           juju-channel: ${{ matrix.action-operator.juju }}
           lxd-channel: ${{ matrix.action-operator.lxd-channel }}
-      - name: Setup operator environment (set status)              # set the workflow status if command failed
+      - name: Setup operator environment (set status)
         if: always()
         run: |
           if ${{ steps.setup-op-0.outcome == 'success' || steps.setup-op-1.outcome == 'success' || steps.setup-op-2.outcome=='success' }}; then
