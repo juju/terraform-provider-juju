@@ -299,29 +299,7 @@ func (r *cloudResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		state.StorageEndpoint = types.StringValue(out.StorageEndpoint)
 	}
 
-	// Juju orders the response for regions, we re-order them back to match what was written during the update to
-	// prevent drift.
-	reorderedRegions := make([]jujucloud.Region, 0, len(out.Regions))
-	regionMap := make(map[string]jujucloud.Region, len(out.Regions))
-	for _, r := range out.Regions {
-		regionMap[r.Name] = r
-	}
-
-	expandedRegions := expandRegions(ctx, state.Regions, resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	for _, r := range expandedRegions { // iterate over state's set order (the order we want)
-		if jujuR, ok := regionMap[r.Name]; ok {
-			reorderedRegions = append(reorderedRegions, jujuR)
-		} else {
-			// region missing from Juju response, just append the state copy (shouldn't ever happen I don't think)
-			reorderedRegions = append(reorderedRegions, r)
-		}
-	}
-
-	lst := flattenRegions(ctx, reorderedRegions, resp.Diagnostics)
+	lst := flattenRegions(ctx, out.Regions, resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
