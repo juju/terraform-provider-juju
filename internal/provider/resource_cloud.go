@@ -54,7 +54,7 @@ type cloudResourceModel struct {
 	IdentityEndpoint types.String `tfsdk:"identity_endpoint"`
 	StorageEndpoint  types.String `tfsdk:"storage_endpoint"`
 	CACertificates   types.Set    `tfsdk:"ca_certificates"`
-	Regions          types.Set    `tfsdk:"regions"`
+	Regions          types.List   `tfsdk:"regions"`
 
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
@@ -147,8 +147,8 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 			// All clouds must have at least one default region. Juju has a default region named "default" that is used
 			// if no regions are specified. This is provided by the CLI client when adding clouds without regions.
 			// As such we are copying that behaviour here by providing a default region named "default" if no regions are specified.
-			"regions": schema.SetNestedAttribute{
-				Description: "List of regions for the cloud. The first entry is the default region.",
+			"regions": schema.ListNestedAttribute{
+				Description: "List of regions for the cloud. The first region in the list is the default region for the cloud.",
 				Computed:    true,
 				Optional:    true,
 				NestedObject: schema.NestedAttributeObject{
@@ -299,7 +299,31 @@ func (r *cloudResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		state.StorageEndpoint = types.StringValue(out.StorageEndpoint)
 	}
 
-	lst := flattenRegions(ctx, out.Regions, resp.Diagnostics)
+	// Regions comes back in an ordered list from Juju, but we want it to match the ordering we already
+	// have in state (users may rely on index 0 being the default region).
+	// We do this as we use the 1st region in the List as the default.
+	orderedRegions := make([]jujucloud.Region, 0, len(out.Regions))
+	regionByName := make(map[string]jujucloud.Region, len(out.Regions))
+	for _, rg := range out.Regions {
+		regionByName[rg.Name] = rg
+	}
+
+	var stateCrms []cloudRegionModel
+	resp.Diagnostics.Append(state.Regions.ElementsAs(ctx, &stateCrms, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	for _, crm := range stateCrms {
+		if crm.Name.IsNull() || crm.Name.IsUnknown() {
+			continue
+		}
+		if rg, ok := regionByName[crm.Name.ValueString()]; ok {
+			orderedRegions = append(orderedRegions, rg)
+		}
+	}
+
+	lst := flattenRegions(ctx, orderedRegions, resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -396,10 +420,10 @@ func expandStringList(ctx context.Context, s types.Set, resp diag.Diagnostics) [
 	return result
 }
 
-func expandRegions(ctx context.Context, set types.Set, resp diag.Diagnostics) []jujucloud.Region {
+func expandRegions(ctx context.Context, list types.List, resp diag.Diagnostics) []jujucloud.Region {
 	var regModels []cloudRegionModel
 
-	resp.Append(set.ElementsAs(ctx, &regModels, false)...)
+	resp.Append(list.ElementsAs(ctx, &regModels, false)...)
 
 	regions := make([]jujucloud.Region, 0, len(regModels))
 	for _, rm := range regModels {
@@ -413,7 +437,7 @@ func expandRegions(ctx context.Context, set types.Set, resp diag.Diagnostics) []
 	return regions
 }
 
-func flattenRegions(ctx context.Context, regions []jujucloud.Region, resp diag.Diagnostics) types.Set {
+func flattenRegions(ctx context.Context, regions []jujucloud.Region, resp diag.Diagnostics) types.List {
 	items := make([]cloudRegionModel, 0, len(regions))
 
 	for _, r := range regions {
@@ -440,7 +464,7 @@ func flattenRegions(ctx context.Context, regions []jujucloud.Region, resp diag.D
 		})
 	}
 
-	lst, diags := types.SetValueFrom(ctx, types.ObjectType{
+	lst, diags := types.ListValueFrom(ctx, types.ObjectType{
 		AttrTypes: map[string]attr.Type{
 			"name":              types.StringType,
 			"endpoint":          types.StringType,
@@ -458,8 +482,8 @@ func flattenRegions(ctx context.Context, regions []jujucloud.Region, resp diag.D
 // It is a list with a single region element, where it's name is [jujucloud.DefaultCloudRegion].
 type defaultRegionForCloud struct{}
 
-// DefaultSet implements [defaults.List.DefaultSet] for a default cloud region.
-func (d defaultRegionForCloud) DefaultSet(ctx context.Context, _ defaults.SetRequest, res *defaults.SetResponse) {
+// DefaultSet implements [defaults.List.DefaultList] for a default cloud region.
+func (d defaultRegionForCloud) DefaultList(ctx context.Context, _ defaults.ListRequest, res *defaults.ListResponse) {
 	elemType := types.ObjectType{
 		AttrTypes: map[string]attr.Type{
 			"name":              types.StringType,
@@ -483,13 +507,13 @@ func (d defaultRegionForCloud) DefaultSet(ctx context.Context, _ defaults.SetReq
 		return
 	}
 
-	set, diags := types.SetValue(elemType, []attr.Value{obj})
+	list, diags := types.ListValue(elemType, []attr.Value{obj})
 	res.Diagnostics.Append(diags...)
 	if res.Diagnostics.HasError() {
 		return
 	}
 
-	res.PlanValue = set
+	res.PlanValue = list
 }
 
 // Description implements [defaults.Describer.Description].
