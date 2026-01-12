@@ -90,7 +90,7 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 		Description: "A resource that represents a Juju Cloud for an existing controller.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
-				Description: "The name of the cloud for Juju. Changing this value will cause the cloud to be destroyed and recreated by terraform.",
+				Description: "The name of the cloud for Juju.",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -112,7 +112,9 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 					stringvalidator.LengthAtLeast(1),
 				},
 			},
-			// Juju bug is why this cannot be nulled.
+			// Unfortunately, identity_endpoint and storage_endpoint cannot be nulled once set due to a schema design in Juju's BSON regarding
+			// these fields. They are set to omitempty, which prevents them from being cleared and the previous value returned on read.
+			// See [DisallowUnsetIfSet] for more details.
 			"identity_endpoint": schema.StringAttribute{
 				Description: "Optional global identity endpoint for the cloud. This field cannot be set to a null value once previously set.",
 				Optional:    true,
@@ -123,7 +125,6 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 					DisallowUnsetIfSet("identity_endpoint cannot be unset once set"),
 				},
 			},
-			// Juju bug is why this cannot be nulled.
 			"storage_endpoint": schema.StringAttribute{
 				Description: "Optional global storage endpoint for the cloud. This field cannot be set to a null value once previously set.",
 				Optional:    true,
@@ -143,8 +144,9 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 				// ensure they are valid PEM-encoded certs here.
 				Validators: []validator.List{ValidateCACertificatesPEM()},
 			},
-			// All clouds must have at least one default region. We want to allow users to optionally use
-			// the default region, as such, we're adhering to the Juju requirement here.
+			// All clouds must have at least one default region. Juju has a default region named "default" that is used
+			// if no regions are specified. This is provided by the CLI client when adding clouds without regions.
+			// As such we are copying that behaviour here by providing a default region named "default" if no regions are specified.
 			"regions": schema.ListNestedAttribute{
 				Description: "List of regions for the cloud. The first entry is the default region.",
 				Computed:    true,
@@ -195,22 +197,23 @@ func (r *cloudResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	regions, diags := expandRegions(ctx, plan.Regions)
-	resp.Diagnostics.Append(diags...)
+	regions := expandRegions(ctx, plan.Regions, resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// This shouldn't happen due to the default, but just in case.
 	if len(regions) == 0 {
-		resp.Diagnostics.AddError("Plan Error", "Field `regions` must contain at least one region (the first is the default).")
+		resp.Diagnostics.AddError("Plan Error", "Field `regions` must contain at least one region.")
 		return
 	}
-	authTypes, diags2 := expandStringList(ctx, plan.AuthTypes)
-	resp.Diagnostics.Append(diags2...)
+
+	authTypes := expandStringList(ctx, plan.AuthTypes, resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	cacerts, diags3 := expandStringList(ctx, plan.CACertificates)
-	resp.Diagnostics.Append(diags3...)
+
+	cacerts := expandStringList(ctx, plan.CACertificates, resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -304,8 +307,7 @@ func (r *cloudResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		regionMap[r.Name] = r
 	}
 
-	expandedRegions, diags := expandRegions(ctx, state.Regions)
-	resp.Diagnostics.Append(diags...)
+	expandedRegions := expandRegions(ctx, state.Regions, resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -319,12 +321,11 @@ func (r *cloudResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		}
 	}
 
-	if lst, d := flattenRegions(ctx, reorderedRegions); !d.HasError() {
-		state.Regions = lst
-	} else {
-		resp.Diagnostics.Append(d...)
+	lst := flattenRegions(ctx, reorderedRegions, resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
 		return
 	}
+	state.Regions = lst
 
 	state.ID = types.StringValue(out.Name)
 
@@ -345,18 +346,15 @@ func (r *cloudResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	regions, diags := expandRegions(ctx, plan.Regions)
-	resp.Diagnostics.Append(diags...)
+	regions := expandRegions(ctx, plan.Regions, resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	authTypes, diags2 := expandStringList(ctx, plan.AuthTypes)
-	resp.Diagnostics.Append(diags2...)
+	authTypes := expandStringList(ctx, plan.AuthTypes, resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	cacerts, diags3 := expandStringList(ctx, plan.CACertificates)
-	resp.Diagnostics.Append(diags3...)
+	cacerts := expandStringList(ctx, plan.CACertificates, resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -412,25 +410,19 @@ func (r *cloudResource) trace(msg string, additionalFields ...map[string]interfa
 	tflog.SubsystemTrace(r.subCtx, LogResourceCloud, msg, additionalFields...)
 }
 
-func expandStringList(ctx context.Context, l types.List) ([]string, diag.Diagnostics) {
+func expandStringList(ctx context.Context, l types.List, resp diag.Diagnostics) []string {
 	var result []string
-	if l.IsNull() || l.IsUnknown() {
-		return result, nil
-	}
 
-	return result, l.ElementsAs(ctx, &result, false)
+	resp.Append(l.ElementsAs(ctx, &result, false)...)
+
+	return result
 }
 
-func expandRegions(ctx context.Context, list types.List) ([]jujucloud.Region, diag.Diagnostics) {
-	var diags diag.Diagnostics
+func expandRegions(ctx context.Context, list types.List, resp diag.Diagnostics) []jujucloud.Region {
 	var regModels []cloudRegionModel
-	if list.IsNull() || list.IsUnknown() {
-		return nil, diags
-	}
-	diags.Append(list.ElementsAs(ctx, &regModels, false)...)
-	if diags.HasError() {
-		return nil, diags
-	}
+
+	resp.Append(list.ElementsAs(ctx, &regModels, false)...)
+
 	regions := make([]jujucloud.Region, 0, len(regModels))
 	for _, rm := range regModels {
 		regions = append(regions, jujucloud.Region{
@@ -440,10 +432,10 @@ func expandRegions(ctx context.Context, list types.List) ([]jujucloud.Region, di
 			StorageEndpoint:  rm.StorageEndpoint.ValueString(),
 		})
 	}
-	return regions, diags
+	return regions
 }
 
-func flattenRegions(ctx context.Context, regions []jujucloud.Region) (types.List, diag.Diagnostics) {
+func flattenRegions(ctx context.Context, regions []jujucloud.Region, resp diag.Diagnostics) types.List {
 	items := make([]cloudRegionModel, 0, len(regions))
 
 	for _, r := range regions {
@@ -479,9 +471,13 @@ func flattenRegions(ctx context.Context, regions []jujucloud.Region) (types.List
 		},
 	}, items)
 
-	return lst, diags
+	resp.Append(diags...)
+
+	return lst
 }
 
+// defaultRegionForCloud implements a default for the regions attribute of the cloud resource.
+// It is a list with a single region element, where it's name is [jujucloud.DefaultCloudRegion].
 type defaultRegionForCloud struct{}
 
 // DefaultList implements [defaults.List.DefaultList] for a default cloud region.
