@@ -204,7 +204,7 @@ func (r *cloudResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	regions := expandRegions(ctx, plan.Regions, resp.Diagnostics)
+	regions := expandRegions(ctx, plan.Regions, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -215,12 +215,12 @@ func (r *cloudResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	authTypes := expandStringList(ctx, plan.AuthTypes, resp.Diagnostics)
+	authTypes := expandStringList(ctx, plan.AuthTypes, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	cacerts := expandStringList(ctx, plan.CACertificates, resp.Diagnostics)
+	cacerts := expandStringList(ctx, plan.CACertificates, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -349,7 +349,7 @@ func (r *cloudResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		}
 	}
 
-	lst := flattenRegions(ctx, orderedRegions, resp.Diagnostics)
+	lst := flattenRegions(ctx, orderedRegions, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -374,15 +374,15 @@ func (r *cloudResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	regions := expandRegions(ctx, plan.Regions, resp.Diagnostics)
+	regions := expandRegions(ctx, plan.Regions, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	authTypes := expandStringList(ctx, plan.AuthTypes, resp.Diagnostics)
+	authTypes := expandStringList(ctx, plan.AuthTypes, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	cacerts := expandStringList(ctx, plan.CACertificates, resp.Diagnostics)
+	cacerts := expandStringList(ctx, plan.CACertificates, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -526,7 +526,7 @@ func (r *cloudResource) trace(msg string, additionalFields ...map[string]interfa
 	tflog.SubsystemTrace(r.subCtx, LogResourceCloud, msg, additionalFields...)
 }
 
-func expandStringList(ctx context.Context, s types.Set, resp diag.Diagnostics) []string {
+func expandStringList(ctx context.Context, s types.Set, resp *diag.Diagnostics) []string {
 	var result []string
 
 	resp.Append(s.ElementsAs(ctx, &result, false)...)
@@ -534,7 +534,7 @@ func expandStringList(ctx context.Context, s types.Set, resp diag.Diagnostics) [
 	return result
 }
 
-func expandRegions(ctx context.Context, list types.List, resp diag.Diagnostics) []jujucloud.Region {
+func expandRegions(ctx context.Context, list types.List, resp *diag.Diagnostics) []jujucloud.Region {
 	var regModels []cloudRegionModel
 
 	resp.Append(list.ElementsAs(ctx, &regModels, false)...)
@@ -551,7 +551,7 @@ func expandRegions(ctx context.Context, list types.List, resp diag.Diagnostics) 
 	return regions
 }
 
-func flattenRegions(ctx context.Context, regions []jujucloud.Region, resp diag.Diagnostics) types.List {
+func flattenRegions(ctx context.Context, regions []jujucloud.Region, resp *diag.Diagnostics) types.List {
 	items := make([]cloudRegionModel, 0, len(regions))
 
 	for _, r := range regions {

@@ -56,17 +56,17 @@ resource "juju_cloud" "this" {
 
 ### Required
 
-- `auth_types` (List of String) List of supported authentication types by the cloud.
-- `name` (String) The name of the cloud for Juju. Changing this value will cause the cloud to be destroyed and recreated by terraform.
+- `auth_types` (Set of String) List of supported authentication types by the cloud.
+- `name` (String) The name of the cloud for Juju.
 - `type` (String) The type of the cloud.
 
 ### Optional
 
-- `ca_certificates` (List of String, Sensitive) List of PEM-encoded X509 certificates for the cloud.
+- `ca_certificates` (Set of String, Sensitive) List of PEM-encoded X509 certificates for the cloud.
 - `endpoint` (String) Optional global endpoint for the cloud.
-- `identity_endpoint` (String) Optional global identity endpoint for the cloud. This field cannot be set to a null value once previously set.
-- `regions` (Attributes List) List of regions for the cloud. The first entry is the default region. (see [below for nested schema](#nestedatt--regions))
-- `storage_endpoint` (String) Optional global storage endpoint for the cloud. This field cannot be set to a null value once previously set.
+- `identity_endpoint` (String) Optional global identity endpoint for the cloud.
+- `regions` (Attributes List) List of regions for the cloud. The first region in the list is the default region for the cloud. (see [below for nested schema](#nestedatt--regions))
+- `storage_endpoint` (String) Optional global storage endpoint for the cloud.
 
 ### Read-Only
 
