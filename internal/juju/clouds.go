@@ -1,4 +1,4 @@
-// Copyright 2024 Canonical Ltd.
+// Copyright 2023 Canonical Ltd.
 // Licensed under the Apache License, Version 2.0, see LICENCE file for details.
 
 package juju
@@ -31,6 +31,11 @@ const (
 	// operatorStorageKey is the model config attribute used to specify
 	// the storage class for provisioning operator storage.
 	operatorStorageKey = "operator-storage"
+)
+
+var (
+	// CloudNotFoundError is returned when a cloud does not exist.
+	CloudNotFoundError = errors.New("cloud not found")
 )
 
 type cloudsClient struct {
@@ -447,6 +452,10 @@ func (c *cloudsClient) ReadCloud(input ReadCloudInput) (*ReadCloudOutput, error)
 	cloudClient := c.getCloudAPIClient(conn)
 
 	jjCloud, err := cloudClient.Cloud(names.NewCloudTag(input.Name))
+	if errors.Is(err, errors.NotFound) {
+		return nil, CloudNotFoundError
+	}
+
 	if err != nil {
 		return nil, errors.Annotate(err, "getting cloud")
 	}

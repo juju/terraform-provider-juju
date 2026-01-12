@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -22,6 +23,7 @@ import (
 
 	jujucloud "github.com/juju/juju/cloud"
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -108,9 +110,6 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 			"endpoint": schema.StringAttribute{
 				Description: "Optional global endpoint for the cloud.",
 				Optional:    true,
-				Validators: []validator.String{
-					stringvalidator.LengthAtLeast(1),
-				},
 			},
 			// Unfortunately, identity_endpoint and storage_endpoint cannot be nulled once set due to a schema design in Juju's BSON regarding
 			// these fields. They are set to omitempty, which prevents them from being cleared and the previous value returned on read.
@@ -247,6 +246,25 @@ func (r *cloudResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	if err := r.client.Clouds.AddCloud(input); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create cloud, got error %s", err))
+		return
+	}
+
+	if _, err := wait.WaitFor(
+		wait.WaitForCfg[juju.ReadCloudInput, *juju.ReadCloudOutput]{
+			Context: ctx,
+			GetData: r.client.Clouds.ReadCloud,
+			Input:   juju.ReadCloudInput{Name: plan.Name.ValueString()},
+			DataAssertions: []wait.Assert[*juju.ReadCloudOutput]{
+				func(output *juju.ReadCloudOutput) error {
+					if output.Name != plan.Name.ValueString() {
+						return juju.NewRetryReadError("waiting for cloud to be created")
+					}
+					return nil
+				},
+			},
+		},
+	); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to verify cloud creation, got error %s", err))
 		return
 	}
 
@@ -391,6 +409,77 @@ func (r *cloudResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
+	if _, err := wait.WaitFor(
+		wait.WaitForCfg[juju.ReadCloudInput, *juju.ReadCloudOutput]{
+			Context: ctx,
+			GetData: r.client.Clouds.ReadCloud,
+			Input:   juju.ReadCloudInput{Name: plan.Name.ValueString()},
+			DataAssertions: []wait.Assert[*juju.ReadCloudOutput]{
+				func(output *juju.ReadCloudOutput) error {
+					// Endpoint: treat null as empty string on the Juju side.
+					expectedEndpoint := ""
+					if !plan.Endpoint.IsNull() && !plan.Endpoint.IsUnknown() {
+						expectedEndpoint = plan.Endpoint.ValueString()
+					}
+					if output.Endpoint != expectedEndpoint {
+						return juju.NewRetryReadError("waiting for cloud endpoint to be updated")
+					}
+
+					// Auth types: order is not significant.
+					if len(output.AuthTypes) != len(at) {
+						return juju.NewRetryReadError("waiting for cloud auth types to be updated")
+					}
+					expectedAT := make(map[string]struct{}, len(at))
+					for _, v := range at {
+						expectedAT[string(v)] = struct{}{}
+					}
+					for _, got := range output.AuthTypes {
+						if _, ok := expectedAT[string(got)]; !ok {
+							return juju.NewRetryReadError("waiting for cloud auth types to be updated")
+						}
+					}
+
+					// CA certificates: exact string match, order not significant.
+					if len(output.CACertificates) != len(cacerts) {
+						return juju.NewRetryReadError("waiting for cloud ca certificates to be updated")
+					}
+					expectedCAs := make(map[string]struct{}, len(cacerts))
+					for _, v := range cacerts {
+						expectedCAs[v] = struct{}{}
+					}
+					for _, got := range output.CACertificates {
+						if _, ok := expectedCAs[got]; !ok {
+							return juju.NewRetryReadError("waiting for cloud ca certificates to be updated")
+						}
+					}
+
+					// Regions: Juju returns an ordered list, but we validate set equality by name and fields.
+					if len(output.Regions) != len(regions) {
+						return juju.NewRetryReadError("waiting for cloud regions to be updated")
+					}
+					expectedRegions := make(map[string]jujucloud.Region, len(regions))
+					for _, r := range regions {
+						expectedRegions[r.Name] = r
+					}
+					for _, got := range output.Regions {
+						exp, ok := expectedRegions[got.Name]
+						if !ok {
+							return juju.NewRetryReadError("waiting for cloud regions to be updated")
+						}
+						if got.Endpoint != exp.Endpoint || got.IdentityEndpoint != exp.IdentityEndpoint || got.StorageEndpoint != exp.StorageEndpoint {
+							return juju.NewRetryReadError("waiting for cloud regions to be updated")
+						}
+					}
+
+					return nil
+				},
+			},
+		},
+	); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to verify cloud update, got error %s", err))
+		return
+	}
+
 	r.trace(fmt.Sprintf("Updated cloud %s", plan.Name.ValueString()))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -410,6 +499,23 @@ func (r *cloudResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to remove cloud, got error %s", err))
 		return
 	}
+
+	if err := wait.WaitForError(
+		wait.WaitForErrorCfg[juju.ReadCloudInput, *juju.ReadCloudOutput]{
+			Context:        ctx,
+			GetData:        r.client.Clouds.ReadCloud,
+			Input:          juju.ReadCloudInput{Name: state.Name.ValueString()},
+			ExpectedErr:    juju.CloudNotFoundError,
+			RetryAllErrors: true,
+			RetryConf: &wait.RetryConf{
+				MaxDuration: time.Second,
+			},
+		},
+	); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to verify cloud deletion, got error %s", err))
+		return
+	}
+
 	r.trace(fmt.Sprintf("Removed cloud %s", state.Name.ValueString()))
 }
 

@@ -1,5 +1,5 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
+// Copyright 2026 Canonical Ltd.
+// Licensed under the Apache License, Version 2.0, see LICENCE file for details.
 
 package provider
 
