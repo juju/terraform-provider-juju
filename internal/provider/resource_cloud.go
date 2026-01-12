@@ -116,23 +116,31 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 			// these fields. They are set to omitempty, which prevents them from being cleared and the previous value returned on read.
 			// See [DisallowUnsetIfSet] for more details.
 			"identity_endpoint": schema.StringAttribute{
-				Description: "Optional global identity endpoint for the cloud. This field cannot be set to a null value once previously set.",
+				Description: "Optional global identity endpoint for the cloud.",
 				Optional:    true,
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
 				},
 				PlanModifiers: []planmodifier.String{
-					DisallowUnsetIfSet("identity_endpoint cannot be unset once set"),
+					stringplanmodifier.RequiresReplaceIf(
+						replaceIfIdentityOrStorageEndpointUnset,
+						"identity_endpoint cannot be unset once set (resource must be replaced)",
+						"identity_endpoint cannot be unset once set (resource must be replaced)",
+					),
 				},
 			},
 			"storage_endpoint": schema.StringAttribute{
-				Description: "Optional global storage endpoint for the cloud. This field cannot be set to a null value once previously set.",
+				Description: "Optional global storage endpoint for the cloud.",
 				Optional:    true,
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
 				},
 				PlanModifiers: []planmodifier.String{
-					DisallowUnsetIfSet("storage_endpoint cannot be unset once set"),
+					stringplanmodifier.RequiresReplaceIf(
+						replaceIfIdentityOrStorageEndpointUnset,
+						"storage_endpoint cannot be unset once set (resource must be replaced)",
+						"storage_endpoint cannot be unset once set (resource must be replaced)",
+					),
 				},
 			},
 			"ca_certificates": schema.SetAttribute{
@@ -476,6 +484,23 @@ func flattenRegions(ctx context.Context, regions []jujucloud.Region, resp diag.D
 	resp.Append(diags...)
 
 	return lst
+}
+
+// replaceIfIdentityOrStorageEndpointUnset is a plan modifier function that forces replacement
+// of the attribute if it was set, and the user unsets it by removing the field (plan becomes null).
+// They cannot set it to "" due to validation.
+func replaceIfIdentityOrStorageEndpointUnset(ctx context.Context, sr planmodifier.StringRequest, rrifr *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+	// Force replacement if the attribute was set, and the user unsets it by removing
+	// the field (plan becomes null). They cannot set it to "" due to validation.
+	if sr.StateValue.IsNull() || sr.StateValue.IsUnknown() {
+		return
+	}
+	if sr.PlanValue.IsUnknown() {
+		return
+	}
+	if sr.PlanValue.IsNull() {
+		rrifr.RequiresReplace = true
+	}
 }
 
 // defaultRegionForCloud implements a default for the regions attribute of the cloud resource.

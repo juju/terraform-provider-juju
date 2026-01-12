@@ -101,12 +101,16 @@ func TestAcc_ResourceCloud(t *testing.T) {
 					resource.TestCheckNoResourceAttr(resourceName, "regions.2.storage_endpoint"),
 				),
 			},
-			// We don't allow unsetting identity or storage endpoints, so verify our plan validator runs.
+			// We don't allow unsetting identity or storage endpoints. Forcing a replacement is the
+			// supported behaviour (removing the field makes the plan null).
 			{
-				Config:   testAccResourceCloud_OpenStack_Minimal(cloudName),
-				PlanOnly: true,
-				ExpectError: regexp.MustCompile(
-					`(?s)Unsupported change.*(identity_endpoint|storage_endpoint) cannot be unset once set \(workaround for a Juju limitation\)`,
+				Config:             testAccResourceCloud_OpenStack_Minimal(cloudName),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
+				ExpectError:        nil,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", cloudName),
+					resource.TestCheckResourceAttr(resourceName, "id", cloudName),
 				),
 			},
 		},
