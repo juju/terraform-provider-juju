@@ -52,13 +52,13 @@ TiQuXo1Umr0AZLv9jFBEkvVJAdgURVouG/lnidQ3apg4NcAWv2cpOBQ=
 
 func TestValidateCACertificatesPEM_Success(t *testing.T) {
 	v := provider.ValidateCACertificatesPEM()
-	list, diags := types.ListValueFrom(context.Background(), types.StringType, []string{testCert})
+	set, diags := types.SetValueFrom(context.Background(), types.StringType, []string{testCert})
 	if diags.HasError() {
-		t.Fatalf("failed to build list: %v", diags)
+		t.Fatalf("failed to build set: %v", diags)
 	}
-	req := validator.ListRequest{ConfigValue: list}
-	var resp validator.ListResponse
-	v.ValidateList(context.Background(), req, &resp)
+	req := validator.SetRequest{ConfigValue: set}
+	var resp validator.SetResponse
+	v.ValidateSet(context.Background(), req, &resp)
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("expected no errors, got: %v", resp.Diagnostics)
 	}
@@ -66,13 +66,13 @@ func TestValidateCACertificatesPEM_Success(t *testing.T) {
 
 func TestValidateCACertificatesPEM_InvalidPEM(t *testing.T) {
 	v := provider.ValidateCACertificatesPEM()
-	list, diags := types.ListValueFrom(context.Background(), types.StringType, []string{"invalid"})
+	set, diags := types.SetValueFrom(context.Background(), types.StringType, []string{"invalid"})
 	if diags.HasError() {
-		t.Fatalf("failed to build list: %v", diags)
+		t.Fatalf("failed to build set: %v", diags)
 	}
-	req := validator.ListRequest{ConfigValue: list}
-	var resp validator.ListResponse
-	v.ValidateList(context.Background(), req, &resp)
+	req := validator.SetRequest{ConfigValue: set}
+	var resp validator.SetResponse
+	v.ValidateSet(context.Background(), req, &resp)
 	if !resp.Diagnostics.HasError() {
 		t.Fatalf("expected validation error for invalid PEM, got none")
 	}
@@ -84,13 +84,13 @@ func TestValidateCACertificatesPEM_InvalidCertInsidePEM(t *testing.T) {
 	payload := base64.StdEncoding.EncodeToString([]byte("not a cert"))
 	invalidPEM := "-----BEGIN CERTIFICATE-----\n" + payload + "\n-----END CERTIFICATE-----\n"
 
-	list, diags := types.ListValueFrom(context.Background(), types.StringType, []string{invalidPEM})
+	set, diags := types.SetValueFrom(context.Background(), types.StringType, []string{invalidPEM})
 	if diags.HasError() {
-		t.Fatalf("failed to build list: %v", diags)
+		t.Fatalf("failed to build set: %v", diags)
 	}
-	req := validator.ListRequest{ConfigValue: list}
-	var resp validator.ListResponse
-	v.ValidateList(context.Background(), req, &resp)
+	req := validator.SetRequest{ConfigValue: set}
+	var resp validator.SetResponse
+	v.ValidateSet(context.Background(), req, &resp)
 	if !resp.Diagnostics.HasError() {
 		t.Fatalf("expected validation error for invalid cert payload, got none")
 	}

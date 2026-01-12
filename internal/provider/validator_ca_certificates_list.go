@@ -14,7 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
-var _ validator.List = caPEMCertificateListValidator{}
+var _ validator.Set = caPEMCertificateListValidator{}
 
 // caPEMCertificateListValidator validates that each list element is a PEM-encoded X.509 certificate.
 type caPEMCertificateListValidator struct{}
@@ -27,7 +27,7 @@ func (v caPEMCertificateListValidator) MarkdownDescription(ctx context.Context) 
 	return v.Description(ctx)
 }
 
-func (v caPEMCertificateListValidator) ValidateList(ctx context.Context, req validator.ListRequest, resp *validator.ListResponse) {
+func (v caPEMCertificateListValidator) ValidateSet(ctx context.Context, req validator.SetRequest, resp *validator.SetResponse) {
 	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
 		return
 	}
@@ -102,6 +102,6 @@ func (v caPEMCertificateListValidator) ValidateList(ctx context.Context, req val
 }
 
 // ValidateCACertificatesPEM returns a validator for ca_certificates list attributes that enforces PEM encoding.
-func ValidateCACertificatesPEM() validator.List {
+func ValidateCACertificatesPEM() validator.Set {
 	return caPEMCertificateListValidator{}
 }

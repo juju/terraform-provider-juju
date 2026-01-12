@@ -49,12 +49,12 @@ type cloudRegionModel struct {
 type cloudResourceModel struct {
 	Name             types.String `tfsdk:"name"`
 	Type             types.String `tfsdk:"type"`
-	AuthTypes        types.List   `tfsdk:"auth_types"`
+	AuthTypes        types.Set    `tfsdk:"auth_types"`
 	Endpoint         types.String `tfsdk:"endpoint"`
 	IdentityEndpoint types.String `tfsdk:"identity_endpoint"`
 	StorageEndpoint  types.String `tfsdk:"storage_endpoint"`
-	CACertificates   types.List   `tfsdk:"ca_certificates"`
-	Regions          types.List   `tfsdk:"regions"`
+	CACertificates   types.Set    `tfsdk:"ca_certificates"`
+	Regions          types.Set    `tfsdk:"regions"`
 
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
@@ -100,7 +100,7 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 				Description: "The type of the cloud.",
 				Required:    true,
 			},
-			"auth_types": schema.ListAttribute{
+			"auth_types": schema.SetAttribute{
 				Description: "List of supported authentication types by the cloud.",
 				ElementType: types.StringType,
 				Required:    true,
@@ -135,19 +135,19 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 					DisallowUnsetIfSet("storage_endpoint cannot be unset once set"),
 				},
 			},
-			"ca_certificates": schema.ListAttribute{
+			"ca_certificates": schema.SetAttribute{
 				Description: "List of PEM-encoded X509 certificates for the cloud.",
 				ElementType: types.StringType,
 				Optional:    true,
 				Sensitive:   true,
 				// Juju doesn't validate the certificates on add/update, but we can at least
 				// ensure they are valid PEM-encoded certs here.
-				Validators: []validator.List{ValidateCACertificatesPEM()},
+				Validators: []validator.Set{ValidateCACertificatesPEM()},
 			},
 			// All clouds must have at least one default region. Juju has a default region named "default" that is used
 			// if no regions are specified. This is provided by the CLI client when adding clouds without regions.
 			// As such we are copying that behaviour here by providing a default region named "default" if no regions are specified.
-			"regions": schema.ListNestedAttribute{
+			"regions": schema.SetNestedAttribute{
 				Description: "List of regions for the cloud. The first entry is the default region.",
 				Computed:    true,
 				Optional:    true,
@@ -272,7 +272,7 @@ func (r *cloudResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	state.Type = types.StringValue(out.Type)
 
 	var dErr diag.Diagnostics
-	state.AuthTypes, dErr = types.ListValueFrom(ctx, types.StringType, out.AuthTypes)
+	state.AuthTypes, dErr = types.SetValueFrom(ctx, types.StringType, out.AuthTypes)
 	if dErr.HasError() {
 		resp.Diagnostics.Append(dErr...)
 		return
@@ -410,18 +410,18 @@ func (r *cloudResource) trace(msg string, additionalFields ...map[string]interfa
 	tflog.SubsystemTrace(r.subCtx, LogResourceCloud, msg, additionalFields...)
 }
 
-func expandStringList(ctx context.Context, l types.List, resp diag.Diagnostics) []string {
+func expandStringList(ctx context.Context, s types.Set, resp diag.Diagnostics) []string {
 	var result []string
 
-	resp.Append(l.ElementsAs(ctx, &result, false)...)
+	resp.Append(s.ElementsAs(ctx, &result, false)...)
 
 	return result
 }
 
-func expandRegions(ctx context.Context, list types.List, resp diag.Diagnostics) []jujucloud.Region {
+func expandRegions(ctx context.Context, set types.Set, resp diag.Diagnostics) []jujucloud.Region {
 	var regModels []cloudRegionModel
 
-	resp.Append(list.ElementsAs(ctx, &regModels, false)...)
+	resp.Append(set.ElementsAs(ctx, &regModels, false)...)
 
 	regions := make([]jujucloud.Region, 0, len(regModels))
 	for _, rm := range regModels {
@@ -435,7 +435,7 @@ func expandRegions(ctx context.Context, list types.List, resp diag.Diagnostics) 
 	return regions
 }
 
-func flattenRegions(ctx context.Context, regions []jujucloud.Region, resp diag.Diagnostics) types.List {
+func flattenRegions(ctx context.Context, regions []jujucloud.Region, resp diag.Diagnostics) types.Set {
 	items := make([]cloudRegionModel, 0, len(regions))
 
 	for _, r := range regions {
@@ -462,7 +462,7 @@ func flattenRegions(ctx context.Context, regions []jujucloud.Region, resp diag.D
 		})
 	}
 
-	lst, diags := types.ListValueFrom(ctx, types.ObjectType{
+	lst, diags := types.SetValueFrom(ctx, types.ObjectType{
 		AttrTypes: map[string]attr.Type{
 			"name":              types.StringType,
 			"endpoint":          types.StringType,
@@ -480,8 +480,8 @@ func flattenRegions(ctx context.Context, regions []jujucloud.Region, resp diag.D
 // It is a list with a single region element, where it's name is [jujucloud.DefaultCloudRegion].
 type defaultRegionForCloud struct{}
 
-// DefaultList implements [defaults.List.DefaultList] for a default cloud region.
-func (d defaultRegionForCloud) DefaultList(ctx context.Context, _ defaults.ListRequest, res *defaults.ListResponse) {
+// DefaultSet implements [defaults.List.DefaultSet] for a default cloud region.
+func (d defaultRegionForCloud) DefaultSet(ctx context.Context, _ defaults.SetRequest, res *defaults.SetResponse) {
 	elemType := types.ObjectType{
 		AttrTypes: map[string]attr.Type{
 			"name":              types.StringType,
@@ -505,13 +505,13 @@ func (d defaultRegionForCloud) DefaultList(ctx context.Context, _ defaults.ListR
 		return
 	}
 
-	list, diags := types.ListValue(elemType, []attr.Value{obj})
+	set, diags := types.SetValue(elemType, []attr.Value{obj})
 	res.Diagnostics.Append(diags...)
 	if res.Diagnostics.HasError() {
 		return
 	}
 
-	res.PlanValue = list
+	res.PlanValue = set
 }
 
 // Description implements [defaults.Describer.Description].
