@@ -114,6 +114,65 @@ func TestAcc_ResourceCloud(t *testing.T) {
 					resource.TestCheckNoResourceAttr(resourceName, "regions.2.storage_endpoint"),
 				),
 			},
+			// Re-order regions and ensure state stores the plan order and not the API order.
+			// Additionally, we add a new region. And update the name of an existing region.
+			{
+				Config: testAccCloudFromTemplate(internaltesting.TemplateData{
+					"Name":                    cloudName,
+					"Type":                    "openstack",
+					"IncludeAuthTypes":        true,
+					"AuthTypesList":           hclList([]string{"userpass", "access-key"}),
+					"IncludeEndpoint":         true,
+					"Endpoint":                "https://cloud.example.com",
+					"IncludeIdentityEndpoint": true,
+					"IdentityEndpoint":        "https://identity.example.com",
+					"IncludeStorageEndpoint":  true,
+					"StorageEndpoint":         "https://storage.example.com",
+					"IncludeCACerts":          true,
+					"CACertsHCL":              hclCACerts([]string{ca1, ca2}),
+					"IncludeRegions":          true,
+					"RegionsHCL": hclRegions([]map[string]string{
+						{"name": "oh-no-something-appeared"},
+						{"name": "us-east-1"},
+						{"name": "default", "endpoint": "https://region-default.example.com", "identity_endpoint": "https://identity-default.example.com", "storage_endpoint": "https://storage-default.example.com"},
+						{"name": "us-east-3"},
+					}),
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", cloudName),
+					resource.TestCheckResourceAttr(resourceName, "type", "openstack"),
+					resource.TestCheckResourceAttr(resourceName, "auth_types.#", "2"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "auth_types.*", "userpass"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "auth_types.*", "access-key"),
+					resource.TestCheckResourceAttr(resourceName, "endpoint", "https://cloud.example.com"),
+					resource.TestCheckResourceAttr(resourceName, "identity_endpoint", "https://identity.example.com"),
+					resource.TestCheckResourceAttr(resourceName, "storage_endpoint", "https://storage.example.com"),
+					resource.TestCheckResourceAttr(resourceName, "ca_certificates.#", "2"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "ca_certificates.*", ca1+"\n"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "ca_certificates.*", ca2+"\n"),
+					resource.TestCheckResourceAttr(resourceName, "regions.#", "4"),
+					// oh-no-something-appeared
+					resource.TestCheckResourceAttr(resourceName, "regions.0.name", "oh-no-something-appeared"),
+					resource.TestCheckNoResourceAttr(resourceName, "regions.0.endpoint"),
+					resource.TestCheckNoResourceAttr(resourceName, "regions.0.identity_endpoint"),
+					resource.TestCheckNoResourceAttr(resourceName, "regions.0.storage_endpoint"),
+					// us-east-1
+					resource.TestCheckResourceAttr(resourceName, "regions.1.name", "us-east-1"),
+					resource.TestCheckNoResourceAttr(resourceName, "regions.1.endpoint"),
+					resource.TestCheckNoResourceAttr(resourceName, "regions.1.identity_endpoint"),
+					resource.TestCheckNoResourceAttr(resourceName, "regions.1.storage_endpoint"),
+					// default
+					resource.TestCheckResourceAttr(resourceName, "regions.2.name", "default"),
+					resource.TestCheckResourceAttr(resourceName, "regions.2.endpoint", "https://region-default.example.com"),
+					resource.TestCheckResourceAttr(resourceName, "regions.2.identity_endpoint", "https://identity-default.example.com"),
+					resource.TestCheckResourceAttr(resourceName, "regions.2.storage_endpoint", "https://storage-default.example.com"),
+					// us-east 3 (previously us-east-2)
+					resource.TestCheckResourceAttr(resourceName, "regions.3.name", "us-east-3"),
+					resource.TestCheckNoResourceAttr(resourceName, "regions.3.endpoint"),
+					resource.TestCheckNoResourceAttr(resourceName, "regions.3.identity_endpoint"),
+					resource.TestCheckNoResourceAttr(resourceName, "regions.3.storage_endpoint"),
+				),
+			},
 			// We don't allow unsetting identity or storage endpoints. Forcing a replacement is the
 			// supported behaviour (removing the field makes the plan null).
 			{

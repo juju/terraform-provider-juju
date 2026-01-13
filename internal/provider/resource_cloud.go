@@ -325,26 +325,40 @@ func (r *cloudResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		state.StorageEndpoint = types.StringValue(out.StorageEndpoint)
 	}
 
-	// Regions comes back in an ordered list from Juju, but we want it to match the ordering we already
-	// have in state (users may rely on index 0 being the default region).
+	// Regions comes back in an ordered lexicographical list from Juju, but we
+	// want it to match the ordering we already have in state
+	// (users may rely on index 0 being the default region).
 	// We do this as we use the 1st region in the List as the default.
 	orderedRegions := make([]jujucloud.Region, 0, len(out.Regions))
-	regionByName := make(map[string]jujucloud.Region, len(out.Regions))
+
+	// Build a lookup of regions returned by Juju
+	outRegionByName := make(map[string]jujucloud.Region, len(out.Regions))
 	for _, rg := range out.Regions {
-		regionByName[rg.Name] = rg
+		outRegionByName[rg.Name] = rg
 	}
 
+	// Read regions from state to preserve ordering
 	var stateCrms []cloudRegionModel
 	resp.Diagnostics.Append(state.Regions.ElementsAs(ctx, &stateCrms, false)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
+	// First, add regions that exist in state, in state order,
+	// and remove them from the lookup map as they are consumed.
 	for _, crm := range stateCrms {
-		if crm.Name.IsNull() || crm.Name.IsUnknown() {
-			continue
+		if rg, ok := outRegionByName[crm.Name.ValueString()]; ok {
+			orderedRegions = append(orderedRegions, rg)
+			delete(outRegionByName, crm.Name.ValueString())
 		}
-		if rg, ok := regionByName[crm.Name.ValueString()]; ok {
+	}
+
+	// Append any regions that exist in Juju but were not present in state
+	// (e.g. added out-of-band). Iterate Juju's original slice so that newly
+	// discovered regions are appended in a deterministic (lexicographical)
+	// order, AFTER all state-ordered regions.
+	for _, rg := range out.Regions {
+		if _, stillMissing := outRegionByName[rg.Name]; stillMissing {
 			orderedRegions = append(orderedRegions, rg)
 		}
 	}
