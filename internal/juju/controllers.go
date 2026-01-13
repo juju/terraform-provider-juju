@@ -224,7 +224,9 @@ func (d *DefaultJujuCommand) Bootstrap(ctx context.Context, args BootstrapArgume
 // performBootstrap executes the actual bootstrap logic with the provided command runner.
 // This function is separated to allow for easier testing with a mock command runner.
 func performBootstrap(ctx context.Context, args BootstrapArguments, tmpDir string, runner CommandRunner) (*ControllerConnectionInformation, error) {
-	// Update public clouds
+	// Update public clouds - this command will go fetch a list of public clouds
+	// from https://streams.canonical.com/juju/public-clouds.syaml and update
+	// client's local store.
 	if err := runner.Run(ctx, "update-public-clouds", "--client"); err != nil {
 		return nil, fmt.Errorf("failed to update public clouds: %w", err)
 	}
@@ -236,6 +238,9 @@ func performBootstrap(ctx context.Context, args BootstrapArguments, tmpDir strin
 		return nil, fmt.Errorf("failed to validate cloud: %w", err)
 	}
 
+	// If a cloud is not known to Juju i.e. public cloud like AWS, Azure, GCP, etc.,
+	// then we need to create a cloud entry on disk with information on how
+	// to reach the cloud, its regions, etc.
 	if !isPublicCloud {
 		// Create personal cloud
 		cloud := buildJujuCloud(args.Cloud)
@@ -258,7 +263,7 @@ func performBootstrap(ctx context.Context, args BootstrapArguments, tmpDir strin
 	}
 
 	// Write config file
-	configFilePath, err := writeBootstrapConfig(tmpDir, args.Config)
+	configFilePath, err := writeBootstrapConfigs(tmpDir, args.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -315,8 +320,8 @@ func (d *DefaultJujuCommand) Destroy(ctx context.Context, connInfo *ControllerCo
 	return fmt.Errorf("not implemented")
 }
 
-// writeBootstrapConfig writes the bootstrap config to a YAML file.
-func writeBootstrapConfig(workDir string, config BootstrapConfig) (string, error) {
+// writeBootstrapConfigs writes the bootstrap configs to a single YAML file.
+func writeBootstrapConfigs(workDir string, config BootstrapConfig) (string, error) {
 	// Skip if config is empty
 	if len(config.ControllerConfig) == 0 && len(config.ControllerModelConfig) == 0 && len(config.BootstrapConfig) == 0 {
 		return "", nil
