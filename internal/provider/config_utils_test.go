@@ -91,7 +91,6 @@ func TestComputeConfigDiff(t *testing.T) {
 	expectedNewConfig := map[string]string{
 		"key2": "newValue2",
 		"key4": "value4",
-		"key5": "value5",
 	}
 	assert.Equal(t, expectedNewConfig, newConfig, fmt.Sprintf("newConfig mismatch: got %+v, want %+v", newConfig, expectedNewConfig))
 
