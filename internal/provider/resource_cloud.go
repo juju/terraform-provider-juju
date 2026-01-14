@@ -6,7 +6,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -23,7 +22,6 @@ import (
 
 	jujucloud "github.com/juju/juju/cloud"
 	"github.com/juju/terraform-provider-juju/internal/juju"
-	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -111,9 +109,6 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 				Description: "Optional global endpoint for the cloud.",
 				Optional:    true,
 			},
-			// Unfortunately, identity_endpoint and storage_endpoint cannot be nulled once set due to a schema design in Juju's BSON regarding
-			// these fields. They are set to omitempty, which prevents them from being cleared and the previous value returned on read.
-			// See [DisallowUnsetIfSet] for more details.
 			"identity_endpoint": schema.StringAttribute{
 				Description: "Optional global identity endpoint for the cloud.",
 				Optional:    true,
@@ -246,25 +241,6 @@ func (r *cloudResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	if err := r.client.Clouds.AddCloud(input); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create cloud, got error %s", err))
-		return
-	}
-
-	if _, err := wait.WaitFor(
-		wait.WaitForCfg[juju.ReadCloudInput, *juju.ReadCloudOutput]{
-			Context: ctx,
-			GetData: r.client.Clouds.ReadCloud,
-			Input:   juju.ReadCloudInput{Name: plan.Name.ValueString()},
-			DataAssertions: []wait.Assert[*juju.ReadCloudOutput]{
-				func(output *juju.ReadCloudOutput) error {
-					if output.Name != plan.Name.ValueString() {
-						return juju.NewRetryReadError("waiting for cloud to be created")
-					}
-					return nil
-				},
-			},
-		},
-	); err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to verify cloud creation, got error %s", err))
 		return
 	}
 
@@ -440,22 +416,6 @@ func (r *cloudResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 	if err := r.client.Clouds.RemoveCloud(juju.RemoveCloudInput{Name: state.Name.ValueString()}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to remove cloud, got error %s", err))
-		return
-	}
-
-	if err := wait.WaitForError(
-		wait.WaitForErrorCfg[juju.ReadCloudInput, *juju.ReadCloudOutput]{
-			Context:        ctx,
-			GetData:        r.client.Clouds.ReadCloud,
-			Input:          juju.ReadCloudInput{Name: state.Name.ValueString()},
-			ExpectedErr:    juju.CloudNotFoundError,
-			RetryAllErrors: true,
-			RetryConf: &wait.RetryConf{
-				MaxDuration: time.Second,
-			},
-		},
-	); err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to verify cloud deletion, got error %s", err))
 		return
 	}
 

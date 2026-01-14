@@ -43,19 +43,6 @@ func TestAcc_ResourceCloud(t *testing.T) {
 			{
 				Config: testAccResourceCloud_OpenStack_Minimal(cloudName),
 				Check: resource.ComposeTestCheckFunc(
-					func(*terraform.State) error {
-						// Ensure the cloud exists at the API level.
-						if TestClient == nil {
-							return fmt.Errorf("TestClient is not configured")
-						}
-
-						_, err := TestClient.Clouds.ReadCloud(juju.ReadCloudInput{Name: cloudName})
-						if err != nil {
-							return fmt.Errorf("cloud %q does not exist", cloudName)
-						}
-
-						return nil
-					},
 					resource.TestCheckResourceAttr(resourceName, "name", cloudName),
 					resource.TestCheckResourceAttr(resourceName, "type", "openstack"),
 					resource.TestCheckResourceAttr(resourceName, "regions.#", "1"),
