@@ -86,8 +86,7 @@ Then, in a terminal, use the `juju` client to switch to the desired controller: 
 (add-a-cloud-to-a-controller)=
 ## Add a cloud to a controller
 
-While your controller is implicitly connected to the cloud that it has been bootstrapped on, and can implicitly use that cloud to provision resources, as is generally the case in Juju, you can also give it access to further clouds.
-
+> See more: {ref}`add-a-machine-cloud`
 > See more: {ref}`add-a-kubernetes-cloud`
 
 (add-a-credential-to-a-controller)=

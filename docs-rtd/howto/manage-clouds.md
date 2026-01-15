@@ -5,10 +5,8 @@
 
 
 (add-a-machine-cloud)=
-## Add a Machine cloud
-To add a Machine cloud to the controller that your Terraform plan is connected to, in your Terraform plan add a resource of the `juju_cloud` type. 
-
-The example below details the fields that may be filled in depending on the cloud type you wish to create:
+## Add a machine cloud
+To add a machine cloud to the controller that your Terraform plan is connected to, in your Terraform plan add a resource of the `juju_cloud` type. For example:
 ```terraform
 resource "juju_cloud" "this" {
   name = "my-cloud"
@@ -24,20 +22,21 @@ resource "juju_cloud" "this" {
     file("${path.module}/ca.pem"),
   ]
 
-  # Note, the first region is the DEFAULT region.
   regions = [
     {
-      name              = "default"
+      name              = "my-first-region"
       endpoint          = "https://region-default.example.com"
       identity_endpoint = "https://identity-default.example.com"
       storage_endpoint  = "https://storage-default.example.com"
     },
     {
-      name = "us-east-1"
+      name = "my-other-region"
     },
   ]
 }
 ```
+
+Please note, in the list of regions, the first region is the default regions.
 
 For further details on adding clouds to Juju, please read: [`add-cloud`](https://documentation.ubuntu.com/juju/3.6/reference/juju-cli/list-of-juju-cli-commands/add-cloud/).
 

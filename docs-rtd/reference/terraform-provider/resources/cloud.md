@@ -21,7 +21,7 @@ resource "juju_cloud" "this" {
   auth_types = ["userpass"]
 }
 
-# A full example of all fields possible to be filled in a juju_cloud resource.
+# A fully specified example.
 resource "juju_cloud" "this" {
   name = "my-cloud"
   type = "openstack"
@@ -45,7 +45,7 @@ resource "juju_cloud" "this" {
       storage_endpoint  = "https://storage-default.example.com"
     },
     {
-      name = "us-east-1"
+      name = "my-other-region"
     },
   ]
 }
@@ -57,7 +57,7 @@ resource "juju_cloud" "this" {
 ### Required
 
 - `auth_types` (Set of String) List of supported authentication types by the cloud.
-- `name` (String) The name of the cloud for Juju.
+- `name` (String) The name of the cloud in Juju.
 - `type` (String) The type of the cloud.
 
 ### Optional

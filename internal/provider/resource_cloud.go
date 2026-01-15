@@ -90,7 +90,7 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 		Description: "A resource that represents a Juju Cloud for an existing controller.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
-				Description: "The name of the cloud for Juju.",
+				Description: "The name of the cloud in Juju.",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
