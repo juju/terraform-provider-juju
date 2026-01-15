@@ -132,7 +132,10 @@ func computeConfigDiff(ctx context.Context, configState types.Map, configPlan ty
 	}
 	newConfigMapNotNil := map[string]string{}
 	for k, v := range planConfig {
-		if v != nil {
+		if v == nil {
+			continue
+		}
+		if stateConfig[k] == nil || *stateConfig[k] != *v {
 			newConfigMapNotNil[k] = *v
 		}
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -32,9 +33,11 @@ type JujuCommand interface {
 	// Bootstrap creates a new controller and returns connection information.
 	Bootstrap(ctx context.Context, model juju.BootstrapArguments) (*juju.ControllerConnectionInformation, error)
 	// UpdateConfig updates controller and controller-model configuration.
-	UpdateConfig(ctx context.Context, connInfo *juju.ControllerConnectionInformation, controllerConfig, controllerModelConfig map[string]string) error
+	UpdateConfig(ctx context.Context, connInfo *juju.ControllerConnectionInformation,
+		controllerConfig, controllerModelConfig map[string]string,
+		unsetControllerModelConfig []string) error
 	// Config retrieves controller configuration and controller-model configuration settings.
-	Config(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (map[string]string, map[string]string, error)
+	Config(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (map[string]any, map[string]any, error)
 	// Destroy removes the controller.
 	Destroy(ctx context.Context, connInfo *juju.ControllerConnectionInformation) error
 }
@@ -64,7 +67,6 @@ type controllerResourceModel struct {
 
 	// Controller details
 	APIAddresses types.List   `tfsdk:"api_addresses"`
-	AdminSecret  types.String `tfsdk:"admin_secret"`
 	CACert       types.String `tfsdk:"ca_cert"`
 	Username     types.String `tfsdk:"username"`
 	Password     types.String `tfsdk:"password"`
@@ -136,19 +138,13 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"admin_secret": schema.StringAttribute{
-				Description: "The admin secret for the controller.",
-				Optional:    true,
-				Sensitive:   true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-					stringplanmodifier.UseStateForUnknown(),
-				},
-			},
 			"api_addresses": schema.ListAttribute{
 				Description: "API addresses of the controller.",
 				Computed:    true,
 				ElementType: types.StringType,
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"bootstrap_base": schema.StringAttribute{
 				Description: "The base for the bootstrap machine.",
@@ -171,6 +167,9 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Description: "CA certificate for the controller.",
 				Computed:    true,
 				Sensitive:   false,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"storage_pool": schema.SingleNestedAttribute{
 				Description: "Options for the initial storage pool",
@@ -313,7 +312,9 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				},
 			},
 			"controller_config": schema.MapAttribute{
-				Description: "Configuration options for the bootstrapped controller.",
+				Description: "Configuration options for the bootstrapped controller. " +
+					"Note that removing a key from this map will not unset it in the controller, " +
+					"instead it will be left unchanged on the controller.",
 				Optional:    true,
 				ElementType: types.StringType,
 				PlanModifiers: []planmodifier.Map{
@@ -367,11 +368,17 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Description: "Admin password for the controller.",
 				Computed:    true,
 				Sensitive:   true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"username": schema.StringAttribute{
 				Description: "Admin username for the controller.",
 				Computed:    true,
 				Sensitive:   false,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
@@ -642,22 +649,34 @@ func (r *controllerResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	if len(controllerConfig) > 0 {
-		configMap, diags := types.MapValueFrom(ctx, types.StringType, controllerConfig)
+	cfg, diags := newConfigFromModelConfigAPI(ctx, controllerConfig, state.ControllerConfig)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if cfg == nil {
+		state.ControllerConfig = types.MapNull(types.StringType)
+	} else {
+		state.ControllerConfig, diags = types.MapValueFrom(ctx, types.StringType, cfg)
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		state.ControllerConfig = configMap
 	}
 
-	if len(controllerModelConfig) > 0 {
-		configMap, diags := types.MapValueFrom(ctx, types.StringType, controllerModelConfig)
+	cfg, diags = newConfigFromModelConfigAPI(ctx, controllerModelConfig, state.ControllerModelConfig)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if cfg == nil {
+		state.ControllerModelConfig = types.MapNull(types.StringType)
+	} else {
+		state.ControllerModelConfig, diags = types.MapValueFrom(ctx, types.StringType, cfg)
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		state.ControllerModelConfig = configMap
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -691,12 +710,19 @@ func (r *controllerResource) Update(ctx context.Context, req resource.UpdateRequ
 		Password:  state.Password.ValueString(),
 	}
 
-	updatedControllerConfig := mergedStringMapFromStateAndPlan(ctx, &resp.Diagnostics, state.ControllerConfig, plan.ControllerConfig)
-	if resp.Diagnostics.HasError() {
+	// Note that below we ignore the unset controller config keys because Juju's API
+	// does not support unsetting controller config values. If a user removes a config
+	// key from their Terraform plan, it will be left unchanged in Juju.
+	var diags diag.Diagnostics
+	updatedControllerConfig, _, diags := computeConfigDiff(ctx, state.ControllerConfig, plan.ControllerConfig)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
 		return
 	}
-	updatedControllerModelConfig := mergedStringMapFromStateAndPlan(ctx, &resp.Diagnostics, state.ControllerModelConfig, plan.ControllerModelConfig)
-	if resp.Diagnostics.HasError() {
+
+	updatedControllerModelConfig, unsetControllerModelConfig, diags := computeConfigDiff(ctx, state.ControllerModelConfig, plan.ControllerModelConfig)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
 		return
 	}
 
@@ -708,7 +734,7 @@ func (r *controllerResource) Update(ctx context.Context, req resource.UpdateRequ
 		)
 		return
 	}
-	err = command.UpdateConfig(ctx, connInfo, updatedControllerConfig, updatedControllerModelConfig)
+	err = command.UpdateConfig(ctx, connInfo, updatedControllerConfig, updatedControllerModelConfig, unsetControllerModelConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Controller Update Error",
@@ -717,25 +743,10 @@ func (r *controllerResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
-	// Update the state with the new config(s)
-	controllerConfig, diags := types.MapValueFrom(ctx, types.StringType, updatedControllerConfig)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	state.ControllerConfig = controllerConfig
-
-	controllerModelConfig, diags := types.MapValueFrom(ctx, types.StringType, updatedControllerModelConfig)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	state.ControllerModelConfig = controllerModelConfig
-
 	r.trace(fmt.Sprintf("controller updated: %q", plan.Name.ValueString()))
 
 	// Write the updated state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 // Delete destroys the Juju controller.
@@ -787,42 +798,6 @@ func buildStringListFromMap(constraints map[string]string) []string {
 		parts = append(parts, fmt.Sprintf("%s=%s", k, v))
 	}
 	return parts
-}
-
-func mergedStringMapFromStateAndPlan(ctx context.Context, diags *diag.Diagnostics, stateMap, planMap types.Map) map[string]string {
-	current := stringMapFromTerraformMap(ctx, diags, stateMap)
-	if diags.HasError() {
-		return nil
-	}
-	incoming := stringMapFromTerraformMap(ctx, diags, planMap)
-	if diags.HasError() {
-		return nil
-	}
-
-	// TODO(JUJU-8931): Handle config removal.
-
-	updated := make(map[string]string, len(current)+len(incoming))
-	for k, v := range current {
-		updated[k] = v
-	}
-	for k, v := range incoming {
-		updated[k] = v
-	}
-	return updated
-}
-
-func stringMapFromTerraformMap(ctx context.Context, diags *diag.Diagnostics, m types.Map) map[string]string {
-	if m.IsNull() || m.IsUnknown() {
-		return map[string]string{}
-	}
-
-	out := map[string]string{}
-	d := m.ElementsAs(ctx, &out, false)
-	diags.Append(d...)
-	if diags.HasError() {
-		return nil
-	}
-	return out
 }
 
 func (r *controllerResource) trace(msg string, additionalFields ...map[string]interface{}) {

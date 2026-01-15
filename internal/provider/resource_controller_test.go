@@ -88,11 +88,11 @@ func TestAcc_ResourceController(t *testing.T) {
 			Username:  "admin",
 			Password:  "password",
 		},
-	).Return(map[string]string{
+	).Return(map[string]any{
 		"agent-logfile-max-backups": "3",
 		"audit-log-capture-args":    "true",
 		"autocert-dns-name":         "test-external-name",
-	}, map[string]string{
+	}, map[string]any{
 		"enable-os-refresh-update": "false",
 		"http-proxy":               "fake-proxy",
 	}, nil).AnyTimes()

@@ -14,6 +14,9 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/juju/juju/api/client/modelconfig"
+	"github.com/juju/juju/api/connector"
+	controllerapi "github.com/juju/juju/api/controller/controller"
 	jujucloud "github.com/juju/juju/cloud"
 	"github.com/juju/juju/juju/osenv"
 	"github.com/juju/juju/jujuclient"
@@ -238,7 +241,7 @@ func performBootstrap(ctx context.Context, args BootstrapArguments, tmpDir strin
 		return nil, fmt.Errorf("failed to validate cloud: %w", err)
 	}
 
-	// If a cloud is not known to Juju i.e. public cloud like AWS, Azure, GCP, etc.,
+	// If a cloud is not known to Juju i.e. clouds besides AWS, Azure, GCP, etc.,
 	// then we need to create a cloud entry on disk with information on how
 	// to reach the cloud, its regions, etc.
 	if !isPublicCloud {
@@ -303,15 +306,90 @@ func (d *DefaultJujuCommand) UpdateConfig(
 	ctx context.Context,
 	connInfo *ControllerConnectionInformation,
 	controllerConfig, controllerModelConfig map[string]string,
+	controllerModelConfigUnset []string,
 ) error {
-	// TODO: Implement config update logic
-	return fmt.Errorf("update config not implemented")
+	// Connect to the controller
+	connr, err := connector.NewSimple(connector.SimpleConfig{
+		ControllerAddresses: connInfo.Addresses,
+		CACert:              connInfo.CACert,
+		Username:            connInfo.Username,
+		Password:            connInfo.Password,
+	})
+	if err != nil {
+		return err
+	}
+
+	conn, err := connr.Connect()
+	if err != nil {
+		return err
+	}
+
+	ctrlClient := controllerapi.NewClient(conn)
+	ctrlConfigVals := make(map[string]any)
+	for k, v := range controllerConfig {
+		ctrlConfigVals[k] = v
+	}
+
+	// Update controller config
+	if len(ctrlConfigVals) > 0 {
+		if err := ctrlClient.ConfigSet(ctrlConfigVals); err != nil {
+			return fmt.Errorf("failed to update controller config: %w", err)
+		}
+	}
+
+	modelCfgClient := modelconfig.NewClient(conn)
+	modelConfigVals := make(map[string]any)
+	for k, v := range controllerModelConfig {
+		modelConfigVals[k] = v
+	}
+
+	// Update model config
+	if len(modelConfigVals) > 0 {
+		if err := modelCfgClient.ModelSet(modelConfigVals); err != nil {
+			return fmt.Errorf("failed to update controller model config: %w", err)
+		}
+	}
+	if len(controllerModelConfigUnset) > 0 {
+		if err := modelCfgClient.ModelUnset(controllerModelConfigUnset...); err != nil {
+			return fmt.Errorf("failed to unset controller model config keys: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // Config retrieves controller configuration and controller-model configuration settings.
-func (d *DefaultJujuCommand) Config(ctx context.Context, connInfo *ControllerConnectionInformation) (map[string]string, map[string]string, error) {
-	// TODO: Implement read logic
-	return nil, nil, fmt.Errorf("read not implemented")
+func (d *DefaultJujuCommand) Config(ctx context.Context, connInfo *ControllerConnectionInformation) (map[string]any, map[string]any, error) {
+	// Connect to the controller
+	connr, err := connector.NewSimple(connector.SimpleConfig{
+		ControllerAddresses: connInfo.Addresses,
+		CACert:              connInfo.CACert,
+		Username:            connInfo.Username,
+		Password:            connInfo.Password,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	conn, err := connr.Connect()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Fetch controller config
+	ctrlClient := controllerapi.NewClient(conn)
+	ctrlConfig, err := ctrlClient.ControllerConfig()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	modelCfgClient := modelconfig.NewClient(conn)
+	modelConfig, err := modelCfgClient.ModelGet()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return ctrlConfig, modelConfig, nil
 }
 
 // Destroy removes the controller.

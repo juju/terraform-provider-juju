@@ -81,11 +81,11 @@ func (c *MockJujuCommandBootstrapCall) DoAndReturn(f func(context.Context, juju.
 }
 
 // Config mocks base method.
-func (m *MockJujuCommand) Config(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (map[string]string, map[string]string, error) {
+func (m *MockJujuCommand) Config(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (map[string]any, map[string]any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Config", ctx, connInfo)
-	ret0, _ := ret[0].(map[string]string)
-	ret1, _ := ret[1].(map[string]string)
+	ret0, _ := ret[0].(map[string]any)
+	ret1, _ := ret[1].(map[string]any)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
@@ -103,19 +103,19 @@ type MockJujuCommandConfigCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockJujuCommandConfigCall) Return(arg0, arg1 map[string]string, arg2 error) *MockJujuCommandConfigCall {
+func (c *MockJujuCommandConfigCall) Return(arg0, arg1 map[string]any, arg2 error) *MockJujuCommandConfigCall {
 	c.Call = c.Call.Return(arg0, arg1, arg2)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockJujuCommandConfigCall) Do(f func(context.Context, *juju.ControllerConnectionInformation) (map[string]string, map[string]string, error)) *MockJujuCommandConfigCall {
+func (c *MockJujuCommandConfigCall) Do(f func(context.Context, *juju.ControllerConnectionInformation) (map[string]any, map[string]any, error)) *MockJujuCommandConfigCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockJujuCommandConfigCall) DoAndReturn(f func(context.Context, *juju.ControllerConnectionInformation) (map[string]string, map[string]string, error)) *MockJujuCommandConfigCall {
+func (c *MockJujuCommandConfigCall) DoAndReturn(f func(context.Context, *juju.ControllerConnectionInformation) (map[string]any, map[string]any, error)) *MockJujuCommandConfigCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -159,17 +159,17 @@ func (c *MockJujuCommandDestroyCall) DoAndReturn(f func(context.Context, *juju.C
 }
 
 // UpdateConfig mocks base method.
-func (m *MockJujuCommand) UpdateConfig(ctx context.Context, connInfo *juju.ControllerConnectionInformation, controllerConfig, controllerModelConfig map[string]string) error {
+func (m *MockJujuCommand) UpdateConfig(ctx context.Context, connInfo *juju.ControllerConnectionInformation, controllerConfig, controllerModelConfig map[string]string, unsetControllerModelConfig []string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateConfig", ctx, connInfo, controllerConfig, controllerModelConfig)
+	ret := m.ctrl.Call(m, "UpdateConfig", ctx, connInfo, controllerConfig, controllerModelConfig, unsetControllerModelConfig)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdateConfig indicates an expected call of UpdateConfig.
-func (mr *MockJujuCommandMockRecorder) UpdateConfig(ctx, connInfo, controllerConfig, controllerModelConfig any) *MockJujuCommandUpdateConfigCall {
+func (mr *MockJujuCommandMockRecorder) UpdateConfig(ctx, connInfo, controllerConfig, controllerModelConfig, unsetControllerModelConfig any) *MockJujuCommandUpdateConfigCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateConfig", reflect.TypeOf((*MockJujuCommand)(nil).UpdateConfig), ctx, connInfo, controllerConfig, controllerModelConfig)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateConfig", reflect.TypeOf((*MockJujuCommand)(nil).UpdateConfig), ctx, connInfo, controllerConfig, controllerModelConfig, unsetControllerModelConfig)
 	return &MockJujuCommandUpdateConfigCall{Call: call}
 }
 
@@ -185,13 +185,13 @@ func (c *MockJujuCommandUpdateConfigCall) Return(arg0 error) *MockJujuCommandUpd
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockJujuCommandUpdateConfigCall) Do(f func(context.Context, *juju.ControllerConnectionInformation, map[string]string, map[string]string) error) *MockJujuCommandUpdateConfigCall {
+func (c *MockJujuCommandUpdateConfigCall) Do(f func(context.Context, *juju.ControllerConnectionInformation, map[string]string, map[string]string, []string) error) *MockJujuCommandUpdateConfigCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockJujuCommandUpdateConfigCall) DoAndReturn(f func(context.Context, *juju.ControllerConnectionInformation, map[string]string, map[string]string) error) *MockJujuCommandUpdateConfigCall {
+func (c *MockJujuCommandUpdateConfigCall) DoAndReturn(f func(context.Context, *juju.ControllerConnectionInformation, map[string]string, map[string]string, []string) error) *MockJujuCommandUpdateConfigCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
