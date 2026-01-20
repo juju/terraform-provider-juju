@@ -119,7 +119,6 @@ func TestAcc_ResourceController(t *testing.T) {
 
 	resourceName := "juju_controller.controller"
 	resource.ParallelTest(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactoriesWithMockJujuCommand,
 		Steps: []resource.TestStep{{
 			Config: testAccResourceController(controllerName, testingCloud.CloudName()),
@@ -226,4 +225,114 @@ func TestBuildStringListFromMap(t *testing.T) {
 			require.ElementsMatch(t, tt.expected, result)
 		})
 	}
+}
+
+// These tests require an LXD or MicroK8s config file to exist at the known path.
+// Check `project-docs/BOOTSTRAP_TESTS.md` for more details
+// on how to set up the environment.
+
+func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
+	SkipJAAS(t)
+	controllerName := acctest.RandomWithPrefix("tf-test-controller")
+	resourceName := "juju_controller.controller"
+	frameworkProviderFactoriesControllerMode := map[string]func() (tfprotov6.ProviderServer, error){
+		"juju": providerserver.NewProtocol6WithError(
+			NewJujuProvider("dev", ProviderConfiguration{
+				ControllerMode:   true,
+				WaitForResources: false,
+				NewJujuCommand: func(binaryPath string) (JujuCommand, error) {
+					return juju.NewDefaultJujuCommand(binaryPath)
+				},
+			}),
+		),
+	}
+	resource.ParallelTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: frameworkProviderFactoriesControllerMode,
+		Steps: []resource.TestStep{{
+			Config: testAccResourceControllerWithJujuBinary(controllerName, "test"),
+			Check: resource.ComposeTestCheckFunc(
+				resource.TestCheckResourceAttr(resourceName, "name", controllerName),
+			),
+		}},
+	})
+}
+
+func testAccResourceControllerWithJujuBinary(controllerName, cloudName string) string {
+	switch testingCloud {
+	case LXDCloudTesting:
+		return fmt.Sprintf(`
+provider "juju" {
+  controller_mode = true
+}
+
+locals {
+  lxd_creds = yamldecode(file("~/lxd-credentials.yaml"))
+}
+
+resource "juju_controller" "controller" {
+  name          = %q
+
+  juju_binary     = "/snap/juju/current/bin/juju"
+
+  cloud = {
+    name   = %q
+	auth_types = ["certificate"]
+	type = "lxd"
+	endpoint = local.lxd_creds.endpoint
+  } 
+
+  cloud_credential = {
+	name = %q
+	auth_type = "certificate"
+	
+	attributes = {
+      client-cert = local.lxd_creds.client-cert
+      client-key  = local.lxd_creds.client-key
+      server-cert = local.lxd_creds.server-cert
+    }
+  }
+  
+}
+`, controllerName, cloudName, cloudName)
+	case MicroK8sTesting:
+		return fmt.Sprintf(`
+provider "juju" {
+  controller_mode = true
+}
+
+locals {
+  microk8s_config = yamldecode(file("~/microk8s-config.yaml"))
+}
+
+resource "juju_controller" "controller" {
+  name          = %q
+
+  juju_binary     = "/snap/juju/current/bin/juju"
+
+  cloud = {
+    name   = %q
+	auth_types = ["certificate"]
+	type = "kubernetes"
+	endpoint = local.microk8s_config.clusters[0].cluster.server
+	ca_certificates = [base64decode(local.microk8s_config.clusters[0].cluster["certificate-authority-data"])]
+	config = {
+	   "workload-storage" = "microk8s-hostpath"
+	   "operator-storage" = "microk8s-hostpath"
+	}
+	host_cloud_region = "localhost"
+  } 
+
+  cloud_credential = {
+	name = %q
+	auth_type = "clientcertificate"
+	
+	attributes = {
+      ClientCertificateData = base64decode(local.microk8s_config.users[0].user["client-certificate-data"])
+      ClientKeyData  = base64decode(local.microk8s_config.users[0].user["client-key-data"])
+	}
+  }
+}
+`, controllerName, cloudName, cloudName)
+	}
+	return ""
 }
