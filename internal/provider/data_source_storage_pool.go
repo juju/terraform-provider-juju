@@ -73,6 +73,10 @@ func (d *storagePoolDataSource) Configure(ctx context.Context, req datasource.Co
 		)
 		return
 	}
+	resp.Diagnostics = checkControllerMode(resp.Diagnostics, provider.Config, false)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	d.client = provider.Client
 	d.subCtx = tflog.NewSubsystem(ctx, LogDataSourceStoragePool)

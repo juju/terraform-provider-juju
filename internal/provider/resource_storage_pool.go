@@ -64,6 +64,10 @@ func (r *storagePoolResource) Configure(ctx context.Context, req resource.Config
 		)
 		return
 	}
+	resp.Diagnostics = checkControllerMode(resp.Diagnostics, provider.Config, false)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	r.client = provider.Client
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceStoragePool)
 }

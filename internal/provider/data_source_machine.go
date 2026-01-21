@@ -83,6 +83,10 @@ func (d *machineDataSource) Configure(ctx context.Context, req datasource.Config
 		)
 		return
 	}
+	resp.Diagnostics = checkControllerMode(resp.Diagnostics, provider.Config, false)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	d.client = provider.Client
 	d.subCtx = tflog.NewSubsystem(ctx, LogDataSourceMachine)

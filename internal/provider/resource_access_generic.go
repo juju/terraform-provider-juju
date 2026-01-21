@@ -104,6 +104,10 @@ func (resource *genericJAASAccessResource) Configure(ctx context.Context, req re
 		)
 		return
 	}
+	resp.Diagnostics = checkControllerMode(resp.Diagnostics, provider.Config, false)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	resource.client = provider.Client
 	// Create the local logging subsystem here, using the TF context when creating it.
 	resource.subCtx = tflog.NewSubsystem(ctx, resource.resourceLogName)

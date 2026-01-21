@@ -391,6 +391,10 @@ func (c *credentialResource) Configure(ctx context.Context, req resource.Configu
 		)
 		return
 	}
+	resp.Diagnostics = checkControllerMode(resp.Diagnostics, provider.Config, false)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	c.client = provider.Client
 	// Create the local logging subsystem here, using the TF context when creating it.
 	c.subCtx = tflog.NewSubsystem(ctx, LogResourceCredential)

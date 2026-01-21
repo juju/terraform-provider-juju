@@ -281,6 +281,10 @@ func (o *offerResource) Configure(ctx context.Context, req resource.ConfigureReq
 		)
 		return
 	}
+	resp.Diagnostics = checkControllerMode(resp.Diagnostics, provider.Config, false)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	o.client = provider.Client
 	// Create the local logging subsystem here, using the TF context when creating it.

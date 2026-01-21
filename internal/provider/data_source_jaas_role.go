@@ -69,6 +69,10 @@ func (d *jaasRoleDataSource) Configure(ctx context.Context, req datasource.Confi
 		)
 		return
 	}
+	resp.Diagnostics = checkControllerMode(resp.Diagnostics, provider.Config, false)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	d.client = provider.Client
 	d.subCtx = tflog.NewSubsystem(ctx, LogDataSourceJAASRole)

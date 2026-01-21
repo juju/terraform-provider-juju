@@ -652,27 +652,30 @@ func expectedResourceOwner() string {
 	return username + clientId
 }
 
-func TestAcc_ProviderControllerMode(t *testing.T) {
+func TestAcc_ProviderControllerModeError(t *testing.T) {
 	// This test needs a local provider factory because changing the provider.controller_mode
 	// flag was persisted between tests when using the global frameworkProviderFactories.
 	localProviderFactory := map[string]func() (tfprotov6.ProviderServer, error){
-		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev", ProviderConfiguration{
-			ControllerMode: true,
-		})),
+		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev", ProviderConfiguration{})),
 	}
 	resource.ParallelTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: localProviderFactory,
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccProviderControllerMode(),
-				ExpectError: regexp.MustCompile(`.*The provider hashicorp/juju does not support resource type "juju_model".`),
+				Config:      testAccProviderControllerModeError(true),
+				ExpectError: regexp.MustCompile(`.*when controller_mode is true.*`),
+			},
+			{
+				Config:      testAccProviderControllerModeError(false),
+				ExpectError: regexp.MustCompile(`.*when controller_mode is false.*`),
 			},
 		},
 	})
 }
 
-func testAccProviderControllerMode() string {
-	return `
+func testAccProviderControllerModeError(controllerMode bool) string {
+	if controllerMode {
+		return `
 provider "juju" {
   controller_mode = true
 }
@@ -681,4 +684,34 @@ resource "juju_model" "test_model" {
   name = "test-model-bootstrap-only"
 }
 `
+	} else {
+		return `
+provider "juju" {
+  controller_mode = false
+}
+
+resource "juju_controller" "controller" {
+  name          = "a"
+
+  juju_binary     = "binary"
+
+  cloud = {
+    name   = "a"
+	auth_types = ["certificate"]
+	type = "kubernetes"
+	endpoint = ""
+	ca_certificates = [""]
+	config = {}
+	host_cloud_region = ""
+  } 
+
+  cloud_credential = {
+	name = "a"
+	auth_type = "clientcertificate"
+	
+	attributes = {}
+  }
+}
+`
+	}
 }

@@ -74,6 +74,10 @@ func (s *sshKeyResource) Configure(ctx context.Context, req resource.ConfigureRe
 		)
 		return
 	}
+	resp.Diagnostics = checkControllerMode(resp.Diagnostics, provider.Config, false)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	s.client = provider.Client
 	// Create the local logging subsystem here, using the TF context when creating it.
 	s.subCtx = tflog.NewSubsystem(ctx, LogResourceSSHKey)

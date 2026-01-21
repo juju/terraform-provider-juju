@@ -476,6 +476,10 @@ func (a *accessOfferResource) Configure(ctx context.Context, req resource.Config
 		)
 		return
 	}
+	resp.Diagnostics = checkControllerMode(resp.Diagnostics, provider.Config, false)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	a.client = provider.Client
 	// Create the local logging subsystem here, using the TF context when creating it.
 	a.subCtx = tflog.NewSubsystem(ctx, LogResourceAccessOffer)

@@ -108,7 +108,6 @@ func getEnvVar(field string) types.String {
 var _ provider.Provider = &jujuProvider{}
 
 type ProviderConfiguration struct {
-	ControllerMode   bool
 	WaitForResources bool
 	NewJujuCommand   func(string) (JujuCommand, error)
 }
@@ -117,7 +116,6 @@ type ProviderConfiguration struct {
 func NewJujuProvider(version string, config ProviderConfiguration) provider.Provider {
 	return &jujuProvider{
 		version:          version,
-		controllerMode:   config.ControllerMode,
 		waitForResources: config.WaitForResources,
 		newJujuCommand:   config.NewJujuCommand,
 	}
@@ -125,8 +123,6 @@ func NewJujuProvider(version string, config ProviderConfiguration) provider.Prov
 
 type jujuProvider struct {
 	version string
-
-	controllerMode bool
 
 	// waitForResources is used to determine if the provider should wait for
 	// resources to be created/destroyed before proceeding.
@@ -384,9 +380,14 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		resp.Diagnostics.Append(diags...)
 		return
 	}
-
 	if data.ControllerMode.ValueBool() {
-		p.controllerMode = true
+		providerData := juju.ProviderData{
+			Config: juju.Config{
+				ControllerMode: true,
+			},
+		}
+		resp.ResourceData = providerData
+		resp.DataSourceData = providerData
 		return
 	}
 
@@ -542,12 +543,8 @@ func getJujuProviderModel(ctx context.Context, req provider.ConfigureRequest) (j
 // The resource type name is determined by the Resource implementing
 // the Metadata method. All resources must have unique names.
 func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
-	if p.controllerMode {
-		return []func() resource.Resource{
-			func() resource.Resource { return NewControllerResource(p.newJujuCommand) },
-		}
-	}
 	return []func() resource.Resource{
+		func() resource.Resource { return NewControllerResource(p.newJujuCommand) },
 		func() resource.Resource { return NewAccessModelResource() },
 		func() resource.Resource { return NewAccessOfferResource() },
 		func() resource.Resource { return NewApplicationResource() },
@@ -579,9 +576,6 @@ func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
 // The data source type name is determined by the DataSource implementing
 // the Metadata method. All data sources must have unique names.
 func (p *jujuProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-	if p.controllerMode {
-		return []func() datasource.DataSource{}
-	}
 	return []func() datasource.DataSource{
 		func() datasource.DataSource { return NewApplicationDataSource() },
 		func() datasource.DataSource { return NewMachineDataSource() },
@@ -617,5 +611,15 @@ func checkClientErr(err error, config juju.ControllerConfiguration) diag.Diagnos
 		return diags
 	}
 	diags.AddError("Client Error", err.Error())
+	return diags
+}
+
+func checkControllerMode(diags diag.Diagnostics, config juju.Config, isControllerResource bool) diag.Diagnostics {
+	if config.ControllerMode && !isControllerResource {
+		diags.AddError("when controller_mode is true this resource cannot be used.", "")
+		return diags
+	} else if !config.ControllerMode && isControllerResource {
+		diags.AddError("when controller_mode is false this resource cannot be used.", "")
+	}
 	return diags
 }
