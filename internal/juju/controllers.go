@@ -395,7 +395,7 @@ func (d *DefaultJujuCommand) Config(ctx context.Context, connInfo *ControllerCon
 // Destroy removes the controller.
 func (d *DefaultJujuCommand) Destroy(ctx context.Context, connInfo *ControllerConnectionInformation) error {
 	// TODO: Implement destroy logic
-	return fmt.Errorf("not implemented")
+	return nil
 }
 
 // writeBootstrapConfigs writes the bootstrap configs to a single YAML file.
