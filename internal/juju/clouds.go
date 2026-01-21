@@ -1,11 +1,13 @@
-// Copyright 2024 Canonical Ltd.
+// Copyright 2023 Canonical Ltd.
 // Licensed under the Apache License, Version 2.0, see LICENCE file for details.
 
 package juju
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"strings"
 
 	jujuclock "github.com/juju/clock"
@@ -29,6 +31,11 @@ const (
 	// operatorStorageKey is the model config attribute used to specify
 	// the storage class for provisioning operator storage.
 	operatorStorageKey = "operator-storage"
+)
+
+var (
+	// CloudNotFoundError is returned when a cloud does not exist.
+	CloudNotFoundError = errors.New("cloud not found")
 )
 
 type cloudsClient struct {
@@ -168,7 +175,7 @@ type ReadCloudOutput struct {
 	// CACertificates contains an optional list of Certificate
 	// Authority certificates to be used to validate certificates
 	// of cloud infrastructure components
-	// The contents are Base64 encoded x.509 certs.
+	// The contents are PEM encoded CA certificates.
 	CACertificates []string
 }
 
@@ -386,7 +393,7 @@ func (c *cloudsClient) AddCloud(input AddCloudInput) error {
 		IdentityEndpoint:  input.IdentityEndpoint,
 		StorageEndpoint:   input.StorageEndpoint,
 		Regions:           input.Regions,
-		CACertificates:    input.CACertificates,
+		CACertificates:    encodeB64Certs(input.CACertificates),
 		SkipTLSVerify:     false,
 		IsControllerCloud: false,
 	}
@@ -413,7 +420,7 @@ func (c *cloudsClient) UpdateCloud(input UpdateCloudInput) error {
 		IdentityEndpoint:  input.IdentityEndpoint,
 		StorageEndpoint:   input.StorageEndpoint,
 		Regions:           input.Regions,
-		CACertificates:    input.CACertificates,
+		CACertificates:    encodeB64Certs(input.CACertificates),
 		SkipTLSVerify:     false,
 		IsControllerCloud: false,
 	}
@@ -445,8 +452,17 @@ func (c *cloudsClient) ReadCloud(input ReadCloudInput) (*ReadCloudOutput, error)
 	cloudClient := c.getCloudAPIClient(conn)
 
 	jjCloud, err := cloudClient.Cloud(names.NewCloudTag(input.Name))
+	if errors.Is(err, errors.NotFound) {
+		return nil, CloudNotFoundError
+	}
+
 	if err != nil {
 		return nil, errors.Annotate(err, "getting cloud")
+	}
+
+	decodedCACertificates, decodedCACertificatesErr := decodeB64Certs(jjCloud.CACertificates)
+	if decodedCACertificatesErr != nil {
+		return nil, errors.Annotate(decodedCACertificatesErr, "decoding cloud CA certificates")
 	}
 
 	return &ReadCloudOutput{
@@ -458,7 +474,7 @@ func (c *cloudsClient) ReadCloud(input ReadCloudInput) (*ReadCloudOutput, error)
 		IdentityEndpoint: jjCloud.IdentityEndpoint,
 		StorageEndpoint:  jjCloud.StorageEndpoint,
 		Regions:          jjCloud.Regions,
-		CACertificates:   jjCloud.CACertificates,
+		CACertificates:   decodedCACertificates,
 	}, nil
 }
 
@@ -511,4 +527,24 @@ func getNewCredentialUID() (string, error) {
 		return "", errors.Trace(err)
 	}
 	return hex.EncodeToString(b), nil
+}
+
+func encodeB64Certs(cacerts []string) []string {
+	encoded := make([]string, len(cacerts))
+	for i, cert := range cacerts {
+		encoded[i] = base64.StdEncoding.EncodeToString([]byte(cert))
+	}
+	return encoded
+}
+
+func decodeB64Certs(cacerts []string) ([]string, error) {
+	decoded := make([]string, len(cacerts))
+	for i, cert := range cacerts {
+		b, err := base64.StdEncoding.DecodeString(cert)
+		if err != nil {
+			return nil, fmt.Errorf("failed to base64 decode certificate at index %d: %w", i, err)
+		}
+		decoded[i] = string(b)
+	}
+	return decoded, nil
 }
