@@ -121,17 +121,17 @@ func (c *MockJujuCommandConfigCall) DoAndReturn(f func(context.Context, *juju.Co
 }
 
 // Destroy mocks base method.
-func (m *MockJujuCommand) Destroy(ctx context.Context, connInfo *juju.ControllerConnectionInformation) error {
+func (m *MockJujuCommand) Destroy(ctx context.Context, args juju.DestroyArguments) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Destroy", ctx, connInfo)
+	ret := m.ctrl.Call(m, "Destroy", ctx, args)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Destroy indicates an expected call of Destroy.
-func (mr *MockJujuCommandMockRecorder) Destroy(ctx, connInfo any) *MockJujuCommandDestroyCall {
+func (mr *MockJujuCommandMockRecorder) Destroy(ctx, args any) *MockJujuCommandDestroyCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Destroy", reflect.TypeOf((*MockJujuCommand)(nil).Destroy), ctx, connInfo)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Destroy", reflect.TypeOf((*MockJujuCommand)(nil).Destroy), ctx, args)
 	return &MockJujuCommandDestroyCall{Call: call}
 }
 
@@ -147,13 +147,13 @@ func (c *MockJujuCommandDestroyCall) Return(arg0 error) *MockJujuCommandDestroyC
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockJujuCommandDestroyCall) Do(f func(context.Context, *juju.ControllerConnectionInformation) error) *MockJujuCommandDestroyCall {
+func (c *MockJujuCommandDestroyCall) Do(f func(context.Context, juju.DestroyArguments) error) *MockJujuCommandDestroyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockJujuCommandDestroyCall) DoAndReturn(f func(context.Context, *juju.ControllerConnectionInformation) error) *MockJujuCommandDestroyCall {
+func (c *MockJujuCommandDestroyCall) DoAndReturn(f func(context.Context, juju.DestroyArguments) error) *MockJujuCommandDestroyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

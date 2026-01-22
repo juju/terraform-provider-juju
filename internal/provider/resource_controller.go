@@ -39,7 +39,7 @@ type JujuCommand interface {
 	// Config retrieves controller configuration and controller-model configuration settings.
 	Config(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (map[string]any, map[string]any, error)
 	// Destroy removes the controller.
-	Destroy(ctx context.Context, connInfo *juju.ControllerConnectionInformation) error
+	Destroy(ctx context.Context, args juju.DestroyArguments) error
 }
 
 var _ resource.Resource = &controllerResource{}
@@ -64,6 +64,10 @@ type controllerResourceModel struct {
 	BootstrapConfig       types.Map `tfsdk:"bootstrap_config"`
 	ControllerConfig      types.Map `tfsdk:"controller_config"`
 	ControllerModelConfig types.Map `tfsdk:"controller_model_config"`
+
+	// Fields for destroy command
+	ControllerUUID types.String `tfsdk:"controller_uuid"`
+	DestroyFlags   types.Object `tfsdk:"destroy_flags"`
 
 	// Controller details
 	APIAddresses types.List   `tfsdk:"api_addresses"`
@@ -109,6 +113,15 @@ type nestedStoragePoolModel struct {
 	Attributes types.Map    `tfsdk:"attributes"`
 }
 
+// nestedDestroyFlagsModel represents destroy flags configuration
+type nestedDestroyFlagsModel struct {
+	DestroyAllModels types.Bool  `tfsdk:"destroy_all_models"`
+	DestroyStorage   types.Bool  `tfsdk:"destroy_storage"`
+	Force            types.Bool  `tfsdk:"force"`
+	ModelTimeout     types.Int32 `tfsdk:"model_timeout"`
+	ReleaseStorage   types.Bool  `tfsdk:"release_storage"`
+}
+
 // NewControllerResource returns a new resource for managing Juju controllers.
 func NewControllerResource(newJujuCommand func(string) (JujuCommand, error)) resource.Resource {
 	return &controllerResource{
@@ -133,6 +146,7 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"agent_version": schema.StringAttribute{
 				Description: "The version of agent binaries.",
 				Optional:    true,
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
@@ -380,6 +394,44 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"controller_uuid": schema.StringAttribute{
+				Description: "The UUID of the controller.",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+
+			// The flags below are only used when destroying the controller.
+			"destroy_flags": schema.SingleNestedAttribute{
+				Description: "Additional flags for destroying the controller.",
+				Optional:    true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
+				Attributes: map[string]schema.Attribute{
+					"destroy_all_models": schema.BoolAttribute{
+						Description: "Destroy all models in the controller.",
+						Optional:    true,
+					},
+					"destroy_storage": schema.BoolAttribute{
+						Description: "Destroy all storage instances managed by the controller.",
+						Optional:    true,
+					},
+					"force": schema.BoolAttribute{
+						Description: "Force destroy models ignoring any errors.",
+						Optional:    true,
+					},
+					"model_timeout": schema.Int32Attribute{
+						Description: "Timeout for each step of force model destruction.",
+						Optional:    true,
+					},
+					"release_storage": schema.BoolAttribute{
+						Description: "Release all storage instances from management of the controller, without destroying them.",
+						Optional:    true,
+					},
+				},
+			},
 		},
 	}
 }
@@ -604,6 +656,8 @@ func (r *controllerResource) Create(ctx context.Context, req resource.CreateRequ
 	plan.CACert = types.StringValue(result.CACert)
 	plan.Username = types.StringValue(result.Username)
 	plan.Password = types.StringValue(result.Password)
+	plan.AgentVersion = types.StringValue(result.AgentVersion)
+	plan.ControllerUUID = types.StringValue(result.ControllerUUID)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -769,11 +823,18 @@ func (r *controllerResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	connInfo := &juju.ControllerConnectionInformation{
-		Addresses: addresses,
-		CACert:    state.CACert.ValueString(),
-		Username:  state.Username.ValueString(),
-		Password:  state.Password.ValueString(),
+	var cloudModel nestedCloudModel
+	resp.Diagnostics.Append(state.Cloud.As(ctx, &cloudModel, basetypes.ObjectAsOptions{})...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var regionModel nestedCloudRegionModel
+	if !cloudModel.Region.IsNull() && !cloudModel.Region.IsUnknown() {
+		resp.Diagnostics.Append(cloudModel.Region.As(ctx, &regionModel, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
 	command, err := r.newJujuCommand(state.JujuBinary.ValueString())
@@ -784,12 +845,51 @@ func (r *controllerResource) Delete(ctx context.Context, req resource.DeleteRequ
 		)
 		return
 	}
-	err = command.Destroy(ctx, connInfo)
+
+	var destroyFlags nestedDestroyFlagsModel
+	if !state.DestroyFlags.IsNull() && !state.DestroyFlags.IsUnknown() {
+		resp.Diagnostics.Append(state.DestroyFlags.As(ctx, &destroyFlags, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+	args := juju.DestroyArguments{
+		Name:        state.Name.ValueString(),
+		JujuBinary:  state.JujuBinary.ValueString(),
+		CloudName:   cloudModel.Name.ValueString(),
+		CloudRegion: regionModel.Name.ValueString(),
+		ConnectionInfo: juju.ControllerConnectionInformation{
+			Addresses:      addresses,
+			CACert:         state.CACert.ValueString(),
+			Username:       state.Username.ValueString(),
+			Password:       state.Password.ValueString(),
+			AgentVersion:   state.AgentVersion.ValueString(),
+			ControllerUUID: state.ControllerUUID.ValueString(),
+		},
+		Flags: juju.DestroyFlags{
+			DestroyAllModels: destroyFlags.DestroyAllModels.ValueBool(),
+			DestroyStorage:   destroyFlags.DestroyStorage.ValueBool(),
+			Force:            destroyFlags.Force.ValueBool(),
+			ModelTimeout:     int(destroyFlags.ModelTimeout.ValueInt32()),
+			ReleaseStorage:   destroyFlags.ReleaseStorage.ValueBool(),
+		},
+	}
+
+	err = command.Destroy(ctx, args)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Controller Deletion Error",
-			fmt.Sprintf("Unable to destroy controller %q, got error: %s", state.Name.ValueString(), err),
-		)
+		errSummary := "Controller Deletion Error"
+		errDetail := fmt.Sprintf("Unable to destroy controller %q, got error: %s", state.Name.ValueString(), err)
+		if r.config.SkipFailedDeletion {
+			resp.Diagnostics.AddWarning(
+				errSummary,
+				errDetail+"There might be dangling resources requiring manual intervion.\n",
+			)
+		} else {
+			resp.Diagnostics.AddError(
+				errSummary,
+				errDetail,
+			)
+		}
 		return
 	}
 }

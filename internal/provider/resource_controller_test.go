@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
@@ -24,6 +25,7 @@ import (
 	"github.com/juju/juju/api/connector"
 	controllerapi "github.com/juju/juju/api/controller/controller"
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	"github.com/juju/version/v2"
 )
 
 func TestAcc_ResourceController(t *testing.T) {
@@ -83,10 +85,11 @@ func TestAcc_ResourceController(t *testing.T) {
 			BootstrapBase: "test-base",
 		},
 	}).Return(&juju.ControllerConnectionInformation{
-		Addresses: []string{"127.0.0.1:17070"},
-		CACert:    "test controller CA cert",
-		Username:  "admin",
-		Password:  "password",
+		Addresses:    []string{"127.0.0.1:17070"},
+		CACert:       "test controller CA cert",
+		Username:     "admin",
+		Password:     "password",
+		AgentVersion: "3.6.12",
 	}, nil).AnyTimes()
 
 	mockJujuCommand.EXPECT().Config(
@@ -108,11 +111,18 @@ func TestAcc_ResourceController(t *testing.T) {
 
 	mockJujuCommand.EXPECT().Destroy(
 		gomock.Any(),
-		&juju.ControllerConnectionInformation{
-			Addresses: []string{"127.0.0.1:17070"},
-			CACert:    "test controller CA cert",
-			Username:  "admin",
-			Password:  "password",
+		juju.DestroyArguments{
+			Name:        controllerName,
+			JujuBinary:  "/snap/bin/juju",
+			CloudName:   testingCloud.CloudName(),
+			CloudRegion: "local",
+			ConnectionInfo: juju.ControllerConnectionInformation{
+				Addresses:    []string{"127.0.0.1:17070"},
+				CACert:       "test controller CA cert",
+				Username:     "admin",
+				Password:     "password",
+				AgentVersion: "3.6.12",
+			},
 		},
 	).Return(nil).AnyTimes()
 
@@ -380,6 +390,28 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				ExpectError: regexp.MustCompile("failed to update controller config: unknown controller config"),
 			},
 		},
+		CheckDestroy: func(s *terraform.State) error {
+			// Skip this check for 2.9, where it can fail intermittently
+			version, err := getAgentVersionFromState(s)
+			if err != nil {
+				return fmt.Errorf("failed to get agent version from state: %w", err)
+			}
+			if version.Major == 2 && version.Minor < 9 {
+				return nil
+			}
+
+			// Attempt to connect and expect a timeout after 10s
+			// This doesn't definitely prove the controller is destroyed, but is a good heuristic.
+			_, err = newBootstrappedControllerClient(s, api.WithDialOpts(api.DialOpts{Timeout: 10 * time.Second}))
+			if err != nil {
+				if strings.Contains(err.Error(), "failed to connect to controller: unable to connect to API") {
+					return nil
+				}
+				return fmt.Errorf("unexpected error when connecting to detroyed controller: %w", err)
+			} else {
+				return fmt.Errorf("unexpectedly managed to connect to controller")
+			}
+		},
 	})
 }
 
@@ -408,6 +440,10 @@ resource "juju_controller" "controller" {
   controller_config = %s
 
   controller_model_config = %s
+
+  destroy_flags	= {
+	destroy_all_models = true
+  }
 
   // Specifying the cloud name as 'localhost' uses the local LXD cloud
   // without the need to specify a cloud endpoint.
@@ -495,7 +531,7 @@ func renderStringMapAsHCL(values map[string]string) string {
 	return b.String()
 }
 
-func newBootstrappedControllerClient(state *terraform.State) (api.Connection, error) {
+func newBootstrappedControllerClient(state *terraform.State, dialOptions ...api.DialOption) (api.Connection, error) {
 	resourceState, ok := state.RootModule().Resources["juju_controller.controller"]
 	if !ok {
 		return nil, fmt.Errorf("resource juju_controller.controller not found in state")
@@ -531,7 +567,7 @@ func newBootstrappedControllerClient(state *terraform.State) (api.Connection, er
 		return nil, fmt.Errorf("failed to create connector to controller: %w", err)
 	}
 
-	conn, err := connr.Connect()
+	conn, err := connr.Connect(dialOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to controller: %w", err)
 	}
@@ -565,4 +601,23 @@ func getStringListFromTerraformState(attrs map[string]string, attrName string) (
 	}
 
 	return out, nil
+}
+
+func getAgentVersionFromState(s *terraform.State) (*version.Number, error) {
+	resourceState, ok := s.RootModule().Resources["juju_controller.controller"]
+	if !ok {
+		return nil, fmt.Errorf("resource juju_controller.controller not found in state")
+	}
+
+	agentVersion, ok := resourceState.Primary.Attributes["agent_version"]
+	if !ok {
+		return nil, fmt.Errorf("ca_cert attribute not found in resource state")
+	}
+
+	parsedVersion, err := version.Parse(agentVersion)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse agent_version %q: %w", agentVersion, err)
+	}
+
+	return &parsedVersion, nil
 }
