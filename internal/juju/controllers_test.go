@@ -333,3 +333,64 @@ func TestPerformBootstrap(t *testing.T) {
 	assert.Equal(t, "admin", result.Username)
 	assert.Equal(t, "test-password-12345", result.Password)
 }
+
+func TestPerformDestroy(t *testing.T) {
+	// Create a temporary directory for the test
+	tmpDir, err := os.MkdirTemp("", "juju-test-*")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	// Set JUJU_DATA for the test
+	oldJujuData := osenv.SetJujuXDGDataHome(tmpDir)
+	defer func() {
+		osenv.SetJujuXDGDataHome(oldJujuData)
+	}()
+
+	// Create mock command runner
+	ctlr := gomock.NewController(t)
+	defer ctlr.Finish()
+	mockRunner := NewMockCommandRunner(ctlr)
+
+	mockRunner.EXPECT().WorkingDir().AnyTimes().Return(tmpDir)
+	mockRunner.EXPECT().Close().AnyTimes().Return(nil)
+	mockRunner.EXPECT().ClientStore().AnyTimes().Return(jujuclient.NewFileClientStore(), func() {})
+
+	mockRunner.EXPECT().Run(gomock.Any(), "update-public-clouds", "--client").Times(1)
+	mockRunner.EXPECT().Run(
+		gomock.Any(),
+		"destroy-controller",
+		"test-controller",
+	).Return(nil).Times(1)
+
+	// Prepare destroy arguments
+	destroyArgs := DestroyArguments{
+		Name: "test-controller",
+		Cloud: BootstrapCloudArgument{
+			Name:      "test-cloud",
+			Type:      "manual",
+			AuthTypes: []string{"empty"},
+			Endpoint:  "https://test.example.com",
+		},
+		CloudCredential: BootstrapCredentialArgument{
+			Name:     "test-cred",
+			AuthType: "empty",
+			Attributes: map[string]string{
+				"endpoint": "https://test.example.com",
+			},
+		},
+		ConnectionInfo: ControllerConnectionInformation{
+			Addresses: []string{"127.0.0.1:17070"},
+			CACert:    "test-ca-cert",
+			Username:  "admin",
+			Password:  "test-password",
+		},
+		Flags: DestroyFlags{},
+	}
+
+	// Run performDestroy
+	ctx := context.Background()
+	err = performDestroy(ctx, destroyArgs, mockRunner)
+
+	// Verify no error
+	assert.NoError(t, err)
+}
