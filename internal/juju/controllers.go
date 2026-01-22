@@ -447,49 +447,6 @@ func performDestroy(ctx context.Context, args DestroyArguments, runner CommandRu
 	return nil
 }
 
-func setupCloudWithCredentials(ctx context.Context, runner CommandRunner, cloud BootstrapCloudArgument, credential BootstrapCredentialArgument) error {
-	// Update public clouds - this command will go fetch a list of public clouds
-	// from https://streams.canonical.com/juju/public-clouds.syaml and update
-	// client's local store.
-	if err := runner.Run(ctx, "update-public-clouds", "--client"); err != nil {
-		return fmt.Errorf("failed to update public clouds: %w", err)
-	}
-
-	// Setup cloud
-	cloudName := cloud.Name
-	isPublicCloud, err := isValidPublicCloud(cloud)
-	if err != nil {
-		return fmt.Errorf("failed to validate cloud: %w", err)
-	}
-
-	// If a cloud is not known to Juju i.e. clouds besides AWS, Azure, GCP, etc.,
-	// then we need to create a cloud entry on disk with information on how
-	// to reach the cloud, its regions, etc.
-	if !isPublicCloud {
-		// Create personal cloud
-		cloud := buildJujuCloud(cloud)
-		if err := jujucloud.WritePersonalCloudMetadata(map[string]jujucloud.Cloud{
-			cloudName: cloud,
-		}); err != nil {
-			return fmt.Errorf("failed to write personal cloud metadata: %w", err)
-		}
-	}
-
-	// Setup credentials
-	cloudCred := jujucloud.CloudCredential{
-		AuthCredentials: map[string]jujucloud.Credential{
-			cloudName: buildJujuCredential(credential),
-		},
-	}
-	store, close := runner.ClientStore()
-	defer close()
-	if err := store.UpdateCredential(cloudName, cloudCred); err != nil {
-		return fmt.Errorf("failed to update credential: %w", err)
-	}
-
-	return nil
-}
-
 // writeBootstrapConfigs writes the bootstrap configs to a single YAML file.
 func writeBootstrapConfigs(workDir string, config BootstrapConfig) (string, error) {
 	// Skip if config is empty
