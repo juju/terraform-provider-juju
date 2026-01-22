@@ -621,8 +621,7 @@ func TestGetJujuProviderModel(t *testing.T) {
 				tt.setEnv(t)
 			}
 
-			confReq := newConfigureRequest(t, tt.plan)
-			model, diags := getJujuProviderModel(context.Background(), confReq)
+			model, diags := getJujuProviderModel(context.Background(), tt.plan)
 
 			if tt.wantErrSummary != "" {
 				require.True(t, diags.HasError())

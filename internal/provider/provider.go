@@ -374,8 +374,10 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 // API client, which should be stored on the struct implementing the
 // Provider interface.
 func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	// Get data required for configuring the juju client.
-	data, diags := getJujuProviderModel(ctx, req)
+	var data jujuProviderModel
+	var diags diag.Diagnostics
+	// Read Terraform configuration data into the juju provider model.
+	diags.Append(req.Config.Get(ctx, &data)...)
 	if diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
@@ -388,6 +390,12 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		}
 		resp.ResourceData = providerData
 		resp.DataSourceData = providerData
+		return
+	}
+	// Get data required for configuring the juju client.
+	data, diags = getJujuProviderModel(ctx, data)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
 		return
 	}
 
@@ -469,15 +477,9 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 // getJujuProviderModel a filled in jujuProviderModel if able. First check
 // the plan being used, then fall back to the JUJU_ environment variables,
 // lastly check to see if an active juju can supply the data.
-func getJujuProviderModel(ctx context.Context, req provider.ConfigureRequest) (jujuProviderModel, diag.Diagnostics) {
-	var planData jujuProviderModel
+func getJujuProviderModel(ctx context.Context, planData jujuProviderModel) (jujuProviderModel, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
-	// Read Terraform configuration data into the juju provider model.
-	diags.Append(req.Config.Get(ctx, &planData)...)
-	if diags.HasError() {
-		return planData, diags
-	}
 	// If validation failed because we have both username/password
 	// and client ID/secret combinations in the plan. Exit now.
 	if planData.UserName.ValueString() != "" && planData.ClientID.ValueString() != "" {
