@@ -39,7 +39,7 @@ type JujuCommand interface {
 	// Config retrieves controller configuration and controller-model configuration settings.
 	Config(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (map[string]any, map[string]any, error)
 	// Destroy removes the controller.
-	Destroy(ctx context.Context, connInfo *juju.ControllerConnectionInformation) error
+	Destroy(ctx context.Context, args juju.DestroyArguments) error
 }
 
 var _ resource.Resource = &controllerResource{}
@@ -378,6 +378,19 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Sensitive:   false,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+
+			// The arguments below are only used when destroying the controller.
+			// The use of a map allows flexibility across Juju CLI versions,
+			// but will require normalisation when comparing values between
+			// the user's plan and the controller's state.
+			"destroy_arguments": schema.MapAttribute{
+				Description: "Additional arguments for destroying the controller.",
+				Optional:    true,
+				ElementType: types.StringType,
+				PlanModifiers: []planmodifier.Map{
+					mapplanmodifier.UseStateForUnknown(),
 				},
 			},
 		},
@@ -772,13 +785,6 @@ func (r *controllerResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	connInfo := &juju.ControllerConnectionInformation{
-		Addresses: addresses,
-		CACert:    state.CACert.ValueString(),
-		Username:  state.Username.ValueString(),
-		Password:  state.Password.ValueString(),
-	}
-
 	command, err := r.newJujuCommand(state.JujuBinary.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -787,7 +793,20 @@ func (r *controllerResource) Delete(ctx context.Context, req resource.DeleteRequ
 		)
 		return
 	}
-	err = command.Destroy(ctx, connInfo)
+
+	args := juju.DestroyArguments{
+		Name:       state.Name.ValueString(),
+		JujuBinary: state.JujuBinary.ValueString(),
+		Flags:      juju.DestroyFlags{},
+		ConnectionInfo: juju.ControllerConnectionInformation{
+			Addresses: addresses,
+			CACert:    state.CACert.ValueString(),
+			Username:  state.Username.ValueString(),
+			Password:  state.Password.ValueString(),
+		},
+	}
+
+	err = command.Destroy(ctx, args)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Controller Deletion Error",

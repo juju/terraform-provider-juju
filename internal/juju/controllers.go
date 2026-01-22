@@ -201,6 +201,24 @@ type BootstrapCredentialArgument struct {
 	Attributes map[string]string
 }
 
+type DestroyFlags struct {
+	AgentVersion     string `flag:"agent-version"`
+	DestroyAllModels bool   `flag:"destroy-all-models"`
+	DestroyStorage   bool   `flag:"destroy-storage"`
+	ReleaseStorage   bool   `flag:"release-storage"`
+	Force            bool   `flag:"force"`
+	ModelTimeout     int    `flag:"model-timeout"` // safe to expose?
+}
+
+type DestroyArguments struct {
+	Name            string
+	JujuBinary      string
+	Cloud           BootstrapCloudArgument
+	CloudCredential BootstrapCredentialArgument
+	ConnectionInfo  ControllerConnectionInformation
+	Flags           DestroyFlags
+}
+
 // DefaultJujuCommand is the default implementation of JujuCommand.
 type DefaultJujuCommand struct {
 	jujuBinary string
@@ -381,8 +399,94 @@ func (d *DefaultJujuCommand) Config(ctx context.Context, connInfo *ControllerCon
 }
 
 // Destroy removes the controller.
-func (d *DefaultJujuCommand) Destroy(ctx context.Context, connInfo *ControllerConnectionInformation) error {
-	// TODO: Implement destroy logic
+func (d *DefaultJujuCommand) Destroy(ctx context.Context, args DestroyArguments) error {
+	// Validate arguments
+	if args.Name == "" {
+		return fmt.Errorf("controller name cannot be empty")
+	}
+	if args.Cloud.Name == "" {
+		return fmt.Errorf("cloud name cannot be empty")
+	}
+	if args.CloudCredential.Name == "" {
+		return fmt.Errorf("credential name cannot be empty")
+	}
+	if args.Flags.AgentVersion != "" {
+		if _, err := version.Parse(args.Flags.AgentVersion); err != nil {
+			return fmt.Errorf("invalid agent version %q: %w", args.Flags.AgentVersion, err)
+		}
+	}
+
+	// Create command runner with log file
+	runner, err := newCommandRunner(d.jujuBinary)
+	if err != nil {
+		return err
+	}
+	defer runner.Close()
+
+	tflog.SubsystemDebug(ctx, LogJujuCommand, fmt.Sprintf("Destroy log file: %s\n", runner.LogFilePath()))
+
+	return performDestroy(ctx, args, runner)
+}
+
+func performDestroy(ctx context.Context, args DestroyArguments, runner CommandRunner) error {
+	err := setupCloudWithCredentials(ctx, runner, args.Cloud, args.CloudCredential)
+	if err != nil {
+		return fmt.Errorf("failed to setup cloud and credentials: %w", err)
+	}
+
+	cmdArgs, err := buildDestroyArgs(ctx, args)
+	if err != nil {
+		return err
+	}
+
+	err = runner.Run(ctx, cmdArgs...)
+	if err != nil {
+		return fmt.Errorf("destroy failed: %w", err)
+	}
+
+	return nil
+}
+
+func setupCloudWithCredentials(ctx context.Context, runner CommandRunner, cloud BootstrapCloudArgument, credential BootstrapCredentialArgument) error {
+	// Update public clouds - this command will go fetch a list of public clouds
+	// from https://streams.canonical.com/juju/public-clouds.syaml and update
+	// client's local store.
+	if err := runner.Run(ctx, "update-public-clouds", "--client"); err != nil {
+		return fmt.Errorf("failed to update public clouds: %w", err)
+	}
+
+	// Setup cloud
+	cloudName := cloud.Name
+	isPublicCloud, err := isValidPublicCloud(cloud)
+	if err != nil {
+		return fmt.Errorf("failed to validate cloud: %w", err)
+	}
+
+	// If a cloud is not known to Juju i.e. clouds besides AWS, Azure, GCP, etc.,
+	// then we need to create a cloud entry on disk with information on how
+	// to reach the cloud, its regions, etc.
+	if !isPublicCloud {
+		// Create personal cloud
+		cloud := buildJujuCloud(cloud)
+		if err := jujucloud.WritePersonalCloudMetadata(map[string]jujucloud.Cloud{
+			cloudName: cloud,
+		}); err != nil {
+			return fmt.Errorf("failed to write personal cloud metadata: %w", err)
+		}
+	}
+
+	// Setup credentials
+	cloudCred := jujucloud.CloudCredential{
+		AuthCredentials: map[string]jujucloud.Credential{
+			cloudName: buildJujuCredential(credential),
+		},
+	}
+	store, close := runner.ClientStore()
+	defer close()
+	if err := store.UpdateCredential(cloudName, cloudCred); err != nil {
+		return fmt.Errorf("failed to update credential: %w", err)
+	}
+
 	return nil
 }
 
@@ -602,4 +706,12 @@ func setupCloudWithCredentials(ctx context.Context, runner CommandRunner, cloud 
 	}
 
 	return nil
+}
+
+func buildDestroyArgs(ctx context.Context, args DestroyArguments) ([]string, error) {
+	cmdArgs := []string{"destroy-controller", args.Name}
+
+	cmdArgs = append(cmdArgs, buildArgsFromFlags(ctx, args.Flags)...)
+
+	return cmdArgs, nil
 }
