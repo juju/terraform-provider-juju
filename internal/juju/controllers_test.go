@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/juju/juju/juju/osenv"
+	"github.com/juju/juju/jujuclient"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -281,9 +283,7 @@ func TestPerformBootstrap(t *testing.T) {
 	defer ctlr.Finish()
 	mockRunner := NewMockCommandRunner(ctlr)
 
-	mockRunner.EXPECT().WorkingDir().Times(1).Return(tmpDir)
-	mockRunner.EXPECT().SetClientGlobal().Times(2).Return()
-	mockRunner.EXPECT().UnsetClientGlobal().Times(2).Return()
+	mockRunner.EXPECT().WorkingDir().Times(3).Return(tmpDir)
 
 	mockRunner.EXPECT().Run(gomock.Any(), "update-public-clouds", "--client").Times(1)
 	mockRunner.EXPECT().Run(
@@ -332,4 +332,36 @@ func TestPerformBootstrap(t *testing.T) {
 	assert.Contains(t, result.CACert, "TESTCACERT")
 	assert.Equal(t, "admin", result.Username)
 	assert.Equal(t, "test-password-12345", result.Password)
+}
+
+func TestConcurrentSafeFileStore(t *testing.T) {
+	wg := sync.WaitGroup{}
+	tmpDirs := []string{}
+	for range 10 {
+		wg.Add(1)
+		tmpDir, err := os.MkdirTemp("", "test-concurrent")
+		assert.NoError(t, err)
+		tmpDirs = append(tmpDirs, tmpDir)
+		go func(dir string) {
+			store := newSafeJujuClientStore(dir)
+			defer store.Close()
+			err := store.AddController("test-concurrent", jujuclient.ControllerDetails{
+				ControllerUUID: "concurrent-uuid",
+			})
+			if err != nil {
+				t.Errorf("failed to add controller: %v", err)
+			}
+			wg.Done()
+		}(tmpDir)
+	}
+
+	wg.Wait()
+
+	for _, dir := range tmpDirs {
+		// check if controllers.yaml file exists
+		controllersPath := filepath.Join(dir, "controllers.yaml")
+		_, err := os.Stat(controllersPath)
+		assert.NoError(t, err)
+		os.RemoveAll(dir)
+	}
 }
