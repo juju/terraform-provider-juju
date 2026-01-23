@@ -381,12 +381,12 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				},
 			},
 
-			// The arguments below are only used when destroying the controller.
+			// The flags below are only used when destroying the controller.
 			// The use of a map allows flexibility across Juju CLI versions,
 			// but will require normalisation when comparing values between
 			// the user's plan and the controller's state.
-			"destroy_arguments": schema.MapAttribute{
-				Description: "Additional arguments for destroying the controller.",
+			"destroy_flags": schema.MapAttribute{
+				Description: "Additional flags for destroying the controller.",
 				Optional:    true,
 				ElementType: types.StringType,
 				PlanModifiers: []planmodifier.Map{

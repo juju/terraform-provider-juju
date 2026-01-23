@@ -281,9 +281,9 @@ func TestPerformBootstrap(t *testing.T) {
 	defer ctlr.Finish()
 	mockRunner := NewMockCommandRunner(ctlr)
 
-	mockRunner.EXPECT().WorkingDir().Times(1).Return(tmpDir)
-	mockRunner.EXPECT().SetClientGlobal().Times(2).Return()
-	mockRunner.EXPECT().UnsetClientGlobal().Times(2).Return()
+	mockRunner.EXPECT().WorkingDir().Return(tmpDir).Times(1)
+	mockRunner.EXPECT().SetClientGlobal().Return().Times(2)
+	mockRunner.EXPECT().UnsetClientGlobal().Return().Times(2)
 
 	mockRunner.EXPECT().Run(gomock.Any(), "update-public-clouds", "--client").Times(1)
 	mockRunner.EXPECT().Run(
@@ -351,9 +351,10 @@ func TestPerformDestroy(t *testing.T) {
 	defer ctlr.Finish()
 	mockRunner := NewMockCommandRunner(ctlr)
 
-	mockRunner.EXPECT().WorkingDir().Times(0).Return(tmpDir)
-	mockRunner.EXPECT().SetClientGlobal().Times(1).Return()
-	mockRunner.EXPECT().UnsetClientGlobal().Times(1).Return()
+	mockRunner.EXPECT().WorkingDir().Return(tmpDir).Times(0)
+	mockRunner.EXPECT().SetClientGlobal().Return().Times(1)
+	mockRunner.EXPECT().UnsetClientGlobal().Return().Times(1)
+	mockRunner.EXPECT().Version(gomock.Any()).Return("3.6.0", nil).Times(1)
 
 	mockRunner.EXPECT().Run(gomock.Any(), "update-public-clouds", "--client").Times(1)
 	mockRunner.EXPECT().Run(
@@ -364,7 +365,8 @@ func TestPerformDestroy(t *testing.T) {
 
 	// Prepare destroy arguments
 	destroyArgs := DestroyArguments{
-		Name: "test-controller",
+		Name:         "test-controller",
+		AgentVersion: "3.6.0",
 		Cloud: BootstrapCloudArgument{
 			Name:      "test-cloud",
 			Type:      "manual",

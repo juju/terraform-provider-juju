@@ -38,6 +38,8 @@ type ControllerConnectionInformation struct {
 type CommandRunner interface {
 	// Run executes a juju command with the configured environment and logging.
 	Run(ctx context.Context, args ...string) error
+	// Version returns the juju CLI version.
+	Version(ctx context.Context) (string, error)
 	// LogFilePath returns the path to the log file.
 	LogFilePath() string
 	// WorkingDir returns the temporary directory created by the runner.
@@ -114,6 +116,21 @@ func (r *commandRunner) Run(ctx context.Context, args ...string) error {
 	}
 
 	return nil
+}
+
+func (r *commandRunner) Version(ctx context.Context) (string, error) {
+	cmd := exec.CommandContext(ctx, r.jujuBinary, "--version")
+
+	// Build environment vars
+	cmd.Env = append(cmd.Env, fmt.Sprintf("JUJU_DATA=%s", r.workingDir))
+
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get juju version: %w", err)
+	}
+
+	versionStr := strings.TrimSpace(string(output))
+	return versionStr, nil
 }
 
 // LogFilePath returns the path to the log file.
@@ -202,17 +219,17 @@ type BootstrapCredentialArgument struct {
 }
 
 type DestroyFlags struct {
-	AgentVersion     string `flag:"agent-version"`
-	DestroyAllModels bool   `flag:"destroy-all-models"`
-	DestroyStorage   bool   `flag:"destroy-storage"`
-	ReleaseStorage   bool   `flag:"release-storage"`
-	Force            bool   `flag:"force"`
-	ModelTimeout     int    `flag:"model-timeout"` // safe to expose?
+	DestroyAllModels bool `flag:"destroy-all-models"`
+	DestroyStorage   bool `flag:"destroy-storage"`
+	ReleaseStorage   bool `flag:"release-storage"`
+	Force            bool `flag:"force"`
+	ModelTimeout     int  `flag:"model-timeout"`
 }
 
 type DestroyArguments struct {
 	Name            string
 	JujuBinary      string
+	AgentVersion    string
 	Cloud           BootstrapCloudArgument
 	CloudCredential BootstrapCredentialArgument
 	ConnectionInfo  ControllerConnectionInformation
@@ -410,9 +427,9 @@ func (d *DefaultJujuCommand) Destroy(ctx context.Context, args DestroyArguments)
 	if args.CloudCredential.Name == "" {
 		return fmt.Errorf("credential name cannot be empty")
 	}
-	if args.Flags.AgentVersion != "" {
-		if _, err := version.Parse(args.Flags.AgentVersion); err != nil {
-			return fmt.Errorf("invalid agent version %q: %w", args.Flags.AgentVersion, err)
+	if args.AgentVersion != "" {
+		if _, err := version.Parse(args.AgentVersion); err != nil {
+			return fmt.Errorf("invalid agent version %q: %w", args.AgentVersion, err)
 		}
 	}
 
@@ -429,6 +446,14 @@ func (d *DefaultJujuCommand) Destroy(ctx context.Context, args DestroyArguments)
 }
 
 func performDestroy(ctx context.Context, args DestroyArguments, runner CommandRunner) error {
+	if version, err := runner.Version(ctx); err != nil {
+		return fmt.Errorf("failed to get juju version: %w", err)
+	} else {
+		if version != args.AgentVersion {
+			return fmt.Errorf("Juju CLI version (%s) does not match agent version (%s)", version, args.AgentVersion)
+		}
+	}
+
 	err := setupCloudWithCredentials(ctx, runner, args.Cloud, args.CloudCredential)
 	if err != nil {
 		return fmt.Errorf("failed to setup cloud and credentials: %w", err)
