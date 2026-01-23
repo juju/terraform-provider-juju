@@ -96,15 +96,8 @@ func (resource *genericJAASAccessResource) Configure(ctx context.Context, req re
 		return
 	}
 
-	provider, ok := req.ProviderData.(juju.ProviderData)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-	resp.Diagnostics = checkControllerMode(resp.Diagnostics, provider.Config, false)
+	provider, diags := getProviderData(req, false)
+	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}

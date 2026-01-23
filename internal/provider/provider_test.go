@@ -661,18 +661,22 @@ func TestAcc_ProviderControllerModeError(t *testing.T) {
 		ProtoV6ProviderFactories: localProviderFactory,
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccProviderControllerModeError(true),
+				Config:      testAccProviderControllerResourceModeErrorResource(true),
 				ExpectError: regexp.MustCompile(`.*when controller_mode is true.*`),
 			},
 			{
-				Config:      testAccProviderControllerModeError(false),
+				Config:      testAccProviderControllerResourceModeErrorResource(false),
 				ExpectError: regexp.MustCompile(`.*when controller_mode is false.*`),
+			},
+			{
+				Config:      testAccProviderControllerResourceModeErrorDataSource(),
+				ExpectError: regexp.MustCompile(`.*when controller_mode is true.*`),
 			},
 		},
 	})
 }
 
-func testAccProviderControllerModeError(controllerMode bool) string {
+func testAccProviderControllerResourceModeErrorResource(controllerMode bool) string {
 	if controllerMode {
 		return `
 provider "juju" {
@@ -713,4 +717,17 @@ resource "juju_controller" "controller" {
 }
 `
 	}
+}
+
+func testAccProviderControllerResourceModeErrorDataSource() string {
+	return `
+provider "juju" {
+  controller_mode = true
+}
+
+data "juju_model" "test_model" {
+  name = "test-model-bootstrap-only"
+  owner = "some-owner"
+}
+`
 }

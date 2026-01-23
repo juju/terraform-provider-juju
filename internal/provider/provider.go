@@ -625,3 +625,41 @@ func checkControllerMode(diags diag.Diagnostics, config juju.Config, isControlle
 	}
 	return diags
 }
+
+// getProviderData extracts and validates provider data from a ConfigureRequest.
+// It performs type assertion and controller mode validation in one step.
+func getProviderData(req resource.ConfigureRequest, isControllerResource bool) (juju.ProviderData, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	provider, ok := req.ProviderData.(juju.ProviderData)
+	if !ok {
+		diags.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return juju.ProviderData{}, diags
+	}
+	diags = checkControllerMode(diags, provider.Config, isControllerResource)
+	if diags.HasError() {
+		return juju.ProviderData{}, diags
+	}
+	return provider, diags
+}
+
+// getProviderDataForDataSource extracts and validates provider data from a data source ConfigureRequest.
+// It performs type assertion and controller mode validation in one step.
+func getProviderDataForDataSource(req datasource.ConfigureRequest, isControllerResource bool) (juju.ProviderData, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	provider, ok := req.ProviderData.(juju.ProviderData)
+	if !ok {
+		diags.AddError(
+			"Unexpected Data Source Configure Type",
+			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return juju.ProviderData{}, diags
+	}
+	diags = checkControllerMode(diags, provider.Config, isControllerResource)
+	if diags.HasError() {
+		return juju.ProviderData{}, diags
+	}
+	return provider, diags
+}

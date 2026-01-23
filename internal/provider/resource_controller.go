@@ -391,15 +391,8 @@ func (r *controllerResource) Configure(ctx context.Context, req resource.Configu
 		return
 	}
 
-	provider, ok := req.ProviderData.(juju.ProviderData)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-	resp.Diagnostics = checkControllerMode(resp.Diagnostics, provider.Config, true)
+	provider, diags := getProviderData(req, true)
+	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}

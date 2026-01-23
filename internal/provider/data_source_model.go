@@ -112,15 +112,8 @@ func (d *modelDataSource) Configure(ctx context.Context, req datasource.Configur
 		return
 	}
 
-	provider, ok := req.ProviderData.(juju.ProviderData)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-	resp.Diagnostics = checkControllerMode(resp.Diagnostics, provider.Config, false)
+	provider, diags := getProviderDataForDataSource(req, false)
+	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
