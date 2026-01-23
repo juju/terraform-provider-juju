@@ -2716,6 +2716,44 @@ func (m *MockCommandRunner) EXPECT() *MockCommandRunnerMockRecorder {
 	return m.recorder
 }
 
+// Close mocks base method.
+func (m *MockCommandRunner) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockCommandRunnerMockRecorder) Close() *MockCommandRunnerCloseCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockCommandRunner)(nil).Close))
+	return &MockCommandRunnerCloseCall{Call: call}
+}
+
+// MockCommandRunnerCloseCall wrap *gomock.Call
+type MockCommandRunnerCloseCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockCommandRunnerCloseCall) Return(arg0 error) *MockCommandRunnerCloseCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockCommandRunnerCloseCall) Do(f func() error) *MockCommandRunnerCloseCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockCommandRunnerCloseCall) DoAndReturn(f func() error) *MockCommandRunnerCloseCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // LogFilePath mocks base method.
 func (m *MockCommandRunner) LogFilePath() string {
 	m.ctrl.T.Helper()
@@ -2797,38 +2835,112 @@ func (c *MockCommandRunnerRunCall) DoAndReturn(f func(context.Context, ...string
 	return c
 }
 
-// SetEnv mocks base method.
-func (m *MockCommandRunner) SetEnv(key, value string) {
+// SetClientGlobal mocks base method.
+func (m *MockCommandRunner) SetClientGlobal() {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetEnv", key, value)
+	m.ctrl.Call(m, "SetClientGlobal")
 }
 
-// SetEnv indicates an expected call of SetEnv.
-func (mr *MockCommandRunnerMockRecorder) SetEnv(key, value any) *MockCommandRunnerSetEnvCall {
+// SetClientGlobal indicates an expected call of SetClientGlobal.
+func (mr *MockCommandRunnerMockRecorder) SetClientGlobal() *MockCommandRunnerSetClientGlobalCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetEnv", reflect.TypeOf((*MockCommandRunner)(nil).SetEnv), key, value)
-	return &MockCommandRunnerSetEnvCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetClientGlobal", reflect.TypeOf((*MockCommandRunner)(nil).SetClientGlobal))
+	return &MockCommandRunnerSetClientGlobalCall{Call: call}
 }
 
-// MockCommandRunnerSetEnvCall wrap *gomock.Call
-type MockCommandRunnerSetEnvCall struct {
+// MockCommandRunnerSetClientGlobalCall wrap *gomock.Call
+type MockCommandRunnerSetClientGlobalCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockCommandRunnerSetEnvCall) Return() *MockCommandRunnerSetEnvCall {
+func (c *MockCommandRunnerSetClientGlobalCall) Return() *MockCommandRunnerSetClientGlobalCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockCommandRunnerSetEnvCall) Do(f func(string, string)) *MockCommandRunnerSetEnvCall {
+func (c *MockCommandRunnerSetClientGlobalCall) Do(f func()) *MockCommandRunnerSetClientGlobalCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockCommandRunnerSetEnvCall) DoAndReturn(f func(string, string)) *MockCommandRunnerSetEnvCall {
+func (c *MockCommandRunnerSetClientGlobalCall) DoAndReturn(f func()) *MockCommandRunnerSetClientGlobalCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// UnsetClientGlobal mocks base method.
+func (m *MockCommandRunner) UnsetClientGlobal() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UnsetClientGlobal")
+}
+
+// UnsetClientGlobal indicates an expected call of UnsetClientGlobal.
+func (mr *MockCommandRunnerMockRecorder) UnsetClientGlobal() *MockCommandRunnerUnsetClientGlobalCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnsetClientGlobal", reflect.TypeOf((*MockCommandRunner)(nil).UnsetClientGlobal))
+	return &MockCommandRunnerUnsetClientGlobalCall{Call: call}
+}
+
+// MockCommandRunnerUnsetClientGlobalCall wrap *gomock.Call
+type MockCommandRunnerUnsetClientGlobalCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockCommandRunnerUnsetClientGlobalCall) Return() *MockCommandRunnerUnsetClientGlobalCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockCommandRunnerUnsetClientGlobalCall) Do(f func()) *MockCommandRunnerUnsetClientGlobalCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockCommandRunnerUnsetClientGlobalCall) DoAndReturn(f func()) *MockCommandRunnerUnsetClientGlobalCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// WorkingDir mocks base method.
+func (m *MockCommandRunner) WorkingDir() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WorkingDir")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// WorkingDir indicates an expected call of WorkingDir.
+func (mr *MockCommandRunnerMockRecorder) WorkingDir() *MockCommandRunnerWorkingDirCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkingDir", reflect.TypeOf((*MockCommandRunner)(nil).WorkingDir))
+	return &MockCommandRunnerWorkingDirCall{Call: call}
+}
+
+// MockCommandRunnerWorkingDirCall wrap *gomock.Call
+type MockCommandRunnerWorkingDirCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockCommandRunnerWorkingDirCall) Return(arg0 string) *MockCommandRunnerWorkingDirCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockCommandRunnerWorkingDirCall) Do(f func() string) *MockCommandRunnerWorkingDirCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockCommandRunnerWorkingDirCall) DoAndReturn(f func() string) *MockCommandRunnerWorkingDirCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

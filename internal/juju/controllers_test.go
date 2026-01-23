@@ -281,6 +281,10 @@ func TestPerformBootstrap(t *testing.T) {
 	defer ctlr.Finish()
 	mockRunner := NewMockCommandRunner(ctlr)
 
+	mockRunner.EXPECT().WorkingDir().Times(1).Return(tmpDir)
+	mockRunner.EXPECT().SetClientGlobal().Times(2).Return()
+	mockRunner.EXPECT().UnsetClientGlobal().Times(2).Return()
+
 	mockRunner.EXPECT().Run(gomock.Any(), "update-public-clouds", "--client").Times(1)
 	mockRunner.EXPECT().Run(
 		gomock.Any(),
@@ -319,7 +323,7 @@ func TestPerformBootstrap(t *testing.T) {
 
 	// Run performBootstrap
 	ctx := context.Background()
-	result, err := performBootstrap(ctx, bootstrapArgs, tmpDir, mockRunner)
+	result, err := performBootstrap(ctx, bootstrapArgs, mockRunner)
 
 	// Verify the result
 	assert.NoError(t, err)
