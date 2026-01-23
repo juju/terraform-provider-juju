@@ -710,14 +710,23 @@ func (r *controllerResource) Update(ctx context.Context, req resource.UpdateRequ
 		Password:  state.Password.ValueString(),
 	}
 
-	// Note that below we ignore the unset controller config keys because Juju's API
-	// does not support unsetting controller config values. If a user removes a config
-	// key from their Terraform plan, it will be left unchanged in Juju.
+	// Note that below we ignore the unset controller config keys (besides warning on them)
+	// because Juju's API does not support unsetting controller config values. If a user
+	// removes a config key from their Terraform plan, it will be left unchanged in Juju.
 	var diags diag.Diagnostics
-	updatedControllerConfig, _, diags := computeConfigDiff(ctx, state.ControllerConfig, plan.ControllerConfig)
+	updatedControllerConfig, unsetControllerConfig, diags := computeConfigDiff(ctx, state.ControllerConfig, plan.ControllerConfig)
 	if diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
+	}
+
+	for _, key := range unsetControllerConfig {
+		resp.Diagnostics.AddWarning(
+			"Controller Config Unset Warning",
+			fmt.Sprintf("The controller config key %q was removed from the Terraform configuration, "+
+				"but Juju does not support unsetting controller config values. The value will be left unchanged in the controller.",
+				key),
+		)
 	}
 
 	updatedControllerModelConfig, unsetControllerModelConfig, diags := computeConfigDiff(ctx, state.ControllerModelConfig, plan.ControllerModelConfig)
