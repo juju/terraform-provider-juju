@@ -351,9 +351,9 @@ func TestPerformDestroy(t *testing.T) {
 	defer ctlr.Finish()
 	mockRunner := NewMockCommandRunner(ctlr)
 
-	mockRunner.EXPECT().WorkingDir().AnyTimes().Return(tmpDir)
-	mockRunner.EXPECT().Close().AnyTimes().Return(nil)
-	mockRunner.EXPECT().ClientStore().AnyTimes().Return(jujuclient.NewFileClientStore(), func() {})
+	mockRunner.EXPECT().WorkingDir().Times(0).Return(tmpDir)
+	mockRunner.EXPECT().SetClientGlobal().Times(1).Return()
+	mockRunner.EXPECT().UnsetClientGlobal().Times(1).Return()
 
 	mockRunner.EXPECT().Run(gomock.Any(), "update-public-clouds", "--client").Times(1)
 	mockRunner.EXPECT().Run(
