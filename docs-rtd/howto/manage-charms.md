@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to deploy Charmhub charms with specific channels and revisions, including automatic revision computation examples."
+---
+
 (manage-charms)=
 # Manage charms
 

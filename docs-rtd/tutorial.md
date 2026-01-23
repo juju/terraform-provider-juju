@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to deploy Mattermost and PostgreSQL on Kubernetes using the Terraform Provider for Juju in this hands-on introductory tutorial."
+---
+
 # Tutorial
 
 <!--

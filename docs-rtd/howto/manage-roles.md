@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to add, reference, and manage JAAS roles and role access permissions for users, service accounts, and groups."
+---
+
 (manage-roles)=
 # Manage roles
 

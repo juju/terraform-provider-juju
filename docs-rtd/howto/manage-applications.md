@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to deploy, configure, scale, and trust Juju applications using Terraform with detailed configuration examples."
+---
+
 (manage-applications)=
 # Manage applications
 

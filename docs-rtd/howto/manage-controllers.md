@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to reference and connect to Juju and JIMM controllers using static credentials, environment variables, or the Juju CLI."
+---
+
 (manage-controllers)=
 # Manage controllers
 
