@@ -65,6 +65,9 @@ type controllerResourceModel struct {
 	ControllerConfig      types.Map `tfsdk:"controller_config"`
 	ControllerModelConfig types.Map `tfsdk:"controller_model_config"`
 
+	// Flags for destroy command
+	DestroyFlags types.Map `tfsdk:"destroy_flags"`
+
 	// Controller details
 	APIAddresses types.List   `tfsdk:"api_addresses"`
 	CACert       types.String `tfsdk:"ca_cert"`
@@ -794,16 +797,87 @@ func (r *controllerResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
+	var cloudModel nestedCloudModel
+	resp.Diagnostics.Append(state.Cloud.As(ctx, &cloudModel, basetypes.ObjectAsOptions{})...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var authTypes []string
+	resp.Diagnostics.Append(cloudModel.AuthTypes.ElementsAs(ctx, &authTypes, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var caCertificates []string
+	if !cloudModel.CACertificates.IsNull() && !cloudModel.CACertificates.IsUnknown() {
+		resp.Diagnostics.Append(cloudModel.CACertificates.ElementsAs(ctx, &caCertificates, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	var cloudConfig map[string]string
+	if !cloudModel.Config.IsNull() && !cloudModel.Config.IsUnknown() {
+		resp.Diagnostics.Append(cloudModel.Config.ElementsAs(ctx, &cloudConfig, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	var credentialModel nestedCloudCredentialModel
+	resp.Diagnostics.Append(state.CloudCredential.As(ctx, &credentialModel, basetypes.ObjectAsOptions{})...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var credentialAttributes map[string]string
+	resp.Diagnostics.Append(credentialModel.Attributes.ElementsAs(ctx, &credentialAttributes, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var cloudRegion *juju.BootstrapCloudRegionArgument
+	if !cloudModel.Region.IsNull() && !cloudModel.Region.IsUnknown() {
+		var regionModel nestedCloudRegionModel
+		resp.Diagnostics.Append(cloudModel.Region.As(ctx, &regionModel, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		cloudRegion = &juju.BootstrapCloudRegionArgument{
+			Name:             regionModel.Name.ValueString(),
+			Endpoint:         regionModel.Endpoint.ValueString(),
+			IdentityEndpoint: regionModel.IdentityEndpoint.ValueString(),
+			StorageEndpoint:  regionModel.StorageEndpoint.ValueString(),
+		}
+	}
+
 	args := juju.DestroyArguments{
-		Name:       state.Name.ValueString(),
-		JujuBinary: state.JujuBinary.ValueString(),
-		Flags:      juju.DestroyFlags{},
+		Name:         state.Name.ValueString(),
+		JujuBinary:   state.JujuBinary.ValueString(),
+		AgentVersion: state.AgentVersion.ValueString(),
+		Cloud: juju.BootstrapCloudArgument{
+			Name:            cloudModel.Name.ValueString(),
+			AuthTypes:       authTypes,
+			CACertificates:  caCertificates,
+			Config:          cloudConfig,
+			Endpoint:        cloudModel.Endpoint.ValueString(),
+			HostCloudRegion: cloudModel.HostCloudRegion.ValueString(),
+			Region:          cloudRegion,
+			Type:            cloudModel.Type.ValueString(),
+		},
+		CloudCredential: juju.BootstrapCredentialArgument{
+			Name:       credentialModel.Name.ValueString(),
+			AuthType:   credentialModel.AuthType.ValueString(),
+			Attributes: credentialAttributes,
+		},
 		ConnectionInfo: juju.ControllerConnectionInformation{
 			Addresses: addresses,
 			CACert:    state.CACert.ValueString(),
 			Username:  state.Username.ValueString(),
 			Password:  state.Password.ValueString(),
 		},
+		Flags: juju.DestroyFlags{},
 	}
 
 	err = command.Destroy(ctx, args)
