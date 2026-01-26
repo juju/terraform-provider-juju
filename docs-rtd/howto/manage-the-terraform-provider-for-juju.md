@@ -45,9 +45,9 @@ terraform {
 
 #### b. Configure the `juju` provider to use an existing Juju or JIMM controller
 
-In your Terraform plan, configure the `provider` with the details of your existing, externally managed Juju or JIMM controller.
+In your Terraform plan, configure the `provider` with the details of your existing, Juju or JAAS controller.
 
-> See more: {ref}`reference-an-externally-managed-controller`
+> See more: {ref}`reference-a-controller`
 
 #### c. Build your deployment
 
