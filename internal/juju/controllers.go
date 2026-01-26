@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/juju/api/client/modelconfig"
@@ -23,6 +24,10 @@ import (
 	"github.com/juju/version/v2"
 	"gopkg.in/yaml.v2"
 )
+
+// clientStoreLock protects access to the JUJU_DATA environment variable
+// when creating safeJujuClientStore instances.
+var clientStoreLock sync.Mutex
 
 const LogJujuCommand = "juju_command"
 
@@ -42,10 +47,6 @@ type CommandRunner interface {
 	LogFilePath() string
 	// WorkingDir returns the temporary directory created by the runner.
 	WorkingDir() string
-	// SetClientGlobal sets the Juju client global Juju data home variable.
-	SetClientGlobal()
-	// UnsetClientGlobal sets the Juju client global Juju data home variable to its previous value.
-	UnsetClientGlobal()
 	// Close cleans up working directory.
 	Close() error
 }
@@ -55,7 +56,6 @@ type commandRunner struct {
 	jujuBinary  string
 	logFilePath string
 	workingDir  string
-	oldJujuData string
 }
 
 // newCommandRunner creates a new command runner with a log file in a temp directory.
@@ -124,20 +124,6 @@ func (r *commandRunner) LogFilePath() string {
 // WorkingDir returns the working directory for the command runner.
 func (r *commandRunner) WorkingDir() string {
 	return r.workingDir
-}
-
-// SetClientGlobal sets the Juju client global Juju data home variable.
-// The caller must UnsetClientGlobal after making filestore calls, ideally in a defer.
-func (r *commandRunner) SetClientGlobal() {
-	// Set Juju data home for a limited period of using the filestore.
-	// This is necessary because internally, store and other methods
-	// look up a global set with osenv.
-	r.oldJujuData = osenv.SetJujuXDGDataHome(r.workingDir)
-}
-
-// UnsetClientGlobal sets the Juju client global Juju data home variable to its previous value.
-func (r *commandRunner) UnsetClientGlobal() {
-	osenv.SetJujuXDGDataHome(r.oldJujuData)
 }
 
 // BootstrapConfig contains all configuration options that can be set during bootstrap.
@@ -266,9 +252,8 @@ func performBootstrap(ctx context.Context, args BootstrapArguments, runner Comma
 	}
 
 	// Client store to read controller information after bootstrap
-	runner.SetClientGlobal()
-	defer runner.UnsetClientGlobal()
-	store := jujuclient.NewFileClientStore()
+	store := newSafeJujuClientStore(runner.WorkingDir())
+	defer store.Close()
 
 	// Read controller information from the client store
 	controllerDetails, err := store.ControllerByName(args.Name)
@@ -534,7 +519,9 @@ func convertToCloudAuthTypes(authTypes []string) []jujucloud.AuthType {
 }
 
 // isValidPublicCloud checks if the cloud name (and possibly region) is a valid public cloud.
-func isValidPublicCloud(arg BootstrapCloudArgument) (bool, error) {
+func (safeJujuClientStore *safeJujuClientStore) isValidPublicCloud(arg BootstrapCloudArgument) (bool, error) {
+	// jujucloud.JujuPublicCloudsPath() reads from `<JUJU_DATA>/public-clouds.yaml`.
+	// So we need to ensure we call it from within the safeJujuClientStore lifetime.
 	pubClouds, _, err := jujucloud.PublicCloudMetadata(jujucloud.JujuPublicCloudsPath())
 	if err != nil {
 		return false, fmt.Errorf("failed to get public cloud metadata: %w", err)
@@ -566,13 +553,12 @@ func setupCloudWithCredentials(ctx context.Context, runner CommandRunner, cloud 
 		return fmt.Errorf("failed to update public clouds: %w", err)
 	}
 
-	runner.SetClientGlobal()
-	defer runner.UnsetClientGlobal()
-	store := jujuclient.NewFileClientStore()
+	store := newSafeJujuClientStore(runner.WorkingDir())
+	defer store.Close()
 
 	// Setup cloud
 	cloudName := cloud.Name
-	isPublicCloud, err := isValidPublicCloud(cloud)
+	isPublicCloud, err := store.isValidPublicCloud(cloud)
 	if err != nil {
 		return fmt.Errorf("failed to validate cloud: %w", err)
 	}
@@ -602,4 +588,32 @@ func setupCloudWithCredentials(ctx context.Context, runner CommandRunner, cloud 
 	}
 
 	return nil
+}
+
+// safeJujuClientStore wraps jujuclient.ClientStore and ensures Juju's package level global is
+// set and locked from changes during its lifetime.
+// This is needed because jujuclient.NewFileClientStore relies on
+// this global to locate the client store files.
+type safeJujuClientStore struct {
+	jujuclient.ClientStore
+	oldJujuData     string
+	currentJujuData string
+}
+
+// Close restores the previous JUJU_DATA value.
+func (s *safeJujuClientStore) Close() {
+	defer clientStoreLock.Unlock()
+	osenv.SetJujuXDGDataHome(s.oldJujuData)
+}
+
+func newSafeJujuClientStore(workingDir string) *safeJujuClientStore {
+	// The unlock will be done in the Close() method.
+	clientStoreLock.Lock()
+	oldJujuData := osenv.SetJujuXDGDataHome(workingDir)
+	store := jujuclient.NewFileClientStore()
+	return &safeJujuClientStore{
+		ClientStore:     store,
+		oldJujuData:     oldJujuData,
+		currentJujuData: workingDir,
+	}
 }
