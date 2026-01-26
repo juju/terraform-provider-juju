@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to reference, add, configure, and manage Juju models with constraints and configuration keys using Terraform."
+---
+
 (manage-models)=
 # Manage models
 

@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to add machine and Kubernetes clouds to Juju controllers and manage cloud access permissions with JAAS."
+---
+
 (manage-clouds)=
 # Manage clouds
 
