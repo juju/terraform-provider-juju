@@ -461,6 +461,11 @@ func performDestroy(ctx context.Context, args DestroyArguments, runner CommandRu
 		return fmt.Errorf("failed to setup cloud and credentials: %w", err)
 	}
 
+	err = setupControllerClientStore(ctx, runner, args)
+	if err != nil {
+		return fmt.Errorf("failed to setup controller client store: %w", err)
+	}
+
 	cmdArgs, err := buildDestroyArgs(ctx, args)
 	if err != nil {
 		return err
@@ -689,6 +694,33 @@ func setupCloudWithCredentials(ctx context.Context, runner CommandRunner, cloud 
 		return fmt.Errorf("failed to update credential: %w", err)
 	}
 
+	return nil
+}
+
+// setupControllerClientStore sets up the client store with controller and account details before destroy
+func setupControllerClientStore(ctx context.Context, runner CommandRunner, args DestroyArguments) error {
+	runner.SetClientGlobal()
+	defer runner.UnsetClientGlobal()
+	store := jujuclient.NewFileClientStore()
+
+	err := store.AddController(args.Name, jujuclient.ControllerDetails{
+		ControllerUUID: "",
+		Cloud:          args.Cloud.Name,
+		CloudRegion:    args.Cloud.Region.Name,
+		APIEndpoints:   args.ConnectionInfo.Addresses,
+		CACert:         args.ConnectionInfo.CACert,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to add controller to client store: %w", err)
+	}
+
+	err = store.UpdateAccount(args.Name, jujuclient.AccountDetails{
+		User:     args.ConnectionInfo.Username,
+		Password: args.ConnectionInfo.Password,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to add account details to client store: %w", err)
+	}
 	return nil
 }
 
