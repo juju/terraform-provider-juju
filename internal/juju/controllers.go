@@ -443,12 +443,7 @@ func (d *DefaultJujuCommand) Destroy(ctx context.Context, args DestroyArguments)
 	}
 	defer runner.Close()
 
-	tflog.SubsystemDebug(ctx, LogJujuCommand, fmt.Sprintf("Destroy log file: %s\n", runner.LogFilePath()))
-
-	return performDestroy(ctx, args, runner)
-}
-
-func performDestroy(ctx context.Context, args DestroyArguments, runner CommandRunner) error {
+	// Check Juju CLI version matches agent version
 	cliVersion, err := runner.Version(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get juju version: %w", err)
@@ -468,7 +463,13 @@ func performDestroy(ctx context.Context, args DestroyArguments, runner CommandRu
 		return fmt.Errorf("Juju CLI version (%s) does not match agent version (%s)", cliVersion, args.ConnectionInfo.AgentVersion)
 	}
 
-	err = setupControllerConnectionInfo(ctx, runner, args)
+	tflog.SubsystemDebug(ctx, LogJujuCommand, fmt.Sprintf("Destroy log file: %s\n", runner.LogFilePath()))
+
+	return performDestroy(ctx, args, runner)
+}
+
+func performDestroy(ctx context.Context, args DestroyArguments, runner CommandRunner) error {
+	err := setupControllerConnectionInfo(ctx, runner, args)
 	if err != nil {
 		return fmt.Errorf("failed to setup controller client store: %w", err)
 	}
