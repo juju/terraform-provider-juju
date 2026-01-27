@@ -87,7 +87,7 @@ func TestAcc_ResourceController(t *testing.T) {
 		CACert:    "test controller CA cert",
 		Username:  "admin",
 		Password:  "password",
-	}, nil).AnyTimes()
+	}, "3.6.12", nil).AnyTimes()
 
 	mockJujuCommand.EXPECT().Config(
 		gomock.Any(),
