@@ -430,11 +430,6 @@ func (d *DefaultJujuCommand) Destroy(ctx context.Context, args DestroyArguments)
 	if args.CloudRegion == "" {
 		return fmt.Errorf("cloud region cannot be empty")
 	}
-	if args.ConnectionInfo.AgentVersion != "" {
-		if _, err := version.Parse(args.ConnectionInfo.AgentVersion); err != nil {
-			return fmt.Errorf("invalid agent version %q: %w", args.ConnectionInfo.AgentVersion, err)
-		}
-	}
 
 	// Create command runner with log file
 	runner, err := newCommandRunner(d.jujuBinary)
