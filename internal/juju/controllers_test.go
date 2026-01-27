@@ -323,7 +323,7 @@ func TestPerformBootstrap(t *testing.T) {
 
 	// Run performBootstrap
 	ctx := context.Background()
-	result, version, err := performBootstrap(ctx, bootstrapArgs, mockRunner)
+	result, err := performBootstrap(ctx, bootstrapArgs, mockRunner)
 
 	// Verify the result
 	assert.NoError(t, err)
@@ -332,7 +332,6 @@ func TestPerformBootstrap(t *testing.T) {
 	assert.Contains(t, result.CACert, "TESTCACERT")
 	assert.Equal(t, "admin", result.Username)
 	assert.Equal(t, "test-password-12345", result.Password)
-	assert.Equal(t, "3.6.0", version)
 }
 
 func TestPerformDestroy(t *testing.T) {
