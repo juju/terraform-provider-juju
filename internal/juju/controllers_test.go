@@ -241,6 +241,7 @@ func simulateBootstrapSuccess(controllerName, jujuData string) func(ctx context.
   %s:
     uuid: test-uuid-12345
     api-endpoints: ["127.0.0.1:17070"]
+    agent-version: 3.6.0
     ca-cert: |
       -----BEGIN CERTIFICATE-----
       TESTCACERT
@@ -323,7 +324,7 @@ func TestPerformBootstrap(t *testing.T) {
 
 	// Run performBootstrap
 	ctx := context.Background()
-	result, version, err := performBootstrap(ctx, bootstrapArgs, mockRunner)
+	result, err := performBootstrap(ctx, bootstrapArgs, mockRunner)
 
 	// Verify the result
 	assert.NoError(t, err)
@@ -332,7 +333,7 @@ func TestPerformBootstrap(t *testing.T) {
 	assert.Contains(t, result.CACert, "TESTCACERT")
 	assert.Equal(t, "admin", result.Username)
 	assert.Equal(t, "test-password-12345", result.Password)
-	assert.Equal(t, "3.6.0", version)
+	assert.Equal(t, "3.6.0", result.AgentVersion)
 }
 
 func TestPerformDestroy(t *testing.T) {

@@ -42,13 +42,12 @@ func (m *MockJujuCommand) EXPECT() *MockJujuCommandMockRecorder {
 }
 
 // Bootstrap mocks base method.
-func (m *MockJujuCommand) Bootstrap(ctx context.Context, model juju.BootstrapArguments) (*juju.ControllerConnectionInformation, string, error) {
+func (m *MockJujuCommand) Bootstrap(ctx context.Context, model juju.BootstrapArguments) (*juju.ControllerConnectionInformation, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Bootstrap", ctx, model)
 	ret0, _ := ret[0].(*juju.ControllerConnectionInformation)
-	ret1, _ := ret[1].(string)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Bootstrap indicates an expected call of Bootstrap.
@@ -64,19 +63,19 @@ type MockJujuCommandBootstrapCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockJujuCommandBootstrapCall) Return(arg0 *juju.ControllerConnectionInformation, arg1 string, arg2 error) *MockJujuCommandBootstrapCall {
-	c.Call = c.Call.Return(arg0, arg1, arg2)
+func (c *MockJujuCommandBootstrapCall) Return(arg0 *juju.ControllerConnectionInformation, arg1 error) *MockJujuCommandBootstrapCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockJujuCommandBootstrapCall) Do(f func(context.Context, juju.BootstrapArguments) (*juju.ControllerConnectionInformation, string, error)) *MockJujuCommandBootstrapCall {
+func (c *MockJujuCommandBootstrapCall) Do(f func(context.Context, juju.BootstrapArguments) (*juju.ControllerConnectionInformation, error)) *MockJujuCommandBootstrapCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockJujuCommandBootstrapCall) DoAndReturn(f func(context.Context, juju.BootstrapArguments) (*juju.ControllerConnectionInformation, string, error)) *MockJujuCommandBootstrapCall {
+func (c *MockJujuCommandBootstrapCall) DoAndReturn(f func(context.Context, juju.BootstrapArguments) (*juju.ControllerConnectionInformation, error)) *MockJujuCommandBootstrapCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

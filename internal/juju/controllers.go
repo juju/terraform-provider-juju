@@ -28,10 +28,11 @@ const LogJujuCommand = "juju_command"
 
 // ControllerConnectionInformation contains the connection details for a controller.
 type ControllerConnectionInformation struct {
-	Addresses []string
-	CACert    string
-	Username  string
-	Password  string
+	Addresses    []string
+	CACert       string
+	Username     string
+	Password     string
+	AgentVersion string
 }
 
 // CommandRunner defines the interface for executing juju commands.
@@ -247,27 +248,27 @@ func NewDefaultJujuCommand(jujuBinary string) (*DefaultJujuCommand, error) {
 }
 
 // Bootstrap creates a new controller and returns connection information.
-func (d *DefaultJujuCommand) Bootstrap(ctx context.Context, args BootstrapArguments) (*ControllerConnectionInformation, string, error) {
+func (d *DefaultJujuCommand) Bootstrap(ctx context.Context, args BootstrapArguments) (*ControllerConnectionInformation, error) {
 	// Validate arguments
 	if args.Name == "" {
-		return nil, "", fmt.Errorf("controller name cannot be empty")
+		return nil, fmt.Errorf("controller name cannot be empty")
 	}
 	if args.Cloud.Name == "" {
-		return nil, "", fmt.Errorf("cloud name cannot be empty")
+		return nil, fmt.Errorf("cloud name cannot be empty")
 	}
 	if args.CloudCredential.Name == "" {
-		return nil, "", fmt.Errorf("credential name cannot be empty")
+		return nil, fmt.Errorf("credential name cannot be empty")
 	}
 	if args.Flags.AgentVersion != "" {
 		if _, err := version.Parse(args.Flags.AgentVersion); err != nil {
-			return nil, "", fmt.Errorf("invalid agent version %q: %w", args.Flags.AgentVersion, err)
+			return nil, fmt.Errorf("invalid agent version %q: %w", args.Flags.AgentVersion, err)
 		}
 	}
 
 	// Create command runner with log file
 	runner, err := newCommandRunner(d.jujuBinary)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	defer runner.Close()
 
@@ -278,31 +279,26 @@ func (d *DefaultJujuCommand) Bootstrap(ctx context.Context, args BootstrapArgume
 
 // performBootstrap executes the actual bootstrap logic with the provided command runner.
 // This function is separated to allow for easier testing with a mock command runner.
-func performBootstrap(ctx context.Context, args BootstrapArguments, runner CommandRunner) (*ControllerConnectionInformation, string, error) {
-	version, err := runner.Version(ctx)
+func performBootstrap(ctx context.Context, args BootstrapArguments, runner CommandRunner) (*ControllerConnectionInformation, error) {
+	err := setupCloudWithCredentials(ctx, runner, args.Cloud, args.CloudCredential)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to get juju version: %w", err)
-	}
-
-	err = setupCloudWithCredentials(ctx, runner, args.Cloud, args.CloudCredential)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to setup cloud and credentials: %w", err)
+		return nil, fmt.Errorf("failed to setup cloud and credentials: %w", err)
 	}
 
 	// Write config file
 	configFilePath, err := writeBootstrapConfigs(runner.WorkingDir(), args.Config)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	// Build bootstrap command arguments
 	cmdArgs, err := buildBootstrapArgs(ctx, args, configFilePath)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	// Execute bootstrap command
 	if err := runner.Run(ctx, cmdArgs...); err != nil {
-		return nil, "", fmt.Errorf("bootstrap failed: %w", err)
+		return nil, fmt.Errorf("bootstrap failed: %w", err)
 	}
 
 	// Client store to read controller information after bootstrap
@@ -313,20 +309,21 @@ func performBootstrap(ctx context.Context, args BootstrapArguments, runner Comma
 	// Read controller information from the client store
 	controllerDetails, err := store.ControllerByName(args.Name)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to read controller details from client store: %w", err)
+		return nil, fmt.Errorf("failed to read controller details from client store: %w", err)
 	}
 
 	accountDetails, err := store.AccountDetails(args.Name)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to read account details from client store: %w", err)
+		return nil, fmt.Errorf("failed to read account details from client store: %w", err)
 	}
 
 	return &ControllerConnectionInformation{
-		Addresses: controllerDetails.APIEndpoints,
-		CACert:    controllerDetails.CACert,
-		Username:  accountDetails.User,
-		Password:  accountDetails.Password,
-	}, version, nil
+		Addresses:    controllerDetails.APIEndpoints,
+		CACert:       controllerDetails.CACert,
+		Username:     accountDetails.User,
+		Password:     accountDetails.Password,
+		AgentVersion: controllerDetails.AgentVersion,
+	}, nil
 }
 
 // UpdateConfig updates controller configuration.

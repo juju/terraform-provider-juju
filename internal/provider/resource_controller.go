@@ -31,7 +31,7 @@ import (
 // JujuCommand defines the interface for interacting with Juju controllers.
 type JujuCommand interface {
 	// Bootstrap creates a new controller and returns connection information.
-	Bootstrap(ctx context.Context, model juju.BootstrapArguments) (*juju.ControllerConnectionInformation, string, error)
+	Bootstrap(ctx context.Context, model juju.BootstrapArguments) (*juju.ControllerConnectionInformation, error)
 	// UpdateConfig updates controller and controller-model configuration.
 	UpdateConfig(ctx context.Context, connInfo *juju.ControllerConnectionInformation,
 		controllerConfig, controllerModelConfig map[string]string,
@@ -620,7 +620,7 @@ func (r *controllerResource) Create(ctx context.Context, req resource.CreateRequ
 		)
 		return
 	}
-	result, version, err := command.Bootstrap(ctx, bootstrapArgs)
+	result, err := command.Bootstrap(ctx, bootstrapArgs)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Bootstrap Error",
@@ -643,7 +643,7 @@ func (r *controllerResource) Create(ctx context.Context, req resource.CreateRequ
 	plan.CACert = types.StringValue(result.CACert)
 	plan.Username = types.StringValue(result.Username)
 	plan.Password = types.StringValue(result.Password)
-	plan.AgentVersion = types.StringValue(version)
+	plan.AgentVersion = types.StringValue(result.AgentVersion)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
