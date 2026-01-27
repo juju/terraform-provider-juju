@@ -136,6 +136,7 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"agent_version": schema.StringAttribute{
 				Description: "The version of agent binaries.",
 				Optional:    true,
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
