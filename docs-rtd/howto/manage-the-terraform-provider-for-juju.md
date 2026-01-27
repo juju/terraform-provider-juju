@@ -22,12 +22,10 @@ sudo snap install terraform --classic
 ```
 
 (setup-provider)=
-## Setup the provider
+## Set up the Terraform Provider for Juju
 
-(reference-a-controller)=
-### Reference a controller
+To set up the provider, connect it to a Juju controller. You can do this in one of 3 ways:
 
-To reference a controller in your `provider` definition, add your controller address(es) and your controller authentication details. You can do this in one of 3 ways:
 1. Using static credentials;
 2. Using environment variables;
 3. Using the `juju` client. 
@@ -41,7 +39,7 @@ Across all the supported methods, for authentication with a Juju controller you 
 To view your controller’s details, run `juju show-controller --show-password`. No password will be shown for JAAS controllers.
 ```
 
-#### Using static credentials
+### Using static credentials
 
 In your Terraform plan add:
 
@@ -66,10 +64,13 @@ provider "juju" {
 - `password` (String, Sensitive) This is the password of the username to be used. This can also be set by the `JUJU_PASSWORD` environment variable
 - `username` (String) This is the username registered with the controller to be used. This can also be set by the `JUJU_USERNAME` environment variable
 
+Sensitive values should be kept of version control (for example, pass them via `TF_VAR_...` environment variables, a secrets manager, or a `.tfvars` file you do not commit).
+
 > See more: [`juju` provider](../reference/index)
 
-#### Using environment variables
+### Using environment variables
 
+The provider also supports specific environment variables for configuration.\
 In your Terraform plan, leave the `provider` specification empty:
 
 ```terraform
@@ -93,7 +94,7 @@ export JUJU_CLIENT_SECRET="<client secret>"
 > See more: [`juju` provider](../reference/index)
 
 
-#### Using the `juju` CLI
+### Using the `juju` CLI
 
 ```{important}
 This method is only supported for regular Juju controllers.
@@ -132,11 +133,11 @@ terraform {
 }
 ```
 
-#### b. Configure the `juju` provider to use an existing Juju or JAAS controller
+#### b. Configure the `juju` provider to use an existing Juju or JIMM controller
 
-In your Terraform plan, configure the `provider` with the details of your existing, Juju or JAAS controller.
+In your Terraform plan, configure the `provider` with the details of your existing, Juju or JIMM controller.
 
-> See above: {ref}`reference-a-controller`
+> See more: {ref}`setup-provider`
 
 #### c. Build your deployment
 
