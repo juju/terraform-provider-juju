@@ -449,15 +449,26 @@ func (d *DefaultJujuCommand) Destroy(ctx context.Context, args DestroyArguments)
 }
 
 func performDestroy(ctx context.Context, args DestroyArguments, runner CommandRunner) error {
-	if version, err := runner.Version(ctx); err != nil {
+	cliVersion, err := runner.Version(ctx)
+	if err != nil {
 		return fmt.Errorf("failed to get juju version: %w", err)
-	} else {
-		if version != args.ConnectionInfo.AgentVersion {
-			return fmt.Errorf("Juju CLI version (%s) does not match agent version (%s)", version, args.ConnectionInfo.AgentVersion)
-		}
 	}
 
-	err := setupControllerConnectionInfo(ctx, runner, args)
+	parsedVersion, err := version.Parse(cliVersion)
+	if err != nil {
+		return fmt.Errorf("invalid juju version %q: %w", cliVersion, err)
+	}
+
+	agentVersion, err := version.Parse(args.ConnectionInfo.AgentVersion)
+	if err != nil {
+		return fmt.Errorf("invalid agent version %q: %w", args.ConnectionInfo.AgentVersion, err)
+	}
+
+	if parsedVersion != agentVersion {
+		return fmt.Errorf("Juju CLI version (%s) does not match agent version (%s)", cliVersion, args.ConnectionInfo.AgentVersion)
+	}
+
+	err = setupControllerConnectionInfo(ctx, runner, args)
 	if err != nil {
 		return fmt.Errorf("failed to setup controller client store: %w", err)
 	}
