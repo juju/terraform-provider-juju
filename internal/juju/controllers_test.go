@@ -356,7 +356,6 @@ func TestPerformDestroy(t *testing.T) {
 	mockRunner.EXPECT().WorkingDir().Return(tmpDir).Times(0)
 	mockRunner.EXPECT().SetClientGlobal().Return().Times(1)
 	mockRunner.EXPECT().UnsetClientGlobal().Return().Times(1)
-	mockRunner.EXPECT().Version(gomock.Any()).Return("3.6.0", nil).Times(1)
 
 	mockRunner.EXPECT().Run(
 		gomock.Any(),
