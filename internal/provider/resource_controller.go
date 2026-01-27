@@ -66,7 +66,7 @@ type controllerResourceModel struct {
 	ControllerModelConfig types.Map `tfsdk:"controller_model_config"`
 
 	// Flags for destroy command
-	DestroyFlags types.Map `tfsdk:"destroy_flags"`
+	DestroyFlags types.Object `tfsdk:"destroy_flags"`
 
 	// Controller details
 	APIAddresses types.List   `tfsdk:"api_addresses"`
@@ -385,15 +385,34 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			},
 
 			// The flags below are only used when destroying the controller.
-			// The use of a map allows flexibility across Juju CLI versions,
-			// but will require normalisation when comparing values between
-			// the user's plan and the controller's state.
-			"destroy_flags": schema.MapAttribute{
+			"destroy_flags": schema.SingleNestedAttribute{
 				Description: "Additional flags for destroying the controller.",
 				Optional:    true,
-				ElementType: types.StringType,
-				PlanModifiers: []planmodifier.Map{
-					mapplanmodifier.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.RequiresReplace(),
+					objectplanmodifier.UseStateForUnknown(),
+				},
+				Attributes: map[string]schema.Attribute{
+					"destroy_all_models": schema.BoolAttribute{
+						Description: "Destroy all models in the controller.",
+						Optional:    true,
+					},
+					"destroy_storage": schema.BoolAttribute{
+						Description: "Destroy all storage instances managed by the controller.",
+						Optional:    true,
+					},
+					"force": schema.BoolAttribute{
+						Description: "Force destroy models ignoring any errors.",
+						Optional:    true,
+					},
+					"model_timeout": schema.Int32Attribute{
+						Description: "Timeout for each step of force model destruction.",
+						Optional:    true,
+					},
+					"release_storage": schema.BoolAttribute{
+						Description: "Release all storage instances from management of the controller, without destroying them.",
+						Optional:    true,
+					},
 				},
 			},
 		},
@@ -852,6 +871,14 @@ func (r *controllerResource) Delete(ctx context.Context, req resource.DeleteRequ
 		}
 	}
 
+	var destroyFlags juju.DestroyFlags
+	if !state.DestroyFlags.IsNull() && !state.DestroyFlags.IsUnknown() {
+		resp.Diagnostics.Append(state.DestroyFlags.As(ctx, &destroyFlags, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
 	args := juju.DestroyArguments{
 		Name:         state.Name.ValueString(),
 		JujuBinary:   state.JujuBinary.ValueString(),
@@ -877,7 +904,7 @@ func (r *controllerResource) Delete(ctx context.Context, req resource.DeleteRequ
 			Username:  state.Username.ValueString(),
 			Password:  state.Password.ValueString(),
 		},
-		Flags: juju.DestroyFlags{},
+		Flags: destroyFlags,
 	}
 
 	err = command.Destroy(ctx, args)
