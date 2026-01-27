@@ -28,11 +28,12 @@ const LogJujuCommand = "juju_command"
 
 // ControllerConnectionInformation contains the connection details for a controller.
 type ControllerConnectionInformation struct {
-	Addresses    []string
-	CACert       string
-	Username     string
-	Password     string
-	AgentVersion string
+	Addresses      []string
+	CACert         string
+	Username       string
+	Password       string
+	AgentVersion   string
+	ControllerUUID string
 }
 
 // CommandRunner defines the interface for executing juju commands.
@@ -228,13 +229,12 @@ type DestroyFlags struct {
 }
 
 type DestroyArguments struct {
-	Name            string
-	JujuBinary      string
-	AgentVersion    string
-	Cloud           BootstrapCloudArgument
-	CloudCredential BootstrapCredentialArgument
-	ConnectionInfo  ControllerConnectionInformation
-	Flags           DestroyFlags
+	Name           string
+	JujuBinary     string
+	CloudName      string
+	CloudRegion    string
+	ConnectionInfo ControllerConnectionInformation
+	Flags          DestroyFlags
 }
 
 // DefaultJujuCommand is the default implementation of JujuCommand.
@@ -318,11 +318,12 @@ func performBootstrap(ctx context.Context, args BootstrapArguments, runner Comma
 	}
 
 	return &ControllerConnectionInformation{
-		Addresses:    controllerDetails.APIEndpoints,
-		CACert:       controllerDetails.CACert,
-		Username:     accountDetails.User,
-		Password:     accountDetails.Password,
-		AgentVersion: controllerDetails.AgentVersion,
+		Addresses:      controllerDetails.APIEndpoints,
+		CACert:         controllerDetails.CACert,
+		Username:       accountDetails.User,
+		Password:       accountDetails.Password,
+		AgentVersion:   controllerDetails.AgentVersion,
+		ControllerUUID: controllerDetails.ControllerUUID,
 	}, nil
 }
 
@@ -423,15 +424,15 @@ func (d *DefaultJujuCommand) Destroy(ctx context.Context, args DestroyArguments)
 	if args.Name == "" {
 		return fmt.Errorf("controller name cannot be empty")
 	}
-	if args.Cloud.Name == "" {
+	if args.CloudName == "" {
 		return fmt.Errorf("cloud name cannot be empty")
 	}
-	if args.CloudCredential.Name == "" {
-		return fmt.Errorf("credential name cannot be empty")
+	if args.CloudRegion == "" {
+		return fmt.Errorf("cloud region cannot be empty")
 	}
-	if args.AgentVersion != "" {
-		if _, err := version.Parse(args.AgentVersion); err != nil {
-			return fmt.Errorf("invalid agent version %q: %w", args.AgentVersion, err)
+	if args.ConnectionInfo.AgentVersion != "" {
+		if _, err := version.Parse(args.ConnectionInfo.AgentVersion); err != nil {
+			return fmt.Errorf("invalid agent version %q: %w", args.ConnectionInfo.AgentVersion, err)
 		}
 	}
 
@@ -451,17 +452,12 @@ func performDestroy(ctx context.Context, args DestroyArguments, runner CommandRu
 	if version, err := runner.Version(ctx); err != nil {
 		return fmt.Errorf("failed to get juju version: %w", err)
 	} else {
-		if version != args.AgentVersion {
-			return fmt.Errorf("Juju CLI version (%s) does not match agent version (%s)", version, args.AgentVersion)
+		if version != args.ConnectionInfo.AgentVersion {
+			return fmt.Errorf("Juju CLI version (%s) does not match agent version (%s)", version, args.ConnectionInfo.AgentVersion)
 		}
 	}
 
-	err := setupCloudWithCredentials(ctx, runner, args.Cloud, args.CloudCredential)
-	if err != nil {
-		return fmt.Errorf("failed to setup cloud and credentials: %w", err)
-	}
-
-	err = setupControllerClientStore(ctx, runner, args)
+	err := setupControllerConnectionInfo(ctx, runner, args)
 	if err != nil {
 		return fmt.Errorf("failed to setup controller client store: %w", err)
 	}
@@ -697,16 +693,16 @@ func setupCloudWithCredentials(ctx context.Context, runner CommandRunner, cloud 
 	return nil
 }
 
-// setupControllerClientStore sets up the client store with controller and account details before destroy
-func setupControllerClientStore(ctx context.Context, runner CommandRunner, args DestroyArguments) error {
+// setupControllerConnectionInfo sets up the client store with controller and account details before destroy
+func setupControllerConnectionInfo(_ context.Context, runner CommandRunner, args DestroyArguments) error {
 	runner.SetClientGlobal()
 	defer runner.UnsetClientGlobal()
 	store := jujuclient.NewFileClientStore()
 
 	err := store.AddController(args.Name, jujuclient.ControllerDetails{
-		ControllerUUID: "",
-		Cloud:          args.Cloud.Name,
-		CloudRegion:    args.Cloud.Region.Name,
+		ControllerUUID: args.ConnectionInfo.ControllerUUID,
+		Cloud:          args.CloudName,
+		CloudRegion:    args.CloudRegion,
 		APIEndpoints:   args.ConnectionInfo.Addresses,
 		CACert:         args.ConnectionInfo.CACert,
 	})

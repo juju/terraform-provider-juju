@@ -358,7 +358,6 @@ func TestPerformDestroy(t *testing.T) {
 	mockRunner.EXPECT().UnsetClientGlobal().Return().Times(1)
 	mockRunner.EXPECT().Version(gomock.Any()).Return("3.6.0", nil).Times(1)
 
-	mockRunner.EXPECT().Run(gomock.Any(), "update-public-clouds", "--client").Times(1)
 	mockRunner.EXPECT().Run(
 		gomock.Any(),
 		"destroy-controller",
@@ -367,26 +366,16 @@ func TestPerformDestroy(t *testing.T) {
 
 	// Prepare destroy arguments
 	destroyArgs := DestroyArguments{
-		Name:         "test-controller",
-		AgentVersion: "3.6.0",
-		Cloud: BootstrapCloudArgument{
-			Name:      "test-cloud",
-			Type:      "manual",
-			AuthTypes: []string{"empty"},
-			Endpoint:  "https://test.example.com",
-		},
-		CloudCredential: BootstrapCredentialArgument{
-			Name:     "test-cred",
-			AuthType: "empty",
-			Attributes: map[string]string{
-				"endpoint": "https://test.example.com",
-			},
-		},
+		Name:        "test-controller",
+		CloudName:   "test-cloud",
+		CloudRegion: "region1",
 		ConnectionInfo: ControllerConnectionInformation{
-			Addresses: []string{"127.0.0.1:17070"},
-			CACert:    "test-ca-cert",
-			Username:  "admin",
-			Password:  "test-password",
+			Addresses:      []string{"127.0.0.1:17070"},
+			CACert:         "test-ca-cert",
+			Username:       "admin",
+			Password:       "test-password",
+			AgentVersion:   "3.6.0",
+			ControllerUUID: "b6951ccd-4492-4ae7-ae15-655f0a8548c3",
 		},
 		Flags: DestroyFlags{},
 	}
