@@ -6,19 +6,18 @@
 (bootstrap-a-controller)=
 ## Bootstrap a controller
 
-Use the `juju_controller` resource to bootstrap a brand new Juju controller as part of a Terraform plan.
-
-```{important}
-Bootstrapping is a special case: there is no controller to connect to yet.
-Set `controller_mode = true` in the provider so Terraform can create a controller.
-No other resources can be created besides controllers when this flag is set.
-```
+To bootstrap a new Juju controller use the `juju_controller` resource.
 
 ### Bootstrap to LXD (localhost)
 
 This example bootstraps a controller onto the local LXD cloud using certificate authentication.
 
-1. Configure the provider for controller mode. 
+**1. Configure the provider for controller mode.**
+
+Bootstrapping is a unique situation as there is no controller to connect to yet so our `provider` block will be mostly empty.
+
+Set `controller_mode = true` in the provider to enable bootstrapping.\
+No resources besides controllers can be created when this flag is set.
 
 ```terraform
 terraform {
@@ -35,7 +34,7 @@ provider "juju" {
 }
 ```
 
-2. Obtain your LXD credential values (including secrets):
+**2. Obtain your LXD credential values (including secrets):**
 
 ```bash
 juju show-credentials --client localhost localhost --show-secrets
@@ -44,7 +43,7 @@ juju show-credentials --client localhost localhost --show-secrets
 From the output, you will need the values `client-cert`, `client-key`, and `server-cert`.
 Keep them out of version control (for example, pass them via `TF_VAR_...` environment variables, a secrets manager, or a `.tfvars` file you do not commit).
 
-3. Declare the controller:
+**3. Declare the controller:**
 
 Here we use the `localhost` cloud which is already known to the Juju CLI. Private clouds can be specified by filling the remainder of the fields in the `cloud` object.
 
@@ -91,14 +90,33 @@ If you have installed Juju as a snap, use the path `/snap/juju/current/bin/juju`
 
 After `terraform apply`, the resource exposes useful read-only attributes such as the controller `api_addresses`, `ca_cert`, `username`, and `password`.
 
-### Bootstrap configuration
+**4. Change config post-bootstrap:**
 
-Many `juju_controller` arguments correspond to the same concepts used by the `juju bootstrap` CLI. When in doubt, `juju bootstrap --help` and the Juju docs are a good way to discover valid keys and values.
+After bootstrap, the controller config and controller-model config can be changed.
 
-The following behaviours are important caveats in how the `juju_controller` resource handles config:
+Note the following behaviors:
 1. If you remove a key from `controller_config`, it will not be unset on the controller; it is left unchanged.
-2. Attempting to change a config value that cannot be changed after bootstrap will result in an error. You must destroy and recreate the controller to change these values.
-3. Values besides strings and integers must follow a specific format, currently this only applies to boolean values which must be "true"/"false".
+2. Attempting to change a config value that Juju doesn't support changing after bootstrap will result in an error. You must destroy and recreate the controller to change these values.
+3. Boolean values must be specified as either "true" or "false".
+
+```{tip}
+Many `juju_controller` fields correspond to the same flags used by the `juju bootstrap` CLI. When in doubt, `juju bootstrap --help` and the Juju docs are a good way to discover valid keys and values.
+```
+
+```terraform
+resource "juju_controller" "this" {
+  # additional fields ommitted
+
+  controller_config = {
+    "audit-log-max-backups"     = "10"
+  }
+
+  controller_model_config = {
+    "juju-http-proxy"              = "http://my-proxy.internal"
+    "update-status-hook-interval"  = "1m"
+  }
+}
+```
 
 > See more: [`juju_controller` (resource)](../reference/terraform-provider/resources/controller)
 

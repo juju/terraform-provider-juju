@@ -26,7 +26,6 @@ manage-offers
 manage-units
 manage-secrets
 manage-machines
-setup-provider
 use-the-juju-cli
 ```
 
