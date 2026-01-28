@@ -39,7 +39,7 @@ type JujuCommand interface {
 	// Config retrieves controller configuration and controller-model configuration settings.
 	Config(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (map[string]any, map[string]any, error)
 	// Destroy removes the controller.
-	Destroy(ctx context.Context, connInfo *juju.ControllerConnectionInformation) error
+	Destroy(ctx context.Context, args juju.DestroyArguments) error
 }
 
 var _ resource.Resource = &controllerResource{}
@@ -64,6 +64,10 @@ type controllerResourceModel struct {
 	BootstrapConfig       types.Map `tfsdk:"bootstrap_config"`
 	ControllerConfig      types.Map `tfsdk:"controller_config"`
 	ControllerModelConfig types.Map `tfsdk:"controller_model_config"`
+
+	// Fields for destroy command
+	ControllerUUID types.String `tfsdk:"controller_uuid"`
+	DestroyFlags   types.Object `tfsdk:"destroy_flags"`
 
 	// Controller details
 	APIAddresses types.List   `tfsdk:"api_addresses"`
@@ -133,6 +137,7 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"agent_version": schema.StringAttribute{
 				Description: "The version of agent binaries.",
 				Optional:    true,
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
@@ -380,6 +385,44 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"controller_uuid": schema.StringAttribute{
+				Description: "The UUID of the controller.",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+
+			// The flags below are only used when destroying the controller.
+			"destroy_flags": schema.SingleNestedAttribute{
+				Description: "Additional flags for destroying the controller.",
+				Optional:    true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
+				Attributes: map[string]schema.Attribute{
+					"destroy_all_models": schema.BoolAttribute{
+						Description: "Destroy all models in the controller.",
+						Optional:    true,
+					},
+					"destroy_storage": schema.BoolAttribute{
+						Description: "Destroy all storage instances managed by the controller.",
+						Optional:    true,
+					},
+					"force": schema.BoolAttribute{
+						Description: "Force destroy models ignoring any errors.",
+						Optional:    true,
+					},
+					"model_timeout": schema.Int32Attribute{
+						Description: "Timeout for each step of force model destruction.",
+						Optional:    true,
+					},
+					"release_storage": schema.BoolAttribute{
+						Description: "Release all storage instances from management of the controller, without destroying them.",
+						Optional:    true,
+					},
+				},
+			},
 		},
 	}
 }
@@ -604,6 +647,8 @@ func (r *controllerResource) Create(ctx context.Context, req resource.CreateRequ
 	plan.CACert = types.StringValue(result.CACert)
 	plan.Username = types.StringValue(result.Username)
 	plan.Password = types.StringValue(result.Password)
+	plan.AgentVersion = types.StringValue(result.AgentVersion)
+	plan.ControllerUUID = types.StringValue(result.ControllerUUID)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -769,11 +814,18 @@ func (r *controllerResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	connInfo := &juju.ControllerConnectionInformation{
-		Addresses: addresses,
-		CACert:    state.CACert.ValueString(),
-		Username:  state.Username.ValueString(),
-		Password:  state.Password.ValueString(),
+	var cloudModel nestedCloudModel
+	resp.Diagnostics.Append(state.Cloud.As(ctx, &cloudModel, basetypes.ObjectAsOptions{})...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var regionModel nestedCloudRegionModel
+	if !cloudModel.Region.IsNull() && !cloudModel.Region.IsUnknown() {
+		resp.Diagnostics.Append(cloudModel.Region.As(ctx, &regionModel, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
 	command, err := r.newJujuCommand(state.JujuBinary.ValueString())
@@ -784,7 +836,31 @@ func (r *controllerResource) Delete(ctx context.Context, req resource.DeleteRequ
 		)
 		return
 	}
-	err = command.Destroy(ctx, connInfo)
+
+	var destroyFlags juju.DestroyFlags
+	if !state.DestroyFlags.IsNull() && !state.DestroyFlags.IsUnknown() {
+		resp.Diagnostics.Append(state.DestroyFlags.As(ctx, &destroyFlags, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+	args := juju.DestroyArguments{
+		Name:        state.Name.ValueString(),
+		JujuBinary:  state.JujuBinary.ValueString(),
+		CloudName:   cloudModel.Name.ValueString(),
+		CloudRegion: regionModel.Name.ValueString(),
+		ConnectionInfo: juju.ControllerConnectionInformation{
+			Addresses:      addresses,
+			CACert:         state.CACert.ValueString(),
+			Username:       state.Username.ValueString(),
+			Password:       state.Password.ValueString(),
+			AgentVersion:   state.AgentVersion.ValueString(),
+			ControllerUUID: state.ControllerUUID.ValueString(),
+		},
+		Flags: destroyFlags,
+	}
+
+	err = command.Destroy(ctx, args)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Controller Deletion Error",

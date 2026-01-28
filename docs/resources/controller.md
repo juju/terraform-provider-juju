@@ -28,6 +28,7 @@ A resource that represents a Juju Controller.
 - `bootstrap_constraints` (Map of String) Constraints for the bootstrap machine.
 - `controller_config` (Map of String) Configuration options for the bootstrapped controller. Note that removing a key from this map will not unset it in the controller, instead it will be left unchanged on the controller.
 - `controller_model_config` (Map of String) Configuration options to be set for the controller model.
+- `destroy_flags` (Attributes) Additional flags for destroying the controller. (see [below for nested schema](#nestedatt--destroy_flags))
 - `juju_binary` (String) The path to the juju CLI binary.
 - `model_constraints` (Map of String) Constraints for all workload machines in models.
 - `model_default` (Map of String) Configuration options to be set for all models.
@@ -38,6 +39,7 @@ A resource that represents a Juju Controller.
 
 - `api_addresses` (List of String) API addresses of the controller.
 - `ca_cert` (String) CA certificate for the controller.
+- `controller_uuid` (String) The UUID of the controller.
 - `id` (String) The ID of this resource.
 - `password` (String, Sensitive) Admin password for the controller.
 - `username` (String) Admin username for the controller.
@@ -82,6 +84,18 @@ Required:
 - `attributes` (Map of String) Authentication attributes (key-value pairs specific to the auth type).
 - `auth_type` (String) The authentication type (e.g., 'userpass', 'oauth2', 'access-key').
 - `name` (String) The name of the credential.
+
+
+<a id="nestedatt--destroy_flags"></a>
+### Nested Schema for `destroy_flags`
+
+Optional:
+
+- `destroy_all_models` (Boolean) Destroy all models in the controller.
+- `destroy_storage` (Boolean) Destroy all storage instances managed by the controller.
+- `force` (Boolean) Force destroy models ignoring any errors.
+- `model_timeout` (Number) Timeout for each step of force model destruction.
+- `release_storage` (Boolean) Release all storage instances from management of the controller, without destroying them.
 
 
 <a id="nestedatt--storage_pool"></a>
