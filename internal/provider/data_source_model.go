@@ -58,14 +58,17 @@ func (d *modelDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 			"name": schema.StringAttribute{
 				Description: "The name of the model.",
 				Optional:    true,
+				Computed:    true,
 			},
 			"owner": schema.StringAttribute{
 				Description: "The owner of the model.",
 				Optional:    true,
+				Computed:    true,
 			},
 			"uuid": schema.StringAttribute{
 				Description: "The UUID of the model.",
 				Optional:    true,
+				Computed:    true,
 				Validators: []validator.String{
 					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
 				},

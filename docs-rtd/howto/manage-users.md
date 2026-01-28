@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to add, manage access, update passwords, and remove users in Juju controllers using Terraform Provider."
+---
+
 (manage-users)=
 # Manage users
 

@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to create deployment dependencies in the Terraform Provider for Juju using null_resource and juju wait-for commands."
+---
+
 (create-deployment-dependencies)=
 # Create deployment dependencies
 

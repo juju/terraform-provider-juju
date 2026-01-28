@@ -106,7 +106,7 @@ func (a *jaasAccessGroupResource) Metadata(_ context.Context, req resource.Metad
 // ConfigValidators sets validators for the group resource.
 func (r *jaasAccessGroupResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
 	return []resource.ConfigValidator{
-		NewRequiresJAASValidator(r.client),
+		NewResourceRequiresJAASValidator(r.client),
 		resourcevalidator.AtLeastOneOf(
 			path.MatchRoot("users"),
 			path.MatchRoot("groups"),

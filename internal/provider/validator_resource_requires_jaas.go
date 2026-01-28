@@ -13,44 +13,44 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-var _ datasource.ConfigValidator = &RequiresJAASValidator{}
-var _ resource.ConfigValidator = &RequiresJAASValidator{}
+var _ datasource.ConfigValidator = &ResourceRequiresJAAS{}
+var _ resource.ConfigValidator = &ResourceRequiresJAAS{}
 
-// RequiresJAASValidator enforces that the resource can only be used with JAAS.
-type RequiresJAASValidator struct {
+// ResourceRequiresJAAS enforces that the resource can only be used with JAAS.
+type ResourceRequiresJAAS struct {
 	client *juju.Client
 }
 
-// NewRequiresJAASValidator returns a new validator that enforces a resource can
+// NewResourceRequiresJAASValidator returns a new validator that enforces a resource can
 // only be created against JAAS.
-func NewRequiresJAASValidator(client *juju.Client) RequiresJAASValidator {
-	return RequiresJAASValidator{
+func NewResourceRequiresJAASValidator(client *juju.Client) ResourceRequiresJAAS {
+	return ResourceRequiresJAAS{
 		client: client,
 	}
 }
 
 // Description returns a plain text description of the validator's behavior, suitable for a practitioner to understand its impact.
-func (v RequiresJAASValidator) Description(ctx context.Context) string {
+func (v ResourceRequiresJAAS) Description(ctx context.Context) string {
 	return v.MarkdownDescription(ctx)
 }
 
 // MarkdownDescription returns a markdown formatted description of the validator's behavior, suitable for a practitioner to understand its impact.
-func (v RequiresJAASValidator) MarkdownDescription(_ context.Context) string {
+func (v ResourceRequiresJAAS) MarkdownDescription(_ context.Context) string {
 	return "Enforces that this resource can only be used with JAAS"
 }
 
 // ValidateResource performs the validation on the data source.
-func (v RequiresJAASValidator) ValidateDataSource(ctx context.Context, req datasource.ValidateConfigRequest, resp *datasource.ValidateConfigResponse) {
+func (v ResourceRequiresJAAS) ValidateDataSource(ctx context.Context, req datasource.ValidateConfigRequest, resp *datasource.ValidateConfigResponse) {
 	resp.Diagnostics = v.validate()
 }
 
 // ValidateResource performs the validation on the resource.
-func (v RequiresJAASValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+func (v ResourceRequiresJAAS) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	resp.Diagnostics = v.validate()
 }
 
 // validate runs the main validation logic of the validator, reading configuration data out of `config` and returning with diagnostics.
-func (v RequiresJAASValidator) validate() diag.Diagnostics {
+func (v ResourceRequiresJAAS) validate() diag.Diagnostics {
 	var diags diag.Diagnostics
 
 	// Return without error if a nil client is detected.

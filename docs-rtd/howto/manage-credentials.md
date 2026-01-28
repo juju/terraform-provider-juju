@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to define, add, update, and remove cloud credentials in the Terraform Provider for Juju for secure authentication."
+---
+
 (manage-credentials)=
 # Manage credentials
 

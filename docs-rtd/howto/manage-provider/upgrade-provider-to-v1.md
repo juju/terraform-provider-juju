@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Complete guide for upgrading the Terraform Provider for Juju from v0.x to v1.0.0 with breaking changes and migration steps."
+---
+
 (upgrade-to-terraform-provider-juju-v-1)=
 # Upgrade the provider to v1
 

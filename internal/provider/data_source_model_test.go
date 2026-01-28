@@ -53,6 +53,21 @@ func TestAcc_DataSourceModel(t *testing.T) {
 	})
 }
 
+func TestAcc_DataSourceModelReferencedByUUID(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-datasource-model-test")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			// Test 1: Test a model data source looked up by UUID can have its name field referenced.
+			{
+				Config: testAccFrameworkDataSourceModelByUUIDCanBeReferenced(modelName),
+			},
+		},
+	})
+}
+
 func testAccFrameworkDataSourceModelByUUID(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "test-model" {
@@ -86,4 +101,22 @@ data "juju_model" "test-model" {
 	uuid = juju_model.test-model.uuid
 	name = %[1]q
 }`, modelName)
+}
+
+func testAccFrameworkDataSourceModelByUUIDCanBeReferenced(modelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "example" {
+  name = %[1]q
+}
+
+# Lookup model by UUID
+data "juju_model" "by_uuid" {
+  uuid = juju_model.example.uuid
+}
+
+locals {
+  example = data.juju_model.by_uuid.name
+  example2 = "example-${data.juju_model.by_uuid.name}"
+}
+  `, modelName)
 }

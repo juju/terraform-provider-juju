@@ -292,3 +292,15 @@ func (jc *jaasClient) RemoveRole(name string) error {
 	req := params.RemoveRoleRequest{Name: name}
 	return client.RemoveRole(&req)
 }
+
+// ListControllers returns a list of controllers accessible to the client.
+func (jc *jaasClient) ListControllers() ([]params.ControllerInfo, error) {
+	conn, err := jc.GetConnection(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := jc.getJaasApiClient(conn)
+	return client.ListControllers()
+}

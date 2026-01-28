@@ -59,7 +59,7 @@ jobs:
         id: jaas
         with:
           juju-channel: 3/stable
-          jimm-version: v3.3.2
+          jimm-version: v3.3.12
           ghcr-pat: ${{ secrets.GITHUB_TOKEN }}
       - name: Create additional networks when testing with LXD
         run: |

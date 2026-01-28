@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to use the Juju CLI within Terraform plans using provisioners for Juju and JAAS controllers."
+---
+
 (use-the-juju-cli-in-terraform)=
 # Use the Juju CLI in Terraform
 

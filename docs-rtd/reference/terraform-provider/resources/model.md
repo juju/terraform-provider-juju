@@ -47,6 +47,7 @@ resource "juju_model" "this" {
 - `config` (Map of String) Override default model configuration
 - `constraints` (String) Constraints imposed to this model
 - `credential` (String) Credential used to add the model
+- `target_controller` (String) Only useful with JAAS - the backing controller where the model will be created. If not set, a random controller the user has access to supporting the desired cloud will be used.
 
 ### Read-Only
 

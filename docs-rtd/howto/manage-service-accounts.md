@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to manage service account access to controllers, clouds, models, offers, roles, and groups in JAAS."
+---
+
 (manage-service-accounts)=
 # Manage service accounts
 

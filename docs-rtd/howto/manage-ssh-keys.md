@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to add SSH keys to Juju models using Terraform, including examples for GitHub and Launchpad key integration."
+---
+
 (manage-ssh-keys)=
 # Manage SSH keys
 

@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to create, reference, and integrate with Juju application offers for same-controller and cross-controller relations."
+---
+
 (manage-offers)=
 # Manage offers
 

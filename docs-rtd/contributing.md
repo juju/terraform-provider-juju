@@ -1,4 +1,7 @@
 ---
+myst:
+  html_meta:
+    description: "Learn how to contribute to the Terraform Provider for Juju with code, documentation, testing, and understand submission guidelines and licensing."
 orphan: true
 ---
 

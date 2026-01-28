@@ -106,7 +106,7 @@ func (a *jaasAccessRoleResource) Metadata(_ context.Context, req resource.Metada
 // ConfigValidators sets validators for the resource.
 func (r *jaasAccessRoleResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
 	return []resource.ConfigValidator{
-		NewRequiresJAASValidator(r.client),
+		NewResourceRequiresJAASValidator(r.client),
 		resourcevalidator.AtLeastOneOf(
 			path.MatchRoot("users"),
 			path.MatchRoot("groups"),

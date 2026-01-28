@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to add and remove same-model and cross-model relations between Juju applications using Terraform integration resources."
+---
+
 (manage-relations)=
 # Manage relations
 

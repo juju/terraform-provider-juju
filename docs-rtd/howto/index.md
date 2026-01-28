@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Step-by-step guides for managing Terraform Provider for Juju: setup, authentication, deployment, and infrastructure operations."
+---
+
 (howtos)=
 # How-to guides
 

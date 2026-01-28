@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to add, reference, and manage JAAS groups and group membership for users, service accounts, and nested groups."
+---
+
 (manage-groups)=
 # Manage groups
 

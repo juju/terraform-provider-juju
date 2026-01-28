@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to control the number of units for Juju applications using the Terraform Provider for Juju to scale your deployments."
+---
+
 (manage-units)=
 # Manage units
 

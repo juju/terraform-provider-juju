@@ -183,6 +183,57 @@ resource "juju_model" "testmodel" {
 	})
 }
 
+func TestAcc_ResourceModel_TargetController(t *testing.T) {
+	OnlyTestAgainstJAAS(t)
+
+	testAccPreCheck(t)
+
+	controllers, err := TestClient.Jaas.ListControllers()
+	if err != nil || len(controllers) == 0 {
+		t.Fatalf("unable to list controllers from JAAS: %v", err)
+	}
+	targetController := controllers[0].Name
+
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "juju_model" "testmodel" {
+  name = %q
+  target_controller = %q
+}`, modelName, targetController),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_model.testmodel", "name", modelName),
+					resource.TestCheckResourceAttr("juju_model.testmodel", "target_controller", targetController),
+				),
+			},
+		},
+	})
+}
+
+func TestAcc_ResourceModel_TargetControllerValidation(t *testing.T) {
+	SkipJAAS(t)
+
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "juju_model" "testmodel" {
+  name = %q
+  target_controller = "some-controller"
+}`, modelName),
+				ExpectError: regexp.MustCompile(`(?s)The following field\(s\) can only be set when using JAAS.*\[target_controller\]`),
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceModel_UpgradeProvider(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	logLevelDebug := "DEBUG"

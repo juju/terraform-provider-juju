@@ -1,3 +1,86 @@
+## 1.2.0
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.11 release.
+
+ENHANCEMENTS
+
+* Addition of the `juju_cloud` resource by @ale8k in [#1012](https://github.com/juju/terraform-provider-juju/pull/1012)
+* Implementation of the `juju_cloud` CRUD methods by @ale8k in [#1009](https://github.com/juju/terraform-provider-juju/pull/1009)
+* Addition of the `target_controller` field to the `juju_model` resource by @kian99 in [#1011](https://github.com/juju/terraform-provider-juju/pull/1011)
+
+BUG FIXES
+
+* A fix for unsetting removed/deprecated configuration values from `juju_application` by @SimoneDutto in [#992](https://github.com/juju/terraform-provider-juju/pull/992)
+* A fix for referencing model data source in locals by @kian99 in [#1020]https://github.com/juju/terraform-provider-juju/pull/1020)
+* Removal of custom Charmhub client for legacy deploys by @alesstimec in [#987](https://github.com/juju/terraform-provider-juju/pull/987)
+
+DOCUMENTATION
+
+* Documentation of differences in `juju_application`'s  `unit` values in 0.19 and later versions by @ale8k in [#1004](https://github.com/juju/terraform-provider-juju/pull/1004)
+* Upgrade to the Sphinx starter pack by @tmihoc in [#1010](https://github.com/juju/terraform-provider-juju/pull/1010)
+
+CI & MAINTENANCE
+
+* Fix for the Juju 2.9 integration test by @luci1900 in [#1014](https://github.com/juju/terraform-provider-juju/pull/1014)
+
+
+## 1.1.1
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.11 release.
+
+BUG FIXES
+
+* Fix for a panic when updating JAAS access resources by @kian99 in [#1001](https://github.com/juju/terraform-provider-juju/pull/1001)
+
+DOCUMENTATION
+
+* A documentation fix for a model name reference in documentation by @alesstimec in [#998](https://github.com/juju/terraform-provider-juju/pull/998)
+
+## 1.1.0
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.11 release.
+
+ENHANCEMENTS
+
+* Introduction of cross-controller integrations by @SimoneDutto in [#965](https://github.com/juju/terraform-provider-juju/pull/965)
+* Addition of the `offering_controller` field to the `juju_offer` data source by @SimoneDutto in [#979](https://github.com/juju/terraform-provider-juju/pull/979)
+* Implementation of a validator for `offer_url` in the `juju_integration` resource to reject controller source by @kian99 in [#975](https://github.com/juju/terraform-provider-juju/pull/975)
+* Addition of client credentials to offering controllers in the provider config by @alesstimec in [#982](https://github.com/juju/terraform-provider-juju/pull/982)
+
+BUG FIXES
+
+* Ensuring resources are refreshed when a charm is updates by @kian99 in [#981](https://github.com/juju/terraform-provider-juju/pull/981)
+* A fix for the cross-controller integration import by @luci1900 in [#980](https://github.com/juju/terraform-provider-juju/pull/980)
+* A fix for exposing and unexposing `juju_application` by @alesstimec in [#951](https://github.com/juju/terraform-provider-juju/pull/951)
+* Removing the use or patterns in Juju status calls to get application status by @alesstimec in [#957](https://github.com/juju/terraform-provider-juju/pull/957)
+* Correct validation of nested application attribute by @kian99 in [#989](https://github.com/juju/terraform-provider-juju/pull/989)
+
+DOCUMENTATION 
+
+* Documentation for cross controller integrations by @SimoneDutto in [#977](https://github.com/juju/terraform-provider-juju/pull/977)
+* Documentation for cross controller integration import by @luci1900 in [#985](https://github.com/juju/terraform-provider-juju/pull/985)
+* Update of documentation for v1.0.0 resources by @kian99 in [#964](https://github.com/juju/terraform-provider-juju/pull/964)
+* Documentation about using the http provider with charmhub to compute charm revision from channel by @SimoneDutto in [#984](https://github.com/juju/terraform-provider-juju/pull/984)
+
+  
+CI & MAINTENANCE
+
+* Improvement of the CI speed and resource usage by @kian99 in [#897](https://github.com/juju/terraform-provider-juju/pull/897)
+* Update the Juju dependency to 3.6.11 by @ale8k in [#958](https://github.com/juju/terraform-provider-juju/pull/958)
+* A fix for CI naming and jaas tests by @kian99 in [#988](https://github.com/juju/terraform-provider-juju/pull/988)
+
 ## 1.0.0
 
 NOTES:
