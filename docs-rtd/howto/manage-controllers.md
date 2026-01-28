@@ -3,85 +3,123 @@
 
 > See also: {external+juju:ref}`Juju | Controller <controller>`
 
-The Terraform Provider for Juju does not support controller bootstrap. However, you can make your Terraform plan relative to a specific externally managed Juju or JIMM controller, and you can also use Terraform to control access to a JIMM-managed Juju controller.
+(bootstrap-a-controller)=
+## Bootstrap a controller
 
-(reference-an-externally-managed-controller)=
-## Reference an externally managed controller
+To bootstrap a new Juju controller use the `juju_controller` resource.
 
-To reference a controller that you've created outside of Terraform (because Terraform does not support controller bootstrap), in your `provider` definition add your controller address(es) and your controller authentication details. You can do this in one of 3 ways: using static credentials, using environment variables, or using the `juju` client. Note: The last method is not supported for JIMM controllers. Across all the supported methods, for authentication with a Juju controller you must provide the username and password for a user, whereas for authentication with a JIMM controller you must provide the client ID and client secret for a service account (where the service account must be created through the external identity provider connected to the JIMM controller).
+### Bootstrap to LXD (localhost)
 
+This example bootstraps a controller onto the local LXD cloud using certificate authentication.
 
-```{tip}
-For all methods and both controller types: To view your controller’s details, run `juju show-controller --show-password`.
-```
+**1. Configure the provider for controller mode.**
 
-### Using static credentials
+Bootstrapping is a unique situation as there is no controller to connect to yet so our `provider` block will be mostly empty.
 
-In your Terraform plan add:
+Set `controller_mode = true` in the provider to enable bootstrapping.\
+No resources besides controllers can be created when this flag is set.
 
 ```terraform
+terraform {
+  required_providers {
+    juju = {
+      source  = "juju/juju"
+      version = "~> 1.0.0"
+    }
+  }
+}
+
 provider "juju" {
-  controller_addresses = "<controller addresses>"
-  # For a controller deployed with a self-signed certificate:
-  ca_certificate = file("<path to certificate file>")
-  # For a regular Juju controller, provide the username and password for a user:
-  username = "<username>"
-  password = "<password>"
-  # For a JIMM controller, provide the client ID and client secret for a service account:
-  client_id     = "<clientID>"
-  client_secret = "<clientSecret>"
+  controller_mode = true
 }
 ```
 
-- `ca_certificate` (String) If the controller was deployed with a self-signed certificate: This is the certificate to use for identification. This can also be set by the `JUJU_CA_CERT` environment variable
-- `client_id` (String) If using JAAS: This is the client ID (OAuth2.0, created by the external identity provider) to be used. This can also be set by the `JUJU_CLIENT_ID` environment variable
-- `client_secret` (String, Sensitive) If using JAAS: This is the client secret (OAuth2.0, created by the external identity provider) to be used. This can also be set by the `JUJU_CLIENT_SECRET` environment variable
-- `controller_addresses` (String) This is the controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `JUJU_CONTROLLER_ADDRESSES` environment variable.
-- `password` (String, Sensitive) This is the password of the username to be used. This can also be set by the `JUJU_PASSWORD` environment variable
-- `username` (String) This is the username registered with the controller to be used. This can also be set by the `JUJU_USERNAME` environment variable
-
-> See more: [`juju` provider](../reference/index)
-
-### Using environment variables
-
-In your Terraform plan, leave the `provider` specification empty:
-
-```terraform
-provider "juju" {}
-```
-
-Then, in a terminal, export the controller environment variables with your controller's values. For example:
+**2. Obtain your LXD credential values (including secrets):**
 
 ```bash
-export JUJU_CONTROLLER_ADDRESSES="<controller addresses>"
-# For a controller deployed with a self-signed certificate:
-export JUJU_CA_CERT=file("<path to certificate file>")
-# For a regular Juju controller, provide the username and password for a user:
-export JUJU_USERNAME="<username>"
-export JUJU_PASSWORD="<password>"
-# For a JIMM controller, provide the client ID and client secret for a service account:
-export JUJU_CLIENT_ID="<client ID>"
-export JUJU_CLIENT_SECRET="<client secret>"
+juju show-credentials --client localhost localhost --show-secrets
 ```
 
-> See more: [`juju` provider](../reference/index)
+From the output, you will need the values `client-cert`, `client-key`, and `server-cert`.
+Keep them out of version control (for example, pass them via `TF_VAR_...` environment variables, a secrets manager, or a `.tfvars` file you do not commit).
 
+**3. Declare the controller:**
 
-### Using the `juju` CLI
-
-```{important}
-This method is only supported for regular Juju controllers.
-```
-
-In your Terraform plan, leave the `provider` specification empty:
+Here we use the `localhost` cloud which is already known to the Juju CLI. Private clouds can be specified by filling the remainder of the fields in the `cloud` object.
 
 ```terraform
-provider "juju" {}
+resource "juju_controller" "this" {
+  name = "test-controller"
+
+  cloud = {
+    name       = "localhost"
+    type       = "lxd"
+    auth_types = ["certificate"]
+  }
+
+  cloud_credential = {
+    name      = "localhost"
+    auth_type = "certificate"
+    attributes = {
+      "client-cert" = var.lxd_client_cert
+      "client-key"  = var.lxd_client_key
+      "server-cert" = var.lxd_server_cert
+    }
+  }
+
+  # Settings here map to flags/config used by `juju controller-config`.
+  controller_config = {
+    "audit-log-max-backups"     = "10"
+    "query-tracing-enabled"     = "true"
+  }
+
+  # Settings here map to flags/config used by `juju model-config`.
+  controller_model_config = {
+    "juju-http-proxy" = "http://my-proxy.internal"
+  }
+
+  # Optional: use a Juju binary from a specific location.
+  # The default is /usr/bin/juju.
+  juju_binary = "/snap/juju/current/bin/juju"
+}
 ```
 
-Then, in a terminal, use the `juju` client to switch to the desired controller: `juju switch <controller>`. Your Terraform plan will be interpreted relative to that controller.
+```{important}
+If you have installed Juju as a snap, use the path `/snap/juju/current/bin/juju` to avoid snap confinement issues.
+```
 
-> See more: [`juju` provider](../reference/index)
+After `terraform apply`, the resource exposes useful read-only attributes such as the controller `api_addresses`, `ca_cert`, `username`, and `password`.
+
+**4. Change config post-bootstrap:**
+
+After bootstrap, the controller config and controller-model config can be changed.
+
+Note the following behaviors:
+1. If you remove a key from `controller_config`, it will not be unset on the controller; it is left unchanged.
+2. Attempting to change a config value that Juju doesn't support changing after bootstrap will result in an error. You must destroy and recreate the controller to change these values.
+3. Boolean values must be specified as either "true" or "false".
+
+```{tip}
+Many `juju_controller` fields correspond to the same flags used by the `juju bootstrap` CLI. When in doubt, `juju bootstrap --help` and the Juju docs are a good way to discover valid keys and values.
+```
+
+```terraform
+resource "juju_controller" "this" {
+  # additional fields ommitted
+
+  controller_config = {
+    "audit-log-max-backups"     = "10"
+  }
+
+  controller_model_config = {
+    "juju-http-proxy"              = "http://my-proxy.internal"
+    "update-status-hook-interval"  = "1m"
+  }
+}
+```
+
+> See more: [`juju_controller` (resource)](../reference/terraform-provider/resources/controller)
+
 
 (add-a-cloud-to-a-controller)=
 ## Add a cloud to a controller
@@ -101,10 +139,10 @@ By virtue of being bootstrapped into a cloud, your controller already has a cred
 ## Manage access to a controller
 
 ```{note}
-At present the Terraform Provider for Juju supports controller access management only for Juju controllers added to JIMM.
+At present the Terraform Provider for Juju supports controller access management only for Juju controllers added to JAAS.
 ```
 
-When using Juju with JAAS, to grant access to a Juju controller added to JIMM, in your Terraform plan add a resource type `juju_jaas_access_controller`. Access can be granted to one or more users, service accounts, roles, and/or groups. You must specify the model UUID, the JAAS controller access level, and the desired list of users, service accounts, roles, and/or groups. For example:
+When using Juju with JAAS, to grant access to a Juju controller added to JAAS, in your Terraform plan add a resource type `juju_jaas_access_controller`. Access can be granted to one or more users, service accounts, roles, and/or groups. You must specify the model UUID, the JAAS controller access level, and the desired list of users, service accounts, roles, and/or groups. For example:
 
 ```terraform
 resource "juju_jaas_access_controller" "development" {
