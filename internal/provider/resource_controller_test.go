@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
@@ -388,6 +389,17 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				ExpectError: regexp.MustCompile("failed to update controller config: unknown controller config"),
 			},
 		},
+		CheckDestroy: func(s *terraform.State) error {
+			_, err := newBootstrappedControllerClient(s, api.WithDialOpts(api.DialOpts{Timeout: 15 * time.Second}))
+			if err != nil {
+				if strings.Contains(err.Error(), "failed to connect to controller: unable to connect to API") {
+					return nil
+				}
+				return fmt.Errorf("unexpected error when connecting to detroyed controller: %w", err)
+			} else {
+				return fmt.Errorf("unexpectedly managed to connect to controller")
+			}
+		},
 	})
 }
 
@@ -503,7 +515,7 @@ func renderStringMapAsHCL(values map[string]string) string {
 	return b.String()
 }
 
-func newBootstrappedControllerClient(state *terraform.State) (api.Connection, error) {
+func newBootstrappedControllerClient(state *terraform.State, dialOptions ...api.DialOption) (api.Connection, error) {
 	resourceState, ok := state.RootModule().Resources["juju_controller.controller"]
 	if !ok {
 		return nil, fmt.Errorf("resource juju_controller.controller not found in state")
@@ -539,7 +551,7 @@ func newBootstrappedControllerClient(state *terraform.State) (api.Connection, er
 		return nil, fmt.Errorf("failed to create connector to controller: %w", err)
 	}
 
-	conn, err := connr.Connect()
+	conn, err := connr.Connect(dialOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to controller: %w", err)
 	}
