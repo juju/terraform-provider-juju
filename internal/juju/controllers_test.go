@@ -17,6 +17,8 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+var jujuDataHomeLock sync.Mutex
+
 func TestConvertToCloudAuthTypes(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -365,6 +367,8 @@ func TestPerformBootstrap(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// Set JUJU_DATA for the test
+	jujuDataHomeLock.Lock()
+	defer jujuDataHomeLock.Unlock()
 	oldJujuData := osenv.SetJujuXDGDataHome(tmpDir)
 	defer func() {
 		osenv.SetJujuXDGDataHome(oldJujuData)
@@ -434,6 +438,8 @@ func TestPerformDestroy(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// Set JUJU_DATA for the test
+	jujuDataHomeLock.Lock()
+	defer jujuDataHomeLock.Unlock()
 	oldJujuData := osenv.SetJujuXDGDataHome(tmpDir)
 	defer func() {
 		osenv.SetJujuXDGDataHome(oldJujuData)
