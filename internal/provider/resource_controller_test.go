@@ -390,7 +390,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 		},
 		CheckDestroy: func(s *terraform.State) error {
-			_, err := newBootstrappedControllerClient(s, api.WithDialOpts(api.DialOpts{Timeout: 15 * time.Second}))
+			_, err := newBootstrappedControllerClient(s, api.WithDialOpts(api.DialOpts{Timeout: 10 * time.Second}))
 			if err != nil {
 				if strings.Contains(err.Error(), "failed to connect to controller: unable to connect to API") {
 					return nil
