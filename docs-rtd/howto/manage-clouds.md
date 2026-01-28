@@ -1,7 +1,50 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to add machine and Kubernetes clouds to Juju controllers and manage cloud access permissions with JAAS."
+---
+
 (manage-clouds)=
 # Manage clouds
 
 > See also: {external+juju:ref}`Juju | Cloud <cloud>`
+
+
+(add-a-machine-cloud)=
+## Add a machine cloud
+To add a machine cloud to the controller that your Terraform plan is connected to, in your Terraform plan add a resource of the `juju_cloud` type. For example:
+```terraform
+resource "juju_cloud" "this" {
+  name = "my-cloud"
+  type = "openstack"
+
+  auth_types = ["userpass"]
+
+  endpoint          = "https://cloud.example.com"
+  identity_endpoint = "https://identity.example.com"
+  storage_endpoint  = "https://storage.example.com"
+
+  ca_certificates = [
+    file("${path.module}/ca.pem"),
+  ]
+
+  regions = [
+    {
+      name              = "my-first-region"
+      endpoint          = "https://region-default.example.com"
+      identity_endpoint = "https://identity-default.example.com"
+      storage_endpoint  = "https://storage-default.example.com"
+    },
+    {
+      name = "my-other-region"
+    },
+  ]
+}
+```
+
+Please note, in the list of regions, the first region is the default regions.
+
+For further details on adding clouds to Juju, please read: [`add-cloud`](https://documentation.ubuntu.com/juju/3.6/reference/juju-cli/list-of-juju-cli-commands/add-cloud/).
 
 (add-a-kubernetes-cloud)=
 ## Add a Kubernetes cloud

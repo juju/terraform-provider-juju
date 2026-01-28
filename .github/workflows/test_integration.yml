@@ -57,13 +57,45 @@ jobs:
         with:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
+      # This step fails intermittently on Juju 2.9 (mongodb fails to start up).
+      # In that case, it'll retry a little in order to improve CI UX.
       - name: Setup operator environment
+        id: setup-op-0
+        continue-on-error: true
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: ${{ matrix.action-operator.cloud }}
           channel: ${{ matrix.action-operator.cloud-channel }}
           juju-channel: ${{ matrix.action-operator.juju }}
           lxd-channel: ${{ matrix.action-operator.lxd-channel }}
+      - name: Setup operator environment (retry 1)
+        id: setup-op-1
+        continue-on-error: true
+        if: steps.setup-op-0.outcome == 'failure'
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: ${{ matrix.action-operator.cloud }}
+          channel: ${{ matrix.action-operator.cloud-channel }}
+          juju-channel: ${{ matrix.action-operator.juju }}
+          lxd-channel: ${{ matrix.action-operator.lxd-channel }}
+      - name: Setup operator environment (retry 2)
+        id: setup-op-2
+        continue-on-error: true
+        if: steps.setup-op-1.outcome == 'failure'
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: ${{ matrix.action-operator.cloud }}
+          channel: ${{ matrix.action-operator.cloud-channel }}
+          juju-channel: ${{ matrix.action-operator.juju }}
+          lxd-channel: ${{ matrix.action-operator.lxd-channel }}
+      - name: Setup operator environment (set status)
+        if: always()
+        run: |
+          if ${{ steps.setup-op-0.outcome == 'success' || steps.setup-op-1.outcome == 'success' || steps.setup-op-2.outcome=='success' }}; then
+             echo "Setup operator environment succeeded"
+          else
+             exit 1
+          fi
       - name: In case of LXD setup also microk8s
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
         run: |

@@ -97,6 +97,8 @@ type SecretAPIClient interface {
 
 // JaasAPIClient defines the set of methods that the JAAS API provides.
 type JaasAPIClient interface {
+	AddModelToController(req *jaasparams.AddModelToControllerRequest) (params.ModelInfo, error)
+	ListControllers() ([]jaasparams.ControllerInfo, error)
 	ListRelationshipTuples(req *jaasparams.ListRelationshipTuplesRequest) (*jaasparams.ListRelationshipTuplesResponse, error)
 	AddRelation(req *jaasparams.AddRelationRequest) error
 	RemoveRelation(req *jaasparams.RemoveRelationRequest) error
@@ -110,8 +112,8 @@ type JaasAPIClient interface {
 	RemoveRole(req *jaasparams.RemoveRoleRequest) error
 }
 
-// KubernetesCloudAPIClient defines the set of methods that the Kubernetes cloud API provides.
-type KubernetesCloudAPIClient interface {
+// CloudAPIClient defines the methods the Juju API client provides for clouds.
+type CloudAPIClient interface {
 	AddCloud(cloud jujucloud.Cloud, force bool) error
 	Cloud(tag names.CloudTag) (jujucloud.Cloud, error)
 	UpdateCloud(cloud jujucloud.Cloud) error

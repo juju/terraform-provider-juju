@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to add, reference, update, and manage access to user secrets in Juju models using the Terraform Provider for Juju."
+---
+
 (manage-secrets)=
 # Manage secrets
 

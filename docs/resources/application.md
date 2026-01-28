@@ -217,3 +217,9 @@ Import is supported using the following syntax:
 # Applications can be imported using the format: `model_uuid:application_name`, for example:
 $ terraform import juju_application.wordpress abe22490-a845-4a4d-ba52-7ec80a60aff5:wordpress
 ```
+
+
+## Note on Subordinate Applications and Units
+For subordinate applications (such as those that attach to a principal charm). Starting with version 0.19.0, remove the units field from your subordinate application.
+
+The provider will show units = 1 in state for subordinates if the units field is omitted, this is expected and for backwards compatibility.

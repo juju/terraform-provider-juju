@@ -10,7 +10,7 @@ require (
 )
 
 require (
-	github.com/canonical/jimm-go-sdk/v3 v3.0.6
+	github.com/canonical/jimm-go-sdk/v3 v3.3.12
 	github.com/dustin/go-humanize v1.0.1
 	github.com/hashicorp/terraform-json v0.27.2
 	github.com/hashicorp/terraform-plugin-framework v1.16.1
@@ -24,7 +24,6 @@ require (
 	github.com/juju/cmd/v3 v3.2.2
 	github.com/juju/collections v1.0.4
 	github.com/juju/errors v1.0.0
-	github.com/juju/loggo v1.0.0
 	github.com/juju/names/v5 v5.0.0
 	github.com/juju/retry v1.0.1
 	github.com/juju/utils v0.0.0-20200604140309-9d78121a29e0
@@ -127,6 +126,7 @@ require (
 	github.com/juju/http/v2 v2.0.0 // indirect
 	github.com/juju/idmclient/v2 v2.0.0 // indirect
 	github.com/juju/jsonschema v1.0.0 // indirect
+	github.com/juju/loggo v1.0.0 // indirect
 	github.com/juju/lru v1.0.0 // indirect
 	github.com/juju/lumberjack/v2 v2.0.2 // indirect
 	github.com/juju/mgo/v3 v3.0.5 // indirect

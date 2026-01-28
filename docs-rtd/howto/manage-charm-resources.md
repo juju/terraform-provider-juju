@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to specify and manage charm resources when deploying or updating applications with Terraform Provider for Juju."
+---
+
 (manage-charm-resources)=
 # Manage charm resources
 
