@@ -28,7 +28,7 @@ A resource that represents a Juju Controller.
 - `bootstrap_constraints` (Map of String) Constraints for the bootstrap machine.
 - `controller_config` (Map of String) Configuration options for the bootstrapped controller. Note that removing a key from this map will not unset it in the controller, instead it will be left unchanged on the controller.
 - `controller_model_config` (Map of String) Configuration options to be set for the controller model.
-- `destroy_flags` (Attributes) Additional flags for destroying the controller. (see [below for nested schema](#nestedatt--destroy_flags))
+- `destroy_flags` (Attributes) Additional flags for destroying the controller. Changing any of these values will require applying before they can be taken into account during destroy. (see [below for nested schema](#nestedatt--destroy_flags))
 - `juju_binary` (String) The path to the juju CLI binary.
 - `model_constraints` (Map of String) Constraints for all workload machines in models.
 - `model_default` (Map of String) Configuration options to be set for all models.
