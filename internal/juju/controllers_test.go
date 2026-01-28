@@ -451,6 +451,7 @@ func TestPerformDestroy(t *testing.T) {
 	mockRunner := NewMockCommandRunner(ctlr)
 
 	mockRunner.EXPECT().WorkingDir().Return(tmpDir).Times(1)
+	mockRunner.EXPECT().Version(gomock.Any()).Return("3.6.0-genericlinux-amd64", nil).Times(1)
 
 	mockRunner.EXPECT().Run(
 		gomock.Any(),
