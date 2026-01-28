@@ -134,6 +134,97 @@ func TestBuildBootstrapArgs(t *testing.T) {
 	}
 }
 
+func TestBuildDestroyArgs(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        DestroyArguments
+		contains    []string // strings that should be in the result
+		notContains []string // strings that should not be in the result
+	}{
+		{
+			name: "minimal destroy args",
+			args: DestroyArguments{
+				Name: "test-controller",
+			},
+			contains:    []string{"destroy-controller", "--no-prompt", "test-controller"},
+			notContains: []string{"--force", "--destroy-all-models", "--destroy-storage", "--release-storage", "--model-timeout"},
+		},
+		{
+			name: "destroy with force flag",
+			args: DestroyArguments{
+				Name: "test-controller",
+				Flags: DestroyFlags{
+					Force: true,
+				},
+			},
+			contains: []string{"destroy-controller", "--no-prompt", "--force", "test-controller"},
+		},
+		{
+			name: "destroy with destroy-all-models flag",
+			args: DestroyArguments{
+				Name: "test-controller",
+				Flags: DestroyFlags{
+					DestroyAllModels: true,
+				},
+			},
+			contains: []string{"destroy-controller", "--no-prompt", "--destroy-all-models", "test-controller"},
+		},
+		{
+			name: "destroy with storage flags",
+			args: DestroyArguments{
+				Name: "test-controller",
+				Flags: DestroyFlags{
+					DestroyStorage: true,
+					ReleaseStorage: true,
+				},
+			},
+			contains: []string{"destroy-controller", "--no-prompt", "--destroy-storage", "--release-storage", "test-controller"},
+		},
+		{
+			name: "destroy with model timeout",
+			args: DestroyArguments{
+				Name: "test-controller",
+				Flags: DestroyFlags{
+					ModelTimeout: 5,
+				},
+			},
+			contains: []string{"destroy-controller", "--no-prompt", "--model-timeout=5", "test-controller"},
+		},
+		{
+			name: "destroy with all flags",
+			args: DestroyArguments{
+				Name: "test-controller",
+				Flags: DestroyFlags{
+					Force:            true,
+					DestroyAllModels: true,
+					DestroyStorage:   true,
+					ModelTimeout:     10,
+				},
+			},
+			contains: []string{"destroy-controller", "--no-prompt", "--force", "--destroy-all-models", "--destroy-storage", "--model-timeout=10", "test-controller"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := buildDestroyArgs(t.Context(), tt.args)
+			assert.NoError(t, err)
+			resultStr := ""
+			for _, arg := range result {
+				resultStr += arg + " "
+			}
+
+			for _, expected := range tt.contains {
+				assert.Contains(t, resultStr, expected, "Expected to find %q in destroy args, got value: %s", expected, resultStr)
+			}
+
+			for _, notExpected := range tt.notContains {
+				assert.NotContains(t, resultStr, notExpected, "Expected not to find %q in destroy args", notExpected)
+			}
+		})
+	}
+}
+
 func TestBuildJujuCloud(t *testing.T) {
 	tests := []struct {
 		name  string
