@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -77,7 +78,7 @@ func testAccCheckJaasRoleExists(resourceName string, checkExists bool) resource.
 			return errors.New("No role uuid is set")
 		}
 
-		_, err := TestClient.Jaas.ReadRoleByUUID(uuid)
+		_, err := TestClient.Jaas.ReadRoleByUUID(context.Background(), uuid)
 		if checkExists && err != nil {
 			return fmt.Errorf("Role with uuid %q does not exist", uuid)
 		} else if !checkExists && err == nil {

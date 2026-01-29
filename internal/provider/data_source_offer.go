@@ -117,7 +117,7 @@ func (d *offerDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	}
 
 	// Get current juju machine data source values .
-	offer, err := d.client.Offers.ReadOffer(&juju.ReadOfferInput{
+	offer, err := d.client.Offers.ReadOffer(ctx, &juju.ReadOfferInput{
 		OfferURL:           data.OfferURL.ValueString(),
 		OfferingController: data.OfferingController.ValueString(),
 	})

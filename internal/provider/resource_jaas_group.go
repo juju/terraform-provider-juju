@@ -106,7 +106,7 @@ func (resource *jaasGroupResource) Create(ctx context.Context, req resource.Crea
 	}
 
 	// Add the group to JAAS
-	uuid, err := resource.client.Jaas.AddGroup(plan.Name.ValueString())
+	uuid, err := resource.client.Jaas.AddGroup(ctx, plan.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to add group %q, got error: %s", plan.Name.ValueString(), err))
 		return
@@ -133,7 +133,7 @@ func (resource *jaasGroupResource) Read(ctx context.Context, req resource.ReadRe
 	}
 
 	// Read the group from JAAS
-	group, err := resource.client.Jaas.ReadGroupByUUID(state.UUID.ValueString())
+	group, err := resource.client.Jaas.ReadGroupByUUID(ctx, state.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get group %q, got error: %s", state.Name.ValueString(), err))
 		return
@@ -172,7 +172,7 @@ func (resource *jaasGroupResource) Update(ctx context.Context, req resource.Upda
 	}
 
 	// Rename the group in JAAS
-	err := resource.client.Jaas.RenameGroup(state.Name.ValueString(), plan.Name.ValueString())
+	err := resource.client.Jaas.RenameGroup(ctx, state.Name.ValueString(), plan.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to rename group %q to %q, got error: %s", state.Name.ValueString(), plan.Name.ValueString(), err))
 		return
@@ -199,7 +199,7 @@ func (resource *jaasGroupResource) Delete(ctx context.Context, req resource.Dele
 	}
 
 	// Delete the group from JAAS
-	err := resource.client.Jaas.RemoveGroup(state.Name.ValueString())
+	err := resource.client.Jaas.RemoveGroup(ctx, state.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to remove group %q, got error: %s", state.Name.ValueString(), err))
 		return

@@ -5,13 +5,13 @@ package juju
 
 import (
 	"bytes"
+	"context"
 	"maps"
 
 	charmresources "github.com/juju/charm/v12/resource"
 	jujuerrors "github.com/juju/errors"
 	apiapplication "github.com/juju/juju/api/client/application"
-	"github.com/juju/juju/core/resources"
-	"github.com/juju/juju/docker"
+	"github.com/juju/juju/core/resource"
 	"gopkg.in/yaml.v3"
 )
 
@@ -46,10 +46,10 @@ func (cr CharmResources) Equal(other CharmResources) bool {
 // MarhsalYaml marshals the CharmResource into a YAML representation
 // suitable for uploading to Juju as a resource.
 func (cr CharmResource) MarhsalYaml() ([]byte, error) {
-	registryDetails := resources.DockerImageDetails{
+	registryDetails := resource.DockerImageDetails{
 		RegistryPath: cr.OCIImageURL,
-		ImageRepoDetails: docker.ImageRepoDetails{
-			BasicAuthConfig: docker.BasicAuthConfig{
+		ImageRepoDetails: resource.ImageRepoDetails{
+			BasicAuthConfig: resource.BasicAuthConfig{
 				Username: cr.RegistryUser,
 				Password: cr.RegistryPassword,
 			},
@@ -62,6 +62,7 @@ func (cr CharmResource) MarhsalYaml() ([]byte, error) {
 // after DeployFromRepository, where the resources have been added
 // to the controller.
 func uploadExistingPendingResources(
+	ctx context.Context,
 	appName string,
 	pendingResources []apiapplication.PendingResourceUpload,
 	charmResources map[string]CharmResource,
@@ -90,7 +91,7 @@ func uploadExistingPendingResources(
 		if err != nil {
 			return jujuerrors.Trace(err)
 		}
-		uploadErr := resourceAPIClient.Upload(appName, pendingResUpload.Name, pendingResUpload.Filename, "", bytes.NewReader(details))
+		uploadErr := resourceAPIClient.Upload(ctx, appName, pendingResUpload.Name, pendingResUpload.Filename, "", bytes.NewReader(details))
 		if uploadErr != nil {
 			return jujuerrors.Trace(uploadErr)
 		}

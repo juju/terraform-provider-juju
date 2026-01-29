@@ -348,7 +348,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 	if len(annotations) > 0 {
-		err = r.client.Annotations.SetAnnotations(&juju.SetAnnotationsInput{
+		err = r.client.Annotations.SetAnnotations(ctx, &juju.SetAnnotationsInput{
 			ModelUUID:   plan.ModelUUID.ValueString(),
 			Annotations: annotations,
 			EntityTag:   names.NewMachineTag(response.ID),
@@ -457,7 +457,7 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 	r.trace(fmt.Sprintf("read machine resource %q", machineID))
 
-	annotations, err := r.client.Annotations.GetAnnotations(&juju.GetAnnotationsInput{
+	annotations, err := r.client.Annotations.GetAnnotations(ctx, &juju.GetAnnotationsInput{
 		EntityTag: names.NewMachineTag(response.ID),
 		ModelUUID: modelUUID,
 	})
@@ -565,10 +565,11 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 		r.trace(fmt.Sprintf("delete machine resource %q", machineID))
 	}()
 
-	if err := r.client.Machines.DestroyMachine(&juju.DestroyMachineInput{
+	err := r.client.Machines.DestroyMachine(ctx, &juju.DestroyMachineInput{
 		ModelUUID: modelUUID,
 		ID:        machineID,
-	}); err != nil {
+	})
+	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete machine, got error: %s", err))
 		return
 	}
@@ -673,7 +674,7 @@ func modelMachineIDAndName(value string, diags *diag.Diagnostics) (string, strin
 }
 
 type annotationSetter interface {
-	SetAnnotations(input *juju.SetAnnotationsInput) error
+	SetAnnotations(ctx context.Context, input *juju.SetAnnotationsInput) error
 }
 
 // updateAnnotations takes the state and the plan, and performs the necessary
@@ -702,7 +703,7 @@ func updateAnnotations(ctx context.Context, client annotationSetter, stateAnnota
 		}
 	}
 
-	err := client.SetAnnotations(&juju.SetAnnotationsInput{
+	err := client.SetAnnotations(ctx, &juju.SetAnnotationsInput{
 		ModelUUID:   modelUUID,
 		Annotations: annotationsPlan,
 		EntityTag:   entityTag,

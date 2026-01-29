@@ -4,11 +4,10 @@
 package juju
 
 import (
+	"context"
 	"io"
 
 	jaasparams "github.com/canonical/jimm-go-sdk/v3/api/params"
-	"github.com/juju/charm/v12"
-	charmresources "github.com/juju/charm/v12/resource"
 	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
@@ -18,10 +17,11 @@ import (
 	jujucloud "github.com/juju/juju/cloud"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/model"
-	"github.com/juju/juju/core/resources"
+	"github.com/juju/juju/core/resource"
 	"github.com/juju/juju/core/secrets"
+	"github.com/juju/juju/domain/deployment/charm"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/names/v5"
+	"github.com/juju/names/v6"
 )
 
 type SharedClient interface {
@@ -49,50 +49,50 @@ type SharedClient interface {
 }
 
 type ClientAPIClient interface {
-	Status(args *apiclient.StatusArgs) (*params.FullStatus, error)
+	Status(ctx context.Context, args *apiclient.StatusArgs) (*params.FullStatus, error)
 }
 
 type ApplicationAPIClient interface {
-	AddUnits(args apiapplication.AddUnitsParams) ([]string, error)
-	ApplicationsInfo(applications []names.ApplicationTag) ([]params.ApplicationInfoResult, error)
-	Deploy(args apiapplication.DeployArgs) error
-	DestroyUnits(in apiapplication.DestroyUnitsParams) ([]params.DestroyUnitResult, error)
-	DeployFromRepository(arg apiapplication.DeployFromRepositoryArg) (apiapplication.DeployInfo, []apiapplication.PendingResourceUpload, []error)
-	DestroyApplications(in apiapplication.DestroyApplicationsParams) ([]params.DestroyApplicationResult, error)
-	Expose(application string, exposedEndpoints map[string]params.ExposedEndpoint) error
-	Get(branchName, application string) (*params.ApplicationGetResults, error)
-	GetCharmURLOrigin(branchName, applicationName string) (*charm.URL, apicommoncharm.Origin, error)
-	GetConstraints(applications ...string) ([]constraints.Value, error)
-	MergeBindings(req params.ApplicationMergeBindingsArgs) error
-	ScaleApplication(in apiapplication.ScaleApplicationParams) (params.ScaleApplicationResult, error)
-	SetCharm(branchName string, cfg apiapplication.SetCharmConfig) error
-	SetConfig(branchName, application, configYAML string, config map[string]string) error
-	UnsetApplicationConfig(branchName, application string, keys []string) error
-	SetConstraints(application string, constraints constraints.Value) error
-	Unexpose(application string, endpoints []string) error
+	AddUnits(ctx context.Context, args apiapplication.AddUnitsParams) ([]string, error)
+	ApplicationsInfo(ctx context.Context, applications []names.ApplicationTag) ([]params.ApplicationInfoResult, error)
+	Deploy(ctx context.Context, args apiapplication.DeployArgs) error
+	DestroyUnits(ctx context.Context, in apiapplication.DestroyUnitsParams) ([]params.DestroyUnitResult, error)
+	DeployFromRepository(ctx context.Context, arg apiapplication.DeployFromRepositoryArg) (apiapplication.DeployInfo, []apiapplication.PendingResourceUpload, []error)
+	DestroyApplications(ctx context.Context, in apiapplication.DestroyApplicationsParams) ([]params.DestroyApplicationResult, error)
+	Expose(ctx context.Context, application string, exposedEndpoints map[string]params.ExposedEndpoint) error
+	Get(ctx context.Context, application string) (*params.ApplicationGetResults, error)
+	GetCharmURLOrigin(ctx context.Context, applicationName string) (*charm.URL, apicommoncharm.Origin, error)
+	GetConstraints(ctx context.Context, applications ...string) ([]constraints.Value, error)
+	MergeBindings(ctx context.Context, req params.ApplicationMergeBindingsArgs) error
+	ScaleApplication(ctx context.Context, in apiapplication.ScaleApplicationParams) (params.ScaleApplicationResult, error)
+	SetCharm(ctx context.Context, cfg apiapplication.SetCharmConfig) error
+	SetConfig(ctx context.Context, application, configYAML string, config map[string]string) error
+	UnsetApplicationConfig(ctx context.Context, application string, keys []string) error
+	SetConstraints(ctx context.Context, application string, constraints constraints.Value) error
+	Unexpose(ctx context.Context, application string, endpoints []string) error
 }
 
 type ModelConfigAPIClient interface {
-	ModelGet() (map[string]interface{}, error)
+	ModelGet(ctx context.Context) (map[string]interface{}, error)
 }
 
 type ResourceAPIClient interface {
-	AddPendingResources(args apiresources.AddPendingResourcesArgs) ([]string, error)
-	ListResources(applications []string) ([]resources.ApplicationResources, error)
-	Upload(application, name, filename, pendingID string, reader io.ReadSeeker) error
-	UploadPendingResource(applicationID string, resource charmresources.Resource, filename string, r io.ReadSeeker) (id string, err error)
+	AddPendingResources(ctx context.Context, args apiresources.AddPendingResourcesArgs) ([]string, error)
+	ListResources(ctx context.Context, applications []string) ([]resource.ApplicationResources, error)
+	Upload(ctx context.Context, application, name, filename, pendingID string, reader io.ReadSeeker) error
+	UploadPendingResource(ctx context.Context, args apiresources.UploadPendingResourceArgs) (string, error)
 }
 
 type SecretAPIClient interface {
-	CreateSecret(name, description string, data map[string]string) (string, error)
-	ListSecrets(reveal bool, filter secrets.Filter) ([]apisecrets.SecretDetails, error)
+	CreateSecret(ctx context.Context, name, description string, data map[string]string) (string, error)
+	ListSecrets(ctx context.Context, reveal bool, filter secrets.Filter) ([]apisecrets.SecretDetails, error)
 	UpdateSecret(
-		uri *secrets.URI, name string, autoPrune *bool,
+		ctx context.Context, uri *secrets.URI, name string, autoPrune *bool,
 		newName string, description string, data map[string]string,
 	) error
-	RemoveSecret(uri *secrets.URI, name string, revision *int) error
-	GrantSecret(uri *secrets.URI, name string, apps []string) ([]error, error)
-	RevokeSecret(uri *secrets.URI, name string, apps []string) ([]error, error)
+	RemoveSecret(ctx context.Context, uri *secrets.URI, name string, revision *int) error
+	GrantSecret(ctx context.Context, uri *secrets.URI, name string, apps []string) ([]error, error)
+	RevokeSecret(ctx context.Context, uri *secrets.URI, name string, apps []string) ([]error, error)
 }
 
 // JaasAPIClient defines the set of methods that the JAAS API provides.
@@ -114,16 +114,16 @@ type JaasAPIClient interface {
 
 // CloudAPIClient defines the methods the Juju API client provides for clouds.
 type CloudAPIClient interface {
-	AddCloud(cloud jujucloud.Cloud, force bool) error
-	Cloud(tag names.CloudTag) (jujucloud.Cloud, error)
-	UpdateCloud(cloud jujucloud.Cloud) error
-	RemoveCloud(cloud string) error
-	AddCredential(cloud string, credential jujucloud.Credential) error
-	UserCredentials(user names.UserTag, cloud names.CloudTag) ([]names.CloudCredentialTag, error)
+	AddCloud(ctx context.Context, cloud jujucloud.Cloud, force bool) error
+	Cloud(ctx context.Context, tag names.CloudTag) (jujucloud.Cloud, error)
+	UpdateCloud(ctx context.Context, cloud jujucloud.Cloud) error
+	RemoveCloud(ctx context.Context, cloud string) error
+	AddCredential(ctx context.Context, cloud string, credential jujucloud.Credential) error
+	UserCredentials(ctx context.Context, user names.UserTag, cloud names.CloudTag) ([]names.CloudCredentialTag, error)
 }
 
 // AnnotationsAPIClient defines the set of methods that the Annotations API provides.
 type AnnotationsAPIClient interface {
-	Get(tags []string) ([]params.AnnotationsGetResult, error)
-	Set(annotations map[string]map[string]string) ([]params.ErrorResult, error)
+	Get(ctx context.Context, tags []string) ([]params.AnnotationsGetResult, error)
+	Set(ctx context.Context, annotations map[string]map[string]string) ([]params.ErrorResult, error)
 }

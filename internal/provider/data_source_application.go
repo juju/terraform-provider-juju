@@ -110,7 +110,7 @@ func (d *applicationDataSource) Read(ctx context.Context, req datasource.ReadReq
 		"Name":      appName,
 	})
 
-	response, err := d.client.Applications.ReadApplication(&juju.ReadApplicationInput{
+	response, err := d.client.Applications.ReadApplication(ctx, &juju.ReadApplicationInput{
 		ModelUUID: modelUUID,
 		AppName:   appName,
 	})

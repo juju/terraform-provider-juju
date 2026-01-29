@@ -4,11 +4,12 @@
 package juju
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
 	"github.com/juju/juju/api/client/keymanager"
-	"github.com/juju/utils/v3/ssh"
+	"github.com/juju/utils/v4/ssh"
 )
 
 type sshKeysClient struct {
@@ -48,7 +49,7 @@ func newSSHKeysClient(sc SharedClient) *sshKeysClient {
 	}
 }
 
-func (c *sshKeysClient) CreateSSHKey(input *CreateSSHKeyInput) error {
+func (c *sshKeysClient) CreateSSHKey(ctx context.Context, input *CreateSSHKeyInput) error {
 	c.KeyLock.Lock()
 	defer c.KeyLock.Unlock()
 	conn, err := c.GetConnection(&input.ModelUUID)
@@ -61,7 +62,7 @@ func (c *sshKeysClient) CreateSSHKey(input *CreateSSHKeyInput) error {
 
 	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
 	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
-	params, err := client.AddKeys(input.Username, input.Payload)
+	params, err := client.AddKeys(ctx, input.Username, input.Payload)
 	if err != nil {
 		return err
 	}
@@ -82,7 +83,7 @@ func (c *sshKeysClient) CreateSSHKey(input *CreateSSHKeyInput) error {
 	return nil
 }
 
-func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, error) {
+func (c *sshKeysClient) ReadSSHKey(ctx context.Context, input *ReadSSHKeyInput) (*ReadSSHKeyOutput, error) {
 	c.KeyLock.RLock()
 	defer c.KeyLock.RUnlock()
 	conn, err := c.GetConnection(&input.ModelUUID)
@@ -95,7 +96,7 @@ func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, e
 
 	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
 	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
-	returnedKeys, err := client.ListKeys(ssh.FullKeys, input.Username)
+	returnedKeys, err := client.ListKeys(ctx, ssh.FullKeys, input.Username)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +118,7 @@ func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, e
 	return nil, fmt.Errorf("no ssh key found for %s", input.KeyIdentifier)
 }
 
-func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
+func (c *sshKeysClient) DeleteSSHKey(ctx context.Context, input *DeleteSSHKeyInput) error {
 	c.KeyLock.Lock()
 	defer c.KeyLock.Unlock()
 	conn, err := c.GetConnection(&input.ModelUUID)
@@ -133,7 +134,7 @@ func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	// that impacts the current Juju logic. As a temporal workaround
 	// we will check if this is the latest SSH key of this model and
 	// skip the delete.
-	returnedKeys, err := client.ListKeys(ssh.FullKeys, input.Username)
+	returnedKeys, err := client.ListKeys(ctx, ssh.FullKeys, input.Username)
 	if err != nil {
 		return err
 	}
@@ -151,8 +152,8 @@ func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	}
 
 	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
-	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.<
-	params, err := client.DeleteKeys(input.Username, input.KeyIdentifier)
+	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
+	params, err := client.DeleteKeys(ctx, input.Username, input.KeyIdentifier)
 	if len(params) != 0 {
 		messages := make([]string, 0)
 		for _, e := range params {

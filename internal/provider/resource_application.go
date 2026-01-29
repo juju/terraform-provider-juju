@@ -29,7 +29,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
 	"github.com/juju/juju/core/constraints"
-	jujustorage "github.com/juju/juju/storage"
+	jujustorage "github.com/juju/juju/core/storage"
 	"github.com/juju/names/v5"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -587,16 +587,16 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	// Parse storage
-	var storageConstraints map[string]jujustorage.Constraints
+	var storageConstraints map[string]jujustorage.Directive
 	if !plan.StorageDirectives.IsUnknown() {
 		storageDirectives := make(map[string]string)
 		resp.Diagnostics.Append(plan.StorageDirectives.ElementsAs(ctx, &storageDirectives, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		storageConstraints = make(map[string]jujustorage.Constraints, len(storageDirectives))
+		storageConstraints = make(map[string]jujustorage.Directive, len(storageDirectives))
 		for k, v := range storageDirectives {
-			result, err := jujustorage.ParseConstraints(v)
+			result, err := jujustorage.ParseDirective(v)
 			if err != nil {
 				resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse storage directives, got error: %s", err))
 				return
@@ -826,7 +826,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	response, err := r.client.Applications.ReadApplication(&juju.ReadApplicationInput{
+	response, err := r.client.Applications.ReadApplication(ctx, &juju.ReadApplicationInput{
 		ModelUUID: modelUUID,
 		AppName:   appName,
 	})
@@ -1214,10 +1214,10 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		updateApplicationInput.StorageConstraints = directives
+		updateApplicationInput.StorageDirectives = directives
 	}
 
-	if err := r.client.Applications.UpdateApplication(&updateApplicationInput); err != nil {
+	if err := r.client.Applications.UpdateApplication(ctx, &updateApplicationInput); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update application resource, got error: %s", err))
 		return
 	}
@@ -1296,9 +1296,9 @@ func (r *applicationResource) updateStorage(
 	ctx context.Context,
 	plan applicationResourceModelV1,
 	state applicationResourceModelV1,
-) (map[string]jujustorage.Constraints, diag.Diagnostics) {
+) (map[string]jujustorage.Directive, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
-	var updatedStorageDirectivesMap map[string]jujustorage.Constraints
+	var updatedStorageDirectivesMap map[string]jujustorage.Directive
 
 	var planStorageDirectives, stateStorageDirectives map[string]string
 	diagnostics.Append(plan.StorageDirectives.ElementsAs(ctx, &planStorageDirectives, false)...)
@@ -1311,10 +1311,10 @@ func (r *applicationResource) updateStorage(
 	}
 
 	// Create a map of updated storage directives that are in the plan but not in the state
-	updatedStorageDirectivesMap = make(map[string]jujustorage.Constraints)
+	updatedStorageDirectivesMap = make(map[string]jujustorage.Directive)
 	for label, constraintString := range planStorageDirectives {
 		if _, ok := stateStorageDirectives[label]; !ok {
-			cons, err := jujustorage.ParseConstraints(constraintString)
+			cons, err := jujustorage.ParseDirective(constraintString)
 			if err != nil {
 				// Just in case, as this should have been validated out before now.
 				diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse storage directives, got error: %s", err))
@@ -1475,7 +1475,7 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 		resp.Diagnostics.Append(dErr...)
 	}
 
-	if err := r.client.Applications.DestroyApplication(&juju.DestroyApplicationInput{
+	if err := r.client.Applications.DestroyApplication(ctx, &juju.DestroyApplicationInput{
 		ApplicationName: appName,
 		ModelUUID:       modelUUID,
 	}); err != nil {

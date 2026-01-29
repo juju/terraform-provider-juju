@@ -43,7 +43,6 @@ jobs:
       matrix:
         terraform: ["1.11.*"]
         action-operator:
-          - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "2.9" }
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "3" }
           - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.32-strict", juju: "3" }
     timeout-minutes: 90
@@ -141,6 +140,8 @@ jobs:
         run: |
           sudo microk8s.config > /home/$USER/microk8s-config.yaml
       - run: go mod download
+      - name: Setup tmate session
+        uses: canonical/action-tmate@main
       - env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.action-operator.cloud }}
