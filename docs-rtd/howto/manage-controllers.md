@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to reference and connect to Juju and JIMM controllers using static credentials, environment variables, or the Juju CLI."
+---
+
 (manage-controllers)=
 # Manage controllers
 
@@ -124,8 +130,7 @@ resource "juju_controller" "this" {
 (add-a-cloud-to-a-controller)=
 ## Add a cloud to a controller
 
-While your controller is implicitly connected to the cloud that it has been bootstrapped on, and can implicitly use that cloud to provision resources, as is generally the case in Juju, you can also give it access to further clouds. The Terraform Provider for Juju currently supports this only for Kubernetes clouds.
-
+> See more: {ref}`add-a-machine-cloud`
 > See more: {ref}`add-a-kubernetes-cloud`
 
 (add-a-credential-to-a-controller)=

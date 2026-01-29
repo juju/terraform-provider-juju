@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to install, configure, and upgrade the Terraform Provider for Juju with detailed setup instructions and version migration guides."
+---
+
 (manage-the-terraform-provider-for-juju)=
 # Manage the Terraform Provider for Juju
 

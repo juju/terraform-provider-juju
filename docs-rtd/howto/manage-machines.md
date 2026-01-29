@@ -1,3 +1,9 @@
+---
+myst:
+  html_meta:
+    description: "Learn how to add, reference, configure constraints, and remove machines in Juju models using the Terraform Provider for Juju."
+---
+
 (manage-machines)=
 # Manage machines
 

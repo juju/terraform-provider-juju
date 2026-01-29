@@ -14,7 +14,6 @@ import (
 	stderrors "errors"
 	"fmt"
 	"math"
-	"os"
 	"reflect"
 	"slices"
 	"sort"
@@ -37,8 +36,6 @@ import (
 	apiresources "github.com/juju/juju/api/client/resources"
 	apispaces "github.com/juju/juju/api/client/spaces"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
-	"github.com/juju/juju/charmhub"
-	"github.com/juju/juju/charmhub/transport"
 	"github.com/juju/juju/cmd/juju/application/utils"
 	corebase "github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/constraints"
@@ -49,7 +46,6 @@ import (
 	"github.com/juju/juju/rpc/params"
 	jujustorage "github.com/juju/juju/storage"
 	jujuversion "github.com/juju/juju/version"
-	"github.com/juju/loggo"
 	"github.com/juju/names/v5"
 	"github.com/juju/retry"
 	"github.com/juju/version/v2"
@@ -105,6 +101,7 @@ type applicationsClient struct {
 	getClientAPIClient      func(api.Connection) ClientAPIClient
 	getModelConfigAPIClient func(api.Connection) ModelConfigAPIClient
 	getResourceAPIClient    func(connection api.Connection) (ResourceAPIClient, error)
+	getCharmClient          func(api.Connection) *charmsClient
 }
 
 func newApplicationClient(sc SharedClient) *applicationsClient {
@@ -121,6 +118,9 @@ func newApplicationClient(sc SharedClient) *applicationsClient {
 		},
 		getResourceAPIClient: func(conn api.Connection) (ResourceAPIClient, error) {
 			return apiresources.NewClient(conn)
+		},
+		getCharmClient: func(conn api.Connection) *charmsClient {
+			return newCharmsClient(conn)
 		},
 	}
 }
@@ -480,12 +480,10 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 		return err
 	}
 
-	charmhubClient, err := newCharmhubClient()
-	if err != nil {
-		return err
-	}
-
-	subordinate, err := isSubordinateCharm(ctx, charmhubClient, transformedInput.charmName, transformedInput.charmChannel)
+	subordinate, err := c.getCharmClient(conn).IsSubordinateCharm(IsSubordinateCharmParameters{
+		Name:    transformedInput.charmName,
+		Channel: transformedInput.charmChannel,
+	})
 	if err != nil {
 		return err
 	}
@@ -1377,11 +1375,16 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	}
 
 	if len(input.UnsetConfig) > 0 {
-		// these are config entries to be unset
-		c.Debugf("Detected config keys to be unset.")
-		if err := applicationAPIClient.UnsetApplicationConfig(model.GenerationMaster, input.AppName, input.UnsetConfig); err != nil {
-			c.Errorf(err, "unsetting config")
-			return err
+		// unset config keys one by one, so we can swallow the `unknown option` error,
+		// which means the key was set in the state but is no longer valid (e.g. removed in a new charm revision).
+		// We don't want to fail the whole update.
+		for _, key := range input.UnsetConfig {
+			if err := applicationAPIClient.UnsetApplicationConfig(model.GenerationMaster, input.AppName, []string{key}); err != nil {
+				if strings.Contains(err.Error(), "unknown option") {
+					continue
+				}
+				return err
+			}
 		}
 	}
 
@@ -1917,45 +1920,4 @@ func getModelDefaultSpace(modelconfigAPIClient ModelConfigAPIClient) (string, er
 		defaultSpace = network.AlphaSpaceName
 	}
 	return defaultSpace, nil
-}
-
-const (
-	// defaultChamhubURL is the default location of the global Charmhub API.
-	// An alternate location can be configured with the CHARMHUB_URL environement
-	// variable
-	defaultCharmhubURL = "https://api.charmhub.io"
-
-	charmhubURLEnvKey = "CHARMHUB_URL"
-)
-
-type CharmhubClient interface {
-	Info(context.Context, string, ...charmhub.InfoOption) (transport.InfoResponse, error)
-}
-
-var newCharmhubClient = func() (CharmhubClient, error) {
-	charmhubURL := defaultCharmhubURL
-	if url := os.Getenv(charmhubURLEnvKey); url != "" {
-		charmhubURL = url
-	}
-
-	return charmhub.NewClient(charmhub.Config{
-		URL:    charmhubURL,
-		Logger: loggo.Logger{},
-	})
-}
-
-func isSubordinateCharm(ctx context.Context, client CharmhubClient, name string, channel string) (bool, error) {
-	var options []charmhub.InfoOption
-	if channel != "" {
-		options = append(options, charmhub.WithInfoChannel(channel))
-	}
-	info, err := client.Info(ctx, name, options...)
-	if err != nil {
-		return false, err
-	}
-	meta, err := charm.ReadMeta(bytes.NewBufferString(info.DefaultRelease.Revision.MetadataYAML))
-	if err != nil {
-		return false, err
-	}
-	return meta.Subordinate, nil
 }

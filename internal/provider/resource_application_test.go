@@ -26,7 +26,6 @@ import (
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
 
-	"github.com/juju/terraform-provider-juju/internal/juju"
 	internaljuju "github.com/juju/terraform-provider-juju/internal/juju"
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
@@ -405,14 +404,14 @@ func TestAcc_ResourceApplication_UpdateImportedSubordinate(t *testing.T) {
 
 	ctx := context.Background()
 
-	resp, err := TestClient.Models.CreateModel(juju.CreateModelInput{
+	resp, err := TestClient.Models.CreateModel(internaljuju.CreateModelInput{
 		Name: modelName,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = TestClient.Applications.CreateApplication(ctx, &juju.CreateApplicationInput{
+	_, err = TestClient.Applications.CreateApplication(ctx, &internaljuju.CreateApplicationInput{
 		ApplicationName: "telegraf",
 		ModelUUID:       resp.UUID,
 		CharmName:       "telegraf",
@@ -2743,7 +2742,7 @@ func TestCreateCharmResources(t *testing.T) {
 		name          string
 		planResources map[string]string
 		registryCreds map[string]registryDetails
-		expected      juju.CharmResources
+		expected      internaljuju.CharmResources
 		expectError   bool
 	}{
 		{
@@ -2752,7 +2751,7 @@ func TestCreateCharmResources(t *testing.T) {
 				"charm1": "123",
 			},
 			registryCreds: map[string]registryDetails{},
-			expected: juju.CharmResources{
+			expected: internaljuju.CharmResources{
 				"charm1": {
 					RevisionNumber: "123",
 				},
@@ -2770,7 +2769,7 @@ func TestCreateCharmResources(t *testing.T) {
 					Password: types.StringValue("pass"),
 				},
 			},
-			expected: juju.CharmResources{
+			expected: internaljuju.CharmResources{
 				"charm2": {
 					OCIImageURL:      "registry.example.com/path/image:tag",
 					RegistryUser:     "user",
@@ -2790,7 +2789,7 @@ func TestCreateCharmResources(t *testing.T) {
 					Password: types.StringValue("pass"),
 				},
 			},
-			expected: juju.CharmResources{
+			expected: internaljuju.CharmResources{
 				"charm2": {
 					OCIImageURL: "registry.example.com/path/image:tag",
 				},
@@ -2813,7 +2812,7 @@ func TestCreateCharmResources(t *testing.T) {
 					Password: types.StringValue("pass2"),
 				},
 			},
-			expected: juju.CharmResources{
+			expected: internaljuju.CharmResources{
 				"charm2": {
 					OCIImageURL:      "registry.example.com/path/image:tag",
 					RegistryUser:     "user",
@@ -2838,7 +2837,7 @@ func TestCreateCharmResources(t *testing.T) {
 					Password: types.StringValue("pass"),
 				},
 			},
-			expected: juju.CharmResources{
+			expected: internaljuju.CharmResources{
 				"charm2": {
 					OCIImageURL:      "registry.example.com/image:tag",
 					RegistryUser:     "user",
@@ -2871,4 +2870,63 @@ func TestCreateCharmResources(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestAcc_ResourceApplication_RemoveConfigNotExistingAnymore tests that removing a config entry from terraform that
+// does not exist anymore in the juju application config.
+func TestAcc_ResourceApplication_RemoveConfigNotExistingAnymore(t *testing.T) {
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with MicroK8s")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-application-channel-revision")
+	appName := "my-test-charm"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationWithChannelRevisionAndConfig(modelName, appName, "juju-jimm-k8s", "3/stable", 90, true),
+			},
+			{
+				Config: testAccResourceApplicationWithChannelRevisionAndConfig(modelName, appName, "juju-jimm-k8s", "3/stable", 50, false),
+			},
+		},
+	})
+}
+
+func testAccResourceApplicationWithChannelRevisionAndConfig(modelName, appName, charmName, channel string, revision int, configNew bool) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceApplicationWithChannelRevisionAndConfig",
+		`
+resource "juju_model" "development" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_application" "test_app" {
+  name       = "{{.AppName}}"
+  model_uuid = juju_model.development.uuid
+
+  charm {
+    name     = "{{.CharmName}}"
+    channel  = "{{.Channel}}"
+    revision = {{.Revision}}
+  }
+  config = {
+   {{- if .ConfigNew }}
+    ssh-max-concurrent-connections = "1"
+   {{- else }}
+	dns-name = "test.localhost"
+   {{- end }}
+  }
+ 
+}
+`, internaltesting.TemplateData{
+			"ModelName": modelName,
+			"AppName":   appName,
+			"CharmName": charmName,
+			"Channel":   channel,
+			"Revision":  revision,
+			"ConfigNew": configNew,
+		})
 }
