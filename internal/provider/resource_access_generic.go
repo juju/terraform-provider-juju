@@ -129,7 +129,7 @@ func (resource *genericJAASAccessResource) Create(ctx context.Context, req resou
 		return
 	}
 	// Make a call to create relations
-	err := resource.client.Jaas.AddRelations(tuples)
+	err := resource.client.Jaas.AddRelations(ctx, tuples)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create access relationships for %s, got error: %s", targetTag.String(), err))
 		return
@@ -228,7 +228,7 @@ func (resource *genericJAASAccessResource) Update(ctx context.Context, req resou
 
 	// Add new relations
 	if len(addTuples) > 0 {
-		err := resource.client.Jaas.AddRelations(addTuples)
+		err := resource.client.Jaas.AddRelations(ctx, addTuples)
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to add access rules for %s, got error: %s", targetTag.String(), err))
 			return
@@ -240,7 +240,7 @@ func (resource *genericJAASAccessResource) Update(ctx context.Context, req resou
 
 	// Delete removed relations
 	if len(removeTuples) > 0 {
-		err := resource.client.Jaas.DeleteRelations(removeTuples)
+		err := resource.client.Jaas.DeleteRelations(ctx, removeTuples)
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to remove access rules for %s, got error: %s", targetTag.String(), err))
 			return
@@ -325,7 +325,7 @@ func (resource *genericJAASAccessResource) Delete(ctx context.Context, req resou
 		return
 	}
 	// Delete the tuples
-	err := resource.client.Jaas.DeleteRelations(tuples)
+	err := resource.client.Jaas.DeleteRelations(ctx, tuples)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete access rules for %s, got error: %s", targetTag.String(), err))
 		return

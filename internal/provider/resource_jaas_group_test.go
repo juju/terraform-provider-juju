@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -77,7 +78,7 @@ func testAccCheckJaasGroupExists(resourceName string, checkExists bool) resource
 			return errors.New("No group uuid is set")
 		}
 
-		_, err := TestClient.Jaas.ReadGroupByUUID(uuid)
+		_, err := TestClient.Jaas.ReadGroupByUUID(context.Background(), uuid)
 		if checkExists && err != nil {
 			return fmt.Errorf("Group with uuid %q does not exist", uuid)
 		} else if !checkExists && err == nil {

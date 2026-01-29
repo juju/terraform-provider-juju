@@ -144,7 +144,7 @@ func (r *userResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	_, err := r.client.Users.CreateUser(juju.CreateUserInput{
+	_, err := r.client.Users.CreateUser(ctx, juju.CreateUserInput{
 		Name:        data.Name.ValueString(),
 		DisplayName: data.DisplayName.ValueString(),
 		Password:    data.Password.ValueString(),
@@ -190,7 +190,7 @@ func (r *userResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	response, err := r.client.Users.ReadUser(userName)
+	response, err := r.client.Users.ReadUser(ctx, userName)
 	if err != nil {
 		// TODO (hmlanigan) 2023-06-14
 		// Add a user NotFound error type to the client.
@@ -253,7 +253,7 @@ func (r *userResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	// Update user can only change the user's password. It is not currently
 	// possible to change the display name via terraform after the user is
 	// created. Nor is it possible to change an existing username.
-	if err := r.client.Users.UpdateUser(juju.UpdateUserInput{
+	if err := r.client.Users.UpdateUser(ctx, juju.UpdateUserInput{
 		Name:     data.Name.ValueString(),
 		Password: data.Password.ValueString(),
 	}); err != nil {
@@ -302,7 +302,7 @@ func (r *userResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	err := r.client.Users.DestroyUser(juju.DestroyUserInput{
+	err := r.client.Users.DestroyUser(ctx, juju.DestroyUserInput{
 		Name: userName,
 	})
 	if err != nil {

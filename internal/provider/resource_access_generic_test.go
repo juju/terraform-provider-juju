@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -152,7 +153,7 @@ func testAccCheckJaasResourceAccess(relation string, object, target *string, exp
 			return err
 		}
 		defer func() { _ = conn.Close() }()
-		jc := api.NewClient(conn)
+		jc := api.NewClient(juju.JaasConnShim{Connection: conn})
 		req := params.ListRelationshipTuplesRequest{
 			Tuple: params.RelationshipTuple{
 				Object:       *object,

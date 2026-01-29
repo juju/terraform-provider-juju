@@ -4,13 +4,14 @@
 package juju
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/juju/errors"
 	cloudapi "github.com/juju/juju/api/client/cloud"
+	"github.com/juju/juju/api/jujuclient"
 	jujucloud "github.com/juju/juju/cloud"
-	"github.com/juju/juju/jujuclient"
-	"github.com/juju/names/v5"
+	"github.com/juju/names/v6"
 )
 
 type credentialsClient struct {
@@ -90,7 +91,7 @@ func supportedAuth(cloud jujucloud.Cloud, authTypeReceived string) bool {
 	return false
 }
 
-func (c *credentialsClient) ValidateCredentialForCloud(cloudName, authTypeReceived string) error {
+func (c *credentialsClient) ValidateCredentialForCloud(ctx context.Context, cloudName, authTypeReceived string) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return err
@@ -101,7 +102,7 @@ func (c *credentialsClient) ValidateCredentialForCloud(cloudName, authTypeReceiv
 
 	cloudTag := names.NewCloudTag(cloudName)
 
-	cloud, err := client.Cloud(cloudTag)
+	cloud, err := client.Cloud(ctx, cloudTag)
 	if err != nil {
 		return err
 	}
@@ -112,7 +113,7 @@ func (c *credentialsClient) ValidateCredentialForCloud(cloudName, authTypeReceiv
 	return nil
 }
 
-func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*CreateCredentialResponse, error) {
+func (c *credentialsClient) CreateCredential(ctx context.Context, input CreateCredentialInput) (*CreateCredentialResponse, error) {
 	if !input.ControllerCredential && !input.ClientCredential {
 		// Just in case none of them are set
 		return nil, fmt.Errorf("controller_credential or/and client_credential must be set to true")
@@ -125,7 +126,7 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 
 	cloudName := input.CloudName
 
-	if err := c.ValidateCredentialForCloud(cloudName, input.AuthType); err != nil {
+	if err := c.ValidateCredentialForCloud(ctx, cloudName, input.AuthType); err != nil {
 		return nil, err
 	}
 
@@ -158,7 +159,7 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 	}
 
 	if input.ControllerCredential {
-		if err := client.AddCredential(cloudCredTag.String(), cloudCredential); err != nil {
+		if err := client.AddCredential(ctx, cloudCredTag.String(), cloudCredential); err != nil {
 			return nil, err
 		}
 	}
@@ -167,7 +168,7 @@ func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*Crea
 }
 
 // ListClientCredentials lists all credentials on the client.
-func (c *credentialsClient) ListClientCredentials() (*ListCredentialResponse, error) {
+func (c *credentialsClient) ListClientCredentials(ctx context.Context) (*ListCredentialResponse, error) {
 	clientCredentialFound, err := getExistingClientCredentials()
 	if err != nil {
 		return nil, err
@@ -178,7 +179,7 @@ func (c *credentialsClient) ListClientCredentials() (*ListCredentialResponse, er
 }
 
 // ListControllerCredentials lists all credentials on the controller.
-func (c *credentialsClient) ListControllerCredentials() (*ListCredentialResponse, error) {
+func (c *credentialsClient) ListControllerCredentials(ctx context.Context) (*ListCredentialResponse, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
 		return nil, err
@@ -188,7 +189,7 @@ func (c *credentialsClient) ListControllerCredentials() (*ListCredentialResponse
 	client := cloudapi.NewClient(conn)
 
 	controllerCredentialFound := map[string]jujucloud.CloudCredential{}
-	credentialContents, err := client.CredentialContents("", "", true)
+	credentialContents, err := client.CredentialContents(ctx, "", "", true)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +212,7 @@ func (c *credentialsClient) ListControllerCredentials() (*ListCredentialResponse
 	}, nil
 }
 
-func (c *credentialsClient) ReadCredential(input ReadCredentialInput) (*ReadCredentialResponse, error) {
+func (c *credentialsClient) ReadCredential(ctx context.Context, input ReadCredentialInput) (*ReadCredentialResponse, error) {
 	clientCredential := input.ClientCredential
 	cloudName := input.CloudName
 	controllerCredential := input.ControllerCredential
@@ -236,7 +237,7 @@ func (c *credentialsClient) ReadCredential(input ReadCredentialInput) (*ReadCred
 
 	var controllerCredentialFound jujucloud.Credential
 	if controllerCredential {
-		credentialContents, err := client.CredentialContents(cloudName, credentialName, true)
+		credentialContents, err := client.CredentialContents(ctx, cloudName, credentialName, true)
 		if err != nil {
 			return nil, err
 		}
@@ -281,7 +282,7 @@ func (c *credentialsClient) ReadCredential(input ReadCredentialInput) (*ReadCred
 	return nil, fmt.Errorf("credential %s not found for cloud %s", credentialName, cloudName)
 }
 
-func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error {
+func (c *credentialsClient) UpdateCredential(ctx context.Context, input UpdateCredentialInput) error {
 	if !input.ControllerCredential && !input.ClientCredential {
 		// Just in case none of them are set
 		return fmt.Errorf("controller_credential or/and client_credential must be set to true")
@@ -294,7 +295,7 @@ func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error 
 
 	cloudName := input.CloudName
 
-	if err := c.ValidateCredentialForCloud(cloudName, input.AuthType); err != nil {
+	if err := c.ValidateCredentialForCloud(ctx, cloudName, input.AuthType); err != nil {
 		return err
 	}
 
@@ -327,7 +328,7 @@ func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error 
 	if input.ControllerCredential {
 		client := cloudapi.NewClient(conn)
 
-		if _, err := client.UpdateCredentialsCheckModels(*cloudCredTag, cloudCredential); err != nil {
+		if _, err := client.UpdateCredentialsCheckModels(ctx, *cloudCredTag, cloudCredential); err != nil {
 			return err
 		}
 	}
@@ -370,7 +371,7 @@ func updateClientCredential(cloudName string, credentialName string, cloudCreden
 	return nil
 }
 
-func (c *credentialsClient) DestroyCredential(input DestroyCredentialInput) error {
+func (c *credentialsClient) DestroyCredential(ctx context.Context, input DestroyCredentialInput) error {
 	cloudName := input.CloudName
 	credentialName := input.Name
 
@@ -390,7 +391,7 @@ func (c *credentialsClient) DestroyCredential(input DestroyCredentialInput) erro
 	}
 
 	if input.ControllerCredential {
-		if err := client.RevokeCredential(*cloudCredTag, false); err != nil {
+		if err := client.RevokeCredential(ctx, *cloudCredTag, false); err != nil {
 			return err
 		}
 	}

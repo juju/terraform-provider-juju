@@ -24,7 +24,7 @@ import (
 	"github.com/juju/juju/api/client/resources"
 	apispaces "github.com/juju/juju/api/client/spaces"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/names/v5"
+	"github.com/juju/names/v6"
 
 	internaljuju "github.com/juju/terraform-provider-juju/internal/juju"
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
@@ -326,7 +326,7 @@ func TestAcc_ResourceApplication_RefreshCharmUpdatesResources(t *testing.T) {
 								},
 							},
 						}
-						err := TestClient.Applications.UpdateApplication(&input)
+						err := TestClient.Applications.UpdateApplication(t.Context(), &input)
 						if err != nil {
 							return err
 						}
@@ -336,7 +336,7 @@ func TestAcc_ResourceApplication_RefreshCharmUpdatesResources(t *testing.T) {
 							ModelUUID: modelUUID,
 							AppName:   "test-app",
 						}
-						readRes, err := TestClient.Applications.ReadApplication(&readInput)
+						readRes, err := TestClient.Applications.ReadApplication(t.Context(), &readInput)
 						if err != nil {
 							return err
 						}
@@ -370,7 +370,7 @@ func TestAcc_ResourceApplication_RefreshCharmUpdatesResources(t *testing.T) {
 							ModelUUID: modelUUID,
 							AppName:   "test-app",
 						}
-						res, err := TestClient.Applications.ReadApplication(&input)
+						res, err := TestClient.Applications.ReadApplication(t.Context(), &input)
 						if err != nil {
 							return err
 						}
@@ -404,9 +404,12 @@ func TestAcc_ResourceApplication_UpdateImportedSubordinate(t *testing.T) {
 
 	ctx := context.Background()
 
-	resp, err := TestClient.Models.CreateModel(internaljuju.CreateModelInput{
-		Name: modelName,
-	})
+	resp, err := TestClient.Models.CreateModel(
+		t.Context(),
+		internaljuju.CreateModelInput{
+			Name: modelName,
+		},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -996,7 +999,7 @@ func testAccCheckApplicationResource(appResource string, checks charmResourceChe
 			return err
 		}
 
-		resources, err := jc.ListResources([]string{appName})
+		resources, err := jc.ListResources(context.TODO(), []string{appName})
 		if err != nil {
 			return err
 		}
@@ -2233,7 +2236,7 @@ func setupModelAndSpaces(t *testing.T, modelName string) (string, string, string
 	// All the space setup is needed until https://github.com/juju/terraform-provider-juju/issues/336 is implemented
 	// called to have TestClient populated
 	testAccPreCheck(t)
-	model, err := TestClient.Models.CreateModel(internaljuju.CreateModelInput{
+	model, err := TestClient.Models.CreateModel(t.Context(), internaljuju.CreateModelInput{
 		Name: modelName,
 	})
 	if err != nil {
@@ -2246,7 +2249,7 @@ func setupModelAndSpaces(t *testing.T, modelName string) (string, string, string
 		t.Fatal(err)
 	}
 	cleanUp := func() {
-		_ = TestClient.Models.DestroyModel(internaljuju.DestroyModelInput{UUID: model.UUID})
+		_ = TestClient.Models.DestroyModel(t.Context(), internaljuju.DestroyModelInput{UUID: model.UUID})
 		_ = conn.Close()
 	}
 
@@ -2259,11 +2262,11 @@ func setupModelAndSpaces(t *testing.T, modelName string) (string, string, string
 	publicSpace := "public"
 	managementSpace := "management"
 	spaceAPIClient := apispaces.NewAPI(conn)
-	err = spaceAPIClient.CreateSpace(managementSpace, []string{managementBridgeCidr}, true)
+	err = spaceAPIClient.CreateSpace(t.Context(), managementSpace, []string{managementBridgeCidr}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = spaceAPIClient.CreateSpace(publicSpace, []string{publicBridgeCidr}, true)
+	err = spaceAPIClient.CreateSpace(t.Context(), publicSpace, []string{publicBridgeCidr}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2385,7 +2388,10 @@ func testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, defaultSpace str
 		applicationAPIClient := apiapplication.NewClient(conn)
 		clientAPIClient := apiclient.NewClient(conn, TestClient.Applications.JujuLogger())
 
-		apps, err := applicationAPIClient.ApplicationsInfo([]names.ApplicationTag{names.NewApplicationTag(appName)})
+		apps, err := applicationAPIClient.ApplicationsInfo(
+			context.TODO(),
+			[]names.ApplicationTag{names.NewApplicationTag(appName)},
+		)
 		if err != nil {
 			return err
 		}
@@ -2408,9 +2414,11 @@ func testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, defaultSpace str
 		// This is needed to make sure the units have access
 		// to ip addresses part of the spaces
 		for i := 0; i < 50; i++ {
-			status, err := clientAPIClient.Status(&apiclient.StatusArgs{
-				Patterns: []string{appName},
-			})
+			status, err := clientAPIClient.Status(
+				context.TODO(),
+				&apiclient.StatusArgs{
+					Patterns: []string{appName},
+				})
 			if err != nil {
 				return err
 			}

@@ -92,7 +92,7 @@ func (s *accessSecretResource) ImportState(ctx context.Context, req resource.Imp
 	modelUUID := parts[0]
 	secretName := parts[1]
 
-	readSecretOutput, err := s.client.Secrets.ReadSecret(&juju.ReadSecretInput{
+	readSecretOutput, err := s.client.Secrets.ReadSecret(ctx, &juju.ReadSecretInput{
 		ModelUUID: modelUUID,
 		Name:      &secretName,
 	})
@@ -206,7 +206,7 @@ func (s *accessSecretResource) Create(ctx context.Context, req resource.CreateRe
 	applications := make([]string, len(plan.Applications.Elements()))
 	resp.Diagnostics.Append(plan.Applications.ElementsAs(ctx, &applications, false)...)
 
-	err := s.client.Secrets.UpdateAccessSecret(&juju.GrantRevokeAccessSecretInput{
+	err := s.client.Secrets.UpdateAccessSecret(ctx, &juju.GrantRevokeAccessSecretInput{
 		ModelUUID:    plan.ModelUUID.ValueString(),
 		SecretId:     plan.SecretId.ValueString(),
 		Applications: applications,
@@ -239,7 +239,7 @@ func (s *accessSecretResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 
-	readSecretOutput, err := s.client.Secrets.ReadSecret(&juju.ReadSecretInput{
+	readSecretOutput, err := s.client.Secrets.ReadSecret(ctx, &juju.ReadSecretInput{
 		SecretId:  state.SecretId.ValueString(),
 		ModelUUID: state.ModelUUID.ValueString(),
 	})
@@ -326,7 +326,7 @@ func (s *accessSecretResource) Update(ctx context.Context, req resource.UpdateRe
 
 	// revoke access to applications that are in the state but not in the plan
 	if !applicationsToGrant.IsEmpty() {
-		err := s.client.Secrets.UpdateAccessSecret(&juju.GrantRevokeAccessSecretInput{
+		err := s.client.Secrets.UpdateAccessSecret(ctx, &juju.GrantRevokeAccessSecretInput{
 			ModelUUID:    state.ModelUUID.ValueString(),
 			SecretId:     state.SecretId.ValueString(),
 			Applications: applicationsToGrant.Values(),
@@ -339,7 +339,7 @@ func (s *accessSecretResource) Update(ctx context.Context, req resource.UpdateRe
 
 	// grant access to applications that are in the plan but not in the state
 	if !applicationsToRevoke.IsEmpty() {
-		err := s.client.Secrets.UpdateAccessSecret(&juju.GrantRevokeAccessSecretInput{
+		err := s.client.Secrets.UpdateAccessSecret(ctx, &juju.GrantRevokeAccessSecretInput{
 			ModelUUID:    state.ModelUUID.ValueString(),
 			SecretId:     state.SecretId.ValueString(),
 			Applications: applicationsToRevoke.Values(),
@@ -378,7 +378,7 @@ func (s *accessSecretResource) Delete(ctx context.Context, req resource.DeleteRe
 		return
 	}
 
-	err := s.client.Secrets.UpdateAccessSecret(&juju.GrantRevokeAccessSecretInput{
+	err := s.client.Secrets.UpdateAccessSecret(ctx, &juju.GrantRevokeAccessSecretInput{
 		ModelUUID:    state.ModelUUID.ValueString(),
 		SecretId:     state.SecretId.ValueString(),
 		Applications: applications,

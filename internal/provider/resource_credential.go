@@ -166,14 +166,16 @@ func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequ
 	credentialName := data.Name.ValueString()
 
 	// Perform logic or external calls
-	response, err := c.client.Credentials.CreateCredential(juju.CreateCredentialInput{
-		Attributes:           attributes,
-		AuthType:             authType,
-		ClientCredential:     clientCredential,
-		CloudName:            cloudName,
-		ControllerCredential: controllerCredential,
-		Name:                 credentialName,
-	})
+	response, err := c.client.Credentials.CreateCredential(
+		ctx,
+		juju.CreateCredentialInput{
+			Attributes:           attributes,
+			AuthType:             authType,
+			ClientCredential:     clientCredential,
+			CloudName:            cloudName,
+			ControllerCredential: controllerCredential,
+			Name:                 credentialName,
+		})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create credential resource, got error: %s", err))
 		return
@@ -210,7 +212,7 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 	}
 
 	// Retrieve updated resource state from upstream
-	response, err := c.client.Credentials.ReadCredential(juju.ReadCredentialInput{
+	response, err := c.client.Credentials.ReadCredential(ctx, juju.ReadCredentialInput{
 		ClientCredential:     clientCredential,
 		CloudName:            cloudName,
 		ControllerCredential: controllerCredential,
@@ -320,7 +322,7 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 
 	// Perform external call to modify resource
-	err := c.client.Credentials.UpdateCredential(juju.UpdateCredentialInput{
+	err := c.client.Credentials.UpdateCredential(ctx, juju.UpdateCredentialInput{
 		Attributes:           newAttributes,
 		AuthType:             newAuthType,
 		ClientCredential:     newClientCredential,
@@ -365,12 +367,15 @@ func (c *credentialResource) Delete(ctx context.Context, req resource.DeleteRequ
 	}
 
 	// Perform external call to destroy the resource
-	err := c.client.Credentials.DestroyCredential(juju.DestroyCredentialInput{
-		ClientCredential:     clientCredential,
-		CloudName:            cloudName,
-		ControllerCredential: controllerCredential,
-		Name:                 credentialName,
-	})
+	err := c.client.Credentials.DestroyCredential(
+		ctx,
+		juju.DestroyCredentialInput{
+			ClientCredential:     clientCredential,
+			CloudName:            cloudName,
+			ControllerCredential: controllerCredential,
+			Name:                 credentialName,
+		},
+	)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete credential resource, got error: %s", err))
 	}

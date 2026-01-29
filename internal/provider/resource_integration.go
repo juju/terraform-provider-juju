@@ -243,7 +243,7 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	// If we have an offer URL, we need to consume it (creating a remote-app) before creating the integration.
 	// If the remote-app already exists, we will re-use it (see `ConsumeRemoteOffer` for more details).
 	if offer != nil {
-		offerResponse, err := r.client.Offers.ConsumeRemoteOffer(&juju.ConsumeRemoteOfferInput{
+		offerResponse, err := r.client.Offers.ConsumeRemoteOffer(ctx, &juju.ConsumeRemoteOfferInput{
 			ModelUUID:          modelUUID,
 			OfferURL:           offer.url,
 			OfferingController: offer.offeringController,
@@ -266,7 +266,7 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	viaCIDRs := plan.Via.ValueString()
-	response, err := r.client.Integrations.CreateIntegration(&juju.IntegrationInput{
+	response, err := r.client.Integrations.CreateIntegration(ctx, &juju.IntegrationInput{
 		ModelUUID: modelUUID,
 		Apps:      appNames,
 		Endpoints: endpoints,
@@ -329,7 +329,7 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 		},
 	}
 
-	response, err := r.client.Integrations.ReadIntegration(integration)
+	response, err := r.client.Integrations.ReadIntegration(ctx, integration)
 	if err != nil {
 		resp.Diagnostics.Append(handleIntegrationNotFoundError(ctx, err, &resp.State)...)
 		return
@@ -382,7 +382,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 	endpoints := []string{endpointA, endpointB}
-	err := r.client.Integrations.DestroyIntegration(&juju.IntegrationInput{
+	err := r.client.Integrations.DestroyIntegration(ctx, &juju.IntegrationInput{
 		ModelUUID: modelUUID,
 		Endpoints: endpoints,
 	})
