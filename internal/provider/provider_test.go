@@ -173,7 +173,7 @@ func TestProviderConfigureAddresses(t *testing.T) {
 	assert.Equal(t, confResp.Diagnostics.HasError(), true)
 	err := confResp.Diagnostics.Errors()[0]
 	assert.Equal(t, diag.SeverityError, err.Severity())
-	assert.Equal(t, "Connection error, please check the controller_addresses property set on the provider", err.Detail())
+	assert.Equal(t, "api connection open timed out", err.Detail())
 }
 
 // This is a valid certificate allowing the client to attempt a connection but failing certificate validation
