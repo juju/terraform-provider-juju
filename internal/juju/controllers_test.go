@@ -325,6 +325,77 @@ func TestBuildJujuCredential(t *testing.T) {
 	}
 }
 
+func TestCheckVersionsMatch(t *testing.T) {
+	tests := []struct {
+		name         string
+		cliVersion   string
+		agentVersion string
+		expectError  bool
+		errorMsg     string
+	}{
+		{
+			name:         "exact match",
+			cliVersion:   "3.6.0-genericlinux-amd64",
+			agentVersion: "3.6.0",
+			expectError:  false,
+		},
+		{
+			name:         "same major.minor, different patch",
+			cliVersion:   "3.6.1-genericlinux-amd64",
+			agentVersion: "3.6.0",
+			expectError:  false,
+		},
+		{
+			name:         "same major.minor, different arch",
+			cliVersion:   "3.6.0-darwin-arm64",
+			agentVersion: "3.6.0",
+			expectError:  false,
+		},
+		{
+			name:         "different minor version",
+			cliVersion:   "3.7.0-genericlinux-amd64",
+			agentVersion: "3.6.0",
+			expectError:  true,
+			errorMsg:     "Juju CLI version (3.7.0-genericlinux-amd64) does not match agent version (3.6.0)",
+		},
+		{
+			name:         "different major version",
+			cliVersion:   "4.0.0-genericlinux-amd64",
+			agentVersion: "3.6.0",
+			expectError:  true,
+			errorMsg:     "Juju CLI version (4.0.0-genericlinux-amd64) does not match agent version (3.6.0)",
+		},
+		{
+			name:         "invalid cli version",
+			cliVersion:   "invalid-version",
+			agentVersion: "3.6.0",
+			expectError:  true,
+			errorMsg:     "failed to parse Juju CLI version",
+		},
+		{
+			name:         "invalid agent version",
+			cliVersion:   "3.6.0-genericlinux-amd64",
+			agentVersion: "invalid",
+			expectError:  true,
+			errorMsg:     "failed to parse agent version",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkVersionsMatch(tt.cliVersion, tt.agentVersion)
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.errorMsg != "" {
+					assert.Contains(t, err.Error(), tt.errorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func simulateBootstrapSuccess(controllerName, jujuData string) func(ctx context.Context, args ...string) error {
 	return func(ctx context.Context, args ...string) error {
 		// Simulate creating controller data
@@ -451,6 +522,7 @@ func TestPerformDestroy(t *testing.T) {
 	mockRunner := NewMockCommandRunner(ctlr)
 
 	mockRunner.EXPECT().WorkingDir().Return(tmpDir).Times(1)
+	mockRunner.EXPECT().Version(gomock.Any()).Return("3.6.0-genericlinux-amd64", nil).Times(1)
 
 	mockRunner.EXPECT().Run(
 		gomock.Any(),

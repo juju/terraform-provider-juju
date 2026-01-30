@@ -404,8 +404,10 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 
 			// The flags below are only used when destroying the controller.
 			"destroy_flags": schema.SingleNestedAttribute{
-				Description: "Additional flags for destroying the controller.",
-				Optional:    true,
+				Description: "Additional flags for destroying the controller." +
+					" Changing any of these values will require applying before they can be" +
+					" taken into account during destroy.",
+				Optional: true,
 				PlanModifiers: []planmodifier.Object{
 					objectplanmodifier.UseStateForUnknown(),
 				},
