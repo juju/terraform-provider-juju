@@ -12,12 +12,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -45,6 +45,7 @@ type JujuCommand interface {
 var _ resource.Resource = &controllerResource{}
 var _ resource.ResourceWithConfigure = &controllerResource{}
 var _ resource.ResourceWithImportState = &controllerResource{}
+var _ resource.ResourceWithIdentity = &controllerResource{}
 
 type controllerResourceModel struct {
 	JujuBinary      types.String `tfsdk:"juju_binary"`
@@ -79,6 +80,18 @@ type controllerResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
+// controllerResourceIdentityModel represents the identity data for a controller resource
+type controllerResourceIdentityModel struct {
+	Name         types.String `tfsdk:"name"`
+	ApiAddresses types.List   `tfsdk:"api_addresses"`
+	CACert       types.String `tfsdk:"ca_cert"`
+	Username     types.String `tfsdk:"username"`
+	Password     types.String `tfsdk:"password"`
+	UUID         types.String `tfsdk:"controller_uuid"`
+	Cloud        types.String `tfsdk:"cloud"`
+	CloudRegion  types.String `tfsdk:"cloud_region"`
+}
+
 // nestedCloudModel represents the cloud nested object in the controller resource
 type nestedCloudModel struct {
 	Name            types.String `tfsdk:"name"`
@@ -91,12 +104,47 @@ type nestedCloudModel struct {
 	Type            types.String `tfsdk:"type"`
 }
 
+// validateForCreate validates that required fields are set during resource creation
+func (m *nestedCloudModel) validateForCreate() diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	if m.AuthTypes.IsNull() || m.AuthTypes.IsUnknown() {
+		diags.AddError(
+			"Missing Required Field",
+			"The 'cloud.auth_types' field is required when creating a controller.",
+		)
+	}
+
+	if m.Type.IsNull() || m.Type.IsUnknown() {
+		diags.AddError(
+			"Missing Required Field",
+			"The 'cloud.type' field is required when creating a controller.",
+		)
+	}
+
+	return diags
+}
+
 // nestedCloudRegionModel represents the region nested object in the cloud
 type nestedCloudRegionModel struct {
 	Name             types.String `tfsdk:"name"`
 	Endpoint         types.String `tfsdk:"endpoint"`
 	IdentityEndpoint types.String `tfsdk:"identity_endpoint"`
 	StorageEndpoint  types.String `tfsdk:"storage_endpoint"`
+}
+
+// validateForCreate validates that required fields are set during resource creation
+func (m *nestedCloudRegionModel) validateForCreate() diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	if m.Endpoint.IsNull() || m.Endpoint.IsUnknown() {
+		diags.AddError(
+			"Missing Required Field",
+			"The 'cloud.region.endpoint' field is required when creating a controller with a region.",
+		)
+	}
+
+	return diags
 }
 
 // nestedCloudCredentialModel represents cloud credentials configuration
@@ -218,7 +266,7 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Attributes: map[string]schema.Attribute{
 					"auth_types": schema.SetAttribute{
 						Description: "The authentication type(s) supported by the cloud.",
-						Required:    true,
+						Optional:    true,
 						ElementType: types.StringType,
 					},
 					"ca_certificates": schema.SetAttribute{
@@ -252,7 +300,7 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 						Attributes: map[string]schema.Attribute{
 							"endpoint": schema.StringAttribute{
 								Description: "The API endpoint for the region.",
-								Required:    true,
+								Optional:    true,
 							},
 							"identity_endpoint": schema.StringAttribute{
 								Description: "The identity endpoint for the region.",
@@ -270,14 +318,14 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 					},
 					"type": schema.StringAttribute{
 						Description: "The type of the cloud .",
-						Required:    true,
+						Optional:    true,
 					},
 				},
 			},
 			"cloud_credential": schema.SingleNestedAttribute{
 				Description: "Cloud credentials to use for bootstrapping the controller.",
-				Required:    true,
 				Sensitive:   true,
+				Optional:    true,
 				PlanModifiers: []planmodifier.Object{
 					objectplanmodifier.RequiresReplace(),
 					objectplanmodifier.UseStateForUnknown(),
@@ -346,10 +394,8 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
 				},
-				Default: stringdefault.StaticString("/usr/bin/juju"),
 			},
 			"model_constraints": schema.MapAttribute{
 				Description: "Constraints for all workload machines in models.",
@@ -436,6 +482,39 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 	}
 }
 
+// IdentitySchema defines the identity schema for the controller resource.
+func (r *controllerResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
+	resp.IdentitySchema = identityschema.Schema{
+		Attributes: map[string]identityschema.Attribute{
+			"name": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+			"api_addresses": identityschema.ListAttribute{
+				ElementType:       types.StringType,
+				RequiredForImport: true,
+			},
+			"ca_cert": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+			"username": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+			"password": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+			"controller_uuid": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+			"cloud": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+			"cloud_region": identityschema.StringAttribute{
+				OptionalForImport: true,
+			},
+		},
+	}
+}
+
 // Configure prepares the resource for operations
 func (r *controllerResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
@@ -460,7 +539,41 @@ func (r *controllerResource) Metadata(_ context.Context, req resource.MetadataRe
 
 // ImportState imports the resource state.
 func (r *controllerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	if req.ID != "" {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			"Importing Juju controllers by ID is not supported. "+
+				"Please import using the identity attributes: name, api_addresses, ca_cert, username, and password.",
+		)
+		return
+	}
+
+	var identityData controllerResourceIdentityModel
+	resp.Diagnostics.Append(req.Identity.Get(ctx, &identityData)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Copy all identity data to state. This is because the identity attributes are not
+	// exposed in the resource attributes, and can't be used in the plan.
+	// See https://github.com/hashicorp/terraform-plugin-framework/issues/1244
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), identityData.Name)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), identityData.Name)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("api_addresses"), identityData.ApiAddresses)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("ca_cert"), identityData.CACert)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("username"), identityData.Username)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("password"), identityData.Password)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("controller_uuid"), identityData.UUID)...)
+
+	// Map cloud name to the nested cloud structure
+	if !identityData.Cloud.IsNull() && !identityData.Cloud.IsUnknown() {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cloud").AtName("name"), identityData.Cloud)...)
+	}
+
+	// Map cloud region to the nested cloud.region structure
+	if !identityData.CloudRegion.IsNull() && !identityData.CloudRegion.IsUnknown() {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cloud").AtName("region").AtName("name"), identityData.CloudRegion)...)
+	}
 }
 
 // Create bootstraps a new Juju controller.
@@ -478,6 +591,12 @@ func (r *controllerResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 
+	// Validate cloud model for create
+	resp.Diagnostics.Append(cloudModel.validateForCreate()...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	var cloudRegion *juju.BootstrapCloudRegionArgument
 	if !cloudModel.Region.IsNull() && !cloudModel.Region.IsUnknown() {
 		var regionModel nestedCloudRegionModel
@@ -485,6 +604,13 @@ func (r *controllerResource) Create(ctx context.Context, req resource.CreateRequ
 		if resp.Diagnostics.HasError() {
 			return
 		}
+
+		// Validate region model for create
+		resp.Diagnostics.Append(regionModel.validateForCreate()...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
 		cloudRegion = &juju.BootstrapCloudRegionArgument{
 			Name:             regionModel.Name.ValueString(),
 			Endpoint:         regionModel.Endpoint.ValueString(),
@@ -513,6 +639,15 @@ func (r *controllerResource) Create(ctx context.Context, req resource.CreateRequ
 		if resp.Diagnostics.HasError() {
 			return
 		}
+	}
+
+	// Validate that cloud_credential is provided for create
+	if plan.CloudCredential.IsNull() || plan.CloudCredential.IsUnknown() {
+		resp.Diagnostics.AddError(
+			"Missing Required Field",
+			"The 'cloud_credential' field is required when creating a controller.",
+		)
+		return
 	}
 
 	var credentialModel nestedCloudCredentialModel
@@ -660,6 +795,24 @@ func (r *controllerResource) Create(ctx context.Context, req resource.CreateRequ
 	plan.ControllerUUID = types.StringValue(result.ControllerUUID)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+
+	// Set identity data
+	identity := controllerResourceIdentityModel{
+		Name:         plan.Name,
+		ApiAddresses: apiAddresses,
+		CACert:       plan.CACert,
+		Username:     plan.Username,
+		Password:     plan.Password,
+		UUID:         plan.ControllerUUID,
+		Cloud:        cloudModel.Name,
+	}
+
+	// Add cloud region if it was specified
+	if cloudRegion != nil {
+		identity.CloudRegion = types.StringValue(cloudRegion.Name)
+	}
+
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 // Read retrieves the Juju controller configuration.
