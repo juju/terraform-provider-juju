@@ -18,7 +18,6 @@ A resource that represents a Juju Controller.
 ### Required
 
 - `cloud` (Attributes) The cloud where the controller will operate. (see [below for nested schema](#nestedatt--cloud))
-- `cloud_credential` (Attributes, Sensitive) Cloud credentials to use for bootstrapping the controller. (see [below for nested schema](#nestedatt--cloud_credential))
 
 ### Optional
 
@@ -26,6 +25,7 @@ A resource that represents a Juju Controller.
 - `bootstrap_base` (String) The base for the bootstrap machine.
 - `bootstrap_config` (Map of String) Configuration options that apply during the bootstrap process.
 - `bootstrap_constraints` (Map of String) Constraints for the bootstrap machine.
+- `cloud_credential` (Attributes, Sensitive) Cloud credentials to use for bootstrapping the controller. (see [below for nested schema](#nestedatt--cloud_credential))
 - `controller_config` (Map of String) Configuration options for the bootstrapped controller. Note that removing a key from this map will not unset it in the controller, instead it will be left unchanged on the controller.
 - `controller_model_config` (Map of String) Configuration options to be set for the controller model.
 - `destroy_flags` (Attributes) Additional flags for destroying the controller. (see [below for nested schema](#nestedatt--destroy_flags))
@@ -49,28 +49,28 @@ A resource that represents a Juju Controller.
 
 Required:
 
-- `auth_types` (Set of String) The authentication type(s) supported by the cloud.
 - `name` (String) The name of the cloud
-- `type` (String) The type of the cloud .
 
 Optional:
 
+- `auth_types` (Set of String) The authentication type(s) supported by the cloud.
 - `ca_certificates` (Set of String) CA certificates for the cloud.
 - `config` (Map of String) Configuration options for the cloud.
 - `endpoint` (String) The API endpoint for the cloud.
 - `host_cloud_region` (String) The host cloud region for the cloud.
 - `region` (Attributes) The cloud region where the controller will operate. (see [below for nested schema](#nestedatt--cloud--region))
+- `type` (String) The type of the cloud .
 
 <a id="nestedatt--cloud--region"></a>
 ### Nested Schema for `cloud.region`
 
 Required:
 
-- `endpoint` (String) The API endpoint for the region.
 - `name` (String) The name of the region.
 
 Optional:
 
+- `endpoint` (String) The API endpoint for the region.
 - `identity_endpoint` (String) The identity endpoint for the region.
 - `storage_endpoint` (String) The storage endpoint for the region.
 
