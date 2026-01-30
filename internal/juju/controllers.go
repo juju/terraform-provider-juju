@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 
@@ -33,16 +34,20 @@ const LogJujuCommand = "juju_command"
 
 // ControllerConnectionInformation contains the connection details for a controller.
 type ControllerConnectionInformation struct {
-	Addresses []string
-	CACert    string
-	Username  string
-	Password  string
+	Addresses      []string
+	CACert         string
+	Username       string
+	Password       string
+	AgentVersion   string
+	ControllerUUID string
 }
 
 // CommandRunner defines the interface for executing juju commands.
 type CommandRunner interface {
 	// Run executes a juju command with the configured environment and logging.
 	Run(ctx context.Context, args ...string) error
+	// Version returns the juju CLI version.
+	Version(ctx context.Context) (string, error)
 	// LogFilePath returns the path to the log file.
 	LogFilePath() string
 	// WorkingDir returns the temporary directory created by the runner.
@@ -116,6 +121,21 @@ func (r *commandRunner) Run(ctx context.Context, args ...string) error {
 	return nil
 }
 
+func (r *commandRunner) Version(ctx context.Context) (string, error) {
+	cmd := exec.CommandContext(ctx, r.jujuBinary, "--version")
+
+	// Build environment vars
+	cmd.Env = append(cmd.Env, fmt.Sprintf("JUJU_DATA=%s", r.workingDir))
+
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get juju version: %w", err)
+	}
+
+	versionStr := strings.TrimSpace(string(output))
+	return versionStr, nil
+}
+
 // LogFilePath returns the path to the log file.
 func (r *commandRunner) LogFilePath() string {
 	return r.logFilePath
@@ -185,6 +205,25 @@ type BootstrapCredentialArgument struct {
 	Name       string
 	AuthType   string
 	Attributes map[string]string
+}
+
+// DestroyFlags contains usable CLI flags for juju destroy-controller
+type DestroyFlags struct {
+	DestroyAllModels bool `flag:"destroy-all-models"`
+	DestroyStorage   bool `flag:"destroy-storage"`
+	ReleaseStorage   bool `flag:"release-storage"`
+	Force            bool `flag:"force"`
+	ModelTimeout     int  `flag:"model-timeout"`
+}
+
+// DestroyArguments contains all info needed for destroying a controller.
+type DestroyArguments struct {
+	Name           string
+	JujuBinary     string
+	CloudName      string
+	CloudRegion    string
+	ConnectionInfo ControllerConnectionInformation
+	Flags          DestroyFlags
 }
 
 // DefaultJujuCommand is the default implementation of JujuCommand.
@@ -267,10 +306,12 @@ func performBootstrap(ctx context.Context, args BootstrapArguments, runner Comma
 	}
 
 	return &ControllerConnectionInformation{
-		Addresses: controllerDetails.APIEndpoints,
-		CACert:    controllerDetails.CACert,
-		Username:  accountDetails.User,
-		Password:  accountDetails.Password,
+		Addresses:      controllerDetails.APIEndpoints,
+		CACert:         controllerDetails.CACert,
+		Username:       accountDetails.User,
+		Password:       accountDetails.Password,
+		AgentVersion:   controllerDetails.AgentVersion,
+		ControllerUUID: controllerDetails.ControllerUUID,
 	}, nil
 }
 
@@ -366,8 +407,54 @@ func (d *DefaultJujuCommand) Config(ctx context.Context, connInfo *ControllerCon
 }
 
 // Destroy removes the controller.
-func (d *DefaultJujuCommand) Destroy(ctx context.Context, connInfo *ControllerConnectionInformation) error {
-	// TODO: Implement destroy logic
+func (d *DefaultJujuCommand) Destroy(ctx context.Context, args DestroyArguments) error {
+	// Validate arguments
+	if args.Name == "" {
+		return fmt.Errorf("controller name cannot be empty")
+	}
+	if args.CloudName == "" {
+		return fmt.Errorf("cloud name cannot be empty")
+	}
+
+	// Create command runner with log file
+	runner, err := newCommandRunner(d.jujuBinary)
+	if err != nil {
+		return err
+	}
+	defer runner.Close()
+
+	// Check Juju CLI version matches agent version
+	cliVersion, err := runner.Version(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get juju version: %w", err)
+	}
+
+	// TODO(luci1900): replace with proper parsing
+	if !strings.HasPrefix(cliVersion, args.ConnectionInfo.AgentVersion) {
+		return fmt.Errorf("Juju CLI version (%s) does not match agent version (%s)", cliVersion, args.ConnectionInfo.AgentVersion)
+	}
+
+	tflog.SubsystemDebug(ctx, LogJujuCommand, fmt.Sprintf("Destroy log file: %s\n", runner.LogFilePath()))
+
+	return performDestroy(ctx, args, runner)
+}
+
+func performDestroy(ctx context.Context, args DestroyArguments, runner CommandRunner) error {
+	err := setupControllerConnectionInfo(ctx, runner, args)
+	if err != nil {
+		return fmt.Errorf("failed to setup controller client store: %w", err)
+	}
+
+	cmdArgs, err := buildDestroyArgs(ctx, args)
+	if err != nil {
+		return err
+	}
+
+	err = runner.Run(ctx, cmdArgs...)
+	if err != nil {
+		return fmt.Errorf("destroy failed: %w", err)
+	}
+
 	return nil
 }
 
@@ -428,6 +515,13 @@ func buildBootstrapArgs(ctx context.Context, args BootstrapArguments, configFile
 	return cmdArgs, nil
 }
 
+func buildDestroyArgs(ctx context.Context, args DestroyArguments) ([]string, error) {
+	cmdArgs := []string{"destroy-controller", "--no-prompt"}
+	cmdArgs = append(cmdArgs, buildArgsFromFlags(ctx, args.Flags)...)
+	cmdArgs = append(cmdArgs, args.Name)
+	return cmdArgs, nil
+}
+
 // buildArgsFromFlags builds command line arguments from the provided flags-like struct using reflection.
 func buildArgsFromFlags(ctx context.Context, flags any) []string {
 	var cmdArgs []string
@@ -461,6 +555,14 @@ func buildArgsFromFlags(ctx context.Context, flags any) []string {
 					}
 				}
 			}
+		case reflect.Bool:
+			if fieldValue.Bool() {
+				cmdArgs = append(cmdArgs, fmt.Sprintf("--%s", flagTag))
+			}
+		case reflect.Int:
+			if intVal := fieldValue.Int(); intVal != 0 {
+				cmdArgs = append(cmdArgs, fmt.Sprintf("--%s=%d", flagTag, intVal))
+			}
 		default:
 			// Log unhandled field types for debugging
 			if !fieldValue.IsZero() {
@@ -468,6 +570,9 @@ func buildArgsFromFlags(ctx context.Context, flags any) []string {
 			}
 		}
 	}
+
+	// Sort args for log and test consistency
+	sort.Strings(cmdArgs)
 
 	return cmdArgs
 }
@@ -585,6 +690,33 @@ func setupCloudWithCredentials(ctx context.Context, runner CommandRunner, cloud 
 
 	if err := store.UpdateCredential(cloudName, cloudCred); err != nil {
 		return fmt.Errorf("failed to update credential: %w", err)
+	}
+
+	return nil
+}
+
+// setupControllerConnectionInfo sets up the client store with controller and account details before destroy
+func setupControllerConnectionInfo(_ context.Context, runner CommandRunner, args DestroyArguments) error {
+	store := newSafeJujuClientStore(runner.WorkingDir())
+	defer store.Close()
+
+	err := store.AddController(args.Name, jujuclient.ControllerDetails{
+		ControllerUUID: args.ConnectionInfo.ControllerUUID,
+		Cloud:          args.CloudName,
+		CloudRegion:    args.CloudRegion,
+		APIEndpoints:   args.ConnectionInfo.Addresses,
+		CACert:         args.ConnectionInfo.CACert,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to add controller to client store: %w", err)
+	}
+
+	err = store.UpdateAccount(args.Name, jujuclient.AccountDetails{
+		User:     args.ConnectionInfo.Username,
+		Password: args.ConnectionInfo.Password,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to add account details to client store: %w", err)
 	}
 
 	return nil

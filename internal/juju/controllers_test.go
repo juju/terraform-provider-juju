@@ -17,6 +17,8 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+var jujuDataHomeLock sync.Mutex
+
 func TestConvertToCloudAuthTypes(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -134,6 +136,97 @@ func TestBuildBootstrapArgs(t *testing.T) {
 	}
 }
 
+func TestBuildDestroyArgs(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        DestroyArguments
+		contains    []string // strings that should be in the result
+		notContains []string // strings that should not be in the result
+	}{
+		{
+			name: "minimal destroy args",
+			args: DestroyArguments{
+				Name: "test-controller",
+			},
+			contains:    []string{"destroy-controller", "--no-prompt", "test-controller"},
+			notContains: []string{"--force", "--destroy-all-models", "--destroy-storage", "--release-storage", "--model-timeout"},
+		},
+		{
+			name: "destroy with force flag",
+			args: DestroyArguments{
+				Name: "test-controller",
+				Flags: DestroyFlags{
+					Force: true,
+				},
+			},
+			contains: []string{"destroy-controller", "--no-prompt", "--force", "test-controller"},
+		},
+		{
+			name: "destroy with destroy-all-models flag",
+			args: DestroyArguments{
+				Name: "test-controller",
+				Flags: DestroyFlags{
+					DestroyAllModels: true,
+				},
+			},
+			contains: []string{"destroy-controller", "--no-prompt", "--destroy-all-models", "test-controller"},
+		},
+		{
+			name: "destroy with storage flags",
+			args: DestroyArguments{
+				Name: "test-controller",
+				Flags: DestroyFlags{
+					DestroyStorage: true,
+					ReleaseStorage: true,
+				},
+			},
+			contains: []string{"destroy-controller", "--no-prompt", "--destroy-storage", "--release-storage", "test-controller"},
+		},
+		{
+			name: "destroy with model timeout",
+			args: DestroyArguments{
+				Name: "test-controller",
+				Flags: DestroyFlags{
+					ModelTimeout: 5,
+				},
+			},
+			contains: []string{"destroy-controller", "--no-prompt", "--model-timeout=5", "test-controller"},
+		},
+		{
+			name: "destroy with all flags",
+			args: DestroyArguments{
+				Name: "test-controller",
+				Flags: DestroyFlags{
+					Force:            true,
+					DestroyAllModels: true,
+					DestroyStorage:   true,
+					ModelTimeout:     10,
+				},
+			},
+			contains: []string{"destroy-controller", "--no-prompt", "--force", "--destroy-all-models", "--destroy-storage", "--model-timeout=10", "test-controller"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := buildDestroyArgs(t.Context(), tt.args)
+			assert.NoError(t, err)
+			resultStr := ""
+			for _, arg := range result {
+				resultStr += arg + " "
+			}
+
+			for _, expected := range tt.contains {
+				assert.Contains(t, resultStr, expected, "Expected to find %q in destroy args, got value: %s", expected, resultStr)
+			}
+
+			for _, notExpected := range tt.notContains {
+				assert.NotContains(t, resultStr, notExpected, "Expected not to find %q in destroy args", notExpected)
+			}
+		})
+	}
+}
+
 func TestBuildJujuCloud(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -243,6 +336,7 @@ func simulateBootstrapSuccess(controllerName, jujuData string) func(ctx context.
   %s:
     uuid: test-uuid-12345
     api-endpoints: ["127.0.0.1:17070"]
+    agent-version: 3.6.0
     ca-cert: |
       -----BEGIN CERTIFICATE-----
       TESTCACERT
@@ -273,6 +367,8 @@ func TestPerformBootstrap(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// Set JUJU_DATA for the test
+	jujuDataHomeLock.Lock()
+	defer jujuDataHomeLock.Unlock()
 	oldJujuData := osenv.SetJujuXDGDataHome(tmpDir)
 	defer func() {
 		osenv.SetJujuXDGDataHome(oldJujuData)
@@ -332,6 +428,66 @@ func TestPerformBootstrap(t *testing.T) {
 	assert.Contains(t, result.CACert, "TESTCACERT")
 	assert.Equal(t, "admin", result.Username)
 	assert.Equal(t, "test-password-12345", result.Password)
+	assert.Equal(t, "3.6.0", result.AgentVersion)
+}
+
+func TestPerformDestroy(t *testing.T) {
+	// Create a temporary directory for the test
+	tmpDir, err := os.MkdirTemp("", "juju-test-*")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	// Set JUJU_DATA for the test
+	jujuDataHomeLock.Lock()
+	defer jujuDataHomeLock.Unlock()
+	oldJujuData := osenv.SetJujuXDGDataHome(tmpDir)
+	defer func() {
+		osenv.SetJujuXDGDataHome(oldJujuData)
+	}()
+
+	// Create mock command runner
+	ctlr := gomock.NewController(t)
+	defer ctlr.Finish()
+	mockRunner := NewMockCommandRunner(ctlr)
+
+	mockRunner.EXPECT().WorkingDir().Return(tmpDir).Times(1)
+
+	mockRunner.EXPECT().Run(
+		gomock.Any(),
+		"destroy-controller",
+		"--no-prompt",
+		"--destroy-all-models",
+		"--force",
+		"--model-timeout=2",
+		"test-controller",
+	).Return(nil).Times(1)
+
+	// Prepare destroy arguments
+	destroyArgs := DestroyArguments{
+		Name:        "test-controller",
+		CloudName:   "test-cloud",
+		CloudRegion: "region1",
+		ConnectionInfo: ControllerConnectionInformation{
+			Addresses:      []string{"127.0.0.1:17070"},
+			CACert:         "test-ca-cert",
+			Username:       "admin",
+			Password:       "test-password",
+			AgentVersion:   "3.6.0",
+			ControllerUUID: "b6951ccd-4492-4ae7-ae15-655f0a8548c3",
+		},
+		Flags: DestroyFlags{
+			Force:            true,
+			DestroyAllModels: true,
+			ModelTimeout:     2,
+		},
+	}
+
+	// Run performDestroy
+	ctx := context.Background()
+	err = performDestroy(ctx, destroyArgs, mockRunner)
+
+	// Verify no error
+	assert.NoError(t, err)
 }
 
 func TestConcurrentSafeFileStore(t *testing.T) {

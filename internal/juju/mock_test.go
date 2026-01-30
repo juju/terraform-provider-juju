@@ -2843,6 +2843,45 @@ func (c *MockCommandRunnerRunCall) DoAndReturn(f func(context.Context, ...string
 	return c
 }
 
+// Version mocks base method.
+func (m *MockCommandRunner) Version(ctx context.Context) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Version", ctx)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Version indicates an expected call of Version.
+func (mr *MockCommandRunnerMockRecorder) Version(ctx any) *MockCommandRunnerVersionCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Version", reflect.TypeOf((*MockCommandRunner)(nil).Version), ctx)
+	return &MockCommandRunnerVersionCall{Call: call}
+}
+
+// MockCommandRunnerVersionCall wrap *gomock.Call
+type MockCommandRunnerVersionCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockCommandRunnerVersionCall) Return(arg0 string, arg1 error) *MockCommandRunnerVersionCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockCommandRunnerVersionCall) Do(f func(context.Context) (string, error)) *MockCommandRunnerVersionCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockCommandRunnerVersionCall) DoAndReturn(f func(context.Context) (string, error)) *MockCommandRunnerVersionCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // WorkingDir mocks base method.
 func (m *MockCommandRunner) WorkingDir() string {
 	m.ctrl.T.Helper()
