@@ -302,7 +302,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactoriesControllerMode,
 		Steps: []resource.TestStep{
 			{
-				// Step 1: Create the controller
+				// Create the controller
 				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, baseControllerConfig, baseControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", controllerName),
@@ -314,7 +314,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				),
 			},
 			{
-				// Step 2: Verify changing controller config works
+				// Verify changing controller config works
 				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, updatedControllerConfig, baseControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_config.agent-logfile-max-backups", "4"),
@@ -323,7 +323,14 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				),
 			},
 			{
-				// Step 3: Verify unsetting a controller config value behaves as expected.
+				// Test import using identity with controller_config and controller_model_config set.
+				Config:          testAccResourceControllerImport(controllerName),
+				ResourceName:    resourceName,
+				ImportState:     true,
+				ImportStateKind: resource.ImportBlockWithResourceIdentity,
+			},
+			{
+				// Verify unsetting a controller config value behaves as expected.
 				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, baseControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
@@ -350,7 +357,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				),
 			},
 			{
-				// Step 4: Verify changing controller model config works
+				// Verify changing controller model config works
 				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, updatedControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "2"),
@@ -360,7 +367,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				),
 			},
 			{
-				// Step 5: Verify unsetting controller model config works
+				// Verify unsetting controller model config works
 				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
@@ -385,7 +392,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				),
 			},
 			{
-				// Step 6: Verify that invalid controller config fails
+				// Step 7: Verify that invalid controller config fails
 				Config:      testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, invalidControllerConfig, unsetControllerModelConfig),
 				ExpectError: regexp.MustCompile("failed to update controller config: unknown controller config"),
 			},
@@ -413,6 +420,28 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			}
 		},
 	})
+}
+
+// testAccResourceControllerImport returns the Terraform configuration
+// for importing a juju_controller resource by its name.
+// The config for the controller_config and controller_model_config blocks
+// are always empty, because any value set would trigger an update-in-place.
+// The reason is that the import does not set these values in state,
+// so they would always differ from the config.
+func testAccResourceControllerImport(controllerName string) string {
+	return fmt.Sprintf(`
+provider "juju" {
+  controller_mode = true
+}
+  
+resource "juju_controller" "controller" {
+  name          = %q
+
+  cloud = {
+    name   = "localhost"
+  }
+}
+`, controllerName)
 }
 
 func testAccResourceControllerWithJujuBinary(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
