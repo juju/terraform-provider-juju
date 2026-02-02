@@ -46,7 +46,7 @@ type ControllerConnectionInformation struct {
 type CommandRunner interface {
 	// Run executes a juju command with the configured environment and logging.
 	Run(ctx context.Context, args ...string) error
-	// Version returns the juju CLI version.
+	// Version returns the Juju CLI's self-reported version.
 	Version(ctx context.Context) (string, error)
 	// LogFilePath returns the path to the log file.
 	LogFilePath() string
@@ -121,6 +121,7 @@ func (r *commandRunner) Run(ctx context.Context, args ...string) error {
 	return nil
 }
 
+// Version returns the Juju CLI's self-reported version.
 func (r *commandRunner) Version(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, r.jujuBinary, "--version")
 
@@ -261,7 +262,7 @@ func (d *DefaultJujuCommand) Bootstrap(ctx context.Context, args BootstrapArgume
 	}
 	defer runner.Close()
 
-	tflog.SubsystemDebug(ctx, LogJujuCommand, fmt.Sprintf("Bootstrap log file: %s\n", runner.LogFilePath()))
+	tflog.SubsystemDebug(ctx, LogJujuCommand, fmt.Sprintf("Log file from bootstrap: %s\n", runner.LogFilePath()))
 
 	return performBootstrap(ctx, args, runner)
 }
@@ -423,24 +424,22 @@ func (d *DefaultJujuCommand) Destroy(ctx context.Context, args DestroyArguments)
 	}
 	defer runner.Close()
 
-	// Check Juju CLI version matches agent version
-	cliVersion, err := runner.Version(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get juju version: %w", err)
-	}
-
-	// TODO(luci1900): replace with proper parsing
-	if !strings.HasPrefix(cliVersion, args.ConnectionInfo.AgentVersion) {
-		return fmt.Errorf("Juju CLI version (%s) does not match agent version (%s)", cliVersion, args.ConnectionInfo.AgentVersion)
-	}
-
-	tflog.SubsystemDebug(ctx, LogJujuCommand, fmt.Sprintf("Destroy log file: %s\n", runner.LogFilePath()))
+	tflog.SubsystemDebug(ctx, LogJujuCommand, fmt.Sprintf("Log file for destroy: %s\n", runner.LogFilePath()))
 
 	return performDestroy(ctx, args, runner)
 }
 
 func performDestroy(ctx context.Context, args DestroyArguments, runner CommandRunner) error {
-	err := setupControllerConnectionInfo(ctx, runner, args)
+	cliVersion, err := runner.Version(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get Juju CLI version: %w", err)
+	}
+
+	if err := checkVersionsMatch(cliVersion, args.ConnectionInfo.AgentVersion); err != nil {
+		return fmt.Errorf("version mismatch: %w", err)
+	}
+
+	err = setupControllerConnectionInfo(ctx, runner, args)
 	if err != nil {
 		return fmt.Errorf("failed to setup controller client store: %w", err)
 	}
@@ -719,6 +718,22 @@ func setupControllerConnectionInfo(_ context.Context, runner CommandRunner, args
 		return fmt.Errorf("failed to add account details to client store: %w", err)
 	}
 
+	return nil
+}
+
+// checkVersionsMatch checks that the Juju CLI version matches agent version
+func checkVersionsMatch(cliVersion, agentVersion string) error {
+	cliBinary, err := version.ParseBinary(cliVersion)
+	if err != nil {
+		return fmt.Errorf("failed to parse Juju CLI version %q: %w", cliVersion, err)
+	}
+	agentNumber, err := version.Parse(agentVersion)
+	if err != nil {
+		return fmt.Errorf("failed to parse agent version %q: %w", agentVersion, err)
+	}
+	if cliBinary.Number.Major != agentNumber.Major || cliBinary.Number.Minor != agentNumber.Minor {
+		return fmt.Errorf("Juju CLI version (%s) does not match agent version (%s)", cliVersion, agentVersion)
+	}
 	return nil
 }
 
