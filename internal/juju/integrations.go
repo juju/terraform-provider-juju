@@ -96,7 +96,7 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 
 	err = WaitForAppsAvailable(ctx, client, input.Apps, IntegrationApiTickWait)
 	if err != nil {
-		return nil, errors.New("the applications were not available to be integrated")
+		return nil, errors.Annotate(err, "the applications were not available to be integrated")
 	}
 
 	listViaCIDRs := splitCommaDelimitedList(input.ViaCIDRs)
