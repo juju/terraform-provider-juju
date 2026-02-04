@@ -15,11 +15,11 @@ import (
 	url "net/url"
 	reflect "reflect"
 
+	api "github.com/juju/juju/api"
 	base "github.com/juju/juju/api/base"
 	network "github.com/juju/juju/core/network"
-	proxy "github.com/juju/juju/proxy"
-	names "github.com/juju/names/v5"
-	version "github.com/juju/version/v2"
+	semversion "github.com/juju/juju/core/semversion"
+	names "github.com/juju/names/v6"
 	gomock "go.uber.org/mock/gomock"
 	httprequest "gopkg.in/httprequest.v1"
 	macaroon "gopkg.in/macaroon.v2"
@@ -50,17 +50,17 @@ func (m *MockConnection) EXPECT() *MockConnectionMockRecorder {
 }
 
 // APICall mocks base method.
-func (m *MockConnection) APICall(objType string, version int, id, request string, params, response any) error {
+func (m *MockConnection) APICall(ctx context.Context, objType string, version int, id, request string, params, response any) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "APICall", objType, version, id, request, params, response)
+	ret := m.ctrl.Call(m, "APICall", ctx, objType, version, id, request, params, response)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // APICall indicates an expected call of APICall.
-func (mr *MockConnectionMockRecorder) APICall(objType, version, id, request, params, response any) *MockConnectionAPICallCall {
+func (mr *MockConnectionMockRecorder) APICall(ctx, objType, version, id, request, params, response any) *MockConnectionAPICallCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "APICall", reflect.TypeOf((*MockConnection)(nil).APICall), objType, version, id, request, params, response)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "APICall", reflect.TypeOf((*MockConnection)(nil).APICall), ctx, objType, version, id, request, params, response)
 	return &MockConnectionAPICallCall{Call: call}
 }
 
@@ -76,13 +76,13 @@ func (c *MockConnectionAPICallCall) Return(arg0 error) *MockConnectionAPICallCal
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockConnectionAPICallCall) Do(f func(string, int, string, string, any, any) error) *MockConnectionAPICallCall {
+func (c *MockConnectionAPICallCall) Do(f func(context.Context, string, int, string, string, any, any) error) *MockConnectionAPICallCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockConnectionAPICallCall) DoAndReturn(f func(string, int, string, string, any, any) error) *MockConnectionAPICallCall {
+func (c *MockConnectionAPICallCall) DoAndReturn(f func(context.Context, string, int, string, string, any, any) error) *MockConnectionAPICallCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -354,18 +354,18 @@ func (c *MockConnectionCloseCall) DoAndReturn(f func() error) *MockConnectionClo
 }
 
 // ConnectControllerStream mocks base method.
-func (m *MockConnection) ConnectControllerStream(path string, attrs url.Values, headers http.Header) (base.Stream, error) {
+func (m *MockConnection) ConnectControllerStream(ctx context.Context, path string, attrs url.Values, headers http.Header) (base.Stream, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConnectControllerStream", path, attrs, headers)
+	ret := m.ctrl.Call(m, "ConnectControllerStream", ctx, path, attrs, headers)
 	ret0, _ := ret[0].(base.Stream)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ConnectControllerStream indicates an expected call of ConnectControllerStream.
-func (mr *MockConnectionMockRecorder) ConnectControllerStream(path, attrs, headers any) *MockConnectionConnectControllerStreamCall {
+func (mr *MockConnectionMockRecorder) ConnectControllerStream(ctx, path, attrs, headers any) *MockConnectionConnectControllerStreamCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConnectControllerStream", reflect.TypeOf((*MockConnection)(nil).ConnectControllerStream), path, attrs, headers)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConnectControllerStream", reflect.TypeOf((*MockConnection)(nil).ConnectControllerStream), ctx, path, attrs, headers)
 	return &MockConnectionConnectControllerStreamCall{Call: call}
 }
 
@@ -381,30 +381,30 @@ func (c *MockConnectionConnectControllerStreamCall) Return(arg0 base.Stream, arg
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockConnectionConnectControllerStreamCall) Do(f func(string, url.Values, http.Header) (base.Stream, error)) *MockConnectionConnectControllerStreamCall {
+func (c *MockConnectionConnectControllerStreamCall) Do(f func(context.Context, string, url.Values, http.Header) (base.Stream, error)) *MockConnectionConnectControllerStreamCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockConnectionConnectControllerStreamCall) DoAndReturn(f func(string, url.Values, http.Header) (base.Stream, error)) *MockConnectionConnectControllerStreamCall {
+func (c *MockConnectionConnectControllerStreamCall) DoAndReturn(f func(context.Context, string, url.Values, http.Header) (base.Stream, error)) *MockConnectionConnectControllerStreamCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // ConnectStream mocks base method.
-func (m *MockConnection) ConnectStream(path string, attrs url.Values) (base.Stream, error) {
+func (m *MockConnection) ConnectStream(ctx context.Context, path string, attrs url.Values) (base.Stream, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConnectStream", path, attrs)
+	ret := m.ctrl.Call(m, "ConnectStream", ctx, path, attrs)
 	ret0, _ := ret[0].(base.Stream)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ConnectStream indicates an expected call of ConnectStream.
-func (mr *MockConnectionMockRecorder) ConnectStream(path, attrs any) *MockConnectionConnectStreamCall {
+func (mr *MockConnectionMockRecorder) ConnectStream(ctx, path, attrs any) *MockConnectionConnectStreamCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConnectStream", reflect.TypeOf((*MockConnection)(nil).ConnectStream), path, attrs)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConnectStream", reflect.TypeOf((*MockConnection)(nil).ConnectStream), ctx, path, attrs)
 	return &MockConnectionConnectStreamCall{Call: call}
 }
 
@@ -420,51 +420,13 @@ func (c *MockConnectionConnectStreamCall) Return(arg0 base.Stream, arg1 error) *
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockConnectionConnectStreamCall) Do(f func(string, url.Values) (base.Stream, error)) *MockConnectionConnectStreamCall {
+func (c *MockConnectionConnectStreamCall) Do(f func(context.Context, string, url.Values) (base.Stream, error)) *MockConnectionConnectStreamCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockConnectionConnectStreamCall) DoAndReturn(f func(string, url.Values) (base.Stream, error)) *MockConnectionConnectStreamCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Context mocks base method.
-func (m *MockConnection) Context() context.Context {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Context")
-	ret0, _ := ret[0].(context.Context)
-	return ret0
-}
-
-// Context indicates an expected call of Context.
-func (mr *MockConnectionMockRecorder) Context() *MockConnectionContextCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Context", reflect.TypeOf((*MockConnection)(nil).Context))
-	return &MockConnectionContextCall{Call: call}
-}
-
-// MockConnectionContextCall wrap *gomock.Call
-type MockConnectionContextCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockConnectionContextCall) Return(arg0 context.Context) *MockConnectionContextCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockConnectionContextCall) Do(f func() context.Context) *MockConnectionContextCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockConnectionContextCall) DoAndReturn(f func() context.Context) *MockConnectionContextCall {
+func (c *MockConnectionConnectStreamCall) DoAndReturn(f func(context.Context, string, url.Values) (base.Stream, error)) *MockConnectionConnectStreamCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -661,17 +623,17 @@ func (c *MockConnectionIPAddrCall) DoAndReturn(f func() string) *MockConnectionI
 }
 
 // IsBroken mocks base method.
-func (m *MockConnection) IsBroken() bool {
+func (m *MockConnection) IsBroken(ctx context.Context) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsBroken")
+	ret := m.ctrl.Call(m, "IsBroken", ctx)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // IsBroken indicates an expected call of IsBroken.
-func (mr *MockConnectionMockRecorder) IsBroken() *MockConnectionIsBrokenCall {
+func (mr *MockConnectionMockRecorder) IsBroken(ctx any) *MockConnectionIsBrokenCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsBroken", reflect.TypeOf((*MockConnection)(nil).IsBroken))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsBroken", reflect.TypeOf((*MockConnection)(nil).IsBroken), ctx)
 	return &MockConnectionIsBrokenCall{Call: call}
 }
 
@@ -687,13 +649,13 @@ func (c *MockConnectionIsBrokenCall) Return(arg0 bool) *MockConnectionIsBrokenCa
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockConnectionIsBrokenCall) Do(f func() bool) *MockConnectionIsBrokenCall {
+func (c *MockConnectionIsBrokenCall) Do(f func(context.Context) bool) *MockConnectionIsBrokenCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockConnectionIsBrokenCall) DoAndReturn(f func() bool) *MockConnectionIsBrokenCall {
+func (c *MockConnectionIsBrokenCall) DoAndReturn(f func(context.Context) bool) *MockConnectionIsBrokenCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -737,17 +699,17 @@ func (c *MockConnectionIsProxiedCall) DoAndReturn(f func() bool) *MockConnection
 }
 
 // Login mocks base method.
-func (m *MockConnection) Login(name names.Tag, password, nonce string, ms []macaroon.Slice) error {
+func (m *MockConnection) Login(ctx context.Context, name names.Tag, password, nonce string, ms []macaroon.Slice) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Login", name, password, nonce, ms)
+	ret := m.ctrl.Call(m, "Login", ctx, name, password, nonce, ms)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Login indicates an expected call of Login.
-func (mr *MockConnectionMockRecorder) Login(name, password, nonce, ms any) *MockConnectionLoginCall {
+func (mr *MockConnectionMockRecorder) Login(ctx, name, password, nonce, ms any) *MockConnectionLoginCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Login", reflect.TypeOf((*MockConnection)(nil).Login), name, password, nonce, ms)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Login", reflect.TypeOf((*MockConnection)(nil).Login), ctx, name, password, nonce, ms)
 	return &MockConnectionLoginCall{Call: call}
 }
 
@@ -763,13 +725,13 @@ func (c *MockConnectionLoginCall) Return(arg0 error) *MockConnectionLoginCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockConnectionLoginCall) Do(f func(names.Tag, string, string, []macaroon.Slice) error) *MockConnectionLoginCall {
+func (c *MockConnectionLoginCall) Do(f func(context.Context, names.Tag, string, string, []macaroon.Slice) error) *MockConnectionLoginCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockConnectionLoginCall) DoAndReturn(f func(names.Tag, string, string, []macaroon.Slice) error) *MockConnectionLoginCall {
+func (c *MockConnectionLoginCall) DoAndReturn(f func(context.Context, names.Tag, string, string, []macaroon.Slice) error) *MockConnectionLoginCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -814,10 +776,10 @@ func (c *MockConnectionModelTagCall) DoAndReturn(f func() (names.ModelTag, bool)
 }
 
 // Proxy mocks base method.
-func (m *MockConnection) Proxy() proxy.Proxier {
+func (m *MockConnection) Proxy() api.Proxier {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Proxy")
-	ret0, _ := ret[0].(proxy.Proxier)
+	ret0, _ := ret[0].(api.Proxier)
 	return ret0
 }
 
@@ -834,19 +796,19 @@ type MockConnectionProxyCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockConnectionProxyCall) Return(arg0 proxy.Proxier) *MockConnectionProxyCall {
+func (c *MockConnectionProxyCall) Return(arg0 api.Proxier) *MockConnectionProxyCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockConnectionProxyCall) Do(f func() proxy.Proxier) *MockConnectionProxyCall {
+func (c *MockConnectionProxyCall) Do(f func() api.Proxier) *MockConnectionProxyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockConnectionProxyCall) DoAndReturn(f func() proxy.Proxier) *MockConnectionProxyCall {
+func (c *MockConnectionProxyCall) DoAndReturn(f func() api.Proxier) *MockConnectionProxyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -929,10 +891,10 @@ func (c *MockConnectionRootHTTPClientCall) DoAndReturn(f func() (*httprequest.Cl
 }
 
 // ServerVersion mocks base method.
-func (m *MockConnection) ServerVersion() (version.Number, bool) {
+func (m *MockConnection) ServerVersion() (semversion.Number, bool) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ServerVersion")
-	ret0, _ := ret[0].(version.Number)
+	ret0, _ := ret[0].(semversion.Number)
 	ret1, _ := ret[1].(bool)
 	return ret0, ret1
 }
@@ -950,19 +912,19 @@ type MockConnectionServerVersionCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockConnectionServerVersionCall) Return(arg0 version.Number, arg1 bool) *MockConnectionServerVersionCall {
+func (c *MockConnectionServerVersionCall) Return(arg0 semversion.Number, arg1 bool) *MockConnectionServerVersionCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockConnectionServerVersionCall) Do(f func() (version.Number, bool)) *MockConnectionServerVersionCall {
+func (c *MockConnectionServerVersionCall) Do(f func() (semversion.Number, bool)) *MockConnectionServerVersionCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockConnectionServerVersionCall) DoAndReturn(f func() (version.Number, bool)) *MockConnectionServerVersionCall {
+func (c *MockConnectionServerVersionCall) DoAndReturn(f func() (semversion.Number, bool)) *MockConnectionServerVersionCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -144,7 +144,7 @@ func (s *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	modelUUID := plan.ModelUUID.ValueString()
 
-	if err := s.client.SSHKeys.CreateSSHKey(&juju.CreateSSHKeyInput{
+	if err := s.client.SSHKeys.CreateSSHKey(ctx, &juju.CreateSSHKeyInput{
 		Username:  s.client.Username(),
 		ModelUUID: plan.ModelUUID.ValueString(),
 		Payload:   payload,
@@ -196,7 +196,7 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	result, err := s.client.SSHKeys.ReadSSHKey(&juju.ReadSSHKeyInput{
+	result, err := s.client.SSHKeys.ReadSSHKey(ctx, &juju.ReadSSHKeyInput{
 		Username:      s.client.Username(),
 		ModelUUID:     modelUUID,
 		KeyIdentifier: identifier,
@@ -248,7 +248,7 @@ func (s *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 
 	// Delete the key
-	if err := s.client.SSHKeys.DeleteSSHKey(&juju.DeleteSSHKeyInput{
+	if err := s.client.SSHKeys.DeleteSSHKey(ctx, &juju.DeleteSSHKeyInput{
 		Username:      s.client.Username(),
 		ModelUUID:     modelName,
 		KeyIdentifier: identifier,

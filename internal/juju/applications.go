@@ -21,8 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juju/charm/v12"
-	charmresources "github.com/juju/charm/v12/resource"
 	"github.com/juju/clock"
 	"github.com/juju/collections/set"
 	jujuerrors "github.com/juju/errors"
@@ -41,13 +39,15 @@ import (
 	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/network"
+	"github.com/juju/juju/core/semversion"
+	jujustorage "github.com/juju/juju/core/storage"
+	jujuversion "github.com/juju/juju/core/version"
+	"github.com/juju/juju/domain/deployment/charm"
+	charmresources "github.com/juju/juju/domain/deployment/charm/resource"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
-	jujustorage "github.com/juju/juju/storage"
-	jujuversion "github.com/juju/juju/version"
-	"github.com/juju/names/v5"
+	"github.com/juju/names/v6"
 	"github.com/juju/retry"
-	"github.com/juju/version/v2"
 	goyaml "gopkg.in/yaml.v2"
 )
 
@@ -94,7 +94,7 @@ func newApplicationPartiallyCreatedError(appName string) error {
 
 type applicationsClient struct {
 	SharedClient
-	controllerVersion version.Number
+	controllerVersion semversion.Number
 
 	getApplicationAPIClient func(base.APICallCloser) ApplicationAPIClient
 	getClientAPIClient      func(api.Connection) ClientAPIClient
@@ -178,14 +178,14 @@ type CreateApplicationInput struct {
 	Constraints        constraints.Value
 	EndpointBindings   map[string]string
 	Resources          map[string]CharmResource
-	StorageConstraints map[string]jujustorage.Constraints
+	StorageConstraints map[string]jujustorage.Directive
 }
 
 // validateAndTransform returns transformedCreateApplicationInput which
 // validated and in the proper format for both the new and legacy deployment
 // methods. Select input is not transformed due to differences in the
 // 2 deployment methods, such as config.
-func (input CreateApplicationInput) validateAndTransform(conn api.Connection) (parsed transformedCreateApplicationInput, err error) {
+func (input CreateApplicationInput) validateAndTransform(ctx context.Context, conn api.Connection) (parsed transformedCreateApplicationInput, err error) {
 	parsed.charmChannel = input.CharmChannel
 	parsed.charmName = input.CharmName
 	parsed.charmRevision = input.CharmRevision
@@ -217,10 +217,7 @@ func (input CreateApplicationInput) validateAndTransform(conn api.Connection) (p
 			return
 		}
 	} else if input.CharmSeries != "" {
-		userSuppliedBase, err = corebase.GetBaseFromSeries(input.CharmSeries)
-		if err != nil {
-			return
-		}
+		return parsed, jujuerrors.New("series not supported")
 	}
 	parsed.charmBase = userSuppliedBase
 
@@ -255,7 +252,7 @@ func (input CreateApplicationInput) validateAndTransform(conn api.Connection) (p
 	endpointBindings := map[string]string{}
 	if len(input.EndpointBindings) > 0 {
 		spaceAPIClient := apispaces.NewAPI(conn)
-		knownSpaces, err := spaceAPIClient.ListSpaces()
+		knownSpaces, err := spaceAPIClient.ListSpaces(ctx)
 		if err != nil {
 			return parsed, err
 		}
@@ -289,7 +286,7 @@ type transformedCreateApplicationInput struct {
 	trust            bool
 	endpointBindings map[string]string
 	resources        map[string]CharmResource
-	storage          map[string]jujustorage.Constraints
+	storage          map[string]jujustorage.Directive
 }
 
 type CreateApplicationResponse struct {
@@ -318,7 +315,7 @@ type ReadApplicationResponse struct {
 	Placement        string
 	Machines         []string
 	EndpointBindings map[string]string
-	Storage          map[string]jujustorage.Constraints
+	Storage          map[string]jujustorage.Directive
 	Resources        map[string]string
 }
 
@@ -332,16 +329,16 @@ type UpdateApplicationInput struct {
 	Trust     *bool
 	Expose    map[string]interface{}
 	// Unexpose indicates what endpoints to unexpose
-	Unexpose           []string
-	Config             map[string]string
-	UnsetConfig        []string
-	Base               string
-	Constraints        *constraints.Value
-	EndpointBindings   map[string]string
-	StorageConstraints map[string]jujustorage.Constraints
-	Resources          map[string]CharmResource
-	AddMachines        []string
-	RemoveMachines     []string
+	Unexpose          []string
+	Config            map[string]string
+	UnsetConfig       []string
+	Base              string
+	Constraints       *constraints.Value
+	EndpointBindings  map[string]string
+	StorageDirectives map[string]jujustorage.Directive
+	Resources         map[string]CharmResource
+	AddMachines       []string
+	RemoveMachines    []string
 }
 
 type DestroyApplicationInput struct {
@@ -369,7 +366,7 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	}
 	defer func() { _ = conn.Close() }()
 
-	transformedInput, err := input.validateAndTransform(conn)
+	transformedInput, err := input.validateAndTransform(ctx, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -380,7 +377,7 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 		return nil, err
 	}
 	if applicationAPIClient.BestAPIVersion() >= 19 {
-		err := c.deployFromRepository(applicationAPIClient, resourceAPIClient, transformedInput)
+		err := c.deployFromRepository(ctx, applicationAPIClient, resourceAPIClient, transformedInput)
 		if err != nil {
 			return nil, err
 		}
@@ -393,7 +390,7 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 
 	// If we have managed to deploy something, now we have
 	// to check if we have to expose something
-	err = c.processExpose(applicationAPIClient, transformedInput.applicationName, transformedInput.expose)
+	err = c.processExpose(ctx, applicationAPIClient, transformedInput.applicationName, transformedInput.expose)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", newApplicationPartiallyCreatedError(transformedInput.applicationName), err)
 	}
@@ -407,14 +404,14 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	}, nil
 }
 
-func (c applicationsClient) deployFromRepository(applicationAPIClient ApplicationAPIClient, resourceAPIClient ResourceAPIClient, transformedInput transformedCreateApplicationInput) error {
+func (c applicationsClient) deployFromRepository(ctx context.Context, applicationAPIClient ApplicationAPIClient, resourceAPIClient ResourceAPIClient, transformedInput transformedCreateApplicationInput) error {
 	settingsForYaml := map[interface{}]interface{}{transformedInput.applicationName: transformedInput.config}
 	configYaml, err := goyaml.Marshal(settingsForYaml)
 	if err != nil {
 		return jujuerrors.Trace(err)
 	}
 	c.Tracef("Calling DeployFromRepository")
-	deployInfo, localPendingResources, errs := applicationAPIClient.DeployFromRepository(apiapplication.DeployFromRepositoryArg{
+	deployInfo, localPendingResources, errs := applicationAPIClient.DeployFromRepository(ctx, apiapplication.DeployFromRepositoryArg{
 		CharmName:        transformedInput.charmName,
 		ApplicationName:  transformedInput.applicationName,
 		Base:             &transformedInput.charmBase,
@@ -435,7 +432,7 @@ func (c applicationsClient) deployFromRepository(applicationAPIClient Applicatio
 	}
 
 	// Upload the provided local resources to Juju
-	uploadErr := uploadExistingPendingResources(deployInfo.Name, localPendingResources, transformedInput.resources, resourceAPIClient)
+	uploadErr := uploadExistingPendingResources(ctx, deployInfo.Name, localPendingResources, transformedInput.resources, resourceAPIClient)
 
 	if uploadErr != nil {
 		return fmt.Errorf("%w: %w", newApplicationPartiallyCreatedError(transformedInput.applicationName), uploadErr)
@@ -479,7 +476,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 		return err
 	}
 
-	subordinate, err := c.getCharmClient(conn).IsSubordinateCharm(IsSubordinateCharmParameters{
+	subordinate, err := c.getCharmClient(conn).IsSubordinateCharm(ctx, IsSubordinateCharmParameters{
 		Name:    transformedInput.charmName,
 		Channel: transformedInput.charmChannel,
 	})
@@ -498,7 +495,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 	}
 
 	userSuppliedBase := transformedInput.charmBase
-	platformCons, err := modelconfigAPIClient.GetModelConstraints()
+	platformCons, err := modelconfigAPIClient.GetModelConstraints(ctx)
 	if err != nil {
 		return err
 	}
@@ -512,11 +509,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 	// Juju 2.9 cares that the series is in the origin. Juju 3.3 does not.
 	// We are supporting both now.
 	if !userSuppliedBase.Empty() {
-		userSuppliedSeries, err := corebase.GetSeriesFromBase(userSuppliedBase)
-		if err != nil {
-			return err
-		}
-		urlForOrigin = urlForOrigin.WithSeries(userSuppliedSeries)
+		return jujuerrors.New("series not supported")
 	}
 
 	origin, err := utils.MakeOrigin(charm.Schema(urlForOrigin.Schema), transformedInput.charmRevision, channel, platform)
@@ -527,7 +520,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 	// Charm or bundle has been supplied as a URL so we resolve and
 	// deploy using the store but pass in the origin command line
 	// argument so users can target a specific origin.
-	resolvedURL, resolvedOrigin, supportedBases, err := resolveCharm(charmsAPIClient, charmURL, origin)
+	resolvedURL, resolvedOrigin, supportedBases, err := resolveCharm(ctx, charmsAPIClient, charmURL, origin)
 	if err != nil {
 		return err
 	}
@@ -536,7 +529,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 	}
 	c.Tracef("resolveCharm returned", map[string]interface{}{"resolvedURL": resolvedURL, "resolvedOrigin": resolvedOrigin, "supportedBases": supportedBases})
 
-	baseToUse, err := c.baseToUse(modelconfigAPIClient, userSuppliedBase, resolvedOrigin.Base, supportedBases)
+	baseToUse, err := c.baseToUse(ctx, modelconfigAPIClient, userSuppliedBase, resolvedOrigin.Base, supportedBases)
 	if err != nil {
 		c.Warnf("failed to get a suggested operating system from resolved charm response", map[string]interface{}{"err": err})
 	}
@@ -547,13 +540,6 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 			userSuppliedBase, baseToUse)
 	}
 	resolvedOrigin.Base = baseToUse
-	// 3.3 version of ResolveCharm does not always include the series
-	// in the url. However, juju 2.9 requires it.
-	series, err := corebase.GetSeriesFromBase(baseToUse)
-	if err != nil {
-		return err
-	}
-	resolvedURL = resolvedURL.WithSeries(series)
 
 	appConfig := transformedInput.config
 	if appConfig == nil {
@@ -575,7 +561,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 	return retry.Call(retry.CallArgs{
 		Func: func() error {
 			c.Tracef("AddCharm ", map[string]interface{}{"resolvedURL": resolvedURL, "resolvedOrigin": resolvedOrigin})
-			resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, resolvedOrigin, false)
+			resultOrigin, err := charmsAPIClient.AddCharm(ctx, resolvedURL, resolvedOrigin, false)
 			if err != nil {
 				err2 := typedError(err)
 				// If the charm is AlreadyExists, keep going, we
@@ -592,7 +578,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 				Origin: resultOrigin,
 			}
 
-			resources, err := c.processResources(charmsAPIClient, conn, charmID, transformedInput.applicationName, transformedInput.resources)
+			resources, err := c.processResources(ctx, charmsAPIClient, conn, charmID, transformedInput.applicationName, transformedInput.resources)
 			if err != nil && !jujuerrors.Is(err, jujuerrors.AlreadyExists) {
 				return err
 			}
@@ -610,7 +596,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 				EndpointBindings: transformedInput.endpointBindings,
 			}
 			c.Tracef("Calling Deploy", map[string]interface{}{"args": args})
-			if err = applicationAPIClient.Deploy(args); err != nil {
+			if err = applicationAPIClient.Deploy(ctx, args); err != nil {
 				return typedError(err)
 			}
 			return nil
@@ -641,10 +627,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 // uses juju 3.3.0 code. However, the supported workload base list is
 // different between juju 2 and juju 3. Handle that here.
 func (c applicationsClient) supportedWorkloadBase(imageStream string) ([]corebase.Base, error) {
-	supportedBases, err := corebase.WorkloadBases(time.Now(), corebase.Base{}, imageStream)
-	if err != nil {
-		return nil, err
-	}
+	supportedBases := corebase.WorkloadBases()
 	if c.controllerVersion.Major > 2 {
 		// SupportedBases include those supported with juju 3.x; juju 2.9.x
 		// supports more. If we have a juju 2.9.x controller add them back.
@@ -679,10 +662,10 @@ func (c applicationsClient) supportedWorkloadBase(imageStream string) ([]corebas
 //
 // Note, we are re-implementing the logic of base_selector in juju code as it's
 // a private object.
-func (c applicationsClient) baseToUse(modelconfigAPIClient *apimodelconfig.Client, inputBase, suggestedBase corebase.Base, charmBases []corebase.Base) (corebase.Base, error) {
+func (c applicationsClient) baseToUse(ctx context.Context, modelconfigAPIClient *apimodelconfig.Client, inputBase, suggestedBase corebase.Base, charmBases []corebase.Base) (corebase.Base, error) {
 	c.Tracef("baseToUse", map[string]interface{}{"inputBase": inputBase, "suggestedBase": suggestedBase, "charmBases": charmBases})
 
-	attrs, err := modelconfigAPIClient.ModelGet()
+	attrs, err := modelconfigAPIClient.ModelGet(ctx)
 	if err != nil {
 		return corebase.Base{}, jujuerrors.Wrap(err, jujuerrors.New("cannot fetch model settings"))
 	}
@@ -746,7 +729,7 @@ func (c applicationsClient) baseToUse(modelconfigAPIClient *apimodelconfig.Clien
 // an exposed request is done populating the request arguments with
 // the endpoints, spaces, and cidrs contained in the exposeConfig
 // map.
-func (c applicationsClient) processExpose(applicationAPIClient ApplicationAPIClient, applicationName string, expose map[string]interface{}) error {
+func (c applicationsClient) processExpose(ctx context.Context, applicationAPIClient ApplicationAPIClient, applicationName string, expose map[string]interface{}) error {
 	// nothing to do
 	if expose == nil {
 		return nil
@@ -769,7 +752,7 @@ func (c applicationsClient) processExpose(applicationAPIClient ApplicationAPICli
 
 	if len(listEndpoints)+len(listSpaces)+len(listCIDRs) == 0 {
 		c.Tracef(fmt.Sprintf("call expose application [%s]", applicationName))
-		return applicationAPIClient.Expose(applicationName, nil)
+		return applicationAPIClient.Expose(ctx, applicationName, nil)
 	}
 
 	// build params and send the request
@@ -787,7 +770,7 @@ func (c applicationsClient) processExpose(applicationAPIClient ApplicationAPICli
 
 	c.Tracef("call expose API endpoint", map[string]interface{}{"ExposeParams": requestParams})
 
-	return applicationAPIClient.Expose(applicationName, requestParams)
+	return applicationAPIClient.Expose(ctx, applicationName, requestParams)
 }
 
 func splitCommaDelimitedList(list string) []string {
@@ -804,8 +787,8 @@ func splitCommaDelimitedList(list string) []string {
 
 // processResources is a helper function to process the charm
 // metadata and request the download of any additional resource.
-func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string, resourcesToUse map[string]CharmResource) (map[string]string, error) {
-	charmInfo, err := charmsAPIClient.CharmInfo(charmID.URL)
+func (c applicationsClient) processResources(ctx context.Context, charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string, resourcesToUse map[string]CharmResource) (map[string]string, error) {
+	charmInfo, err := charmsAPIClient.CharmInfo(ctx, charmID.URL)
 	if err != nil {
 		return nil, typedError(err)
 	}
@@ -819,8 +802,7 @@ func (c applicationsClient) processResources(charmsAPIClient *apicharms.Client, 
 	if err != nil {
 		return nil, err
 	}
-
-	return addPendingResources(appName, charmInfo.Meta.Resources, resourcesToUse, charmID, resourcesAPIClient)
+	return addPendingResources(ctx, appName, charmInfo.Meta.Resources, resourcesToUse, charmID, resourcesAPIClient)
 }
 
 // ReadApplicationWithRetryOnNotFound calls ReadApplication until
@@ -835,7 +817,7 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 	retryErr := retry.Call(retry.CallArgs{
 		Func: func() error {
 			var err error
-			output, err = c.ReadApplication(input)
+			output, err = c.ReadApplication(ctx, input)
 			if jujuerrors.As(err, &ApplicationNotFoundError) || jujuerrors.As(err, &StorageNotFoundError) {
 				return err
 			} else if err != nil {
@@ -904,7 +886,7 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 	return output, retryErr
 }
 
-func (c *applicationsClient) applicationStorageDirectives(status params.FullStatus, appStatus params.ApplicationStatus) map[string]jujustorage.Constraints {
+func (c *applicationsClient) applicationStorageDirectives(status params.FullStatus, appStatus params.ApplicationStatus) map[string]jujustorage.Directive {
 	// first we collect all application units
 	appUnits := make(map[string]bool)
 	for unitTag := range appStatus.Units {
@@ -961,8 +943,8 @@ func (c *applicationsClient) transformToStorageDirectives(
 	storageDetailsSlice []params.StorageDetails,
 	filesystemDetailsSlice []params.FilesystemDetails,
 	volumeDetailsSlice []params.VolumeDetails,
-) map[string]jujustorage.Constraints {
-	storageDirectives := make(map[string]jujustorage.Constraints)
+) map[string]jujustorage.Directive {
+	storageDirectives := make(map[string]jujustorage.Directive)
 	for _, storageDetails := range storageDetailsSlice {
 		// switch base on storage kind
 		storageCounters := make(map[string]uint64)
@@ -981,9 +963,9 @@ func (c *applicationsClient) transformToStorageDirectives(
 					// Cut PrefixStorage from the storage tag and `-NUMBER` suffix
 					storageLabel := getStorageLabel(storageDetails.StorageTag)
 					storageCounters[storageLabel]++
-					storageDirectives[storageLabel] = jujustorage.Constraints{
+					storageDirectives[storageLabel] = jujustorage.Directive{
 						Pool:  fd.Info.Pool,
-						Size:  fd.Info.Size,
+						Size:  fd.Info.SizeMiB,
 						Count: storageCounters[storageLabel],
 					}
 				}
@@ -1001,9 +983,9 @@ func (c *applicationsClient) transformToStorageDirectives(
 				if vd.Storage.StorageTag == storageDetails.StorageTag {
 					storageLabel := getStorageLabel(storageDetails.StorageTag)
 					storageCounters[storageLabel]++
-					storageDirectives[storageLabel] = jujustorage.Constraints{
+					storageDirectives[storageLabel] = jujustorage.Directive{
 						Pool:  vd.Info.Pool,
-						Size:  vd.Info.Size,
+						Size:  vd.Info.SizeMiB,
 						Count: storageCounters[storageLabel],
 					}
 				}
@@ -1017,7 +999,7 @@ func getStorageLabel(storageTag string) string {
 	return strings.TrimSuffix(strings.TrimPrefix(storageTag, PrefixStorage), "-0")
 }
 
-func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadApplicationResponse, error) {
+func (c applicationsClient) ReadApplication(ctx context.Context, input *ReadApplicationInput) (*ReadApplicationResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -1027,7 +1009,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	applicationAPIClient := c.getApplicationAPIClient(conn)
 	modelconfigAPIClient := c.getModelConfigAPIClient(conn)
 
-	apps, err := applicationAPIClient.ApplicationsInfo([]names.ApplicationTag{names.NewApplicationTag(input.AppName)})
+	apps, err := applicationAPIClient.ApplicationsInfo(ctx, []names.ApplicationTag{names.NewApplicationTag(input.AppName)})
 	if err != nil {
 		return nil, jujuerrors.Annotate(err, "when querying the applications info")
 	}
@@ -1046,15 +1028,15 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	appInfo := apps[0].Result
 
 	var appStatus params.ApplicationStatus
-	var storageDirectives map[string]jujustorage.Constraints
+	var storageDirectives map[string]jujustorage.Directive
 	if c.controllerVersion.Major == 4 {
 		// With Juju 4 we have to manually filter storage/volumes/filesystems of an application.
-		appStatus, storageDirectives, err = c.getApplicationStatusAndStorageDirectives4(conn, input.AppName)
+		appStatus, storageDirectives, err = c.getApplicationStatusAndStorageDirectives4(ctx, conn, input.AppName)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		appStatus, storageDirectives, err = c.getApplicationStatusAndStorageDirectives(conn, input.AppName)
+		appStatus, storageDirectives, err = c.getApplicationStatusAndStorageDirectives(ctx, conn, input.AppName)
 		if err != nil {
 			return nil, err
 		}
@@ -1089,7 +1071,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		return nil, fmt.Errorf("failed to parse charm: %v", err)
 	}
 
-	returnedConf, err := applicationAPIClient.Get(model.GenerationMaster, input.AppName)
+	returnedConf, err := applicationAPIClient.Get(ctx, input.AppName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get app configuration %v", err)
 	}
@@ -1179,12 +1161,8 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	if err != nil {
 		return nil, jujuerrors.Annotate(err, "failed parse channel for base")
 	}
-	seriesString, err := corebase.GetSeriesFromChannel(appInfo.Base.Name, baseChannel.Track)
-	if err != nil {
-		return nil, jujuerrors.Annotate(err, "failed to get series from base")
-	}
 
-	defaultSpace, err := getModelDefaultSpace(modelconfigAPIClient)
+	defaultSpace, err := getModelDefaultSpace(ctx, modelconfigAPIClient)
 	if err != nil {
 		return nil, err
 	}
@@ -1207,7 +1185,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	if err != nil {
 		return nil, err
 	}
-	resources, err := resourcesAPIClient.ListResources([]string{input.AppName})
+	resources, err := resourcesAPIClient.ListResources(ctx, []string{input.AppName})
 	if err != nil {
 		return nil, jujuerrors.Annotate(err, "failed to list application resources")
 	}
@@ -1231,7 +1209,6 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 		Revision:         charmURL.Revision,
 		Base:             fmt.Sprintf("%s@%s", appInfo.Base.Name, baseChannel.Track),
 		ModelType:        modelType.String(),
-		Series:           seriesString,
 		Units:            unitCount,
 		Trust:            trustValue,
 		Expose:           exposed,
@@ -1248,14 +1225,14 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 	return response, nil
 }
 
-func (c applicationsClient) getApplicationStatusAndStorageDirectives4(conn api.Connection, appName string) (params.ApplicationStatus, map[string]jujustorage.Constraints, error) {
+func (c applicationsClient) getApplicationStatusAndStorageDirectives4(ctx context.Context, conn api.Connection, appName string) (params.ApplicationStatus, map[string]jujustorage.Directive, error) {
 	clientAPIClient := c.getClientAPIClient(conn)
 
 	// Fetch status. Storage is not provided by application,
 	// rather storage data buries a unit name deep
 	// in the structure.
 	// TODO(alesstimec): Switch to using GetApplicationStorage once juju 4 implements it.
-	status, err := clientAPIClient.Status(&apiclient.StatusArgs{
+	status, err := clientAPIClient.Status(ctx, &apiclient.StatusArgs{
 		IncludeStorage: true,
 	})
 	if err != nil {
@@ -1272,14 +1249,14 @@ func (c applicationsClient) getApplicationStatusAndStorageDirectives4(conn api.C
 	return appStatus, c.applicationStorageDirectives(*status, appStatus), nil
 }
 
-func (c applicationsClient) getApplicationStatusAndStorageDirectives(conn api.Connection, appName string) (params.ApplicationStatus, map[string]jujustorage.Constraints, error) {
+func (c applicationsClient) getApplicationStatusAndStorageDirectives(ctx context.Context, conn api.Connection, appName string) (params.ApplicationStatus, map[string]jujustorage.Directive, error) {
 	clientAPIClient := c.getClientAPIClient(conn)
 
 	// Fetch data only about the application being read. This helps to limit
 	// the data on storage to the specific application too. Storage is not
 	// provided by application, rather storage data buries a unit name deep
 	// in the structure.
-	status, err := clientAPIClient.Status(&apiclient.StatusArgs{
+	status, err := clientAPIClient.Status(ctx, &apiclient.StatusArgs{
 		Patterns:       []string{appName},
 		IncludeStorage: true,
 	})
@@ -1315,7 +1292,7 @@ func removeDefaultCidrs(cidrs []string) []string {
 	return toReturn
 }
 
-func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) error {
+func (c applicationsClient) UpdateApplication(ctx context.Context, input *UpdateApplicationInput) error {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
@@ -1332,7 +1309,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		return err
 	}
 
-	status, err := clientAPIClient.Status(nil)
+	status, err := clientAPIClient.Status(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -1359,14 +1336,14 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		auxConfig["trust"] = fmt.Sprintf("%v", *input.Trust)
 	}
 
-	err = c.UpdateCharmAndResources(input, applicationAPIClient, charmsAPIClient, resourcesAPIClient)
+	err = c.UpdateCharmAndResources(ctx, input, applicationAPIClient, charmsAPIClient, resourcesAPIClient)
 	if err != nil {
 		c.Errorf(err, "updating charm and resources")
 		return err
 	}
 
 	if auxConfig != nil {
-		err := applicationAPIClient.SetConfig("master", input.AppName, "", auxConfig)
+		err := applicationAPIClient.SetConfig(ctx, input.AppName, "", auxConfig)
 		if err != nil {
 			c.Errorf(err, "setting configuration params")
 			return err
@@ -1378,7 +1355,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		// which means the key was set in the state but is no longer valid (e.g. removed in a new charm revision).
 		// We don't want to fail the whole update.
 		for _, key := range input.UnsetConfig {
-			if err := applicationAPIClient.UnsetApplicationConfig(model.GenerationMaster, input.AppName, []string{key}); err != nil {
+			if err := applicationAPIClient.UnsetApplicationConfig(ctx, input.AppName, []string{key}); err != nil {
 				if strings.Contains(err.Error(), "unknown option") {
 					continue
 				}
@@ -1388,7 +1365,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	}
 
 	if len(input.EndpointBindings) > 0 {
-		modelDefaultSpace, err := getModelDefaultSpace(modelconfigAPIClient)
+		modelDefaultSpace, err := getModelDefaultSpace(ctx, modelconfigAPIClient)
 		if err != nil {
 			return err
 		}
@@ -1396,7 +1373,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 		if err != nil {
 			return err
 		}
-		err = applicationAPIClient.MergeBindings(endpointBindingsParams)
+		err = applicationAPIClient.MergeBindings(ctx, endpointBindingsParams)
 		if err != nil {
 			c.Errorf(err, "setting endpoint bindings")
 			return err
@@ -1406,7 +1383,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	// unexpose corresponding endpoints
 	if len(input.Unexpose) != 0 {
 		c.Tracef("Unexposing endpoints", map[string]interface{}{"endpoints": input.Unexpose})
-		if err := applicationAPIClient.Unexpose(input.AppName, input.Unexpose); err != nil {
+		if err := applicationAPIClient.Unexpose(ctx, input.AppName, input.Unexpose); err != nil {
 			c.Errorf(err, "when trying to unexpose")
 			return err
 		}
@@ -1414,7 +1391,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	// expose endpoints if required
 	if input.Expose != nil {
 		c.Tracef("Expose endpoints", map[string]interface{}{"endpoints": input.Unexpose})
-		err := c.processExpose(applicationAPIClient, input.AppName, input.Expose)
+		err := c.processExpose(ctx, applicationAPIClient, input.AppName, input.Expose)
 		if err != nil {
 			c.Errorf(err, "when trying to expose")
 			return err
@@ -1422,7 +1399,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	}
 
 	if input.Constraints != nil {
-		err := applicationAPIClient.SetConstraints(input.AppName, *input.Constraints)
+		err := applicationAPIClient.SetConstraints(ctx, input.AppName, *input.Constraints)
 		if err != nil {
 			c.Errorf(err, "setting application constraints")
 			return err
@@ -1436,7 +1413,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	}
 	if input.Units != nil {
 		if modelType == model.CAAS {
-			_, err := applicationAPIClient.ScaleApplication(apiapplication.ScaleApplicationParams{
+			_, err := applicationAPIClient.ScaleApplication(ctx, apiapplication.ScaleApplicationParams{
 				ApplicationName: input.AppName,
 				Scale:           *input.Units,
 				Force:           false,
@@ -1448,10 +1425,12 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 			unitDiff := *input.Units - len(appStatus.Units)
 
 			if unitDiff > 0 {
-				_, err := applicationAPIClient.AddUnits(apiapplication.AddUnitsParams{
-					ApplicationName: input.AppName,
-					NumUnits:        unitDiff,
-				})
+				_, err := applicationAPIClient.AddUnits(
+					ctx,
+					apiapplication.AddUnitsParams{
+						ApplicationName: input.AppName,
+						NumUnits:        unitDiff,
+					})
 				if err != nil {
 					return err
 				}
@@ -1468,10 +1447,12 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 				for i := 0; i < unitAbs; i++ {
 					unitsToDestroy = append(unitsToDestroy, unitNames[i])
 				}
-				_, err := applicationAPIClient.DestroyUnits(apiapplication.DestroyUnitsParams{
-					Units:          unitsToDestroy,
-					DestroyStorage: true,
-				})
+				_, err := applicationAPIClient.DestroyUnits(
+					ctx,
+					apiapplication.DestroyUnitsParams{
+						Units:          unitsToDestroy,
+						DestroyStorage: true,
+					})
 				if err != nil {
 					return err
 				}
@@ -1481,10 +1462,10 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 
 	// for IAAS model we process additions/removals of units
 	if modelType == model.IAAS {
-		if err = c.addUnits(input, applicationAPIClient); err != nil {
+		if err = c.addUnits(ctx, input, applicationAPIClient); err != nil {
 			return err
 		}
-		if err = c.removeUnits(input, applicationAPIClient, appStatus); err != nil {
+		if err = c.removeUnits(ctx, input, applicationAPIClient, appStatus); err != nil {
 			return err
 		}
 	}
@@ -1492,7 +1473,7 @@ func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) err
 	return nil
 }
 
-func (c applicationsClient) addUnits(input *UpdateApplicationInput, client ApplicationAPIClient) error {
+func (c applicationsClient) addUnits(ctx context.Context, input *UpdateApplicationInput, client ApplicationAPIClient) error {
 	if len(input.AddMachines) != 0 {
 		placements := make([]*instance.Placement, len(input.AddMachines))
 		for i, machine := range input.AddMachines {
@@ -1503,7 +1484,7 @@ func (c applicationsClient) addUnits(input *UpdateApplicationInput, client Appli
 			placements[i] = placement
 		}
 
-		_, err := client.AddUnits(apiapplication.AddUnitsParams{
+		_, err := client.AddUnits(ctx, apiapplication.AddUnitsParams{
 			ApplicationName: input.AppName,
 			NumUnits:        len(input.AddMachines),
 			Placement:       placements,
@@ -1515,7 +1496,7 @@ func (c applicationsClient) addUnits(input *UpdateApplicationInput, client Appli
 	return nil
 }
 
-func (c applicationsClient) removeUnits(input *UpdateApplicationInput, client ApplicationAPIClient, appStatus params.ApplicationStatus) error {
+func (c applicationsClient) removeUnits(ctx context.Context, input *UpdateApplicationInput, client ApplicationAPIClient, appStatus params.ApplicationStatus) error {
 	if len(input.RemoveMachines) != 0 {
 		machineUnits := make(map[string]string)
 		for unitName, unitStatus := range appStatus.Units {
@@ -1530,7 +1511,7 @@ func (c applicationsClient) removeUnits(input *UpdateApplicationInput, client Ap
 			}
 			unitsToDestroy = append(unitsToDestroy, unitName)
 		}
-		_, err := client.DestroyUnits(apiapplication.DestroyUnitsParams{
+		_, err := client.DestroyUnits(ctx, apiapplication.DestroyUnitsParams{
 			Units:          unitsToDestroy,
 			DestroyStorage: true,
 		})
@@ -1545,6 +1526,7 @@ func (c applicationsClient) removeUnits(input *UpdateApplicationInput, client Ap
 // of an application. It will update the charm or fetch the current one, and
 // update the resources if required.
 func (c applicationsClient) UpdateCharmAndResources(
+	ctx context.Context,
 	input *UpdateApplicationInput,
 	applicationAPIClient ApplicationAPIClient,
 	charmsAPIClient *apicharms.Client,
@@ -1566,7 +1548,7 @@ func (c applicationsClient) UpdateCharmAndResources(
 	// can be changed from one revision to another. So "Revision-Config"
 	// ordering will help to prevent issues with the configuration parsing.
 	if input.Revision != nil || input.Channel != "" || input.Base != "" {
-		charmID, err = c.computeCharmID(input, applicationAPIClient, charmsAPIClient)
+		charmID, err = c.computeCharmID(ctx, input, applicationAPIClient, charmsAPIClient)
 		if err != nil {
 			return err
 		}
@@ -1575,7 +1557,7 @@ func (c applicationsClient) UpdateCharmAndResources(
 		// Fetch the current charm URL and origin if the charm is not being updated.
 		// This is needed to avoid inadvertently updating the charm when only the
 		// resources are being updated.
-		url, origin, err := applicationAPIClient.GetCharmURLOrigin("", input.AppName)
+		url, origin, err := applicationAPIClient.GetCharmURLOrigin(ctx, input.AppName)
 		if err != nil {
 			return err
 		}
@@ -1588,7 +1570,7 @@ func (c applicationsClient) UpdateCharmAndResources(
 	// Pinned resources will be kept as is.
 	var resourceIds map[string]string
 	if updateCharm || len(input.Resources) > 0 {
-		resourceIds, err = c.updateResources(input.AppName, input.Resources, charmsAPIClient, charmID, resourcesAPIClient)
+		resourceIds, err = c.updateResources(ctx, input.AppName, input.Resources, charmsAPIClient, charmID, resourcesAPIClient)
 		if err != nil {
 			return err
 		}
@@ -1597,12 +1579,12 @@ func (c applicationsClient) UpdateCharmAndResources(
 
 	if updateCharm {
 		charmConfig := apiapplication.SetCharmConfig{
-			ApplicationName:    input.AppName,
-			CharmID:            charmID,
-			ResourceIDs:        resourceIds,
-			StorageConstraints: input.StorageConstraints,
+			ApplicationName:   input.AppName,
+			CharmID:           charmID,
+			ResourceIDs:       resourceIds,
+			StorageDirectives: input.StorageDirectives,
 		}
-		err = applicationAPIClient.SetCharm(model.GenerationMaster, charmConfig)
+		err = applicationAPIClient.SetCharm(ctx, charmConfig)
 		if err != nil {
 			return err
 		}
@@ -1610,7 +1592,7 @@ func (c applicationsClient) UpdateCharmAndResources(
 	return nil
 }
 
-func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) error {
+func (c applicationsClient) DestroyApplication(ctx context.Context, input *DestroyApplicationInput) error {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
@@ -1626,7 +1608,7 @@ func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) e
 		DestroyStorage: true,
 	}
 
-	_, err = applicationAPIClient.DestroyApplications(destroyParams)
+	_, err = applicationAPIClient.DestroyApplications(ctx, destroyParams)
 
 	if err != nil {
 		return err
@@ -1638,11 +1620,12 @@ func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) e
 // computeCharmID populates the corresponding CharmID struct
 // to indicate juju what charm to be deployed.
 func (c applicationsClient) computeCharmID(
+	ctx context.Context,
 	input *UpdateApplicationInput,
 	applicationAPIClient ApplicationAPIClient,
 	charmsAPIClient *apicharms.Client,
 ) (apiapplication.CharmID, error) {
-	oldURL, oldOrigin, err := applicationAPIClient.GetCharmURLOrigin("", input.AppName)
+	oldURL, oldOrigin, err := applicationAPIClient.GetCharmURLOrigin(ctx, input.AppName)
 	if err != nil {
 		return apiapplication.CharmID{}, err
 	}
@@ -1684,7 +1667,7 @@ func (c applicationsClient) computeCharmID(
 		}
 		newOrigin.Base = base
 	}
-	resolvedURL, resolvedOrigin, supportedBases, err := resolveCharm(charmsAPIClient, newURL, newOrigin)
+	resolvedURL, resolvedOrigin, supportedBases, err := resolveCharm(ctx, charmsAPIClient, newURL, newOrigin)
 	if err != nil {
 		return apiapplication.CharmID{}, err
 	}
@@ -1719,7 +1702,7 @@ func (c applicationsClient) computeCharmID(
 		return apiapplication.CharmID{}, jujuerrors.New(msg)
 	}
 
-	resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, oldOrigin, false)
+	resultOrigin, err := charmsAPIClient.AddCharm(ctx, resolvedURL, oldOrigin, false)
 	if err != nil {
 		return apiapplication.CharmID{}, err
 	}
@@ -1730,11 +1713,11 @@ func (c applicationsClient) computeCharmID(
 	}, nil
 }
 
-func resolveCharm(charmsAPIClient *apicharms.Client, curl *charm.URL, origin apicommoncharm.Origin) (*charm.URL, apicommoncharm.Origin, []corebase.Base, error) {
+func resolveCharm(ctx context.Context, charmsAPIClient *apicharms.Client, curl *charm.URL, origin apicommoncharm.Origin) (*charm.URL, apicommoncharm.Origin, []corebase.Base, error) {
 	// Charm or bundle has been supplied as a URL, so we resolve and
 	// deploy using the store but pass in the origin command line
 	// argument so users can target a specific origin.
-	resolved, err := charmsAPIClient.ResolveCharms([]apicharms.CharmToResolve{{URL: curl, Origin: origin}})
+	resolved, err := charmsAPIClient.ResolveCharms(ctx, []apicharms.CharmToResolve{{URL: curl, Origin: origin}})
 	if err != nil {
 		return nil, apicommoncharm.Origin{}, []corebase.Base{}, err
 	}
@@ -1749,13 +1732,14 @@ func strPtr(in string) *string {
 	return &in
 }
 
-func (c applicationsClient) updateResources(appName string, resources map[string]CharmResource, charmsAPIClient *apicharms.Client,
+func (c applicationsClient) updateResources(ctx context.Context, appName string, resources map[string]CharmResource, charmsAPIClient *apicharms.Client,
 	charmID apiapplication.CharmID, resourcesAPIClient ResourceAPIClient) (map[string]string, error) {
-	meta, err := utils.GetMetaResources(charmID.URL, charmsAPIClient)
+	meta, err := utils.GetMetaResources(ctx, charmID.URL, charmsAPIClient)
 	if err != nil {
 		return nil, err
 	}
 	filtered, err := utils.GetUpgradeResources(
+		ctx,
 		charmID,
 		charmsAPIClient,
 		resourcesAPIClient,
@@ -1770,10 +1754,10 @@ func (c applicationsClient) updateResources(appName string, resources map[string
 		return nil, nil
 	}
 
-	return addPendingResources(appName, filtered, resources, charmID, resourcesAPIClient)
+	return addPendingResources(ctx, appName, filtered, resources, charmID, resourcesAPIClient)
 }
 
-func addPendingResources(appName string, charmResourcesToAdd map[string]charmresources.Meta, resourcesToUse map[string]CharmResource,
+func addPendingResources(ctx context.Context, appName string, charmResourcesToAdd map[string]charmresources.Meta, resourcesToUse map[string]CharmResource,
 	charmID apiapplication.CharmID, resourceAPIClient ResourceAPIClient) (map[string]string, error) {
 	pendingResourcesforAdd := []charmresources.Resource{}
 	resourceIDs := map[string]string{}
@@ -1823,7 +1807,13 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 		if err != nil {
 			return nil, typedError(err)
 		}
-		toRequestUpload, err := resourceAPIClient.UploadPendingResource(appName, localResource, resource.String(), bytes.NewReader(details))
+		toRequestUpload, err := resourceAPIClient.UploadPendingResource(
+			ctx, apiresources.UploadPendingResourceArgs{
+				ApplicationID: appName,
+				Resource:      localResource,
+				Filename:      resource.String(),
+				Reader:        bytes.NewReader(details),
+			})
 		if err != nil {
 			return nil, typedError(err)
 		}
@@ -1849,7 +1839,7 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 		},
 		Resources: pendingResourcesforAdd,
 	}
-	toRequestAdd, err := resourceAPIClient.AddPendingResources(resourcesReqforAdd)
+	toRequestAdd, err := resourceAPIClient.AddPendingResources(ctx, resourcesReqforAdd)
 	if err != nil {
 		return nil, typedError(err)
 	}
@@ -1904,8 +1894,8 @@ func computeUpdatedBindings(modelDefaultSpace string, currentBindings map[string
 	return endpointBindingsParams, nil
 }
 
-func getModelDefaultSpace(modelconfigAPIClient ModelConfigAPIClient) (string, error) {
-	attrs, err := modelconfigAPIClient.ModelGet()
+func getModelDefaultSpace(ctx context.Context, modelconfigAPIClient ModelConfigAPIClient) (string, error) {
+	attrs, err := modelconfigAPIClient.ModelGet(ctx)
 	if err != nil {
 		return "", jujuerrors.Annotate(err, "failed to get model config")
 	}
@@ -1916,7 +1906,7 @@ func getModelDefaultSpace(modelconfigAPIClient ModelConfigAPIClient) (string, er
 
 	defaultSpace := modelConfig.DefaultSpace()
 	if defaultSpace == "" {
-		defaultSpace = network.AlphaSpaceName
+		defaultSpace = string(network.AlphaSpaceName)
 	}
 	return defaultSpace, nil
 }

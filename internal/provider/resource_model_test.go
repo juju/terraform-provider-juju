@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"testing"
@@ -188,7 +189,7 @@ func TestAcc_ResourceModel_TargetController(t *testing.T) {
 
 	testAccPreCheck(t)
 
-	controllers, err := TestClient.Jaas.ListControllers()
+	controllers, err := TestClient.Jaas.ListControllers(t.Context())
 	if err != nil || len(controllers) == 0 {
 		t.Fatalf("unable to list controllers from JAAS: %v", err)
 	}
@@ -372,7 +373,7 @@ func testAccCheckDevelopmentConfigIsUnset(resourceID string) resource.TestCheckF
 		// TODO: consider adding to client so we don't expose this layer (even in tests)
 		modelconfigClient := modelconfig.NewClient(conn)
 
-		metadata, err := modelconfigClient.ModelGetWithMetadata()
+		metadata, err := modelconfigClient.ModelGetWithMetadata(context.Background())
 		if err != nil {
 			return err
 		}

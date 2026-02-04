@@ -4,6 +4,7 @@
 package juju
 
 import (
+	"context"
 	"testing"
 
 	"github.com/juju/juju/api"
@@ -65,8 +66,8 @@ func (s *CloudSuite) TestCreateKubernetesCloud() {
 	ctlr := s.setupMocks(s.T())
 	defer ctlr.Finish()
 
-	s.mockCloudClient.EXPECT().AddCloud(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	s.mockCloudClient.EXPECT().AddCredential(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	s.mockCloudClient.EXPECT().AddCloud(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	s.mockCloudClient.EXPECT().AddCredential(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	fakeCloudConfig, err := clientcmd.NewClientConfigFromBytes([]byte(getFakeCloudConfig()))
 	s.Require().NoError(err)
@@ -88,7 +89,7 @@ func (s *CloudSuite) TestCreateKubernetesCloud() {
 	)
 	s.Require().NoError(err)
 
-	err = s.mockCloudClient.AddCloud(fakeCloud, false)
+	err = s.mockCloudClient.AddCloud(s.T().Context(), fakeCloud, false)
 	s.Require().NoError(err)
 
 	fakeCredential, err := k8scloud.CredentialFromKubeConfigContext(fakeContextName, &fakeApiConfig)
@@ -96,7 +97,7 @@ func (s *CloudSuite) TestCreateKubernetesCloud() {
 
 	fakeCloudCredTag := "fake-cloud-cred"
 
-	err = s.mockCloudClient.AddCredential(fakeCloudCredTag, fakeCredential)
+	err = s.mockCloudClient.AddCredential(s.T().Context(), fakeCloudCredTag, fakeCredential)
 	s.Require().NoError(err)
 }
 
@@ -104,7 +105,7 @@ func (s *CloudSuite) TestUpdateKubernetesCloud() {
 	ctlr := s.setupMocks(s.T())
 	defer ctlr.Finish()
 
-	s.mockCloudClient.EXPECT().UpdateCloud(gomock.Any()).Return(nil).AnyTimes()
+	s.mockCloudClient.EXPECT().UpdateCloud(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	fakeCloudConfig, err := clientcmd.NewClientConfigFromBytes([]byte(getFakeCloudConfig()))
 	s.Require().NoError(err)
@@ -122,7 +123,7 @@ func (s *CloudSuite) TestUpdateKubernetesCloud() {
 	)
 	s.Require().NoError(err)
 
-	err = s.mockCloudClient.UpdateCloud(fakeCloud)
+	err = s.mockCloudClient.UpdateCloud(s.T().Context(), fakeCloud)
 	s.Require().NoError(err)
 }
 
@@ -141,15 +142,15 @@ func (s *CloudSuite) TestAddCloud() {
 	s.mockConnection.EXPECT().Close().Return(nil).AnyTimes()
 
 	// Expect default region to be set when Regions is omitted.
-	s.mockCloudClient.EXPECT().AddCloud(gomock.Any(), false).
-		DoAndReturn(func(cloud jujucloud.Cloud, force bool) error {
+	s.mockCloudClient.EXPECT().AddCloud(gomock.Any(), gomock.Any(), false).
+		DoAndReturn(func(ctx context.Context, cloud jujucloud.Cloud, force bool) error {
 			s.Require().Len(cloud.Regions, 1)
 			s.Require().Equal(jujucloud.DefaultCloudRegion, cloud.Regions[0].Name)
 			return nil
 		}).
 		Times(1)
 
-	err := cc.AddCloud(AddCloudInput{})
+	err := cc.AddCloud(s.T().Context(), AddCloudInput{})
 
 	s.Require().NoError(err)
 }

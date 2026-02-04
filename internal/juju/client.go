@@ -19,6 +19,7 @@ import (
 	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/api/connector"
+	"github.com/juju/juju/core/logger"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
@@ -198,7 +199,7 @@ func (sc *sharedClient) IsJAAS(defaultVal bool) bool {
 			return
 		}
 		defer conn.Close()
-		jc := jaasApi.NewClient(conn)
+		jc := jaasApi.NewClient(JaasConnShim{conn})
 		_, err = jc.ListControllers()
 		if err == nil {
 			sc.isJAAS = true
@@ -301,7 +302,7 @@ func (sc *sharedClient) connect(conf connector.SimpleConfig) (api.Connection, er
 		return nil, err
 	}
 
-	conn, err := connr.Connect()
+	conn, err := connr.Connect(context.TODO())
 	if err != nil {
 		sc.Errorf(err, "connection not established")
 		return nil, err
@@ -386,7 +387,7 @@ func (sc *sharedClient) fillModelCache() error {
 
 	// Calling ListModelSummaries because other Model endpoints require
 	// the UUID, here we're trying to get the model UUID for other calls.
-	modelSummaries, err := client.ListModelSummaries(conn.AuthTag().Id(), false)
+	modelSummaries, err := client.ListModelSummaries(context.TODO(), conn.AuthTag().Id(), false)
 	if err != nil {
 		return err
 	}
@@ -394,7 +395,7 @@ func (sc *sharedClient) fillModelCache() error {
 		modelWithUUID := jujuModel{
 			name:      modelSummary.Name,
 			modelType: modelSummary.Type,
-			owner:     modelSummary.Owner,
+			owner:     modelSummary.Qualifier.String(),
 		}
 		sc.modelUUIDcache[modelSummary.UUID] = modelWithUUID
 	}
@@ -462,7 +463,7 @@ func (sc *sharedClient) getModelStatusFunc(uuid string, conn api.Connection) fun
 		}
 
 		client := apiclient.NewClient(conn, sc.JujuLogger())
-		status, err := client.Status(nil)
+		status, err := client.Status(context.TODO(), nil)
 		if err != nil {
 			return nil, err
 		}
@@ -526,11 +527,67 @@ type jujuLoggerShim struct {
 	sc *sharedClient
 }
 
-func (j jujuLoggerShim) Errorf(msg string, in ...interface{}) {
+func (j jujuLoggerShim) Errorf(ctx context.Context, msg string, in ...interface{}) {
 	stringInt := make(map[string]interface{}, len(in)+1)
 	stringInt["error"] = msg
 	for i, v := range in {
 		stringInt[strconv.Itoa(i)] = v
 	}
 	tflog.SubsystemError(j.sc.subCtx, LogJujuClient, "juju api logging", map[string]interface{}{"error": msg})
+}
+
+func (j jujuLoggerShim) Criticalf(ctx context.Context, msg string, args ...any) {
+	tflog.SubsystemError(j.sc.subCtx, LogJujuClient, fmt.Sprintf(msg, args...))
+}
+
+func (j jujuLoggerShim) Warningf(ctx context.Context, msg string, args ...any) {
+	tflog.SubsystemWarn(j.sc.subCtx, LogJujuClient, fmt.Sprintf(msg, args...))
+}
+
+func (j jujuLoggerShim) Infof(ctx context.Context, msg string, args ...any) {
+	tflog.SubsystemInfo(j.sc.subCtx, LogJujuClient, fmt.Sprintf(msg, args...))
+}
+
+func (j jujuLoggerShim) Debugf(ctx context.Context, msg string, args ...any) {
+	tflog.SubsystemDebug(j.sc.subCtx, LogJujuClient, fmt.Sprintf(msg, args...))
+}
+
+func (j jujuLoggerShim) Tracef(ctx context.Context, msg string, args ...any) {
+	tflog.SubsystemTrace(j.sc.subCtx, LogJujuClient, fmt.Sprintf(msg, args...))
+}
+
+func (j jujuLoggerShim) Logf(ctx context.Context, level logger.Level, labels logger.Labels, format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	additionalFields := make(map[string]interface{}, len(labels))
+	for k, v := range labels {
+		additionalFields[k] = v
+	}
+	switch level {
+	case 0: // Trace
+		tflog.SubsystemTrace(j.sc.subCtx, LogJujuClient, msg, additionalFields)
+	case 1: // Debug
+		tflog.SubsystemDebug(j.sc.subCtx, LogJujuClient, msg, additionalFields)
+	case 2: // Info
+		tflog.SubsystemInfo(j.sc.subCtx, LogJujuClient, msg, additionalFields)
+	case 3: // Warning
+		tflog.SubsystemWarn(j.sc.subCtx, LogJujuClient, msg, additionalFields)
+	case 4: // Error/Critical
+		tflog.SubsystemError(j.sc.subCtx, LogJujuClient, msg, additionalFields)
+	}
+}
+
+func (j jujuLoggerShim) IsLevelEnabled(level logger.Level) bool {
+	return true
+}
+
+func (j jujuLoggerShim) GetChildByName(name string) logger.Logger {
+	return jujuLoggerShim{sc: j.sc}
+}
+
+func (j jujuLoggerShim) Helper() {
+	// No-op for terraform logging
+}
+
+func (j jujuLoggerShim) Child(name string, tags ...string) logger.Logger {
+	return jujuLoggerShim{sc: j.sc}
 }

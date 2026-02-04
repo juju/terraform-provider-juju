@@ -91,7 +91,7 @@ func (d *jaasRoleDataSource) Read(ctx context.Context, req datasource.ReadReques
 	}
 
 	// Update the role with the latest data from JAAS
-	role, err := d.client.Jaas.ReadRoleByName(data.Name.ValueString())
+	role, err := d.client.Jaas.ReadRoleByName(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read role, got error: %v", err))
 		return

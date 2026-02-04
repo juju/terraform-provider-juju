@@ -106,7 +106,7 @@ func (resource *jaasRoleResource) Create(ctx context.Context, req resource.Creat
 	}
 
 	// Add the role to JAAS
-	uuid, err := resource.client.Jaas.AddRole(plan.Name.ValueString())
+	uuid, err := resource.client.Jaas.AddRole(ctx, plan.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to add role %q, got error: %s", plan.Name.ValueString(), err))
 		return
@@ -133,7 +133,7 @@ func (resource *jaasRoleResource) Read(ctx context.Context, req resource.ReadReq
 	}
 
 	// Read the role from JAAS
-	role, err := resource.client.Jaas.ReadRoleByUUID(state.UUID.ValueString())
+	role, err := resource.client.Jaas.ReadRoleByUUID(ctx, state.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get role %q, got error: %s", state.Name.ValueString(), err))
 		return
@@ -172,7 +172,7 @@ func (resource *jaasRoleResource) Update(ctx context.Context, req resource.Updat
 	}
 
 	// Rename the role in JAAS
-	err := resource.client.Jaas.RenameRole(state.Name.ValueString(), plan.Name.ValueString())
+	err := resource.client.Jaas.RenameRole(ctx, state.Name.ValueString(), plan.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to rename role %q to %q, got error: %s", state.Name.ValueString(), plan.Name.ValueString(), err))
 		return
@@ -199,7 +199,7 @@ func (resource *jaasRoleResource) Delete(ctx context.Context, req resource.Delet
 	}
 
 	// Delete the role from JAAS
-	err := resource.client.Jaas.RemoveRole(state.Name.ValueString())
+	err := resource.client.Jaas.RemoveRole(ctx, state.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to remove role %q, got error: %s", state.Name.ValueString(), err))
 		return

@@ -4,6 +4,8 @@
 package juju
 
 import (
+	"context"
+
 	"github.com/juju/errors"
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/client/annotations"
@@ -46,7 +48,7 @@ func newAnnotationsClient(sc SharedClient) *annotationsClient {
 
 // SetAnnotations set the annotations for the entity specified.
 // To unset a specific annotation a empty string "" needs to be set.
-func (c *annotationsClient) SetAnnotations(input *SetAnnotationsInput) error {
+func (c *annotationsClient) SetAnnotations(ctx context.Context, input *SetAnnotationsInput) error {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
@@ -59,7 +61,7 @@ func (c *annotationsClient) SetAnnotations(input *SetAnnotationsInput) error {
 		input.EntityTag.String(): input.Annotations,
 	}
 
-	results, err := annotationsAPIClient.Set(args)
+	results, err := annotationsAPIClient.Set(ctx, args)
 	if err != nil {
 		return err
 	}
@@ -77,7 +79,7 @@ func (c *annotationsClient) SetAnnotations(input *SetAnnotationsInput) error {
 }
 
 // GetAnnotations gets the annotation for an entity.
-func (c *annotationsClient) GetAnnotations(input *GetAnnotationsInput) (*GetAnnotationsOutput, error) {
+func (c *annotationsClient) GetAnnotations(ctx context.Context, input *GetAnnotationsInput) (*GetAnnotationsOutput, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -86,7 +88,7 @@ func (c *annotationsClient) GetAnnotations(input *GetAnnotationsInput) (*GetAnno
 
 	annotationsAPIClient := c.getAnnotationsAPIClient(conn)
 
-	results, err := annotationsAPIClient.Get([]string{input.EntityTag.String()})
+	results, err := annotationsAPIClient.Get(ctx, []string{input.EntityTag.String()})
 	if err != nil {
 		return nil, err
 	}

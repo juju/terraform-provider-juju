@@ -91,7 +91,7 @@ func (d *jaasGroupDataSource) Read(ctx context.Context, req datasource.ReadReque
 	}
 
 	// Update the group with the latest data from JAAS
-	group, err := d.client.Jaas.ReadGroupByName(data.Name.ValueString())
+	group, err := d.client.Jaas.ReadGroupByName(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read group, got error: %v", err))
 		return

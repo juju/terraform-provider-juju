@@ -120,7 +120,7 @@ func (d *secretDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		readSecretInput.SecretId = data.SecretId.ValueString()
 	}
 
-	readSecretOutput, err := d.client.Secrets.ReadSecret(&readSecretInput)
+	readSecretOutput, err := d.client.Secrets.ReadSecret(ctx, &readSecretInput)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read secret, got error: %s", err))
 		return

@@ -81,7 +81,7 @@ func newIntegrationsClient(sc SharedClient) *integrationsClient {
 	}
 }
 
-func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateIntegrationResponse, error) {
+func (c *integrationsClient) CreateIntegration(ctx context.Context, input *IntegrationInput) (*CreateIntegrationResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -91,7 +91,7 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 	client := apiapplication.NewClient(conn)
 
 	// wait for the apps to be available
-	ctx, cancel := context.WithTimeout(context.Background(), IntegrationAppAvailableTimeout)
+	ctx, cancel := context.WithTimeout(ctx, IntegrationAppAvailableTimeout)
 	defer cancel()
 
 	err = WaitForAppsAvailable(ctx, client, input.Apps, IntegrationApiTickWait)
@@ -101,6 +101,7 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 
 	listViaCIDRs := splitCommaDelimitedList(input.ViaCIDRs)
 	response, err := client.AddRelation(
+		ctx,
 		input.Endpoints,
 		listViaCIDRs,
 	)
@@ -114,7 +115,7 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 		return nil, err
 	}
 
-	applications, err := parseApplications(status.RemoteApplications, response.Endpoints)
+	applications, err := parseApplications(status.RemoteApplicationOfferers, response.Endpoints)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +126,7 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 	}, nil
 }
 
-func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadIntegrationResponse, error) {
+func (c *integrationsClient) ReadIntegration(ctx context.Context, input *IntegrationInput) (*ReadIntegrationResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
@@ -179,7 +180,7 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 		return nil, NewIntegrationNotFoundError(modelUUID.Id())
 	}
 
-	applications, err := parseApplications(status.RemoteApplications, integration.Endpoints)
+	applications, err := parseApplications(status.RemoteApplicationOfferers, integration.Endpoints)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +190,7 @@ func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadInteg
 	}, nil
 }
 
-func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
+func (c *integrationsClient) DestroyIntegration(ctx context.Context, input *IntegrationInput) error {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return err
@@ -199,6 +200,7 @@ func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
 	client := apiapplication.NewClient(conn)
 
 	err = client.DestroyRelation(
+		ctx,
 		nil,
 		nil,
 		input.Endpoints...,

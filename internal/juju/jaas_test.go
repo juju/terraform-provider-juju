@@ -53,14 +53,14 @@ func (s *JaasSuite) TestAddRelations() {
 	).Return(nil)
 
 	client := s.getJaasClient()
-	err := client.AddRelations(tuples)
+	err := client.AddRelations(s.T().Context(), tuples)
 	s.Require().NoError(err)
 }
 
 func (s *JaasSuite) TestAddRelationsEmptySlice() {
 	expectedErr := errors.New("empty slice of tuples")
 	client := s.getJaasClient()
-	err := client.AddRelations([]JaasTuple{})
+	err := client.AddRelations(s.T().Context(), []JaasTuple{})
 	s.Require().Error(err)
 	s.Assert().Equal(expectedErr, err)
 }
@@ -81,14 +81,14 @@ func (s *JaasSuite) TestDeleteRelations() {
 	).Return(nil)
 
 	client := s.getJaasClient()
-	err := client.DeleteRelations(tuples)
+	err := client.DeleteRelations(s.T().Context(), tuples)
 	s.Require().NoError(err)
 }
 
 func (s *JaasSuite) TestDeleteRelationsEmptySlice() {
 	expectedErr := errors.New("empty slice of tuples")
 	client := s.getJaasClient()
-	err := client.DeleteRelations([]JaasTuple{})
+	err := client.DeleteRelations(s.T().Context(), []JaasTuple{})
 	s.Require().Error(err)
 	s.Assert().Equal(expectedErr, err)
 }
@@ -163,7 +163,7 @@ func (s *JaasSuite) TestAddGroup() {
 	s.mockJaasClient.EXPECT().AddGroup(req).Return(resp, nil)
 
 	client := s.getJaasClient()
-	uuid, err := client.AddGroup(name)
+	uuid, err := client.AddGroup(s.T().Context(), name)
 	s.Require().NoError(err)
 	s.Require().Equal(resp.UUID, uuid)
 }
@@ -179,7 +179,7 @@ func (s *JaasSuite) TestGetGroup() {
 	s.mockJaasClient.EXPECT().GetGroup(req).Return(resp, nil)
 
 	client := s.getJaasClient()
-	gotGroup, err := client.ReadGroupByUUID(uuid)
+	gotGroup, err := client.ReadGroupByUUID(s.T().Context(), uuid)
 	s.Require().NoError(err)
 	s.Require().Equal(*gotGroup, JaasGroup{UUID: uuid, Name: name})
 }
@@ -193,7 +193,7 @@ func (s *JaasSuite) TestGetGroupNotFound() {
 	s.mockJaasClient.EXPECT().GetGroup(req).Return(params.GetGroupResponse{}, errors.New("group not found"))
 
 	client := s.getJaasClient()
-	gotGroup, err := client.ReadGroupByUUID(uuid)
+	gotGroup, err := client.ReadGroupByUUID(s.T().Context(), uuid)
 	s.Require().Error(err)
 	s.Require().Nil(gotGroup)
 }
@@ -207,7 +207,7 @@ func (s *JaasSuite) TestRenameGroup() {
 	s.mockJaasClient.EXPECT().RenameGroup(req).Return(nil)
 
 	client := s.getJaasClient()
-	err := client.RenameGroup(name, newName)
+	err := client.RenameGroup(s.T().Context(), name, newName)
 	s.Require().NoError(err)
 }
 
@@ -219,7 +219,7 @@ func (s *JaasSuite) TestRemoveGroup() {
 	s.mockJaasClient.EXPECT().RemoveGroup(req).Return(nil)
 
 	client := s.getJaasClient()
-	err := client.RemoveGroup(name)
+	err := client.RemoveGroup(s.T().Context(), name)
 	s.Require().NoError(err)
 }
 
@@ -233,7 +233,7 @@ func (s *JaasSuite) TestAddRole() {
 	s.mockJaasClient.EXPECT().AddRole(req).Return(resp, nil)
 
 	client := s.getJaasClient()
-	uuid, err := client.AddRole(name)
+	uuid, err := client.AddRole(s.T().Context(), name)
 	s.Require().NoError(err)
 	s.Require().Equal(resp.UUID, uuid)
 }
@@ -249,7 +249,7 @@ func (s *JaasSuite) TestGetRole() {
 	s.mockJaasClient.EXPECT().GetRole(req).Return(resp, nil)
 
 	client := s.getJaasClient()
-	gotRole, err := client.ReadRoleByUUID(uuid)
+	gotRole, err := client.ReadRoleByUUID(s.T().Context(), uuid)
 	s.Require().NoError(err)
 	s.Require().Equal(*gotRole, JaasRole{UUID: uuid, Name: name})
 }
@@ -263,7 +263,7 @@ func (s *JaasSuite) TestGetRoleNotFound() {
 	s.mockJaasClient.EXPECT().GetRole(req).Return(params.GetRoleResponse{}, errors.New("role not found"))
 
 	client := s.getJaasClient()
-	gotRole, err := client.ReadRoleByUUID(uuid)
+	gotRole, err := client.ReadRoleByUUID(s.T().Context(), uuid)
 	s.Require().Error(err)
 	s.Require().Nil(gotRole)
 }
@@ -277,7 +277,7 @@ func (s *JaasSuite) TestRenameRole() {
 	s.mockJaasClient.EXPECT().RenameRole(req).Return(nil)
 
 	client := s.getJaasClient()
-	err := client.RenameRole(name, newName)
+	err := client.RenameRole(s.T().Context(), name, newName)
 	s.Require().NoError(err)
 }
 
@@ -289,7 +289,7 @@ func (s *JaasSuite) TestRemoveRole() {
 	s.mockJaasClient.EXPECT().RemoveRole(req).Return(nil)
 
 	client := s.getJaasClient()
-	err := client.RemoveRole(name)
+	err := client.RemoveRole(s.T().Context(), name)
 	s.Require().NoError(err)
 }
 
