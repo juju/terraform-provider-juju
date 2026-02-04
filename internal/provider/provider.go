@@ -156,7 +156,7 @@ func (j jujuProviderModel) valid() bool {
 
 	return j.ControllerAddrs.ValueString() != "" &&
 		(validUserPass || validClientCredentials) &&
-		!(validUserPass && validClientCredentials)
+		(!validUserPass || !validClientCredentials)
 }
 
 // merge 2 providerModels together. The receiver data takes

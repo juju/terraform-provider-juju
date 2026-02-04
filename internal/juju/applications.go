@@ -25,7 +25,6 @@ import (
 	charmresources "github.com/juju/charm/v12/resource"
 	"github.com/juju/clock"
 	"github.com/juju/collections/set"
-	"github.com/juju/errors"
 	jujuerrors "github.com/juju/errors"
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
@@ -55,30 +54,30 @@ import (
 // NewApplicationNotFoundError returns a new error indicating that the
 // application was not found.
 func NewApplicationNotFoundError(appName string) error {
-	return errors.WithType(errors.Errorf("application %s not found", appName), ApplicationNotFoundError)
+	return jujuerrors.WithType(jujuerrors.Errorf("application %s not found", appName), ApplicationNotFoundError)
 }
 
 // ApplicationNotFoundError is an error that indicates that the application
 // was not found when contacting the Juju API.
-var ApplicationNotFoundError = errors.ConstError("application-not-found")
+var ApplicationNotFoundError = jujuerrors.ConstError("application-not-found")
 
 // NewStorageNotFoundError returns a new error indicating that the
 // storage was not found.
 func NewStorageNotFoundError(applicationName string) error {
-	return errors.WithType(errors.Errorf("storage not found for application %s", applicationName), StorageNotFoundError)
+	return jujuerrors.WithType(jujuerrors.Errorf("storage not found for application %s", applicationName), StorageNotFoundError)
 }
 
 // StorageNotFoundError is an error that indicates that the storage was not found.
-var StorageNotFoundError = errors.ConstError("storage-not-found")
+var StorageNotFoundError = jujuerrors.ConstError("storage-not-found")
 
 // RetryReadError is an error that indicates that a read operation
 // should be retried. This is used to handle transient errors
 // that may occur when reading application data from the Juju API.
-var RetryReadError = errors.ConstError("retry-read-error")
+var RetryReadError = jujuerrors.ConstError("retry-read-error")
 
 // NewRetryReadError returns a new retry error with the specified message.
 func NewRetryReadError(msg string) error {
-	return errors.WithType(errors.Errorf("retrying: %s", msg), RetryReadError)
+	return jujuerrors.WithType(jujuerrors.Errorf("retrying: %s", msg), RetryReadError)
 }
 
 type ApplicationPartiallyCreatedError struct {
@@ -622,7 +621,7 @@ func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connectio
 			//   1. User error, the application has already been created?
 			//   2. We're replacing the application and tear down hasn't
 			//      finished yet, we should try again.
-			return !errors.Is(err, jujuerrors.NotFound) && !errors.Is(err, jujuerrors.AlreadyExists)
+			return !jujuerrors.Is(err, jujuerrors.NotFound) && !jujuerrors.Is(err, jujuerrors.AlreadyExists)
 		},
 		NotifyFunc: func(err error, attempt int) {
 			c.Errorf(err, fmt.Sprintf("deploy application %q retry", transformedInput.applicationName))
@@ -685,7 +684,7 @@ func (c applicationsClient) baseToUse(modelconfigAPIClient *apimodelconfig.Clien
 
 	attrs, err := modelconfigAPIClient.ModelGet()
 	if err != nil {
-		return corebase.Base{}, jujuerrors.Wrap(err, errors.New("cannot fetch model settings"))
+		return corebase.Base{}, jujuerrors.Wrap(err, jujuerrors.New("cannot fetch model settings"))
 	}
 	modelConfig, err := config.New(config.NoDefaults, attrs)
 	if err != nil {
@@ -837,7 +836,7 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 		Func: func() error {
 			var err error
 			output, err = c.ReadApplication(input)
-			if errors.As(err, &ApplicationNotFoundError) || errors.As(err, &StorageNotFoundError) {
+			if jujuerrors.As(err, &ApplicationNotFoundError) || jujuerrors.As(err, &StorageNotFoundError) {
 				return err
 			} else if err != nil {
 				return err
@@ -879,9 +878,9 @@ func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Conte
 			return nil
 		},
 		IsFatalError: func(err error) bool {
-			if errors.Is(err, ApplicationNotFoundError) ||
-				errors.Is(err, StorageNotFoundError) ||
-				errors.Is(err, RetryReadError) ||
+			if jujuerrors.Is(err, ApplicationNotFoundError) ||
+				jujuerrors.Is(err, StorageNotFoundError) ||
+				jujuerrors.Is(err, RetryReadError) ||
 				strings.Contains(err.Error(), "connection refused") {
 				return false
 			}
@@ -1218,7 +1217,7 @@ func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadA
 			// Per juju convention, -1, indicates that an integer value has not been set.
 			// Uploaded resources currently have no revision number.
 			// So when the revision number is -1, we can use the value in state.
-			if resource.Resource.Origin == charmresources.OriginUpload {
+			if resource.Origin == charmresources.OriginUpload {
 				usedResources[resource.Name] = "-1"
 			} else {
 				usedResources[resource.Name] = strconv.Itoa(resource.Revision)
@@ -1693,7 +1692,7 @@ func (c applicationsClient) computeCharmID(
 	// Ensure that the new charm supports the architecture used by the deployed application.
 	if oldOrigin.Architecture != resolvedOrigin.Architecture {
 		msg := fmt.Sprintf("the new charm does not support the current architecture %q", oldOrigin.Architecture)
-		return apiapplication.CharmID{}, errors.New(msg)
+		return apiapplication.CharmID{}, jujuerrors.New(msg)
 	}
 
 	// Ensure the new revision or channel is contained
@@ -1717,7 +1716,7 @@ func (c applicationsClient) computeCharmID(
 
 	if !basesContain(oldOrigin.Base, supportedBases) {
 		msg := fmt.Sprintf("the new charm does not support the current operating system %q", oldOrigin.Base.String())
-		return apiapplication.CharmID{}, errors.New(msg)
+		return apiapplication.CharmID{}, jujuerrors.New(msg)
 	}
 
 	resultOrigin, err := charmsAPIClient.AddCharm(resolvedURL, oldOrigin, false)
@@ -1839,7 +1838,7 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 	// Sort the resources by name to ensure consistent ordering.
 	// Two resources cannot have the same name.
 	slices.SortFunc(pendingResourcesforAdd, func(a, b charmresources.Resource) int {
-		return strings.Compare(a.Meta.Name, b.Meta.Name)
+		return strings.Compare(a.Name, b.Name)
 	})
 
 	resourcesReqforAdd := apiresources.AddPendingResourcesArgs{
@@ -1856,7 +1855,7 @@ func addPendingResources(appName string, charmResourcesToAdd map[string]charmres
 	}
 	// Add the resource name and the corresponding UUID to the resources map
 	for i, argsResource := range pendingResourcesforAdd {
-		resourceIDs[argsResource.Meta.Name] = toRequestAdd[i]
+		resourceIDs[argsResource.Name] = toRequestAdd[i]
 	}
 
 	return resourceIDs, nil

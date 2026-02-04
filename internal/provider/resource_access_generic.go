@@ -351,7 +351,7 @@ func modelToTuples(ctx context.Context, targetTag names.Tag, model objectsWithAc
 		Target:   targetTag.String(),
 		Relation: model.Access.ValueString(),
 	}
-	var tuples []juju.JaasTuple
+	tuples := make([]juju.JaasTuple, 0, 4)
 	userNameToTagf := func(s string) string { return names.NewUserTag(s).String() }
 	groupIDToTagf := func(s string) string { return jimmnames.NewGroupTag(s).String() + "#member" }
 	roleIDToTagf := func(s string) string { return jimmnames.NewRoleTag(s).String() + "#assignee" }
