@@ -129,7 +129,7 @@ func (v CustomCommaDelimitedStringValue) StringSemanticEquals(ctx context.Contex
 	}
 
 	// Split the two strings into tokens and compare the two slices
-	leftRaw := v.StringValue.ValueString()
+	leftRaw := v.ValueString()
 	rightRaw := newValue.ValueString()
 	if leftRaw == rightRaw { // exact match
 		return true, diags

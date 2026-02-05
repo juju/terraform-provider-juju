@@ -30,7 +30,7 @@ func (s *JaasSuite) setupMocks(t *testing.T) *gomock.Controller {
 
 func (s *JaasSuite) getJaasClient() jaasClient {
 	return jaasClient{
-		SharedClient: s.JujuSuite.mockSharedClient,
+		SharedClient: s.mockSharedClient,
 		getJaasApiClient: func(connection api.Connection) JaasAPIClient {
 			return s.mockJaasClient
 		},

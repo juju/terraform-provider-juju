@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	// StoragePoolNotFoundError is returned when a storage pool does not exist.
-	StoragePoolNotFoundError = errors.New("storage pool not found")
+	// ErrStoragePoolNotFound is returned when a storage pool does not exist.
+	ErrStoragePoolNotFound = errors.New("storage pool not found")
 )
 
 type storageClient struct {
@@ -112,7 +112,7 @@ func (c *storageClient) GetPool(input GetStoragePoolInput) (GetStoragePoolRespon
 		return GetStoragePoolResponse{}, err
 	}
 	if len(pools) == 0 {
-		return GetStoragePoolResponse{}, StoragePoolNotFoundError
+		return GetStoragePoolResponse{}, ErrStoragePoolNotFound
 	}
 
 	return GetStoragePoolResponse{Pool: pools[0]}, nil

@@ -35,7 +35,7 @@ func (s *SecretSuite) setupMocks(t *testing.T) *gomock.Controller {
 
 func (s *SecretSuite) getSecretsClient() secretsClient {
 	return secretsClient{
-		SharedClient: s.JujuSuite.mockSharedClient,
+		SharedClient: s.mockSharedClient,
 		getSecretAPIClient: func(connection api.Connection) SecretAPIClient {
 			return s.mockSecretClient
 		},

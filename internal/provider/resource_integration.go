@@ -502,9 +502,10 @@ func newIDForIntegrationResource(modelUUID string, apps []juju.Application) stri
 	//TODO: verify we always get only 2 endpoints and that the role value is consistent
 	keys := make([]int, len(apps))
 	for k, v := range apps {
-		if v.Role == "provider" {
+		switch v.Role {
+		case "provider":
 			keys[0] = k
-		} else if v.Role == "requirer" {
+		case "requirer":
 			keys[1] = k
 		}
 	}

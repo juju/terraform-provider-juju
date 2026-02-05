@@ -144,7 +144,7 @@ func (v CustomConstraintsValue) StringSemanticEquals(ctx context.Context, newVal
 	}
 
 	// Parse and normalize constraints for semantic comparison
-	leftRaw := v.StringValue.ValueString()
+	leftRaw := v.ValueString()
 	rightRaw := newValue.ValueString()
 	if leftRaw == rightRaw { // exact match
 		return true, diags

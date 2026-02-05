@@ -172,7 +172,7 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 		return nil, errs
 	}
 
-	modelOwner, modelName, err := c.SharedClient.ModelOwnerAndName(input.ModelUUID)
+	modelOwner, modelName, err := c.ModelOwnerAndName(input.ModelUUID)
 	if err != nil {
 		return nil, append(errs, fmt.Errorf("unable to get model name for model UUID %q: %w", input.ModelUUID, err))
 	}

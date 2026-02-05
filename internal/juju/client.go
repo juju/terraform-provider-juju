@@ -155,10 +155,7 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 	}
 	// Client ID and secret are only set when connecting to JAAS. Use this as a fallback
 	// value if connecting to the controller fails.
-	defaultJAASCheck := false
-	if config.ClientID != "" && config.ClientSecret != "" {
-		defaultJAASCheck = true
-	}
+	defaultJAASCheck := config.ClientID != "" && config.ClientSecret != ""
 
 	user := config.Username
 	if config.ClientID != "" && !strings.HasSuffix(config.ClientID, serviceAccountSuffix) {
