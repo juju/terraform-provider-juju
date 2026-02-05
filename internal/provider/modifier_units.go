@@ -32,7 +32,7 @@ func (m unitCountModifier) MarkdownDescription(_ context.Context) string {
 // PlanModifyBool implements the plan modification logic.
 func (m unitCountModifier) PlanModifyInt64(ctx context.Context, req planmodifier.Int64Request, resp *planmodifier.Int64Response) {
 	// Do nothing if there is a known configuration value.
-	if !(req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown()) {
+	if !req.ConfigValue.IsNull() && !req.ConfigValue.IsUnknown() {
 		return
 	}
 

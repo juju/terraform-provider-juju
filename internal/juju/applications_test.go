@@ -654,8 +654,7 @@ func (s *ApplicationSuite) TestUploadExistingPendingResourcesUploadSuccessful() 
 		Filename: "myimage",
 		Type:     "oci-image",
 	}
-	var pendingResources []apiapplication.PendingResourceUpload
-	pendingResources = append(pendingResources, resource)
+	pendingResources := []apiapplication.PendingResourceUpload{resource}
 	charmResources := map[string]CharmResource{
 		"custom-image": {
 			OCIImageURL:      "some-url",
@@ -682,8 +681,7 @@ func (s *ApplicationSuite) TestUploadExistingPendingResourcesUploadFailedReturnE
 		Filename: fileName,
 		Type:     "oci-image",
 	}
-	var pendingResources []apiapplication.PendingResourceUpload
-	pendingResources = append(pendingResources, resource)
+	pendingResources := []apiapplication.PendingResourceUpload{resource}
 	charmResources := map[string]CharmResource{
 		"custom-image": {
 			OCIImageURL:      "some-url",
@@ -704,13 +702,12 @@ func (s *ApplicationSuite) TestUploadExistingPendingResourcesResourceTypeUnknown
 	defer s.setupMocks(s.T()).Finish()
 	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 	appName := "testapplication"
-	var pendingResources []apiapplication.PendingResourceUpload
 	resource := apiapplication.PendingResourceUpload{
 		Name:     "custom-image",
 		Filename: "my-image",
 		Type:     "unknown",
 	}
-	pendingResources = append(pendingResources, resource)
+	pendingResources := []apiapplication.PendingResourceUpload{resource}
 	charmResources := map[string]CharmResource{
 		"custom-image": {
 			OCIImageURL:      "some-url",

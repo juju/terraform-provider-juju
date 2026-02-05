@@ -1096,13 +1096,13 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 
 	if !plan.Machines.Equal(state.Machines) {
 		var planMachines, stateMachines []string
-		if !(plan.Machines.IsUnknown() || plan.Machines.IsNull()) {
+		if !plan.Machines.IsUnknown() && !plan.Machines.IsNull() {
 			resp.Diagnostics.Append(plan.Machines.ElementsAs(ctx, &planMachines, false)...)
 			if resp.Diagnostics.HasError() {
 				return
 			}
 		}
-		if !(state.Machines.IsUnknown() || plan.Machines.IsUnknown()) {
+		if !state.Machines.IsUnknown() && !plan.Machines.IsUnknown() {
 			resp.Diagnostics.Append(state.Machines.ElementsAs(ctx, &stateMachines, false)...)
 			if resp.Diagnostics.HasError() {
 				return

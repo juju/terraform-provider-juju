@@ -126,11 +126,12 @@ func TestAcc_ResourceJaasAccessControllerImportState(t *testing.T) {
 						}
 						return nil
 					}
-					errs := make([]error, 1)
-					errs = append(errs, checker("users.0", "jimm-test@canonical.com"))
-					errs = append(errs, checker("users.#", "1"))
-					errs = append(errs, checker("service_accounts.0", strings.TrimSuffix(expectedResourceOwner(), "@serviceaccount")))
-					errs = append(errs, checker("service_accounts.#", "1"))
+					errs := []error{
+						checker("users.0", "jimm-test@canonical.com"),
+						checker("users.#", "1"),
+						checker("service_accounts.0", strings.TrimSuffix(expectedResourceOwner(), "@serviceaccount")),
+						checker("service_accounts.#", "1"),
+					}
 					return errors.Join(errs...)
 				},
 				ImportState:   true,

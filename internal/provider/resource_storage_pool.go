@@ -384,7 +384,7 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 				ModelUUID: state.ModelUUID.ValueString(),
 				PoolName:  state.Name.ValueString(),
 			},
-			ExpectedErr:    juju.StoragePoolNotFoundError,
+			ExpectedErr:    juju.ErrStoragePoolNotFound,
 			RetryAllErrors: true,
 		},
 	); err != nil {

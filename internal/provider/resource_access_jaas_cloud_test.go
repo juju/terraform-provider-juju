@@ -132,9 +132,7 @@ func TestAcc_ResourceJaasAccessCloudImportState(t *testing.T) {
 						}
 						return nil
 					}
-					errs := make([]error, 1)
-					errs = append(errs, checker("users.0", "everyone@external"))
-					errs = append(errs, checker("users.#", "1"))
+					errs := []error{checker("users.0", "everyone@external"), checker("users.#", "1")}
 					return errors.Join(errs...)
 				},
 				ImportState:   true,
