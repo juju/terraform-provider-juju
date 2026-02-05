@@ -162,7 +162,7 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	response, errs := o.client.Offers.CreateOffer(&juju.CreateOfferInput{
+	response, errs := o.client.Offers.CreateOffer(ctx, &juju.CreateOfferInput{
 		ModelUUID:       modelUUID,
 		Name:            offerName,
 		ApplicationName: plan.ApplicationName.ValueString(),
@@ -204,7 +204,7 @@ func (o *offerResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	response, err := o.client.Offers.ReadOffer(&juju.ReadOfferInput{
+	response, err := o.client.Offers.ReadOffer(ctx, &juju.ReadOfferInput{
 		OfferURL:     state.ID.ValueString(),
 		GetModelUUID: true,
 	})
@@ -257,7 +257,7 @@ func (o *offerResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 
-	err := o.client.Offers.DestroyOffer(&juju.DestroyOfferInput{
+	err := o.client.Offers.DestroyOffer(ctx, &juju.DestroyOfferInput{
 		OfferURL: plan.URL.ValueString(),
 	})
 	if err != nil {

@@ -6,8 +6,8 @@ package juju
 import (
 	"testing"
 
-	"github.com/juju/charm/v12"
 	"github.com/juju/juju/core/crossmodel"
+	"github.com/juju/juju/domain/deployment/charm"
 	"github.com/stretchr/testify/assert"
 )
 

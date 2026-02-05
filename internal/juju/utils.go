@@ -14,8 +14,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
-	"github.com/juju/names/v5"
+	"github.com/juju/names/v6"
 )
 
 // controllerConfig is a representation of the output
@@ -129,7 +130,7 @@ func WaitForAppsAvailable(ctx context.Context, client *apiapplication.Client, ap
 	for {
 		select {
 		case <-tick.C:
-			returned, err := client.ApplicationsInfo(tags)
+			returned, err := client.ApplicationsInfo(ctx, tags)
 			// if there is no error and we get as many app infos as
 			// requested apps, we can assume the apps are available
 			if err != nil {
@@ -159,4 +160,15 @@ func ProcessErrorResults(results []error) error {
 		return &MultiError{Errors: results}
 	}
 	return nil
+}
+
+// JaasConnShim is a shim to adapt the juju api.Connection
+// Now all APICAll methods require a context.Context parameter, which
+// we don't implement in jaas yet.
+type JaasConnShim struct {
+	api.Connection
+}
+
+func (j JaasConnShim) APICall(obj string, version int, id string, request string, params interface{}, response interface{}) error {
+	return j.Connection.APICall(context.TODO(), obj, version, id, request, params, response)
 }

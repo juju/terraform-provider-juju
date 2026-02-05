@@ -162,7 +162,7 @@ func (a *accessModelResource) Create(ctx context.Context, req resource.CreateReq
 	accessStr := plan.Access.ValueString()
 	// Call Models.GrantModel
 	for _, user := range users {
-		err := a.client.Models.GrantModel(juju.GrantModelInput{
+		err := a.client.Models.GrantModel(ctx, juju.GrantModelInput{
 			User:      user,
 			Access:    accessStr,
 			ModelUUID: modelUUIDStr,
@@ -197,7 +197,7 @@ func (a *accessModelResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	response, err := a.client.Users.ModelUserInfo(modelUUID)
+	response, err := a.client.Users.ModelUserInfo(ctx, modelUUID)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read access model resource, got error: %s", err))
 		return
@@ -301,7 +301,7 @@ func (a *accessModelResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	err := a.client.Models.UpdateAccessModel(juju.UpdateAccessModelInput{
+	err := a.client.Models.UpdateAccessModel(ctx, juju.UpdateAccessModelInput{
 		ModelUUID: modelUUID,
 		OldAccess: oldAccess,
 		Grant:     addedUserList,
@@ -341,7 +341,7 @@ func (a *accessModelResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 
-	err := a.client.Models.DestroyAccessModel(juju.DestroyAccessModelInput{
+	err := a.client.Models.DestroyAccessModel(ctx, juju.DestroyAccessModelInput{
 		ModelUUID: plan.ModelUUID.ValueString(),
 		Revoke:    stateUsers,
 		Access:    plan.Access.ValueString(),

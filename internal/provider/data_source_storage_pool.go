@@ -96,7 +96,7 @@ func (d *storagePoolDataSource) Read(ctx context.Context, req datasource.ReadReq
 		ModelUUID: data.ModelUUID.ValueString(),
 		PoolName:  data.Name.ValueString(),
 	}
-	output, err := d.client.Storage.GetPool(input)
+	output, err := d.client.Storage.GetPool(ctx, input)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read storage pool, got error: %s", err))
 		return

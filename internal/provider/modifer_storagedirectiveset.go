@@ -9,7 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	jujustorage "github.com/juju/juju/storage"
+	jujustorage "github.com/juju/juju/core/storage"
 )
 
 // storageDirectivesMapRequiresReplace is a plan modifier function that
@@ -19,7 +19,7 @@ import (
 // Return false if new items were added and old items were not changed.
 // Return true if old items were changed or removed.
 func storageDirectivesMapRequiresReplace(ctx context.Context, req planmodifier.MapRequest, resp *mapplanmodifier.RequiresReplaceIfFuncResponse) {
-	planSet := make(map[string]jujustorage.Constraints)
+	planSet := make(map[string]jujustorage.Directive)
 	if !req.PlanValue.IsUnknown() {
 		var planStorageDirectives map[string]string
 		resp.Diagnostics.Append(req.PlanValue.ElementsAs(ctx, &planStorageDirectives, false)...)
@@ -28,7 +28,7 @@ func storageDirectivesMapRequiresReplace(ctx context.Context, req planmodifier.M
 		}
 		if len(planStorageDirectives) > 0 {
 			for label, storage := range planStorageDirectives {
-				cons, err := jujustorage.ParseConstraints(storage)
+				cons, err := jujustorage.ParseDirective(storage)
 				if err != nil {
 					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse storage directives, got error: %s", err))
 					continue
@@ -40,7 +40,7 @@ func storageDirectivesMapRequiresReplace(ctx context.Context, req planmodifier.M
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	stateSet := make(map[string]jujustorage.Constraints)
+	stateSet := make(map[string]jujustorage.Directive)
 	if !req.StateValue.IsUnknown() {
 		var stateStorageDirectives map[string]string
 		resp.Diagnostics.Append(req.StateValue.ElementsAs(ctx, &stateStorageDirectives, false)...)
@@ -49,7 +49,7 @@ func storageDirectivesMapRequiresReplace(ctx context.Context, req planmodifier.M
 		}
 		if len(stateStorageDirectives) > 0 {
 			for label, storage := range stateStorageDirectives {
-				cons, err := jujustorage.ParseConstraints(storage)
+				cons, err := jujustorage.ParseDirective(storage)
 				if err != nil {
 					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse storage directives, got error: %s", err))
 					continue

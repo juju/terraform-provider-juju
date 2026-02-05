@@ -163,24 +163,18 @@ func (d *modelDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	}
 
 	// Get current juju model data source values.
-	model, err := d.client.Models.GetModel(modelUUID)
+	model, err := d.client.Models.GetModel(ctx, modelUUID)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model by UUID, got error: %s", err))
 		return
 	}
 	d.trace(fmt.Sprintf("read juju model %q data source", data.UUID))
 
-	owner, err := names.ParseUserTag(model.OwnerTag)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse model owner tag %q, got error: %s", model.OwnerTag, err))
-		return
-	}
-
 	// Save data into Terraform state
 	data.UUID = types.StringValue(model.UUID)
 	data.ID = types.StringValue(model.UUID)
 	data.Name = types.StringValue(model.Name)
-	data.Owner = types.StringValue(owner.Id())
+	data.Owner = types.StringValue(model.Qualifier)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 

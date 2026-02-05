@@ -4,6 +4,7 @@
 package wait_test
 
 import (
+	"context"
 	"errors"
 	"sync/atomic"
 	"testing"
@@ -18,7 +19,7 @@ import (
 func TestWaitFor(t *testing.T) {
 	autoAdvancingClock := createAutoAdvancingClock(time.Now())
 	counter := atomic.Int32{}
-	testFunc := func(string) (string, error) {
+	testFunc := func(context.Context, string) (string, error) {
 		if counter.Load() < 10 {
 			counter.Add(1)
 			return "", juju.RetryReadError
@@ -65,7 +66,7 @@ func TestWaitForFatalError(t *testing.T) {
 	autoAdvancingClock := createAutoAdvancingClock(time.Now())
 	fatalError := errors.New("fatal error")
 	counter := atomic.Int32{}
-	testFunc := func(string) (string, error) {
+	testFunc := func(context.Context, string) (string, error) {
 		counter.Add(1)
 		return "", fatalError
 	}
@@ -96,7 +97,7 @@ func TestWaitForFatalError(t *testing.T) {
 func TestWaitForMaxDuration(t *testing.T) {
 	now := time.Now()
 	autoAdvancingClock := createAutoAdvancingClock(now)
-	testFunc := func(string) (string, error) {
+	testFunc := func(context.Context, string) (string, error) {
 		return "", juju.RetryReadError
 	}
 	_, err := wait.WaitFor(wait.WaitForCfg[string, string]{
@@ -125,7 +126,7 @@ func TestWaitForMaxDuration(t *testing.T) {
 func TestWaitForError(t *testing.T) {
 	autoAdvancingClock := createAutoAdvancingClock(time.Now())
 	counter := atomic.Int32{}
-	testFunc := func(string) (string, error) {
+	testFunc := func(context.Context, string) (string, error) {
 		if counter.Load() < 10 {
 			counter.Add(1)
 			return "", juju.RetryReadError
@@ -156,7 +157,7 @@ func TestWaitForError(t *testing.T) {
 func TestWaitForError_RetryAllErrors(t *testing.T) {
 	autoAdvancingClock := createAutoAdvancingClock(time.Now())
 	counter := atomic.Int32{}
-	testFunc := func(string) (string, error) {
+	testFunc := func(context.Context, string) (string, error) {
 		switch counter.Load() {
 		case 0:
 			counter.Add(1)
@@ -194,7 +195,7 @@ func TestWaitForError_RetryAllErrors(t *testing.T) {
 func TestWaitForError_MaxDuration(t *testing.T) {
 	now := time.Now()
 	autoAdvancingClock := createAutoAdvancingClock(now)
-	testFunc := func(string) (string, error) {
+	testFunc := func(context.Context, string) (string, error) {
 		return "", juju.RetryReadError
 	}
 	err := wait.WaitForError(wait.WaitForErrorCfg[string, string]{

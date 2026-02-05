@@ -86,7 +86,7 @@ func (s *secretResource) ImportState(ctx context.Context, req resource.ImportSta
 	modelUUID := parts[0]
 	secretName := parts[1]
 
-	readSecretOutput, err := s.client.Secrets.ReadSecret(&juju.ReadSecretInput{
+	readSecretOutput, err := s.client.Secrets.ReadSecret(ctx, &juju.ReadSecretInput{
 		ModelUUID: modelUUID,
 		Name:      &secretName,
 	})
@@ -222,12 +222,14 @@ func (s *secretResource) Create(ctx context.Context, req resource.CreateRequest,
 	secretValue := make(map[string]string)
 	resp.Diagnostics.Append(plan.Value.ElementsAs(ctx, &secretValue, false)...)
 
-	createSecretOutput, err := s.client.Secrets.CreateSecret(&juju.CreateSecretInput{
-		ModelUUID: plan.ModelUUID.ValueString(),
-		Name:      plan.Name.ValueString(),
-		Value:     secretValue,
-		Info:      plan.Info.ValueString(),
-	})
+	createSecretOutput, err := s.client.Secrets.CreateSecret(ctx,
+		&juju.CreateSecretInput{
+			ModelUUID: plan.ModelUUID.ValueString(),
+			Name:      plan.Name.ValueString(),
+			Value:     secretValue,
+			Info:      plan.Info.ValueString(),
+		},
+	)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to add secret, got error: %s", err))
 		return
@@ -269,7 +271,7 @@ func (s *secretResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	s.trace(fmt.Sprintf("reading secret resource %q", state.SecretId))
 
-	readSecretOutput, err := s.client.Secrets.ReadSecret(&juju.ReadSecretInput{
+	readSecretOutput, err := s.client.Secrets.ReadSecret(ctx, &juju.ReadSecretInput{
 		SecretId:  state.SecretId.ValueString(),
 		ModelUUID: state.ModelUUID.ValueString(),
 	})
@@ -361,7 +363,7 @@ func (s *secretResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	err = s.client.Secrets.UpdateSecret(&updatedSecretInput)
+	err = s.client.Secrets.UpdateSecret(ctx, &updatedSecretInput)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update secret, got error: %s", err))
 		return
@@ -391,7 +393,7 @@ func (s *secretResource) Delete(ctx context.Context, req resource.DeleteRequest,
 
 	s.trace(fmt.Sprintf("deleting secret resource %q", state.SecretId))
 
-	err := s.client.Secrets.DeleteSecret(&juju.DeleteSecretInput{
+	err := s.client.Secrets.DeleteSecret(ctx, &juju.DeleteSecretInput{
 		ModelUUID: state.ModelUUID.ValueString(),
 		SecretId:  state.SecretId.ValueString(),
 	})

@@ -239,7 +239,7 @@ func (r *cloudResource) Create(ctx context.Context, req resource.CreateRequest, 
 		Force:            false,
 	}
 
-	if err := r.client.Clouds.AddCloud(input); err != nil {
+	if err := r.client.Clouds.AddCloud(ctx, input); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create cloud, got error %s", err))
 		return
 	}
@@ -264,7 +264,7 @@ func (r *cloudResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	out, err := r.client.Clouds.ReadCloud(juju.ReadCloudInput{Name: state.Name.ValueString()})
+	out, err := r.client.Clouds.ReadCloud(ctx, juju.ReadCloudInput{Name: state.Name.ValueString()})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read cloud, got error %s", err))
 		return
@@ -394,7 +394,7 @@ func (r *cloudResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		Regions:          regions,
 		CACertificates:   cacerts,
 	}
-	if err := r.client.Clouds.UpdateCloud(input); err != nil {
+	if err := r.client.Clouds.UpdateCloud(ctx, input); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update cloud, got error %s", err))
 		return
 	}
@@ -414,7 +414,7 @@ func (r *cloudResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := r.client.Clouds.RemoveCloud(juju.RemoveCloudInput{Name: state.Name.ValueString()}); err != nil {
+	if err := r.client.Clouds.RemoveCloud(ctx, juju.RemoveCloudInput{Name: state.Name.ValueString()}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to remove cloud, got error %s", err))
 		return
 	}

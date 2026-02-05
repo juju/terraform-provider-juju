@@ -173,7 +173,7 @@ func TestProviderConfigureAddresses(t *testing.T) {
 	assert.Equal(t, confResp.Diagnostics.HasError(), true)
 	err := confResp.Diagnostics.Errors()[0]
 	assert.Equal(t, diag.SeverityError, err.Severity())
-	assert.Equal(t, "Connection error, please check the controller_addresses property set on the provider", err.Detail())
+	assert.Equal(t, "api connection open timed out", err.Detail())
 }
 
 // This is a valid certificate allowing the client to attempt a connection but failing certificate validation
@@ -300,7 +300,7 @@ func createCloudCredential(t *testing.T) {
 	cloudName := canonicalCloudName(strings.ToLower(os.Getenv(TestCloudEnvKey)))
 
 	// List controller credentials to bail out early if one already exists.
-	controllerCreds, _ := TestClient.Credentials.ListControllerCredentials()
+	controllerCreds, _ := TestClient.Credentials.ListControllerCredentials(t.Context())
 	// skip checking the error here, because the controller
 	// returns a not found error if no credentials exist
 	// and for any other errors we want to continue anyway.
@@ -314,7 +314,7 @@ func createCloudCredential(t *testing.T) {
 	}
 
 	// List client credentials to check if we have any cloud-credentials.
-	clientCreds, err := TestClient.Credentials.ListClientCredentials()
+	clientCreds, err := TestClient.Credentials.ListClientCredentials(t.Context())
 	if err != nil {
 		t.Fatalf("failed to read cloud-credential from client store: %v", err)
 	}
@@ -334,7 +334,7 @@ func createCloudCredential(t *testing.T) {
 		break
 	}
 
-	_, err = TestClient.Credentials.CreateCredential(createCredential)
+	_, err = TestClient.Credentials.CreateCredential(t.Context(), createCredential)
 	if err != nil {
 		t.Fatalf("failed to create controller credential: %v", err)
 	}

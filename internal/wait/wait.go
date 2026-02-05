@@ -120,7 +120,7 @@ func (cfg *WaitForErrorCfg[I, D]) setRetryConfDefaults() {
 }
 
 // GetData is a function type that retrieves data based on the input.
-type GetData[I any, D any] func(I) (D, error)
+type GetData[I any, D any] func(context.Context, I) (D, error)
 
 // Assert is a function type that takes data and returns an error if the assertion fails.
 type Assert[D any] func(D) error
@@ -134,7 +134,7 @@ func WaitFor[I any, D any](waitCfg WaitForCfg[I, D]) (D, error) {
 	retryErr := retry.Call(retry.CallArgs{
 		Func: func() error {
 			var err error
-			data, err = waitCfg.GetData(waitCfg.Input)
+			data, err = waitCfg.GetData(waitCfg.Context, waitCfg.Input)
 			if err != nil {
 				return err
 			}
@@ -170,7 +170,7 @@ func WaitForError[I any, D any](cfg WaitForErrorCfg[I, D]) error {
 
 	retryErr := retry.Call(retry.CallArgs{
 		Func: func() error {
-			_, err := cfg.GetData(cfg.Input)
+			_, err := cfg.GetData(cfg.Context, cfg.Input)
 			if err == nil {
 				return juju.NewRetryReadError("no error returned")
 			}
