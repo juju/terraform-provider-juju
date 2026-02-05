@@ -412,7 +412,6 @@ func testAccResourceOfferFuzzyNameStep1(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
-	constraints = "arch=arm64"
 }
 
 resource "juju_application" "haproxy" {
@@ -513,7 +512,6 @@ func testAccResourceOfferTwoOffersSameApplication(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
-	constraints = "arch=arm64"
 }
 
 resource "juju_application" "haproxy" {
