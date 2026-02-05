@@ -41,7 +41,6 @@ import (
 	"github.com/juju/juju/core/network"
 	"github.com/juju/juju/core/semversion"
 	jujustorage "github.com/juju/juju/core/storage"
-	jujuversion "github.com/juju/juju/core/version"
 	"github.com/juju/juju/domain/deployment/charm"
 	charmresources "github.com/juju/juju/domain/deployment/charm/resource"
 	"github.com/juju/juju/environs/config"
@@ -346,19 +345,6 @@ type DestroyApplicationInput struct {
 	ModelUUID       string
 }
 
-func resolveCharmURL(charmName string) (*charm.URL, error) {
-	path, err := charm.EnsureSchema(charmName, charm.CharmHub)
-	if err != nil {
-		return nil, err
-	}
-	charmURL, err := charm.ParseURL(path)
-	if err != nil {
-		return nil, err
-	}
-
-	return charmURL, nil
-}
-
 func (c applicationsClient) CreateApplication(ctx context.Context, input *CreateApplicationInput) (*CreateApplicationResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
@@ -382,10 +368,7 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 			return nil, err
 		}
 	} else {
-		err := c.legacyDeploy(ctx, conn, applicationAPIClient, transformedInput)
-		if err != nil {
-			return nil, jujuerrors.Annotate(err, "legacy deploy method")
-		}
+		return nil, jujuerrors.New("not supported: juju version does not support DeployFromRepository API")
 	}
 
 	// If we have managed to deploy something, now we have
@@ -455,275 +438,6 @@ func resourcesAsStringMap(resources map[string]CharmResource) map[string]string 
 	return result
 }
 
-// TODO (hml) 23-Feb-2024
-// Remove the functionality associated with legacyDeploy
-// once the provider no longer supports a version of juju
-// before 3.3.
-func (c applicationsClient) legacyDeploy(ctx context.Context, conn api.Connection, applicationAPIClient *apiapplication.Client, transformedInput transformedCreateApplicationInput) error {
-	// Version needed for operating system selection.
-	c.controllerVersion, _ = conn.ServerVersion()
-
-	charmsAPIClient := apicharms.NewClient(conn)
-	modelconfigAPIClient := apimodelconfig.NewClient(conn)
-
-	channel, err := charm.ParseChannel(transformedInput.charmChannel)
-	if err != nil {
-		return err
-	}
-
-	charmURL, err := resolveCharmURL(transformedInput.charmName)
-	if err != nil {
-		return err
-	}
-
-	subordinate, err := c.getCharmClient(conn).IsSubordinateCharm(ctx, IsSubordinateCharmParameters{
-		Name:    transformedInput.charmName,
-		Channel: transformedInput.charmChannel,
-	})
-	if err != nil {
-		return err
-	}
-	if subordinate {
-		transformedInput.units = 0
-	}
-
-	if charmURL.Revision != UnspecifiedRevision {
-		return fmt.Errorf("cannot specify revision in a charm name")
-	}
-	if transformedInput.charmRevision != UnspecifiedRevision && channel.Empty() {
-		return fmt.Errorf("specifying a revision requires a channel for future upgrades")
-	}
-
-	userSuppliedBase := transformedInput.charmBase
-	platformCons, err := modelconfigAPIClient.GetModelConstraints(ctx)
-	if err != nil {
-		return err
-	}
-	platform := utils.MakePlatform(transformedInput.constraints, userSuppliedBase, platformCons)
-
-	urlForOrigin := charmURL
-	if transformedInput.charmRevision != UnspecifiedRevision {
-		urlForOrigin = urlForOrigin.WithRevision(transformedInput.charmRevision)
-	}
-
-	// Juju 2.9 cares that the series is in the origin. Juju 3.3 does not.
-	// We are supporting both now.
-	if !userSuppliedBase.Empty() {
-		return jujuerrors.New("series not supported")
-	}
-
-	origin, err := utils.MakeOrigin(charm.Schema(urlForOrigin.Schema), transformedInput.charmRevision, channel, platform)
-	if err != nil {
-		return err
-	}
-
-	// Charm or bundle has been supplied as a URL so we resolve and
-	// deploy using the store but pass in the origin command line
-	// argument so users can target a specific origin.
-	resolvedURL, resolvedOrigin, supportedBases, err := resolveCharm(ctx, charmsAPIClient, charmURL, origin)
-	if err != nil {
-		return err
-	}
-	if resolvedOrigin.Type == "bundle" {
-		return jujuerrors.NotSupportedf("deploying bundles")
-	}
-	c.Tracef("resolveCharm returned", map[string]interface{}{"resolvedURL": resolvedURL, "resolvedOrigin": resolvedOrigin, "supportedBases": supportedBases})
-
-	baseToUse, err := c.baseToUse(ctx, modelconfigAPIClient, userSuppliedBase, resolvedOrigin.Base, supportedBases)
-	if err != nil {
-		c.Warnf("failed to get a suggested operating system from resolved charm response", map[string]interface{}{"err": err})
-	}
-	// Double check we got what was requested.
-	if !userSuppliedBase.Empty() && !userSuppliedBase.IsCompatible(baseToUse) {
-		return jujuerrors.Errorf(
-			"juju bug (LP 2039179), requested base %q does not match base %q found for charm.",
-			userSuppliedBase, baseToUse)
-	}
-	resolvedOrigin.Base = baseToUse
-
-	appConfig := transformedInput.config
-	if appConfig == nil {
-		appConfig = make(map[string]string)
-	}
-	appConfig["trust"] = fmt.Sprintf("%v", transformedInput.trust)
-
-	// If a plan element, with RequiresReplace in the schema, is
-	// changed. Terraform calls the Destroy method then the Create
-	// method for resource. This provider does not wait for Destroy
-	// to be complete before returning. Therefore, a race may occur
-	// of tearing down and reading the same charm.
-	//
-	// Do the actual work to create an application within Retry.
-	// Errors seen so far include:
-	// * cannot add application "replace": charm "ch:amd64/jammy/mysql-196" not found
-	// * cannot add application "replace": application already exists
-	// * cannot add application "replace": charm: not found or not alive
-	return retry.Call(retry.CallArgs{
-		Func: func() error {
-			c.Tracef("AddCharm ", map[string]interface{}{"resolvedURL": resolvedURL, "resolvedOrigin": resolvedOrigin})
-			resultOrigin, err := charmsAPIClient.AddCharm(ctx, resolvedURL, resolvedOrigin, false)
-			if err != nil {
-				err2 := typedError(err)
-				// If the charm is AlreadyExists, keep going, we
-				// may still be able to create the application. It's
-				// also possible we have multiple applications using
-				// the same charm.
-				if !jujuerrors.Is(err2, jujuerrors.AlreadyExists) {
-					return err2
-				}
-			}
-
-			charmID := apiapplication.CharmID{
-				URL:    resolvedURL.String(),
-				Origin: resultOrigin,
-			}
-
-			resources, err := c.processResources(ctx, charmsAPIClient, conn, charmID, transformedInput.applicationName, transformedInput.resources)
-			if err != nil && !jujuerrors.Is(err, jujuerrors.AlreadyExists) {
-				return err
-			}
-
-			args := apiapplication.DeployArgs{
-				CharmID:          charmID,
-				ApplicationName:  transformedInput.applicationName,
-				NumUnits:         transformedInput.units,
-				CharmOrigin:      resultOrigin,
-				Config:           appConfig,
-				Cons:             transformedInput.constraints,
-				Resources:        resources,
-				Storage:          transformedInput.storage,
-				Placement:        transformedInput.placement,
-				EndpointBindings: transformedInput.endpointBindings,
-			}
-			c.Tracef("Calling Deploy", map[string]interface{}{"args": args})
-			if err = applicationAPIClient.Deploy(ctx, args); err != nil {
-				return typedError(err)
-			}
-			return nil
-		},
-		IsFatalError: func(err error) bool {
-			// If we hit AlreadyExists, it is from Deploy only under 2
-			// scenarios:
-			//   1. User error, the application has already been created?
-			//   2. We're replacing the application and tear down hasn't
-			//      finished yet, we should try again.
-			return !jujuerrors.Is(err, jujuerrors.NotFound) && !jujuerrors.Is(err, jujuerrors.AlreadyExists)
-		},
-		NotifyFunc: func(err error, attempt int) {
-			c.Errorf(err, fmt.Sprintf("deploy application %q retry", transformedInput.applicationName))
-			message := fmt.Sprintf("waiting for application %q deploy, attempt %d", transformedInput.applicationName, attempt)
-			c.Debugf(message)
-		},
-		BackoffFunc: retry.DoubleDelay,
-		Attempts:    30,
-		Delay:       time.Second,
-		Clock:       clock.WallClock,
-		Stop:        ctx.Done(),
-	})
-}
-
-// supportedWorkloadBase returns a slice of supported workload basees
-// depending on the controller agent version. This provider currently
-// uses juju 3.3.0 code. However, the supported workload base list is
-// different between juju 2 and juju 3. Handle that here.
-func (c applicationsClient) supportedWorkloadBase(imageStream string) ([]corebase.Base, error) {
-	supportedBases := corebase.WorkloadBases()
-	if c.controllerVersion.Major > 2 {
-		// SupportedBases include those supported with juju 3.x; juju 2.9.x
-		// supports more. If we have a juju 2.9.x controller add them back.
-		additionallySupported := []corebase.Base{
-			{OS: "ubuntu", Channel: corebase.Channel{Track: "18.04"}}, // bionic
-			{OS: "ubuntu", Channel: corebase.Channel{Track: "16.04"}}, // xenial
-			{OS: "ubuntu", Channel: corebase.Channel{Track: "14.04"}}, // trusty
-			{OS: "ubuntu", Channel: corebase.Channel{Track: "12.04"}}, // precise
-			{OS: "windows"},
-			{OS: "centos", Channel: corebase.Channel{Track: "7"}}, // centos7
-		}
-		supportedBases = append(supportedBases, additionallySupported...)
-	}
-	return supportedBases, nil
-}
-
-// baseToUse selects a base to deploy a charm with based on the following
-// criteria
-//   - A user specified base must be supported by the charm and a valid juju
-//     supported workload base. If so, use that, otherwise if an input base
-//     is provided, return an error.
-//   - Next check DefaultBase from model config. If explicitly defined by the
-//     user, check against charm and juju supported workloads. Use that if in
-//     both lists.
-//   - Third check the suggested base.
-//   - Fourth, use the DefaultLTS if a supported base.
-//   - Lastly, pop the first element of the supported bases off the list and use
-//     that.
-//
-// If the intersection of the charm and supported workload bases is empty, exit
-// with an error.
-//
-// Note, we are re-implementing the logic of base_selector in juju code as it's
-// a private object.
-func (c applicationsClient) baseToUse(ctx context.Context, modelconfigAPIClient *apimodelconfig.Client, inputBase, suggestedBase corebase.Base, charmBases []corebase.Base) (corebase.Base, error) {
-	c.Tracef("baseToUse", map[string]interface{}{"inputBase": inputBase, "suggestedBase": suggestedBase, "charmBases": charmBases})
-
-	attrs, err := modelconfigAPIClient.ModelGet(ctx)
-	if err != nil {
-		return corebase.Base{}, jujuerrors.Wrap(err, jujuerrors.New("cannot fetch model settings"))
-	}
-	modelConfig, err := config.New(config.NoDefaults, attrs)
-	if err != nil {
-		return corebase.Base{}, err
-	}
-
-	supportedWorkloadBases, err := c.supportedWorkloadBase(modelConfig.ImageStream())
-	if err != nil {
-		return corebase.Base{}, err
-	}
-
-	// We can choose from a list of bases, supported both as
-	// workload bases and by the charm.
-	supportedBases := intersectionOfBases(charmBases, supportedWorkloadBases)
-	if len(supportedBases) == 0 {
-		return corebase.Base{}, jujuerrors.NewNotSupported(nil,
-			"This charm has no bases supported by the charm and in the list of juju workload bases for the current version of juju.")
-	}
-
-	// If the inputBase is supported by the charm and is a supported
-	// workload base, use that.
-	if basesContain(inputBase, supportedBases) {
-		return inputBase, nil
-	} else if !inputBase.Empty() {
-		return corebase.Base{}, jujuerrors.NewNotSupported(nil,
-			fmt.Sprintf("base %q either not supported by the charm, or an unsupported juju workload base with the current version of juju.", inputBase))
-	}
-
-	// If a default base is explicitly defined for the model,
-	// use that if a supportedBase.
-	defaultBaseString, explicit := modelConfig.DefaultBase()
-	if explicit {
-		defaultBase, err := corebase.ParseBaseFromString(defaultBaseString)
-		if err != nil {
-			return corebase.Base{}, err
-		}
-		if basesContain(defaultBase, supportedBases) {
-			return defaultBase, nil
-		}
-	}
-
-	// If a suggested base is in the supportedBases list, use it.
-	if basesContain(suggestedBase, supportedBases) {
-		return suggestedBase, nil
-	}
-
-	// Note: This DefaultSupportedLTSBase is specific to juju 3.3.0
-	lts := jujuversion.DefaultSupportedLTSBase()
-	if basesContain(lts, supportedBases) {
-		return lts, nil
-	}
-
-	// Last attempt, the first base in supported Bases.
-	return supportedBases[0], nil
-}
-
 // processExpose is a local function that executes an exposed request.
 // If the exposeConfig argument is nil it simply exits. If not,
 // an exposed request is done populating the request arguments with
@@ -783,26 +497,6 @@ func splitCommaDelimitedList(list string) []string {
 		items = append(items, token)
 	}
 	return items
-}
-
-// processResources is a helper function to process the charm
-// metadata and request the download of any additional resource.
-func (c applicationsClient) processResources(ctx context.Context, charmsAPIClient *apicharms.Client, conn api.Connection, charmID apiapplication.CharmID, appName string, resourcesToUse map[string]CharmResource) (map[string]string, error) {
-	charmInfo, err := charmsAPIClient.CharmInfo(ctx, charmID.URL)
-	if err != nil {
-		return nil, typedError(err)
-	}
-
-	// check if we have resources to request
-	if len(charmInfo.Meta.Resources) == 0 && len(resourcesToUse) == 0 {
-		return nil, nil
-	}
-
-	resourcesAPIClient, err := c.getResourceAPIClient(conn)
-	if err != nil {
-		return nil, err
-	}
-	return addPendingResources(ctx, appName, charmInfo.Meta.Resources, resourcesToUse, charmID, resourcesAPIClient)
 }
 
 // ReadApplicationWithRetryOnNotFound calls ReadApplication until
