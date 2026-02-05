@@ -335,8 +335,13 @@ func matchByEndpoints(offers []*crossmodel.ApplicationOfferDetails, endpoints []
 // Secondly, this fuzzy match is across the model, so if there was another offer for a completely different
 // application, this would match too.
 //
-// We do not need to filter by application though, as exact offer name match is enough to distinguish offers,
-// even if there are multiple offers for the same/different application.
+// It's worth noting that the FindApplicationOffers API, despite having the parameter, doesn't support filtering by application name,
+// so we can't use that to workaround the fuzzy matching of offer name. And even if we could, it wouldn't solve the scenario
+// where the same application has two offers of similar names and the same endpoint (although this is less likely to happen in practice).
+// It's also worth noting that the ListApplicationOffer API does support filtering by application name, and all options entirely,
+// but is an administrator level endpoint. To prevent potential breaking changes, and to cover both scenarios (one or two applications with
+// similar offer names), we are filtering by offer name in the client side, which is a more robust solution to ensure we get the correct offer.
+// And option not to filter by application name as an exact offer match is sufficient.
 func matchByOfferName(offers []*crossmodel.ApplicationOfferDetails, offerName string) []*crossmodel.ApplicationOfferDetails {
 	exactMatches := []*crossmodel.ApplicationOfferDetails{}
 	for _, off := range offers {
