@@ -26,6 +26,7 @@ import (
 	model "github.com/juju/juju/core/model"
 	resource "github.com/juju/juju/core/resource"
 	secrets0 "github.com/juju/juju/core/secrets"
+	semversion "github.com/juju/juju/core/semversion"
 	charm0 "github.com/juju/juju/domain/deployment/charm"
 	params0 "github.com/juju/juju/rpc/params"
 	names "github.com/juju/names/v6"
@@ -242,6 +243,45 @@ func (c *MockSharedClientGetConnectionCall) Do(f func(*string) (api.Connection, 
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockSharedClientGetConnectionCall) DoAndReturn(f func(*string) (api.Connection, error)) *MockSharedClientGetConnectionCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// GetControllerVersion mocks base method.
+func (m *MockSharedClient) GetControllerVersion(arg0 context.Context) (semversion.Number, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetControllerVersion", arg0)
+	ret0, _ := ret[0].(semversion.Number)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetControllerVersion indicates an expected call of GetControllerVersion.
+func (mr *MockSharedClientMockRecorder) GetControllerVersion(arg0 any) *MockSharedClientGetControllerVersionCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetControllerVersion", reflect.TypeOf((*MockSharedClient)(nil).GetControllerVersion), arg0)
+	return &MockSharedClientGetControllerVersionCall{Call: call}
+}
+
+// MockSharedClientGetControllerVersionCall wrap *gomock.Call
+type MockSharedClientGetControllerVersionCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSharedClientGetControllerVersionCall) Return(arg0 semversion.Number, arg1 error) *MockSharedClientGetControllerVersionCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSharedClientGetControllerVersionCall) Do(f func(context.Context) (semversion.Number, error)) *MockSharedClientGetControllerVersionCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSharedClientGetControllerVersionCall) DoAndReturn(f func(context.Context) (semversion.Number, error)) *MockSharedClientGetControllerVersionCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

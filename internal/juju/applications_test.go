@@ -98,8 +98,7 @@ func (s *ApplicationSuite) setupMocks(t *testing.T) *gomock.Controller {
 
 func (s *ApplicationSuite) getApplicationsClient() applicationsClient {
 	return applicationsClient{
-		SharedClient:      s.mockSharedClient,
-		controllerVersion: semversion.Number{},
+		SharedClient: s.mockSharedClient,
 		getApplicationAPIClient: func(_ base.APICallCloser) ApplicationAPIClient {
 			return s.mockApplicationClient
 		},
@@ -118,6 +117,7 @@ func (s *ApplicationSuite) getApplicationsClient() applicationsClient {
 func (s *ApplicationSuite) TestReadApplicationRetry() {
 	defer s.setupMocks(s.T()).Finish()
 	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().GetControllerVersion(gomock.Any()).Return(semversion.Number{}, nil)
 
 	appName := "testapplication"
 	aExp := s.mockApplicationClient.EXPECT()
@@ -200,6 +200,7 @@ func (s *ApplicationSuite) TestReadApplicationRetryDoNotPanic() {
 func (s *ApplicationSuite) TestReadApplicationRetryWaitForMachines() {
 	defer s.setupMocks(s.T()).Finish()
 	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().GetControllerVersion(gomock.Any()).Return(semversion.Number{}, nil).AnyTimes()
 
 	appName := "testapplication"
 	aExp := s.mockApplicationClient.EXPECT()
@@ -276,6 +277,7 @@ func (s *ApplicationSuite) TestReadApplicationRetryWaitForMachines() {
 func (s *ApplicationSuite) TestReadApplicationRetrySubordinate() {
 	defer s.setupMocks(s.T()).Finish()
 	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().GetControllerVersion(gomock.Any()).Return(semversion.Number{}, nil)
 
 	appName := "testapplication"
 	aExp := s.mockApplicationClient.EXPECT()
@@ -332,6 +334,7 @@ func (s *ApplicationSuite) TestReadApplicationRetrySubordinate() {
 func (s *ApplicationSuite) TestReadApplicationRetryNotFoundStorageNotFoundError() {
 	defer s.setupMocks(s.T()).Finish()
 	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().GetControllerVersion(gomock.Any()).Return(semversion.Number{}, nil)
 
 	appName := "testapplication"
 	aExp := s.mockApplicationClient.EXPECT()

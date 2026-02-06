@@ -21,6 +21,7 @@ import (
 	"github.com/juju/juju/api/connector"
 	"github.com/juju/juju/core/logger"
 	"github.com/juju/juju/core/model"
+	"github.com/juju/juju/core/semversion"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
 	"github.com/juju/utils/cache"
@@ -182,6 +183,20 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 		isJAAS:       func() bool { return sc.IsJAAS(defaultJAASCheck) },
 		username:     user,
 	}, nil
+}
+
+// GetControllerVersion returns the version of the controller that the client is connected to.
+func (sc *sharedClient) GetControllerVersion(ctx context.Context) (semversion.Number, error) {
+	conn, err := sc.GetConnection(nil)
+	if err != nil {
+		return semversion.Number{}, err
+	}
+	defer func() { _ = conn.Close() }()
+	v, ok := conn.ServerVersion()
+	if !ok {
+		return semversion.Number{}, errors.New("failed to get controller version")
+	}
+	return v, nil
 }
 
 // IsJAAS checks if the controller is a JAAS controller.
