@@ -9,9 +9,11 @@ import (
 	"maps"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
@@ -45,6 +47,7 @@ type JujuCommand interface {
 var _ resource.Resource = &controllerResource{}
 var _ resource.ResourceWithConfigure = &controllerResource{}
 var _ resource.ResourceWithImportState = &controllerResource{}
+var _ resource.ResourceWithIdentity = &controllerResource{}
 
 type controllerResourceModel struct {
 	JujuBinary      types.String `tfsdk:"juju_binary"`
@@ -77,6 +80,17 @@ type controllerResourceModel struct {
 
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
+}
+
+// controllerResourceIdentityModel represents the identity data for a controller resource
+type controllerResourceIdentityModel struct {
+	Name           types.String `tfsdk:"name"`
+	ApiAddresses   types.List   `tfsdk:"api_addresses"`
+	CACert         types.String `tfsdk:"ca_cert"`
+	Username       types.String `tfsdk:"username"`
+	Password       types.String `tfsdk:"password"`
+	UUID           types.String `tfsdk:"controller_uuid"`
+	CredentialName types.String `tfsdk:"credential_name"`
 }
 
 // nestedCloudModel represents the cloud nested object in the controller resource
@@ -121,6 +135,33 @@ type nestedDestroyFlagsModel struct {
 	ModelTimeout     types.Int32 `tfsdk:"model_timeout"`
 	ReleaseStorage   types.Bool  `tfsdk:"release_storage"`
 }
+
+// Type definitions for nested objects
+var (
+	nestedCloudRegionAttrTypes = map[string]attr.Type{
+		"name":              types.StringType,
+		"endpoint":          types.StringType,
+		"identity_endpoint": types.StringType,
+		"storage_endpoint":  types.StringType,
+	}
+
+	nestedCloudCredentialAttrTypes = map[string]attr.Type{
+		"name":       types.StringType,
+		"auth_type":  types.StringType,
+		"attributes": types.MapType{ElemType: types.StringType},
+	}
+
+	nestedCloudAttrTypes = map[string]attr.Type{
+		"name":              types.StringType,
+		"auth_types":        types.SetType{ElemType: types.StringType},
+		"ca_certificates":   types.SetType{ElemType: types.StringType},
+		"config":            types.MapType{ElemType: types.StringType},
+		"endpoint":          types.StringType,
+		"host_cloud_region": types.StringType,
+		"region":            types.ObjectType{AttrTypes: nestedCloudRegionAttrTypes},
+		"type":              types.StringType,
+	}
+)
 
 // NewControllerResource returns a new resource for managing Juju controllers.
 func NewControllerResource(newJujuCommand func(string) (JujuCommand, error)) resource.Resource {
@@ -252,7 +293,7 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 						Attributes: map[string]schema.Attribute{
 							"endpoint": schema.StringAttribute{
 								Description: "The API endpoint for the region.",
-								Required:    true,
+								Optional:    true,
 							},
 							"identity_endpoint": schema.StringAttribute{
 								Description: "The identity endpoint for the region.",
@@ -346,7 +387,6 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Default: stringdefault.StaticString("/usr/bin/juju"),
@@ -438,6 +478,36 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 	}
 }
 
+// IdentitySchema defines the identity schema for the controller resource.
+func (r *controllerResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
+	resp.IdentitySchema = identityschema.Schema{
+		Attributes: map[string]identityschema.Attribute{
+			"name": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+			"api_addresses": identityschema.ListAttribute{
+				ElementType:       types.StringType,
+				RequiredForImport: true,
+			},
+			"ca_cert": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+			"username": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+			"password": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+			"controller_uuid": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+			"credential_name": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+		},
+	}
+}
+
 // Configure prepares the resource for operations
 func (r *controllerResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
@@ -460,9 +530,153 @@ func (r *controllerResource) Metadata(_ context.Context, req resource.MetadataRe
 	resp.TypeName = req.ProviderTypeName + "_controller"
 }
 
+// stateSetter interface allows setting attributes on either State or response objects
+type stateSetter interface {
+	SetAttribute(ctx context.Context, path path.Path, val any) diag.Diagnostics
+}
+
+// populateCloudState populates the state with cloud information.
+func (r *controllerResource) populateCloudState(ctx context.Context, cloudInfo *juju.CloudInformation, setter stateSetter, diagnostics *diag.Diagnostics) {
+	// Build cloud model from CloudInformation
+	cloudModel := nestedCloudModel{
+		Name: types.StringValue(cloudInfo.CloudName),
+		Type: types.StringValue(cloudInfo.CloudType),
+	}
+
+	// Set auth types
+	authTypesList, diags := types.SetValueFrom(ctx, types.StringType, cloudInfo.CloudAuthTypes)
+	diagnostics.Append(diags...)
+	if diagnostics.HasError() {
+		return
+	}
+	cloudModel.AuthTypes = authTypesList
+
+	// Set endpoint if available
+	if cloudInfo.CloudEndpoint != "" {
+		cloudModel.Endpoint = types.StringValue(cloudInfo.CloudEndpoint)
+	} else {
+		cloudModel.Endpoint = types.StringNull()
+	}
+
+	// Set CA certificates if available
+	if len(cloudInfo.CloudCACertificates) > 0 {
+		caCertsList, diags := types.SetValueFrom(ctx, types.StringType, cloudInfo.CloudCACertificates)
+		diagnostics.Append(diags...)
+		if diagnostics.HasError() {
+			return
+		}
+		cloudModel.CACertificates = caCertsList
+	} else {
+		cloudModel.CACertificates = types.SetNull(types.StringType)
+	}
+
+	regionModel := nestedCloudRegionModel{
+		Name:             types.StringValue(cloudInfo.CloudRegion),
+		Endpoint:         types.StringNull(),
+		IdentityEndpoint: types.StringNull(),
+		StorageEndpoint:  types.StringNull(),
+	}
+	regionObj, diags := types.ObjectValueFrom(ctx, nestedCloudRegionAttrTypes, regionModel)
+	diagnostics.Append(diags...)
+	if diagnostics.HasError() {
+		return
+	}
+	cloudModel.Region = regionObj
+
+	// Config and host_cloud_region are typically null when importing
+	cloudModel.Config = types.MapNull(types.StringType)
+	cloudModel.HostCloudRegion = types.StringNull()
+
+	// Convert cloudModel to object and set it on state
+	cloudObj, diags := types.ObjectValueFrom(ctx, nestedCloudAttrTypes, cloudModel)
+	diagnostics.Append(diags...)
+	if diagnostics.HasError() {
+		return
+	}
+	diagnostics.Append(setter.SetAttribute(ctx, path.Root("cloud"), cloudObj)...)
+}
+
+// populateCredentialState populates the state with credential information.
+func (r *controllerResource) populateCredentialState(ctx context.Context, cloudInfo *juju.CloudInformation, credentialName string, setter stateSetter, diagnostics *diag.Diagnostics) {
+	// Build cloud credential model from CloudInformation
+	credentialModel := nestedCloudCredentialModel{
+		Name:     types.StringValue(credentialName),
+		AuthType: types.StringValue(cloudInfo.CredentialAuthType),
+	}
+
+	// Set credential attributes
+	if len(cloudInfo.CredentialAttributes) > 0 {
+		attrMap, diags := types.MapValueFrom(ctx, types.StringType, cloudInfo.CredentialAttributes)
+		diagnostics.Append(diags...)
+		if diagnostics.HasError() {
+			return
+		}
+		credentialModel.Attributes = attrMap
+	} else {
+		credentialModel.Attributes = types.MapNull(types.StringType)
+	}
+
+	// Convert credentialModel to object and set it on state
+	credentialObj, diags := types.ObjectValueFrom(ctx, nestedCloudCredentialAttrTypes, credentialModel)
+	diagnostics.Append(diags...)
+	if diagnostics.HasError() {
+		return
+	}
+	diagnostics.Append(setter.SetAttribute(ctx, path.Root("cloud_credential"), credentialObj)...)
+}
+
 // ImportState imports the resource state.
 func (r *controllerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	if req.ID != "" {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			"Importing Juju controllers by ID is not supported. "+
+				"Please import using the identity schema.",
+		)
+		return
+	}
+
+	var identityData controllerResourceIdentityModel
+	resp.Diagnostics.Append(req.Identity.Get(ctx, &identityData)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Set identity fields in state
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), identityData.Name)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), identityData.Name)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("api_addresses"), identityData.ApiAddresses)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("ca_cert"), identityData.CACert)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("username"), identityData.Username)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("password"), identityData.Password)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("controller_uuid"), identityData.UUID)...)
+
+	// Fetch and populate cloud and credential information
+	var apiAddresses []string
+	resp.Diagnostics.Append(identityData.ApiAddresses.ElementsAs(ctx, &apiAddresses, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	connInfo := &juju.ControllerConnectionInformation{
+		Addresses:      apiAddresses,
+		CACert:         identityData.CACert.ValueString(),
+		Username:       identityData.Username.ValueString(),
+		Password:       identityData.Password.ValueString(),
+		ControllerUUID: identityData.UUID.ValueString(),
+	}
+
+	cloudInfo, err := juju.GetCloudInformation(ctx, connInfo)
+	if err != nil {
+		resp.Diagnostics.AddWarning(
+			"Failed to fetch cloud information",
+			fmt.Sprintf("Could not fetch cloud and credential information from controller: %s. ", err.Error()),
+		)
+		return
+	}
+
+	r.populateCloudState(ctx, cloudInfo, &resp.State, &resp.Diagnostics)
+	r.populateCredentialState(ctx, cloudInfo, identityData.CredentialName.ValueString(), &resp.State, &resp.Diagnostics)
 }
 
 // Create bootstraps a new Juju controller.
@@ -487,6 +701,7 @@ func (r *controllerResource) Create(ctx context.Context, req resource.CreateRequ
 		if resp.Diagnostics.HasError() {
 			return
 		}
+
 		cloudRegion = &juju.BootstrapCloudRegionArgument{
 			Name:             regionModel.Name.ValueString(),
 			Endpoint:         regionModel.Endpoint.ValueString(),
@@ -662,6 +877,19 @@ func (r *controllerResource) Create(ctx context.Context, req resource.CreateRequ
 	plan.ControllerUUID = types.StringValue(result.ControllerUUID)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+
+	// Set identity data
+	identity := controllerResourceIdentityModel{
+		Name:           plan.Name,
+		ApiAddresses:   apiAddresses,
+		CACert:         plan.CACert,
+		Username:       plan.Username,
+		Password:       plan.Password,
+		UUID:           plan.ControllerUUID,
+		CredentialName: types.StringValue(credentialModel.Name.ValueString()),
+	}
+
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 // Read retrieves the Juju controller configuration.
@@ -732,6 +960,7 @@ func (r *controllerResource) Read(ctx context.Context, req resource.ReadRequest,
 		}
 	}
 
+	// Set the state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 

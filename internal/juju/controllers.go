@@ -16,12 +16,15 @@ import (
 	"sync"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/juju/errors"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/connector"
 	controllerapi "github.com/juju/juju/api/controller/controller"
 	jujucloud "github.com/juju/juju/cloud"
+	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/juju/osenv"
 	"github.com/juju/juju/jujuclient"
+	"github.com/juju/names/v5"
 	"github.com/juju/version/v2"
 	"gopkg.in/yaml.v2"
 )
@@ -40,6 +43,18 @@ type ControllerConnectionInformation struct {
 	Password       string
 	AgentVersion   string
 	ControllerUUID string
+}
+
+// CloudInformation contains cloud and credential details for a controller.
+type CloudInformation struct {
+	CloudName            string
+	CloudType            string
+	CloudRegion          string
+	CloudEndpoint        string
+	CloudAuthTypes       []string
+	CloudCACertificates  []string
+	CredentialAuthType   string
+	CredentialAttributes map[string]string
 }
 
 // CommandRunner defines the interface for executing juju commands.
@@ -763,4 +778,85 @@ func newSafeJujuClientStore(workingDir string) *safeJujuClientStore {
 		oldJujuData:     oldJujuData,
 		currentJujuData: workingDir,
 	}
+}
+
+// GetCloudInformation retrieves cloud and credential information from a controller
+// using the Juju API. This is useful for importing controller resources.
+func GetCloudInformation(ctx context.Context, connInfo *ControllerConnectionInformation) (*CloudInformation, error) {
+	if connInfo == nil {
+		return nil, fmt.Errorf("connection information is required")
+	}
+
+	// Connect to the controller
+	conn, err := connector.NewSimple(connector.SimpleConfig{
+		ControllerAddresses: connInfo.Addresses,
+		Username:            connInfo.Username,
+		Password:            connInfo.Password,
+		CACert:              connInfo.CACert,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create connector: %w", err)
+	}
+
+	apiConn, err := conn.Connect()
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to controller: %w", err)
+	}
+	defer apiConn.Close()
+
+	// Get controller API client
+	controllerAPI := controllerapi.NewClient(apiConn)
+	defer controllerAPI.Close()
+
+	// Get model config API client
+	modelConfigAPI := modelconfig.NewClient(apiConn)
+	defer modelConfigAPI.Close()
+
+	// Get model config to obtain model UUID
+	modelAttrs, err := modelConfigAPI.ModelGet()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get model config: %w", err)
+	}
+
+	cfg, err := config.New(config.NoDefaults, modelAttrs)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	// Get cloud spec from the controller
+	cloudSpec, err := controllerAPI.CloudSpec(names.NewModelTag(cfg.UUID()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cloud spec: %w", err)
+	}
+
+	// Extract auth types
+	authTypes := make([]string, 0)
+	if cloudSpec.Credential != nil {
+		authTypes = []string{string(cloudSpec.Credential.AuthType())}
+	}
+
+	// Extract credential attributes
+	credentialAttrs := make(map[string]string)
+	if cloudSpec.Credential != nil {
+		credentialAttrs = cloudSpec.Credential.Attributes()
+	}
+
+	// Extract CA certificates if present
+	var caCerts []string
+	if len(cloudSpec.CACertificates) > 0 {
+		caCerts = cloudSpec.CACertificates
+	}
+
+	cloudInfo := &CloudInformation{
+		CloudName:            cloudSpec.Name,
+		CloudType:            cloudSpec.Type,
+		CloudRegion:          cloudSpec.Region,
+		CloudEndpoint:        cloudSpec.Endpoint,
+		CloudAuthTypes:       authTypes,
+		CloudCACertificates:  caCerts,
+		CredentialAuthType:   string(cloudSpec.Credential.AuthType()),
+		CredentialAttributes: credentialAttrs,
+	}
+
+	return cloudInfo, nil
 }
