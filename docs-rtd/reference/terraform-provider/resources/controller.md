@@ -50,6 +50,7 @@ A resource that represents a Juju Controller.
 Required:
 
 - `auth_types` (Set of String) The authentication type(s) supported by the cloud.
+- `endpoint` (String) The API endpoint for the cloud.
 - `name` (String) The name of the cloud
 - `type` (String) The type of the cloud .
 
@@ -57,7 +58,6 @@ Optional:
 
 - `ca_certificates` (Set of String) CA certificates for the cloud.
 - `config` (Map of String) Configuration options for the cloud.
-- `endpoint` (String) The API endpoint for the cloud.
 - `host_cloud_region` (String) The host cloud region for the cloud.
 - `region` (Attributes) The cloud region where the controller will operate. (see [below for nested schema](#nestedatt--cloud--region))
 
@@ -66,11 +66,11 @@ Optional:
 
 Required:
 
-- `endpoint` (String) The API endpoint for the region.
 - `name` (String) The name of the region.
 
 Optional:
 
+- `endpoint` (String) The API endpoint for the region.
 - `identity_endpoint` (String) The identity endpoint for the region.
 - `storage_endpoint` (String) The storage endpoint for the region.
 
