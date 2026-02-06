@@ -177,13 +177,15 @@ func (c offersClient) CreateOffer(input *CreateOfferInput) (*CreateOfferResponse
 		return nil, append(errs, fmt.Errorf("unable to get model name for model UUID %q: %w", input.ModelUUID, err))
 	}
 
+	c.JujuLogger().sc.Debugf(fmt.Sprintf("listing offers to find the created offer %q in model %q owned by %q", offerName, modelName, modelOwner))
+
 	filter := crossmodel.ApplicationOfferFilter{
 		OfferName: offerName,
 		ModelName: modelName,
 		OwnerName: modelOwner,
 	}
 
-	offer, err := findApplicationOffers(client, filter, input.Endpoints)
+	offer, err := findCreatedOffer(client, filter, input.Endpoints, offerName)
 	if err != nil {
 		return nil, append(errs, err)
 	}
@@ -321,13 +323,45 @@ func matchByEndpoints(offers []*crossmodel.ApplicationOfferDetails, endpoints []
 	return filtered
 }
 
-func findApplicationOffers(client *applicationoffers.Client, filter crossmodel.ApplicationOfferFilter, endpoints []string) (*crossmodel.ApplicationOfferDetails, error) {
+// matchByOfferName is returning offers that match exactly the offer name provided.
+//
+// The FindApplicationOffers API doesn't support exact matching on offer name, it does a fuzzy match using
+// regex ".*<offer-name>.*".
+//
+// If we create an offer called "haproxy-two", and then an offer called "haproxy", Juju will return both
+// offers because it will covert the offer name of "haproxy" into a fuzzy match of ".*haproxy.*".
+// To workaround this, we need to filter the offers by exact offer name.
+//
+// Secondly, this fuzzy match is across the model, so if there was another offer for a completely different
+// application, this would match too.
+//
+// FindApplicationOffer accepts an application name parameter, but doesn't filter by it.
+// While ListApplicationOffer does support filtering by application, it is an administrator endpoint.
+//
+// Even if they did filter by application, it's still possible for a single application to have two offers
+// with names that will be confused by the filter. Doing our own client-side filtering is the more robust solution.
+func matchByOfferName(offers []*crossmodel.ApplicationOfferDetails, offerName string) []*crossmodel.ApplicationOfferDetails {
+	exactMatches := []*crossmodel.ApplicationOfferDetails{}
+	for _, off := range offers {
+		if off.OfferName == offerName {
+			exactMatches = append(exactMatches, off)
+		}
+	}
+	return exactMatches
+}
+
+// findCreatedOffer is a helper function to find the created offer after calling the Offer API.
+//
+// This is required because the Offer API doesn't return the offer URL of the created offer, or
+// any kind of identifier to help find the offer.
+func findCreatedOffer(client *applicationoffers.Client, filter crossmodel.ApplicationOfferFilter, endpoints []string, offerName string) (*crossmodel.ApplicationOfferDetails, error) {
 	offers, err := client.FindApplicationOffers(filter)
 	if err != nil {
 		return nil, err
 	}
 
 	offers = matchByEndpoints(offers, endpoints)
+	offers = matchByOfferName(offers, offerName)
 
 	if len(offers) == 0 {
 		return nil, fmt.Errorf("unable to find offer after creation")
