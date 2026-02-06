@@ -39,7 +39,6 @@ import (
 	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/network"
-	"github.com/juju/juju/core/semversion"
 	jujustorage "github.com/juju/juju/core/storage"
 	"github.com/juju/juju/domain/deployment/charm"
 	charmresources "github.com/juju/juju/domain/deployment/charm/resource"
@@ -93,7 +92,6 @@ func newApplicationPartiallyCreatedError(appName string) error {
 
 type applicationsClient struct {
 	SharedClient
-	controllerVersion semversion.Number
 
 	getApplicationAPIClient func(base.APICallCloser) ApplicationAPIClient
 	getClientAPIClient      func(api.Connection) ClientAPIClient
@@ -723,7 +721,11 @@ func (c applicationsClient) ReadApplication(ctx context.Context, input *ReadAppl
 
 	var appStatus params.ApplicationStatus
 	var storageDirectives map[string]jujustorage.Directive
-	if c.controllerVersion.Major == 4 {
+	v, err := c.GetControllerVersion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if v.Major == 4 {
 		// With Juju 4 we have to manually filter storage/volumes/filesystems of an application.
 		appStatus, storageDirectives, err = c.getApplicationStatusAndStorageDirectives4(ctx, conn, input.AppName)
 		if err != nil {

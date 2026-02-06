@@ -19,12 +19,14 @@ import (
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/resource"
 	"github.com/juju/juju/core/secrets"
+	"github.com/juju/juju/core/semversion"
 	"github.com/juju/juju/domain/deployment/charm"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v6"
 )
 
 type SharedClient interface {
+	GetControllerVersion(context.Context) (semversion.Number, error)
 	AddModel(modelName, modelOwner, modelUUID string, modelType model.ModelType)
 	GetConnection(modelUUID *string) (api.Connection, error)
 	GetOfferingControllerConn(name string) (api.Connection, error)
