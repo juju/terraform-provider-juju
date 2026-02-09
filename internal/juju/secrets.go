@@ -318,10 +318,6 @@ func (c *secretsClient) UpdateAccessSecret(input *GrantRevokeAccessSecretInput, 
 		return &MultiError{Errors: results}
 	}
 
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
