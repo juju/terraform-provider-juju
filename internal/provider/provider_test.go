@@ -384,12 +384,56 @@ func validateJujuTestConfig(t *testing.T) {
 func configureProvider(t *testing.T, p provider.Provider) provider.ConfigureResponse {
 	conf := jujuProviderModel{}
 	conf.OfferingControllers = types.MapNull(offeringControllersMapType.ElemType)
+	return configureProviderWithModel(t, p, conf)
+}
+
+func configureProviderWithModel(t *testing.T, p provider.Provider, conf jujuProviderModel) provider.ConfigureResponse {
 	confReq := newConfigureRequest(t, conf)
 	confResp := provider.ConfigureResponse{Diagnostics: diag.Diagnostics{}}
 
 	p.Configure(context.Background(), confReq, &confResp)
 
 	return confResp
+}
+
+// This test verifies that when the controller-mode flag is set, controller details can be omitted.
+func TestProviderConfigureControllerModeWithoutConnectionDetails(t *testing.T) {
+	t.Setenv(JujuControllerEnvKey, "")
+	t.Setenv(JujuUsernameEnvKey, "")
+	t.Setenv(JujuPasswordEnvKey, "")
+	t.Setenv(JujuCACertEnvKey, "")
+	t.Setenv(JujuClientIDEnvKey, "")
+	t.Setenv(JujuClientSecretEnvKey, "")
+	t.Setenv("PATH", "")
+
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	confResp := configureProviderWithModel(t, jujuProvider, jujuProviderModel{
+		ControllerMode:      types.BoolValue(true),
+		OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
+	})
+
+	require.False(t, confResp.Diagnostics.HasError(), "unexpected configure error: %v", confResp.Diagnostics.Errors())
+
+	providerData, ok := confResp.ResourceData.(juju.ProviderData)
+	require.Truef(t, ok, "ResourceData not of type ProviderData")
+	assert.True(t, providerData.Config.ControllerMode)
+	assert.Nil(t, providerData.Client)
+}
+
+// This test verifies that when the controller-mode flag is set, connection details can be provided.
+func TestProviderConfigureControllerModeWithConnectionDetails(t *testing.T) {
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	confResp := configureProviderWithModel(t, jujuProvider, jujuProviderModel{
+		ControllerMode:      types.BoolValue(true),
+		OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
+	})
+
+	require.False(t, confResp.Diagnostics.HasError(), "unexpected configure error: %v", confResp.Diagnostics.Errors())
+
+	providerData, ok := confResp.ResourceData.(juju.ProviderData)
+	require.Truef(t, ok, "ResourceData not of type ProviderData")
+	assert.True(t, providerData.Config.ControllerMode)
+	assert.NotNil(t, providerData.Client)
 }
 
 func newConfigureRequest(t *testing.T, conf jujuProviderModel) provider.ConfigureRequest {
@@ -470,6 +514,7 @@ func TestGetJujuProviderModel(t *testing.T) {
 	tests := []struct {
 		name           string
 		plan           jujuProviderModel
+		requireDetails bool
 		setEnv         func(t *testing.T)
 		wantErr        bool
 		wantErrSummary string
@@ -527,6 +572,45 @@ func TestGetJujuProviderModel(t *testing.T) {
 			},
 			wantErr:        true,
 			wantErrSummary: "Only username and password OR client id and client secret may be used.",
+		},
+		{
+			name:           "RequireDetailsTrueWithMissingDetails",
+			requireDetails: true,
+			plan: jujuProviderModel{
+				OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
+			},
+			setEnv: func(t *testing.T) {
+				t.Setenv(JujuControllerEnvKey, "")
+				t.Setenv(JujuUsernameEnvKey, "")
+				t.Setenv(JujuPasswordEnvKey, "")
+				t.Setenv(JujuCACertEnvKey, "")
+				t.Setenv(JujuClientIDEnvKey, "")
+				t.Setenv(JujuClientSecretEnvKey, "")
+				t.Setenv("PATH", "")
+			},
+			wantErr:        true,
+			wantErrSummary: "Username and password or client id and client secret must be set",
+		},
+		{
+			name:           "RequireDetailsFalseWithoutMissingDetails",
+			requireDetails: false,
+			plan: jujuProviderModel{
+				OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
+			},
+			setEnv: func(t *testing.T) {
+				t.Setenv(JujuControllerEnvKey, "")
+				t.Setenv(JujuUsernameEnvKey, "")
+				t.Setenv(JujuPasswordEnvKey, "")
+				t.Setenv(JujuCACertEnvKey, "")
+				t.Setenv(JujuClientIDEnvKey, "")
+				t.Setenv(JujuClientSecretEnvKey, "")
+				t.Setenv("PATH", "")
+			},
+			wantErr: false,
+			wantValues: jujuProviderModel{
+				SkipFailedDeletion:  types.BoolValue(false),
+				OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
+			},
 		},
 		{
 			name: "EnvVarsUsed",
@@ -622,7 +706,7 @@ func TestGetJujuProviderModel(t *testing.T) {
 				tt.setEnv(t)
 			}
 
-			model, diags := getJujuProviderModel(context.Background(), tt.plan)
+			model, diags := getJujuProviderModel(context.Background(), tt.plan, tt.requireDetails)
 
 			if tt.wantErrSummary != "" {
 				require.True(t, diags.HasError())

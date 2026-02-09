@@ -238,6 +238,40 @@ func (s *JaasSuite) TestAddRole() {
 	s.Require().Equal(resp.UUID, uuid)
 }
 
+func (s *JaasSuite) TestAddController() {
+	defer s.setupMocks(s.T()).Finish()
+
+	req := &params.AddControllerRequest{
+		UUID:          "uuid",
+		Name:          "name",
+		PublicAddress: "example.com:17070",
+		Username:      "user",
+		Password:      "pass",
+	}
+	resp := params.ControllerInfo{Name: req.Name, UUID: req.UUID, PublicAddress: req.PublicAddress}
+
+	s.mockJaasClient.EXPECT().AddController(req).Return(resp, nil)
+
+	client := s.getJaasClient()
+	info, err := client.AddController(req)
+	s.Require().NoError(err)
+	s.Require().Equal(resp, info)
+}
+
+func (s *JaasSuite) TestRemoveController() {
+	defer s.setupMocks(s.T()).Finish()
+
+	req := &params.RemoveControllerRequest{Name: "name", Force: true}
+	resp := params.ControllerInfo{Name: req.Name, UUID: "uuid"}
+
+	s.mockJaasClient.EXPECT().RemoveController(req).Return(resp, nil)
+
+	client := s.getJaasClient()
+	info, err := client.RemoveController(req)
+	s.Require().NoError(err)
+	s.Require().Equal(resp, info)
+}
+
 func (s *JaasSuite) TestGetRole() {
 	defer s.setupMocks(s.T()).Finish()
 
