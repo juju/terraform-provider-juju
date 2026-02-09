@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
@@ -35,6 +36,7 @@ import (
 var _ resource.Resource = &modelResource{}
 var _ resource.ResourceWithConfigure = &modelResource{}
 var _ resource.ResourceWithImportState = &modelResource{}
+var _ resource.ResourceWithIdentity = &modelResource{}
 
 func NewModelResource() resource.Resource {
 	return &modelResource{}
@@ -62,10 +64,25 @@ type modelResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
+type modelResourceIdentityModel struct {
+	ID types.String `tfsdk:"id"`
+}
+
 // nestedCloud represents an element in a Cloud list of a model resource
 type nestedCloud struct {
 	Name   types.String `tfsdk:"name"`
 	Region types.String `tfsdk:"region"`
+}
+
+// IdentitySchema defines the schema for the resource's identity, which is used during import operations to uniquely identify the resource.
+func (r *modelResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
+	resp.IdentitySchema = identityschema.Schema{
+		Attributes: map[string]identityschema.Attribute{
+			"id": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+		},
+	}
 }
 
 func (r *modelResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -205,7 +222,7 @@ func (r *modelResource) Metadata(_ context.Context, req resource.MetadataRequest
 }
 
 func (r *modelResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughWithIdentity(ctx, path.Root("id"), path.Root("id"), req, resp)
 }
 
 func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -326,6 +343,11 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	// Write the state plan into the Response.State
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+
+	identity := modelResourceIdentityModel{
+		ID: types.StringValue(response.UUID),
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -336,7 +358,6 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	}
 
 	var state modelResourceModel
-
 	// Read Terraform configuration from the request into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -431,6 +452,11 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	r.trace(fmt.Sprintf("Read model resource for: %v", response.ModelInfo.Name))
 	// Set the state onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+
+	identity := modelResourceIdentityModel{
+		ID: types.StringValue(response.ModelInfo.UUID),
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 func (r *modelResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {

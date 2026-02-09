@@ -35,7 +35,7 @@ jobs:
           cache: true
       - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.11.*"
+          terraform_version: "1.14.*"
           terraform_wrapper: false
 
       - name: Set up Docker Compose

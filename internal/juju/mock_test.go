@@ -285,6 +285,44 @@ func (c *MockSharedClientGetOfferingControllerConnCall) DoAndReturn(f func(strin
 	return c
 }
 
+// GetUser mocks base method.
+func (m *MockSharedClient) GetUser() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUser")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetUser indicates an expected call of GetUser.
+func (mr *MockSharedClientMockRecorder) GetUser() *MockSharedClientGetUserCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUser", reflect.TypeOf((*MockSharedClient)(nil).GetUser))
+	return &MockSharedClientGetUserCall{Call: call}
+}
+
+// MockSharedClientGetUserCall wrap *gomock.Call
+type MockSharedClientGetUserCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSharedClientGetUserCall) Return(arg0 string) *MockSharedClientGetUserCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSharedClientGetUserCall) Do(f func() string) *MockSharedClientGetUserCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSharedClientGetUserCall) DoAndReturn(f func() string) *MockSharedClientGetUserCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // IsOfferingController mocks base method.
 func (m *MockSharedClient) IsOfferingController(name string) bool {
 	m.ctrl.T.Helper()

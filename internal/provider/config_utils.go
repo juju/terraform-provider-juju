@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -28,6 +29,19 @@ func newConfig(ctx context.Context, configPlan types.Map) (map[string]string, di
 		}
 	}
 	return configMap, diags
+}
+
+// newConfigFromMap converts a map[string]interface{} to a map[string]*string, ignoring nil values.
+func newConfigFromMap(configMap map[string]interface{}) map[string]*string {
+	config := map[string]*string{}
+	for k, v := range configMap {
+		if v != nil {
+			config[k] = castToJujuConfig(v)
+		} else {
+			config[k] = nil
+		}
+	}
+	return config
 }
 
 // newConfigFromModelConfigAPI converts the config returned by the ModelConfig
@@ -57,8 +71,7 @@ func newConfigFromModelConfigAPI(ctx context.Context, configFromAPI map[string]i
 	for k, v := range stateConfig {
 		if v != nil {
 			if value, exists := configFromAPI[k]; exists {
-				stringifiedValue := fmt.Sprint(value)
-				config[k] = &stringifiedValue
+				config[k] = castToJujuConfig(value)
 			} else {
 				config[k] = v
 			}
@@ -68,6 +81,34 @@ func newConfigFromModelConfigAPI(ctx context.Context, configFromAPI map[string]i
 	}
 
 	return config, nil
+}
+
+// castToJujuConfig converts interface{} values to
+// the right string representation expected by Juju.
+func castToJujuConfig(v interface{}) *string {
+	if v == nil {
+		return nil
+	}
+	switch v := v.(type) {
+	case map[string]interface{}:
+		if len(v) == 0 {
+			return nil
+		}
+		s := ""
+		for mk, mv := range v {
+			s += fmt.Sprintf("%s=%v", mk, mv)
+		}
+		return &s
+	case []string:
+		if len(v) == 0 {
+			return nil
+		}
+		s := strings.Join(v, ",")
+		return &s
+	default:
+		stringifiedValue := fmt.Sprint(v)
+		return &stringifiedValue
+	}
 }
 
 // newConfigFromApplicationAPI converts the config returned by the
