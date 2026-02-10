@@ -66,11 +66,11 @@ Optional:
 
 Required:
 
-- `endpoint` (String) The API endpoint for the region.
 - `name` (String) The name of the region.
 
 Optional:
 
+- `endpoint` (String) The API endpoint for the region.
 - `identity_endpoint` (String) The identity endpoint for the region.
 - `storage_endpoint` (String) The storage endpoint for the region.
 

@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/stretchr/testify/require"
 	gomock "go.uber.org/mock/gomock"
@@ -29,6 +30,7 @@ import (
 )
 
 func TestAcc_ResourceController(t *testing.T) {
+	SkipJAAS(t)
 	controllerName := acctest.RandomWithPrefix("tf-test-controller")
 
 	mockCtrl := gomock.NewController(t)
@@ -302,7 +304,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactoriesControllerMode,
 		Steps: []resource.TestStep{
 			{
-				// Step 1: Create the controller
+				// Create the controller
 				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, baseControllerConfig, baseControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", controllerName),
@@ -314,7 +316,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				),
 			},
 			{
-				// Step 2: Verify changing controller config works
+				// Verify changing controller config works
 				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, updatedControllerConfig, baseControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_config.agent-logfile-max-backups", "4"),
@@ -323,7 +325,22 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				),
 			},
 			{
-				// Step 3: Verify unsetting a controller config value behaves as expected.
+				// Test import using identity with controller_config and controller_model_config set.
+				Config:          testAccResourceControllerWithJujuBinaryImport(controllerName),
+				ResourceName:    resourceName,
+				ImportState:     true,
+				ImportStateKind: resource.ImportBlockWithResourceIdentity,
+				// Expect a non-empty plan after import because we need to set connection info and other
+				// field in the state. we test that we don't require-replace.
+				ExpectNonEmptyPlan: true,
+				ImportPlanChecks: resource.ImportPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+				},
+			},
+			{
+				// Verify unsetting a controller config value behaves as expected.
 				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, baseControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
@@ -350,7 +367,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				),
 			},
 			{
-				// Step 4: Verify changing controller model config works
+				// Verify changing controller model config works
 				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, updatedControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "2"),
@@ -360,7 +377,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				),
 			},
 			{
-				// Step 5: Verify unsetting controller model config works
+				// Verify unsetting controller model config works
 				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
@@ -385,7 +402,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				),
 			},
 			{
-				// Step 6: Verify that invalid controller config fails
+				// Verify that invalid controller config fails
 				Config:      testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, invalidControllerConfig, unsetControllerModelConfig),
 				ExpectError: regexp.MustCompile("failed to update controller config: unknown controller config"),
 			},
@@ -413,6 +430,104 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			}
 		},
 	})
+}
+
+// testAccResourceControllerWithJujuBinaryImport returns a Terraform configuration
+// for a juju_controller resource using the Juju binary for import.
+// During import for lxd we need to:
+//   - ignore changes to cloud attributes, because the client-key and client-cert
+//     values are put in the state by the import but they shouldn't require replace.
+//   - ignore changes to cloud.region and cloud.endpoint
+//
+// During import for microk8s we need to:
+//   - ignore changes to cloud.region and cloud.host_cloud_region.
+func testAccResourceControllerWithJujuBinaryImport(controllerName string) string {
+	switch testingCloud {
+	case LXDCloudTesting:
+		return fmt.Sprintf(`
+provider "juju" {
+  controller_mode = true
+}
+
+locals {
+  lxd_creds = yamldecode(file("~/lxd-credentials.yaml"))
+}
+
+resource "juju_controller" "controller" {
+  name          = %q
+
+  juju_binary     = "/snap/juju/current/bin/juju"
+
+  // Specifying the cloud name as 'localhost' uses the local LXD cloud
+  // without the need to specify a cloud endpoint.
+  cloud = {
+    name   = "localhost"
+	auth_types = ["certificate"]
+	type = "lxd"
+  } 
+
+  cloud_credential = {
+	name = "test-credential"
+	auth_type = "certificate"
+	
+	attributes = {
+      server-cert = local.lxd_creds.server-cert
+    }
+  }
+
+  lifecycle {
+	ignore_changes = [
+	  cloud.endpoint,
+	  cloud.region,
+	  cloud_credential.attributes["client-cert"],
+      cloud_credential.attributes["client-key"]
+	]
+   }
+}
+`, controllerName)
+	case MicroK8sTesting:
+		return fmt.Sprintf(`
+provider "juju" {
+  controller_mode = true
+}
+
+locals {
+  microk8s_config = yamldecode(file("~/microk8s-config.yaml"))
+}
+
+resource "juju_controller" "controller" {
+  name          = %q
+
+  juju_binary     = "/snap/juju/current/bin/juju"
+
+  cloud = {
+    name   = "test-k8s"
+	auth_types = ["clientcertificate"]
+	type = "kubernetes"
+	endpoint = local.microk8s_config.clusters[0].cluster.server
+	ca_certificates = [base64decode(local.microk8s_config.clusters[0].cluster["certificate-authority-data"])]
+	host_cloud_region = "localhost"
+  } 
+
+  cloud_credential = {
+	name = "test-credential"
+	auth_type = "clientcertificate"
+	
+	attributes = {
+      ClientCertificateData = base64decode(local.microk8s_config.users[0].user["client-certificate-data"])
+      ClientKeyData  = base64decode(local.microk8s_config.users[0].user["client-key-data"])
+	}
+  }
+  lifecycle {
+    ignore_changes = [
+	  cloud.region,
+	  cloud.host_cloud_region
+    ]
+  }
+}
+`, controllerName)
+	}
+	return ""
 }
 
 func testAccResourceControllerWithJujuBinary(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
@@ -451,16 +566,16 @@ resource "juju_controller" "controller" {
     name   = "localhost"
 	auth_types = ["certificate"]
 	type = "lxd"
-  } 
+   }
 
   cloud_credential = {
 	name = "test-credential"
 	auth_type = "certificate"
 	
 	attributes = {
-      client-cert = local.lxd_creds.client-cert
-      client-key  = local.lxd_creds.client-key
       server-cert = local.lxd_creds.server-cert
+	  client-key = local.lxd_creds.client-key
+	  client-cert = local.lxd_creds.client-cert
     }
   }
   
