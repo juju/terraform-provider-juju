@@ -19,6 +19,7 @@ A resource that represents a Juju Controller.
 
 - `cloud` (Attributes) The cloud where the controller will operate. (see [below for nested schema](#nestedatt--cloud))
 - `cloud_credential` (Attributes, Sensitive) Cloud credentials to use for bootstrapping the controller. (see [below for nested schema](#nestedatt--cloud_credential))
+- `juju_binary` (String) The path to the juju CLI binary. If you have installed Juju as a snap, use the path `/snap/juju/current/bin/juju` to avoid snap confinement issues.
 
 ### Optional
 
@@ -29,7 +30,6 @@ A resource that represents a Juju Controller.
 - `controller_config` (Map of String) Configuration options for the bootstrapped controller. Note that removing a key from this map will not unset it in the controller, instead it will be left unchanged on the controller.
 - `controller_model_config` (Map of String) Configuration options to be set for the controller model.
 - `destroy_flags` (Attributes) Additional flags for destroying the controller. Changing any of these values will require applying before they can be taken into account during destroy. (see [below for nested schema](#nestedatt--destroy_flags))
-- `juju_binary` (String) The path to the juju CLI binary.
 - `model_constraints` (Map of String) Constraints for all workload machines in models.
 - `model_default` (Map of String) Configuration options to be set for all models.
 - `name` (String) The name to be assigned to the controller. Changing this value will require the controller to be destroyed and recreated by terraform.

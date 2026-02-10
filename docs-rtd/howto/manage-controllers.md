@@ -57,6 +57,8 @@ Here we use the `localhost` cloud which is already known to the Juju CLI. Privat
 resource "juju_controller" "this" {
   name = "test-controller"
 
+  juju_binary = "/snap/juju/current/bin/juju"
+  
   cloud = {
     name       = "localhost"
     type       = "lxd"
@@ -84,9 +86,6 @@ resource "juju_controller" "this" {
     "juju-http-proxy" = "http://my-proxy.internal"
   }
 
-  # Optional: use a Juju binary from a specific location.
-  # The default is /usr/bin/juju.
-  juju_binary = "/snap/juju/current/bin/juju"
 }
 ```
 
