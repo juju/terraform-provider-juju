@@ -19,7 +19,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -383,13 +382,11 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				},
 			},
 			"juju_binary": schema.StringAttribute{
-				Description: "The path to the juju CLI binary.",
-				Optional:    true,
-				Computed:    true,
+				Description: "The path to the juju CLI binary. If you have installed Juju as a snap, use the path `/snap/juju/current/bin/juju` to avoid snap confinement issues.",
+				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
-				Default: stringdefault.StaticString("/usr/bin/juju"),
 			},
 			"model_constraints": schema.MapAttribute{
 				Description: "Constraints for all workload machines in models.",
