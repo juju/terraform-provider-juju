@@ -113,6 +113,26 @@ jobs:
           sudo chown -R $USER ~/.kube
           sudo microk8s.enable dns hostpath-storage
           sudo -g snap_microk8s -E microk8s status --wait-ready --timeout=600
+      - uses: actions/checkout@v4
+        if: ${{ (matrix.action-operator.cloud == 'microk8s') && (matrix.action-operator.juju == '4') }}   
+        with:
+          repository: juju/juju
+          ref: main
+          path: juju
+      - name: Remove the juju snap, build juju and update microk8s operator
+        if: ${{ (matrix.action-operator.cloud == 'microk8s') && (matrix.action-operator.juju == '4') }}
+        run: |
+          set -x
+          sudo snap remove juju 
+          cd juju
+          wget https://download.docker.com/linux/ubuntu/dists/jammy/pool/stable/amd64/docker-buildx-plugin_0.28.0-0~ubuntu.22.04~jammy_amd64.deb
+          sudo dpkg -i docker-buildx-plugin_0.28.0-0~ubuntu.22.04~jammy_amd64.deb
+          sudo usermod -a -G snap_microk8s $USER
+          sudo chown -R $USER ~/.kube
+          sudo -g snap_microk8s -E make go-install
+          sudo -g snap_microk8s -E make microk8s-operator-update
+          juju bootstrap microk8s qa-microk8s
+          cd -
       - name: Create additional networks when testing with LXD
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
         run: |
