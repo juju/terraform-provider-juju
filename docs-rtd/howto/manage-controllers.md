@@ -126,6 +126,209 @@ resource "juju_controller" "this" {
 > See more: [`juju_controller` (resource)](../reference/terraform-provider/resources/controller)
 
 
+(import-an-existing-controller)=
+## Import an existing controller
+
+If you have a controller that was created outside of Terraform (for example, via `juju bootstrap`), you can import it into your Terraform state.
+
+**Import syntax:**
+
+To import an existing controller, you must use the identity-based import format. This format requires you to specify the controller's connection details in an `import` block.
+
+```{important}
+Importing controllers by ID is not supported. You must use the identity schema in your import block.
+```
+
+**Getting controller connection information:**
+
+To import a controller, you need its connection details. You can obtain these by running:
+
+```bash
+juju show-controller --show-password
+```
+
+From the output, you will need:
+- Controller name
+- API addresses
+- CA certificate
+- Admin username (typically `admin`)
+- Admin password
+- Controller UUID
+- Credential name
+
+**Import block structure:**
+
+Create an `import` block with the identity schema containing the controller's connection information:
+
+```terraform
+import {
+  to = juju_controller.imported
+  identity = {
+    name            = "my-existing-controller"
+    api_addresses   = ["<ip>:17070"]
+    username        = "admin"
+    password        = "<password>"
+    ca_cert         = <<-EOT
+      -----BEGIN CERTIFICATE-----
+      -----END CERTIFICATE-----
+    EOT
+    controller_uuid = "<controller-uudi>"
+    credential_name = "<credential-name>"
+  }
+}
+```
+
+**Resource configuration:**
+
+You also need to define the corresponding `juju_controller` resource with the cloud and credential information:
+
+```terraform
+resource "juju_controller" "imported" {
+  name = "my-existing-controller"
+
+  cloud = {
+    name       = "localhost"
+    type       = "lxd"
+    auth_types = ["certificate"]
+  }
+
+  cloud_credential = {
+    name      = "localhost"
+    auth_type = "certificate"
+    attributes = {
+      "client-cert" = var.lxd_client_cert
+      "client-key"  = var.lxd_client_key
+      "server-cert" = var.lxd_server_cert
+    }
+  }
+}
+```
+
+Then run:
+
+```bash
+terraform plan
+```
+
+Terraform will detect the import block and import the controller during the next `terraform apply`.
+
+(import-example-lxd)=
+### Import example: LXD controller
+
+```terraform
+provider "juju" {
+  controller_mode = true
+}
+
+resource "juju_controller" "imported" {
+  name = "my-lxd-controller"
+
+  juju_binary = "/snap/juju/current/bin/juju"
+
+  cloud = {
+    name       = "localhost"
+    type       = "lxd"
+    auth_types = ["certificate"]
+  }
+
+  cloud_credential = {
+    name      = "localhost"
+    auth_type = "certificate"
+    attributes = {
+      <attrs>
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      cloud.endpoint,
+      cloud.region,
+      cloud_credential.attributes["client-cert"],
+      cloud_credential.attributes["client-key"]
+    ]
+  }
+}
+```
+
+```{note}
+The `cloud_credential.attributes["client-cert"]` and `cloud_credential.attributes["client-key"]` are not required to bootstrap an LXD controller, but they are populated in the state during import because they are fetched from the controller. The same applies to `cloud.endpoint` and `cloud.region`, which may be set by Juju during bootstrap even if not explicitly specified.
+```
+
+(import-example-microk8s)=
+### Import example: MicroK8s controller
+
+```terraform
+provider "juju" {
+  controller_mode = true
+}
+
+resource "juju_controller" "imported" {
+  name = "my-k8s-controller"
+
+  juju_binary = "/snap/juju/current/bin/juju"
+
+  cloud = {
+    name                = "test-k8s"
+    type                = "kubernetes"
+    auth_types          = ["clientcertificate"]
+    endpoint            = var.k8s_endpoint
+    ca_certificates     = [var.k8s_ca_cert]
+    host_cloud_region   = "localhost"
+  }
+
+  cloud_credential = {
+    name      = "test-credential"
+    auth_type = "clientcertificate"
+    attributes = {
+      "ClientCertificateData" = var.k8s_client_cert
+      "ClientKeyData"         = var.k8s_client_key
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      cloud.region,
+      cloud.host_cloud_region
+    ]
+  }
+}
+```
+
+```{note}
+The `cloud.region` is not required during bootstrap but may be set by Juju and needs to be ignored. The `cloud.host_cloud_region` cannot be fetched from the controller after bootstrap, so it must be ignored to prevent Terraform from attempting to replace the controller.
+```
+
+(import-post-import-workflow)=
+### Post-import workflow
+
+After importing a controller:
+
+**1. Review the plan:**
+
+Run `terraform plan` to see which attributes Terraform cannot determine or that differ from your configuration. These differences are expected after an import.
+
+```bash
+terraform plan
+```
+
+**2. Add necessary ignore_changes:**
+
+Based on the plan output, add any fields showing unexpected changes to the `lifecycle.ignore_changes` block that would require a replace of the controller resource.  
+Common fields to ignore include:
+
+- Credential attributes that may differ between your plan and the ones fetched from the controller. 
+- Cloud region and endpoint fields, which can be default when a controller is bootstrap, but it's returned when it's set in the state when it's fetched from the controller.
+- Bootstrap-time configuration that cannot be changed, and can't be fetched from the controller.
+
+**3. Verify the configuration:**
+
+After adding the appropriate `lifecycle.ignore_changes` directives, run `terraform plan` again. You should see either no changes or only expected configuration updates.
+
+```{tip}
+If you see `controller_config` or `controller_model_config` showing changes to set default values, you can either apply them (they will update the controller configuration which is idempotent) or add these blocks to `ignore_changes` to prevent the updates.
+```
+
+
 (add-a-cloud-to-a-controller)=
 ## Add a cloud to a controller
 
