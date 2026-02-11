@@ -114,7 +114,7 @@ func TestAcc_ResourceAccessModel_UpgradeProvider(t *testing.T) {
 				Config: testAccResourceAccessModel(userName, userPassword, modelName, access, true),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "access", access),
-					resource.TestCheckResourceAttr(resourceName, "model", modelName),
+					resource.TestCheckResourceAttrPair(resourceName, "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", userName),
 				),
 			},

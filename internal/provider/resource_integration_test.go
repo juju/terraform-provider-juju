@@ -211,8 +211,7 @@ func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
 				},
 				Config: testAccResourceIntegration(modelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_integration.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "one", "endpoint": "source"}),
 				),

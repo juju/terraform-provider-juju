@@ -204,7 +204,7 @@ func TestAcc_ResourceMachine_UpgradeProvider(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_machine.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
-					resource.TestCheckResourceAttr("juju_machine.this", "series", "focal"),
+					resource.TestCheckResourceAttr("juju_machine.this", "base", "ubuntu@22.04"),
 				),
 			},
 			{
