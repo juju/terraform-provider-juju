@@ -131,15 +131,7 @@ resource "juju_controller" "this" {
 
 If you have a controller that was created outside of Terraform (for example, via `juju bootstrap`), you can import it into your Terraform state.
 
-**Import syntax:**
-
-To import an existing controller, you must use the identity-based import format. This format requires you to specify the controller's connection details in an `import` block.
-
-```{important}
-Importing controllers by ID is not supported. You must use the identity schema in your import block.
-```
-
-**Getting controller connection information:**
+**1: Getting controller connection information:**
 
 To import a controller, you need its connection details. You can obtain these by running:
 
@@ -156,7 +148,7 @@ From the output, you will need:
 - Controller UUID
 - Credential name
 
-**Import block structure:**
+**2: Import block structure:**
 
 Create an `import` block with the identity schema containing the controller's connection information:
 
@@ -178,7 +170,7 @@ import {
 }
 ```
 
-**Resource configuration:**
+**3: Define a `juju_controller` resource:**
 
 You also need to define the corresponding `juju_controller` resource with the cloud and credential information:
 
@@ -248,6 +240,22 @@ resource "juju_controller" "imported" {
     ]
   }
 }
+
+import {
+  to = juju_controller.imported
+  identity = {
+    name            = "my-lxd-controller"
+    api_addresses   = ["<ip>:17070"]
+    username        = "admin"
+    password        = "<password>"
+    ca_cert         = <<-EOT
+      -----BEGIN CERTIFICATE-----
+      -----END CERTIFICATE-----
+    EOT
+    controller_uuid = "<controller-uudi>"
+    credential_name = "<credential-name>"
+  }
+}
 ```
 
 ```{note}
@@ -290,6 +298,22 @@ resource "juju_controller" "imported" {
       cloud.region,
       cloud.host_cloud_region
     ]
+  }
+}
+
+import {
+  to = juju_controller.imported
+  identity = {
+    name            = "my-k8s-controller"
+    api_addresses   = ["<ip>:17070"]
+    username        = "admin"
+    password        = "<password>"
+    ca_cert         = <<-EOT
+      -----BEGIN CERTIFICATE-----
+      -----END CERTIFICATE-----
+    EOT
+    controller_uuid = "<controller-uudi>"
+    credential_name = "<credential-name>"
   }
 }
 ```
