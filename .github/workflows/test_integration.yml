@@ -146,6 +146,9 @@ jobs:
           TEST_CLOUD: ${{ matrix.action-operator.cloud }}
         run: go test -parallel 4 -timeout 90m -v -cover ./internal/provider/
         timeout-minutes: 90
+      - if: failure()
+        run: |
+          sudo snap logs aproxy -n=all
 
   # Run acceptance tests in a matrix with Terraform CLI versions
   add-machine-test:
