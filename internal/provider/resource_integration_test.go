@@ -193,8 +193,6 @@ func TestAcc_ResourceIntegration_UpgradeV0ToV1(t *testing.T) {
 }
 
 func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
-	t.Skip("This test currently fails due to the breaking change in the provider schema. " +
-		"Remove the skip after the v1 release of the provider.")
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -213,8 +211,7 @@ func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
 				},
 				Config: testAccResourceIntegration(modelName),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_integration.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "one", "endpoint": "source"}),
 				),

@@ -1373,8 +1373,6 @@ func testAccResourceApplicationBasic_Machines(modelName, charmName string) strin
 }
 
 func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
-	t.Skip("This test currently fails due to the breaking change in the provider schema. " +
-		"Remove the skip after the v1 release of the provider.")
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 
