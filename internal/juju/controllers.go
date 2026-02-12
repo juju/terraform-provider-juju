@@ -20,11 +20,11 @@ import (
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/connector"
 	controllerapi "github.com/juju/juju/api/controller/controller"
+	"github.com/juju/juju/api/jujuclient"
 	jujucloud "github.com/juju/juju/cloud"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/juju/osenv"
-	"github.com/juju/juju/jujuclient"
-	"github.com/juju/names/v5"
+	"github.com/juju/names/v6"
 	"github.com/juju/version/v2"
 	"gopkg.in/yaml.v2"
 )
@@ -349,7 +349,7 @@ func (d *DefaultJujuCommand) UpdateConfig(
 		return err
 	}
 
-	conn, err := connr.Connect()
+	conn, err := connr.Connect(ctx)
 	if err != nil {
 		return err
 	}
@@ -362,7 +362,7 @@ func (d *DefaultJujuCommand) UpdateConfig(
 
 	// Update controller config
 	if len(ctrlConfigVals) > 0 {
-		if err := ctrlClient.ConfigSet(ctrlConfigVals); err != nil {
+		if err := ctrlClient.ConfigSet(ctx, ctrlConfigVals); err != nil {
 			return fmt.Errorf("failed to update controller config: %w", err)
 		}
 	}
@@ -375,12 +375,12 @@ func (d *DefaultJujuCommand) UpdateConfig(
 
 	// Update model config
 	if len(modelConfigVals) > 0 {
-		if err := modelCfgClient.ModelSet(modelConfigVals); err != nil {
+		if err := modelCfgClient.ModelSet(ctx, modelConfigVals); err != nil {
 			return fmt.Errorf("failed to update controller model config: %w", err)
 		}
 	}
 	if len(controllerModelConfigUnset) > 0 {
-		if err := modelCfgClient.ModelUnset(controllerModelConfigUnset...); err != nil {
+		if err := modelCfgClient.ModelUnset(ctx, controllerModelConfigUnset...); err != nil {
 			return fmt.Errorf("failed to unset controller model config keys: %w", err)
 		}
 	}
@@ -401,20 +401,20 @@ func (d *DefaultJujuCommand) Config(ctx context.Context, connInfo *ControllerCon
 		return nil, nil, err
 	}
 
-	conn, err := connr.Connect()
+	conn, err := connr.Connect(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Fetch controller config
 	ctrlClient := controllerapi.NewClient(conn)
-	ctrlConfig, err := ctrlClient.ControllerConfig()
+	ctrlConfig, err := ctrlClient.ControllerConfig(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	modelCfgClient := modelconfig.NewClient(conn)
-	modelConfig, err := modelCfgClient.ModelGet()
+	modelConfig, err := modelCfgClient.ModelGet(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -800,7 +800,7 @@ func GetCloudInformation(ctx context.Context, connInfo *ControllerConnectionInfo
 		return nil, fmt.Errorf("failed to create connector: %w", err)
 	}
 
-	apiConn, err := conn.Connect()
+	apiConn, err := conn.Connect(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to controller: %w", err)
 	}
@@ -815,7 +815,7 @@ func GetCloudInformation(ctx context.Context, connInfo *ControllerConnectionInfo
 	defer modelConfigAPI.Close()
 
 	// Get model config to obtain model UUID
-	modelAttrs, err := modelConfigAPI.ModelGet()
+	modelAttrs, err := modelConfigAPI.ModelGet(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get model config: %w", err)
 	}
@@ -826,7 +826,7 @@ func GetCloudInformation(ctx context.Context, connInfo *ControllerConnectionInfo
 	}
 
 	// Get cloud spec from the controller
-	cloudSpec, err := controllerAPI.CloudSpec(names.NewModelTag(cfg.UUID()))
+	cloudSpec, err := controllerAPI.CloudSpec(ctx, names.NewModelTag(cfg.UUID()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cloud spec: %w", err)
 	}

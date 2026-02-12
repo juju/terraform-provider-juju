@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"sort"
@@ -348,12 +349,12 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 					func(s *terraform.State) error {
 						// Check with Juju that the controller config is the same - Juju doesn't support
 						// unsetting config keys, so the previous value should still be present.
-						conn, err := newBootstrappedControllerClient(s)
+						conn, err := newBootstrappedControllerClient(t.Context(), s)
 						if err != nil {
 							return fmt.Errorf("failed to create controller client: %w", err)
 						}
 						controllerClient := controllerapi.NewClient(conn)
-						configValues, err := controllerClient.ControllerConfig()
+						configValues, err := controllerClient.ControllerConfig(t.Context())
 						if err != nil {
 							return fmt.Errorf("failed to get controller config via Juju API: %w", err)
 						}
@@ -385,12 +386,12 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.disable-telemetry", "true"),
 					func(s *terraform.State) error {
 						// Check with Juju that the controller model config is actually unset.
-						conn, err := newBootstrappedControllerClient(s)
+						conn, err := newBootstrappedControllerClient(t.Context(), s)
 						if err != nil {
 							return fmt.Errorf("failed to create controller client: %w", err)
 						}
 						modelCfgClient := modelconfig.NewClient(conn)
-						configValues, err := modelCfgClient.ModelGet()
+						configValues, err := modelCfgClient.ModelGet(t.Context())
 						if err != nil {
 							return fmt.Errorf("failed to get controller config via Juju API: %w", err)
 						}
@@ -419,7 +420,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 
 			// Attempt to connect and expect a timeout after 10s
 			// This doesn't definitely prove the controller is destroyed, but is a good heuristic.
-			_, err = newBootstrappedControllerClient(s, api.WithDialOpts(api.DialOpts{Timeout: 10 * time.Second}))
+			_, err = newBootstrappedControllerClient(t.Context(), s, api.WithDialOpts(api.DialOpts{Timeout: 10 * time.Second}))
 			if err != nil {
 				if strings.Contains(err.Error(), "failed to connect to controller: unable to connect to API") {
 					return nil
@@ -646,7 +647,7 @@ func renderStringMapAsHCL(values map[string]string) string {
 	return b.String()
 }
 
-func newBootstrappedControllerClient(state *terraform.State, dialOptions ...api.DialOption) (api.Connection, error) {
+func newBootstrappedControllerClient(ctx context.Context, state *terraform.State, dialOptions ...api.DialOption) (api.Connection, error) {
 	resourceState, ok := state.RootModule().Resources["juju_controller.controller"]
 	if !ok {
 		return nil, fmt.Errorf("resource juju_controller.controller not found in state")
@@ -682,7 +683,7 @@ func newBootstrappedControllerClient(state *terraform.State, dialOptions ...api.
 		return nil, fmt.Errorf("failed to create connector to controller: %w", err)
 	}
 
-	conn, err := connr.Connect(dialOptions...)
+	conn, err := connr.Connect(ctx, dialOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to controller: %w", err)
 	}
