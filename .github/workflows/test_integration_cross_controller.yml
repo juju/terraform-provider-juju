@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        terraform: ["1.12.*"]
+        terraform: ["1.14.*"]
         action-operator:
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "3" }
     timeout-minutes: 90
