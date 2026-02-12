@@ -24,7 +24,9 @@ import (
 	"github.com/juju/names/v5"
 )
 
+// SharedClient defines the set of methods that the provider's shared client must implement.
 type SharedClient interface {
+	GetUser() string
 	AddModel(modelName, modelOwner, modelUUID string, modelType model.ModelType)
 	GetConnection(modelUUID *string) (api.Connection, error)
 	GetOfferingControllerConn(name string) (api.Connection, error)
