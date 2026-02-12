@@ -87,9 +87,31 @@ jobs:
           echo "TEST_MANAGEMENT_BR=10.150.40.0/24" >> $GITHUB_ENV
           echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
           echo "JUJU_SKIP_FAILED_DELETION=true" >> $GITHUB_ENV
+      - name: Check disk space before cleaning
+        run: |
+          echo "Disk space before cleaning:"
+          df -h
+          BEFORE=$(df -BM . | tail -1 | awk '{print $4}' | tr -d 'M')
+          echo "Free space: ${BEFORE}MB"
+          echo "FREE_SPACE_BEFORE=${BEFORE}" >> $GITHUB_ENV
       - run: go mod download
+      - name: Compile tests
+        run: go test -c -o provider.test ./internal/provider/
+      - name: Clean caches
+        run: go clean -modcache -cache -testcache
+      - name: Check disk space after cleaning and calculate savings
+        run: |
+          echo "Disk space after cleaning:"
+          df -h
+          AFTER=$(df -BM . | tail -1 | awk '{print $4}' | tr -d 'M')
+          echo "Free space: ${AFTER}MB"
+          SAVED=$((AFTER - FREE_SPACE_BEFORE))
+          echo "Space saved: ${SAVED}MB"
       - env:
           TF_ACC: "1"
           TEST_CLOUD: "lxd"
-        run: go test -parallel 4 -timeout 90m -v -cover ./internal/provider/
+        run: ./provider.test -test.parallel 4 -test.timeout 90m -test.v
         timeout-minutes: 90
+      - if: failure()
+        run: |
+          sudo snap logs aproxy -n=all
