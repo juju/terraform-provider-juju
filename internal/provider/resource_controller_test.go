@@ -422,7 +422,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			// This doesn't definitely prove the controller is destroyed, but is a good heuristic.
 			_, err = newBootstrappedControllerClient(t.Context(), s, api.WithDialOpts(api.DialOpts{Timeout: 10 * time.Second}))
 			if err != nil {
-				if strings.Contains(err.Error(), "failed to connect to controller: unable to connect to API") {
+				if ok, err := regexp.MatchString("failed to connect to controller: .*", err.Error()); ok && err == nil {
 					return nil
 				}
 				return fmt.Errorf("unexpected error when connecting to detroyed controller: %w", err)
