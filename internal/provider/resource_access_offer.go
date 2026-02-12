@@ -468,12 +468,9 @@ func (a *accessOfferResource) Configure(ctx context.Context, req resource.Config
 		return
 	}
 
-	provider, ok := req.ProviderData.(juju.ProviderData)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
+	provider, diags := getProviderData(req, false)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 	a.client = provider.Client

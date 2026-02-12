@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/provider"
 )
 
@@ -52,7 +53,12 @@ func main() {
 	waitForResources := true
 	if err := tf6server.Serve(
 		"registry.terraform.io/juju/juju",
-		providerserver.NewProtocol6(provider.NewJujuProvider(version, waitForResources)),
+		providerserver.NewProtocol6(provider.NewJujuProvider(version, provider.ProviderConfiguration{
+			WaitForResources: waitForResources,
+			NewJujuCommand: func(binaryPath string) (provider.JujuCommand, error) {
+				return juju.NewDefaultJujuCommand(binaryPath)
+			},
+		})),
 		serveOpts...,
 	); err != nil {
 		log.Fatal().Msg(err.Error())
