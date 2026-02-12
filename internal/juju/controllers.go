@@ -118,7 +118,7 @@ func (r *commandRunner) Run(ctx context.Context, args ...string) error {
 	defer logFile.Close()
 
 	// Write command being executed to log
-	if _, err := logFile.WriteString(fmt.Sprintf("\n=== Executing: %s %s ===\n", r.jujuBinary, strings.Join(args, " "))); err != nil {
+	if _, err := fmt.Fprintf(logFile, "\n=== Executing: %s %s ===\n", r.jujuBinary, strings.Join(args, " ")); err != nil {
 		return fmt.Errorf("failed to write to log file: %w", err)
 	}
 
@@ -530,7 +530,9 @@ func buildBootstrapArgs(ctx context.Context, args BootstrapArguments, configFile
 }
 
 func buildDestroyArgs(ctx context.Context, args DestroyArguments) ([]string, error) {
-	cmdArgs := []string{"destroy-controller", "--no-prompt"}
+	argFlags := buildArgsFromFlags(ctx, args.Flags)
+	cmdArgs := make([]string, 0, 2+len(argFlags)+1)
+	cmdArgs = append(cmdArgs, []string{"destroy-controller", "--no-prompt"}...)
 	cmdArgs = append(cmdArgs, buildArgsFromFlags(ctx, args.Flags)...)
 	cmdArgs = append(cmdArgs, args.Name)
 	return cmdArgs, nil
@@ -746,8 +748,8 @@ func checkVersionsMatch(cliVersion, agentVersion string) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse agent version %q: %w", agentVersion, err)
 	}
-	if cliBinary.Number.Major != agentNumber.Major || cliBinary.Number.Minor != agentNumber.Minor {
-		return fmt.Errorf("Juju CLI version (%s) does not match agent version (%s)", cliVersion, agentVersion)
+	if cliBinary.Major != agentNumber.Major || cliBinary.Minor != agentNumber.Minor {
+		return fmt.Errorf("juju CLI version (%s) does not match agent version (%s)", cliVersion, agentVersion)
 	}
 	return nil
 }

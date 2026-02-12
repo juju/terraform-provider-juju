@@ -356,14 +356,14 @@ func TestCheckVersionsMatch(t *testing.T) {
 			cliVersion:   "3.7.0-genericlinux-amd64",
 			agentVersion: "3.6.0",
 			expectError:  true,
-			errorMsg:     "Juju CLI version (3.7.0-genericlinux-amd64) does not match agent version (3.6.0)",
+			errorMsg:     "juju CLI version (3.7.0-genericlinux-amd64) does not match agent version (3.6.0)",
 		},
 		{
 			name:         "different major version",
 			cliVersion:   "4.0.0-genericlinux-amd64",
 			agentVersion: "3.6.0",
 			expectError:  true,
-			errorMsg:     "Juju CLI version (4.0.0-genericlinux-amd64) does not match agent version (3.6.0)",
+			errorMsg:     "juju CLI version (4.0.0-genericlinux-amd64) does not match agent version (3.6.0)",
 		},
 		{
 			name:         "invalid cli version",
@@ -564,7 +564,7 @@ func TestPerformDestroy(t *testing.T) {
 
 func TestConcurrentSafeFileStore(t *testing.T) {
 	wg := sync.WaitGroup{}
-	tmpDirs := []string{}
+	tmpDirs := make([]string, 0, 10)
 	for range 10 {
 		wg.Add(1)
 		tmpDir, err := os.MkdirTemp("", "test-concurrent")
