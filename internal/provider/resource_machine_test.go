@@ -153,38 +153,10 @@ resource "juju_machine" "testmachine" {
 `, modelName)
 }
 
-func TestAcc_ResourceMachine_UpgradeV0ToV1(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-	modelName := acctest.RandomWithPrefix("tf-test-machine")
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-
-		Steps: []resource.TestStep{
-			{
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						VersionConstraint: TestProviderPreV1Version,
-						Source:            "juju/juju",
-					},
-				},
-				Config: testAccResourceMachineV0(modelName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_machine.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
-					resource.TestCheckResourceAttr("juju_machine.this", "base", "ubuntu@22.04"),
-				),
-			},
-			{
-				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceMachine(modelName),
-			},
-		},
-	})
-}
-
 func TestAcc_ResourceMachine_UpgradeProvider(t *testing.T) {
+	// This skip is temporary until we have a stable version of the provider that supports
+	// Juju 4.0.0 and above, at which point we can re-enable it.
+	SkipAgainstJuju4(t)
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -242,20 +214,6 @@ resource "juju_machine" "this" {
 	constraints = %q
 }
 `, modelName, constraints)
-}
-
-func testAccResourceMachineV0(modelName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "this" {
-	name = %q
-}
-
-resource "juju_machine" "this" {
-	name = "this_machine"
-	model = juju_model.this.name
-	base = "ubuntu@22.04"
-}
-`, modelName)
 }
 
 func testAccResourceMachineWaitForHostname(modelName, operatingSystem string) string {
