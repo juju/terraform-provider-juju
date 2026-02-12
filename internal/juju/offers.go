@@ -178,13 +178,15 @@ func (c *offersClient) CreateOffer(ctx context.Context, input *CreateOfferInput)
 		return nil, append(errs, fmt.Errorf("unable to get model name for model UUID %q: %w", input.ModelUUID, err))
 	}
 
+	c.JujuLogger().sc.Debugf(fmt.Sprintf("listing offers to find the created offer %q in model %q owned by %q", offerName, modelName, modelOwner))
+
 	filter := crossmodel.ApplicationOfferFilter{
 		OfferName:      offerName,
 		ModelName:      modelName,
 		ModelQualifier: model.Qualifier(modelOwner),
 	}
 
-	offer, err := findApplicationOffers(ctx, client, filter, input.Endpoints)
+	offer, err := findCreatedOffer(ctx, client, filter, input.Endpoints, offerName)
 	if err != nil {
 		return nil, append(errs, err)
 	}
@@ -322,13 +324,31 @@ func matchByEndpoints(offers []*crossmodel.ApplicationOfferDetails, endpoints []
 	return filtered
 }
 
-func findApplicationOffers(ctx context.Context, client *applicationoffers.Client, filter crossmodel.ApplicationOfferFilter, endpoints []string) (*crossmodel.ApplicationOfferDetails, error) {
+// matchByOfferName is returning offers that match exactly the offer name provided.
+//
+// The FindApplicationOffers API does a fuzzy match by offer name so we do additional client-side filtering to find an exact match.
+func matchByOfferName(offers []*crossmodel.ApplicationOfferDetails, offerName string) []*crossmodel.ApplicationOfferDetails {
+	exactMatches := []*crossmodel.ApplicationOfferDetails{}
+	for _, off := range offers {
+		if off.OfferName == offerName {
+			exactMatches = append(exactMatches, off)
+		}
+	}
+	return exactMatches
+}
+
+// findCreatedOffer is a helper function to find the created offer after calling the Offer API.
+//
+// This is required because the Offer API doesn't return the offer URL of the created offer, or
+// any kind of identifier to help find the offer.
+func findCreatedOffer(ctx context.Context, client *applicationoffers.Client, filter crossmodel.ApplicationOfferFilter, endpoints []string, offerName string) (*crossmodel.ApplicationOfferDetails, error) {
 	offers, err := client.FindApplicationOffers(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
 	offers = matchByEndpoints(offers, endpoints)
+	offers = matchByOfferName(offers, offerName)
 
 	if len(offers) == 0 {
 		return nil, fmt.Errorf("unable to find offer after creation")

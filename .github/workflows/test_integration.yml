@@ -49,6 +49,12 @@ jobs:
           - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.32-strict", juju: "4" }
     timeout-minutes: 90
     steps:
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          android: true
+          dotnet: true
+          haskell: true
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
