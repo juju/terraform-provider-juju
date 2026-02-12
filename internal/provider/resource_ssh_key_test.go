@@ -134,9 +134,6 @@ func TestAcc_ResourceSSHKey_ED25519(t *testing.T) {
 }
 
 func TestAcc_ResourceSSHKey_UpgradeProvider(t *testing.T) {
-	t.Skip("This test currently fails due to the breaking change in the provider schema. " +
-		"Remove the skip after the v1 release of the provider.")
-
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
