@@ -33,7 +33,6 @@ func (m sshKeyCommentInsensitiveModifier) MarkdownDescription(_ context.Context)
 
 // PlanModifyString implements [planmodifier.String] and modifies the plan value if the clean SSH keys (without comments) match.
 func (m sshKeyCommentInsensitiveModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
-
 	// If state null, they're making a new one.
 	if req.StateValue.IsNull() {
 		return
