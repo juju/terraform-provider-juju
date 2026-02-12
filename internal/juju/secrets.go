@@ -96,19 +96,6 @@ type GrantRevokeAccessSecretInput struct {
 	Applications []string
 }
 
-type MultiError struct {
-	Errors []error
-}
-
-// Error returns a string representation of the MultiError.
-func (m *MultiError) Error() string {
-	errStrs := make([]string, 0, len(m.Errors))
-	for _, err := range m.Errors {
-		errStrs = append(errStrs, err.Error())
-	}
-	return strings.Join(errStrs, ", ")
-}
-
 func newSecretsClient(sc SharedClient) *secretsClient {
 	return &secretsClient{
 		SharedClient: sc,
@@ -313,9 +300,9 @@ func (c *secretsClient) UpdateAccessSecret(input *GrantRevokeAccessSecretInput, 
 	if err != nil {
 		return typedError(err)
 	}
-	err = ProcessErrorResults(results)
-	if err != nil {
-		return err
+
+	if len(results) > 0 && results[0] != nil {
+		return errors.Join(results...)
 	}
 
 	return nil
