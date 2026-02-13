@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
 const (
@@ -112,6 +113,17 @@ func OnlyCrossController(t *testing.T) {
 func OnlyTestAgainstJAAS(t *testing.T) {
 	if _, ok := os.LookupEnv("IS_JAAS"); !ok {
 		t.Skip("Skipping JAAS specific test against Juju")
+	}
+}
+
+// SkipAgainstJuju4 should be called at the top of any tests
+// that are not appropriate to run against Juju 4.
+func SkipAgainstJuju4(t *testing.T) {
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "4.0.0") >= 0 {
+		t.Skipf("%s is not set or is below 4.0.0", TestJujuAgentVersion)
 	}
 }
 

@@ -187,50 +187,6 @@ func TestAcc_ResourceSecret_Update(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceSecret_UpgradeV0ToV1(t *testing.T) {
-	agentVersion := os.Getenv(TestJujuAgentVersion)
-	if agentVersion == "" {
-		t.Errorf("%s is not set", TestJujuAgentVersion)
-	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
-		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
-	}
-
-	modelName := acctest.RandomWithPrefix("tf-test-model")
-	secretName := "tf-test-secret"
-	secretValue := map[string]string{
-		"key1": "value1",
-		"key2": "value2",
-	}
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-		Steps: []resource.TestStep{
-			{
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						VersionConstraint: TestProviderPreV1Version,
-						Source:            "juju/juju",
-					},
-				},
-				Config: testAccResourceSecretV0(modelName, secretName, secretValue, ""),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_secret."+secretName, "model", modelName),
-					resource.TestCheckResourceAttr("juju_secret."+secretName, "name", secretName),
-					resource.TestCheckResourceAttr("juju_secret."+secretName, "value.key1", "value1"),
-					resource.TestCheckResourceAttr("juju_secret."+secretName, "value.key2", "value2"),
-				),
-			},
-			{
-				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceSecret(modelName, secretName, secretValue, ""),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrPair("juju_secret."+secretName, "model_uuid", "juju_model."+modelName, "uuid"),
-				),
-			},
-		},
-	})
-}
-
 func testAccResourceSecret(modelName, secretName string, secretValue map[string]string, secretInfo string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceSecret",
@@ -241,34 +197,6 @@ resource "juju_model" "{{.ModelName}}" {
 
 resource "juju_secret" "{{.SecretName}}" {
   model_uuid = juju_model.{{.ModelName}}.uuid
-  name  = "{{.SecretName}}"
-  value =  {
-    {{- range $key, $value := .SecretValue }}
-    "{{$key}}" = "{{$value}}"
-    {{- end }}
-  }
-  {{- if ne .SecretInfo "" }}
-  info  = "{{.SecretInfo}}"
-  {{- end }}
-}
-`, internaltesting.TemplateData{
-			"ModelName":   modelName,
-			"SecretName":  secretName,
-			"SecretValue": secretValue,
-			"SecretInfo":  secretInfo,
-		})
-}
-
-func testAccResourceSecretV0(modelName, secretName string, secretValue map[string]string, secretInfo string) string {
-	return internaltesting.GetStringFromTemplateWithData(
-		"testAccResourceSecret",
-		`
-resource "juju_model" "{{.ModelName}}" {
-  name = "{{.ModelName}}"
-}
-
-resource "juju_secret" "{{.SecretName}}" {
-  model = juju_model.{{.ModelName}}.name
   name  = "{{.SecretName}}"
   value =  {
     {{- range $key, $value := .SecretValue }}

@@ -52,21 +52,10 @@ type integrationResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
-type integrationResourceModelV0 struct {
-	integrationResourceModel
-
-	ModelName types.String `tfsdk:"model"`
-}
-
 type integrationResourceModelV1 struct {
 	integrationResourceModel
 
 	ModelUUID types.String `tfsdk:"model_uuid"`
-}
-type nestedApplicationV0 struct {
-	Name     types.String `tfsdk:"name"`
-	Endpoint types.String `tfsdk:"endpoint"`
-	OfferURL types.String `tfsdk:"offer_url"`
 }
 
 // nestedApplication represents an element in an Application set of an
@@ -419,70 +408,6 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 	r.trace(fmt.Sprintf("Deleted integration resource: %q", state.ID.ValueString()))
 }
 
-// UpgradeState upgrades the state of the integration resource.
-// This is used to handle changes in the resource schema between versions.
-// V0->V2: The model name is replaced with the model UUID and offering_controller field is added.
-func (r *integrationResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
-	return map[int64]resource.StateUpgrader{
-		0: {
-			PriorSchema: integrationV0Schema(),
-			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-				integrationV0 := integrationResourceModelV0{}
-				resp.Diagnostics.Append(req.State.Get(ctx, &integrationV0)...)
-
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				modelUUID, err := r.client.Models.ModelUUID(integrationV0.ModelName.ValueString(), "")
-				if err != nil {
-					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", integrationV0.ModelName.ValueString(), err))
-					return
-				}
-
-				newID := strings.Replace(integrationV0.ID.ValueString(), integrationV0.ModelName.ValueString(), modelUUID, 1)
-
-				// Parse old applications and reconstruct with new schema including offering_controller field
-				var oldApps []nestedApplicationV0
-				resp.Diagnostics.Append(integrationV0.Application.ElementsAs(ctx, &oldApps, false)...)
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				// Reconstruct applications with the new structure
-				upgradedApps := make([]nestedApplication, len(oldApps))
-				for i, app := range oldApps {
-					upgradedApps[i] = nestedApplication{
-						Name:               app.Name,
-						Endpoint:           app.Endpoint,
-						OfferURL:           app.OfferURL,
-						OfferingController: types.StringNull(),
-					}
-				}
-
-				// Create the new Application set with the current schema type
-				appsType := resp.State.Schema.GetBlocks()["application"].(schema.SetNestedBlock).NestedObject.Type()
-				upgradedAppsSet, errDiag := types.SetValueFrom(ctx, appsType, upgradedApps)
-				resp.Diagnostics.Append(errDiag...)
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				upgradedStateData := integrationResourceModelV1{
-					integrationResourceModel: integrationResourceModel{
-						Via:         integrationV0.Via,
-						ID:          types.StringValue(newID),
-						Application: upgradedAppsSet,
-					},
-					ModelUUID: types.StringValue(modelUUID),
-				}
-
-				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
-			},
-		},
-	}
-}
-
 func handleIntegrationNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
 	if errors.Is(err, juju.IntegrationNotFoundError) {
 		// Integration manually removed
@@ -614,39 +539,4 @@ func (r *integrationResource) trace(msg string, additionalFields ...map[string]i
 	// Output:
 	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
 	tflog.SubsystemTrace(r.subCtx, LogResourceIntegration, msg, additionalFields...)
-}
-
-func integrationV0Schema() *schema.Schema {
-	return &schema.Schema{
-		Description: "A resource that represents a Juju Integration.",
-		Attributes: map[string]schema.Attribute{
-			"model": schema.StringAttribute{
-				Required: true,
-			},
-			"via": schema.StringAttribute{
-				Optional: true,
-			},
-			"id": schema.StringAttribute{
-				Computed: true,
-			},
-		},
-		Blocks: map[string]schema.Block{
-			"application": schema.SetNestedBlock{
-				NestedObject: schema.NestedBlockObject{
-					Attributes: map[string]schema.Attribute{
-						"name": schema.StringAttribute{
-							Optional: true,
-						},
-						"endpoint": schema.StringAttribute{
-							Optional: true,
-							Computed: true,
-						},
-						"offer_url": schema.StringAttribute{
-							Optional: true,
-						},
-					},
-				},
-			},
-		},
-	}
 }

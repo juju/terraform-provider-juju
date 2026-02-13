@@ -33,14 +33,14 @@ func TestAcc_ResourceAccessSecret_GrantRevoke(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceSecretWithAccess(modelName, false, true),
+				Config: testAccResourceSecretWithAccess(modelName, false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model."+modelName, "uuid", "juju_access_secret.test_access_secret", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "applications.0", "jul"),
 				),
 			},
 			{
-				Config: testAccResourceSecretWithAccess(modelName, true, true),
+				Config: testAccResourceSecretWithAccess(modelName, true),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model."+modelName, "uuid", "juju_access_secret.test_access_secret", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "applications.0", "jul"),
@@ -48,7 +48,7 @@ func TestAcc_ResourceAccessSecret_GrantRevoke(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceSecretWithAccess(modelName, false, true),
+				Config: testAccResourceSecretWithAccess(modelName, false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model."+modelName, "uuid", "juju_access_secret.test_access_secret", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "applications.0", "jul"),
@@ -73,7 +73,7 @@ func TestAcc_ResourceAccessSecret_Import(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceSecretWithAccess(modelName, true, true),
+				Config: testAccResourceSecretWithAccess(modelName, true),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model."+modelName, "uuid", "juju_access_secret.test_access_secret", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "applications.0", "jul"),
@@ -102,82 +102,7 @@ func TestAcc_ResourceAccessSecret_Import(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceAccessSecret_UpgradeV1ToV2(t *testing.T) {
-	agentVersion := os.Getenv(TestJujuAgentVersion)
-	if agentVersion == "" {
-		t.Errorf("%s is not set", TestJujuAgentVersion)
-	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
-		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
-	}
-
-	modelName := acctest.RandomWithPrefix("tf-test-model")
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-
-		Steps: []resource.TestStep{
-			{
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						VersionConstraint: TestProviderPreV1Version,
-						Source:            "juju/juju",
-					},
-				},
-				Config: testAccResourceSecretWithAccess(modelName, true, false),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "model", modelName),
-					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "applications.0", "jul"),
-				),
-			},
-			{
-				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceSecretWithAccess(modelName, true, true),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrPair("juju_model."+modelName, "uuid", "juju_access_secret.test_access_secret", "model_uuid"),
-					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "applications.0", "jul"),
-				),
-			},
-		},
-	})
-}
-
-func TestAcc_ResourceAccessSecret_UpgradeV0ToV2(t *testing.T) {
-	agentVersion := os.Getenv(TestJujuAgentVersion)
-	if agentVersion == "" {
-		t.Errorf("%s is not set", TestJujuAgentVersion)
-	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
-		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
-	}
-
-	modelName := acctest.RandomWithPrefix("tf-test-model")
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-
-		Steps: []resource.TestStep{
-			{
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						// This is the version with `applications` instead of `endpoints`
-						VersionConstraint: "0.20.0",
-						Source:            "juju/juju",
-					},
-				},
-				Config: testAccResourceSecretWithAccess(modelName, true, false),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "model", modelName),
-					resource.TestCheckResourceAttr("juju_access_secret.test_access_secret", "applications.0", "jul"),
-				),
-			},
-			{
-				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceSecretWithAccess(modelName, true, true),
-			},
-		},
-	})
-}
-
-func testAccResourceSecretWithAccess(modelName string, allApplicationAccess bool, useModelUUID bool) string {
+func testAccResourceSecretWithAccess(modelName string, allApplicationAccess bool) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceSecret",
 		`resource "juju_model" "{{.ModelName}}" {
@@ -186,12 +111,7 @@ func testAccResourceSecretWithAccess(modelName string, allApplicationAccess bool
 
 resource "juju_application" "jul" {
   name  = "jul"
-  {{- if eq .UseModelUUID false }}
-  model = juju_model.{{.ModelName}}.name
-  {{- else }}
   model_uuid = juju_model.{{.ModelName}}.uuid
-  {{- end }}
-
 
   charm {
 	name     = "ubuntu-lite"
@@ -203,11 +123,7 @@ resource "juju_application" "jul" {
 
 resource "juju_application" "jul2" {
   name  = "jul2"
-  {{- if eq .UseModelUUID false }}
-  model = juju_model.{{.ModelName}}.name
-  {{- else }}
   model_uuid = juju_model.{{.ModelName}}.uuid
-  {{- end }}
 
   charm {
 	name     = "ubuntu-lite"
@@ -218,11 +134,7 @@ resource "juju_application" "jul2" {
 }
 
 resource "juju_secret" "test_secret" {
-  {{- if eq .UseModelUUID false }}
-  model = juju_model.{{.ModelName}}.name
-  {{- else }}
   model_uuid = juju_model.{{.ModelName}}.uuid
-  {{- end }}
   
   name  = "test_secret_name"
   value = {
@@ -233,11 +145,7 @@ resource "juju_secret" "test_secret" {
 }
 
 resource "juju_access_secret" "test_access_secret" {
-  {{- if eq .UseModelUUID false }}
-  model = juju_model.{{.ModelName}}.name
-  {{- else }}
   model_uuid = juju_model.{{.ModelName}}.uuid
-  {{- end }}
   {{- if .AllApplicationAccess }}
   applications = [
     juju_application.jul.name, juju_application.jul2.name
@@ -252,6 +160,5 @@ resource "juju_access_secret" "test_access_secret" {
 `, internaltesting.TemplateData{
 			"ModelName":            modelName,
 			"AllApplicationAccess": allApplicationAccess,
-			"UseModelUUID":         useModelUUID,
 		})
 }

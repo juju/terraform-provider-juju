@@ -46,24 +46,6 @@ type accessSecretResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
-type accessSecretResourceModelV0 struct {
-	accessSecretResourceModel
-	// Model to which the secret belongs.
-	Model types.String `tfsdk:"model"`
-
-	// Applications is a list of applications to which the secret is granted or revoked.
-	Applications types.List `tfsdk:"applications"`
-}
-
-type accessSecretResourceModelV1 struct {
-	accessSecretResourceModel
-	// Model to which the secret belongs.
-	Model types.String `tfsdk:"model"`
-
-	// Applications is a set of applications to which the secret is granted or revoked.
-	Applications types.Set `tfsdk:"applications"`
-}
-
 type accessSecretResourceModelV2 struct {
 	accessSecretResourceModel
 	// Model to which the secret belongs.
@@ -399,134 +381,9 @@ func (s *accessSecretResource) Delete(ctx context.Context, req resource.DeleteRe
 	s.trace(fmt.Sprintf("revoke secret access %s", state.SecretId))
 }
 
-// UpgradeState upgrades the state of the secret access resource.
-// This is used to handle changes in the resource schema between versions.
-// V0 -> V1: Replace model name field with model UUID.
-func (s *accessSecretResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
-	return map[int64]resource.StateUpgrader{
-		0: {
-			PriorSchema: accessSecretResourceSchemaV0(),
-			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-				accessSecretV0 := accessSecretResourceModelV0{}
-				resp.Diagnostics.Append(req.State.Get(ctx, &accessSecretV0)...)
-
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				accessSecretV1 := s.accessSecretV0ToV1(ctx, accessSecretV0, resp)
-				accessSecretV2 := s.accessSecretV1ToV2(accessSecretV1, resp)
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				resp.Diagnostics.Append(resp.State.Set(ctx, accessSecretV2)...)
-			},
-		},
-		1: {
-			PriorSchema: accessSecretResourceSchemaV1(),
-			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-				accessSecretV1 := accessSecretResourceModelV1{}
-				resp.Diagnostics.Append(req.State.Get(ctx, &accessSecretV1)...)
-
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				accessSecretV2 := s.accessSecretV1ToV2(accessSecretV1, resp)
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				resp.Diagnostics.Append(resp.State.Set(ctx, accessSecretV2)...)
-			},
-		},
-	}
-}
-
 func (s *accessSecretResource) trace(msg string, additionalFields ...map[string]interface{}) {
 	if s.subCtx == nil {
 		return
 	}
 	tflog.SubsystemTrace(s.subCtx, LogResourceAccessSecret, msg, additionalFields...)
-}
-
-func accessSecretResourceSchemaV0() *schema.Schema {
-	return &schema.Schema{
-		Attributes: map[string]schema.Attribute{
-			"model": schema.StringAttribute{
-				Required: true,
-			},
-			"secret_id": schema.StringAttribute{
-				Required: true,
-			},
-			"applications": schema.ListAttribute{
-				Required:    true,
-				ElementType: types.StringType,
-			},
-			"id": schema.StringAttribute{
-				Computed: true,
-			},
-		},
-	}
-}
-
-func accessSecretResourceSchemaV1() *schema.Schema {
-	return &schema.Schema{
-		Attributes: map[string]schema.Attribute{
-			"model": schema.StringAttribute{
-				Required: true,
-			},
-			"secret_id": schema.StringAttribute{
-				Required: true,
-			},
-			"applications": schema.SetAttribute{
-				Required:    true,
-				ElementType: types.StringType,
-			},
-			"id": schema.StringAttribute{
-				Computed: true,
-			},
-		},
-	}
-}
-
-func (s *accessSecretResource) accessSecretV0ToV1(ctx context.Context, resourceV0 accessSecretResourceModelV0, resp *resource.UpgradeStateResponse) accessSecretResourceModelV1 {
-	applications := []string{}
-	if !resourceV0.Applications.IsNull() {
-		resp.Diagnostics.Append(resourceV0.Applications.ElementsAs(ctx, &applications, false)...)
-	}
-
-	applicationsSet, diags := types.SetValueFrom(ctx, types.StringType, applications)
-	if diags.HasError() {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to convert applications to set, got error: %s", diags))
-	}
-
-	return accessSecretResourceModelV1{
-		Model:        resourceV0.Model,
-		Applications: applicationsSet,
-		accessSecretResourceModel: accessSecretResourceModel{
-			SecretId: resourceV0.SecretId,
-			ID:       resourceV0.ID,
-		},
-	}
-}
-
-func (s *accessSecretResource) accessSecretV1ToV2(resourceV1 accessSecretResourceModelV1, resp *resource.UpgradeStateResponse) accessSecretResourceModelV2 {
-	modelUUID, err := s.client.Models.ModelUUID(resourceV1.Model.ValueString(), "")
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", resourceV1.Model.ValueString(), err))
-		return accessSecretResourceModelV2{}
-	}
-
-	newID := strings.Replace(resourceV1.ID.ValueString(), resourceV1.Model.ValueString(), modelUUID, 1)
-
-	return accessSecretResourceModelV2{
-		ModelUUID:    types.StringValue(modelUUID),
-		Applications: resourceV1.Applications,
-		accessSecretResourceModel: accessSecretResourceModel{
-			SecretId: resourceV1.SecretId,
-			ID:       types.StringValue(newID),
-		},
-	}
 }

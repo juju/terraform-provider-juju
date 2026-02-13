@@ -53,12 +53,6 @@ type secretResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
-type secretResourceModelV0 struct {
-	secretResourceModel
-	// Model to which the secret belongs. This attribute is required for all actions.
-	Model types.String `tfsdk:"model"`
-}
-
 type secretResourceModelV1 struct {
 	secretResourceModel
 	// ModelUUID to which the secret belongs. This attribute is required for all actions.
@@ -411,63 +405,4 @@ func (s *secretResource) trace(msg string, additionalFields ...map[string]interf
 
 func newSecretID(modelUUID, secret string) string {
 	return fmt.Sprintf("%s:%s", modelUUID, secret)
-}
-
-func (o *secretResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
-	return map[int64]resource.StateUpgrader{
-		0: {
-			PriorSchema: &schema.Schema{
-				Attributes: map[string]schema.Attribute{
-					"model": schema.StringAttribute{
-						Required: true,
-					},
-					"name": schema.StringAttribute{
-						Optional: true,
-					},
-					"value": schema.MapAttribute{
-						ElementType: types.StringType,
-						Required:    true,
-						Sensitive:   true,
-					},
-					"secret_id": schema.StringAttribute{
-						Computed: true,
-					},
-					"secret_uri": schema.StringAttribute{
-						Computed: true,
-					},
-					"info": schema.StringAttribute{
-						Optional: true,
-					},
-					"id": schema.StringAttribute{
-						Computed: true,
-					},
-				},
-			},
-			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-				var priorStateData secretResourceModelV0
-
-				resp.Diagnostics.Append(req.State.Get(ctx, &priorStateData)...)
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				modelStr := priorStateData.Model.ValueString()
-				modelUUID, err := o.client.Models.ModelUUID(modelStr, "")
-				if err != nil {
-					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", modelStr, err))
-					return
-				}
-
-				newID := newSecretID(modelUUID, priorStateData.SecretId.ValueString())
-				priorStateData.ID = types.StringValue(newID)
-
-				upgradedStateData := secretResourceModelV1{
-					ModelUUID:           types.StringValue(modelUUID),
-					secretResourceModel: priorStateData.secretResourceModel,
-				}
-
-				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
-			},
-		},
-	}
 }

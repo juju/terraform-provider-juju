@@ -38,7 +38,6 @@ const (
 var _ resource.Resource = &machineResource{}
 var _ resource.ResourceWithConfigure = &machineResource{}
 var _ resource.ResourceWithImportState = &machineResource{}
-var _ resource.ResourceWithUpgradeState = &machineResource{}
 
 func NewMachineResource() resource.Resource {
 	return &machineResource{}
@@ -68,12 +67,6 @@ type machineResourceModel struct {
 	WaitForHostname types.Bool             `tfsdk:"wait_for_hostname"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
-}
-
-type machineResourceModelV0 struct {
-	machineResourceModel
-	Series    types.String `tfsdk:"series"`
-	ModelName types.String `tfsdk:"model"`
 }
 
 type machineResourceModelV1 struct {
@@ -598,42 +591,6 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 }
 
-// UpgradeState upgrades the state of the machine resource.
-// This is used to handle changes in the resource schema between versions.
-// V0-> V1: The model name is replaced with the model UUID.
-func (r *machineResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
-	return map[int64]resource.StateUpgrader{
-		0: {
-			PriorSchema: machineV0Schema(ctx),
-			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-				machineV0 := machineResourceModelV0{}
-				resp.Diagnostics.Append(req.State.Get(ctx, &machineV0)...)
-
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				modelUUID, err := r.client.Models.ModelUUID(machineV0.ModelName.ValueString(), "")
-				if err != nil {
-					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", machineV0.ModelName.ValueString(), err))
-					return
-				}
-
-				_, machineID, machineName := modelMachineIDAndName(machineV0.ID.ValueString(), &resp.Diagnostics)
-				newID := newMachineID(modelUUID, machineID, machineName)
-				machineV0.ID = types.StringValue(newID)
-
-				upgradedStateData := machineResourceModelV1{
-					ModelUUID:            types.StringValue(modelUUID),
-					machineResourceModel: machineV0.machineResourceModel,
-				}
-
-				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
-			},
-		},
-	}
-}
-
 // ImportState is called when the provider must import the state of a
 // resource instance. This method must return enough state so the Read
 // method can properly refresh the full resource.
@@ -730,67 +687,4 @@ func assertMachineRunning(respFromAPI *juju.ReadMachineResponse) error {
 		return juju.NewRetryReadError("waiting for machine to be in running state")
 	}
 	return nil
-}
-
-func machineV0Schema(ctx context.Context) *schema.Schema {
-	return &schema.Schema{
-		Attributes: map[string]schema.Attribute{
-			"annotations": schema.MapAttribute{
-				Optional:    true,
-				ElementType: types.StringType,
-			},
-			"name": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-			},
-			"model": schema.StringAttribute{
-				Required: true,
-			},
-			"constraints": schema.StringAttribute{
-				CustomType: CustomConstraintsType{},
-				Optional:   true,
-			},
-			"disks": schema.StringAttribute{
-				Optional: true,
-			},
-			"base": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-			},
-			"series": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-			},
-			"placement": schema.StringAttribute{
-				Optional: true,
-			},
-			"machine_id": schema.StringAttribute{
-				Computed: true,
-				Optional: false,
-				Required: false,
-			},
-			"ssh_address": schema.StringAttribute{
-				Optional: true,
-			},
-			"public_key_file": schema.StringAttribute{
-				Optional: true,
-			},
-			"private_key_file": schema.StringAttribute{
-				Optional: true,
-			},
-			"hostname": schema.StringAttribute{
-				Computed: true,
-			},
-			"wait_for_hostname": schema.BoolAttribute{
-				Optional: true,
-			},
-			"id": schema.StringAttribute{
-				Computed: true,
-			},
-		},
-		Blocks: map[string]schema.Block{
-			"timeouts": timeouts.Block(ctx, timeouts.Opts{
-				Create: true,
-			}),
-		}}
 }

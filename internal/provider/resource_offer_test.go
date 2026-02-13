@@ -106,6 +106,9 @@ resource "juju_integration" "int" {
 }
 
 func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
+	// This skip is temporary until we have a stable version of the provider that supports
+	// Juju 4.0.0 and above, at which point we can re-enable it.
+	SkipAgainstJuju4(t)
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -137,72 +140,6 @@ func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceOffer_Upgradev0Tov2(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-	modelName := acctest.RandomWithPrefix("tf-test-offer")
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-
-		Steps: []resource.TestStep{
-			{
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						// This is the version with `endpoint` instead of `endpoints`
-						VersionConstraint: "0.19.0",
-						Source:            "juju/juju",
-					},
-				},
-				Config: testAccResourceOfferv0(modelName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
-					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
-				),
-			},
-			{
-				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceOffer(modelName),
-			},
-		},
-	})
-}
-
-func TestAcc_ResourceOffer_UpgradeV1ToV2(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-	modelName := acctest.RandomWithPrefix("tf-test-offer")
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-
-		Steps: []resource.TestStep{
-			{
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						// This is a version using v1 of the offer schema.
-						VersionConstraint: TestProviderPreV1Version,
-						Source:            "juju/juju",
-					},
-				},
-				Config: testAccResourceOfferv1(modelName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
-					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
-				),
-			},
-			{
-				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceOffer(modelName),
-			},
-		},
-	})
-}
-
 func testAccResourceOffer(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
@@ -221,56 +158,6 @@ resource "juju_application" "this" {
 
 resource "juju_offer" "this" {
 	model_uuid       = juju_model.this.uuid
-	application_name = juju_application.this.name
-	endpoints        = ["sink"]
-}
-`, modelName)
-}
-
-func testAccResourceOfferv0(modelName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "this" {
-	name = %q
-}
-
-resource "juju_application" "this" {
-	model = juju_model.this.name
-	name  = "this"
-
-	charm {
-		name = "juju-qa-dummy-source"
-		channel = "latest/stable"
-		base = "ubuntu@22.04"
-	}
-}
-
-resource "juju_offer" "this" {
-	model       = juju_model.this.name
-	application_name = juju_application.this.name
-	endpoint         = "sink"
-}
-`, modelName)
-}
-
-func testAccResourceOfferv1(modelName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "this" {
-	name = %q
-}
-
-resource "juju_application" "this" {
-	model = juju_model.this.name
-	name  = "this"
-
-	charm {
-		name = "juju-qa-dummy-source"
-		channel = "latest/stable"
-		base = "ubuntu@22.04"
-	}
-}
-
-resource "juju_offer" "this" {
-	model       = juju_model.this.name
 	application_name = juju_application.this.name
 	endpoints        = ["sink"]
 }
