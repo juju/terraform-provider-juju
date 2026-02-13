@@ -106,9 +106,6 @@ resource "juju_integration" "int" {
 }
 
 func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
-	t.Skip("This test currently fails due to the breaking change in the provider schema. " +
-		"Remove the skip after the v1 release of the provider.")
-
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -375,4 +372,167 @@ resource "juju_integration" "offer_db_admin" {
 	}
 }
 `, modelName1, modelName2)
+}
+
+func TestAcc_ResourceOfferFuzzyName(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-offer-fuzzy")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// First apply: create only "haproxy-two".
+				Config: testAccResourceOfferFuzzyNameStep1(modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_offer.haproxy_two", "name", "haproxy-two"),
+				),
+			},
+			{
+				// Second apply: add "haproxy" where its name is a substring of "haproxy-two".
+				// Historically this could fail during read-after-create due to fuzzy offer-name matching.
+				Config: testAccResourceOfferFuzzyNameStep2(modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_offer.haproxy", "name", "haproxy"),
+					resource.TestCheckResourceAttr("juju_offer.haproxy_two", "name", "haproxy-two"),
+				),
+			},
+		},
+	})
+}
+
+func testAccResourceOfferFuzzyNameStep1(modelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_application" "haproxy" {
+	model_uuid = juju_model.this.uuid
+	name  = "haproxy"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		base = "ubuntu@22.04"
+	}
+}
+
+resource "juju_application" "haproxy_two" {
+	model_uuid = juju_model.this.uuid
+	name  = "haproxy-two"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		base = "ubuntu@22.04"
+	}
+}
+
+resource "juju_offer" "haproxy_two" {
+	model_uuid       = juju_model.this.uuid
+	name             = "haproxy-two"
+	application_name = juju_application.haproxy_two.name
+	endpoints        = ["sink"]
+}
+`, modelName)
+}
+
+func testAccResourceOfferFuzzyNameStep2(modelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_application" "haproxy" {
+	model_uuid = juju_model.this.uuid
+	name  = "haproxy"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		base = "ubuntu@22.04"
+	}
+}
+
+resource "juju_application" "haproxy_two" {
+	model_uuid = juju_model.this.uuid
+	name  = "haproxy-two"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		base = "ubuntu@22.04"
+	}
+}
+
+resource "juju_offer" "haproxy" {
+	model_uuid       = juju_model.this.uuid
+	name             = "haproxy"
+	application_name = juju_application.haproxy.name
+	endpoints        = ["sink"]
+}
+
+resource "juju_offer" "haproxy_two" {
+	model_uuid       = juju_model.this.uuid
+	name             = "haproxy-two"
+	application_name = juju_application.haproxy_two.name
+	endpoints        = ["sink"]
+}
+`, modelName)
+}
+
+func TestAcc_ResourceOfferTwoOffersSameApplication(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-offer-same-app")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceOfferTwoOffersSameApplication(modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_offer.haproxy", "name", "haproxy"),
+					resource.TestCheckResourceAttr("juju_offer.haproxy_two", "name", "haproxy-two"),
+					resource.TestCheckResourceAttrPair("juju_offer.haproxy", "application_name", "juju_offer.haproxy_two", "application_name"),
+				),
+			},
+		},
+	})
+}
+
+func testAccResourceOfferTwoOffersSameApplication(modelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_application" "haproxy" {
+	model_uuid = juju_model.this.uuid
+	name  = "haproxy"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		base = "ubuntu@22.04"
+	}
+}
+
+resource "juju_offer" "haproxy" {
+	model_uuid       = juju_model.this.uuid
+	name             = "haproxy"
+	application_name = juju_application.haproxy.name
+	endpoints        = ["sink"]
+}
+
+resource "juju_offer" "haproxy_two" {
+	model_uuid       = juju_model.this.uuid
+	name             = "haproxy-two"
+	application_name = juju_application.haproxy.name
+	endpoints        = ["sink"]
+}
+`, modelName)
 }

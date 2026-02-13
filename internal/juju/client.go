@@ -84,6 +84,9 @@ type Config struct {
 	// leave dangling resources in the Juju controller left for the user to clean up.
 	// This avoids making the user manipulate Terraform state manually to get rid of the resource.
 	SkipFailedDeletion bool
+
+	// ControllerMode indicates whether the provider is operating in controller mode.
+	ControllerMode bool
 }
 
 // ProviderData holds data provided to resources and data sources.
