@@ -135,7 +135,7 @@ func (c *sshKeysClient) DeleteSSHKey(ctx context.Context, input *DeleteSSHKeyInp
 	}
 
 	// Juju 4 allows the deletion of the final key per model.
-	if ctrlvers.Major < 3 {
+	if ctrlvers.Major <= 3 {
 		// NOTE: Unfortunately Juju will return an error if we try to
 		// remove the last ssh key from the controller. This is something
 		// that impacts the current Juju logic. As a temporal workaround
