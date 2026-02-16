@@ -34,6 +34,7 @@ JUJU_CONTROLLER_ADDRESSES=$(juju show-controller "${CONTROLLER}" | yq -r ".${CON
 JUJU_USERNAME=$(cat ~/.local/share/juju/accounts.yaml | yq -r ".controllers.${CONTROLLER}.user")
 JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq -r ".controllers.${CONTROLLER}.password")
 JUJU_CA_CERT=$(juju show-controller "${CONTROLLER}" | yq -r ".${CONTROLLER}.details.\"ca-cert\"" | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
+JUJU_AGENT_VERSION=$(juju show-controller "${CONTROLLER}" | yq -r ".$CONTROLLER.details.agent-version" | tr -d '"')
 
 # Get cloud information
 CLOUD_NAME=$(juju show-controller "${CONTROLLER}" | yq -r ".${CONTROLLER}.details.cloud")
@@ -54,6 +55,7 @@ JUJU_USERNAME="$JUJU_USERNAME"
 JUJU_PASSWORD="$JUJU_PASSWORD"
 JUJU_CA_CERT="$JUJU_CA_CERT"
 TEST_CLOUD="$CLOUD_TYPE"
+JUJU_AGENT_VERSION="$JUJU_AGENT_VERSION"
 EOF
 
 if [ -n "$OFFERING_CONTROLLER" ]; then
