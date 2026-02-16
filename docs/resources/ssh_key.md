@@ -25,7 +25,7 @@ resource "juju_ssh_key" "mykey" {
 ### Required
 
 - `model_uuid` (String) The UUID of the model to operate in.
-- `payload` (String, Sensitive) SSH key payload.
+- `payload` (String) SSH key payload.
 
 ### Read-Only
 
