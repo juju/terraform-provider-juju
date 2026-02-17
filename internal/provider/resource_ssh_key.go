@@ -94,6 +94,7 @@ func (s *sshKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Required:    true,
 				Sensitive:   true,
 				PlanModifiers: []planmodifier.String{
+					SSHKeyCommentInsensitiveModifier(),
 					stringplanmodifier.RequiresReplace(),
 				},
 			},

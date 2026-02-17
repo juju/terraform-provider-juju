@@ -129,30 +129,39 @@ func (c *sshKeysClient) DeleteSSHKey(ctx context.Context, input *DeleteSSHKeyInp
 
 	client := keymanager.NewClient(conn)
 
-	// NOTE: Unfortunately Juju will return an error if we try to
-	// remove the last ssh key from the controller. This is something
-	// that impacts the current Juju logic. As a temporal workaround
-	// we will check if this is the latest SSH key of this model and
-	// skip the delete.
-	returnedKeys, err := client.ListKeys(ctx, ssh.FullKeys, input.Username)
+	ctrlvers, err := c.GetControllerVersion(ctx)
 	if err != nil {
 		return err
 	}
-	// only check if there is one key
-	if len(returnedKeys) == 1 {
-		fingerprint, comment, err := ssh.KeyFingerprint(returnedKeys[0].Result[0])
+
+	// Juju 4 allows the deletion of the final key per model.
+	if ctrlvers.Major <= 3 {
+		// NOTE: Unfortunately Juju will return an error if we try to
+		// remove the last ssh key from the controller. This is something
+		// that impacts the current Juju logic. As a temporal workaround
+		// we will check if this is the latest SSH key of this model and
+		// skip the delete.
+		returnedKeys, err := client.ListKeys(ctx, ssh.FullKeys, input.Username)
 		if err != nil {
-			return fmt.Errorf("error getting fingerprint for ssh key: %w", err)
+			return err
 		}
-		if input.KeyIdentifier == fingerprint || input.KeyIdentifier == comment {
-			// This is the latest key, do not remove it
-			c.Warnf(fmt.Sprintf("ssh key from user %s is the last one and will not be removed", input.KeyIdentifier))
-			return nil
+		// only check if there is one key
+		if len(returnedKeys) == 1 {
+			fingerprint, comment, err := ssh.KeyFingerprint(returnedKeys[0].Result[0])
+			if err != nil {
+				return fmt.Errorf("error getting fingerprint for ssh key: %w", err)
+			}
+			if input.KeyIdentifier == fingerprint || input.KeyIdentifier == comment {
+				// This is the latest key, do not remove it
+				c.Warnf(fmt.Sprintf("ssh key from user %s is the last one and will not be removed", input.KeyIdentifier))
+				return nil
+			}
 		}
 	}
 
 	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
-	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
+	// the logged-in user for completeness. In Juju 4, keys are associated per user per model, but note, it isn't the user passed in
+	// via the user argument but rather the API authenticated user.
 	params, err := client.DeleteKeys(ctx, input.Username, input.KeyIdentifier)
 	if len(params) != 0 {
 		messages := make([]string, 0)
