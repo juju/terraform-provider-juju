@@ -69,3 +69,4 @@ Deploy, configure, integrate, scale, etc., charmed applications. This will autom
 - {ref}`manage-secrets`
 - {ref}`manage-machines`
 - {ref}`use-the-juju-cli-in-terraform`
+- {ref}`use-the-bootstrapped-controller`
