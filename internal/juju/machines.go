@@ -384,3 +384,29 @@ func (c *machinesClient) DestroyMachine(input *DestroyMachineInput) error {
 
 	return nil
 }
+
+// ListMachines returns the list of machine IDs in the given model.
+func (c *machinesClient) ListMachines(modelUUID string) ([]string, error) {
+	conn, err := c.GetConnection(&modelUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
+
+	status, err := clientAPIClient.Status(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	machineIDs := make([]string, 0, len(status.Machines))
+	for machineID := range status.Machines {
+		machineIDs = append(machineIDs, machineID)
+		for containerID := range status.Machines[machineID].Containers {
+			machineIDs = append(machineIDs, containerID)
+		}
+	}
+
+	return machineIDs, nil
+}
