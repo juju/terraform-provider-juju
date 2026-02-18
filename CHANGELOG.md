@@ -1,3 +1,53 @@
+
+## 1.3.0
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.11 release.
+
+ENHANCEMENTS
+
+* Add the `controller_mode` flag to the provider configuration by @SimoneDutto in [#993](https://github.com/juju/terraform-provider-juju/pull/993)
+* Introduce the `juju_controller` resource by @alesstimec in [#996](https://github.com/juju/terraform-provider-juju/pull/996)
+* Implement controller bootstrap by @kian99 in [#1015](https://github.com/juju/terraform-provider-juju/pull/1015)
+* Implement controller config read/update by @kian99 in [#1017](https://github.com/juju/terraform-provider-juju/pull/1017)
+* Add a lock around filestore methods for concurrent bootstrap by @SimoneDutto in [#1032](https://github.com/juju/terraform-provider-juju/pull/1032)
+* Add controller destroy support by @luci1900 in [#1035](https://github.com/juju/terraform-provider-juju/pull/1035)
+* Add controller import support by @SimoneDutto in [#1049](https://github.com/juju/terraform-provider-juju/pull/1049)
+* Make `juju_binary` required and document snap confinement by @SimoneDutto in [#1054](https://github.com/juju/terraform-provider-juju/pull/1054)
+* Merge controller management changes by @SimoneDutto in [#1064](https://github.com/juju/terraform-provider-juju/pull/1064)
+* Rearrange the bootstrap command runner by @luci1900 in [#1030](https://github.com/juju/terraform-provider-juju/pull/1030)
+  
+BUG FIXES
+
+* Fix `controller_mode` provider config for CLI usage by @SimoneDutto in [#1026](https://github.com/juju/terraform-provider-juju/pull/1026)
+* Replace Juju prefix version match with parsing by @luci1900 in [#1037](https://github.com/juju/terraform-provider-juju/pull/1037)
+* Fix the fuzzy matching bug of #1038 by @ale8k in [#1046](https://github.com/juju/terraform-provider-juju/pull/1046)
+* Grant access to secret when app does not exist by @ale8k in [#1050](https://github.com/juju/terraform-provider-juju/pull/1050)
+* Remove sensitive property from the `juju_ssh_key` payload attribute by @alesstimec in [#1067](https://github.com/juju/terraform-provider-juju/pull/1067)
+* Fix an identity wipe when require-replace failed destruction by @SimoneDutto in [#1071](https://github.com/juju/terraform-provider-juju/pull/1071)
+* Surface error in `WaitForAppsAvailable` by @SimoneDutto in [#1041](https://github.com/juju/terraform-provider-juju/pull/1041)
+
+DOCUMENTATION
+
+* Add metadata by @tmihoc in [#1031](https://github.com/juju/terraform-provider-juju/pull/1031)
+* Expand the how-to on controller management by @kian99 in [#1033](https://github.com/juju/terraform-provider-juju/pull/1033)
+* Fix `juju_kubernetes_cloud` docs by @alesstimec in [#1045](https://github.com/juju/terraform-provider-juju/pull/1045)
+* RTD fix for juju-kubernetes-cloud by @alesstimec in [#1047](https://github.com/juju/terraform-provider-juju/pull/1047)
+* Add documentation for importing controllers by @SimoneDutto in [#1055](https://github.com/juju/terraform-provider-juju/pull/1055)
+* Multi-step create controller and use it by @SimoneDutto in [#1070](https://github.com/juju/terraform-provider-juju/pull/1070)
+
+CI & MAINTENANCE
+
+* Acceptance tests for bootstrapping a controller on LXD and MicroK8s by @SimoneDutto in [#1025](https://github.com/juju/terraform-provider-juju/pull/1025)
+* Acceptance tests for controller config by @kian99 in [#1028](https://github.com/juju/terraform-provider-juju/pull/1028)
+* Merge main into feature branch by @SimoneDutto in [#1036](https://github.com/juju/terraform-provider-juju/pull/1036)
+* Update golangci-lint to version 2 and Go to 1.26 by @SimoneDutto in [#1043](https://github.com/juju/terraform-provider-juju/pull/1043)
+* Re-add skipped tests by @kian99 in [#1058](https://github.com/juju/terraform-provider-juju/pull/1058)
+
+
 ## 1.2.0
 
 NOTES:
