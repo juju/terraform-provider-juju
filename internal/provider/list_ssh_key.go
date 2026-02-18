@@ -131,14 +131,16 @@ func (r *sshKeyLister) List(ctx context.Context, req list.ListRequest, stream *l
 			}
 			result.Diagnostics.Append(result.Identity.Set(ctx, identity)...)
 
-			// Set resource.
-			sshKeyResourceModelV1 := sshKeyResourceModelV1{
-				ModelUUID: types.StringValue(modelUUID),
-				sshKeyResourceModel: sshKeyResourceModel{
-					Payload: types.StringValue(key),
-				},
+			if req.IncludeResource {
+				// Set resource.
+				sshKeyResourceModelV1 := sshKeyResourceModelV1{
+					ModelUUID: types.StringValue(modelUUID),
+					sshKeyResourceModel: sshKeyResourceModel{
+						Payload: types.StringValue(key),
+					},
+				}
+				result.Diagnostics.Append(result.Resource.Set(ctx, sshKeyResourceModelV1)...)
 			}
-			result.Diagnostics.Append(result.Resource.Set(ctx, sshKeyResourceModelV1)...)
 
 			// Send the result to the stream.
 			if !push(result) {
