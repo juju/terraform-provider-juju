@@ -234,7 +234,7 @@ func (r *machineResource) Schema(ctx context.Context, req resource.SchemaRequest
 				},
 			},
 			PublicKeyFileKey: schema.StringAttribute{
-				Description: "The file path to read the public key from.",
+				Description: "The public key for the ubuntu user that will be created by the provisioning user.",
 				Optional:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
@@ -247,7 +247,7 @@ func (r *machineResource) Schema(ctx context.Context, req resource.SchemaRequest
 				},
 			},
 			PrivateKeyFileKey: schema.StringAttribute{
-				Description: "The file path to read the private key from.",
+				Description: "The provisioning user's private key file path.",
 				Optional:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
