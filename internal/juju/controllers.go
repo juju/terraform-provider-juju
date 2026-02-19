@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 
@@ -567,7 +566,10 @@ func buildArgsFromFlags(ctx context.Context, flags any) []string {
 				for j := 0; j < fieldValue.Len(); j++ {
 					item := fieldValue.Index(j)
 					if item.Kind() == reflect.String {
-						cmdArgs = append(cmdArgs, fmt.Sprintf("--%s %s", flagTag, item.String()))
+						// Results in flags like '--flag value'
+						// Append these separately for correct parsing by exec.Command.
+						cmdArgs = append(cmdArgs, fmt.Sprintf("--%s", flagTag))
+						cmdArgs = append(cmdArgs, item.String())
 					}
 				}
 			}
@@ -586,9 +588,6 @@ func buildArgsFromFlags(ctx context.Context, flags any) []string {
 			}
 		}
 	}
-
-	// Sort args for log and test consistency
-	sort.Strings(cmdArgs)
 
 	return cmdArgs
 }
