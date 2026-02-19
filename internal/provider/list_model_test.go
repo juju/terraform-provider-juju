@@ -51,7 +51,7 @@ func testAccListModels() string {
 	return `
 list "juju_model" "test" {
   provider         = juju
-	include_resource = true
+  include_resource = true
 }
 `
 }
