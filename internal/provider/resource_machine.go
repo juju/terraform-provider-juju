@@ -412,16 +412,7 @@ func waitForMachine(ctx context.Context, client *juju.Client, waitForHostname bo
 	return readResponse, err
 }
 
-type machine struct {
-	ID          string
-	Base        string
-	Constraints string
-	Hostname    string
-	Status      string
-	Annotations map[string]string
-}
-
-func readMachine(ctx context.Context, client *juju.Client, modelUUID, machineID string, waitForHostname bool) (*machine, error) {
+func readMachine(ctx context.Context, client *juju.Client, modelUUID, machineID string, waitForHostname bool) (*machineResourceModelV1, error) {
 	// Prevent panic if the provider has not been configured.
 	if client == nil {
 		return nil, fmt.Errorf("unconfigured HTTP client: expected configured HTTP client")
@@ -434,14 +425,6 @@ func readMachine(ctx context.Context, client *juju.Client, modelUUID, machineID 
 		return nil, err
 	}
 
-	machine := &machine{
-		ID:          response.ID,
-		Base:        response.Base,
-		Constraints: response.Constraints,
-		Hostname:    response.Hostname,
-		Status:      response.Status,
-	}
-
 	annotations, err := client.Annotations.GetAnnotations(&juju.GetAnnotationsInput{
 		EntityTag: names.NewMachineTag(response.ID),
 		ModelUUID: modelUUID,
@@ -449,11 +432,25 @@ func readMachine(ctx context.Context, client *juju.Client, modelUUID, machineID 
 	if err != nil {
 		return nil, fmt.Errorf(" to get machine's annotations, got error: %w", err)
 	}
+	annotationsValue := types.MapNull(types.StringType)
 	if len(annotations.Annotations) > 0 {
-		machine.Annotations = annotations.Annotations
+		var diags diag.Diagnostics
+		annotationsValue, diags = types.MapValueFrom(ctx, types.StringType, annotations.Annotations)
+		if diags.HasError() {
+			return nil, fmt.Errorf("unable to convert machine annotations: %v", diags.Errors())
+		}
 	}
 
-	return machine, nil
+	return &machineResourceModelV1{
+		machineResourceModel: machineResourceModel{
+			Annotations: annotationsValue,
+			Base:        types.StringValue(response.Base),
+			Constraints: NewCustomConstraintsValue(response.Constraints),
+			Hostname:    types.StringValue(response.Hostname),
+			MachineID:   types.StringValue(response.ID),
+		},
+		ModelUUID: types.StringValue(modelUUID),
+	}, nil
 }
 
 func IsMachineNotFound(err error) bool {
@@ -495,38 +492,20 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	r.trace(fmt.Sprintf("read machine resource %q", machineID))
 
-	annotations, err := r.client.Annotations.GetAnnotations(&juju.GetAnnotationsInput{
-		EntityTag: names.NewMachineTag(machine.ID),
-		ModelUUID: modelUUID,
-	})
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get machine's annotations, got error: %s", err))
-		return
-	}
-	if len(annotations.Annotations) > 0 {
-		annotationsType := req.State.Schema.GetAttributes()["annotations"].(schema.MapAttribute).ElementType
-
-		annotationsMapValue, errDiag := types.MapValueFrom(ctx, annotationsType, annotations.Annotations)
-		resp.Diagnostics.Append(errDiag...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		data.Annotations = annotationsMapValue
-	}
-
 	data.Name = types.StringValue(machineName)
 	data.ModelUUID = types.StringValue(modelUUID)
 	data.MachineID = types.StringValue(machineID)
-	data.Base = types.StringValue(machine.Base)
+	data.Base = machine.Base
+	data.Annotations = machine.Annotations
 	// Here is ok to always set Hostname from the response because:
 	// 1. if you set wait_for_hostname to true, this is correctly populated.
 	// 2. if you set wait_for_hostname to false, you shouldn't use the hostname.
 	// 3. if you import a machine, the hostname should have been already populated.
 	//    It could happen that the hostname is set to an empty string during import, but unlikely because
 	//    that means you've created a machine and then imported it immediately afterwards.
-	data.Hostname = types.StringValue(machine.Hostname)
-	if machine.Constraints != "" {
-		data.Constraints = NewCustomConstraintsValue(machine.Constraints)
+	data.Hostname = machine.Hostname
+	if machine.Constraints.ValueString() != "" {
+		data.Constraints = machine.Constraints
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 

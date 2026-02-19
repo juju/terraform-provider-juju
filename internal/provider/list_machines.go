@@ -133,43 +133,18 @@ func (r *machineLister) List(ctx context.Context, req list.ListRequest, stream *
 					continue
 				}
 
-				annotationsValue := types.MapNull(types.StringType)
-				if len(machine.Annotations) > 0 {
-					var diag diag.Diagnostics
-					annotationsValue, diag = types.MapValueFrom(ctx, types.StringType, machine.Annotations)
-					if diag.HasError() {
-						result.Diagnostics.Append(diag...)
-						if !push(result) {
-							return
-						}
-						continue
-					}
-				}
-
-				m := &machineResourceModelV1{
-					machineResourceModel: machineResourceModel{
-						Annotations: annotationsValue,
-						Base:        types.StringValue(machine.Base),
-						Constraints: NewCustomConstraintsValue(machine.Constraints),
-						Hostname:    types.StringValue(machine.Hostname),
-						ID:          identity.ID,
-						MachineID:   types.StringValue(machine.ID),
-						Name:        listRequest.Name,
-						Timeouts: timeouts.Value{
-							Object: types.ObjectValueMust(
-								map[string]attr.Type{
-									"create": types.StringType,
-								},
-								map[string]attr.Value{
-									"create": types.StringValue("30m"),
-								},
-							),
+				machine.Timeouts = timeouts.Value{
+					Object: types.ObjectValueMust(
+						map[string]attr.Type{
+							"create": types.StringType,
 						},
-					},
-					ModelUUID: listRequest.ModelUUID,
+						map[string]attr.Value{
+							"create": types.StringValue("30m"),
+						},
+					),
 				}
-				result.DisplayName = machine.ID
-				result.Diagnostics.Append(result.Resource.Set(ctx, m)...)
+				result.DisplayName = machine.MachineID.ValueString()
+				result.Diagnostics.Append(result.Resource.Set(ctx, machine)...)
 			}
 
 			if !push(result) {
