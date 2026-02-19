@@ -32,6 +32,7 @@ manage-offers
 manage-units
 manage-secrets
 manage-machines
+use-a-bootstrapped-controller
 use-the-juju-cli
 ```
 
@@ -69,4 +70,4 @@ Deploy, configure, integrate, scale, etc., charmed applications. This will autom
 - {ref}`manage-secrets`
 - {ref}`manage-machines`
 - {ref}`use-the-juju-cli-in-terraform`
-- {ref}`use-the-bootstrapped-controller`
+- {ref}`use-a-bootstrapped-controller`

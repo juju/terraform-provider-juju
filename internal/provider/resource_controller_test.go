@@ -550,10 +550,14 @@ resource "juju_controller" "controller" {
 
   juju_binary     = "/snap/juju/current/bin/juju"
 
-  bootstrap_config = %s
+  bootstrap_constraints = {
+    "cores"            = "2"
+    "mem"              = "4G"
+	"root-disk"		   = "4G"
+  }
 
-  controller_config = %s
-
+  bootstrap_config        = %s
+  controller_config       = %s
   controller_model_config = %s
 
   destroy_flags	= {

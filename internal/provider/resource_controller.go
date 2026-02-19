@@ -408,8 +408,7 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"name": schema.StringAttribute{
 				Description: "The name to be assigned to the controller. Changing this value will" +
 					" require the controller to be destroyed and recreated by terraform.",
-				Optional: true,
-				Computed: true,
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),

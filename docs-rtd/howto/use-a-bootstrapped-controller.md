@@ -4,7 +4,7 @@ myst:
     description: "How to bootstrap and use a controller in Terraform."
 ---
 
-(use-the-bootstrapped-controller)=
+(use-a-bootstrapped-controller)=
 # Use a bootstrapped controller
 
 To bootstrap and use a controller you need two plans:
