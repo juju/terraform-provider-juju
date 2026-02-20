@@ -317,7 +317,7 @@ func (o *offerResource) Configure(ctx context.Context, req resource.ConfigureReq
 // ImportState imports the resource state from the given ID.
 // The ID is expected to be `offer_url`.
 func (o *offerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughWithIdentity(ctx, path.Root("id"), path.Root("id"), req, resp)
 }
 
 func (o *offerResource) trace(msg string, additionalFields ...map[string]interface{}) {
