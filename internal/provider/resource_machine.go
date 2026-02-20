@@ -14,12 +14,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
@@ -79,6 +79,10 @@ type machineResourceModelV0 struct {
 type machineResourceModelV1 struct {
 	machineResourceModel
 	ModelUUID types.String `tfsdk:"model_uuid"`
+}
+
+type machineResourceIdentityModel struct {
+	ID types.String `tfsdk:"id"`
 }
 
 func (r *machineResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -367,7 +371,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 
 	waitForHostname := plan.WaitForHostname.ValueBool()
 	modelUUID := plan.ModelUUID.ValueString()
-	readResponse, err := r.waitForMachine(ctx, waitForHostname, modelUUID, response.ID, createTimeout)
+	readResponse, err := waitForMachine(ctx, r.client, waitForHostname, modelUUID, response.ID, createTimeout)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for machine %q readiness, got error: %s", response.ID, err))
 		return
@@ -377,16 +381,21 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	plan.Hostname = types.StringValue(readResponse.Hostname)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+
+	identity := machineResourceIdentityModel{
+		ID: types.StringValue(id),
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
-func (r *machineResource) waitForMachine(ctx context.Context, waitForHostname bool, modelUUID, machineID string, timeout time.Duration) (*juju.ReadMachineResponse, error) {
+func waitForMachine(ctx context.Context, client *juju.Client, waitForHostname bool, modelUUID, machineID string, timeout time.Duration) (*juju.ReadMachineResponse, error) {
 	asserts := []wait.Assert[*juju.ReadMachineResponse]{assertMachineRunning}
 	if waitForHostname {
 		asserts = append(asserts, assertHostnamePopulated)
 	}
 	readResponse, err := wait.WaitFor(wait.WaitForCfg[*juju.ReadMachineInput, *juju.ReadMachineResponse]{
 		Context: ctx,
-		GetData: r.client.Machines.ReadMachine,
+		GetData: client.Machines.ReadMachine,
 		Input: &juju.ReadMachineInput{
 			ModelUUID: modelUUID,
 			ID:        machineID,
@@ -403,22 +412,49 @@ func (r *machineResource) waitForMachine(ctx context.Context, waitForHostname bo
 	return readResponse, err
 }
 
-func IsMachineNotFound(err error) bool {
-	return strings.Contains(err.Error(), "no status returned for machine")
+func readMachine(ctx context.Context, client *juju.Client, modelUUID, machineID string, waitForHostname bool) (*machineResourceModelV1, error) {
+	// Prevent panic if the provider has not been configured.
+	if client == nil {
+		return nil, fmt.Errorf("unconfigured HTTP client: expected configured HTTP client")
+	}
+
+	// During import, we don't know whether to wait for the machine hostname.
+	// So we opt not to wait, assuming the machine is ready.
+	response, err := waitForMachine(ctx, client, false, modelUUID, machineID, defaultCreateTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	annotations, err := client.Annotations.GetAnnotations(&juju.GetAnnotationsInput{
+		EntityTag: names.NewMachineTag(response.ID),
+		ModelUUID: modelUUID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf(" to get machine's annotations, got error: %w", err)
+	}
+	annotationsValue := types.MapNull(types.StringType)
+	if len(annotations.Annotations) > 0 {
+		var diags diag.Diagnostics
+		annotationsValue, diags = types.MapValueFrom(ctx, types.StringType, annotations.Annotations)
+		if diags.HasError() {
+			return nil, fmt.Errorf("unable to convert machine annotations: %v", diags.Errors())
+		}
+	}
+
+	return &machineResourceModelV1{
+		machineResourceModel: machineResourceModel{
+			Annotations: annotationsValue,
+			Base:        types.StringValue(response.Base),
+			Constraints: NewCustomConstraintsValue(response.Constraints),
+			Hostname:    types.StringValue(response.Hostname),
+			MachineID:   types.StringValue(response.ID),
+		},
+		ModelUUID: types.StringValue(modelUUID),
+	}, nil
 }
 
-func handleMachineNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
-	if IsMachineNotFound(err) {
-		// Machine manually removed
-		// This behaviour is inconsistent with normal Terraform operations.
-		// If a resource is removed manually, the user is expected use
-		// the Terraform CLI to remove the resource from state.
-		st.RemoveResource(ctx)
-		return diag.Diagnostics{}
-	}
-	var diags diag.Diagnostics
-	diags.AddError("Not Found", err.Error())
-	return diags
+func IsMachineNotFound(err error) bool {
+	return strings.Contains(err.Error(), "no status returned for machine")
 }
 
 // Read is called when the provider must read resource values in order
@@ -448,49 +484,36 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	// During import, we don't know whether to wait for the machine hostname.
-	// So we opt not to wait, assuming the machine is ready.
-	response, err := r.waitForMachine(ctx, false, modelUUID, machineID, defaultCreateTimeout)
+	machine, err := readMachine(ctx, r.client, modelUUID, machineID, false)
 	if err != nil {
-		resp.Diagnostics.Append(handleMachineNotFoundError(ctx, err, &resp.State)...)
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read machine, got error: %s", err))
 		return
 	}
+
 	r.trace(fmt.Sprintf("read machine resource %q", machineID))
-
-	annotations, err := r.client.Annotations.GetAnnotations(&juju.GetAnnotationsInput{
-		EntityTag: names.NewMachineTag(response.ID),
-		ModelUUID: modelUUID,
-	})
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get machine's annotations, got error: %s", err))
-		return
-	}
-	if len(annotations.Annotations) > 0 {
-		annotationsType := req.State.Schema.GetAttributes()["annotations"].(schema.MapAttribute).ElementType
-
-		annotationsMapValue, errDiag := types.MapValueFrom(ctx, annotationsType, annotations.Annotations)
-		resp.Diagnostics.Append(errDiag...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		data.Annotations = annotationsMapValue
-	}
 
 	data.Name = types.StringValue(machineName)
 	data.ModelUUID = types.StringValue(modelUUID)
 	data.MachineID = types.StringValue(machineID)
-	data.Base = types.StringValue(response.Base)
+	data.Base = machine.Base
+	data.Annotations = machine.Annotations
 	// Here is ok to always set Hostname from the response because:
 	// 1. if you set wait_for_hostname to true, this is correctly populated.
 	// 2. if you set wait_for_hostname to false, you shouldn't use the hostname.
 	// 3. if you import a machine, the hostname should have been already populated.
 	//    It could happen that the hostname is set to an empty string during import, but unlikely because
 	//    that means you've created a machine and then imported it immediately afterwards.
-	data.Hostname = types.StringValue(response.Hostname)
-	if response.Constraints != "" {
-		data.Constraints = NewCustomConstraintsValue(response.Constraints)
+	data.Hostname = machine.Hostname
+	if machine.Constraints.ValueString() != "" {
+		data.Constraints = machine.Constraints
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+
+	id := newMachineID(modelUUID, machineID, machineName)
+	identity := machineResourceIdentityModel{
+		ID: types.StringValue(id),
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 // Update is called to update the state of the resource. Config, planned
@@ -636,14 +659,22 @@ func (r *machineResource) UpgradeState(ctx context.Context) map[int64]resource.S
 	}
 }
 
-// ImportState is called when the provider must import the state of a
-// resource instance. This method must return enough state so the Read
-// method can properly refresh the full resource.
+// IdentitySchema defines the schema for the resource's identity, which is used during import operations to uniquely identify the resource.
+func (r *machineResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
+	resp.IdentitySchema = identityschema.Schema{
+		Attributes: map[string]identityschema.Attribute{
+			"id": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+		},
+	}
+}
+
+// ImportState is called when the provider must import the state of a resource instance. This method must return enough state so the Read method can properly refresh the full resource.
 //
-// If setting an attribute with the import identifier, it is recommended
-// to use the ImportStatePassthroughID() call in this method.
+// If setting an attribute with the import identifier, it is recommended to use the ImportStatePassthroughWithIdentity() call in this method.
 func (r *machineResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughWithIdentity(ctx, path.Root("id"), path.Root("id"), req, resp)
 }
 
 func (r *machineResource) trace(msg string, additionalFields ...map[string]interface{}) {
