@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -76,6 +77,7 @@ var _ resource.Resource = &applicationResource{}
 var _ resource.ResourceWithConfigure = &applicationResource{}
 var _ resource.ResourceWithImportState = &applicationResource{}
 var _ resource.ResourceWithUpgradeState = &applicationResource{}
+var _ resource.ResourceWithIdentity = &applicationResource{}
 
 // NewApplicationResource returns a new instance of the application resource responsible
 // for managing Juju applications, including their configuration, charm, constraints, and
@@ -132,8 +134,23 @@ type applicationResourceModelV1 struct {
 	ModelUUID           types.String               `tfsdk:"model_uuid"`
 }
 
+type applicationResourceIdentityModel struct {
+	ID types.String `tfsdk:"id"`
+}
+
 func (r *applicationResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_application"
+}
+
+// IdentitySchema defines the schema for the resource's identity, which is used during import operations to uniquely identify the resource.
+func (r *applicationResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
+	resp.IdentitySchema = identityschema.Schema{
+		Attributes: map[string]identityschema.Attribute{
+			"id": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+		},
+	}
 }
 
 // Configure enables provider-level data or clients to be set in the
@@ -646,6 +663,10 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	var partialApp juju.ApplicationPartiallyCreatedError
 	if errors.As(err, &partialApp) {
 		plan.ID = types.StringValue(newAppID(plan.ModelUUID.ValueString(), partialApp.AppName))
+		identity := applicationResourceIdentityModel{
+			ID: plan.ID,
+		}
+		resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Application partially created then failed, got error: %s", err))
 		return
@@ -718,6 +739,10 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	plan.ID = types.StringValue(newAppID(plan.ModelUUID.ValueString(), createResp.AppName))
+	identity := applicationResourceIdentityModel{
+		ID: plan.ID,
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 	r.trace("Created", applicationResourceModelForLogging(ctx, &plan))
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -913,7 +938,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 
 	endpointBindingsType := req.State.Schema.GetAttributes()[EndpointBindingsKey].(schema.SetNestedAttribute).NestedObject.Type()
 	if len(response.EndpointBindings) > 0 {
-		state.EndpointBindings, dErr = r.toEndpointBindingsSet(ctx, endpointBindingsType, response.EndpointBindings)
+		state.EndpointBindings, dErr = toEndpointBindingsSet(ctx, endpointBindingsType, response.EndpointBindings)
 		if dErr.HasError() {
 			resp.Diagnostics.Append(dErr...)
 			return
@@ -950,11 +975,15 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 
 	r.trace("Found", applicationResourceModelForLogging(ctx, &state))
+	identity := applicationResourceIdentityModel{
+		ID: types.StringValue(newAppID(modelUUID, appName)),
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 // Convert the endpoint bindings from the juju api to terraform nestedEndpointBinding set
-func (r *applicationResource) toEndpointBindingsSet(ctx context.Context, endpointBindingsType attr.Type, endpointBindings map[string]string) (types.Set, diag.Diagnostics) {
+func toEndpointBindingsSet(ctx context.Context, endpointBindingsType attr.Type, endpointBindings map[string]string) (types.Set, diag.Diagnostics) {
 	endpointBindingsSlice := make([]nestedEndpointBinding, 0, len(endpointBindings))
 	for endpoint, space := range endpointBindings {
 		var endpointString types.String
@@ -1556,7 +1585,7 @@ func (o *applicationResource) UpgradeState(ctx context.Context) map[int64]resour
 // If setting an attribute with the import identifier, it is recommended
 // to use the ImportStatePassthroughID() call in this method.
 func (r *applicationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughWithIdentity(ctx, path.Root("id"), path.Root("id"), req, resp)
 }
 
 // ID is '<model UUID>:<app name>'
