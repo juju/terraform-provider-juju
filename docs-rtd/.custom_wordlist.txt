@@ -120,3 +120,4 @@ wait_for_hostname
 hardcoded
 tmpfs
 rootfs
+userpass

@@ -41,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        terraform: ["1.11.*"]
+        terraform: ["1.12.*"]
         action-operator:
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "2.9" }
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "3" }
@@ -123,6 +123,14 @@ jobs:
         run: |
           sudo lxc network create management-br ipv4.address=10.150.40.1/24 ipv4.nat=true ipv6.address=none ipv6.nat=false
           sudo lxc network create public-br ipv4.address=10.170.80.1/24 ipv4.nat=true ipv6.address=none ipv6.nat=false
+      - name: "Create lxd config for bootstrap tests"
+        if : ${{ matrix.action-operator.cloud == 'lxd' }}
+        run: ./tools/create_lxd_config.sh
+      - name: "Create microk8s config"
+        # language=bash
+        run: |
+          sudo microk8s.config > /home/$USER/microk8s-config.yaml
+      
       - name: "Set environment to configure provider"
         # language=bash
         # JUJU_SKIP_FAILED_DELETION is set to avoid issues with tests failing
@@ -166,6 +174,8 @@ jobs:
           echo "Free space: ${AFTER}MB"
           SAVED=$((AFTER - FREE_SPACE_BEFORE))
           echo "Space saved: ${SAVED}MB"
+      - name: Setup tmate session
+        uses: canonical/action-tmate@main
       - name: Run compiled tests
         env:
           TF_ACC: "1"
@@ -189,7 +199,7 @@ jobs:
         cloud:
           - "lxd"
         terraform:
-          - "1.11.*"
+          - "1.12.*"
         juju:
           - "2.9/stable"
           - "3/stable"
