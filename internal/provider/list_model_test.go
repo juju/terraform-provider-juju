@@ -14,7 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
-func TestAccListModels_query(t *testing.T) {
+func TestAccListModels_Query(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	var modelUUID string
 	resource.ParallelTest(t, resource.TestCase{

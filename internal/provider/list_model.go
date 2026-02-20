@@ -27,10 +27,12 @@ type modelLister struct {
 	subCtx context.Context
 }
 
+// NewModeLister returns a new instance of the model lister, which implements the ListResourceWithConfigure interface.
 func NewModelLister() list.ListResourceWithConfigure {
 	return &modelLister{}
 }
 
+// Configure implements the ResourceWithConfigure interface, providing the provider data to the resource.
 func (r *modelLister) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
@@ -50,25 +52,36 @@ func (r *modelLister) Configure(ctx context.Context, req resource.ConfigureReque
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceModel)
 }
 
+// Metadata returns the full name of the resource.
 func (r *modelLister) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_model"
 }
 
+// ListResourceConfigSchema implements the ListResourceSchema interface.
 func (r *modelLister) ListResourceConfigSchema(_ context.Context, _ list.ListResourceSchemaRequest, resp *list.ListResourceSchemaResponse) {
 	resp.Schema = listschema.Schema{
 		Attributes: map[string]listschema.Attribute{},
 	}
 }
 
+// List implements the ListResource interface, retrieving the list of models and sending them to the framework.
 func (r *modelLister) List(ctx context.Context, req list.ListRequest, stream *list.ListResultsStream) {
+	ids, err := r.client.Models.ListModels()
+	if err != nil {
+		stream.Results = list.ListResultsStreamDiagnostics(
+			diag.Diagnostics{
+				diag.NewErrorDiagnostic(
+					"Client error",
+					fmt.Sprintf("Unable to list models, got error: %s", err),
+				),
+			},
+		)
+		return
+	}
+
 	stream.Results = func(push func(list.ListResult) bool) {
-		result := req.NewListResult(ctx)
-		ids, err := r.client.Models.ListModels()
-		if err != nil {
-			result.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to list models, got error: %s", err))
-			return
-		}
 		for _, id := range ids {
+			result := req.NewListResult(ctx)
 			result.DisplayName = id
 			identity := modelResourceIdentityModel{
 				ID: types.StringValue(id),
