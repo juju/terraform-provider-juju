@@ -81,12 +81,11 @@ func (r *offerLister) ListResourceConfigSchema(_ context.Context, _ list.ListRes
 
 func (r *offerLister) List(ctx context.Context, req list.ListRequest, stream *list.ListResultsStream) {
 	stream.Results = func(push func(list.ListResult) bool) {
-		result := req.NewListResult(ctx)
-
 		// Read list configuration
 		var config offerListConfigModel
-		result.Diagnostics.Append(req.Config.Get(ctx, &config)...)
-		if result.Diagnostics.HasError() {
+		diags := req.Config.Get(ctx, &config)
+		if diags.HasError() {
+			stream.Results = list.ListResultsStreamDiagnostics(diags)
 			return
 		}
 
@@ -102,17 +101,20 @@ func (r *offerLister) List(ctx context.Context, req list.ListRequest, stream *li
 		// List offers
 		offers, err := r.client.Offers.ListOffers(input)
 		if err != nil {
-			result.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to list offers, got error: %s", err))
+			errDiags := diag.NewErrorDiagnostic("Client Error", fmt.Sprintf("Unable to list offers, got error: %s", err))
+			stream.Results = list.ListResultsStreamDiagnostics(diag.Diagnostics{errDiags})
 			return
 		}
 
 		for _, offer := range offers {
+			result := req.NewListResult(ctx)
 			result.DisplayName = offer.OfferURL
 			identity := offerResourceIdentityModel{
 				ID: types.StringValue(offer.OfferURL),
 			}
 			result.Diagnostics.Append(result.Identity.Set(ctx, identity)...)
 			if result.Diagnostics.HasError() {
+				push(result)
 				return
 			}
 
@@ -120,10 +122,12 @@ func (r *offerLister) List(ctx context.Context, req list.ListRequest, stream *li
 				resource, err := r.getOfferResource(ctx, offer)
 				if err.HasError() {
 					result.Diagnostics.Append(err...)
+					push(result)
 					return
 				}
 				result.Diagnostics.Append(result.Resource.Set(ctx, resource)...)
 				if result.Diagnostics.HasError() {
+					push(result)
 					return
 				}
 			}

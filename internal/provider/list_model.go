@@ -90,6 +90,7 @@ func (r *modelLister) List(ctx context.Context, req list.ListRequest, stream *li
 			if result.Diagnostics.HasError() {
 				return
 			}
+
 			if req.IncludeResource {
 				schema, ok := req.ResourceSchema.(schema.Schema)
 				if !ok {
@@ -109,6 +110,7 @@ func (r *modelLister) List(ctx context.Context, req list.ListRequest, stream *li
 					return
 				}
 			}
+
 			if !push(result) {
 				return
 			}
