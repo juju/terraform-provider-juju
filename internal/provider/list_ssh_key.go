@@ -124,6 +124,7 @@ func (r *sshKeyLister) List(ctx context.Context, req list.ListRequest, stream *l
 			)
 			if err != nil {
 				result.Diagnostics.AddError("Malformed SSH Key", fmt.Sprintf("Unable to parse SSH key payload: %s", err))
+				push(result)
 				return
 			}
 			identity := sshKeyResourceIdentityModel{
