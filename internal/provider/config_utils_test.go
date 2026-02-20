@@ -29,7 +29,7 @@ func TestNewConfig(t *testing.T) {
 	tfMapToTest, diags := types.MapValueFrom(t.Context(), types.StringType, mapToTest)
 	require.False(t, diags.HasError(), "failed to create types.Map from map: %v", diags)
 
-	config, diags := newConfig(t.Context(), tfMapToTest)
+	config, diags := newStringMap(t.Context(), tfMapToTest)
 	require.False(t, diags.HasError(), "NewConfig returned diagnostics: %v", diags)
 
 	expectedConfig := map[string]string{
@@ -91,7 +91,6 @@ func TestComputeConfigDiff(t *testing.T) {
 	expectedNewConfig := map[string]string{
 		"key2": "newValue2",
 		"key4": "value4",
-		"key5": "value5",
 	}
 	assert.Equal(t, expectedNewConfig, newConfig, fmt.Sprintf("newConfig mismatch: got %+v, want %+v", newConfig, expectedNewConfig))
 

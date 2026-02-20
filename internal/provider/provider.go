@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/boolvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -36,6 +37,7 @@ const (
 	JujuClientSecretEnvKey   = "JUJU_CLIENT_SECRET"
 	SkipFailedDeletionEnvKey = "JUJU_SKIP_FAILED_DELETION"
 
+	ControllerMode          = "controller_mode"
 	JujuController          = "controller_addresses"
 	JujuUsername            = "username"
 	JujuPassword            = "password"
@@ -105,19 +107,30 @@ func getEnvVar(field string) types.String {
 // Ensure jujuProvider satisfies various provider interfaces.
 var _ provider.Provider = &jujuProvider{}
 
+type ProviderConfiguration struct {
+	WaitForResources bool
+	NewJujuCommand   func(string) (JujuCommand, error)
+}
+
 // NewJujuProvider returns a framework style terraform provider.
-func NewJujuProvider(version string, waitForResources bool) provider.Provider {
+func NewJujuProvider(version string, config ProviderConfiguration) provider.Provider {
 	return &jujuProvider{
 		version:          version,
-		waitForResources: waitForResources,
+		waitForResources: config.WaitForResources,
+		newJujuCommand:   config.NewJujuCommand,
 	}
 }
 
 type jujuProvider struct {
 	version string
+
 	// waitForResources is used to determine if the provider should wait for
 	// resources to be created/destroyed before proceeding.
 	waitForResources bool
+
+	// newJujuCommand returns the implementation of the JujuCommand interface based on the provided Juju binary
+	// to be used for controller management.
+	newJujuCommand func(string) (JujuCommand, error)
 }
 
 type offeringControllerModel struct {
@@ -130,6 +143,7 @@ type offeringControllerModel struct {
 }
 
 type jujuProviderModel struct {
+	ControllerMode  types.Bool   `tfsdk:"controller_mode"`
 	ControllerAddrs types.String `tfsdk:"controller_addresses"`
 	UserName        types.String `tfsdk:"username"`
 	Password        types.String `tfsdk:"password"`
@@ -215,6 +229,15 @@ func (p *jujuProvider) Metadata(_ context.Context, _ provider.MetadataRequest, r
 func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
+			ControllerMode: schema.BoolAttribute{
+				Description: "If set to true, the provider will only allow managing `juju_controller` resources.",
+				Optional:    true,
+				Validators: []validator.Bool{
+					boolvalidator.ConflictsWith(
+						path.Expressions{path.MatchRoot(JujuController)}...,
+					),
+				},
+			},
 			JujuController: schema.StringAttribute{
 				Description: fmt.Sprintf("This is the controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `%s` environment variable.", JujuControllerEnvKey),
 				Optional:    true,
@@ -351,8 +374,26 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 // API client, which should be stored on the struct implementing the
 // Provider interface.
 func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var data jujuProviderModel
+	var diags diag.Diagnostics
+	// Read Terraform configuration data into the juju provider model.
+	diags.Append(req.Config.Get(ctx, &data)...)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+	if data.ControllerMode.ValueBool() {
+		providerData := juju.ProviderData{
+			Config: juju.Config{
+				ControllerMode: true,
+			},
+		}
+		resp.ResourceData = providerData
+		resp.DataSourceData = providerData
+		return
+	}
 	// Get data required for configuring the juju client.
-	data, diags := getJujuProviderModel(ctx, req)
+	data, diags = getJujuProviderModel(ctx, data)
 	if diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
@@ -436,15 +477,8 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 // getJujuProviderModel a filled in jujuProviderModel if able. First check
 // the plan being used, then fall back to the JUJU_ environment variables,
 // lastly check to see if an active juju can supply the data.
-func getJujuProviderModel(ctx context.Context, req provider.ConfigureRequest) (jujuProviderModel, diag.Diagnostics) {
-	var planData jujuProviderModel
+func getJujuProviderModel(ctx context.Context, planData jujuProviderModel) (jujuProviderModel, diag.Diagnostics) {
 	var diags diag.Diagnostics
-
-	// Read Terraform configuration data into the juju provider model.
-	diags.Append(req.Config.Get(ctx, &planData)...)
-	if diags.HasError() {
-		return planData, diags
-	}
 
 	// If validation failed because we have both username/password
 	// and client ID/secret combinations in the plan. Exit now.
@@ -512,6 +546,7 @@ func getJujuProviderModel(ctx context.Context, req provider.ConfigureRequest) (j
 // the Metadata method. All resources must have unique names.
 func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
+		func() resource.Resource { return NewControllerResource(p.newJujuCommand) },
 		func() resource.Resource { return NewAccessModelResource() },
 		func() resource.Resource { return NewAccessOfferResource() },
 		func() resource.Resource { return NewApplicationResource() },
@@ -580,4 +615,52 @@ func checkClientErr(err error, config juju.ControllerConfiguration) diag.Diagnos
 	}
 	diags.AddError("Client Error", err.Error())
 	return diags
+}
+
+func checkControllerMode(diags diag.Diagnostics, config juju.Config, isControllerResource bool) diag.Diagnostics {
+	if config.ControllerMode && !isControllerResource {
+		diags.AddError("when controller_mode is true this resource cannot be used.", "")
+		return diags
+	} else if !config.ControllerMode && isControllerResource {
+		diags.AddError("when controller_mode is false this resource cannot be used.", "")
+	}
+	return diags
+}
+
+// getProviderData extracts and validates provider data from a ConfigureRequest.
+// It performs type assertion and controller mode validation in one step.
+func getProviderData(req resource.ConfigureRequest, isControllerResource bool) (juju.ProviderData, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	provider, ok := req.ProviderData.(juju.ProviderData)
+	if !ok {
+		diags.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return juju.ProviderData{}, diags
+	}
+	diags = checkControllerMode(diags, provider.Config, isControllerResource)
+	if diags.HasError() {
+		return juju.ProviderData{}, diags
+	}
+	return provider, diags
+}
+
+// getProviderDataForDataSource extracts and validates provider data from a data source ConfigureRequest.
+// It performs type assertion and controller mode validation in one step.
+func getProviderDataForDataSource(req datasource.ConfigureRequest, isControllerResource bool) (juju.ProviderData, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	provider, ok := req.ProviderData.(juju.ProviderData)
+	if !ok {
+		diags.AddError(
+			"Unexpected Data Source Configure Type",
+			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return juju.ProviderData{}, diags
+	}
+	diags = checkControllerMode(diags, provider.Config, isControllerResource)
+	if diags.HasError() {
+		return juju.ProviderData{}, diags
+	}
+	return provider, diags
 }
