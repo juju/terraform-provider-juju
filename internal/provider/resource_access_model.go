@@ -48,18 +48,6 @@ type accessModelResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
-type accessModelResourceModelV0 struct {
-	accessModelResourceModel
-	Users types.List   `tfsdk:"users"`
-	Model types.String `tfsdk:"model"`
-}
-
-type accessModelResourceModelV1 struct {
-	accessModelResourceModel
-	Users types.Set    `tfsdk:"users"`
-	Model types.String `tfsdk:"model"`
-}
-
 type accessModelResourceModelV2 struct {
 	accessModelResourceModel
 	Users     types.Set    `tfsdk:"users"`
@@ -124,12 +112,9 @@ func (a *accessModelResource) Configure(ctx context.Context, req resource.Config
 		return
 	}
 
-	provider, ok := req.ProviderData.(juju.ProviderData)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
+	provider, diags := getProviderData(req, false)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 	a.client = provider.Client
@@ -437,131 +422,4 @@ func retrieveAccessModelDataFromID(ctx context.Context, ID types.String, users t
 	}
 
 	return resID[0], resID[1], stateUsers
-}
-
-// UpgradeState upgrades the state of the access model resource.
-// This is used to handle changes in the resource schema between versions.
-func (o *accessModelResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
-	return map[int64]resource.StateUpgrader{
-		// Upgrade from list to set for `users`.
-		0: {
-			PriorSchema: &schema.Schema{
-				Attributes: map[string]schema.Attribute{
-					"model": schema.StringAttribute{
-						Required: true,
-					},
-					"users": schema.ListAttribute{
-						Required:    true,
-						ElementType: types.StringType,
-					},
-					"access": schema.StringAttribute{
-						Required: true,
-					},
-					// ID required by the testing framework
-					"id": schema.StringAttribute{
-						Computed: true,
-					},
-				},
-			},
-			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-				var stateDataV0 accessModelResourceModelV0
-
-				resp.Diagnostics.Append(req.State.Get(ctx, &stateDataV0)...)
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				stateDataV1 := o.stateDataV0ToV1(ctx, resp, stateDataV0)
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				stateDataV2 := o.stateDataV1ToV2(ctx, resp, stateDataV1)
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				resp.Diagnostics.Append(resp.State.Set(ctx, stateDataV2)...)
-			},
-		},
-		// Upgrade from model to model_uuid
-		1: {
-			PriorSchema: &schema.Schema{
-				Attributes: map[string]schema.Attribute{
-					"model": schema.StringAttribute{
-						Required: true,
-					},
-					"users": schema.SetAttribute{
-						Required:    true,
-						ElementType: types.StringType,
-					},
-					"access": schema.StringAttribute{
-						Required: true,
-					},
-					"id": schema.StringAttribute{
-						Computed: true,
-					},
-				},
-			},
-			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-				var stateDataV1 accessModelResourceModelV1
-
-				resp.Diagnostics.Append(req.State.Get(ctx, &stateDataV1)...)
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				stateDataV2 := o.stateDataV1ToV2(ctx, resp, stateDataV1)
-
-				resp.Diagnostics.Append(resp.State.Set(ctx, stateDataV2)...)
-			},
-		},
-	}
-}
-
-func (o *accessModelResource) stateDataV0ToV1(ctx context.Context, resp *resource.UpgradeStateResponse, priorStateData accessModelResourceModelV0) accessModelResourceModelV1 {
-	users := []string{}
-	if !priorStateData.Users.IsNull() {
-		resp.Diagnostics.Append(priorStateData.Users.ElementsAs(ctx, &users, false)...)
-	}
-
-	usersSet, diags := types.SetValueFrom(ctx, types.StringType, users)
-	if diags.HasError() {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to convert users to set, got error: %s", diags))
-		return accessModelResourceModelV1{}
-	}
-
-	return accessModelResourceModelV1{
-		accessModelResourceModel: accessModelResourceModel{
-			Access: priorStateData.Access,
-			ID:     priorStateData.ID,
-		},
-		Model: priorStateData.Model,
-		Users: usersSet,
-	}
-}
-
-func (o *accessModelResource) stateDataV1ToV2(ctx context.Context, resp *resource.UpgradeStateResponse, priorStateData accessModelResourceModelV1) accessModelResourceModelV2 {
-	modelStr := priorStateData.Model.ValueString()
-	modelUUID, err := o.client.Models.ModelUUID(modelStr, "")
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", modelStr, err))
-		return accessModelResourceModelV2{}
-	}
-
-	users := []string{}
-	if !priorStateData.Users.IsNull() {
-		resp.Diagnostics.Append(priorStateData.Users.ElementsAs(ctx, &users, false)...)
-	}
-
-	newID := newAccessModelIDFrom(modelUUID, priorStateData.Access.ValueString(), users)
-
-	return accessModelResourceModelV2{
-		accessModelResourceModel: accessModelResourceModel{
-			Access: priorStateData.Access,
-			ID:     types.StringValue(newID),
-		},
-		ModelUUID: types.StringValue(modelUUID),
-		Users:     priorStateData.Users,
-	}
 }

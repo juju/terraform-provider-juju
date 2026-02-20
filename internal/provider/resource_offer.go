@@ -28,7 +28,6 @@ import (
 var _ resource.Resource = &offerResource{}
 var _ resource.ResourceWithConfigure = &offerResource{}
 var _ resource.ResourceWithImportState = &offerResource{}
-var _ resource.ResourceWithUpgradeState = &offerResource{}
 
 func NewOfferResource() resource.Resource {
 	return &offerResource{}
@@ -47,18 +46,6 @@ type offerResourceModel struct {
 	URL             types.String `tfsdk:"url"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
-}
-
-type offerResourceModelV0 struct {
-	offerResourceModel
-	ModelName    types.String `tfsdk:"model"`
-	EndpointName types.String `tfsdk:"endpoint"`
-}
-
-type offerResourceModelV1 struct {
-	offerResourceModel
-	ModelName types.String `tfsdk:"model"`
-	Endpoints types.Set    `tfsdk:"endpoints"`
 }
 
 type offerResourceModelV2 struct {
@@ -273,12 +260,9 @@ func (o *offerResource) Configure(ctx context.Context, req resource.ConfigureReq
 		return
 	}
 
-	provider, ok := req.ProviderData.(juju.ProviderData)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
+	provider, diags := getProviderData(req, false)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -318,136 +302,4 @@ func handleOfferNotFoundError(ctx context.Context, err error, st *tfsdk.State) d
 	var diags diag.Diagnostics
 	diags.AddError("Client Error", err.Error())
 	return diags
-}
-
-// UpgradeState upgrades the state of the offer resource.
-// This is used to handle changes in the resource schema between versions.
-// V0->V1: Convert attribute `endpoint` to `endpoints`.
-// V1->V2: Convert attribute `model` to `model_uuid`.
-func (o *offerResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
-	return map[int64]resource.StateUpgrader{
-		// Upgrade from `endpoint` to `endpoints` attribute.
-		0: {
-			PriorSchema: offerV0Schema(),
-			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-				var offerV0 offerResourceModelV0
-				resp.Diagnostics.Append(req.State.Get(ctx, &offerV0)...)
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				offerV1 := o.offerV0ToV1(offerV0)
-				offerV2 := o.offerV1ToV2(offerV1, resp)
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				resp.Diagnostics.Append(resp.State.Set(ctx, offerV2)...)
-			},
-		},
-		1: {
-			PriorSchema: offerV1Schema(),
-			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-				offerV1 := offerResourceModelV1{}
-				resp.Diagnostics.Append(req.State.Get(ctx, &offerV1)...)
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				offerV2 := o.offerV1ToV2(offerV1, resp)
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				resp.Diagnostics.Append(resp.State.Set(ctx, offerV2)...)
-			},
-		},
-	}
-}
-
-// offerV0ToV1 converts an offer resource model from v0 to v1.
-// It converts the `endpoint` attribute to the `endpoints` attribute.
-func (o *offerResource) offerV0ToV1(offerV0 offerResourceModelV0) offerResourceModelV1 {
-	endpoints := []string{}
-	if !offerV0.EndpointName.IsNull() {
-		endpoints = append(endpoints, offerV0.EndpointName.ValueString())
-	}
-
-	endpointsSet, _ := types.SetValueFrom(context.Background(), types.StringType, endpoints)
-
-	return offerResourceModelV1{
-		ModelName:          offerV0.ModelName,
-		Endpoints:          endpointsSet,
-		offerResourceModel: offerV0.offerResourceModel,
-	}
-}
-
-// offerV1ToV2 converts an offer resource model from v1 to v2.
-// It converts the `model` attribute to `model_uuid` and ensures the model UUID is
-// fetched using the Juju client.
-func (o *offerResource) offerV1ToV2(offerV1 offerResourceModelV1, resp *resource.UpgradeStateResponse) offerResourceModelV2 {
-	modelUUID, err := o.client.Models.ModelUUID(offerV1.ModelName.ValueString(), "")
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", offerV1.ModelName.ValueString(), err))
-		return offerResourceModelV2{}
-	}
-
-	return offerResourceModelV2{
-		ModelUUID:          types.StringValue(modelUUID),
-		Endpoints:          offerV1.Endpoints,
-		offerResourceModel: offerV1.offerResourceModel,
-	}
-}
-
-func offerV0Schema() *schema.Schema {
-	return &schema.Schema{
-		Attributes: map[string]schema.Attribute{
-			"model": schema.StringAttribute{
-				Required: true,
-			},
-			"name": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-			},
-			"application_name": schema.StringAttribute{
-				Required: true,
-			},
-			"endpoint": schema.StringAttribute{
-				Optional: true,
-			},
-			"url": schema.StringAttribute{
-				Computed: true,
-			},
-			"id": schema.StringAttribute{
-				Computed: true,
-			},
-		},
-	}
-}
-
-func offerV1Schema() *schema.Schema {
-	return &schema.Schema{
-		Attributes: map[string]schema.Attribute{
-			"model": schema.StringAttribute{
-				Required: true,
-			},
-			"name": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-			},
-			"application_name": schema.StringAttribute{
-				Required: true,
-			},
-			"endpoints": schema.SetAttribute{
-				ElementType: types.StringType,
-				Required:    true,
-			},
-			"url": schema.StringAttribute{
-				Computed: true,
-			},
-			"id": schema.StringAttribute{
-				Computed: true,
-			},
-		},
-	}
 }

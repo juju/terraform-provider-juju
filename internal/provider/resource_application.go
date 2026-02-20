@@ -75,7 +75,6 @@ Notes:
 var _ resource.Resource = &applicationResource{}
 var _ resource.ResourceWithConfigure = &applicationResource{}
 var _ resource.ResourceWithImportState = &applicationResource{}
-var _ resource.ResourceWithUpgradeState = &applicationResource{}
 
 // NewApplicationResource returns a new instance of the application resource responsible
 // for managing Juju applications, including their configuration, charm, constraints, and
@@ -115,15 +114,6 @@ type applicationResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
-// applicationResourceModelV0 describes the application data model.
-// tfsdk must match user resource schema attribute names.
-type applicationResourceModelV0 struct {
-	applicationResourceModel
-	ModelName types.String `tfsdk:"model"`
-	Placement types.String `tfsdk:"placement"`
-	Principal types.Bool   `tfsdk:"principal"`
-}
-
 // applicationResourceModelV1 describes the application data model.
 // tfsdk must match user resource schema attribute names.
 type applicationResourceModelV1 struct {
@@ -145,12 +135,9 @@ func (r *applicationResource) Configure(ctx context.Context, req resource.Config
 		return
 	}
 
-	provider, ok := req.ProviderData.(juju.ProviderData)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
+	provider, diags := getProviderData(req, false)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -530,7 +517,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		revision = int(planCharm.Revision.ValueInt64())
 	}
 
-	config, diags := newConfig(ctx, plan.Config)
+	config, diags := newStringMap(ctx, plan.Config)
 	if diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
@@ -1514,41 +1501,6 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 	r.trace(fmt.Sprintf("deleted application resource %q", state.ID.ValueString()))
 }
 
-// UpgradeState upgrades the state of the application resource.
-// This is used to handle changes in the resource schema between versions.
-func (o *applicationResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
-	return map[int64]resource.StateUpgrader{
-		0: {
-			PriorSchema: &appV0Schema,
-			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-				appV0 := applicationResourceModelV0{}
-				resp.Diagnostics.Append(req.State.Get(ctx, &appV0)...)
-
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				modelUUID, err := o.client.Models.ModelUUID(appV0.ModelName.ValueString(), "")
-				if err != nil {
-					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", appV0.ModelName.ValueString(), err))
-					return
-				}
-
-				newID := newAppID(modelUUID, appV0.ApplicationName.ValueString())
-				// appV0.ID is embedded in the applicationResourceModel struct.
-				appV0.ID = types.StringValue(newID)
-
-				upgradedStateData := applicationResourceModelV1{
-					ModelUUID:                types.StringValue(modelUUID),
-					applicationResourceModel: appV0.applicationResourceModel,
-				}
-
-				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
-			},
-		},
-	}
-}
-
 // ImportState is called when the provider must import the state of a
 // resource instance. This method must return enough state so the Read
 // method can properly refresh the full resource.
@@ -1616,140 +1568,4 @@ func assertEqualsMachines(machinesToCompare []string) func(outputFromAPI *juju.R
 
 		return nil
 	}
-}
-
-// Below we store old schema definitions for the application resource.
-// These are used to upgrade the state of the resource when the schema version changes.
-// Keeping the v0 schema verbatim is the simplest solution currently and permits
-// the design to change to something like a schema factory in the future.
-
-var appV0Schema = schema.Schema{
-	Description: "A resource that represents a single Juju application deployment from a charm. Deployment of bundles" +
-		" is not supported.",
-	Version: 0,
-	Attributes: map[string]schema.Attribute{
-		"name": schema.StringAttribute{
-			Optional: true,
-			Computed: true,
-		},
-		MachinesKey: schema.SetAttribute{
-			ElementType: types.StringType,
-			Optional:    true,
-			Computed:    true,
-		},
-		"model": schema.StringAttribute{
-			Required: true,
-		},
-		"model_type": schema.StringAttribute{
-			Computed: true,
-		},
-		UnitsKey: schema.Int64Attribute{
-			Optional: true,
-			Computed: true,
-		},
-		ConfigKey: schema.MapAttribute{
-			Optional:    true,
-			ElementType: types.StringType,
-		},
-		ConstraintsKey: schema.StringAttribute{
-			CustomType: CustomConstraintsType{},
-			Optional:   true,
-			// Set as "computed" to pre-populate and preserve any implicit constraints
-			Computed: true,
-		},
-		"storage_directives": schema.MapAttribute{
-			ElementType: types.StringType,
-			Optional:    true,
-		},
-		"storage": schema.SetNestedAttribute{
-			Optional: true,
-			Computed: true,
-			NestedObject: schema.NestedAttributeObject{
-				Attributes: map[string]schema.Attribute{
-					"label": schema.StringAttribute{
-						Computed: true,
-					},
-					"size": schema.StringAttribute{
-						Computed: true,
-					},
-					"pool": schema.StringAttribute{
-						Computed: true,
-					},
-					"count": schema.Int64Attribute{
-						Computed: true,
-					},
-				},
-			},
-		},
-		"trust": schema.BoolAttribute{
-			Optional: true,
-			Computed: true,
-			Default:  booldefault.StaticBool(false),
-		},
-		"placement": schema.StringAttribute{
-			Optional: true,
-			Computed: true,
-		},
-		"principal": schema.BoolAttribute{
-			Computed: true,
-		},
-		"id": schema.StringAttribute{
-			Computed: true,
-		},
-		EndpointBindingsKey: schema.SetNestedAttribute{
-			Optional: true,
-			NestedObject: schema.NestedAttributeObject{
-				Attributes: map[string]schema.Attribute{
-					"endpoint": schema.StringAttribute{
-						Optional: true,
-					},
-					"space": schema.StringAttribute{
-						Required: true,
-					},
-				},
-			},
-		},
-		ResourceKey: schema.MapAttribute{
-			Optional:    true,
-			ElementType: types.StringType,
-		},
-	},
-	Blocks: map[string]schema.Block{
-		CharmKey: schema.ListNestedBlock{
-			NestedObject: schema.NestedBlockObject{
-				Attributes: map[string]schema.Attribute{
-					"name": schema.StringAttribute{
-						Required: true,
-					},
-					"channel": schema.StringAttribute{
-						Optional: true,
-						Computed: true,
-					},
-					"revision": schema.Int64Attribute{
-						Optional: true,
-						Computed: true,
-					},
-					BaseKey: schema.StringAttribute{
-						Optional: true,
-						Computed: true,
-					},
-				},
-			},
-		},
-		ExposeKey: schema.ListNestedBlock{
-			NestedObject: schema.NestedBlockObject{
-				Attributes: map[string]schema.Attribute{
-					EndpointsKey: schema.StringAttribute{
-						Optional: true,
-					},
-					SpacesKey: schema.StringAttribute{
-						Optional: true,
-					},
-					CidrsKey: schema.StringAttribute{
-						Optional: true,
-					},
-				},
-			},
-		},
-	},
 }

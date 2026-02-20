@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -19,14 +20,16 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
 const (
-	TestProviderStableVersion = "0.21.1"
+	TestProviderStableVersion = "1.2.0"
 	TestProviderPreV1Version  = "0.20.0"
 	isJaasEnvKey              = "IS_JAAS"
 )
@@ -68,13 +71,22 @@ var setupAccTestsOnce sync.Once
 
 func init() {
 	waitForResources := true
-	Provider = NewJujuProvider("dev", waitForResources)
+	Provider = NewJujuProvider(
+		"dev",
+		ProviderConfiguration{
+			WaitForResources: waitForResources,
+		},
+	)
 
 	frameworkProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
-		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev", true)),
+		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev", ProviderConfiguration{
+			WaitForResources: true,
+		})),
 	}
 	frameworkProviderFactoriesNoResourceWait = map[string]func() (tfprotov6.ProviderServer, error){
-		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev", false)),
+		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev", ProviderConfiguration{
+			WaitForResources: false,
+		})),
 	}
 }
 
@@ -104,9 +116,20 @@ func OnlyTestAgainstJAAS(t *testing.T) {
 	}
 }
 
+// SkipAgainstJuju4 should be called at the top of any tests
+// that are not appropriate to run against Juju 4.
+func SkipAgainstJuju4(t *testing.T) {
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "4.0.0") >= 0 {
+		t.Skipf("%s is not set or is below 4.0.0", TestJujuAgentVersion)
+	}
+}
+
 func TestProviderConfigure(t *testing.T) {
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev", true)
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
 	confResp := configureProvider(t, jujuProvider)
 	assert.Equal(t, confResp.Diagnostics.HasError(), false)
 }
@@ -114,7 +137,7 @@ func TestProviderConfigure(t *testing.T) {
 func TestProviderConfigureUsernameFromEnv(t *testing.T) {
 	SkipJAAS(t)
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev", true)
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
 	userNameValue := "the-username"
 	t.Setenv(JujuUsernameEnvKey, userNameValue)
 
@@ -129,7 +152,7 @@ func TestProviderConfigureUsernameFromEnv(t *testing.T) {
 func TestProviderConfigurePasswordFromEnv(t *testing.T) {
 	SkipJAAS(t)
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev", true)
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
 	passwordValue := "the-password"
 	t.Setenv(JujuPasswordEnvKey, passwordValue)
 	confResp := configureProvider(t, jujuProvider)
@@ -143,7 +166,7 @@ func TestProviderConfigurePasswordFromEnv(t *testing.T) {
 func TestProviderConfigureClientIDAndSecretFromEnv(t *testing.T) {
 	SkipJAAS(t)
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev", true)
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
 	emptyValue := ""
 	t.Setenv(JujuUsernameEnvKey, emptyValue)
 	t.Setenv(JujuPasswordEnvKey, emptyValue)
@@ -165,7 +188,7 @@ func TestProviderConfigureAddresses(t *testing.T) {
 	testAccPreCheck(t)
 	os.Setenv("JUJU_CONNECTION_TIMEOUT", "2") // 2s timeout
 	defer os.Unsetenv("JUJU_CONNECTION_TIMEOUT")
-	jujuProvider := NewJujuProvider("dev", true)
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
 	// This IP is from a test network that should never be routed. https://www.rfc-editor.org/rfc/rfc5737#section-3
 	t.Setenv(JujuControllerEnvKey, "192.168.1.100:17070")
 	confResp := configureProvider(t, jujuProvider)
@@ -189,7 +212,7 @@ func TestProviderConfigurex509FromEnv(t *testing.T) {
 		//https://github.com/golang/go/issues/52010
 		t.Skip("This test does not work on MacOS")
 	}
-	jujuProvider := NewJujuProvider("dev", true)
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
 	t.Setenv(JujuCACertEnvKey, invalidCA)
 	confResp := configureProvider(t, jujuProvider)
 	// This is a live test, expect that the client connection will fail.
@@ -202,7 +225,7 @@ func TestProviderConfigurex509FromEnv(t *testing.T) {
 
 func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
 	SkipJAAS(t)
-	jujuProvider := NewJujuProvider("dev", true)
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
 	//Set the CA to the invalid one above
 	//Juju will ignore the system trust store if we set the CA property
 	t.Setenv(JujuCACertEnvKey, invalidCA)
@@ -218,7 +241,7 @@ func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
 
 func TestProviderAllowsEmptyCACert(t *testing.T) {
 	SkipJAAS(t)
-	jujuProvider := NewJujuProvider("dev", true)
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
 	//Set the CA cert to be empty and check that the provider still tries to connect.
 	t.Setenv(JujuCACertEnvKey, "")
 	t.Setenv("JUJU_CA_CERT_FILE", "")
@@ -232,7 +255,7 @@ func TestProviderAllowsEmptyCACert(t *testing.T) {
 }
 
 func TestProviderSetWarnOnDeletionErrors(t *testing.T) {
-	jujuProvider := NewJujuProvider("dev", true)
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
 	t.Setenv(SkipFailedDeletionEnvKey, "false")
 	confResp := configureProvider(t, jujuProvider)
 	providerData, ok := confResp.ResourceData.(juju.ProviderData)
@@ -387,6 +410,7 @@ func newConfigureRequest(t *testing.T, conf jujuProviderModel) provider.Configur
 	assert.Equal(t, schemaResp.Diagnostics.HasError(), false)
 
 	mapTypes := map[string]attr.Type{
+		ControllerMode:          types.BoolType,
 		JujuController:          types.StringType,
 		JujuUsername:            types.StringType,
 		JujuPassword:            types.StringType,
@@ -409,12 +433,12 @@ func newConfigureRequest(t *testing.T, conf jujuProviderModel) provider.Configur
 
 func TestFrameworkProviderSchema(t *testing.T) {
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev", true)
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
 	req := provider.SchemaRequest{}
 	resp := provider.SchemaResponse{}
 	jujuProvider.Schema(context.Background(), req, &resp)
 	assert.Equal(t, resp.Diagnostics.HasError(), false)
-	assert.Len(t, resp.Schema.Attributes, 8)
+	assert.Len(t, resp.Schema.Attributes, 9)
 }
 
 func createOfferingControllerMap(t *testing.T, extControllers map[string]map[string]attr.Value) types.Map {
@@ -610,8 +634,7 @@ func TestGetJujuProviderModel(t *testing.T) {
 				tt.setEnv(t)
 			}
 
-			confReq := newConfigureRequest(t, tt.plan)
-			model, diags := getJujuProviderModel(context.Background(), confReq)
+			model, diags := getJujuProviderModel(context.Background(), tt.plan)
 
 			if tt.wantErrSummary != "" {
 				require.True(t, diags.HasError())
@@ -639,4 +662,85 @@ func expectedResourceOwner() string {
 		clientId = clientId + "@serviceaccount"
 	}
 	return username + clientId
+}
+
+func TestAcc_ProviderControllerModeError(t *testing.T) {
+	// This test needs a local provider factory because changing the provider.controller_mode
+	// flag was persisted between tests when using the global frameworkProviderFactories.
+	localProviderFactory := map[string]func() (tfprotov6.ProviderServer, error){
+		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev", ProviderConfiguration{})),
+	}
+	resource.ParallelTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: localProviderFactory,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccProviderControllerResourceModeErrorResource(true),
+				ExpectError: regexp.MustCompile(`.*when controller_mode is true.*`),
+			},
+			{
+				Config:      testAccProviderControllerResourceModeErrorResource(false),
+				ExpectError: regexp.MustCompile(`.*when controller_mode is false.*`),
+			},
+			{
+				Config:      testAccProviderControllerResourceModeErrorDataSource(),
+				ExpectError: regexp.MustCompile(`.*when controller_mode is true.*`),
+			},
+		},
+	})
+}
+
+func testAccProviderControllerResourceModeErrorResource(controllerMode bool) string {
+	if controllerMode {
+		return `
+provider "juju" {
+  controller_mode = true
+}
+
+resource "juju_model" "test_model" {
+  name = "test-model-bootstrap-only"
+}
+`
+	} else {
+		return `
+provider "juju" {
+  controller_mode = false
+}
+
+resource "juju_controller" "controller" {
+  name          = "a"
+
+  juju_binary     = "binary"
+
+  cloud = {
+    name   = "a"
+	auth_types = ["certificate"]
+	type = "kubernetes"
+	endpoint = ""
+	ca_certificates = [""]
+	config = {}
+	host_cloud_region = ""
+  } 
+
+  cloud_credential = {
+	name = "a"
+	auth_type = "clientcertificate"
+	
+	attributes = {}
+  }
+}
+`
+	}
+}
+
+func testAccProviderControllerResourceModeErrorDataSource() string {
+	return `
+provider "juju" {
+  controller_mode = true
+}
+
+data "juju_model" "test_model" {
+  name = "test-model-bootstrap-only"
+  owner = "some-owner"
+}
+`
 }
