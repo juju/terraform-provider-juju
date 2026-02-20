@@ -41,6 +41,15 @@ type DeleteSSHKeyInput struct {
 	KeyIdentifier string
 }
 
+type ListSSHKeysInput struct {
+	Username  string
+	ModelUUID string
+}
+
+type ListSSHKeysOutput struct {
+	Payloads []string
+}
+
 func newSSHKeysClient(sc SharedClient) *sshKeysClient {
 	return &sshKeysClient{
 		SharedClient: sc,
@@ -168,4 +177,31 @@ func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	}
 
 	return err
+}
+
+func (c *sshKeysClient) ListKeys(input ListSSHKeysInput) ([]string, error) {
+	c.KeyLock.Lock()
+	defer c.KeyLock.Unlock()
+	conn, err := c.GetConnection(&input.ModelUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := keymanager.NewClient(conn)
+
+	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
+	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
+	results, err := client.ListKeys(ssh.FullKeys, input.Username)
+	if err != nil {
+		return nil, err
+	}
+
+	// Incase this looks strange, the Juju CLI does the same and takes [0].
+	result := results[0]
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	return result.Result, nil
 }

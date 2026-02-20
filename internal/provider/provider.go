@@ -590,5 +590,6 @@ func (p *jujuProvider) ListResources(_ context.Context) []func() list.ListResour
 	return []func() list.ListResource{
 		func() list.ListResource { return NewModelLister() },
 		func() list.ListResource { return NewMachineLister() },
+		func() list.ListResource { return NewSSHKeyLister() },
 	}
 }
