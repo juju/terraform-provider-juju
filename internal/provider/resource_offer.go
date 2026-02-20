@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
@@ -29,6 +30,7 @@ var _ resource.Resource = &offerResource{}
 var _ resource.ResourceWithConfigure = &offerResource{}
 var _ resource.ResourceWithImportState = &offerResource{}
 var _ resource.ResourceWithUpgradeState = &offerResource{}
+var _ resource.ResourceWithIdentity = &offerResource{}
 
 func NewOfferResource() resource.Resource {
 	return &offerResource{}
@@ -67,8 +69,23 @@ type offerResourceModelV2 struct {
 	Endpoints types.Set    `tfsdk:"endpoints"`
 }
 
+type offerResourceIdentityModel struct {
+	ID types.String `tfsdk:"id"`
+}
+
 func (o *offerResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_offer"
+}
+
+// IdentitySchema defines the schema for the resource's identity, which is used during import operations to uniquely identify the resource.
+func (o *offerResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
+	resp.IdentitySchema = identityschema.Schema{
+		Attributes: map[string]identityschema.Attribute{
+			"id": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+		},
+	}
 }
 
 func (o *offerResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -189,6 +206,11 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+
+	identity := offerResourceIdentityModel{
+		ID: types.StringValue(response.OfferURL),
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 func (o *offerResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -228,6 +250,11 @@ func (o *offerResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	state.ID = types.StringValue(response.OfferURL)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+
+	identity := offerResourceIdentityModel{
+		ID: types.StringValue(response.OfferURL),
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 func (o *offerResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -290,7 +317,7 @@ func (o *offerResource) Configure(ctx context.Context, req resource.ConfigureReq
 // ImportState imports the resource state from the given ID.
 // The ID is expected to be `offer_url`.
 func (o *offerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughWithIdentity(ctx, path.Root("id"), path.Root("id"), req, resp)
 }
 
 func (o *offerResource) trace(msg string, additionalFields ...map[string]interface{}) {
