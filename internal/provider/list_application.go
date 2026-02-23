@@ -117,7 +117,6 @@ func (r *applicationLister) List(ctx context.Context, req list.ListRequest, stre
 
 	// Extract the application names.
 	appNames := make([]string, 0, len(status.ModelStatus.Applications))
-	//
 	if listRequest.ApplicationName.ValueString() != "" {
 		i := slices.IndexFunc(status.ModelStatus.Applications, func(a base.Application) bool {
 			return a.Name == listRequest.ApplicationName.ValueString()
@@ -215,7 +214,7 @@ func (r *applicationLister) getApplicationResource(
 
 	diags := diag.Diagnostics{}
 
-	// Read da app
+	// Read the application
 	res, err := r.client.Applications.ReadApplication(&juju.ReadApplicationInput{
 		ModelUUID: modelUUID,
 		AppName:   appName,
@@ -324,7 +323,7 @@ func (r *applicationLister) getApplicationResource(
 		diags.Append(dErr...)
 		return applicationResourceModelV1{}, diags
 	}
-	// SetTrust
+	// Set trust
 	appModel.Trust = types.BoolValue(res.Trust)
 
 	// Set units
