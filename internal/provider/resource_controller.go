@@ -277,7 +277,7 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 					"units": schema.Int64Attribute{
 						Description: "Number of controller units. Must be odd. If not specified, defaults to 3. " +
 							"Note: Increasing the number of units can be done in-place, but decreasing is not possible and must be done via the CLI. ",
-						Optional: true,
+						Required: true,
 					},
 				},
 			},

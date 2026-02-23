@@ -439,7 +439,11 @@ func (d *DefaultJujuCommand) EnableHA(ctx context.Context, connInfo *ControllerC
 		return nil
 	}
 
-	if ha.Units > 0 && (ha.Units%2 == 0) {
+	if ha.Units < 3 {
+		return fmt.Errorf("number of HA units must be at least 3, got %d", ha.Units)
+	}
+
+	if ha.Units%2 == 0 {
 		return fmt.Errorf("number of HA units must be odd, got %d", ha.Units)
 	}
 
