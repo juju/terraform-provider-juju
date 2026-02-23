@@ -18,7 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
-func TestAccListApplications_query(t *testing.T) {
+func TestAccListApplications_QueryAll(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-apps")
 	appName := "my-application"
 
@@ -75,10 +75,6 @@ func TestAccListApplications_query(t *testing.T) {
 								}),
 							},
 							{
-								Path:       tfjsonpath.New("constraints"),
-								KnownValue: knownvalue.StringExact("arch=arm64"),
-							},
-							{
 								Path:       tfjsonpath.New("trust"),
 								KnownValue: knownvalue.Bool(false),
 							},
@@ -90,11 +86,6 @@ func TestAccListApplications_query(t *testing.T) {
 								Path:       tfjsonpath.New("config").AtMapKey("hostname"),
 								KnownValue: knownvalue.StringExact("diglett"),
 							},
-							// TODO: Can't deploy with storage rn for some reason
-							// {
-							// 	Path:       tfjsonpath.New("storage_directives").AtMapKey("files"),
-							// 	KnownValue: knownvalue.StringExact("lxd,1,100M"),
-							// },
 							{
 								Path:       tfjsonpath.New("resources"),
 								KnownValue: knownvalue.Null(),
@@ -123,6 +114,42 @@ func TestAccListApplications_query(t *testing.T) {
 					),
 				},
 			},
+			// Run the same query again, but specify the application name as filter, to verify that filtering works as expected.
+			{
+				Config: testAccListApplicationExact(),
+				Query:  true,
+				QueryResultChecks: []querycheck.QueryResultCheck{
+					querycheck.ExpectIdentity("juju_application.test", map[string]knownvalue.Check{
+						"id": knownvalue.StringFunc(func(actual string) error {
+							return knownvalue.StringExact(expectedID).CheckValue(actual)
+						}),
+					}),
+					querycheck.ExpectResourceKnownValues(
+						"juju_application.test",
+						queryfilter.ByResourceIdentity(map[string]knownvalue.Check{
+							"id": knownvalue.StringFunc(func(actual string) error {
+								return knownvalue.StringExact(expectedID).CheckValue(actual)
+							}),
+						}),
+						[]querycheck.KnownValueCheck{
+							{
+								Path:       tfjsonpath.New("name"),
+								KnownValue: knownvalue.StringExact(appName),
+							},
+							{
+								Path: tfjsonpath.New("model_uuid"),
+								KnownValue: knownvalue.StringFunc(func(actual string) error {
+									expectedModelUUID, _, found := strings.Cut(expectedID, ":")
+									if !found || expectedModelUUID == "" {
+										return fmt.Errorf("invalid expected application id format %q", expectedID)
+									}
+									return knownvalue.StringExact(expectedModelUUID).CheckValue(actual)
+								}),
+							},
+						},
+					),
+				},
+			},
 		},
 	})
 }
@@ -131,7 +158,6 @@ func testAccListApplicationsResourceConfig(modelName, appName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "test" {
 	name        = %q
-	constraints = "arch=arm64"
 }
 
 resource "juju_application" "test" {
@@ -161,6 +187,20 @@ list "juju_application" "test" {
 
   config {
     model_uuid = juju_model.test.uuid
+  }
+}
+`
+}
+
+func testAccListApplicationExact() string {
+	return `
+list "juju_application" "test" {
+  provider         = juju
+	include_resource = true
+
+  config {
+    model_uuid = juju_model.test.uuid
+	application_name = juju_application.test.name
   }
 }
 `

@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -16,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/juju/juju/api/base"
 	jujustorage "github.com/juju/juju/storage"
 	"github.com/juju/names/v5"
 
@@ -23,7 +25,8 @@ import (
 )
 
 type listApplicationRequest struct {
-	ModelUUID types.String `tfsdk:"model_uuid"`
+	ModelUUID       types.String `tfsdk:"model_uuid"`
+	ApplicationName types.String `tfsdk:"application_name"`
 }
 
 type applicationLister struct {
@@ -75,6 +78,13 @@ func (r *applicationLister) ListResourceConfigSchema(_ context.Context, _ list.L
 					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
 				},
 			},
+			"application_name": schema.StringAttribute{
+				Description: "The Juju application name.",
+				Optional:    true,
+				Validators: []validator.String{
+					ValidatorMatchString(names.IsValidApplication, "must be a valid application name"),
+				},
+			},
 		},
 	}
 }
@@ -107,10 +117,20 @@ func (r *applicationLister) List(ctx context.Context, req list.ListRequest, stre
 
 	// Extract the application names.
 	appNames := make([]string, 0, len(status.ModelStatus.Applications))
-	for _, app := range status.ModelStatus.Applications {
-		appNames = append(appNames, app.Name)
+	//
+	if listRequest.ApplicationName.ValueString() != "" {
+		i := slices.IndexFunc(status.ModelStatus.Applications, func(a base.Application) bool {
+			return a.Name == listRequest.ApplicationName.ValueString()
+		})
+		if i != -1 {
+			appNames = append(appNames, status.ModelStatus.Applications[i].Name)
+		}
+	} else {
+		for _, app := range status.ModelStatus.Applications {
+			appNames = append(appNames, app.Name)
+		}
+		sort.Strings(appNames)
 	}
-	sort.Strings(appNames)
 
 	stream.Results = func(push func(list.ListResult) bool) {
 		for _, appName := range appNames {
