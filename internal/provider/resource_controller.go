@@ -37,6 +37,8 @@ type JujuCommand interface {
 	UpdateConfig(ctx context.Context, connInfo *juju.ControllerConnectionInformation,
 		controllerConfig, controllerModelConfig map[string]string,
 		unsetControllerModelConfig []string) error
+	// EnableHA enables high availability on the controller.
+	EnableHA(ctx context.Context, connInfo *juju.ControllerConnectionInformation, ha *juju.BootstrapHAArgument) error
 	// Config retrieves controller configuration and controller-model configuration settings.
 	Config(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (map[string]any, map[string]any, error)
 	// Destroy removes the controller.
@@ -61,6 +63,7 @@ type controllerResourceModel struct {
 	ModelDefault         types.Map    `tfsdk:"model_default"`
 	ModelConstraints     types.Map    `tfsdk:"model_constraints"`
 	StoragePool          types.Object `tfsdk:"storage_pool"`
+	HA                   types.Object `tfsdk:"ha"`
 
 	// Config that can be set at bootstrap
 	BootstrapConfig       types.Map `tfsdk:"bootstrap_config"`
@@ -124,6 +127,12 @@ type nestedStoragePoolModel struct {
 	Name       types.String `tfsdk:"name"`
 	Type       types.String `tfsdk:"type"`
 	Attributes types.Map    `tfsdk:"attributes"`
+}
+
+// nestedHAModel represents high availability configuration
+type nestedHAModel struct {
+	Constraints types.String `tfsdk:"constraints"`
+	Units       types.Int64  `tfsdk:"units"`
 }
 
 // nestedDestroyFlagsModel represents destroy flags configuration
@@ -245,6 +254,29 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 						Description: "Additional storage pool attributes.",
 						Optional:    true,
 						ElementType: types.StringType,
+					},
+				},
+			},
+			"ha": schema.SingleNestedAttribute{
+				Description: "High availability configuration for controller units. Requires an odd number of units. " +
+					"Note: Removing this block after it has been configured will require resource replacement. " +
+					"Changing constraints will require replacement. Increasing the number of units can be done in-place, " +
+					"but decreasing the number of units is not possible and has to be done via the CLI.",
+				Optional: true,
+				PlanModifiers: []planmodifier.Object{
+					RequireReplaceIfNotConfigured(),
+				},
+				Attributes: map[string]schema.Attribute{
+					"constraints": schema.StringAttribute{
+						Description: "Constraints for newly created controller machines (e.g., 'mem=8G cores=20').",
+						Optional:    true,
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.RequiresReplace(),
+						},
+					},
+					"units": schema.Int64Attribute{
+						Description: "Number of controller units. Must be odd. If not specified, defaults to 3.",
+						Optional:    true,
 					},
 				},
 			},
@@ -805,6 +837,20 @@ func (r *controllerResource) Create(ctx context.Context, req resource.CreateRequ
 		}
 	}
 
+	var bootstrapHA *juju.BootstrapHAArgument
+	if !plan.HA.IsNull() && !plan.HA.IsUnknown() {
+		var haModel nestedHAModel
+		resp.Diagnostics.Append(plan.HA.As(ctx, &haModel, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		bootstrapHA = &juju.BootstrapHAArgument{
+			Constraints: haModel.Constraints.ValueString(),
+			Units:       int(haModel.Units.ValueInt64()),
+		}
+	}
+
 	bootstrapArgs := juju.BootstrapArguments{
 		Name:       plan.Name.ValueString(),
 		JujuBinary: plan.JujuBinary.ValueString(),
@@ -853,6 +899,17 @@ func (r *controllerResource) Create(ctx context.Context, req resource.CreateRequ
 			fmt.Sprintf("Unable to bootstrap controller %q, got error: %s", plan.Name.ValueString(), err),
 		)
 		return
+	}
+
+	if bootstrapHA != nil {
+		err = command.EnableHA(ctx, result, bootstrapHA)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Enable HA Error",
+				fmt.Sprintf("Controller %q was bootstrapped but HA enablement failed: %s", plan.Name.ValueString(), err),
+			)
+			return
+		}
 	}
 
 	r.trace(fmt.Sprintf("controller created: %q", plan.Name.ValueString()))
@@ -1045,6 +1102,51 @@ func (r *controllerResource) Update(ctx context.Context, req resource.UpdateRequ
 			fmt.Sprintf("Unable to update controller %q configuration: %s", state.Name.ValueString(), err),
 		)
 		return
+	}
+
+	var planHA *juju.BootstrapHAArgument
+	if !plan.HA.IsNull() && !plan.HA.IsUnknown() {
+		var haModel nestedHAModel
+		resp.Diagnostics.Append(plan.HA.As(ctx, &haModel, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		planHA = &juju.BootstrapHAArgument{
+			Constraints: haModel.Constraints.ValueString(),
+			Units:       int(haModel.Units.ValueInt64()),
+		}
+	}
+
+	var stateHA *juju.BootstrapHAArgument
+	if !state.HA.IsNull() && !state.HA.IsUnknown() {
+		var haModel nestedHAModel
+		resp.Diagnostics.Append(state.HA.As(ctx, &haModel, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		stateHA = &juju.BootstrapHAArgument{
+			Constraints: haModel.Constraints.ValueString(),
+			Units:       int(haModel.Units.ValueInt64()),
+		}
+	}
+
+	if planHA != nil {
+		haChanged := stateHA == nil ||
+			stateHA.Units != planHA.Units ||
+			stateHA.Constraints != planHA.Constraints
+
+		if haChanged {
+			err = command.EnableHA(ctx, connInfo, planHA)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Enable HA Error",
+					fmt.Sprintf("Unable to update HA configuration for controller %q: %s", state.Name.ValueString(), err),
+				)
+				return
+			}
+		}
 	}
 
 	r.trace(fmt.Sprintf("controller updated: %q", plan.Name.ValueString()))

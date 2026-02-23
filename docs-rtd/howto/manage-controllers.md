@@ -236,7 +236,8 @@ resource "juju_controller" "imported" {
       cloud.endpoint,
       cloud.region,
       cloud_credential.attributes["client-cert"],
-      cloud_credential.attributes["client-key"]
+      cloud_credential.attributes["client-key"],
+      ha.constraints
     ]
   }
 }
@@ -343,6 +344,7 @@ Common fields to ignore include:
 - Credential attributes that may differ between your plan and the ones fetched from the controller. 
 - Cloud region and endpoint fields, which can be default when a controller is bootstrap, but it's returned when it's set in the state when it's fetched from the controller.
 - Bootstrap-time configuration that cannot be changed, and can't be fetched from the controller.
+- `ha.constraints` - This field is not included in the state but Terraform will attempt to replace the controller if it's specified in your configuration during import.
 
 **3. Verify the configuration:**
 
