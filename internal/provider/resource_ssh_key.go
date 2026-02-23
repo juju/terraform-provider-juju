@@ -235,16 +235,8 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 
-	fingerprint, _, err := ssh.KeyFingerprint(
-		strings.TrimSuffix(result.Payload, "\n"),
-	)
-	if err != nil {
-		resp.Diagnostics.AddError("Malformed SSH Key", fmt.Sprintf("Unable to parse SSH key payload: %s", err))
-		return
-	}
-
 	identity := sshKeyResourceIdentityModel{
-		ID: types.StringValue(newSSHKeyID(modelUUID, fingerprint)),
+		ID: state.ID,
 	}
 	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
