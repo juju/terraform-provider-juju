@@ -305,7 +305,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// Create the controller
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, baseControllerConfig, baseControllerModelConfig),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, baseControllerConfig, baseControllerModelConfig, false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", controllerName),
 					resource.TestCheckResourceAttr(resourceName, "bootstrap_config.admin-secret", "my-favorite-admin-password"),
@@ -317,7 +317,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify changing controller config works
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, updatedControllerConfig, baseControllerModelConfig),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, updatedControllerConfig, baseControllerModelConfig, false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_config.agent-logfile-max-backups", "4"),
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
@@ -341,7 +341,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify unsetting a controller config value behaves as expected.
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, baseControllerModelConfig),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, baseControllerModelConfig, false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
 					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
@@ -368,7 +368,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify changing controller model config works
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, updatedControllerModelConfig),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, updatedControllerModelConfig, false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "2"),
 					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
@@ -378,7 +378,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify unsetting controller model config works
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig, false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
 					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
@@ -403,8 +403,21 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify that invalid controller config fails
-				Config:      testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, invalidControllerConfig, unsetControllerModelConfig),
+				Config:      testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, invalidControllerConfig, unsetControllerModelConfig, false),
 				ExpectError: regexp.MustCompile("failed to update controller config: unknown controller config"),
+			},
+			{
+				// Microk8s doesn't support HA.
+				SkipFunc: func() (bool, error) {
+					return testingCloud != LXDCloudTesting, nil
+				},
+				// Enable HA with 3 units
+				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig, true),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "ha.units", "3"),
+					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
+					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
+				),
 			},
 		},
 		CheckDestroy: func(s *terraform.State) error {
@@ -530,10 +543,18 @@ resource "juju_controller" "controller" {
 	return ""
 }
 
-func testAccResourceControllerWithJujuBinary(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
+func testAccResourceControllerWithJujuBinary(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string, enableHA bool) string {
 	bootstrapConfigHCL := renderStringMapAsHCL(bootstrapConfig)
 	controllerConfigHCL := renderStringMapAsHCL(controllerConfig)
 	modelConfigHCL := renderStringMapAsHCL(modelConfig)
+	haBlockHCL := ""
+	if enableHA {
+		haBlockHCL = `
+
+  ha = {
+    units = 3
+  }`
+	}
 	switch testingCloud {
 	case LXDCloudTesting:
 		return fmt.Sprintf(`
@@ -581,10 +602,10 @@ resource "juju_controller" "controller" {
 	  client-key = local.lxd_creds.client-key
 	  client-cert = local.lxd_creds.client-cert
     }
-  }
+  }%s
   
 }
-`, controllerName, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL)
+`, controllerName, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL, haBlockHCL)
 	case MicroK8sTesting:
 		return fmt.Sprintf(`
 provider "juju" {
@@ -627,9 +648,9 @@ resource "juju_controller" "controller" {
       ClientCertificateData = base64decode(local.microk8s_config.users[0].user["client-certificate-data"])
       ClientKeyData  = base64decode(local.microk8s_config.users[0].user["client-key-data"])
 	}
-  }
+  }%s
 }
-`, controllerName, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL)
+`, controllerName, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL, haBlockHCL)
 	}
 	return ""
 }

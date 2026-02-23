@@ -31,6 +31,7 @@ A resource that represents a Juju Controller.
 - `controller_config` (Map of String) Configuration options for the bootstrapped controller. Note that removing a key from this map will not unset it in the controller, instead it will be left unchanged on the controller.
 - `controller_model_config` (Map of String) Configuration options to be set for the controller model.
 - `destroy_flags` (Attributes) Additional flags for destroying the controller. Changing any of these values will require applying before they can be taken into account during destroy. (see [below for nested schema](#nestedatt--destroy_flags))
+- `ha` (Attributes) High availability configuration for controller units. Removing the HA block after it has been configured will require resource replacement. (see [below for nested schema](#nestedatt--ha))
 - `model_constraints` (Map of String) Constraints for all workload machines in models.
 - `model_default` (Map of String) Configuration options to be set for all models.
 - `storage_pool` (Attributes) Options for the initial storage pool (see [below for nested schema](#nestedatt--storage_pool))
@@ -96,6 +97,15 @@ Optional:
 - `force` (Boolean) Force destroy models ignoring any errors.
 - `model_timeout` (Number) Timeout for each step of force model destruction.
 - `release_storage` (Boolean) Release all storage instances from management of the controller, without destroying them.
+
+
+<a id="nestedatt--ha"></a>
+### Nested Schema for `ha`
+
+Optional:
+
+- `constraints` (String) Constraints for newly created controller machines (e.g., 'mem=8G cores=20'). Note: Changing constraints after it has been configured will require resource replacement. Use ignore_changes lifecycle meta-argument if you want to avoid replacement when modifying constraints.
+- `units` (Number) Number of controller units. Must be odd. If not specified, defaults to 3. Note: Increasing the number of units can be done in-place, but decreasing is not possible and must be done via the CLI.
 
 
 <a id="nestedatt--storage_pool"></a>
