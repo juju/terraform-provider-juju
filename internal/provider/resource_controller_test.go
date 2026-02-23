@@ -407,6 +407,10 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				ExpectError: regexp.MustCompile("failed to update controller config: unknown controller config"),
 			},
 			{
+				// Microk8s doesn't support HA.
+				SkipFunc: func() (bool, error) {
+					return testingCloud != LXDCloudTesting, nil
+				},
 				// Enable HA with 3 units
 				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig, true),
 				Check: resource.ComposeTestCheckFunc(

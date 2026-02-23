@@ -432,7 +432,7 @@ func (d *DefaultJujuCommand) Config(ctx context.Context, connInfo *ControllerCon
 }
 
 // EnableHA enables high availability on the controller.
-// EnableHA doesn't permit to lower the number of units, it will return an error if tried.
+// EnableHA doesn't permit lowering the number of units, it will return an error if tried.
 // EnableHA is idempotent when it's run with the same number of units.
 func (d *DefaultJujuCommand) EnableHA(ctx context.Context, connInfo *ControllerConnectionInformation, ha *BootstrapHAArgument) error {
 	if ha == nil {

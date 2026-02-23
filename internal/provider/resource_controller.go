@@ -258,25 +258,26 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				},
 			},
 			"ha": schema.SingleNestedAttribute{
-				Description: "High availability configuration for controller units. Requires an odd number of units. " +
-					"Note: Removing this block after it has been configured will require resource replacement. " +
-					"Changing constraints will require replacement. Increasing the number of units can be done in-place, " +
-					"but decreasing the number of units is not possible and has to be done via the CLI.",
+				Description: "High availability configuration for controller units. " +
+					"Removing the HA block after it has been configured will require resource replacement.",
 				Optional: true,
 				PlanModifiers: []planmodifier.Object{
 					RequireReplaceIfNotConfigured(),
 				},
 				Attributes: map[string]schema.Attribute{
 					"constraints": schema.StringAttribute{
-						Description: "Constraints for newly created controller machines (e.g., 'mem=8G cores=20').",
-						Optional:    true,
+						Description: "Constraints for newly created controller machines (e.g., 'mem=8G cores=20'). " +
+							"Note: Changing constraints after it has been configured will require resource replacement. " +
+							"Use ignore_changes lifecycle meta-argument if you want to avoid replacement when modifying constraints.",
+						Optional: true,
 						PlanModifiers: []planmodifier.String{
 							stringplanmodifier.RequiresReplace(),
 						},
 					},
 					"units": schema.Int64Attribute{
-						Description: "Number of controller units. Must be odd. If not specified, defaults to 3.",
-						Optional:    true,
+						Description: "Number of controller units. Must be odd. If not specified, defaults to 3. " +
+							"Note: Increasing the number of units can be done in-place, but decreasing is not possible and must be done via the CLI. ",
+						Optional: true,
 					},
 				},
 			},
