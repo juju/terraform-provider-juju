@@ -179,6 +179,7 @@ func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	return err
 }
 
+// ListKeys returns the authorised ssh keys for the specified users.
 func (c *sshKeysClient) ListKeys(input ListSSHKeysInput) ([]string, error) {
 	c.KeyLock.Lock()
 	defer c.KeyLock.Unlock()
