@@ -41,11 +41,13 @@ type DeleteSSHKeyInput struct {
 	KeyIdentifier string
 }
 
+// ListSSHKeysInput is the input for ListSSHKeys.
 type ListSSHKeysInput struct {
 	Username  string
 	ModelUUID string
 }
 
+// ListSSHKeysOutput is the output for ListSSHKeys.
 type ListSSHKeysOutput struct {
 	Payloads []string
 }
@@ -181,8 +183,6 @@ func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 
 // ListKeys returns the authorised ssh keys for the specified users.
 func (c *sshKeysClient) ListKeys(input ListSSHKeysInput) ([]string, error) {
-	c.KeyLock.Lock()
-	defer c.KeyLock.Unlock()
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
 		return nil, err
