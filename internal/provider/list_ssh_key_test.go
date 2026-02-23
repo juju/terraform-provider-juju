@@ -15,6 +15,9 @@ import (
 )
 
 func TestAccListSSHKeys_query(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
 	modelName := acctest.RandomWithPrefix("tf-test-ssh-keys")
 
 	var expectedID string
