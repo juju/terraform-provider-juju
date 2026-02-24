@@ -22,6 +22,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ datasource.DataSourceWithConfigure = &modelDataSource{}
 
+// NewModelDataSource returns a model data source.
 func NewModelDataSource() datasource.DataSourceWithConfigure {
 	return &modelDataSource{}
 }

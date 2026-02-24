@@ -27,6 +27,7 @@ var _ resource.Resource = &accessSecretResource{}
 var _ resource.ResourceWithConfigure = &accessSecretResource{}
 var _ resource.ResourceWithImportState = &accessSecretResource{}
 
+// NewAccessSecretResource returns an access secret resource.
 func NewAccessSecretResource() resource.Resource {
 	return &accessSecretResource{}
 }
@@ -124,6 +125,7 @@ func (s *accessSecretResource) ImportState(ctx context.Context, req resource.Imp
 	s.trace(fmt.Sprintf("import access secret resource %q", state.SecretId))
 }
 
+// Metadata sets the resource type name.
 func (s *accessSecretResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_access_secret"
 }

@@ -3,6 +3,7 @@
 
 package testing
 
+// FakeKubernetesConfig is a minimal kubeconfig used for tests.
 const FakeKubernetesConfig = `apiVersion: v1
 clusters:
 - cluster:

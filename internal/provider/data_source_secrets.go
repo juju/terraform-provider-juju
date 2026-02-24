@@ -20,6 +20,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ datasource.DataSourceWithConfigure = &secretDataSource{}
 
+// NewSecretDataSource returns a secret data source.
 func NewSecretDataSource() datasource.DataSource {
 	return &secretDataSource{}
 }
