@@ -29,24 +29,41 @@ import (
 )
 
 const (
-	JujuControllerEnvKey     = "JUJU_CONTROLLER_ADDRESSES"
-	JujuUsernameEnvKey       = "JUJU_USERNAME"
-	JujuPasswordEnvKey       = "JUJU_PASSWORD"
-	JujuCACertEnvKey         = "JUJU_CA_CERT"
-	JujuClientIDEnvKey       = "JUJU_CLIENT_ID"
-	JujuClientSecretEnvKey   = "JUJU_CLIENT_SECRET"
+	// JujuControllerEnvKey is the env var for controller addresses.
+	JujuControllerEnvKey = "JUJU_CONTROLLER_ADDRESSES"
+	// JujuUsernameEnvKey is the env var for the Juju username.
+	JujuUsernameEnvKey = "JUJU_USERNAME"
+	// JujuPasswordEnvKey is the env var for the Juju password.
+	JujuPasswordEnvKey = "JUJU_PASSWORD"
+	// JujuCACertEnvKey is the env var for the CA certificate.
+	JujuCACertEnvKey = "JUJU_CA_CERT"
+	// JujuClientIDEnvKey is the env var for the JAAS client ID.
+	JujuClientIDEnvKey = "JUJU_CLIENT_ID"
+	// JujuClientSecretEnvKey is the env var for the JAAS client secret.
+	JujuClientSecretEnvKey = "JUJU_CLIENT_SECRET"
+	// SkipFailedDeletionEnvKey is the env var for skip-failed-deletion behavior.
 	SkipFailedDeletionEnvKey = "JUJU_SKIP_FAILED_DELETION"
 
-	ControllerMode          = "controller_mode"
-	JujuController          = "controller_addresses"
-	JujuUsername            = "username"
-	JujuPassword            = "password"
-	JujuClientID            = "client_id"
-	JujuClientSecret        = "client_secret"
-	JujuCACert              = "ca_certificate"
-	SkipFailedDeletion      = "skip_failed_deletion"
+	// ControllerMode is the provider config key for controller mode.
+	ControllerMode = "controller_mode"
+	// JujuController is the provider config key for controller addresses.
+	JujuController = "controller_addresses"
+	// JujuUsername is the provider config key for username.
+	JujuUsername = "username"
+	// JujuPassword is the provider config key for password.
+	JujuPassword = "password"
+	// JujuClientID is the provider config key for JAAS client ID.
+	JujuClientID = "client_id"
+	// JujuClientSecret is the provider config key for JAAS client secret.
+	JujuClientSecret = "client_secret"
+	// JujuCACert is the provider config key for CA certificate.
+	JujuCACert = "ca_certificate"
+	// SkipFailedDeletion is the provider config key for skip-failed-deletion behavior.
+	SkipFailedDeletion = "skip_failed_deletion"
+	// JujuOfferingControllers is the provider config key for offering controllers.
 	JujuOfferingControllers = "offering_controllers"
 
+	// TwoSourcesAuthWarning is the warning message when both auth modes are set.
 	TwoSourcesAuthWarning = "Two sources of identity for controller login"
 )
 
@@ -107,6 +124,7 @@ func getEnvVar(field string) types.String {
 // Ensure jujuProvider satisfies various provider interfaces.
 var _ provider.Provider = &jujuProvider{}
 
+// ProviderConfiguration contains optional provider setup hooks.
 type ProviderConfiguration struct {
 	WaitForResources bool
 	NewJujuCommand   func(string) (JujuCommand, error)

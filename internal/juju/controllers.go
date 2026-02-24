@@ -32,6 +32,7 @@ import (
 // when creating safeJujuClientStore instances.
 var clientStoreLock sync.Mutex
 
+// LogJujuCommand is the logging subsystem name for Juju command execution.
 const LogJujuCommand = "juju_command"
 
 // ControllerConnectionInformation contains the connection details for a controller.

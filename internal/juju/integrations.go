@@ -21,7 +21,7 @@ const (
 	// when querying the API
 	IntegrationApiTickWait = time.Second * 5
 	// IntegrationAppAvailableTimeout indicates the time to wait
-	// for applications to be available before integrating them
+	// for applications to be available before integrating them.
 	IntegrationAppAvailableTimeout = time.Second * 60
 )
 
@@ -38,6 +38,7 @@ type integrationsClient struct {
 	SharedClient
 }
 
+// Application represents an application.
 type Application struct {
 	Name     string
 	Endpoint string
@@ -45,10 +46,12 @@ type Application struct {
 	OfferURL *string
 }
 
+// Offer represents an integration offer reference.
 type Offer struct {
 	OfferURL string
 }
 
+// IntegrationInput contains the parameters for managing an integration.
 type IntegrationInput struct {
 	ModelUUID string
 	Apps      []string
@@ -56,18 +59,22 @@ type IntegrationInput struct {
 	ViaCIDRs  string
 }
 
+// CreateIntegrationResponse contains the created integration applications.
 type CreateIntegrationResponse struct {
 	Applications []Application
 }
 
+// ReadIntegrationResponse contains the integration applications.
 type ReadIntegrationResponse struct {
 	Applications []Application
 }
 
+// UpdateIntegrationResponse contains the updated integration applications.
 type UpdateIntegrationResponse struct {
 	Applications []Application
 }
 
+// UpdateIntegrationInput contains the parameters for updating an integration.
 type UpdateIntegrationInput struct {
 	ModelUUID    string
 	Endpoints    []string
@@ -81,6 +88,7 @@ func newIntegrationsClient(sc SharedClient) *integrationsClient {
 	}
 }
 
+// CreateIntegration creates a new integration.
 func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateIntegrationResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
@@ -125,6 +133,7 @@ func (c integrationsClient) CreateIntegration(input *IntegrationInput) (*CreateI
 	}, nil
 }
 
+// ReadIntegration retrieves integration details for the given endpoints.
 func (c integrationsClient) ReadIntegration(input *IntegrationInput) (*ReadIntegrationResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {

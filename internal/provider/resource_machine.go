@@ -40,6 +40,7 @@ var _ resource.ResourceWithConfigure = &machineResource{}
 var _ resource.ResourceWithImportState = &machineResource{}
 var _ resource.ResourceWithUpgradeState = &machineResource{}
 
+// NewMachineResource returns a new machine resource.
 func NewMachineResource() resource.Resource {
 	return &machineResource{}
 }
@@ -81,6 +82,7 @@ type machineResourceModelV1 struct {
 	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
+// Metadata sets the resource type name.
 func (r *machineResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_machine"
 }
@@ -107,17 +109,27 @@ func (r *machineResource) Configure(ctx context.Context, req resource.ConfigureR
 }
 
 const (
-	NameKey           = "name"
-	ConstraintsKey    = "constraints"
-	DisksKey          = "disks"
-	PlacementKey      = "placement"
-	BaseKey           = "base"
-	MachineIDKey      = "machine_id"
-	SSHAddressKey     = "ssh_address"
+	// NameKey is the schema key for machine name.
+	NameKey = "name"
+	// ConstraintsKey is the schema key for machine constraints.
+	ConstraintsKey = "constraints"
+	// DisksKey is the schema key for disk constraints.
+	DisksKey = "disks"
+	// PlacementKey is the schema key for placement directives.
+	PlacementKey = "placement"
+	// BaseKey is the schema key for the machine base.
+	BaseKey = "base"
+	// MachineIDKey is the schema key for the machine ID.
+	MachineIDKey = "machine_id"
+	// SSHAddressKey is the schema key for SSH address.
+	SSHAddressKey = "ssh_address"
+	// PrivateKeyFileKey is the schema key for the private key file.
 	PrivateKeyFileKey = "private_key_file"
-	PublicKeyFileKey  = "public_key_file"
+	// PublicKeyFileKey is the schema key for the public key file.
+	PublicKeyFileKey = "public_key_file"
 )
 
+// Schema defines the resource schema.
 func (r *machineResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:     1,

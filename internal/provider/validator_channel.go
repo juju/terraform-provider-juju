@@ -10,6 +10,8 @@ import (
 	"github.com/juju/charm/v12"
 )
 
+// StringIsChannelValidator validates that strings are valid charm channels.
+// StringIsChannelValidator validates charm channel strings.
 type StringIsChannelValidator struct{}
 
 // Description returns a plain text description of the validator's behavior, suitable for a practitioner to understand its impact.

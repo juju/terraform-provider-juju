@@ -19,6 +19,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ datasource.DataSourceWithConfigure = &offerDataSource{}
 
+// NewOfferDataSource returns an offer data source.
 func NewOfferDataSource() datasource.DataSource {
 	return &offerDataSource{}
 }
@@ -42,10 +43,12 @@ type offerDataSourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
+// Metadata implements the datasource.DataSourceWithConfigure interface.
 func (d *offerDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_offer"
 }
 
+// Schema implements the datasource.DataSourceWithConfigure interface.
 func (d *offerDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A data source representing a Juju Offer.",
@@ -82,6 +85,7 @@ func (d *offerDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 	}
 }
 
+// Configure implements the datasource.DataSourceWithConfigure interface.
 func (d *offerDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
@@ -98,6 +102,7 @@ func (d *offerDataSource) Configure(ctx context.Context, req datasource.Configur
 	d.subCtx = tflog.NewSubsystem(ctx, LogDataSourceOffer)
 }
 
+// Read implements the datasource.DataSourceWithConfigure interface.
 func (d *offerDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	// Prevent panic if the provider has not been configured.
 	if d.client == nil {

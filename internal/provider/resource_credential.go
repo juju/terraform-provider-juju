@@ -31,6 +31,7 @@ var _ resource.Resource = &credentialResource{}
 var _ resource.ResourceWithConfigure = &credentialResource{}
 var _ resource.ResourceWithImportState = &credentialResource{}
 
+// NewCredentialResource returns a credential resource.
 func NewCredentialResource() resource.Resource {
 	return &credentialResource{}
 }
@@ -54,10 +55,12 @@ type credentialResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
+// Metadata implements resource.ResourceWithConfigure interface.
 func (c *credentialResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_credential"
 }
 
+// Schema implements resource.ResourceWithConfigure interface.
 func (c *credentialResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A resource that represent a credential for a cloud.",

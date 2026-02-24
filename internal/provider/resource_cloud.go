@@ -28,6 +28,7 @@ import (
 var _ resource.Resource = &cloudResource{}
 var _ resource.ResourceWithConfigure = &cloudResource{}
 
+// NewCloudResource returns a cloud resource.
 func NewCloudResource() resource.Resource {
 	return &cloudResource{}
 }

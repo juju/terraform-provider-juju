@@ -29,6 +29,7 @@ var _ resource.ResourceWithConfigure = &sshKeyResource{}
 var _ resource.ResourceWithImportState = &sshKeyResource{}
 var _ resource.ResourceWithUpgradeState = &sshKeyResource{}
 
+// NewSSHKeyResource returns an SSH key resource.
 func NewSSHKeyResource() resource.Resource {
 	return &sshKeyResource{}
 }
@@ -56,10 +57,12 @@ type sshKeyResourceModelV1 struct {
 	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
+// ImportState implements resource.ResourceWithImportState interface.
 func (s *sshKeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
+// Configure implements resource.ResourceWithConfigure interface.
 func (s *sshKeyResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
@@ -76,10 +79,12 @@ func (s *sshKeyResource) Configure(ctx context.Context, req resource.ConfigureRe
 	s.subCtx = tflog.NewSubsystem(ctx, LogResourceSSHKey)
 }
 
+// Metadata implements resource.ResourceWithConfigure interface.
 func (s *sshKeyResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_ssh_key"
 }
 
+// Schema implements resource.ResourceWithConfigure interface.
 func (s *sshKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:     1,
@@ -112,6 +117,7 @@ func (s *sshKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 	}
 }
 
+// Create creates the SSH key resource.
 func (s *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Prevent panic if the provider has not been configured.
 	if s.client == nil {
@@ -172,6 +178,7 @@ func retrieveModelKeyNameFromID(id string, d *diag.Diagnostics) (string, string)
 	return tokens[1], tokens[2]
 }
 
+// Read implements resource.ResourceWithConfigure interface.
 func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	// Prevent panic if the provider has not been configured.
 	if s.client == nil {
@@ -210,6 +217,7 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update implements resource.ResourceWithConfigure interface.
 func (s *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	// This should never be called, because all of the fields have a `RequiresReplace` plan modifier.
 }
