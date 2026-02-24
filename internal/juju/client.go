@@ -266,6 +266,9 @@ func (sc *sharedClient) IsOfferingController(name string) bool {
 
 // GetUser returns the username of the user connecting to the Juju controller.
 func (sc *sharedClient) GetUser() string {
+	if sc.isJAAS {
+		return sc.controllerConfig.ClientID
+	}
 	return sc.controllerConfig.Username
 }
 
