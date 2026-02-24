@@ -80,10 +80,13 @@ func NewRetryReadError(msg string) error {
 	return jujuerrors.WithType(jujuerrors.Errorf("retrying: %s", msg), RetryReadError)
 }
 
+// ApplicationPartiallyCreatedError indicates an application was created
+// but follow-up steps failed.
 type ApplicationPartiallyCreatedError struct {
 	AppName string
 }
 
+// Error implements the error interface for ApplicationPartiallyCreatedError.
 func (e ApplicationPartiallyCreatedError) Error() string {
 	return "application " + e.AppName + " was partially created"
 }
@@ -125,7 +128,7 @@ func newApplicationClient(sc SharedClient) *applicationsClient {
 }
 
 // ConfigEntry is an auxiliary struct to keep information about
-// juju application config entries. Specially, we want to know
+// Juju application config entries. Specially, we want to know
 // if they have the default value.
 type ConfigEntry struct {
 	Value     interface{}
@@ -142,6 +145,7 @@ func EqualConfigEntries(a interface{}, b interface{}) bool {
 	return a == b
 }
 
+// String implements the fmt.Stringer interface for ConfigEntry.
 func (ce *ConfigEntry) String() string {
 	return ConfigEntryToString(ce.Value)
 }
@@ -161,6 +165,7 @@ func ConfigEntryToString(input interface{}) string {
 	}
 }
 
+// CreateApplicationInput contains the parameters for creating an application.
 type CreateApplicationInput struct {
 	ApplicationName    string
 	ModelUUID          string
@@ -292,16 +297,19 @@ type transformedCreateApplicationInput struct {
 	storage          map[string]jujustorage.Constraints
 }
 
+// CreateApplicationResponse contains the results of a create application request.
 type CreateApplicationResponse struct {
 	AppName   string
 	ModelType string
 }
 
+// ReadApplicationInput contains the parameters for reading an application.
 type ReadApplicationInput struct {
 	ModelUUID string
 	AppName   string
 }
 
+// ReadApplicationResponse contains application details returned by ReadApplication.
 type ReadApplicationResponse struct {
 	Name             string
 	Channel          string
@@ -322,6 +330,7 @@ type ReadApplicationResponse struct {
 	Resources        map[string]string
 }
 
+// UpdateApplicationInput contains the parameters for updating an application.
 type UpdateApplicationInput struct {
 	ModelUUID string
 	ModelInfo *params.ModelInfo
@@ -344,6 +353,7 @@ type UpdateApplicationInput struct {
 	RemoveMachines     []string
 }
 
+// DestroyApplicationInput contains the parameters for removing an application.
 type DestroyApplicationInput struct {
 	ApplicationName string
 	ModelUUID       string
@@ -362,6 +372,7 @@ func resolveCharmURL(charmName string) (*charm.URL, error) {
 	return charmURL, nil
 }
 
+// CreateApplication creates an application in the specified model.
 func (c applicationsClient) CreateApplication(ctx context.Context, input *CreateApplicationInput) (*CreateApplicationResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
@@ -1017,6 +1028,7 @@ func getStorageLabel(storageTag string) string {
 	return strings.TrimSuffix(strings.TrimPrefix(storageTag, PrefixStorage), "-0")
 }
 
+// ReadApplication retrieves application details from the specified model.
 func (c applicationsClient) ReadApplication(input *ReadApplicationInput) (*ReadApplicationResponse, error) {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
@@ -1315,6 +1327,7 @@ func removeDefaultCidrs(cidrs []string) []string {
 	return toReturn
 }
 
+// UpdateApplication updates application settings, units, and resources.
 func (c applicationsClient) UpdateApplication(input *UpdateApplicationInput) error {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {
@@ -1610,6 +1623,7 @@ func (c applicationsClient) UpdateCharmAndResources(
 	return nil
 }
 
+// DestroyApplication removes an application from the specified model.
 func (c applicationsClient) DestroyApplication(input *DestroyApplicationInput) error {
 	conn, err := c.GetConnection(&input.ModelUUID)
 	if err != nil {

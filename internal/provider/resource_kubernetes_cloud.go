@@ -22,6 +22,7 @@ var _ resource.Resource = &kubernetesCloudResource{}
 var _ resource.ResourceWithConfigure = &kubernetesCloudResource{}
 var _ resource.ResourceWithConfigValidators = &kubernetesCloudResource{}
 
+// NewKubernetesCloudResource returns a Kubernetes cloud resource.
 func NewKubernetesCloudResource() resource.Resource {
 	return &kubernetesCloudResource{}
 }
@@ -46,6 +47,7 @@ type kubernetesCloudResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
+// StorageClassNameMarkdownDescription describes the storage class attribute behaviour.
 const StorageClassNameMarkdownDescription = `Specify the Kubernetes storage class name for workload and operator storage.
 
 When adding K8S clouds via the Terraform Provider, it strays in behaviour from the Juju CLI.

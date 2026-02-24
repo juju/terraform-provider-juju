@@ -15,6 +15,7 @@ import (
 	coresecrets "github.com/juju/juju/core/secrets"
 )
 
+// SecretNotFoundError matches errors returned when a secret is missing.
 var SecretNotFoundError = &secretNotFoundError{}
 
 type secretNotFoundError struct {
@@ -41,14 +42,17 @@ type secretsClient struct {
 	getSecretAPIClient func(connection api.Connection) SecretAPIClient
 }
 
+// AccessSecretAction represents the type of access operation to apply.
 type AccessSecretAction int
 
 const (
+	// GrantAccess grants access to a secret.
 	GrantAccess AccessSecretAction = iota
+	// RevokeAccess revokes access to a secret.
 	RevokeAccess
 )
 
-// CreateSecretInput is the input for CreateSecret.
+// CreateSecretInput contains the parameters for creating a secret.
 type CreateSecretInput struct {
 	ModelUUID string
 	Name      string
@@ -56,13 +60,13 @@ type CreateSecretInput struct {
 	Info      string
 }
 
-// CreateSecretOutput is the output for CreateSecret.
+// CreateSecretOutput contains the identifiers for a created secret.
 type CreateSecretOutput struct {
 	SecretId  string
 	SecretURI string
 }
 
-// ReadSecretInput is the input for ReadSecret.
+// ReadSecretInput contains the parameters for reading a secret.
 type ReadSecretInput struct {
 	SecretId  string
 	ModelUUID string
@@ -70,7 +74,7 @@ type ReadSecretInput struct {
 	Revision  *int
 }
 
-// ReadSecretOutput is the output for ReadSecret.
+// ReadSecretOutput contains the secret data returned by a read request.
 type ReadSecretOutput struct {
 	SecretId     string
 	SecretURI    string
@@ -96,7 +100,7 @@ type ListSecretsOutput struct {
 	Info         string
 }
 
-// UpdateSecretInput is the input for UpdateSecret.
+// UpdateSecretInput contains the parameters for updating a secret.
 type UpdateSecretInput struct {
 	SecretId  string
 	ModelUUID string
@@ -106,13 +110,13 @@ type UpdateSecretInput struct {
 	Info      *string
 }
 
-// DeleteSecretInput is the input for DeleteSecret.
+// DeleteSecretInput contains the parameters for deleting a secret.
 type DeleteSecretInput struct {
 	SecretId  string
 	ModelUUID string
 }
 
-// GrantRevokeAccessSecretInput is the input for Grant/RevokeAccessSecret.
+// GrantRevokeAccessSecretInput contains the parameters for access updates.
 type GrantRevokeAccessSecretInput struct {
 	SecretId     string
 	ModelUUID    string
