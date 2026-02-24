@@ -30,6 +30,7 @@ var _ resource.ResourceWithConfigure = &offerResource{}
 var _ resource.ResourceWithImportState = &offerResource{}
 var _ resource.ResourceWithUpgradeState = &offerResource{}
 
+// NewOfferResource returns an offer resource.
 func NewOfferResource() resource.Resource {
 	return &offerResource{}
 }
@@ -67,10 +68,12 @@ type offerResourceModelV2 struct {
 	Endpoints types.Set    `tfsdk:"endpoints"`
 }
 
+// Metadata implements resource.ResourceWithConfigure interface.
 func (o *offerResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_offer"
 }
 
+// Schema implements resource.ResourceWithConfigure interface.
 func (o *offerResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:     2,

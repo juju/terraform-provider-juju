@@ -112,7 +112,7 @@ func populateControllerConfig() {
 	tflog.Debug(context.TODO(), "local provider controllerConfig was set", map[string]interface{}{"localProviderConfig": fmt.Sprintf("%#v", localProviderConfig)})
 }
 
-// WaitForAppAvailable blocks the execution flow and waits until all the
+// WaitForAppsAvailable blocks the execution flow and waits until all the
 // application names can be queried before the context is done. The
 // tickTime param indicates the frequency used to query the API.
 func WaitForAppsAvailable(ctx context.Context, client *apiapplication.Client, appsName []string, tickTime time.Duration) error {
