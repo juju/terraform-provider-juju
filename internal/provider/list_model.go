@@ -90,6 +90,7 @@ func (r *modelLister) List(ctx context.Context, req list.ListRequest, stream *li
 			if result.Diagnostics.HasError() {
 				return
 			}
+
 			if req.IncludeResource {
 				schema, ok := req.ResourceSchema.(schema.Schema)
 				if !ok {
@@ -109,6 +110,7 @@ func (r *modelLister) List(ctx context.Context, req list.ListRequest, stream *li
 					return
 				}
 			}
+
 			if !push(result) {
 				return
 			}
@@ -116,22 +118,8 @@ func (r *modelLister) List(ctx context.Context, req list.ListRequest, stream *li
 	}
 }
 
-type modelResourceModelForListing struct {
-	Name             types.String `tfsdk:"name"`
-	Cloud            types.List   `tfsdk:"cloud"`
-	TargetController types.String `tfsdk:"target_controller"`
-	Config           types.Map    `tfsdk:"config"`
-	Constraints      types.String `tfsdk:"constraints"`
-	Annotations      types.Map    `tfsdk:"annotations"`
-	Credential       types.String `tfsdk:"credential"`
-	Type             types.String `tfsdk:"type"`
-	UUID             types.String `tfsdk:"uuid"`
-	// ID required by the testing framework
-	ID types.String `tfsdk:"id"`
-}
-
 func (r *modelLister) getModelResource(ctx context.Context, modelUUID string, sc schema.Schema) (modelResourceModel, diag.Diagnostics) {
-	resource := modelResourceModelForListing{}
+	resource := modelResourceModel{}
 	diags := diag.Diagnostics{}
 	response, err := r.client.Models.ReadModel(modelUUID)
 	if err != nil {
