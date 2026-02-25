@@ -236,7 +236,7 @@ resource "juju_controller" "imported" {
       cloud.endpoint,
       cloud.region,
       cloud_credential.attributes["client-cert"],
-      cloud_credential.attributes["client-key"]
+      cloud_credential.attributes["client-key"],
     ]
   }
 }

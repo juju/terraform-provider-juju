@@ -15,6 +15,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/boolvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -106,6 +107,7 @@ func getEnvVar(field string) types.String {
 
 // Ensure jujuProvider satisfies various provider interfaces.
 var _ provider.Provider = &jujuProvider{}
+var _ provider.ProviderWithActions = &jujuProvider{}
 
 type ProviderConfiguration struct {
 	WaitForResources bool
@@ -390,6 +392,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		}
 		resp.ResourceData = providerData
 		resp.DataSourceData = providerData
+		resp.ActionData = providerData
 		return
 	}
 	// Get data required for configuring the juju client.
@@ -472,6 +475,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 
 	resp.ResourceData = providerData
 	resp.DataSourceData = providerData
+	resp.ActionData = providerData
 }
 
 // getJujuProviderModel a filled in jujuProviderModel if able. First check
@@ -573,6 +577,13 @@ func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
 	}
 }
 
+// Actions returns the list of actions provided by this provider.
+func (p *jujuProvider) Actions(_ context.Context) []func() action.Action {
+	return []func() action.Action{
+		NewEnableHAAction,
+	}
+}
+
 // DataSources returns a slice of functions to instantiate each DataSource
 // implementation.
 //
@@ -663,4 +674,23 @@ func getProviderDataForDataSource(req datasource.ConfigureRequest, isControllerR
 		return juju.ProviderData{}, diags
 	}
 	return provider, diags
+}
+
+// getProviderDataForAction extracts and validates provider data from an action ConfigureRequest.
+// It performs type assertion and controller mode validation in one step.
+func getProviderDataForAction(req action.ConfigureRequest, isTargetingControllers bool) (juju.ProviderData, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	providerData, ok := req.ProviderData.(juju.ProviderData)
+	if !ok {
+		diags.AddError(
+			"Unexpected Action Configure Type",
+			fmt.Sprintf("Expected juju.ProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return juju.ProviderData{}, diags
+	}
+	diags = checkControllerMode(diags, providerData.Config, isTargetingControllers)
+	if diags.HasError() {
+		return juju.ProviderData{}, diags
+	}
+	return providerData, diags
 }
