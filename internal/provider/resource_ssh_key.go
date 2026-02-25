@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -28,6 +29,7 @@ var _ resource.Resource = &sshKeyResource{}
 var _ resource.ResourceWithConfigure = &sshKeyResource{}
 var _ resource.ResourceWithImportState = &sshKeyResource{}
 var _ resource.ResourceWithUpgradeState = &sshKeyResource{}
+var _ resource.ResourceWithIdentity = &sshKeyResource{}
 
 func NewSSHKeyResource() resource.Resource {
 	return &sshKeyResource{}
@@ -56,8 +58,12 @@ type sshKeyResourceModelV1 struct {
 	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
+type sshKeyResourceIdentityModel struct {
+	ID types.String `tfsdk:"id"`
+}
+
 func (s *sshKeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughWithIdentity(ctx, path.Root("id"), path.Root("id"), req, resp)
 }
 
 func (s *sshKeyResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -81,6 +87,17 @@ func (s *sshKeyResource) Configure(ctx context.Context, req resource.ConfigureRe
 
 func (s *sshKeyResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_ssh_key"
+}
+
+// IdentitySchema implements [resource.ResourceWithIdentity].
+func (r *sshKeyResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
+	resp.IdentitySchema = identityschema.Schema{
+		Attributes: map[string]identityschema.Attribute{
+			"id": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+		},
+	}
 }
 
 func (s *sshKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -156,6 +173,11 @@ func (s *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	plan.ID = types.StringValue(newSSHKeyID(modelUUID, fingerprint))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+
+	identity := sshKeyResourceIdentityModel{
+		ID: plan.ID,
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 func newSSHKeyID(modelUUID string, keyIdentifier string) string {
@@ -212,6 +234,11 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+
+	identity := sshKeyResourceIdentityModel{
+		ID: state.ID,
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 func (s *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
