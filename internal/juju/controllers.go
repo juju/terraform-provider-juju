@@ -16,12 +16,10 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
-	"github.com/juju/juju/api/client/highavailability"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/connector"
 	controllerapi "github.com/juju/juju/api/controller/controller"
 	jujucloud "github.com/juju/juju/cloud"
-	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/juju/osenv"
 	"github.com/juju/juju/jujuclient"
@@ -173,14 +171,6 @@ type BootstrapConfig struct {
 	ControllerModelConfig map[string]string
 	// BootstrapConfig contains bootstrap configuration options
 	BootstrapConfig map[string]string
-}
-
-// BootstrapHAArgument contains high availability configuration.
-type BootstrapHAArgument struct {
-	// Constraints for HA controller units
-	Constraints string
-	// Units is the number of controller units
-	Units int
 }
 
 // BootstrapFlags contains CLI flags for the bootstrap command.
@@ -429,55 +419,6 @@ func (d *DefaultJujuCommand) Config(ctx context.Context, connInfo *ControllerCon
 	}
 
 	return ctrlConfig, modelConfig, nil
-}
-
-// EnableHA enables high availability on the controller.
-// EnableHA doesn't permit lowering the number of units, it will return an error if tried.
-// EnableHA is idempotent when it's run with the same number of units.
-func (d *DefaultJujuCommand) EnableHA(ctx context.Context, connInfo *ControllerConnectionInformation, ha *BootstrapHAArgument) error {
-	if ha == nil {
-		return nil
-	}
-
-	if ha.Units < 3 {
-		return fmt.Errorf("number of HA units must be at least 3, got %d", ha.Units)
-	}
-
-	if ha.Units%2 == 0 {
-		return fmt.Errorf("number of HA units must be odd, got %d", ha.Units)
-	}
-
-	connr, err := connector.NewSimple(connector.SimpleConfig{
-		ControllerAddresses: connInfo.Addresses,
-		CACert:              connInfo.CACert,
-		Username:            connInfo.Username,
-		Password:            connInfo.Password,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create connector: %w", err)
-	}
-
-	conn, err := connr.Connect()
-	if err != nil {
-		return fmt.Errorf("failed to connect to controller: %w", err)
-	}
-	defer conn.Close()
-
-	haClient := highavailability.NewClient(conn)
-	defer haClient.Close()
-	var cons constraints.Value
-	if ha.Constraints != "" {
-		cons, err = constraints.Parse(ha.Constraints)
-		if err != nil {
-			return fmt.Errorf("failed to parse constraints %q: %w", ha.Constraints, err)
-		}
-	}
-	_, err = haClient.EnableHA(ha.Units, cons, nil)
-	if err != nil {
-		return fmt.Errorf("failed to enable HA: %w", err)
-	}
-
-	return nil
 }
 
 // Destroy removes the controller.

@@ -158,44 +158,6 @@ func (c *MockJujuCommandDestroyCall) DoAndReturn(f func(context.Context, juju.De
 	return c
 }
 
-// EnableHA mocks base method.
-func (m *MockJujuCommand) EnableHA(ctx context.Context, connInfo *juju.ControllerConnectionInformation, ha *juju.BootstrapHAArgument) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnableHA", ctx, connInfo, ha)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// EnableHA indicates an expected call of EnableHA.
-func (mr *MockJujuCommandMockRecorder) EnableHA(ctx, connInfo, ha any) *MockJujuCommandEnableHACall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableHA", reflect.TypeOf((*MockJujuCommand)(nil).EnableHA), ctx, connInfo, ha)
-	return &MockJujuCommandEnableHACall{Call: call}
-}
-
-// MockJujuCommandEnableHACall wrap *gomock.Call
-type MockJujuCommandEnableHACall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockJujuCommandEnableHACall) Return(arg0 error) *MockJujuCommandEnableHACall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockJujuCommandEnableHACall) Do(f func(context.Context, *juju.ControllerConnectionInformation, *juju.BootstrapHAArgument) error) *MockJujuCommandEnableHACall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockJujuCommandEnableHACall) DoAndReturn(f func(context.Context, *juju.ControllerConnectionInformation, *juju.BootstrapHAArgument) error) *MockJujuCommandEnableHACall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // UpdateConfig mocks base method.
 func (m *MockJujuCommand) UpdateConfig(ctx context.Context, connInfo *juju.ControllerConnectionInformation, controllerConfig, controllerModelConfig map[string]string, unsetControllerModelConfig []string) error {
 	m.ctrl.T.Helper()

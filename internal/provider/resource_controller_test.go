@@ -23,8 +23,10 @@ import (
 
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/client/modelconfig"
+	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/api/connector"
 	controllerapi "github.com/juju/juju/api/controller/controller"
+	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/version/v2"
 )
@@ -284,7 +286,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 	}
 	updatedControllerModelConfig := map[string]string{
 		"disable-telemetry": "true",
-		"http-proxy":        "http://my-proxy.local:8080",
+		"enable-os-upgrade": "false",
 	}
 	unsetControllerModelConfig := map[string]string{
 		"disable-telemetry": "true",
@@ -305,7 +307,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// Create the controller
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, baseControllerConfig, baseControllerModelConfig, false),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, baseControllerConfig, baseControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", controllerName),
 					resource.TestCheckResourceAttr(resourceName, "bootstrap_config.admin-secret", "my-favorite-admin-password"),
@@ -317,7 +319,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify changing controller config works
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, updatedControllerConfig, baseControllerModelConfig, false),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, updatedControllerConfig, baseControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_config.agent-logfile-max-backups", "4"),
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
@@ -341,7 +343,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify unsetting a controller config value behaves as expected.
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, baseControllerModelConfig, false),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, baseControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
 					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
@@ -368,17 +370,17 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify changing controller model config works
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, updatedControllerModelConfig, false),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, updatedControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "2"),
 					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.disable-telemetry", "true"),
-					resource.TestCheckResourceAttr(resourceName, "controller_model_config.http-proxy", "http://my-proxy.local:8080"),
+					resource.TestCheckResourceAttr(resourceName, "controller_model_config.enable-os-upgrade", "false"),
 				),
 			},
 			{
 				// Verify unsetting controller model config works
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig, false),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
 					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
@@ -394,8 +396,58 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 						if err != nil {
 							return fmt.Errorf("failed to get controller config via Juju API: %w", err)
 						}
-						if configValues["http-proxy"] != "" {
-							return fmt.Errorf("expected empty value for 'http-proxy' , got %q", configValues["http-proxy"])
+						if configValues["enable-os-upgrade"] != true {
+							return fmt.Errorf("expected true value for 'enable-os-upgrade' , got %q", configValues["enable-os-upgrade"])
+						}
+						return nil
+					},
+				),
+			},
+			{
+				SkipFunc: func() (bool, error) {
+					return testingCloud != LXDCloudTesting, nil
+				},
+				Config: testAccResourceControllerWithEnableHA(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", controllerName),
+					func(s *terraform.State) error {
+						conn, err := newBootstrappedControllerClient(s)
+						if err != nil {
+							return fmt.Errorf("failed to create controller client for HA check: %w", err)
+						}
+						defer conn.Close()
+
+						// Find the controller model UUID.
+						models, err := controllerapi.NewClient(conn).AllModels()
+						if err != nil {
+							return fmt.Errorf("failed to list models for HA check: %w", err)
+						}
+						var controllerModelUUID string
+						for _, m := range models {
+							if m.Name == "controller" {
+								controllerModelUUID = m.UUID
+								break
+							}
+						}
+						if controllerModelUUID == "" {
+							return fmt.Errorf("controller model not found in AllModels response")
+						}
+
+						// ModelInfo returns machine details including WantsVote for HA nodes.
+						results, err := modelmanager.NewClient(conn).ModelInfo(
+							[]names.ModelTag{names.NewModelTag(controllerModelUUID)},
+						)
+						if err != nil {
+							return fmt.Errorf("failed to get controller model info for HA check: %w", err)
+						}
+						if len(results) == 0 || results[0].Error != nil {
+							return fmt.Errorf("unexpected model info result: %v", results)
+						}
+
+						// WantsVote is set immediately on all controller nodes when
+						// EnableHA is requested, before machines finish provisioning.
+						if len(results[0].Result.Machines) != 3 {
+							return fmt.Errorf("expected 3 controller units for HA, got %d", len(results[0].Result.Machines))
 						}
 						return nil
 					},
@@ -403,21 +455,8 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify that invalid controller config fails
-				Config:      testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, invalidControllerConfig, unsetControllerModelConfig, false),
+				Config:      testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, invalidControllerConfig, unsetControllerModelConfig),
 				ExpectError: regexp.MustCompile("failed to update controller config: unknown controller config"),
-			},
-			{
-				// Microk8s doesn't support HA.
-				SkipFunc: func() (bool, error) {
-					return testingCloud != LXDCloudTesting, nil
-				},
-				// Enable HA with 3 units
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig, true),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "ha.units", "3"),
-					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
-					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
-				),
 			},
 		},
 		CheckDestroy: func(s *terraform.State) error {
@@ -543,18 +582,10 @@ resource "juju_controller" "controller" {
 	return ""
 }
 
-func testAccResourceControllerWithJujuBinary(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string, enableHA bool) string {
+func testAccResourceControllerWithJujuBinary(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
 	bootstrapConfigHCL := renderStringMapAsHCL(bootstrapConfig)
 	controllerConfigHCL := renderStringMapAsHCL(controllerConfig)
 	modelConfigHCL := renderStringMapAsHCL(modelConfig)
-	haBlockHCL := ""
-	if enableHA {
-		haBlockHCL = `
-
-  ha = {
-    units = 3
-  }`
-	}
 	switch testingCloud {
 	case LXDCloudTesting:
 		return fmt.Sprintf(`
@@ -602,10 +633,9 @@ resource "juju_controller" "controller" {
 	  client-key = local.lxd_creds.client-key
 	  client-cert = local.lxd_creds.client-cert
     }
-  }%s
-  
+	  }  
 }
-`, controllerName, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL, haBlockHCL)
+`, controllerName, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL)
 	case MicroK8sTesting:
 		return fmt.Sprintf(`
 provider "juju" {
@@ -648,11 +678,40 @@ resource "juju_controller" "controller" {
       ClientCertificateData = base64decode(local.microk8s_config.users[0].user["client-certificate-data"])
       ClientKeyData  = base64decode(local.microk8s_config.users[0].user["client-key-data"])
 	}
-  }%s
+	  }
 }
-`, controllerName, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL, haBlockHCL)
+`, controllerName, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL)
 	}
 	return ""
+}
+
+// testAccResourceControllerWithEnableHA returns HCL that bootstraps a controller
+// and runs the juju_enable_ha action with 3 units.
+func testAccResourceControllerWithEnableHA(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
+	base := testAccResourceControllerWithJujuBinary(controllerName, bootstrapConfig, controllerConfig, modelConfig)
+	if base == "" {
+		return ""
+	}
+	return base + `
+resource "terraform_data" "test" {
+  lifecycle {
+    action_trigger {
+      events  = [after_create]
+      actions = [action.juju_enable_ha.ctrl_ha]
+    }
+  }
+}
+
+action "juju_enable_ha" "ctrl_ha" {
+  config {
+  	api_addresses = juju_controller.controller.api_addresses
+  	ca_cert       = juju_controller.controller.ca_cert
+  	username      = juju_controller.controller.username
+  	password      = juju_controller.controller.password
+  	units         = 3
+  }
+}
+`
 }
 
 func renderStringMapAsHCL(values map[string]string) string {
