@@ -19,6 +19,10 @@ import (
 )
 
 func TestAccListApplications_QueryAll(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
 	modelName := acctest.RandomWithPrefix("tf-test-apps")
 	appName := "my-application"
 
