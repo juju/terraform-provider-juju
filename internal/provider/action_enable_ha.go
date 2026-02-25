@@ -98,8 +98,7 @@ func (a *enableHAAction) Schema(_ context.Context, _ action.SchemaRequest, resp 
 			},
 			"to": actionschema.ListAttribute{
 				Description: "Optional list of placement directives for new controller " +
-					"units (e.g. [\"lxd:0\", \"lxd:1\"]). When omitted, Juju selects " +
-					"placement automatically.",
+					"units (e.g. [\"lxd:0\", \"lxd:1\"]).",
 				ElementType: types.StringType,
 				Optional:    true,
 			},

@@ -411,6 +411,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", controllerName),
 					func(s *terraform.State) error {
+						// Here we check that the enable-HA action has successfully added 3 controller units by checking the WantsVote field via the API.
 						conn, err := newBootstrappedControllerClient(s)
 						if err != nil {
 							return fmt.Errorf("failed to create controller client for HA check: %w", err)

@@ -38,21 +38,12 @@ func NewEnableHAClient() *EnableHAClient {
 }
 
 // EnableHA enables high availability on the controller described by input.ConnInfo.
-// It returns an error if the number of units is fewer than 3 or is even, or if
-// the API call fails.
 //
 // EnableHA is idempotent when called with the same number of units.
 // Decreasing the number of units is not supported by Juju and will return an
 // error from the API.
+// An odd number of units or less than 3 units will also result in an error from the API.
 func (c *EnableHAClient) EnableHA(ctx context.Context, input EnableHAInput) error {
-	if input.Units < 3 {
-		return fmt.Errorf("number of HA units must be at least 3, got %d", input.Units)
-	}
-
-	if input.Units%2 == 0 {
-		return fmt.Errorf("number of HA units must be odd, got %d", input.Units)
-	}
-
 	connr, err := connector.NewSimple(connector.SimpleConfig{
 		ControllerAddresses: input.ConnInfo.Addresses,
 		CACert:              input.ConnInfo.CACert,
