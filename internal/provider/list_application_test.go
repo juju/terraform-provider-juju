@@ -22,6 +22,7 @@ func TestAccListApplications_QueryAll(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
+	skipTestIfJujuAgentVersionBelow(t, "3.0.0")
 
 	modelName := acctest.RandomWithPrefix("tf-test-apps")
 	appName := "my-application"

@@ -104,3 +104,13 @@ func skipTestIfSecretsNotSupported(t *testing.T) {
 		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
 	}
 }
+
+// skipTestIfJujuAgentVersionBelow skips the test for overly old Juju versions
+func skipTestIfJujuAgentVersionBelow(t *testing.T, version string) {
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, version) < 0 {
+		t.Skipf("%s is not set or is below %s", TestJujuAgentVersion, version)
+	}
+}
