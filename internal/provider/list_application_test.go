@@ -6,6 +6,7 @@ package provider
 import (
 	"fmt"
 	"math/big"
+	"os"
 	"strings"
 	"testing"
 
@@ -16,11 +17,18 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/querycheck/queryfilter"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
 func TestAccListApplications_QueryAll(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
+	}
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.0.0") < 0 {
+		t.Skipf("%s is not set or is below 3.0.0", TestJujuAgentVersion)
 	}
 
 	modelName := acctest.RandomWithPrefix("tf-test-apps")
@@ -28,7 +36,7 @@ func TestAccListApplications_QueryAll(t *testing.T) {
 
 	var expectedID string
 
-	resource.ParallelTest(t, resource.TestCase{
+	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
