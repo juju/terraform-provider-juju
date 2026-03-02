@@ -41,7 +41,7 @@ jobs:
           TRIVY_DB_REPOSITORY: ghcr.io/canonical/comsys-build-tools/trivy-db:2
   
       - name: Upload trivy scan results as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trivy-security-scan-results
           path: 'trivy-results.sarif'
@@ -64,7 +64,7 @@ jobs:
           repo-checkout: false
   
       - name: Upload govuln scan results as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: govuln-security-scan-results
           path: 'govuln-results.sarif'
@@ -105,7 +105,7 @@ jobs:
           KNOWN_CVES_FILE: kev.json
 
       - name: Upload KEV Trivy scan results as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kev-trivy-fs-scan-results
           path: 'kev-trivy-fs-scan.txt'
@@ -118,7 +118,7 @@ jobs:
           KNOWN_CVES_FILE: kev.json
 
       - name: Upload KEV Govuln scan results as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kev-govuln-scan-results
           path: 'kev-govuln-scan.txt'
