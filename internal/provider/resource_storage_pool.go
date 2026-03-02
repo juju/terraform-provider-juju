@@ -7,10 +7,12 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -27,6 +29,7 @@ import (
 var _ resource.Resource = &storagePoolResource{}
 var _ resource.ResourceWithConfigure = &storagePoolResource{}
 var _ resource.ResourceWithImportState = &storagePoolResource{}
+var _ resource.ResourceWithIdentity = &storagePoolResource{}
 
 // NewStoragePoolResource returns a new instance of the storage pool resource.
 func NewStoragePoolResource() resource.Resource {
@@ -47,6 +50,10 @@ type storagePoolResourceModel struct {
 	Attributes      types.Map    `tfsdk:"attributes"`
 
 	// ID required by the testing framework
+	ID types.String `tfsdk:"id"`
+}
+
+type storagePoolResourceIdentityModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
@@ -131,33 +138,19 @@ To learn more about storage pools, please visit: https://documentation.ubuntu.co
 	}
 }
 
+// IdentitySchema implements [resource.ResourceWithIdentity].
+func (r *storagePoolResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
+	resp.IdentitySchema = identityschema.Schema{
+		Attributes: map[string]identityschema.Attribute{
+			"id": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+		},
+	}
+}
+
 func (r *storagePoolResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	if r.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "secret", "import")
-		return
-	}
-
-	// modelUUID:poolname
-	parts := strings.Split(req.ID, ":")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		resp.Diagnostics.AddError(
-			"Unexpected Import Identifier",
-			fmt.Sprintf("Expected import identifier with format: <model uuid>:<pool name>. Got: %q", req.ID),
-		)
-		return
-	}
-	modelUUID := parts[0]
-	poolName := parts[1]
-
-	var state storagePoolResourceModel
-
-	state.StorageProvider = types.StringNull()
-	state.Attributes = types.MapNull(types.StringType)
-	state.Name = types.StringValue(poolName)
-	state.ModelUUID = types.StringValue(modelUUID)
-	state.ID = generateResourceID(state)
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+	resource.ImportStatePassthroughWithIdentity(ctx, path.Root("id"), path.Root("id"), req, resp)
 }
 
 // Create implements resource.Resource.
@@ -224,6 +217,9 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 	plan.ID = generateResourceID(plan)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+
+	identity := storagePoolResourceIdentityModel{ID: plan.ID}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 // Read implements resource.Resource.
@@ -240,10 +236,15 @@ func (r *storagePoolResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
+	modelUUID, poolName := retrieveModelPoolFromStoragePoolID(state.ID.ValueString(), &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	getPoolResp, err := r.client.Storage.GetPool(
 		juju.GetStoragePoolInput{
-			ModelUUID: state.ModelUUID.ValueString(),
-			PoolName:  state.Name.ValueString(),
+			ModelUUID: modelUUID,
+			PoolName:  poolName,
 		},
 	)
 	if err != nil {
@@ -263,10 +264,14 @@ func (r *storagePoolResource) Read(ctx context.Context, req resource.ReadRequest
 		state.Attributes = convertedAttrs
 	}
 
+	state.ModelUUID = types.StringValue(modelUUID)
 	state.Name = types.StringValue(getPoolResp.Pool.Name)
 	state.StorageProvider = types.StringValue(getPoolResp.Pool.Provider)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+
+	identity := storagePoolResourceIdentityModel{ID: state.ID}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 // Update implements resource.Resource.
@@ -365,10 +370,15 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 
+	modelUUID, poolName := retrieveModelPoolFromStoragePoolID(state.ID.ValueString(), &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	if err := r.client.Storage.RemovePool(
 		juju.RemoveStoragePoolInput{
-			ModelUUID: state.ModelUUID.ValueString(),
-			PoolName:  state.Name.ValueString(),
+			ModelUUID: modelUUID,
+			PoolName:  poolName,
 		},
 	); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete storage pool resource, got error: %s", err))
@@ -381,8 +391,8 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 			Context: ctx,
 			GetData: r.client.Storage.GetPool,
 			Input: juju.GetStoragePoolInput{
-				ModelUUID: state.ModelUUID.ValueString(),
-				PoolName:  state.Name.ValueString(),
+				ModelUUID: modelUUID,
+				PoolName:  poolName,
 			},
 			ExpectedErr:    juju.ErrStoragePoolNotFound,
 			RetryAllErrors: true,
@@ -392,8 +402,8 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 	r.trace("deleted storage pool", map[string]interface{}{
-		"name":             state.Name.ValueString(),
-		"model":            state.ModelUUID.ValueString(),
+		"name":             poolName,
+		"model":            modelUUID,
 		"storage_provider": state.StorageProvider.ValueString(),
 	})
 }
@@ -426,4 +436,27 @@ func generateResourceID(plan storagePoolResourceModel) basetypes.StringValue {
 	return types.StringValue(
 		fmt.Sprintf("%s-%s", plan.ModelUUID.ValueString(), plan.Name.ValueString()),
 	)
+}
+
+func retrieveModelPoolFromStoragePoolID(id string, d *diag.Diagnostics) (string, string) {
+	if id == "" {
+		d.AddError("Malformed ID", "unable to parse model uuid and pool name from an empty ID")
+		return "", ""
+	}
+
+	if len(id) < 38 {
+		d.AddError("Malformed ID", fmt.Sprintf("unable to parse model uuid and pool name from provided ID: %q", id))
+		return "", ""
+	}
+
+	modelUUID := id[:36]
+	separator := id[36]
+	poolName := id[37:]
+
+	if separator != '-' || !names.IsValidModel(modelUUID) || poolName == "" {
+		d.AddError("Malformed ID", fmt.Sprintf("unable to parse model uuid and pool name from provided ID: %q", id))
+		return "", ""
+	}
+
+	return modelUUID, poolName
 }
