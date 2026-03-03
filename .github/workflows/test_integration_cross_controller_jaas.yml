@@ -39,7 +39,7 @@ jobs:
           terraform_wrapper: false
 
       - name: Set up Docker Compose
-        uses: docker/setup-compose-action@v1
+        uses: docker/setup-compose-action@v2
 
       - name: Setup JAAS as offering controller
         uses: canonical/jimm/.github/actions/test-server@v3
