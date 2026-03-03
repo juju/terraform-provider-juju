@@ -37,17 +37,28 @@ import (
 )
 
 const (
-	CharmKey            = "charm"
-	CidrsKey            = "cidrs"
-	ConfigKey           = "config"
+	// CharmKey is the schema key for charm configuration.
+	CharmKey = "charm"
+	// CidrsKey is the schema key for expose CIDRs.
+	CidrsKey = "cidrs"
+	// ConfigKey is the schema key for application config.
+	ConfigKey = "config"
+	// EndpointBindingsKey is the schema key for endpoint bindings.
 	EndpointBindingsKey = "endpoint_bindings"
-	EndpointsKey        = "endpoints"
-	ExposeKey           = "expose"
-	MachinesKey         = "machines"
-	ResourceKey         = "resources"
-	SpacesKey           = "spaces"
-	StorageKey          = "storage"
-	UnitsKey            = "units"
+	// EndpointsKey is the schema key for expose endpoints.
+	EndpointsKey = "endpoints"
+	// ExposeKey is the schema key for exposure configuration.
+	ExposeKey = "expose"
+	// MachinesKey is the schema key for machines placement.
+	MachinesKey = "machines"
+	// ResourceKey is the schema key for charm resources.
+	ResourceKey = "resources"
+	// SpacesKey is the schema key for expose spaces.
+	SpacesKey = "spaces"
+	// StorageKey is the schema key for storage directives.
+	StorageKey = "storage"
+	// UnitsKey is the schema key for unit count.
+	UnitsKey = "units"
 
 	imageRegistriesMarkdownDescription = `
 	OCI image registry credentials for OCI images specified in the charm resources. The map key is the registry URL.
@@ -132,6 +143,7 @@ type applicationResourceModelV1 struct {
 	ModelUUID           types.String               `tfsdk:"model_uuid"`
 }
 
+// Metadata sets the resource type name.
 func (r *applicationResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_application"
 }
@@ -157,6 +169,7 @@ func (r *applicationResource) Configure(ctx context.Context, req resource.Config
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceApplication)
 }
 
+// Schema defines the resource schema.
 func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A resource that represents a single Juju application deployment from a charm. Deployment of bundles" +

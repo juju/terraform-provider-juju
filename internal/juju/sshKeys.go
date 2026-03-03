@@ -19,22 +19,26 @@ type sshKeysClient struct {
 	KeyLock *sync.RWMutex
 }
 
+// CreateSSHKeyInput contains the parameters for creating an SSH key.
 type CreateSSHKeyInput struct {
 	Username  string
 	ModelUUID string
 	Payload   string
 }
 
+// ReadSSHKeyInput contains the parameters for reading an SSH key.
 type ReadSSHKeyInput struct {
 	Username      string
 	ModelUUID     string
 	KeyIdentifier string
 }
 
+// ReadSSHKeyOutput contains the SSH key payload.
 type ReadSSHKeyOutput struct {
 	Payload string
 }
 
+// DeleteSSHKeyInput contains the parameters for deleting an SSH key.
 type DeleteSSHKeyInput struct {
 	Username      string
 	ModelUUID     string
@@ -48,6 +52,7 @@ func newSSHKeysClient(sc SharedClient) *sshKeysClient {
 	}
 }
 
+// CreateSSHKey adds an SSH key to the specified model.
 func (c *sshKeysClient) CreateSSHKey(input *CreateSSHKeyInput) error {
 	c.KeyLock.Lock()
 	defer c.KeyLock.Unlock()
@@ -82,6 +87,7 @@ func (c *sshKeysClient) CreateSSHKey(input *CreateSSHKeyInput) error {
 	return nil
 }
 
+// ReadSSHKey retrieves an SSH key by identifier.
 func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, error) {
 	c.KeyLock.RLock()
 	defer c.KeyLock.RUnlock()
@@ -117,6 +123,7 @@ func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, e
 	return nil, fmt.Errorf("no ssh key found for %s", input.KeyIdentifier)
 }
 
+// DeleteSSHKey removes an SSH key from the specified model.
 func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	c.KeyLock.Lock()
 	defer c.KeyLock.Unlock()

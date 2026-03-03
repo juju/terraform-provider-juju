@@ -26,13 +26,21 @@ import (
 )
 
 const (
-	PrefixCloud                          = "cloud-"
-	PrefixModel                          = "model-"
-	PrefixCharm                          = "charm-"
-	PrefixUser                           = "user-"
-	PrefixMachine                        = "machine-"
-	PrefixApplication                    = "application-"
-	PrefixStorage                        = "storage-"
+	// PrefixCloud is the resource identifier prefix for clouds.
+	PrefixCloud = "cloud-"
+	// PrefixModel is the resource identifier prefix for models.
+	PrefixModel = "model-"
+	// PrefixCharm is the resource identifier prefix for charms.
+	PrefixCharm = "charm-"
+	// PrefixUser is the resource identifier prefix for users.
+	PrefixUser = "user-"
+	// PrefixMachine is the resource identifier prefix for machines.
+	PrefixMachine = "machine-"
+	// PrefixApplication is the resource identifier prefix for applications.
+	PrefixApplication = "application-"
+	// PrefixStorage is the resource identifier prefix for storage entities.
+	PrefixStorage = "storage-"
+	// UnspecifiedRevision indicates that no revision was provided.
 	UnspecifiedRevision                  = -1
 	customTimeoutKey                     = "JUJU_CONNECTION_TIMEOUT"
 	waitForResourcesKey                  = "JUJU_WAIT_FOR_RESOURCES"
@@ -40,9 +48,11 @@ const (
 	serviceAccountSuffix                 = "@serviceaccount"
 	defaultModelStatusCacheInterval      = 5 * time.Second
 	defaultModelStatusCacheRetryInterval = defaultModelStatusCacheInterval / 2
-	ReadModelDefaultInterval             = defaultModelStatusCacheInterval / 2
+	// ReadModelDefaultInterval is the default polling interval for model reads.
+	ReadModelDefaultInterval = defaultModelStatusCacheInterval / 2
 )
 
+// ControllerConfiguration contains controller connection settings.
 type ControllerConfiguration struct {
 	ControllerAddresses []string
 	Username            string
@@ -489,7 +499,9 @@ func (sc *sharedClient) ModelStatus(modelUUID string, conn api.Connection) (*par
 	return modelStatus, nil
 }
 
-// module names for logging
+// LogJujuClient is the logging subsystem name for Juju client operations.
+//
+// Module names for logging use the format:
 // @module=juju.<subsystem>
 // e.g.:
 //
@@ -519,6 +531,7 @@ func getCurrentJujuUser(conn api.Connection) string {
 	return conn.AuthTag().Id()
 }
 
+// JujuLogger returns a shim that adapts Juju loggo logging to tflog.
 func (sc *sharedClient) JujuLogger() *jujuLoggerShim {
 	return &jujuLoggerShim{sc: sc}
 }

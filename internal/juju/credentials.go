@@ -17,6 +17,7 @@ type credentialsClient struct {
 	SharedClient
 }
 
+// CreateCredentialInput contains the parameters for creating a credential.
 type CreateCredentialInput struct {
 	Attributes           map[string]string
 	AuthType             string
@@ -26,6 +27,7 @@ type CreateCredentialInput struct {
 	Name                 string
 }
 
+// CreateCredentialResponse contains the created credential details.
 type CreateCredentialResponse struct {
 	CloudCredential jujucloud.Credential
 	CloudName       string
@@ -37,6 +39,7 @@ type ListCredentialResponse struct {
 	CloudCredentials map[string]jujucloud.CloudCredential
 }
 
+// ReadCredentialInput contains the parameters for reading a credential.
 type ReadCredentialInput struct {
 	Name                 string
 	ClientCredential     bool
@@ -44,10 +47,12 @@ type ReadCredentialInput struct {
 	ControllerCredential bool
 }
 
+// ReadCredentialResponse contains the credential returned by a read request.
 type ReadCredentialResponse struct {
 	CloudCredential jujucloud.Credential
 }
 
+// UpdateCredentialInput contains the parameters for updating a credential.
 type UpdateCredentialInput struct {
 	Attributes           map[string]string
 	AuthType             string
@@ -57,6 +62,7 @@ type UpdateCredentialInput struct {
 	Name                 string
 }
 
+// DestroyCredentialInput contains the parameters for deleting a credential.
 type DestroyCredentialInput struct {
 	ClientCredential     bool
 	CloudName            string
@@ -70,6 +76,7 @@ func newCredentialsClient(sc SharedClient) *credentialsClient {
 	}
 }
 
+// GetCloudCredentialTag builds and validates a cloud credential tag.
 func GetCloudCredentialTag(cloudName, currentUser, name string) (*names.CloudCredentialTag, error) {
 	id := fmt.Sprintf("%s/%s/%s", cloudName, currentUser, name)
 	if !names.IsValidCloudCredential(id) {
@@ -90,6 +97,7 @@ func supportedAuth(cloud jujucloud.Cloud, authTypeReceived string) bool {
 	return false
 }
 
+// ValidateCredentialForCloud checks whether the cloud supports the given auth type.
 func (c *credentialsClient) ValidateCredentialForCloud(cloudName, authTypeReceived string) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
@@ -112,6 +120,7 @@ func (c *credentialsClient) ValidateCredentialForCloud(cloudName, authTypeReceiv
 	return nil
 }
 
+// CreateCredential creates a credential in the controller and/or client store.
 func (c *credentialsClient) CreateCredential(input CreateCredentialInput) (*CreateCredentialResponse, error) {
 	if !input.ControllerCredential && !input.ClientCredential {
 		// Just in case none of them are set
@@ -211,6 +220,7 @@ func (c *credentialsClient) ListControllerCredentials() (*ListCredentialResponse
 	}, nil
 }
 
+// ReadCredential reads a credential from the controller and/or client store.
 func (c *credentialsClient) ReadCredential(input ReadCredentialInput) (*ReadCredentialResponse, error) {
 	clientCredential := input.ClientCredential
 	cloudName := input.CloudName
@@ -281,6 +291,7 @@ func (c *credentialsClient) ReadCredential(input ReadCredentialInput) (*ReadCred
 	return nil, fmt.Errorf("credential %s not found for cloud %s", credentialName, cloudName)
 }
 
+// UpdateCredential updates an existing credential.
 func (c *credentialsClient) UpdateCredential(input UpdateCredentialInput) error {
 	if !input.ControllerCredential && !input.ClientCredential {
 		// Just in case none of them are set
@@ -370,6 +381,7 @@ func updateClientCredential(cloudName string, credentialName string, cloudCreden
 	return nil
 }
 
+// DestroyCredential removes a credential from the controller and/or client store.
 func (c *credentialsClient) DestroyCredential(input DestroyCredentialInput) error {
 	cloudName := input.CloudName
 	credentialName := input.Name
