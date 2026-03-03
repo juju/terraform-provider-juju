@@ -86,6 +86,21 @@ func (s *secretResource) IdentitySchema(_ context.Context, _ resource.IdentitySc
 // ImportState reads the secret based on model UUID and secret name to be
 // imported into terraform.
 func (s *secretResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+
+	idStr := ""
+
+	if req.ID != "" {
+		idStr = req.ID
+	} else {
+		var identityData secretResourceIdentityModel
+		resp.Diagnostics.Append(req.Identity.Get(ctx, &identityData)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		idStr = identityData.ID.ValueString()
+	}
+
 	// Prevent panic if the provider has not been configured.
 	if s.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "secret", "import")
@@ -93,11 +108,11 @@ func (s *secretResource) ImportState(ctx context.Context, req resource.ImportSta
 	}
 
 	// modelUUID:name
-	parts := strings.Split(req.ID, ":")
+	parts := strings.Split(idStr, ":")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		resp.Diagnostics.AddError(
 			"Unexpected Import Identifier",
-			fmt.Sprintf("Expected import identifier with format: <modeluuid>:<secretname>. Got: %q", req.ID),
+			fmt.Sprintf("Expected import identifier with format: <modeluuid>:<secretname>. Got: %q", idStr),
 		)
 		return
 	}
