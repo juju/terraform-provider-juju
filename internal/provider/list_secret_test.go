@@ -36,8 +36,7 @@ func TestAccListSecrets_query(t *testing.T) {
 		"key2": "value2",
 	}
 
-	var expectedModelUUID string
-	var expectedSecretID string
+	var expectedID string
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -50,8 +49,7 @@ func TestAccListSecrets_query(t *testing.T) {
 					if !ok {
 						return fmt.Errorf("not found: juju_secret.test")
 					}
-					expectedModelUUID = rs.Primary.Attributes["model_uuid"]
-					expectedSecretID = rs.Primary.Attributes["secret_id"]
+					expectedID = rs.Primary.Attributes["id"]
 					return nil
 				},
 			},
@@ -60,21 +58,15 @@ func TestAccListSecrets_query(t *testing.T) {
 				Query:  true,
 				QueryResultChecks: []querycheck.QueryResultCheck{
 					querycheck.ExpectIdentity("juju_secret.test", map[string]knownvalue.Check{
-						"model_uuid": knownvalue.StringFunc(func(actual string) error {
-							return knownvalue.StringExact(expectedModelUUID).CheckValue(actual)
-						}),
-						"secret_id": knownvalue.StringFunc(func(actual string) error {
-							return knownvalue.StringExact(expectedSecretID).CheckValue(actual)
+						"id": knownvalue.StringFunc(func(actual string) error {
+							return knownvalue.StringExact(expectedID).CheckValue(actual)
 						}),
 					}),
 					querycheck.ExpectResourceKnownValues(
 						"juju_secret.test",
 						queryfilter.ByResourceIdentity(map[string]knownvalue.Check{
-							"model_uuid": knownvalue.StringFunc(func(actual string) error {
-								return knownvalue.StringExact(expectedModelUUID).CheckValue(actual)
-							}),
-							"secret_id": knownvalue.StringFunc(func(actual string) error {
-								return knownvalue.StringExact(expectedSecretID).CheckValue(actual)
+							"id": knownvalue.StringFunc(func(actual string) error {
+								return knownvalue.StringExact(expectedID).CheckValue(actual)
 							}),
 						}),
 						[]querycheck.KnownValueCheck{
@@ -117,11 +109,8 @@ func TestAccListSecrets_query(t *testing.T) {
 				QueryResultChecks: []querycheck.QueryResultCheck{
 					querycheck.ExpectLength("juju_secret.test", 1),
 					querycheck.ExpectIdentity("juju_secret.test", map[string]knownvalue.Check{
-						"model_uuid": knownvalue.StringFunc(func(actual string) error {
-							return knownvalue.StringExact(expectedModelUUID).CheckValue(actual)
-						}),
-						"secret_id": knownvalue.StringFunc(func(actual string) error {
-							return knownvalue.StringExact(expectedSecretID).CheckValue(actual)
+						"id": knownvalue.StringFunc(func(actual string) error {
+							return knownvalue.StringExact(expectedID).CheckValue(actual)
 						}),
 					}),
 				},
