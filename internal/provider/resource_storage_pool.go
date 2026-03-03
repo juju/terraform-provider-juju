@@ -161,7 +161,6 @@ func (r *storagePoolResource) ImportState(ctx context.Context, req resource.Impo
 		}
 
 		idStr = identityData.ID.ValueString()
-
 	}
 
 	if r.client == nil {
