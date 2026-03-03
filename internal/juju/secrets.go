@@ -76,6 +76,20 @@ type ReadSecretOutput struct {
 	Info         string
 }
 
+type ListSecretsInput struct {
+	ModelUUID string
+	Name      *string
+}
+
+type ListSecretsOutput struct {
+	SecretId     string
+	SecretURI    string
+	Name         string
+	Value        map[string]string
+	Applications []string
+	Info         string
+}
+
 type UpdateSecretInput struct {
 	SecretId  string
 	ModelUUID string
@@ -201,6 +215,51 @@ func (c *secretsClient) ReadSecret(input *ReadSecretInput) (ReadSecretOutput, er
 		Applications: applications,
 		Info:         results[0].Metadata.Description,
 	}, nil
+}
+
+// ListSecrets lists secrets in a model.
+func (c *secretsClient) ListSecrets(input *ListSecretsInput) ([]ListSecretsOutput, error) {
+	conn, err := c.GetConnection(&input.ModelUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	secretAPIClient := c.getSecretAPIClient(conn)
+
+	secretFilter := coresecrets.Filter{
+		Label: input.Name,
+	}
+
+	results, err := secretAPIClient.ListSecrets(true, secretFilter)
+	if err != nil {
+		return nil, typedError(err)
+	}
+
+	output := make([]ListSecretsOutput, 0, len(results))
+	for _, result := range results {
+		if result.Error != "" {
+			return nil, errors.New(result.Error)
+		}
+
+		decodedValue, err := result.Value.Values()
+		if err != nil {
+			return nil, err
+		}
+
+		applications := getApplicationsFromAccessInfo(result.Access)
+
+		output = append(output, ListSecretsOutput{
+			SecretId:     result.Metadata.URI.ID,
+			SecretURI:    result.Metadata.URI.String(),
+			Name:         result.Metadata.Label,
+			Value:        decodedValue,
+			Applications: applications,
+			Info:         result.Metadata.Description,
+		})
+	}
+
+	return output, nil
 }
 
 // UpdateSecret updates a secret.
