@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -166,7 +167,8 @@ func TestAcc_ResourceStoragePool_ImportState(t *testing.T) {
 				ImportState:  true,
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					rs := s.RootModule().Resources[resourceFullName]
-					return rs.Primary.ID, nil
+					modelUUID := rs.Primary.Attributes["model_uuid"]
+					return fmt.Sprintf("%s:%s", modelUUID, poolName), nil
 				},
 				ImportStateVerify: true,
 			},
