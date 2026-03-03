@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -24,6 +25,8 @@ import (
 var _ resource.Resource = &secretResource{}
 var _ resource.ResourceWithConfigure = &secretResource{}
 var _ resource.ResourceWithImportState = &secretResource{}
+var _ resource.ResourceWithUpgradeState = &secretResource{}
+var _ resource.ResourceWithIdentity = &secretResource{}
 
 func NewSecretResource() resource.Resource {
 	return &secretResource{}
@@ -65,7 +68,26 @@ type secretResourceModelV1 struct {
 	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
-// ImportState reads the secret based on the model name and secret name to be
+type secretResourceIdentityModel struct {
+	ModelUUID types.String `tfsdk:"model_uuid"`
+	SecretID  types.String `tfsdk:"secret_id"`
+}
+
+// IdentitySchema implements [resource.ResourceWithIdentity].
+func (s *secretResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
+	resp.IdentitySchema = identityschema.Schema{
+		Attributes: map[string]identityschema.Attribute{
+			"model_uuid": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+			"secret_id": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+		},
+	}
+}
+
+// ImportState reads the secret based on model UUID and secret name to be
 // imported into terraform.
 func (s *secretResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Prevent panic if the provider has not been configured.
@@ -102,6 +124,7 @@ func (s *secretResource) ImportState(ctx context.Context, req resource.ImportSta
 			Name:      types.StringValue(readSecretOutput.Name),
 			SecretId:  types.StringValue(readSecretOutput.SecretId),
 			SecretURI: types.StringValue(readSecretOutput.SecretURI),
+			ID:        types.StringValue(newSecretID(modelUUID, readSecretOutput.SecretId)),
 		},
 	}
 
@@ -118,6 +141,12 @@ func (s *secretResource) ImportState(ctx context.Context, req resource.ImportSta
 
 	// Save state into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+
+	identity := secretResourceIdentityModel{
+		ModelUUID: state.ModelUUID,
+		SecretID:  state.SecretId,
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 
 	s.trace(fmt.Sprintf("import secret resource %q", state.SecretId))
 }
@@ -248,6 +277,12 @@ func (s *secretResource) Create(ctx context.Context, req resource.CreateRequest,
 	// Save plan into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 
+	identity := secretResourceIdentityModel{
+		ModelUUID: plan.ModelUUID,
+		SecretID:  plan.SecretId,
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
+
 	s.trace(fmt.Sprintf("created secret resource %s", plan.SecretId))
 }
 
@@ -279,6 +314,7 @@ func (s *secretResource) Read(ctx context.Context, req resource.ReadRequest, res
 	}
 
 	// Save the secret details into the Terraform state
+	state.SecretId = types.StringValue(readSecretOutput.SecretId)
 	if !state.Name.IsNull() {
 		state.Name = types.StringValue(readSecretOutput.Name)
 	}
@@ -297,6 +333,12 @@ func (s *secretResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	// Save state into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+
+	identity := secretResourceIdentityModel{
+		ModelUUID: state.ModelUUID,
+		SecretID:  state.SecretId,
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 
 	s.trace(fmt.Sprintf("read secret resource %s", state.SecretId))
 }
