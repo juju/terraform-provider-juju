@@ -1,4 +1,4 @@
-# Terraform Provider for Juju
+# Terraform Provider for Juju (test)
 
 > **Warning** The provider is under active development and will initially support only some Juju functionality. Use releases at your own risk.
 
