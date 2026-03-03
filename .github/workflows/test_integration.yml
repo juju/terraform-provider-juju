@@ -173,7 +173,7 @@ jobs:
           - "1.14.*"
         juju:
           - "3/stable"
-          - "4/stable"
+          - "4/edge"
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
