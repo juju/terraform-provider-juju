@@ -69,18 +69,14 @@ type secretResourceModelV1 struct {
 }
 
 type secretResourceIdentityModel struct {
-	ModelUUID types.String `tfsdk:"model_uuid"`
-	SecretID  types.String `tfsdk:"secret_id"`
+	ID types.String `tfsdk:"id"`
 }
 
 // IdentitySchema implements [resource.ResourceWithIdentity].
 func (s *secretResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
 	resp.IdentitySchema = identityschema.Schema{
 		Attributes: map[string]identityschema.Attribute{
-			"model_uuid": identityschema.StringAttribute{
-				RequiredForImport: true,
-			},
-			"secret_id": identityschema.StringAttribute{
+			"id": identityschema.StringAttribute{
 				RequiredForImport: true,
 			},
 		},
@@ -143,8 +139,7 @@ func (s *secretResource) ImportState(ctx context.Context, req resource.ImportSta
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 
 	identity := secretResourceIdentityModel{
-		ModelUUID: state.ModelUUID,
-		SecretID:  state.SecretId,
+		ID: state.ID,
 	}
 	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 
@@ -278,8 +273,7 @@ func (s *secretResource) Create(ctx context.Context, req resource.CreateRequest,
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 
 	identity := secretResourceIdentityModel{
-		ModelUUID: plan.ModelUUID,
-		SecretID:  plan.SecretId,
+		ID: plan.ID,
 	}
 	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 
@@ -335,8 +329,7 @@ func (s *secretResource) Read(ctx context.Context, req resource.ReadRequest, res
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 
 	identity := secretResourceIdentityModel{
-		ModelUUID: state.ModelUUID,
-		SecretID:  state.SecretId,
+		ID: state.ID,
 	}
 	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 

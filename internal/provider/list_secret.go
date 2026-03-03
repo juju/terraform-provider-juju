@@ -119,6 +119,7 @@ func (r *secretLister) List(ctx context.Context, req list.ListRequest, stream *l
 		for _, secret := range secrets {
 			// Create result.
 			result := req.NewListResult(ctx)
+			resourceID := types.StringValue(newSecretID(modelUUID, secret.SecretId))
 
 			// Set display name.
 			if secret.Name != "" {
@@ -129,8 +130,7 @@ func (r *secretLister) List(ctx context.Context, req list.ListRequest, stream *l
 
 			// Set identity.
 			identity := secretResourceIdentityModel{
-				ModelUUID: types.StringValue(modelUUID),
-				SecretID:  types.StringValue(secret.SecretId),
+				ID: resourceID,
 			}
 			result.Diagnostics.Append(result.Identity.Set(ctx, identity)...)
 			if result.Diagnostics.HasError() {
@@ -139,7 +139,6 @@ func (r *secretLister) List(ctx context.Context, req list.ListRequest, stream *l
 			}
 
 			if req.IncludeResource {
-				resourceID := types.StringValue(newSecretID(modelUUID, secret.SecretId))
 				resource := secretResourceModelV1{
 					ModelUUID: types.StringValue(modelUUID),
 					secretResourceModel: secretResourceModel{
