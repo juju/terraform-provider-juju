@@ -149,17 +149,32 @@ func (r *storagePoolResource) IdentitySchema(_ context.Context, _ resource.Ident
 }
 
 func (r *storagePoolResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	idStr := ""
+
+	if req.ID != "" {
+		idStr = req.ID
+	} else {
+		var identityData storagePoolResourceIdentityModel
+		resp.Diagnostics.Append(req.Identity.Get(ctx, &identityData)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		idStr = identityData.ID.ValueString()
+
+	}
+
 	if r.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "storagepool", "import")
 		return
 	}
 
 	// modelUUID:poolname
-	parts := strings.Split(req.ID, ":")
+	parts := strings.Split(idStr, ":")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		resp.Diagnostics.AddError(
 			"Unexpected Import Identifier",
-			fmt.Sprintf("Expected import identifier with format: <model uuid>:<pool name>. Got: %q", req.ID),
+			fmt.Sprintf("Expected import identifier with format: <model uuid>:<pool name>. Got: %q", idStr),
 		)
 		return
 	}
@@ -450,6 +465,6 @@ func (s storagePoolResourceModel) getAttributesAsGoMap(ctx context.Context) (map
 
 func generateResourceID(plan storagePoolResourceModel) basetypes.StringValue {
 	return types.StringValue(
-		fmt.Sprintf("%s-%s", plan.ModelUUID.ValueString(), plan.Name.ValueString()),
+		fmt.Sprintf("%s:%s", plan.ModelUUID.ValueString(), plan.Name.ValueString()),
 	)
 }
