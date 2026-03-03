@@ -86,7 +86,6 @@ func (s *secretResource) IdentitySchema(_ context.Context, _ resource.IdentitySc
 // ImportState reads the secret based on model UUID and secret name to be
 // imported into terraform.
 func (s *secretResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-
 	idStr := ""
 
 	if req.ID != "" {
