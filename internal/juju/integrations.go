@@ -56,6 +56,14 @@ type IntegrationInput struct {
 	ViaCIDRs  string
 }
 
+type ListIntegrationsInput struct {
+	ModelUUID string
+}
+
+type ListIntegrationsOutput struct {
+	Applications []Application
+}
+
 type CreateIntegrationResponse struct {
 	Applications []Application
 }
@@ -208,6 +216,34 @@ func (c integrationsClient) DestroyIntegration(input *IntegrationInput) error {
 	}
 
 	return nil
+}
+
+func (c integrationsClient) ListIntegrations(input *ListIntegrationsInput) ([]ListIntegrationsOutput, error) {
+	conn, err := c.GetConnection(&input.ModelUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	status, err := c.ModelStatus(input.ModelUUID, conn)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(status.Relations) == 0 {
+		return []ListIntegrationsOutput{}, nil
+	}
+
+	results := make([]ListIntegrationsOutput, 0, len(status.Relations))
+	for _, relation := range status.Relations {
+		applications, err := parseApplications(status.RemoteApplications, relation.Endpoints)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, ListIntegrationsOutput{Applications: applications})
+	}
+
+	return results, nil
 }
 
 // This function takes remote applications and endpoint status and combines them into a more usable format to return to the provider

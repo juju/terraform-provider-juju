@@ -589,6 +589,7 @@ func checkClientErr(err error, config juju.ControllerConfiguration) diag.Diagnos
 func (p *jujuProvider) ListResources(_ context.Context) []func() list.ListResource {
 	return []func() list.ListResource{
 		func() list.ListResource { return NewApplicationLister() },
+		func() list.ListResource { return NewIntegrationLister() },
 		func() list.ListResource { return NewModelLister() },
 		func() list.ListResource { return NewOfferLister() },
 		func() list.ListResource { return NewMachineLister() },
