@@ -121,7 +121,7 @@ func newSecretsClient(sc SharedClient) *secretsClient {
 
 // CreateSecret creates a new secret.
 func (c *secretsClient) CreateSecret(ctx context.Context, input *CreateSecretInput) (CreateSecretOutput, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return CreateSecretOutput{}, err
 	}
@@ -151,7 +151,7 @@ func (c *secretsClient) CreateSecret(ctx context.Context, input *CreateSecretInp
 
 // ReadSecret reads a secret.
 func (c *secretsClient) ReadSecret(ctx context.Context, input *ReadSecretInput) (ReadSecretOutput, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return ReadSecretOutput{}, err
 	}
@@ -206,7 +206,7 @@ func (c *secretsClient) ReadSecret(ctx context.Context, input *ReadSecretInput) 
 
 // UpdateSecret updates a secret.
 func (c *secretsClient) UpdateSecret(ctx context.Context, input *UpdateSecretInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -267,7 +267,7 @@ func (c *secretsClient) UpdateSecret(ctx context.Context, input *UpdateSecretInp
 
 // DeleteSecret deletes a secret.
 func (c *secretsClient) DeleteSecret(ctx context.Context, input *DeleteSecretInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -288,7 +288,7 @@ func (c *secretsClient) DeleteSecret(ctx context.Context, input *DeleteSecretInp
 
 // UpdateAccessSecret updates access to a secret.
 func (c *secretsClient) UpdateAccessSecret(ctx context.Context, input *GrantRevokeAccessSecretInput, op AccessSecretAction) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}

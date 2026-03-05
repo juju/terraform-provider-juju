@@ -229,7 +229,7 @@ func newCloudsClient(sc SharedClient) *cloudsClient {
 // CreateKubernetesCloud creates a new Kubernetes cloud with juju cloud facade.
 // The credential name for this cloud is returned.
 func (c *cloudsClient) CreateKubernetesCloud(ctx context.Context, input *CreateKubernetesCloudInput) (string, error) {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return "", err
 	}
@@ -295,7 +295,7 @@ func (c *cloudsClient) CreateKubernetesCloud(ctx context.Context, input *CreateK
 
 // ReadKubernetesCloud reads a Kubernetes cloud with juju cloud facade.
 func (c *cloudsClient) ReadKubernetesCloud(ctx context.Context, input ReadKubernetesCloudInput) (*ReadKubernetesCloudOutput, error) {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +331,7 @@ func (c *cloudsClient) ReadKubernetesCloud(ctx context.Context, input ReadKubern
 
 // UpdateKubernetesCloud updates a Kubernetes cloud with juju cloud facade.
 func (c *cloudsClient) UpdateKubernetesCloud(ctx context.Context, input UpdateKubernetesCloudInput) error {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -372,7 +372,7 @@ func (c *cloudsClient) UpdateKubernetesCloud(ctx context.Context, input UpdateKu
 
 // AddCloud adds a cloud definition to the controller.
 func (c *cloudsClient) AddCloud(ctx context.Context, input AddCloudInput) error {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -404,7 +404,7 @@ func (c *cloudsClient) AddCloud(ctx context.Context, input AddCloudInput) error 
 
 // UpdateCloud updates a cloud definition on the controller.
 func (c *cloudsClient) UpdateCloud(ctx context.Context, input UpdateCloudInput) error {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -431,7 +431,7 @@ func (c *cloudsClient) UpdateCloud(ctx context.Context, input UpdateCloudInput) 
 
 // RemoveCloud removes a cloud.
 func (c *cloudsClient) RemoveCloud(ctx context.Context, input RemoveCloudInput) error {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -444,7 +444,7 @@ func (c *cloudsClient) RemoveCloud(ctx context.Context, input RemoveCloudInput) 
 
 // ReadCloud reads a cloud.
 func (c *cloudsClient) ReadCloud(ctx context.Context, input ReadCloudInput) (*ReadCloudOutput, error) {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -126,7 +126,7 @@ func getTargetStatusFunc(machineID string) targetStatusFunc {
 }
 
 func (c *machinesClient) CreateMachine(ctx context.Context, input *CreateMachineInput) (*CreateMachineResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +315,7 @@ func manualProvision(ctx context.Context, client manual.ProvisioningClientAPI,
 }
 
 func (c *machinesClient) ReadMachine(ctx context.Context, input *ReadMachineInput) (*ReadMachineResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -361,7 +361,7 @@ func (c *machinesClient) ReadMachine(ctx context.Context, input *ReadMachineInpu
 }
 
 func (c *machinesClient) DestroyMachine(ctx context.Context, input *DestroyMachineInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}

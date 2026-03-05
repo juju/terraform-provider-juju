@@ -344,7 +344,7 @@ type DestroyApplicationInput struct {
 }
 
 func (c applicationsClient) CreateApplication(ctx context.Context, input *CreateApplicationInput) (*CreateApplicationResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -375,7 +375,7 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", newApplicationPartiallyCreatedError(transformedInput.applicationName), err)
 	}
-	modelType, err := c.ModelType(input.ModelUUID)
+	modelType, err := c.ModelType(ctx, input.ModelUUID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", newApplicationPartiallyCreatedError(transformedInput.applicationName), err)
 	}
@@ -502,7 +502,7 @@ func splitCommaDelimitedList(list string) []string {
 // not found. Delay indicates how long to wait between attempts.
 func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Context, input *ReadApplicationInput) (*ReadApplicationResponse, error) {
 	var output *ReadApplicationResponse
-	modelType, err := c.ModelType(input.ModelUUID)
+	modelType, err := c.ModelType(ctx, input.ModelUUID)
 	if err != nil {
 		return nil, jujuerrors.Annotatef(err, "getting model type")
 	}
@@ -692,7 +692,7 @@ func getStorageLabel(storageTag string) string {
 }
 
 func (c applicationsClient) ReadApplication(ctx context.Context, input *ReadApplicationInput) (*ReadApplicationResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -753,7 +753,7 @@ func (c applicationsClient) ReadApplication(ctx context.Context, input *ReadAppl
 
 	unitCount := len(appStatus.Units)
 	// if we have a CAAS we use scale instead of units length
-	modelType, err := c.ModelType(input.ModelUUID)
+	modelType, err := c.ModelType(ctx, input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -989,7 +989,7 @@ func removeDefaultCidrs(cidrs []string) []string {
 }
 
 func (c applicationsClient) UpdateApplication(ctx context.Context, input *UpdateApplicationInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -1103,7 +1103,7 @@ func (c applicationsClient) UpdateApplication(ctx context.Context, input *Update
 	}
 
 	// TODO: Refactor this to a separate function
-	modelType, err := c.ModelType(input.ModelUUID)
+	modelType, err := c.ModelType(ctx, input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -1289,7 +1289,7 @@ func (c applicationsClient) UpdateCharmAndResources(
 }
 
 func (c applicationsClient) DestroyApplication(ctx context.Context, input *DestroyApplicationInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}

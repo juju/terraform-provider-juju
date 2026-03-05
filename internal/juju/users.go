@@ -58,7 +58,7 @@ func newUsersClient(sc SharedClient) *usersClient {
 }
 
 func (c *usersClient) CreateUser(ctx context.Context, input CreateUserInput) (*CreateUserResponse, error) {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (c *usersClient) CreateUser(ctx context.Context, input CreateUserInput) (*C
 }
 
 func (c *usersClient) ReadUser(ctx context.Context, name string) (*ReadUserResponse, error) {
-	usermanagerConn, err := c.GetConnection(nil)
+	usermanagerConn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func (c *usersClient) ReadUser(ctx context.Context, name string) (*ReadUserRespo
 }
 
 func (c *usersClient) ModelUserInfo(ctx context.Context, modelUUID string) (*ReadModelUserResponse, error) {
-	usermanagerConn, err := c.GetConnection(nil)
+	usermanagerConn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func (c *usersClient) ModelUserInfo(ctx context.Context, modelUUID string) (*Rea
 }
 
 func (c *usersClient) UpdateUser(ctx context.Context, input UpdateUserInput) error {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func (c *usersClient) UpdateUser(ctx context.Context, input UpdateUserInput) err
 }
 
 func (c *usersClient) DestroyUser(ctx context.Context, input DestroyUserInput) error {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}

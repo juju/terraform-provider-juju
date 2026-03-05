@@ -885,6 +885,8 @@ func TestAcc_CustomResourcesRemovedFromPlanMicrok8s(t *testing.T) {
 }
 
 func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
+	ctx := t.Context()
+
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
@@ -901,7 +903,7 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 				// A custom resource from a private registry.
 				Config: testAccResourceApplicationFromPrivateRegistry(modelName, appName, "user", "pass", "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
+					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
 						fingerprint: "5cf445e5cccb7c02f60491b1c379038d6b5be46ec86efc1e75d90452f557b8a3bb5f7f085e814986e4e2dc07812b4a56",
 						origin:      "upload",
 						revision:    "0",
@@ -917,7 +919,7 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 					},
 				},
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
+					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
 						fingerprint: "7307af1e23462be0a8101ce884ed1ba7b5743922cfab99d4ceeb08d65c96400938a344832cf033a110a1b2a0c3e8d0b9",
 						origin:      "upload",
 						revision:    "0",
@@ -933,7 +935,7 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 					},
 				},
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
+					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
 						fingerprint: "19ece2bcbac52dbbbf7ec48345ab9f7d9a963e43270cf984be42ee7141e636d4ed8e65e7ab35bc97edd138cb468c0659",
 						origin:      "upload",
 						revision:    "0",
@@ -949,7 +951,7 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 					},
 				},
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
+					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
 						fingerprint: "398048a2c483cd10a5e358f0d45ed8e21ed077079779fecce58772d443a3c9b53e871cf43dba94fcb3463adee154c440",
 						origin:      "store",
 						revision:    "74",
@@ -972,7 +974,7 @@ type charmResourceChecks struct {
 	revision string
 }
 
-func testAccCheckApplicationResource(appResource string, checks charmResourceChecks) resource.TestCheckFunc {
+func testAccCheckApplicationResource(ctx context.Context, appResource string, checks charmResourceChecks) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		// retrieve the resource by name from state
 		rs, ok := s.RootModule().Resources[appResource]
@@ -989,7 +991,7 @@ func testAccCheckApplicationResource(appResource string, checks charmResourceChe
 			return fmt.Errorf("name is not set")
 		}
 
-		conn, err := TestClient.Models.GetConnection(&model_uuid)
+		conn, err := TestClient.Models.GetConnection(ctx, &model_uuid)
 		if err != nil {
 			return err
 		}
@@ -1412,6 +1414,8 @@ func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
+	ctx := t.Context()
+
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -1434,7 +1438,7 @@ func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "ubuntu", "space": publicSpace}),
-					testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(ctx, modelUUID, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
 				),
 			},
 			{
@@ -1447,6 +1451,8 @@ func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
+	ctx := t.Context()
+
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -1468,7 +1474,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "1"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
-					testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, managementSpace, map[string]string{"": managementSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(ctx, modelUUID, appName, managementSpace, map[string]string{"": managementSpace}),
 				),
 			},
 			{
@@ -1479,7 +1485,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "1"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": publicSpace}),
-					testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, publicSpace, map[string]string{"": publicSpace, "ubuntu": publicSpace, "another": publicSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(ctx, modelUUID, appName, publicSpace, map[string]string{"": publicSpace, "ubuntu": publicSpace, "another": publicSpace}),
 				),
 			},
 			{
@@ -1491,7 +1497,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "ubuntu", "space": publicSpace}),
-					testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace, "another": managementSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(ctx, modelUUID, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace, "another": managementSpace}),
 				),
 			},
 			{
@@ -1500,7 +1506,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "0"),
-					testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, "alpha", map[string]string{"": "alpha", "ubuntu": "alpha", "another": "alpha"}),
+					testCheckEndpointsAreSetToCorrectSpace(ctx, modelUUID, appName, "alpha", map[string]string{"": "alpha", "ubuntu": "alpha", "another": "alpha"}),
 				),
 			},
 			{
@@ -2176,7 +2182,7 @@ func setupModelAndSpaces(t *testing.T, modelName string) (string, string, string
 	}
 	modelUUID := model.UUID
 
-	conn, err := TestClient.Models.GetConnection(&model.UUID)
+	conn, err := TestClient.Models.GetConnection(t.Context(), &model.UUID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2309,9 +2315,9 @@ resource "juju_application" "{{.AppName}}" {
 	})
 }
 
-func testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, defaultSpace string, configuredEndpoints map[string]string) resource.TestCheckFunc {
+func testCheckEndpointsAreSetToCorrectSpace(ctx context.Context, modelUUID, appName, defaultSpace string, configuredEndpoints map[string]string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		conn, err := TestClient.Models.GetConnection(&modelUUID)
+		conn, err := TestClient.Models.GetConnection(ctx, &modelUUID)
 		if err != nil {
 			return err
 		}

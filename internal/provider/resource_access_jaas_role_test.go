@@ -23,6 +23,8 @@ import (
 // resource_access_jaas_model_test.go
 
 func TestAcc_ResourceJaasAccessRole(t *testing.T) {
+	ctx := t.Context()
+
 	OnlyTestAgainstJAAS(t)
 	// Resource names, note that role two has access to role one.
 	RoleAccessResourceName := "juju_jaas_access_role.test"
@@ -49,8 +51,8 @@ func TestAcc_ResourceJaasAccessRole(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
-			testAccCheckJaasResourceAccess(accessSuccess, &UserTag, roleOneCheck.tag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, roleOneCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &UserTag, roleOneCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, roleOneCheck.tag, false),
 		),
 		Steps: []resource.TestStep{
 			{
@@ -61,8 +63,8 @@ func TestAcc_ResourceJaasAccessRole(t *testing.T) {
 				Config: testAccResourceJaasAccessRole(roleOneName, accessSuccess, user, svcAcc),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(roleOneCheck),
-					testAccCheckJaasResourceAccess(accessSuccess, &UserTag, roleOneCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, roleOneCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &UserTag, roleOneCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, roleOneCheck.tag, true),
 					resource.TestCheckResourceAttr(RoleAccessResourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(RoleAccessResourceName, "users.*", user),
 					resource.TestCheckResourceAttr(RoleAccessResourceName, "users.#", "1"),

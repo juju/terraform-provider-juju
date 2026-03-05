@@ -115,7 +115,7 @@ func newModelsClient(sc SharedClient, isJAAS bool) *modelsClient {
 
 // GetModel retrieves a model by UUID.
 func (c *modelsClient) GetModel(ctx context.Context, modelUUID string) (*params.ModelInfo, error) {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func (c *modelsClient) CreateModel(ctx context.Context, input CreateModelInput) 
 		return resp, fmt.Errorf("%q is not a valid name: model names may only contain lowercase letters, digits and hyphens", modelName)
 	}
 
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return resp, err
 	}
@@ -199,11 +199,11 @@ func (c *modelsClient) CreateModel(ctx context.Context, input CreateModelInput) 
 
 	// we have to set constraints ...
 	// establish a new connection with the created model through the modelconfig api to set constraints
-	connModel, err := c.GetConnection(&resp.UUID)
+	connModel, err := c.GetConnection(ctx, &resp.UUID)
 	if err != nil {
 		return resp, err
 	}
-	defer func() { _ = conn.Close() }()
+	defer func() { _ = connModel.Close() }()
 
 	modelClient := modelconfig.NewClient(connModel)
 	err = modelClient.SetModelConstraints(ctx, input.Constraints)
@@ -216,7 +216,7 @@ func (c *modelsClient) CreateModel(ctx context.Context, input CreateModelInput) 
 
 // createJAASModel creates a Juju model using the JAAS API client.
 // This is required to support creating models on a specific controller.
-func createJAASModel(ctx context.Context, cconn jujuapi.Connection,
+func createJAASModel(ctx context.Context, conn jujuapi.Connection,
 	name, owner, cloud, cloudRegion string,
 	cloudCredential names.CloudCredentialTag,
 	config map[string]interface{}, targetController string) (CreateModelResponse, error) {
@@ -233,7 +233,7 @@ func createJAASModel(ctx context.Context, cconn jujuapi.Connection,
 		cloudTag = names.NewCloudTag(cloud).String()
 	}
 
-	client := jaasapi.NewClient(JaasConnShim{Connection: cconn})
+	client := jaasapi.NewClient(JaasConnShim{Connection: conn})
 
 	modelInfo, err := client.AddModelToController(&jaasparams.AddModelToControllerRequest{
 		ModelCreateArgs: params.ModelCreateArgs{
@@ -296,13 +296,13 @@ func createJujuModel(ctx context.Context, conn jujuapi.Connection,
 }
 
 func (c *modelsClient) ReadModel(ctx context.Context, modelUUID string) (*ReadModelResponse, error) {
-	modelmanagerConn, err := c.GetConnection(nil)
+	modelmanagerConn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = modelmanagerConn.Close() }()
 
-	modelconfigConn, err := c.GetConnection(&modelUUID)
+	modelconfigConn, err := c.GetConnection(ctx, &modelUUID)
 	if err != nil {
 		if params.IsCodeNotFound(err) {
 			return nil, errors.WithType(err, ModelNotFoundError)
@@ -357,7 +357,7 @@ func (c *modelsClient) ReadModel(ctx context.Context, modelUUID string) (*ReadMo
 // It returns a ReadModelStatusResponse containing the model's status.
 // If the model is not found, it returns an error.
 func (c *modelsClient) ReadModelStatus(ctx context.Context, modelUUID string) (*ReadModelStatusResponse, error) {
-	modelmanagerConn, err := c.GetConnection(nil)
+	modelmanagerConn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +387,7 @@ func (c *modelsClient) ReadModelStatus(ctx context.Context, modelUUID string) (*
 }
 
 func (c *modelsClient) UpdateModel(ctx context.Context, input UpdateModelInput) error {
-	conn, err := c.GetConnection(&input.UUID)
+	conn, err := c.GetConnection(ctx, &input.UUID)
 	if err != nil {
 		return err
 	}
@@ -428,12 +428,12 @@ func (c *modelsClient) UpdateModel(ctx context.Context, input UpdateModelInput) 
 			return err
 		}
 		// open new connection to get facade versions correctly
-		connModelManager, err := c.GetConnection(nil)
+		connModelManager, err := c.GetConnection(ctx, nil)
 		if err != nil {
 			return err
 		}
-		defer func() { _ = conn.Close() }()
-		modelUUIDTag, modelOk := conn.ModelTag()
+		defer func() { _ = connModelManager.Close() }()
+		modelUUIDTag, modelOk := connModelManager.ModelTag()
 		if !modelOk {
 			return errors.Errorf("Not connected to model %q", input.Name)
 		}
@@ -447,7 +447,7 @@ func (c *modelsClient) UpdateModel(ctx context.Context, input UpdateModelInput) 
 }
 
 func (c *modelsClient) DestroyModel(ctx context.Context, input DestroyModelInput) error {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, &input.UUID)
 	if err != nil {
 		return err
 	}
@@ -473,7 +473,7 @@ func (c *modelsClient) DestroyModel(ctx context.Context, input DestroyModelInput
 }
 
 func (c *modelsClient) GrantModel(ctx context.Context, input GrantModelInput) error {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -493,7 +493,7 @@ func (c *modelsClient) GrantModel(ctx context.Context, input GrantModelInput) er
 // If a user has had `write`, then removing that access would decrease their
 // access to `read` and the user will remain part of the model access.
 func (c *modelsClient) UpdateAccessModel(ctx context.Context, input UpdateAccessModelInput) error {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -522,7 +522,7 @@ func (c *modelsClient) UpdateAccessModel(ctx context.Context, input UpdateAccess
 // If a user has had `write`, then removing that access would decrease their
 // access to `read` and the user will remain part of the model access.
 func (c *modelsClient) DestroyAccessModel(ctx context.Context, input DestroyAccessModelInput) error {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
