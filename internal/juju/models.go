@@ -447,7 +447,7 @@ func (c *modelsClient) UpdateModel(ctx context.Context, input UpdateModelInput) 
 }
 
 func (c *modelsClient) DestroyModel(ctx context.Context, input DestroyModelInput) error {
-	conn, err := c.GetConnection(ctx, &input.UUID)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
