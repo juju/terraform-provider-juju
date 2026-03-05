@@ -26,7 +26,7 @@ A resource that represents a controller registered in JAAS (JIMM).
 
 - `api_addresses` (List of String) API addresses of the controller. If the controller is HA, only 1 address needs to be provided but multiple addresses are also accepted.
 - `ca_certificate` (String) CA certificate for the controller.
-- `force` (Boolean) Force removal when deleting (only required when the controlle is still available).
+- `force` (Boolean) Force removal when deleting (only required when the controller is still available).
 - `public_address` (String) Public address of the controller (typically host:port) to be used instead of providing api_addresses.
 - `tls_hostname` (String) Hostname used for TLS verification.
 

@@ -137,7 +137,7 @@ func (r *jaasControllerResource) Schema(_ context.Context, _ resource.SchemaRequ
 				Computed:    true,
 			},
 			"force": schema.BoolAttribute{
-				Description: "Force removal when deleting (only required when the controlle is still available).",
+				Description: "Force removal when deleting (only required when the controller is still available).",
 				Optional:    true,
 			},
 			"id": schema.StringAttribute{
@@ -297,6 +297,7 @@ func (r *jaasControllerResource) Delete(ctx context.Context, req resource.Delete
 	}
 }
 
+// ImportState imports the resource by its name, which is also used as the ID.
 func (r *jaasControllerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Import by controller name.
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
