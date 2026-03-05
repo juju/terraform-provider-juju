@@ -595,6 +595,7 @@ func TestGetJujuProviderModel(t *testing.T) {
 			name:           "RequireDetailsFalseWithoutMissingDetails",
 			requireDetails: false,
 			plan: jujuProviderModel{
+				SkipFailedDeletion:  types.BoolValue(true),
 				OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
 			},
 			setEnv: func(t *testing.T) {
@@ -608,7 +609,7 @@ func TestGetJujuProviderModel(t *testing.T) {
 			},
 			wantErr: false,
 			wantValues: jujuProviderModel{
-				SkipFailedDeletion:  types.BoolValue(false),
+				SkipFailedDeletion:  types.BoolValue(true),
 				OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
 			},
 		},
