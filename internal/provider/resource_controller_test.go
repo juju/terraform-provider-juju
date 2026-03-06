@@ -306,7 +306,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 	}
 	resource.ParallelTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: frameworkProviderFactoriesControllerMode,
-		Steps: []resource.TestStep{
+		Steps: append([]resource.TestStep{
 			{
 				// Create the controller
 				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, baseControllerConfig, baseControllerModelConfig),
@@ -461,47 +461,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				Config:      testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, invalidControllerConfig, unsetControllerModelConfig),
 				ExpectError: regexp.MustCompile("failed to update controller config: unknown controller config"),
 			},
-			{
-				SkipFunc: func() (bool, error) {
-					// Skip if not JAAS
-					if _, ok := os.LookupEnv("IS_JAAS"); !ok {
-						return true, nil
-					}
-					return false, nil
-				},
-				Config: testAccResourceControllerAndJAASRegistration(
-					controllerName,
-					baseBootstrapConfig,
-					unsetControllerConfig,
-					unsetControllerModelConfig,
-				),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_jaas_controller.jaas", "name", controllerName),
-					resource.TestCheckResourceAttrPair("juju_jaas_controller.jaas", "uuid", resourceName, "controller_uuid"),
-					resource.TestCheckResourceAttrSet("juju_jaas_controller.jaas", "id"),
-					resource.TestCheckResourceAttrSet("juju_jaas_controller.jaas", "status"),
-					testAccCheckJaasControllerRegistered(t, controllerName, true),
-				),
-			},
-			{
-				SkipFunc: func() (bool, error) {
-					// Skip if not JAAS
-					if _, ok := os.LookupEnv("IS_JAAS"); !ok {
-						return true, nil
-					}
-					return false, nil
-				},
-				Config: testAccResourceControllerAndJAASRegistration(
-					controllerName,
-					baseBootstrapConfig,
-					unsetControllerConfig,
-					unsetControllerModelConfig,
-				),
-				ResourceName:      "juju_jaas_controller.jaas",
-				ImportState:       true,
-				ImportStateVerify: false, // If importing some values cannot be obtained like the username/password.
-			},
-		},
+		}, testJAASControllerResourceSteps(t, resourceName, controllerName, baseBootstrapConfig)...),
 		CheckDestroy: func(s *terraform.State) error {
 			if isJAAS() {
 				if err := testAccCheckJaasControllerRegistered(t, controllerName, false)(s); err != nil {
@@ -950,24 +910,6 @@ func getAgentVersionFromState(s *terraform.State) (*version.Number, error) {
 	}
 
 	return &parsedVersion, nil
-}
-
-func testAccResourceControllerAndJAASRegistration(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
-	base := testAccResourceControllerWithJujuBinary(controllerName, bootstrapConfig, controllerConfig, modelConfig)
-	return base + `
-resource "juju_jaas_controller" "jaas" {
-  name = juju_controller.controller.name
-  uuid = juju_controller.controller.controller_uuid
-
-  api_addresses  = juju_controller.controller.api_addresses
-  ca_certificate = juju_controller.controller.ca_cert
-
-  username = juju_controller.controller.username
-  password = juju_controller.controller.password
-
-  tls_hostname = "juju-apiserver"
-}
-`
 }
 
 func testAccCheckJaasControllerRegistered(t *testing.T, name string, checkExists bool) resource.TestCheckFunc {

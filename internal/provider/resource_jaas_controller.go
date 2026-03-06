@@ -194,7 +194,7 @@ func (r *jaasControllerResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
-	tflog.Trace(r.subCtx, "creating JAAS controller")
+	tflog.Trace(r.subCtx, "adding JAAS controller")
 
 	apiAddrs := make([]string, 0)
 	if !plan.APIAddresses.IsNull() && !plan.APIAddresses.IsUnknown() {
