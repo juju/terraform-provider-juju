@@ -593,5 +593,6 @@ func (p *jujuProvider) ListResources(_ context.Context) []func() list.ListResour
 		func() list.ListResource { return NewOfferLister() },
 		func() list.ListResource { return NewMachineLister() },
 		func() list.ListResource { return NewSSHKeyLister() },
+		func() list.ListResource { return NewStoragePoolLister() },
 	}
 }
