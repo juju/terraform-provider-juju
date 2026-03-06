@@ -58,6 +58,8 @@ func TestAcc_ResourceModel(t *testing.T) {
 }
 
 func TestAcc_ResourceModel_UnsetConfig(t *testing.T) {
+	ctx := t.Context()
+
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 
 	resourceName := "juju_model.this"
@@ -87,7 +89,8 @@ resource "juju_model" "this" {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
-					testAccCheckDevelopmentConfigIsUnset("juju_model.this"),
+					testAccCheckDevelopmentConfigIsUnset(ctx, "juju_model.this"),
+					testAccCheckDevelopmentConfigIsUnset(ctx, "juju_model.this"),
 				),
 			},
 		},
@@ -95,6 +98,8 @@ resource "juju_model" "this" {
 }
 
 func TestAcc_ResourceModel_UnsetConfigUsingNull(t *testing.T) {
+	ctx := t.Context()
+
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 
 	resourceName := "juju_model.this"
@@ -130,7 +135,7 @@ resource "juju_model" "this" {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
-					testAccCheckDevelopmentConfigIsUnset(resourceName),
+					testAccCheckDevelopmentConfigIsUnset(ctx, resourceName),
 				),
 			},
 			{
@@ -145,7 +150,7 @@ resource "juju_model" "this" {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
-					testAccCheckDevelopmentConfigIsUnset(resourceName),
+					testAccCheckDevelopmentConfigIsUnset(ctx, resourceName),
 				),
 			},
 			{
@@ -158,7 +163,7 @@ resource "juju_model" "this" {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
-					testAccCheckDevelopmentConfigIsUnset(resourceName),
+					testAccCheckDevelopmentConfigIsUnset(ctx, resourceName),
 				),
 			},
 		},
@@ -357,7 +362,7 @@ func TestAcc_ResourceModel_WaitForDelete(t *testing.T) {
 	})
 }
 
-func testAccCheckDevelopmentConfigIsUnset(resourceID string) resource.TestCheckFunc {
+func testAccCheckDevelopmentConfigIsUnset(ctx context.Context, resourceID string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[resourceID]
 		if !ok {
@@ -367,7 +372,7 @@ func testAccCheckDevelopmentConfigIsUnset(resourceID string) resource.TestCheckF
 		if modelUUID == "" {
 			return fmt.Errorf("uuid is empty in state")
 		}
-		conn, err := TestClient.Models.GetConnection(&modelUUID)
+		conn, err := TestClient.Models.GetConnection(ctx, &modelUUID)
 		if err != nil {
 			return err
 		}

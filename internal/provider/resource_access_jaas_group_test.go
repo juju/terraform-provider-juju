@@ -26,6 +26,8 @@ import (
 // resource_access_jaas_model_test.go
 
 func TestAcc_ResourceJaasAccessGroup(t *testing.T) {
+	ctx := t.Context()
+
 	OnlyTestAgainstJAAS(t)
 	// Resource names, note that group two has access to group one.
 	groupAccessResourceName := "juju_jaas_access_group.test"
@@ -59,9 +61,9 @@ func TestAcc_ResourceJaasAccessGroup(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
-			testAccCheckJaasResourceAccess(accessSuccess, &userOneTag, groupOneCheck.tag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, groupTwoCheck.tag, groupOneCheck.tag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, groupOneCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &userOneTag, groupOneCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, groupTwoCheck.tag, groupOneCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, groupOneCheck.tag, false),
 		),
 		Steps: []resource.TestStep{
 			{
@@ -73,9 +75,9 @@ func TestAcc_ResourceJaasAccessGroup(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(groupOneCheck),
 					testAccCheckAttributeNotEmpty(groupTwoCheck),
-					testAccCheckJaasResourceAccess(accessSuccess, &userOneTag, groupOneCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, groupTwoCheck.tag, groupOneCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, groupOneCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userOneTag, groupOneCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, groupTwoCheck.tag, groupOneCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, groupOneCheck.tag, true),
 					resource.TestCheckResourceAttr(groupAccessResourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(groupAccessResourceName, "users.*", userOne),
 					resource.TestCheckResourceAttr(groupAccessResourceName, "users.#", "1"),
@@ -96,10 +98,10 @@ func TestAcc_ResourceJaasAccessGroup(t *testing.T) {
 					},
 				},
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckJaasResourceAccess(accessSuccess, &userOneTag, groupOneCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, &userTwoTag, groupOneCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, groupTwoCheck.tag, groupOneCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, groupOneCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userOneTag, groupOneCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTwoTag, groupOneCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, groupTwoCheck.tag, groupOneCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, groupOneCheck.tag, true),
 					resource.TestCheckResourceAttr(groupAccessResourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(groupAccessResourceName, "users.*", userOne),
 					resource.TestCheckTypeSetElemAttr(groupAccessResourceName, "users.*", userTwo),

@@ -126,7 +126,7 @@ func newOffersClient(sc SharedClient) *offersClient {
 func (c *offersClient) CreateOffer(ctx context.Context, input *CreateOfferInput) (*CreateOfferResponse, []error) {
 	var errs []error
 
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, append(errs, err)
 	}
@@ -140,7 +140,7 @@ func (c *offersClient) CreateOffer(ctx context.Context, input *CreateOfferInput)
 	}
 
 	// connect to the corresponding model
-	modelConn, err := c.GetConnection(&input.ModelUUID)
+	modelConn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, append(errs, err)
 	}
@@ -173,7 +173,7 @@ func (c *offersClient) CreateOffer(ctx context.Context, input *CreateOfferInput)
 		return nil, errs
 	}
 
-	modelOwner, modelName, err := c.ModelOwnerAndName(input.ModelUUID)
+	modelOwner, modelName, err := c.ModelOwnerAndName(ctx, input.ModelUUID)
 	if err != nil {
 		return nil, append(errs, fmt.Errorf("unable to get model name for model UUID %q: %w", input.ModelUUID, err))
 	}
@@ -203,9 +203,9 @@ func (c *offersClient) ReadOffer(ctx context.Context, input *ReadOfferInput) (*R
 	var conn api.Connection
 	var err error
 	if input.OfferingController != "" {
-		conn, err = c.GetOfferingControllerConn(input.OfferingController)
+		conn, err = c.GetOfferingControllerConn(ctx, input.OfferingController)
 	} else {
-		conn, err = c.GetConnection(nil)
+		conn, err = c.GetConnection(ctx, nil)
 	}
 	if err != nil {
 		return nil, err
@@ -239,7 +239,7 @@ func (c *offersClient) ReadOffer(ctx context.Context, input *ReadOfferInput) (*R
 	response.Users = result.Users
 
 	if input.GetModelUUID {
-		response.ModelUUID, err = c.ModelUUID(resultURL.ModelName, resultURL.ModelQualifier)
+		response.ModelUUID, err = c.ModelUUID(ctx, resultURL.ModelName, resultURL.ModelQualifier)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get model UUID for model %q: %w", resultURL.ModelName, err)
 		}
@@ -250,7 +250,7 @@ func (c *offersClient) ReadOffer(ctx context.Context, input *ReadOfferInput) (*R
 
 // DestroyOffer destroys offer managed by the offer resource.
 func (c *offersClient) DestroyOffer(ctx context.Context, input *DestroyOfferInput) error {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -373,16 +373,16 @@ func (c *offersClient) ConsumeRemoteOffer(ctx context.Context, input *ConsumeRem
 	if err != nil {
 		return nil, err
 	}
-	modelConn, err := c.GetConnection(&input.ModelUUID)
+	modelConn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = modelConn.Close() }()
 	var conn api.Connection
 	if input.OfferingController != "" {
-		conn, err = c.GetOfferingControllerConn(input.OfferingController)
+		conn, err = c.GetOfferingControllerConn(ctx, input.OfferingController)
 	} else {
-		conn, err = c.GetConnection(nil)
+		conn, err = c.GetConnection(ctx, nil)
 	}
 	if err != nil {
 		return nil, err
@@ -460,7 +460,7 @@ func (c *offersClient) ConsumeRemoteOffer(ctx context.Context, input *ConsumeRem
 // these objects under "application-endpoints", the API calls them RemoteApplications
 // and `juju status` shows them under the "SAAS" heading.
 func (c *offersClient) ReadRemoteApp(ctx context.Context, input *ReadRemoteAppInput) (*ReadRemoteAppResponse, error) {
-	modelConn, err := c.GetConnection(&input.ModelUUID)
+	modelConn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -490,7 +490,7 @@ func (c *offersClient) ReadRemoteApp(ctx context.Context, input *ReadRemoteAppIn
 
 // RemoveRemoteApp allows the integration resource to destroy the offers managed by the offer resource.
 func (c *offersClient) RemoveRemoteApp(ctx context.Context, input *RemoveRemoteAppInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -545,7 +545,7 @@ func (c *offersClient) RemoveRemoteApp(ctx context.Context, input *RemoveRemoteA
 // GrantOffer adds access to an offer managed by the access offer resource.
 // No action or error is returned if the access was already granted to the user.
 func (c *offersClient) GrantOffer(ctx context.Context, input *GrantRevokeOfferInput) error {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -571,7 +571,7 @@ func (c *offersClient) GrantOffer(ctx context.Context, input *GrantRevokeOfferIn
 // No action or error if the access was already revoked for the user.
 // Note: revoking `ReadAccess` will remove all access levels for the offer
 func (c *offersClient) RevokeOffer(ctx context.Context, input *GrantRevokeOfferInput) error {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}

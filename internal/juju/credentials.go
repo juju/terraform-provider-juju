@@ -92,7 +92,7 @@ func supportedAuth(cloud jujucloud.Cloud, authTypeReceived string) bool {
 }
 
 func (c *credentialsClient) ValidateCredentialForCloud(ctx context.Context, cloudName, authTypeReceived string) error {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func (c *credentialsClient) CreateCredential(ctx context.Context, input CreateCr
 		return nil, err
 	}
 
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +180,7 @@ func (c *credentialsClient) ListClientCredentials(ctx context.Context) (*ListCre
 
 // ListControllerCredentials lists all credentials on the controller.
 func (c *credentialsClient) ListControllerCredentials(ctx context.Context) (*ListCredentialResponse, error) {
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +218,7 @@ func (c *credentialsClient) ReadCredential(ctx context.Context, input ReadCreden
 	controllerCredential := input.ControllerCredential
 	credentialName := input.Name
 
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +299,7 @@ func (c *credentialsClient) UpdateCredential(ctx context.Context, input UpdateCr
 		return err
 	}
 
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -375,7 +375,7 @@ func (c *credentialsClient) DestroyCredential(ctx context.Context, input Destroy
 	cloudName := input.CloudName
 	credentialName := input.Name
 
-	conn, err := c.GetConnection(nil)
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}

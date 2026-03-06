@@ -91,7 +91,7 @@ func (s *ApplicationSuite) setupMocks(t *testing.T) *gomock.Controller {
 	s.mockSharedClient.EXPECT().Errorf(gomock.Any(), gomock.Any()).Do(logErr).AnyTimes()
 	s.mockSharedClient.EXPECT().Tracef(gomock.Any(), gomock.Any()).Do(log).AnyTimes()
 	s.mockSharedClient.EXPECT().JujuLogger().Return(&jujuLoggerShim{}).AnyTimes()
-	s.mockSharedClient.EXPECT().GetConnection(&s.testModelUUID).Return(s.mockConnection, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().GetConnection(gomock.Any(), &s.testModelUUID).Return(s.mockConnection, nil).AnyTimes()
 
 	return ctlr
 }
@@ -116,7 +116,7 @@ func (s *ApplicationSuite) getApplicationsClient() applicationsClient {
 
 func (s *ApplicationSuite) TestReadApplicationRetry() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 	s.mockSharedClient.EXPECT().GetControllerVersion(gomock.Any()).Return(semversion.Number{}, nil)
 
 	appName := "testapplication"
@@ -181,7 +181,7 @@ func (s *ApplicationSuite) TestReadApplicationRetry() {
 
 func (s *ApplicationSuite) TestReadApplicationRetryDoNotPanic() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 
 	appName := "testapplication"
 	aExp := s.mockApplicationClient.EXPECT()
@@ -199,7 +199,7 @@ func (s *ApplicationSuite) TestReadApplicationRetryDoNotPanic() {
 
 func (s *ApplicationSuite) TestReadApplicationRetryWaitForMachines() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 	s.mockSharedClient.EXPECT().GetControllerVersion(gomock.Any()).Return(semversion.Number{}, nil).AnyTimes()
 
 	appName := "testapplication"
@@ -276,7 +276,7 @@ func (s *ApplicationSuite) TestReadApplicationRetryWaitForMachines() {
 
 func (s *ApplicationSuite) TestReadApplicationRetrySubordinate() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 	s.mockSharedClient.EXPECT().GetControllerVersion(gomock.Any()).Return(semversion.Number{}, nil)
 
 	appName := "testapplication"
@@ -333,7 +333,7 @@ func (s *ApplicationSuite) TestReadApplicationRetrySubordinate() {
 // The second response is a real application.
 func (s *ApplicationSuite) TestReadApplicationRetryNotFoundStorageNotFoundError() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 	s.mockSharedClient.EXPECT().GetControllerVersion(gomock.Any()).Return(semversion.Number{}, nil)
 
 	appName := "testapplication"
@@ -402,7 +402,7 @@ func (s *ApplicationSuite) TestReadApplicationRetryNotFoundStorageNotFoundError(
 // One resource ID is returned in the resource list.
 func (s *ApplicationSuite) TestAddPendingResourceCustomImageResourceProvidedCharmResourcesToAddExistsUploadPendingResourceCalled() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 
 	appName := "testapplication"
 	deployValue := "ausf-image"
@@ -458,7 +458,7 @@ func (s *ApplicationSuite) TestAddPendingResourceCustomImageResourceProvidedChar
 // Empty resource list is returned.
 func (s *ApplicationSuite) TestAddPendingResourceCustomImageResourceProvidedNoCharmResourcesToAddEmptyResourceListReturned() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 
 	appName := "testapplication"
 	charmResourcesToAdd := make(map[string]charmresources.Meta)
@@ -501,7 +501,7 @@ func (s *ApplicationSuite) TestAddPendingResourceCustomImageResourceProvidedNoCh
 // ResourceAPIClient.AddPendingResource and ResourceAPIClient.UploadPendingResource is called.
 func (s *ApplicationSuite) TestAddPendingResourceOneCustomResourceOneRevisionProvidedMultipleCharmResourcesToAddUploadPendingResourceAndAddPendingResourceCalled() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 
 	appName := "testapplication"
 	ausfDeployValue := "ausf-image"
@@ -567,7 +567,7 @@ func (s *ApplicationSuite) TestAddPendingResourceOneCustomResourceOneRevisionPro
 // Only ResourceAPIClient.AddPendingResource called, ResourceAPIClient.UploadPendingResource is not called.
 func (s *ApplicationSuite) TestAddPendingResourceOneRevisionProvidedMultipleCharmResourcesToAddOnlyAddPendingResourceCalled() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 
 	appName := "testapplication"
 	ausfDeployValue := "ausf-image"
@@ -650,7 +650,7 @@ func (s *ApplicationSuite) TestAddPendingResourceOneRevisionProvidedMultipleChar
 // Error is not returned.
 func (s *ApplicationSuite) TestUploadExistingPendingResourcesUploadSuccessful() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 	appName := "testapplication"
 	resource := apiapplication.PendingResourceUpload{
 		Name:     "custom-image",
@@ -676,7 +676,7 @@ func (s *ApplicationSuite) TestUploadExistingPendingResourcesUploadSuccessful() 
 // Returns error that upload failed for provided file name.
 func (s *ApplicationSuite) TestUploadExistingPendingResourcesUploadFailedReturnError() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 	appName := "testapplication"
 	fileName := "my-image"
 	resource := apiapplication.PendingResourceUpload{
@@ -703,7 +703,7 @@ func (s *ApplicationSuite) TestUploadExistingPendingResourcesUploadFailedReturnE
 // ResourceAPIClient.Upload is not called and returns error that resource type is invalid.
 func (s *ApplicationSuite) TestUploadExistingPendingResourcesResourceTypeUnknownReturnError() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 	appName := "testapplication"
 	resource := apiapplication.PendingResourceUpload{
 		Name:     "custom-image",
@@ -724,7 +724,7 @@ func (s *ApplicationSuite) TestUploadExistingPendingResourcesResourceTypeUnknown
 
 func (s *ApplicationSuite) TestApplicationUploadOCIResource() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 	appName := "testapplication"
 	resourceName := "myResource"
 	client := s.getApplicationsClient()
@@ -764,7 +764,7 @@ func (s *ApplicationSuite) TestApplicationUploadOCIResource() {
 
 func (s *ApplicationSuite) TestApplicationForbidFileUpload() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 	appName := "testapplication"
 	resourceName := "myResource"
 	client := s.getApplicationsClient()
@@ -788,7 +788,7 @@ func (s *ApplicationSuite) TestApplicationForbidFileUpload() {
 
 func (s *ApplicationSuite) TestApplicationDeployWithRevision() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 	appName := "testapplication"
 	client := s.getApplicationsClient()
 
@@ -811,7 +811,7 @@ func (s *ApplicationSuite) TestApplicationDeployWithRevision() {
 // indicating to the caller that the application was partially created.
 func (s *ApplicationSuite) TestPartialApplicationDeployError() {
 	defer s.setupMocks(s.T()).Finish()
-	s.mockSharedClient.EXPECT().ModelType(gomock.Any()).Return(model.IAAS, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().ModelType(gomock.Any(), gomock.Any()).Return(model.IAAS, nil).AnyTimes()
 	appName := "testapplication"
 	resourceName := "myResource"
 	client := s.getApplicationsClient()

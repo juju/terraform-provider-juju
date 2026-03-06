@@ -24,6 +24,8 @@ import (
 // resource_access_jaas_model_test.go
 
 func TestAcc_ResourceJaasAccessOffer(t *testing.T) {
+	ctx := t.Context()
+
 	OnlyTestAgainstJAAS(t)
 	// Resource names
 	modelName := acctest.RandomWithPrefix("tf-test-offer")
@@ -56,10 +58,10 @@ func TestAcc_ResourceJaasAccessOffer(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeAggregateTestCheckFunc(
-			testAccCheckJaasResourceAccess(accessSuccess, &userTag, offerCheck.tag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, offerCheck.tag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, roleCheck.tag, offerCheck.tag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, offerCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTag, offerCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, groupCheck.tag, offerCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, roleCheck.tag, offerCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, offerCheck.tag, false),
 		),
 		Steps: []resource.TestStep{
 			{
@@ -72,10 +74,10 @@ func TestAcc_ResourceJaasAccessOffer(t *testing.T) {
 					testAccCheckAttributeNotEmpty(groupCheck),
 					testAccCheckAttributeNotEmpty(roleCheck),
 					testAccCheckAttributeNotEmpty(offerCheck),
-					testAccCheckJaasResourceAccess(accessSuccess, &userTag, offerCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, offerCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, offerCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, roleCheck.tag, offerCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTag, offerCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, groupCheck.tag, offerCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, offerCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, roleCheck.tag, offerCheck.tag, true),
 					resource.TestCheckResourceAttr(offerAccessResourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(offerAccessResourceName, "users.*", user),
 					resource.TestCheckResourceAttr(offerAccessResourceName, "users.#", "1"),

@@ -52,7 +52,7 @@ func newSSHKeysClient(sc SharedClient) *sshKeysClient {
 func (c *sshKeysClient) CreateSSHKey(ctx context.Context, input *CreateSSHKeyInput) error {
 	c.KeyLock.Lock()
 	defer c.KeyLock.Unlock()
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func (c *sshKeysClient) CreateSSHKey(ctx context.Context, input *CreateSSHKeyInp
 func (c *sshKeysClient) ReadSSHKey(ctx context.Context, input *ReadSSHKeyInput) (*ReadSSHKeyOutput, error) {
 	c.KeyLock.RLock()
 	defer c.KeyLock.RUnlock()
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func (c *sshKeysClient) ReadSSHKey(ctx context.Context, input *ReadSSHKeyInput) 
 func (c *sshKeysClient) DeleteSSHKey(ctx context.Context, input *DeleteSSHKeyInput) error {
 	c.KeyLock.Lock()
 	defer c.KeyLock.Unlock()
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}

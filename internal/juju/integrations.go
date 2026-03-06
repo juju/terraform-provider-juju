@@ -82,7 +82,7 @@ func newIntegrationsClient(sc SharedClient) *integrationsClient {
 }
 
 func (c *integrationsClient) CreateIntegration(ctx context.Context, input *IntegrationInput) (*CreateIntegrationResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func (c *integrationsClient) CreateIntegration(ctx context.Context, input *Integ
 	}
 
 	// integration is created - fetch the status in order to validate
-	status, err := c.ModelStatus(input.ModelUUID, conn)
+	status, err := c.ModelStatus(ctx, input.ModelUUID, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func (c *integrationsClient) CreateIntegration(ctx context.Context, input *Integ
 }
 
 func (c *integrationsClient) ReadIntegration(ctx context.Context, input *IntegrationInput) (*ReadIntegrationResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func (c *integrationsClient) ReadIntegration(ctx context.Context, input *Integra
 	if !ok {
 		return nil, errors.Errorf("Unable to get model uuid for %q", input.ModelUUID)
 	}
-	status, err := c.ModelStatus(input.ModelUUID, conn)
+	status, err := c.ModelStatus(ctx, input.ModelUUID, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +191,7 @@ func (c *integrationsClient) ReadIntegration(ctx context.Context, input *Integra
 }
 
 func (c *integrationsClient) DestroyIntegration(ctx context.Context, input *IntegrationInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
