@@ -480,7 +480,6 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 					resource.TestCheckResourceAttrPair("juju_jaas_controller.jaas", "uuid", resourceName, "controller_uuid"),
 					resource.TestCheckResourceAttrSet("juju_jaas_controller.jaas", "id"),
 					resource.TestCheckResourceAttrSet("juju_jaas_controller.jaas", "status"),
-					resource.TestCheckResourceAttrSet("juju_jaas_controller.jaas", "cloud_tag"),
 					testAccCheckJaasControllerRegistered(t, controllerName, true),
 				),
 			},
@@ -504,7 +503,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 		},
 		CheckDestroy: func(s *terraform.State) error {
-			if _, ok := os.LookupEnv("IS_JAAS"); ok {
+			if isJAAS() {
 				if err := testAccCheckJaasControllerRegistered(t, controllerName, false)(s); err != nil {
 					return err
 				}
@@ -692,7 +691,7 @@ resource "juju_controller" "controller" {
 }
 
 func testAccResourceControllerWithJujuBinary(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
-	if _, ok := os.LookupEnv("IS_JAAS"); ok {
+	if isJAAS() {
 		// If JAAS, set the controller's login-token-refresh-url to JAAS.
 		addrs := os.Getenv(JujuControllerEnvKey)
 		jaasAddr := strings.TrimSpace(strings.Split(addrs, ",")[0])

@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/canonical/jimm-go-sdk/v3/api/params"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -15,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
@@ -107,6 +109,9 @@ func (r *jaasControllerResource) Schema(_ context.Context, _ resource.SchemaRequ
 				ElementType: types.StringType,
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.List{
+					listvalidator.SizeAtLeast(1),
 				},
 			},
 			"ca_certificate": schema.StringAttribute{
@@ -301,6 +306,5 @@ func (r *jaasControllerResource) Delete(ctx context.Context, req resource.Delete
 
 // ImportState imports the resource by its name, which is also used as the ID.
 func (r *jaasControllerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Import by controller name.
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

@@ -106,6 +106,11 @@ func OnlyCrossController(t *testing.T) {
 	}
 }
 
+func isJAAS() bool {
+	_, ok := os.LookupEnv(isJaasEnvKey)
+	return ok
+}
+
 // OnlyTestAgainstJAAS should be called at the top of any tests that are not
 // appropriate to run against a Juju controller. This includes tests for all JAAS
 // specific resources where only JAAS implements the necessary API methods.
