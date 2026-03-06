@@ -258,6 +258,26 @@ func (s *JaasSuite) TestAddController() {
 	s.Require().Equal(resp, info)
 }
 
+func (s *JaasSuite) TestAddControllerError() {
+	defer s.setupMocks(s.T()).Finish()
+
+	req := &params.AddControllerRequest{
+		UUID:          "uuid",
+		Name:          "name",
+		PublicAddress: "example.com:17070",
+		Username:      "user",
+		Password:      "pass",
+	}
+	expectedErr := errors.New("failed to add controller")
+
+	s.mockJaasClient.EXPECT().AddController(req).Return(params.ControllerInfo{}, expectedErr)
+
+	client := s.getJaasClient()
+	_, err := client.AddController(req)
+	s.Require().Error(err)
+	s.Assert().Equal(expectedErr, err)
+}
+
 func (s *JaasSuite) TestRemoveController() {
 	defer s.setupMocks(s.T()).Finish()
 
@@ -270,6 +290,20 @@ func (s *JaasSuite) TestRemoveController() {
 	info, err := client.RemoveController(req)
 	s.Require().NoError(err)
 	s.Require().Equal(resp, info)
+}
+
+func (s *JaasSuite) TestRemoveControllerError() {
+	defer s.setupMocks(s.T()).Finish()
+
+	req := &params.RemoveControllerRequest{Name: "name", Force: true}
+	expectedErr := errors.New("failed to remove controller")
+
+	s.mockJaasClient.EXPECT().RemoveController(req).Return(params.ControllerInfo{}, expectedErr)
+
+	client := s.getJaasClient()
+	_, err := client.RemoveController(req)
+	s.Require().Error(err)
+	s.Assert().Equal(expectedErr, err)
 }
 
 func (s *JaasSuite) TestGetRole() {
