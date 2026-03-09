@@ -92,7 +92,7 @@ resource "juju_application" "this" {
 
   charm {
     name     = "coredns"
-	revision = 165
+	revision = 191
   }
 }
 

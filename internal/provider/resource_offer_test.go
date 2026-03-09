@@ -220,7 +220,7 @@ resource "juju_application" "that" {
 	name  = "that"
 	charm {
 	    name = "grafana-agent-k8s"
-		revision = 149
+		revision = 164
 		channel = "1/stable"
     }
 }
@@ -242,7 +242,7 @@ resource "juju_application" "toc" {
 	name  = "toc"
 	charm {
 	    name = "grafana-agent-k8s"
-		revision = 149
+		revision = 164
 		channel = "1/stable"
     }
 }
