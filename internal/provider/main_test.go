@@ -12,6 +12,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
 // Env variables to use for various testing purposes
@@ -91,5 +93,14 @@ func TestMain(m *testing.M) {
 		panic(err)
 	} else {
 		os.Exit(m.Run())
+	}
+}
+
+func skipTestIfSecretsNotSupported(t *testing.T) {
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Skipf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
+		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
 	}
 }
