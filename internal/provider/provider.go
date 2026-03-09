@@ -402,6 +402,12 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
+	err := juju.SetProxy()
+	if err != nil {
+		resp.Diagnostics.AddError("Error setting proxy environment variables", fmt.Sprintf("An error was encountered while setting proxy environment variables: %s", err))
+		return
+	}
+
 	controllerConfig := juju.ControllerConfiguration{
 		ControllerAddresses: strings.Split(data.ControllerAddrs.ValueString(), ","),
 		Username:            data.UserName.ValueString(),
