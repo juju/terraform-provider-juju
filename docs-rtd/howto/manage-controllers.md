@@ -186,10 +186,10 @@ action "juju_enable_ha" "this" {
 ### Enable controller high availability post bootstrap
 
 ```{note}
-  Just like the Juju CLI command changing the constraints don't replace the existing units but set the constraints for the new units you're about to add.
+  As with the `juju` CLI, constraints set while scaling in post bootstrap always apply only to the new units being created.
 ```
 
-You can also invoke the action independently against an already-bootstrapped controller.
+To enable controller HA post bootstrap, define a Terraform juju_enable_ha action block:
 
 ```terraform
 action "juju_enable_ha" "this" {
@@ -215,11 +215,11 @@ Post bootstrap you can scale out or in, as below.
 
 ### Scale out
 
-To scale out the number of units via the terraform *enable_ha* action. The only requirement is to be an odd number.
+To scale out the number of units via the terraform *enable_ha* action. The number of units must always be an odd number.
 
 ### Scale in
 
-To scale in you need to manually do via `juju remove-machine`.
+To scale an HA controller in, remove its backing machines manually  via the `juju` CLI [`juju remove-machine`](https://documentation.ubuntu.com/terraform-provider-juju/latest/howto/manage-machines/#remove-a-machine).
 
 (import-an-existing-controller)=
 ## Import an existing controller
