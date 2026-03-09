@@ -5,7 +5,6 @@ package provider
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 
@@ -21,12 +20,7 @@ import (
 )
 
 func TestAccListSecrets_query(t *testing.T) {
-	agentVersion := os.Getenv(TestJujuAgentVersion)
-	if agentVersion == "" {
-		t.Skipf("%s is not set", TestJujuAgentVersion)
-	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
-		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
-	}
+	skipTestIfSecretsNotSupported(t)
 
 	modelName := acctest.RandomWithPrefix("tf-test-secret-list")
 	secretName := "tf-test-secret"

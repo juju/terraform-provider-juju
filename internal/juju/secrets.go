@@ -48,6 +48,7 @@ const (
 	RevokeAccess
 )
 
+// CreateSecretInput is the input for CreateSecret.
 type CreateSecretInput struct {
 	ModelUUID string
 	Name      string
@@ -55,11 +56,13 @@ type CreateSecretInput struct {
 	Info      string
 }
 
+// CreateSecretOutput is the output for CreateSecret.
 type CreateSecretOutput struct {
 	SecretId  string
 	SecretURI string
 }
 
+// ReadSecretInput is the input for ReadSecret.
 type ReadSecretInput struct {
 	SecretId  string
 	ModelUUID string
@@ -67,6 +70,7 @@ type ReadSecretInput struct {
 	Revision  *int
 }
 
+// ReadSecretOutput is the output for ReadSecret.
 type ReadSecretOutput struct {
 	SecretId     string
 	SecretURI    string
@@ -76,11 +80,13 @@ type ReadSecretOutput struct {
 	Info         string
 }
 
+// ListSecretsInput is the input for ListSecrets.
 type ListSecretsInput struct {
 	ModelUUID string
 	Name      *string
 }
 
+// ListSecretsOutput is the output for ListSecrets.
 type ListSecretsOutput struct {
 	SecretId     string
 	SecretURI    string
@@ -90,6 +96,7 @@ type ListSecretsOutput struct {
 	Info         string
 }
 
+// UpdateSecretInput is the input for UpdateSecret.
 type UpdateSecretInput struct {
 	SecretId  string
 	ModelUUID string
@@ -99,17 +106,20 @@ type UpdateSecretInput struct {
 	Info      *string
 }
 
+// DeleteSecretInput is the input for DeleteSecret.
 type DeleteSecretInput struct {
 	SecretId  string
 	ModelUUID string
 }
 
+// GrantRevokeAccessSecretInput is the input for Grant/RevokeAccessSecret.
 type GrantRevokeAccessSecretInput struct {
 	SecretId     string
 	ModelUUID    string
 	Applications []string
 }
 
+// MultiError is a custom error type that can hold multiple errors.
 type MultiError struct {
 	Errors []error
 }
