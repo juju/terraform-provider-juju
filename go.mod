@@ -25,6 +25,7 @@ require (
 	github.com/juju/collections v1.0.4
 	github.com/juju/errors v1.0.0
 	github.com/juju/names/v5 v5.0.0
+	github.com/juju/proxy v1.0.0
 	github.com/juju/retry v1.0.1
 	github.com/juju/utils v0.0.0-20200604140309-9d78121a29e0
 	github.com/juju/utils/v3 v3.2.3
@@ -134,7 +135,6 @@ require (
 	github.com/juju/os/v2 v2.2.5 // indirect
 	github.com/juju/packaging/v4 v4.0.0 // indirect
 	github.com/juju/persistent-cookiejar v1.0.0 // indirect
-	github.com/juju/proxy v1.0.0 // indirect
 	github.com/juju/pubsub/v2 v2.0.0 // indirect
 	github.com/juju/replicaset/v3 v3.0.1 // indirect
 	github.com/juju/rfc/v2 v2.0.0 // indirect
