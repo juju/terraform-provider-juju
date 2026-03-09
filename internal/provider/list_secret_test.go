@@ -69,6 +69,13 @@ func TestAccListSecrets_query(t *testing.T) {
 								KnownValue: knownvalue.StringExact(secretName),
 							},
 							{
+								Path: tfjsonpath.New("value"),
+								KnownValue: knownvalue.MapExact(map[string]knownvalue.Check{
+									"key1": knownvalue.StringExact(secretValue["key1"]),
+									"key2": knownvalue.StringExact(secretValue["key2"]),
+								}),
+							},
+							{
 								Path: tfjsonpath.New("secret_id"),
 								KnownValue: knownvalue.StringFunc(func(actual string) error {
 									if actual == "" {

@@ -145,16 +145,9 @@ func (r *secretLister) List(ctx context.Context, req list.ListRequest, stream *l
 						SecretId:  types.StringValue(secret.SecretId),
 						SecretURI: types.StringValue(secret.SecretURI),
 						ID:        resourceID,
-						Info:      types.StringNull(),
-						Name:      types.StringNull(),
+						Info:      types.StringValue(secret.Info),
+						Name:      types.StringValue(secret.Name),
 					},
-				}
-
-				if secret.Name != "" {
-					resource.Name = types.StringValue(secret.Name)
-				}
-				if secret.Info != "" {
-					resource.Info = types.StringValue(secret.Info)
 				}
 
 				secretValue, dErr := types.MapValueFrom(ctx, types.StringType, secret.Value)
