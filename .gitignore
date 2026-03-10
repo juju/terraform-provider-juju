@@ -27,3 +27,4 @@ __debug_bin
 test.env
 /tmp
 *.tfquery.hcl
+modules/
