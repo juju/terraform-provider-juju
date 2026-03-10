@@ -111,7 +111,7 @@ resource "juju_application" "app" {
   charm {
     name     = "apache2"
     channel  = "latest/stable"
-    revision = 64
+    revision = 59
     base     = "ubuntu@22.04"
   }
 }
@@ -271,7 +271,7 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 					return testingCloud != MicroK8sTesting, nil
 				},
 				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
-				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "165"),
+				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "191"),
 			},
 			{
 				Config: testAccResourceApplicationUpdates(modelName, 2, false, "machinename"),
@@ -305,7 +305,7 @@ func TestAcc_ResourceApplication_RefreshCharmUpdatesResources(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationRefreshCharmUpdatesResources(modelName, 165),
+				Config: testAccResourceApplicationRefreshCharmUpdatesResources(modelName, 191),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 					// Use a check to grab the model UUID and update the application's resource
@@ -331,7 +331,7 @@ func TestAcc_ResourceApplication_RefreshCharmUpdatesResources(t *testing.T) {
 							return err
 						}
 						// Read the application to verify the resource revision is set to 60
-						// and the charm revision is 165.
+						// and the charm revision is 191.
 						readInput := internaljuju.ReadApplicationInput{
 							ModelUUID: modelUUID,
 							AppName:   "test-app",
@@ -340,8 +340,8 @@ func TestAcc_ResourceApplication_RefreshCharmUpdatesResources(t *testing.T) {
 						if err != nil {
 							return err
 						}
-						if readRes.Revision != 165 {
-							return fmt.Errorf("expected charm revision to be 165, got %d", readRes.Revision)
+						if readRes.Revision != 191 {
+							return fmt.Errorf("expected charm revision to be 191, got %d", readRes.Revision)
 						}
 						coreDNSImage, ok := readRes.Resources["coredns-image"]
 						if !ok {
@@ -355,9 +355,9 @@ func TestAcc_ResourceApplication_RefreshCharmUpdatesResources(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceApplicationRefreshCharmUpdatesResources(modelName, 166),
+				Config: testAccResourceApplicationRefreshCharmUpdatesResources(modelName, 199),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "166"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "199"),
 					// Use a check to grab the model UUID and verify that the application's
 					// resource revision has been updated to the latest (greater than 60).
 					func(s *terraform.State) error {
@@ -1952,7 +1952,7 @@ func testAccResourceApplicationUpdates(modelName string, units int, expose bool,
 		  name = "test-app"
 		  charm {
 			name     = "coredns"
-			revision = 165
+			revision = 191
 		  }
 		  trust = true
 		  %s
