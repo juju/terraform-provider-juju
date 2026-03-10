@@ -154,14 +154,6 @@ func WaitForAppsAvailable(ctx context.Context, client *apiapplication.Client, ap
 	}
 }
 
-// ProcessErrorResults processes the results of a secret operation.
-func ProcessErrorResults(results []error) error {
-	if results[0] != nil && len(results) > 1 {
-		return &MultiError{Errors: results}
-	}
-	return nil
-}
-
 // JaasConnShim is a shim to adapt the juju api.Connection
 // Now all APICAll methods require a context.Context parameter, which
 // we don't implement in jaas yet.

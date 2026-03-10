@@ -408,8 +408,7 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"name": schema.StringAttribute{
 				Description: "The name to be assigned to the controller. Changing this value will" +
 					" require the controller to be destroyed and recreated by terraform.",
-				Optional: true,
-				Computed: true,
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
@@ -959,6 +958,23 @@ func (r *controllerResource) Read(ctx context.Context, req resource.ReadRequest,
 
 	// Set the state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+	// Set identity data
+	var credentialModel nestedCloudCredentialModel
+	resp.Diagnostics.Append(state.CloudCredential.As(ctx, &credentialModel, basetypes.ObjectAsOptions{})...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	identity := controllerResourceIdentityModel{
+		Name:           state.Name,
+		ApiAddresses:   state.APIAddresses,
+		CACert:         state.CACert,
+		Username:       state.Username,
+		Password:       state.Password,
+		UUID:           state.ControllerUUID,
+		CredentialName: credentialModel.Name,
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 // Update updates the configuration of the Juju controller.
