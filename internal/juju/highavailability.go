@@ -9,6 +9,7 @@ import (
 
 	"github.com/juju/juju/api/client/highavailability"
 	"github.com/juju/juju/api/connector"
+	"github.com/juju/juju/core/constraints"
 )
 
 // EnableHAInput contains the input for enabling high availability on a controller.
@@ -62,17 +63,15 @@ func (c *EnableHAClient) EnableHA(ctx context.Context, input EnableHAInput) erro
 	haClient := highavailability.NewClient(conn)
 	defer haClient.Close()
 
-	// TODO: will be addressed in another pr.
-	// var cons constraints.Value
-	// if input.Constraints != "" {
-	// 	cons, err = constraints.Parse(input.Constraints)
-	// 	if err != nil {
-	// 		return fmt.Errorf("failed to parse constraints %q: %w", input.Constraints, err)
-	// 	}
-	// }
-	// if _, err = haClient.EnableHA(input.Units, cons, input.To); err != nil {
-	// 	return fmt.Errorf("failed to enable HA: %w", err)
-	// }
-
+	var cons constraints.Value
+	if input.Constraints != "" {
+		cons, err = constraints.Parse(input.Constraints)
+		if err != nil {
+			return fmt.Errorf("failed to parse constraints %q: %w", input.Constraints, err)
+		}
+	}
+	if _, err = haClient.EnableHA(ctx, input.Units, cons, input.To); err != nil {
+		return fmt.Errorf("failed to enable HA: %w", err)
+	}
 	return nil
 }

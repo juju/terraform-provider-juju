@@ -405,8 +405,20 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				),
 			},
 			{
+				// enable-ha is skipped for k8s controllers, and juju 4.
 				SkipFunc: func() (bool, error) {
-					return testingCloud != LXDCloudTesting, nil
+					if testingCloud != LXDCloudTesting {
+						return true, nil
+					}
+					version, err := TestClient.Applications.GetControllerVersion(t.Context())
+					if err != nil {
+						t.Fatalf("failed to get controller version: %v", err)
+						return true, nil
+					}
+					if version.Major > 3 {
+						return true, nil
+					}
+					return false, nil
 				},
 				Config: testAccResourceControllerWithEnableHA(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
