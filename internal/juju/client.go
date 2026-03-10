@@ -21,7 +21,9 @@ import (
 	"github.com/juju/juju/api/connector"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/rpc/params"
+	"github.com/juju/juju/utils/proxy"
 	"github.com/juju/names/v5"
+	proxyutils "github.com/juju/proxy"
 	"github.com/juju/utils/cache"
 )
 
@@ -82,6 +84,9 @@ type Config struct {
 	// leave dangling resources in the Juju controller left for the user to clean up.
 	// This avoids making the user manipulate Terraform state manually to get rid of the resource.
 	SkipFailedDeletion bool
+
+	// ControllerMode indicates whether the provider is operating in controller mode.
+	ControllerMode bool
 }
 
 // ProviderData holds data provided to resources and data sources.
@@ -181,6 +186,20 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 		isJAAS:       func() bool { return sc.IsJAAS(defaultJAASCheck) },
 		username:     user,
 	}, nil
+}
+
+// SetProxy sets the default HTTP transport to use the proxy configuration detected by the juju proxyutils package.
+// It's the way the Juju client gets the proxy configuration from env vars like HTTP_PROXY, HTTPS_PROXY etc.
+func SetProxy() error {
+	// Set the default transport to use the in-process proxy
+	// configuration.
+	if err := proxy.DefaultConfig.Set(proxyutils.DetectProxies()); err != nil {
+		return errors.Trace(err)
+	}
+	if err := proxy.DefaultConfig.InstallInDefaultTransport(); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }
 
 // IsJAAS checks if the controller is a JAAS controller.
