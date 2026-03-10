@@ -126,6 +126,101 @@ resource "juju_controller" "this" {
 > See more: [`juju_controller` (resource)](../reference/terraform-provider/resources/controller)
 
 
+(enable-high-availability)=
+## Enable controller high availability
+
+```{note}
+Enabling HA relies on Terraform actions, which require **Terraform 1.14** or later. For more information, see [Terraform actions](https://developer.hashicorp.com/terraform/language/v1.14.x/invoke-actions).
+```
+
+High availability (HA) for a Juju controller ensures that multiple controller units are running so the controller remains available if individual units fail. You can enable HA either during bootstrap or post-bootstrap, and in the latter case you can scale out as well as in.
+
+### Enable controller high availability during bootstrap
+
+To enable HA during bootstrap, in your `juju_controller` resource, in the `lifecycle` block, define the `action_trigger` field.
+
+```terraform
+resource "juju_controller" "this" {
+  name        = "my-controller"
+  juju_binary = "/snap/juju/current/bin/juju"
+
+  cloud = {
+    name       = "localhost"
+    type       = "lxd"
+    auth_types = ["certificate"]
+  }
+
+  cloud_credential = {
+    name      = "localhost"
+    auth_type = "certificate"
+    attributes = {
+      "client-cert" = var.lxd_client_cert
+      "client-key"  = var.lxd_client_key
+      "server-cert" = var.lxd_server_cert
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      cloud_credential.attributes["client-cert"],
+      cloud_credential.attributes["client-key"],
+    ]
+    action_trigger {
+      events  = [after_create]
+      actions = [action.juju_enable_ha.this]
+    }
+  }
+}
+
+action "juju_enable_ha" "this" {
+  config {
+    api_addresses = juju_controller.this.api_addresses
+    ca_cert       = juju_controller.this.ca_cert
+    username      = juju_controller.this.username
+    password      = juju_controller.this.password
+    units         = 3
+  }
+}
+```
+
+### Enable controller high availability post bootstrap
+
+To enable controller HA post bootstrap, define a Terraform juju_enable_ha action block:
+
+```terraform
+action "juju_enable_ha" "this" {
+  config {
+    api_addresses = juju_controller.this.api_addresses
+    ca_cert       = juju_controller.this.ca_cert
+    username      = juju_controller.this.username
+    password      = juju_controller.this.password
+    units         = 5
+  }
+}
+```
+
+Then run:
+
+```bash
+terraform apply -invoke=action.juju_enable_ha.this
+```
+
+Terraform will execute the `juju_enable_ha` action and ensure the controller has the requested number of units.
+
+### Update the number of units
+
+```{note}
+  As with the `juju` CLI, constraints set while scaling in post bootstrap always apply only to the new units being created.
+```
+
+To scale out the number of units via the terraform *enable_ha* action. The number of units must always be an odd number.
+
+To scale an HA controller in, remove its backing machines manually  via the `juju` CLI [`juju remove-machine`](https://documentation.ubuntu.com/terraform-provider-juju/latest/howto/manage-machines/#remove-a-machine).
+
+```{note}
+  While it _is_ possible to control the number of units or remove machines directly through Terraform, that is currently supported only for regular applications.
+```
+
 (import-an-existing-controller)=
 ## Import an existing controller
 
@@ -236,7 +331,7 @@ resource "juju_controller" "imported" {
       cloud.endpoint,
       cloud.region,
       cloud_credential.attributes["client-cert"],
-      cloud_credential.attributes["client-key"]
+      cloud_credential.attributes["client-key"],
     ]
   }
 }
