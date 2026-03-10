@@ -1,3 +1,15 @@
+## 1.3.1
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.11 release.
+
+BUG FIXES
+
+* Respect proxy environment variables by @SimoneDutto in [#1103](https://github.com/juju/terraform-provider-juju/pull/1103)
+
 
 ## 1.3.0
 
