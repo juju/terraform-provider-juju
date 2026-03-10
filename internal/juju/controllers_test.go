@@ -57,11 +57,10 @@ func TestConvertToCloudAuthTypes(t *testing.T) {
 
 func TestBuildBootstrapArgs(t *testing.T) {
 	tests := []struct {
-		name        string
-		args        BootstrapArguments
-		configPath  string
-		contains    []string // strings that should be in the result
-		notContains []string // strings that should not be in the result
+		name       string
+		args       BootstrapArguments
+		configPath string
+		expected   []string // strings that should be in the result in order
 	}{
 		{
 			name: "minimal bootstrap args",
@@ -71,8 +70,7 @@ func TestBuildBootstrapArgs(t *testing.T) {
 					Name: "lxd",
 				},
 			},
-			contains:    []string{"bootstrap", "lxd", "test-controller"},
-			notContains: []string{"--agent-version", "--bootstrap-base"},
+			expected: []string{"bootstrap", "lxd", "test-controller"},
 		},
 		{
 			name: "bootstrap with version",
@@ -85,7 +83,7 @@ func TestBuildBootstrapArgs(t *testing.T) {
 					AgentVersion: "3.6.12",
 				},
 			},
-			contains: []string{"bootstrap", "lxd", "test-controller", "--agent-version=3.6.12"},
+			expected: []string{"bootstrap", "--agent-version=3.6.12", "lxd", "test-controller"},
 		},
 		{
 			name: "bootstrap with storage pool and model defaults",
@@ -99,9 +97,10 @@ func TestBuildBootstrapArgs(t *testing.T) {
 					ModelDefault: []string{"http-proxy=fake-proxy", "no-proxy=some-url"},
 				},
 			},
-			contains: []string{"bootstrap", "lxd", "test-controller",
-				"--storage-pool name=mypool", "--storage-pool type=ebs",
-				"--model-default http-proxy=fake-proxy", "--model-default no-proxy=some-url"},
+			expected: []string{"bootstrap",
+				"--model-default", "http-proxy=fake-proxy", "--model-default", "no-proxy=some-url",
+				"--storage-pool", "name=mypool", "--storage-pool", "type=ebs",
+				"lxd", "test-controller"},
 		},
 		{
 			name: "bootstrap with config file",
@@ -112,7 +111,7 @@ func TestBuildBootstrapArgs(t *testing.T) {
 				},
 			},
 			configPath: "/tmp/config.yaml",
-			contains:   []string{"bootstrap", "lxd", "test-controller", "--config", "/tmp/config.yaml"},
+			expected:   []string{"bootstrap", "--config", "/tmp/config.yaml", "lxd", "test-controller"},
 		},
 	}
 
@@ -120,18 +119,7 @@ func TestBuildBootstrapArgs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := buildBootstrapArgs(t.Context(), tt.args, tt.configPath)
 			assert.NoError(t, err)
-			resultStr := ""
-			for _, arg := range result {
-				resultStr += arg + " "
-			}
-
-			for _, expected := range tt.contains {
-				assert.Contains(t, resultStr, expected, "Expected to find %q in bootstrap args, got value: %s", expected, resultStr)
-			}
-
-			for _, notExpected := range tt.notContains {
-				assert.NotContains(t, resultStr, notExpected, "Expected not to find %q in bootstrap args", notExpected)
-			}
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }

@@ -92,7 +92,6 @@ func (s *sshKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			"payload": schema.StringAttribute{
 				Description: "SSH key payload.",
 				Required:    true,
-				Sensitive:   true,
 				PlanModifiers: []planmodifier.String{
 					SSHKeyCommentInsensitiveModifier(),
 					stringplanmodifier.RequiresReplace(),

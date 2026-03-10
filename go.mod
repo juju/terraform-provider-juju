@@ -1,13 +1,13 @@
 module github.com/juju/terraform-provider-juju
 
-go 1.25.6
+go 1.25.8
 
 require (
 	github.com/bflad/tfproviderlint v0.30.0
 	github.com/hashicorp/terraform-plugin-docs v0.19.4
 	// It's from commit 5a3bd0894d47ebe818daaf60ccc2b86aa2bb13bc in the 4.0 branch of juju
 	// We will need to track an actual release once 4.0.2 is released.
-	github.com/juju/juju v0.0.0-20260204141904-5a3bd0894d47
+	github.com/juju/juju v0.0.0-20260310092816-9dc4756078c9
 )
 
 require (
@@ -26,6 +26,7 @@ require (
 	github.com/juju/errors v1.0.0
 	github.com/juju/names/v5 v5.0.0
 	github.com/juju/names/v6 v6.0.0-20250512075813-b50ca77a4137
+	github.com/juju/proxy v1.0.0
 	github.com/juju/retry v1.0.1
 	github.com/juju/utils v0.0.0-20200604140309-9d78121a29e0
 	github.com/juju/utils/v3 v3.2.3
@@ -34,7 +35,7 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
-	golang.org/x/crypto v0.45.0
+	golang.org/x/crypto v0.48.0
 	gopkg.in/httprequest.v1 v1.2.1
 	gopkg.in/macaroon.v2 v2.1.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -69,7 +70,7 @@ require (
 	github.com/bflad/gopaniccheck v0.1.0 // indirect
 	github.com/bgentry/speakeasy v0.1.0 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.9.1 // indirect
-	github.com/canonical/sqlair v0.0.0-20250120155751-a83645b9a121 // indirect
+	github.com/canonical/sqlair v0.0.0-20260218132926-bd54c4999dea // indirect
 	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
 	github.com/cloudflare/circl v1.6.1 // indirect
@@ -119,7 +120,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/juju/ansiterm v1.0.0 // indirect
 	github.com/juju/cmd/v3 v3.2.2 // indirect
-	github.com/juju/description/v11 v11.0.0-20260115203504-e19a7ca61eb3 // indirect
+	github.com/juju/description/v11 v11.0.0-20260205224702-ea6d3105b20c // indirect
 	github.com/juju/gnuflag v1.0.0 // indirect
 	github.com/juju/go4 v0.0.0-20160222163258-40d72ab9641a // indirect
 	github.com/juju/gojsonpointer v0.0.0-20150204194629-afe8b77aa08f // indirect
@@ -134,7 +135,6 @@ require (
 	github.com/juju/mutex/v2 v2.0.0 // indirect
 	github.com/juju/os/v2 v2.2.5 // indirect
 	github.com/juju/persistent-cookiejar v1.0.0 // indirect
-	github.com/juju/proxy v1.0.0 // indirect
 	github.com/juju/schema v1.2.0 // indirect
 	github.com/juju/usso v1.0.1 // indirect
 	github.com/juju/webbrowser v1.0.0 // indirect
@@ -189,15 +189,15 @@ require (
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6 // indirect
-	golang.org/x/mod v0.30.0 // indirect
-	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/oauth2 v0.33.0 // indirect
-	golang.org/x/sync v0.18.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
-	golang.org/x/term v0.37.0 // indirect
-	golang.org/x/text v0.31.0 // indirect
+	golang.org/x/mod v0.33.0 // indirect
+	golang.org/x/net v0.51.0 // indirect
+	golang.org/x/oauth2 v0.35.0 // indirect
+	golang.org/x/sync v0.19.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/term v0.40.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
-	golang.org/x/tools v0.39.0 // indirect
+	golang.org/x/tools v0.42.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251111163417-95abcf5c77ba // indirect
 	google.golang.org/grpc v1.77.0 // indirect

@@ -19,11 +19,13 @@ import (
 	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/api/connector"
+	proxy "github.com/juju/juju/api/proxy/config"
 	"github.com/juju/juju/core/logger"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/semversion"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
+	proxyutils "github.com/juju/proxy"
 	"github.com/juju/utils/cache"
 )
 
@@ -200,6 +202,20 @@ func (sc *sharedClient) GetControllerVersion(ctx context.Context) (semversion.Nu
 		return semversion.Number{}, errors.New("failed to get controller version")
 	}
 	return v, nil
+}
+
+// SetProxy sets the default HTTP transport to use the proxy configuration detected by the juju proxyutils package.
+// It's the way the Juju client gets the proxy configuration from env vars like HTTP_PROXY, HTTPS_PROXY etc.
+func SetProxy() error {
+	// Set the default transport to use the in-process proxy
+	// configuration.
+	if err := proxy.DefaultConfig.Set(proxyutils.DetectProxies()); err != nil {
+		return errors.Trace(err)
+	}
+	if err := proxy.DefaultConfig.InstallInDefaultTransport(); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }
 
 // IsJAAS checks if the controller is a JAAS controller.
