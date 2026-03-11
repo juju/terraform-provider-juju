@@ -826,7 +826,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 	r.trace("read application", map[string]interface{}{"resource": appName, "response": response})
 
-	modelType, err := r.client.Applications.ModelType(modelUUID)
+	modelType, err := r.client.Applications.ModelType(ctx, modelUUID)
 	if err != nil {
 		resp.Diagnostics.Append(handleApplicationNotFoundError(ctx, err, &resp.State)...)
 		return

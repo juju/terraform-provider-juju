@@ -61,7 +61,7 @@ func newStorageClient(sc SharedClient) *storageClient {
 
 // CreatePool creates pool with specified parameters.
 func (c *storageClient) CreatePool(ctx context.Context, input CreateStoragePoolInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -74,7 +74,7 @@ func (c *storageClient) CreatePool(ctx context.Context, input CreateStoragePoolI
 
 // UpdatePool updates a pool with specified parameters.
 func (c *storageClient) UpdatePool(ctx context.Context, modeluuid, pname, provider string, attrs map[string]interface{}) error {
-	conn, err := c.GetConnection(&modeluuid)
+	conn, err := c.GetConnection(ctx, &modeluuid)
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func (c *storageClient) UpdatePool(ctx context.Context, modeluuid, pname, provid
 
 // RemovePool removes the named pool.
 func (c *storageClient) RemovePool(ctx context.Context, input RemoveStoragePoolInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (c *storageClient) RemovePool(ctx context.Context, input RemoveStoragePoolI
 
 // GetPool gets a pool by name.
 func (c *storageClient) GetPool(ctx context.Context, input GetStoragePoolInput) (GetStoragePoolResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return GetStoragePoolResponse{}, err
 	}

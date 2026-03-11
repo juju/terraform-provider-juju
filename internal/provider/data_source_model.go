@@ -151,7 +151,7 @@ func (d *modelDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 			resp.Diagnostics.AddError("Invalid Attribute Combination", "When looking up a model by name, both the name and owner attributes must be set.")
 			return
 		}
-		uuid, err := d.client.Models.ModelUUID(data.Name.ValueString(), data.Owner.ValueString())
+		uuid, err := d.client.Models.ModelUUID(ctx, data.Name.ValueString(), data.Owner.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model by name and owner, got error: %s", err))
 			return

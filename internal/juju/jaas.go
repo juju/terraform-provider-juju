@@ -80,7 +80,7 @@ func (jc *jaasClient) AddRelations(ctx context.Context, tuples []JaasTuple) erro
 	if len(tuples) == 0 {
 		return errors.New("empty slice of tuples")
 	}
-	conn, err := jc.GetConnection(nil)
+	conn, err := jc.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ func (jc *jaasClient) DeleteRelations(ctx context.Context, tuples []JaasTuple) e
 	if len(tuples) == 0 {
 		return errors.New("empty slice of tuples")
 	}
-	conn, err := jc.GetConnection(nil)
+	conn, err := jc.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func (jc *jaasClient) ReadRelations(ctx context.Context, tuple *JaasTuple) ([]Ja
 		return nil, errors.New("read relation tuple is nil")
 	}
 
-	conn, err := jc.GetConnection(nil)
+	conn, err := jc.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (jc *jaasClient) ReadRelations(ctx context.Context, tuple *JaasTuple) ([]Ja
 
 // AddGroup attempts to create a new group with the provided name.
 func (jc *jaasClient) AddGroup(ctx context.Context, name string) (string, error) {
-	conn, err := jc.GetConnection(nil)
+	conn, err := jc.GetConnection(ctx, nil)
 	if err != nil {
 		return "", err
 	}
@@ -169,16 +169,16 @@ func (jc *jaasClient) AddGroup(ctx context.Context, name string) (string, error)
 
 // ReadGroupByUUID attempts to read a group that matches the provided UUID.
 func (jc *jaasClient) ReadGroupByUUID(ctx context.Context, uuid string) (*JaasGroup, error) {
-	return jc.readGroup(&params.GetGroupRequest{UUID: uuid})
+	return jc.readGroup(ctx, &params.GetGroupRequest{UUID: uuid})
 }
 
 // ReadGroupByName attempts to read a group that matches the provided name.
 func (jc *jaasClient) ReadGroupByName(ctx context.Context, name string) (*JaasGroup, error) {
-	return jc.readGroup(&params.GetGroupRequest{Name: name})
+	return jc.readGroup(ctx, &params.GetGroupRequest{Name: name})
 }
 
-func (jc *jaasClient) readGroup(req *params.GetGroupRequest) (*JaasGroup, error) {
-	conn, err := jc.GetConnection(nil)
+func (jc *jaasClient) readGroup(ctx context.Context, req *params.GetGroupRequest) (*JaasGroup, error) {
+	conn, err := jc.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +194,7 @@ func (jc *jaasClient) readGroup(req *params.GetGroupRequest) (*JaasGroup, error)
 
 // RenameGroup attempts to rename a group that matches the provided name.
 func (jc *jaasClient) RenameGroup(ctx context.Context, name, newName string) error {
-	conn, err := jc.GetConnection(nil)
+	conn, err := jc.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -207,7 +207,7 @@ func (jc *jaasClient) RenameGroup(ctx context.Context, name, newName string) err
 
 // RemoveGroup attempts to remove a group that matches the provided name.
 func (jc *jaasClient) RemoveGroup(ctx context.Context, name string) error {
-	conn, err := jc.GetConnection(nil)
+	conn, err := jc.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -226,7 +226,7 @@ type JaasRole struct {
 
 // AddRole attempts to create a new role with the provided name.
 func (jc *jaasClient) AddRole(ctx context.Context, name string) (string, error) {
-	conn, err := jc.GetConnection(nil)
+	conn, err := jc.GetConnection(ctx, nil)
 	if err != nil {
 		return "", err
 	}
@@ -244,16 +244,16 @@ func (jc *jaasClient) AddRole(ctx context.Context, name string) (string, error) 
 
 // ReadRoleByUUID attempts to read a role that matches the provided UUID.
 func (jc *jaasClient) ReadRoleByUUID(ctx context.Context, uuid string) (*JaasRole, error) {
-	return jc.readRole(&params.GetRoleRequest{UUID: uuid})
+	return jc.readRole(ctx, &params.GetRoleRequest{UUID: uuid})
 }
 
 // ReadRoleByName attempts to read a role that matches the provided name.
 func (jc *jaasClient) ReadRoleByName(ctx context.Context, name string) (*JaasRole, error) {
-	return jc.readRole(&params.GetRoleRequest{Name: name})
+	return jc.readRole(ctx, &params.GetRoleRequest{Name: name})
 }
 
-func (jc *jaasClient) readRole(req *params.GetRoleRequest) (*JaasRole, error) {
-	conn, err := jc.GetConnection(nil)
+func (jc *jaasClient) readRole(ctx context.Context, req *params.GetRoleRequest) (*JaasRole, error) {
+	conn, err := jc.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +269,7 @@ func (jc *jaasClient) readRole(req *params.GetRoleRequest) (*JaasRole, error) {
 
 // RenameRole attempts to rename a role that matches the provided name.
 func (jc *jaasClient) RenameRole(ctx context.Context, name, newName string) error {
-	conn, err := jc.GetConnection(nil)
+	conn, err := jc.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -282,7 +282,7 @@ func (jc *jaasClient) RenameRole(ctx context.Context, name, newName string) erro
 
 // RemoveRole attempts to remove a role that matches the provided name.
 func (jc *jaasClient) RemoveRole(ctx context.Context, name string) error {
-	conn, err := jc.GetConnection(nil)
+	conn, err := jc.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -295,7 +295,7 @@ func (jc *jaasClient) RemoveRole(ctx context.Context, name string) error {
 
 // ListControllers returns a list of controllers accessible to the client.
 func (jc *jaasClient) ListControllers(ctx context.Context) ([]params.ControllerInfo, error) {
-	conn, err := jc.GetConnection(nil)
+	conn, err := jc.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -26,18 +26,47 @@ import (
 )
 
 type SharedClient interface {
+	// GetControllerVersion returns the version of the controller that the client is connected to.
 	GetControllerVersion(context.Context) (semversion.Number, error)
+
+	// AddModel adds a model to the cache of model data. If any of the required
+	// pieces of data are empty, nothing is added to the cache of model data. If the UUID
+	// already exists in the cache, do nothing.
 	AddModel(modelName, modelOwner, modelUUID string, modelType model.ModelType)
-	GetConnection(modelUUID *string) (api.Connection, error)
-	GetOfferingControllerConn(name string) (api.Connection, error)
-	AddOfferingController(name string, conf ControllerConfiguration) error
+
+	// GetConnection returns a juju connection for use creating juju
+	// api clients. A model UUID can optionally be provided to connect
+	// to a specific model.
+	GetConnection(ctx context.Context, modelUUID *string) (api.Connection, error)
+
+	// GetOfferingControllerConn returns a connection to a controller
+	// specified in the offering_controllers configuration.
+	GetOfferingControllerConn(ctx context.Context, name string) (api.Connection, error)
+
+	// AddOfferingController adds an offering controller configuration
+	// to the sharedClient.
+	AddOfferingController(ctx context.Context, name string, conf ControllerConfiguration) error
+
+	// IsOfferingController returns true if the given controller name is of one of the
+	// added offering controllers.
 	IsOfferingController(name string) bool
-	ModelType(modelUUID string) (model.ModelType, error)
-	ModelOwnerAndName(modelUUID string) (string, string, error)
-	ModelStatus(modelUUID string, conn api.Connection) (*params.FullStatus, error)
+
+	// ModelType returns the model type for the provided modelUUID from
+	// the cache of model data.
+	ModelType(ctx context.Context, modelUUID string) (model.ModelType, error)
+
+	// ModelOwnerAndName returns the owner and name of the model identified by its UUID.
+	ModelOwnerAndName(ctx context.Context, modelUUID string) (string, string, error)
+
+	// ModelStatus returns the status of the model identified by its UUID.
+	ModelStatus(ctx context.Context, modelUUID string, conn api.Connection) (*params.FullStatus, error)
+
+	// RemoveModel deletes the model with the given UUID from the cache of
+	// model data.
 	RemoveModel(modelUUID string)
+
 	// ModelUUID returns a model's UUID based on the model name and owner.
-	ModelUUID(modelName, modelOwner string) (string, error)
+	ModelUUID(ctx context.Context, modelName, modelOwner string) (string, error)
 
 	Debugf(msg string, additionalFields ...map[string]interface{})
 	Errorf(err error, msg string)

@@ -25,6 +25,8 @@ import (
 // resource_access_jaas_model_test.go
 
 func TestAcc_ResourceJaasAccessCloud(t *testing.T) {
+	ctx := t.Context()
+
 	OnlyTestAgainstJAAS(t)
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
@@ -59,10 +61,10 @@ func TestAcc_ResourceJaasAccessCloud(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
-			testAccCheckJaasResourceAccess(accessSuccess, &userTag, &cloudTag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, &cloudTag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, roleCheck.tag, &cloudTag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, &cloudTag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTag, &cloudTag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, groupCheck.tag, &cloudTag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, roleCheck.tag, &cloudTag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, &cloudTag, false),
 		),
 		Steps: []resource.TestStep{
 			{
@@ -74,10 +76,10 @@ func TestAcc_ResourceJaasAccessCloud(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(groupCheck),
 					testAccCheckAttributeNotEmpty(roleCheck),
-					testAccCheckJaasResourceAccess(accessSuccess, &userTag, &cloudTag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, &cloudTag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, &cloudTag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, roleCheck.tag, &cloudTag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTag, &cloudTag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, groupCheck.tag, &cloudTag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, &cloudTag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, roleCheck.tag, &cloudTag, true),
 					resource.TestCheckResourceAttr(cloudAccessResourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(cloudAccessResourceName, "users.*", user),
 					resource.TestCheckResourceAttr(cloudAccessResourceName, "users.#", "1"),

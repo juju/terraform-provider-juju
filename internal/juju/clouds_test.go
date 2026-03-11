@@ -138,7 +138,7 @@ func (s *CloudSuite) TestAddCloud() {
 		},
 	}
 
-	s.mockSharedClient.EXPECT().GetConnection(gomock.Any()).Return(s.mockConnection, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().GetConnection(gomock.Any(), gomock.Any()).Return(s.mockConnection, nil).AnyTimes()
 	s.mockConnection.EXPECT().Close().Return(nil).AnyTimes()
 
 	// Expect default region to be set when Regions is omitted.

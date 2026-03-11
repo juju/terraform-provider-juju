@@ -49,7 +49,7 @@ func newAnnotationsClient(sc SharedClient) *annotationsClient {
 // SetAnnotations set the annotations for the entity specified.
 // To unset a specific annotation a empty string "" needs to be set.
 func (c *annotationsClient) SetAnnotations(ctx context.Context, input *SetAnnotationsInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func (c *annotationsClient) SetAnnotations(ctx context.Context, input *SetAnnota
 
 // GetAnnotations gets the annotation for an entity.
 func (c *annotationsClient) GetAnnotations(ctx context.Context, input *GetAnnotationsInput) (*GetAnnotationsOutput, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}

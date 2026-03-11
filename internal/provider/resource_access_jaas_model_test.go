@@ -19,6 +19,8 @@ import (
 )
 
 func TestAcc_ResourceJaasAccessModel(t *testing.T) {
+	ctx := t.Context()
+
 	OnlyTestAgainstJAAS(t)
 
 	// Resource names
@@ -43,7 +45,7 @@ func TestAcc_ResourceJaasAccessModel(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
-			testAccCheckJaasResourceAccess(accessSuccess, &userOneTag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &userOneTag, modelCheck.tag, false),
 		),
 		Steps: []resource.TestStep{
 			{
@@ -54,8 +56,8 @@ func TestAcc_ResourceJaasAccessModel(t *testing.T) {
 				Config: testAccResourceJaasAccessModelTwoUsers(modelName, accessSuccess, userOne, userTwo),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(modelCheck),
-					testAccCheckJaasResourceAccess(accessSuccess, &userOneTag, modelCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, &userTwoTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userOneTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTwoTag, modelCheck.tag, true),
 					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "foo@domain.com"),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "bar@domain.com"),
@@ -71,8 +73,8 @@ func TestAcc_ResourceJaasAccessModel(t *testing.T) {
 			{
 				Config: testAccResourceJaasAccessModelOneUser(modelName, accessSuccess, userOne),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckJaasResourceAccess(accessSuccess, &userOneTag, modelCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, &userTwoTag, modelCheck.tag, false),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userOneTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTwoTag, modelCheck.tag, false),
 					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "foo@domain.com"),
 					resource.TestCheckResourceAttr(resourceName, "users.#", "1"),
@@ -91,6 +93,8 @@ func TestAcc_ResourceJaasAccessModel(t *testing.T) {
 // i.e. users, groups and services accounts can successfully
 // receive access to a model.
 func TestAcc_ResourceJaasAccessModelAllTypes(t *testing.T) {
+	ctx := t.Context()
+
 	OnlyTestAgainstJAAS(t)
 
 	// Resource names
@@ -119,10 +123,10 @@ func TestAcc_ResourceJaasAccessModelAllTypes(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
-			testAccCheckJaasResourceAccess(access, &userTag, modelCheck.tag, false),
-			testAccCheckJaasResourceAccess(access, &svcAccTag, modelCheck.tag, false),
-			testAccCheckJaasResourceAccess(access, roleCheck.tag, modelCheck.tag, false),
-			testAccCheckJaasResourceAccess(access, groupCheck.tag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, access, &userTag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, access, &svcAccTag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, access, roleCheck.tag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, access, groupCheck.tag, modelCheck.tag, false),
 		),
 		Steps: []resource.TestStep{
 			{
@@ -131,10 +135,10 @@ func TestAcc_ResourceJaasAccessModelAllTypes(t *testing.T) {
 					testAccCheckAttributeNotEmpty(modelCheck),
 					testAccCheckAttributeNotEmpty(roleCheck),
 					testAccCheckAttributeNotEmpty(groupCheck),
-					testAccCheckJaasResourceAccess(access, &userTag, modelCheck.tag, true),
-					testAccCheckJaasResourceAccess(access, &svcAccTag, modelCheck.tag, true),
-					testAccCheckJaasResourceAccess(access, groupCheck.tag, modelCheck.tag, true),
-					testAccCheckJaasResourceAccess(access, roleCheck.tag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, access, &userTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, access, &svcAccTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, access, groupCheck.tag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, access, roleCheck.tag, modelCheck.tag, true),
 					resource.TestCheckResourceAttr(modelResourceName, "access", access),
 					resource.TestCheckTypeSetElemAttr(modelResourceName, "users.*", user),
 					resource.TestCheckResourceAttr(modelResourceName, "users.#", "1"),
@@ -156,6 +160,8 @@ func TestAcc_ResourceJaasAccessModelAllTypes(t *testing.T) {
 // Test that the refresh plan is not empty if the model owner is not included and verify
 // that the model owner has access to the model.
 func TestAcc_ResourceJaasAccessModelAdmin(t *testing.T) {
+	ctx := t.Context()
+
 	OnlyTestAgainstJAAS(t)
 	expectedResourceOwner()
 
@@ -175,7 +181,7 @@ func TestAcc_ResourceJaasAccessModelAdmin(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
-			testAccCheckJaasResourceAccess(accessAdmin, &userOneTag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessAdmin, &userOneTag, modelCheck.tag, false),
 			// TODO(Kian): The owner keeps access to the model after the destroy model command is
 			// issued so that they can monitor the progress. Determine if there is a way to ensure
 			// that relation is also eventually removed.
@@ -186,8 +192,8 @@ func TestAcc_ResourceJaasAccessModelAdmin(t *testing.T) {
 				Config: testAccResourceJaasAccessModelOneUser(modelName, accessAdmin, userOne),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(modelCheck),
-					testAccCheckJaasResourceAccess(accessAdmin, &userOneTag, modelCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessAdmin, &resourceOwnerTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessAdmin, &userOneTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessAdmin, &resourceOwnerTag, modelCheck.tag, true),
 					resource.TestCheckResourceAttr(resourceName, "access", accessAdmin),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "foo@domain.com"),
 					resource.TestCheckResourceAttr(resourceName, "users.#", "1"),
@@ -199,6 +205,8 @@ func TestAcc_ResourceJaasAccessModelAdmin(t *testing.T) {
 }
 
 func TestAcc_ResourceJaasAccessModelChangingAccessReplacesResource(t *testing.T) {
+	ctx := t.Context()
+
 	OnlyTestAgainstJAAS(t)
 
 	// Resource names
@@ -219,14 +227,14 @@ func TestAcc_ResourceJaasAccessModelChangingAccessReplacesResource(t *testing.T)
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
-			testAccCheckJaasResourceAccess(accessWriter, &userOneTag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessWriter, &userOneTag, modelCheck.tag, false),
 		),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccResourceJaasAccessModelOneUser(modelName, accessWriter, userOne),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(modelCheck),
-					testAccCheckJaasResourceAccess(accessWriter, &userOneTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessWriter, &userOneTag, modelCheck.tag, true),
 					resource.TestCheckResourceAttr(resourceName, "access", accessWriter),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "foo@domain.com"),
 					resource.TestCheckResourceAttr(resourceName, "users.#", "1"),
@@ -245,6 +253,8 @@ func TestAcc_ResourceJaasAccessModelChangingAccessReplacesResource(t *testing.T)
 }
 
 func TestAcc_ResourceJaasAccessModelServiceAccountAndUsers(t *testing.T) {
+	ctx := t.Context()
+
 	OnlyTestAgainstJAAS(t)
 
 	// Resource names
@@ -269,9 +279,9 @@ func TestAcc_ResourceJaasAccessModelServiceAccountAndUsers(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
-			testAccCheckJaasResourceAccess(accessSuccess, &svcAccOneTag, modelCheck.tag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, &svcAccTwoTag, modelCheck.tag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, &userTag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccOneTag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTwoTag, modelCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTag, modelCheck.tag, false),
 		),
 		Steps: []resource.TestStep{
 			{
@@ -283,7 +293,7 @@ func TestAcc_ResourceJaasAccessModelServiceAccountAndUsers(t *testing.T) {
 				Config: testAccResourceJaasAccessModelOneSvcAccount(modelName, accessSuccess, svcAccountOne),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(modelCheck),
-					testAccCheckJaasResourceAccess(accessSuccess, &svcAccOneTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccOneTag, modelCheck.tag, true),
 					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(resourceName, "service_accounts.*", svcAccountOne),
 					resource.TestCheckResourceAttr(resourceName, "service_accounts.#", "1"),
@@ -293,9 +303,9 @@ func TestAcc_ResourceJaasAccessModelServiceAccountAndUsers(t *testing.T) {
 				Config: testAccResourceJaasAccessModelSvcAccsAndUser(modelName, accessSuccess, user, svcAccountOne, svcAccountTwo),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(modelCheck),
-					testAccCheckJaasResourceAccess(accessSuccess, &userTag, modelCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, &svcAccOneTag, modelCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, &svcAccTwoTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccOneTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTwoTag, modelCheck.tag, true),
 					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", user),
 					resource.TestCheckTypeSetElemAttr(resourceName, "service_accounts.*", svcAccountOne),
@@ -309,6 +319,8 @@ func TestAcc_ResourceJaasAccessModelServiceAccountAndUsers(t *testing.T) {
 }
 
 func TestAcc_ResourceJaasAccessModel_UpgradeProvider(t *testing.T) {
+	ctx := t.Context()
+
 	OnlyTestAgainstJAAS(t)
 	// This skip is temporary until we have a stable version of the provider that supports
 	// Juju 4.0.0 and above, at which point we can re-enable it.
@@ -344,8 +356,8 @@ func TestAcc_ResourceJaasAccessModel_UpgradeProvider(t *testing.T) {
 				Config: testAccResourceJaasAccessModelTwoUsers(modelName, accessSuccess, userOne, userTwo),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(modelCheck),
-					testAccCheckJaasResourceAccess(accessSuccess, &userOneTag, modelCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, &userTwoTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userOneTag, modelCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTwoTag, modelCheck.tag, true),
 					resource.TestCheckResourceAttr(resourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "foo@domain.com"),
 					resource.TestCheckTypeSetElemAttr(resourceName, "users.*", "bar@domain.com"),

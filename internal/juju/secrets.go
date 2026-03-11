@@ -97,19 +97,6 @@ type GrantRevokeAccessSecretInput struct {
 	Applications []string
 }
 
-type MultiError struct {
-	Errors []error
-}
-
-// Error returns a string representation of the MultiError.
-func (m *MultiError) Error() string {
-	errStrs := make([]string, 0, len(m.Errors))
-	for _, err := range m.Errors {
-		errStrs = append(errStrs, err.Error())
-	}
-	return strings.Join(errStrs, ", ")
-}
-
 func newSecretsClient(sc SharedClient) *secretsClient {
 	return &secretsClient{
 		SharedClient: sc,
@@ -121,7 +108,7 @@ func newSecretsClient(sc SharedClient) *secretsClient {
 
 // CreateSecret creates a new secret.
 func (c *secretsClient) CreateSecret(ctx context.Context, input *CreateSecretInput) (CreateSecretOutput, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return CreateSecretOutput{}, err
 	}
@@ -151,7 +138,7 @@ func (c *secretsClient) CreateSecret(ctx context.Context, input *CreateSecretInp
 
 // ReadSecret reads a secret.
 func (c *secretsClient) ReadSecret(ctx context.Context, input *ReadSecretInput) (ReadSecretOutput, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return ReadSecretOutput{}, err
 	}
@@ -206,7 +193,7 @@ func (c *secretsClient) ReadSecret(ctx context.Context, input *ReadSecretInput) 
 
 // UpdateSecret updates a secret.
 func (c *secretsClient) UpdateSecret(ctx context.Context, input *UpdateSecretInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -267,7 +254,7 @@ func (c *secretsClient) UpdateSecret(ctx context.Context, input *UpdateSecretInp
 
 // DeleteSecret deletes a secret.
 func (c *secretsClient) DeleteSecret(ctx context.Context, input *DeleteSecretInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -288,7 +275,7 @@ func (c *secretsClient) DeleteSecret(ctx context.Context, input *DeleteSecretInp
 
 // UpdateAccessSecret updates access to a secret.
 func (c *secretsClient) UpdateAccessSecret(ctx context.Context, input *GrantRevokeAccessSecretInput, op AccessSecretAction) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -314,9 +301,9 @@ func (c *secretsClient) UpdateAccessSecret(ctx context.Context, input *GrantRevo
 	if err != nil {
 		return typedError(err)
 	}
-	err = ProcessErrorResults(results)
-	if err != nil {
-		return err
+
+	if len(results) > 0 && results[0] != nil {
+		return errors.Join(results...)
 	}
 
 	return nil

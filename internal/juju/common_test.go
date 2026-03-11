@@ -36,7 +36,7 @@ func (s *JujuSuite) setupMocks(t *testing.T) *gomock.Controller {
 	s.mockSharedClient.EXPECT().Errorf(gomock.Any(), gomock.Any()).Do(logErr).AnyTimes()
 	s.mockSharedClient.EXPECT().Tracef(gomock.Any(), gomock.Any()).Do(log).AnyTimes()
 	s.mockSharedClient.EXPECT().JujuLogger().Return(&jujuLoggerShim{}).AnyTimes()
-	s.mockSharedClient.EXPECT().GetConnection(s.testModelName).Return(s.mockConnection, nil).AnyTimes()
+	s.mockSharedClient.EXPECT().GetConnection(gomock.Any(), s.testModelName).Return(s.mockConnection, nil).AnyTimes()
 
 	return ctlr
 }
