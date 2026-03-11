@@ -392,6 +392,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 		wait.WaitForErrorCfg[*juju.IntegrationInput, *juju.ReadIntegrationResponse]{
 			Context: ctx,
 			GetData: r.client.Integrations.ReadIntegration,
+			Logf:    r.trace,
 			Input: &juju.IntegrationInput{
 				ModelUUID: modelUUID,
 				Endpoints: endpoints,

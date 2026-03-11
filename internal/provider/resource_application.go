@@ -1229,6 +1229,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 			},
 			DataAssertions: asserts,
 			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError, juju.ApplicationNotFoundError, juju.StorageNotFoundError},
+			Logf:           r.trace,
 		},
 	)
 	if err != nil {
@@ -1483,6 +1484,7 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 		wait.WaitForErrorCfg[*juju.ReadApplicationInput, *juju.ReadApplicationResponse]{
 			Context: ctx,
 			GetData: r.client.Applications.ReadApplication,
+			Logf:    r.trace,
 			Input: &juju.ReadApplicationInput{
 				ModelUUID: modelUUID,
 				AppName:   appName,
