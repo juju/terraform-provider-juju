@@ -83,6 +83,8 @@ const (
 	LogResourceJAASGroup = "resource-jaas-group"
 	// LogResourceJAASRole is the logging subsystem for JAAS role resources.
 	LogResourceJAASRole = "resource-jaas-role"
+	// LogResourceJAASController is the logging subsystem for JAAS controller resources.
+	LogResourceJAASController = "resource-jaas-controller"
 )
 
 // LogResourceIntegration is the logging subsystem for integration resources.

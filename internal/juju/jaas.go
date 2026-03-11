@@ -304,3 +304,27 @@ func (jc *jaasClient) ListControllers() ([]params.ControllerInfo, error) {
 	client := jc.getJaasApiClient(conn)
 	return client.ListControllers()
 }
+
+// AddController registers a controller with JIMM.
+func (jc *jaasClient) AddController(req *params.AddControllerRequest) (params.ControllerInfo, error) {
+	conn, err := jc.GetConnection(nil)
+	if err != nil {
+		return params.ControllerInfo{}, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := jc.getJaasApiClient(conn)
+	return client.AddController(req)
+}
+
+// RemoveController removes a controller registration from JIMM.
+func (jc *jaasClient) RemoveController(req *params.RemoveControllerRequest) (params.ControllerInfo, error) {
+	conn, err := jc.GetConnection(nil)
+	if err != nil {
+		return params.ControllerInfo{}, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := jc.getJaasApiClient(conn)
+	return client.RemoveController(req)
+}
