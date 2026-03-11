@@ -94,8 +94,9 @@ func (r *jaasControllerResource) Schema(_ context.Context, _ resource.SchemaRequ
 				},
 			},
 			"tls_hostname": schema.StringAttribute{
-				Description: "Hostname used for TLS verification.",
-				Optional:    true,
+				Description: "Hostname used for TLS verification. When connecting directly to a controller, " +
+					"you may need to specify a TLS hostname for SNI purposes that matches the controller's self-signed certificate.",
+				Optional: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
