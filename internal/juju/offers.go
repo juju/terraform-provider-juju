@@ -556,10 +556,6 @@ func (c *offersClient) GrantOffer(ctx context.Context, input *GrantRevokeOfferIn
 	for _, user := range input.Users {
 		err = client.GrantOffer(ctx, user, input.Access, input.OfferURL)
 		if err != nil {
-			// ignore if user was already granted
-			if strings.Contains(err.Error(), "user already has") {
-				continue
-			}
 			return err
 		}
 	}

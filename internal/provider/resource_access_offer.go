@@ -232,8 +232,14 @@ func (a *accessOfferResource) Read(ctx context.Context, req resource.ReadRequest
 		users[offerUserDetail.Access] = append(users[offerUserDetail.Access], offerUserDetail.UserName)
 	}
 	a.trace(fmt.Sprintf("read juju offer response %q", response))
+
+	// If the user hasn't specified the access in the config, and the state is null, we should keep it null if there are no users.
+	// This prevents the "empty list -> null" change on every plan.
+
 	// Save admin users to state
-	if len(users[permission.AdminAccess]) > 0 {
+	if state.AdminUsers.IsNull() && len(users[permission.AdminAccess]) == 0 {
+		state.AdminUsers = types.SetNull(types.StringType)
+	} else {
 		adminUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users[permission.AdminAccess])
 		resp.Diagnostics.Append(errDiag...)
 		if resp.Diagnostics.HasError() {
@@ -241,8 +247,11 @@ func (a *accessOfferResource) Read(ctx context.Context, req resource.ReadRequest
 		}
 		state.AdminUsers = adminUsersSet
 	}
+
 	// Save consume users to state
-	if len(users[permission.ConsumeAccess]) > 0 {
+	if state.ConsumeUsers.IsNull() && len(users[permission.ConsumeAccess]) == 0 {
+		state.ConsumeUsers = types.SetNull(types.StringType)
+	} else {
 		consumeUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users[permission.ConsumeAccess])
 		resp.Diagnostics.Append(errDiag...)
 		if resp.Diagnostics.HasError() {
@@ -250,8 +259,11 @@ func (a *accessOfferResource) Read(ctx context.Context, req resource.ReadRequest
 		}
 		state.ConsumeUsers = consumeUsersSet
 	}
+
 	// Save read users to state
-	if len(users[permission.ReadAccess]) > 0 {
+	if state.ReadUsers.IsNull() && len(users[permission.ReadAccess]) == 0 {
+		state.ReadUsers = types.SetNull(types.StringType)
+	} else {
 		readUsersSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, users[permission.ReadAccess])
 		resp.Diagnostics.Append(errDiag...)
 		if resp.Diagnostics.HasError() {
@@ -356,21 +368,24 @@ func (a *accessOfferResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	// grant read
-	err = grantPermission(ctx, plan.OfferURL.ValueString(), string(permission.ReadAccess), readPlanUsers, a.client)
+	newReadUsers := usersRequiringGrant(readPlanUsers, permission.ReadAccess, stateUsers)
+	err = grantPermission(ctx, plan.OfferURL.ValueString(), string(permission.ReadAccess), newReadUsers, a.client)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
 		return
 	}
 
 	// grant consume
-	err = grantPermission(ctx, plan.OfferURL.ValueString(), string(permission.ConsumeAccess), consumePlanUsers, a.client)
+	newConsumeUsers := usersRequiringGrant(consumePlanUsers, permission.ConsumeAccess, stateUsers)
+	err = grantPermission(ctx, plan.OfferURL.ValueString(), string(permission.ConsumeAccess), newConsumeUsers, a.client)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
 		return
 	}
 
 	// grant admin
-	err = grantPermission(ctx, plan.OfferURL.ValueString(), string(permission.AdminAccess), adminPlanUsers, a.client)
+	newAdminUsers := usersRequiringGrant(adminPlanUsers, permission.AdminAccess, stateUsers)
+	err = grantPermission(ctx, plan.OfferURL.ValueString(), string(permission.AdminAccess), newAdminUsers, a.client)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update access offer resource, got error: %s", err))
 		return
@@ -536,6 +551,10 @@ func validateNoOverlapsNoAdmin(admin, consume, read []string) error {
 }
 
 func grantPermission(ctx context.Context, offerURL, permissionType string, planUsers []string, jujuClient *juju.Client) error {
+	if len(planUsers) == 0 {
+		return nil
+	}
+
 	err := jujuClient.Offers.GrantOffer(ctx, &juju.GrantRevokeOfferInput{
 		Users:    planUsers,
 		Access:   permissionType,
@@ -545,6 +564,31 @@ func grantPermission(ctx context.Context, offerURL, permissionType string, planU
 		return err
 	}
 	return nil
+}
+
+func usersRequiringGrant(planUsers []string, desiredAccess permission.Access, stateUsers map[string]permission.Access) []string {
+	usersToGrant := make([]string, 0, len(planUsers))
+	for _, user := range planUsers {
+		currentAccess, exists := stateUsers[user]
+		if !exists || accessRank(desiredAccess) > accessRank(currentAccess) {
+			usersToGrant = append(usersToGrant, user)
+		}
+	}
+
+	return usersToGrant
+}
+
+func accessRank(access permission.Access) int {
+	switch access {
+	case permission.ReadAccess:
+		return 1
+	case permission.ConsumeAccess:
+		return 2
+	case permission.AdminAccess:
+		return 3
+	default:
+		return 0
+	}
 }
 
 // buildUserAccessMaps builds stateUsers and planUsers maps for access management.
