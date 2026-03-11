@@ -24,6 +24,7 @@ import (
 	"github.com/juju/names/v5"
 )
 
+// SharedClient defines the shared client capabilities used across services.
 type SharedClient interface {
 	AddModel(modelName, modelOwner, modelUUID string, modelType model.ModelType)
 	GetConnection(modelUUID *string) (api.Connection, error)
@@ -48,10 +49,12 @@ type SharedClient interface {
 	WaitForResource() bool
 }
 
+// ClientAPIClient defines the subset of client API methods used by the provider.
 type ClientAPIClient interface {
 	Status(args *apiclient.StatusArgs) (*params.FullStatus, error)
 }
 
+// ApplicationAPIClient defines the subset of application API methods used by the provider.
 type ApplicationAPIClient interface {
 	AddUnits(args apiapplication.AddUnitsParams) ([]string, error)
 	ApplicationsInfo(applications []names.ApplicationTag) ([]params.ApplicationInfoResult, error)
@@ -72,10 +75,12 @@ type ApplicationAPIClient interface {
 	Unexpose(application string, endpoints []string) error
 }
 
+// ModelConfigAPIClient defines the subset of model config API methods used by the provider.
 type ModelConfigAPIClient interface {
 	ModelGet() (map[string]interface{}, error)
 }
 
+// ResourceAPIClient defines the subset of resource API methods used by the provider.
 type ResourceAPIClient interface {
 	AddPendingResources(args apiresources.AddPendingResourcesArgs) ([]string, error)
 	ListResources(applications []string) ([]resources.ApplicationResources, error)
@@ -83,6 +88,7 @@ type ResourceAPIClient interface {
 	UploadPendingResource(applicationID string, resource charmresources.Resource, filename string, r io.ReadSeeker) (id string, err error)
 }
 
+// SecretAPIClient defines the subset of secret API methods used by the provider.
 type SecretAPIClient interface {
 	CreateSecret(name, description string, data map[string]string) (string, error)
 	ListSecrets(reveal bool, filter secrets.Filter) ([]apisecrets.SecretDetails, error)

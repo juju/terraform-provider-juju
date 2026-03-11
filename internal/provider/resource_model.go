@@ -36,6 +36,7 @@ var _ resource.Resource = &modelResource{}
 var _ resource.ResourceWithConfigure = &modelResource{}
 var _ resource.ResourceWithImportState = &modelResource{}
 
+// NewModelResource returns a model resource.
 func NewModelResource() resource.Resource {
 	return &modelResource{}
 }
@@ -68,6 +69,7 @@ type nestedCloud struct {
 	Region types.String `tfsdk:"region"`
 }
 
+// Schema implements resource.ResourceWithConfigure interface.
 func (r *modelResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A resource that represent a Juju Model.",
@@ -197,6 +199,7 @@ func (r *modelResource) Configure(ctx context.Context, req resource.ConfigureReq
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceModel)
 }
 
+// Metadata implements resource.ResourceWithConfigure interface.
 func (r *modelResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_model"
 }

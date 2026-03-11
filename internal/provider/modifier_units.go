@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
 
+// UnitCountModifier adjusts units based on the number of machines.
 func UnitCountModifier() planmodifier.Int64 {
 	return unitCountModifier{}
 }
