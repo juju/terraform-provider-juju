@@ -1712,10 +1712,10 @@ func testAccResourceApplicationBasic(modelName, appName string) string {
 		  trust = true
 		  expose{}
 		  config = {
-			juju-external-hostname="myhostname"
+			%s
 		  }
 		}
-		`, modelName, appName)
+		`, modelName, appName, jujuExternalHostname())
 	}
 }
 
@@ -1754,10 +1754,10 @@ func testAccResourceApplicationScaleUp(modelName, appName, numberOfUnits string)
 		  expose{}
 		  units = %q
 		  config = {
-			juju-external-hostname="myhostname"
+			%s
 		  }
 		}
-		`, modelName, appName, numberOfUnits)
+		`, modelName, appName, numberOfUnits, jujuExternalHostname())
 	}
 }
 
@@ -1867,10 +1867,10 @@ resource "juju_application" "this" {
     "%s" = "%s"
   }
   config = {
-    juju-external-hostname="myhostname"
+    %s
   }
 }
-`, modelName, channel, resourceName, customResource)
+`, modelName, channel, resourceName, customResource, jujuExternalHostname())
 }
 
 func testAccResourceApplicationWithChannelAndRevision(modelName, channel string, revision int) string {
@@ -1907,10 +1907,10 @@ resource "juju_application" "this" {
   trust = true
   expose{}
   config = {
-    juju-external-hostname="myhostname"
+    %s
   }
 }
-`, modelName, channel)
+`, modelName, channel, jujuExternalHostname())
 }
 
 func testAccResourceApplicationUpdates(modelName string, units int, expose bool, hostname string) string {
@@ -1958,10 +1958,10 @@ func testAccResourceApplicationUpdates(modelName string, units int, expose bool,
 		  %s
 		  config = {
 		  	# hostname = "%s"
-			juju-external-hostname="myhostname"
+			%s
 		  }
 		}
-		`, modelName, units, exposeStr, hostname)
+		`, modelName, units, exposeStr, hostname, jujuExternalHostname())
 	}
 }
 
@@ -1977,9 +1977,6 @@ func testAccResourceApplicationRefreshCharmUpdatesResources(modelName string, re
 		  charm {
 			name     = "coredns"
 			revision = %d
-		  }
-		  config = {
-			juju-external-hostname="myhostname"
 		  }
 		}
 		`, modelName, revision)
@@ -2119,10 +2116,10 @@ resource "juju_application" "this" {
   expose{}
   constraints = "%s"
   config = {
-    juju-external-hostname="myhostname"
+    %s
   }
 }
-`, modelName, constraints)
+`, modelName, constraints, jujuExternalHostname())
 	}
 }
 

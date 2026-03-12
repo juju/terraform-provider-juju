@@ -127,6 +127,18 @@ func SkipAgainstJuju4(t *testing.T) {
 	}
 }
 
+// jujuExternalHostname returns the juju-external-hostname config line for use
+// in Terraform HCL templates. In Juju < 4.0 this config is an implicit config and
+// it's required to expose an application.
+// In Juju 4.0+ it must be omitted, so an empty string is returned instead.
+func jujuExternalHostname() string {
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion != "" && internaltesting.CompareVersions(agentVersion, "4.0.0") >= 0 {
+		return ""
+	}
+	return `juju-external-hostname="myhostname"`
+}
+
 func TestProviderConfigure(t *testing.T) {
 	testAccPreCheck(t)
 	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
