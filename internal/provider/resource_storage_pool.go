@@ -206,6 +206,7 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 					return nil
 				},
 			},
+			Logf: r.trace,
 		},
 	); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for storage pool, got error: %s", err))
@@ -333,6 +334,7 @@ func (r *storagePoolResource) Update(ctx context.Context, req resource.UpdateReq
 					return nil
 				},
 			},
+			Logf: r.trace,
 		},
 	); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for storage pool, got error: %s", err))
@@ -377,6 +379,7 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 		wait.WaitForErrorCfg[juju.GetStoragePoolInput, juju.GetStoragePoolResponse]{
 			Context: ctx,
 			GetData: r.client.Storage.GetPool,
+			Logf:    r.trace,
 			Input: juju.GetStoragePoolInput{
 				ModelUUID: state.ModelUUID.ValueString(),
 				PoolName:  state.Name.ValueString(),

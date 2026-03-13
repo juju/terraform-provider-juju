@@ -14,10 +14,8 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-// Logger is an interface for logging debug messages.
-type Logger interface {
-	Debugf(msg string, additionalFields ...map[string]interface{})
-}
+// LogFunc is a function for logging debug messages.
+type LogFunc func(msg string, additionalFields ...map[string]interface{})
 
 // RetryConf is a struct to configure the retry behavior.
 type RetryConf struct {
@@ -85,6 +83,8 @@ type WaitForCfg[I any, D any] struct {
 	DataAssertions []Assert[D]
 	// NonFatalErrors is a list of non-fatal errors to ignore.
 	NonFatalErrors []error
+	// Logf logs retry attempts.
+	Logf LogFunc
 
 	// RetryConf is a configuration for retrying the operation.
 	// If not provided, default values will be used.
@@ -109,6 +109,8 @@ type WaitForErrorCfg[I any, D any] struct {
 	NonFatalErrors []error
 	// RetryAllErrors indicates whether to retry on all errors.
 	RetryAllErrors bool
+	// Logf logs retry attempts while waiting for the expected error.
+	Logf LogFunc
 
 	// RetryConf is a configuration for retrying the operation.
 	// If not provided, default values will be used.
@@ -160,6 +162,18 @@ func WaitFor[I any, D any](waitCfg WaitForCfg[I, D]) (D, error) {
 		MaxDelay:    waitCfg.RetryConf.MaxDelay,
 		Clock:       waitCfg.RetryConf.Clock,
 		Stop:        waitCfg.Context.Done(),
+		NotifyFunc: func(lastError error, attempt int) {
+			if waitCfg.Logf == nil {
+				return
+			}
+
+			waitCfg.Logf("waiting for condition",
+				map[string]any{
+					"attempt":    attempt,
+					"last_error": lastError,
+				},
+			)
+		},
 	})
 	return data, retryErr
 }
@@ -196,6 +210,19 @@ func WaitForError[I any, D any](cfg WaitForErrorCfg[I, D]) error {
 		MaxDelay:    cfg.RetryConf.MaxDelay,
 		Clock:       cfg.RetryConf.Clock,
 		Stop:        cfg.Context.Done(),
+		NotifyFunc: func(lastError error, attempt int) {
+			if cfg.Logf == nil {
+				return
+			}
+
+			cfg.Logf("waiting for expected error",
+				map[string]any{
+					"attempt":        attempt,
+					"expected_error": cfg.ExpectedErr,
+					"last_error":     lastError,
+				},
+			)
+		},
 	})
 	return retryErr
 }
