@@ -184,7 +184,7 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 		Description: "A resource that represents a Juju Controller.",
 		Attributes: map[string]schema.Attribute{
 			"agent_version": schema.StringAttribute{
-				Description: "The version of agent binaries.",
+				Description: "Specifies a controller version to bootstrap. If not specified, the latest stable agent version will be used.",
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{

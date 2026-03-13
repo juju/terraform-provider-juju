@@ -6,6 +6,9 @@ package provider
 import (
 	"context"
 	"fmt"
+	"net"
+	"os"
+	"os/exec"
 	"regexp"
 	"sort"
 	"strconv"
@@ -259,7 +262,6 @@ func TestBuildStringListFromMap(t *testing.T) {
 // on how to set up the environment.
 
 func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
-	SkipJAAS(t)
 	controllerName := acctest.RandomWithPrefix("tf-test-controller")
 	resourceName := "juju_controller.controller"
 
@@ -305,7 +307,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 	}
 	resource.ParallelTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: frameworkProviderFactoriesControllerMode,
-		Steps: []resource.TestStep{
+		Steps: append([]resource.TestStep{
 			{
 				// Create the controller
 				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, baseControllerConfig, baseControllerModelConfig),
@@ -473,8 +475,14 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				Config:      testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, invalidControllerConfig, unsetControllerModelConfig),
 				ExpectError: regexp.MustCompile("failed to update controller config: unknown controller config"),
 			},
-		},
+		}, testJAASControllerResourceSteps(t, resourceName, controllerName, baseBootstrapConfig)...),
 		CheckDestroy: func(s *terraform.State) error {
+			if isJAAS() {
+				if err := testAccCheckJaasControllerRegistered(t, controllerName, false)(s); err != nil {
+					return err
+				}
+			}
+
 			// Skip this check for 2.9, where it can fail intermittently
 			version, err := getAgentVersionFromState(s)
 			if err != nil {
@@ -497,6 +505,65 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			}
 		},
 	})
+}
+
+func lxdBridgeIPv4Address() (string, error) {
+	// Equivalent of: lxc network get lxdbr0 ipv4.address | cut -f1 -d/
+	cmd := exec.Command("lxc", "network", "get", "lxdbr0", "ipv4.address")
+	outBytes, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("running %q failed: %w", strings.Join(cmd.Args, " "), err)
+	}
+	out := strings.TrimSpace(string(outBytes))
+	if out == "" {
+		return "", fmt.Errorf("empty output")
+	}
+	ip, _, _ := strings.Cut(out, "/")
+	ip = strings.TrimSpace(ip)
+	if ip == "" {
+		return "", fmt.Errorf("unexpected output %q", out)
+	}
+	if net.ParseIP(ip) == nil {
+		return "", fmt.Errorf("unexpected non-IP output %q", out)
+	}
+	return ip, nil
+}
+
+func buildJaasCloudInitUserdata(jaasHost string, caCert string) (string, error) {
+	if strings.TrimSpace(jaasHost) == "" {
+		return "", fmt.Errorf("empty JAAS host")
+	}
+	if strings.TrimSpace(caCert) == "" {
+		return "", fmt.Errorf("empty CA cert")
+	}
+	caCert = strings.TrimSpace(caCert)
+	caCert = strings.TrimSuffix(caCert, "\n")
+	caCertIndented := indentLines(caCert, "      ")
+
+	hostIP, err := lxdBridgeIPv4Address()
+	if err != nil {
+		return "", err
+	}
+
+	var b strings.Builder
+	// Adds a hosts entry so the container can resolve the JAAS endpoint.
+	b.WriteString("preruncmd:\n")
+	fmt.Fprintf(&b, "  - echo \"%s    %s\" >> /etc/hosts\n", hostIP, jaasHost)
+	// Installs the CA cert so the controller can validate the JAAS endpoint.
+	b.WriteString("ca-certs:\n")
+	b.WriteString("  trusted:\n")
+	b.WriteString("    - |\n")
+	b.WriteString(caCertIndented)
+	b.WriteString("\n")
+	return b.String(), nil
+}
+
+func indentLines(s string, prefix string) string {
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		lines[i] = prefix + lines[i]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // testAccResourceControllerWithJujuBinaryImport returns a Terraform configuration
@@ -576,7 +643,7 @@ resource "juju_controller" "controller" {
 	host_cloud_region = "localhost"
   } 
 
-  cloud_credential = {
+   cloud_credential = {
 	name = "test-credential"
 	auth_type = "clientcertificate"
 	
@@ -598,6 +665,32 @@ resource "juju_controller" "controller" {
 }
 
 func testAccResourceControllerWithJujuBinary(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
+	if isJAAS() {
+		// If JAAS, set the controller's login-token-refresh-url to JAAS.
+		addrs := os.Getenv(JujuControllerEnvKey)
+		jaasAddr := strings.TrimSpace(strings.Split(addrs, ",")[0])
+		jaasHost, _, err := net.SplitHostPort(jaasAddr)
+		if err != nil {
+			panic(fmt.Sprintf("invalid %s=%q: %v", JujuControllerEnvKey, addrs, err))
+		}
+		if jaasHost == "" {
+			panic(fmt.Sprintf("invalid %s=%q: no addresses", JujuControllerEnvKey, addrs))
+		}
+		bootstrapConfig["login-token-refresh-url"] = fmt.Sprintf("https://%s/.well-known/jwks.json", jaasHost)
+
+		// Ensure the controller can reach JAAS and trust its public key for controller registration.
+		//
+		// - Ensure JAAS DNS resolves from inside the controller.
+		// - Trust the CA used by JAAS.
+		if testingCloud != LXDCloudTesting {
+			panic("testing controller bootstrap with JAAS without LXD is not supported")
+		}
+		cloudInit, err := buildJaasCloudInitUserdata(jaasHost, os.Getenv(JujuCACertEnvKey))
+		if err != nil {
+			panic(fmt.Sprintf("failed to build JAAS cloud-init userdata: %v", err))
+		}
+		bootstrapConfig["cloudinit-userdata"] = cloudInit
+	}
 	bootstrapConfigHCL := renderStringMapAsHCL(bootstrapConfig)
 	controllerConfigHCL := renderStringMapAsHCL(controllerConfig)
 	modelConfigHCL := renderStringMapAsHCL(modelConfig)
@@ -620,7 +713,7 @@ resource "juju_controller" "controller" {
   bootstrap_constraints = {
     "cores"            = "2"
     "mem"              = "4G"
-	"root-disk"		   = "4G"
+    "root-disk"        = "4G"
   }
 
   bootstrap_config        = %s
@@ -637,7 +730,7 @@ resource "juju_controller" "controller" {
     name   = "localhost"
 	auth_types = ["certificate"]
 	type = "lxd"
-   }
+  }
 
   cloud_credential = {
 	name = "test-credential"
@@ -648,7 +741,7 @@ resource "juju_controller" "controller" {
 	  client-key = local.lxd_creds.client-key
 	  client-cert = local.lxd_creds.client-cert
     }
-	  }  
+  }  
 }
 `, controllerName, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL)
 	case MicroK8sTesting:
@@ -693,7 +786,7 @@ resource "juju_controller" "controller" {
       ClientCertificateData = base64decode(local.microk8s_config.users[0].user["client-certificate-data"])
       ClientKeyData  = base64decode(local.microk8s_config.users[0].user["client-key-data"])
 	}
-	  }
+  }
 }
 `, controllerName, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL)
 	}
@@ -704,9 +797,6 @@ resource "juju_controller" "controller" {
 // and runs the juju_enable_ha action with 3 units.
 func testAccResourceControllerWithEnableHA(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
 	base := testAccResourceControllerWithJujuBinary(controllerName, bootstrapConfig, controllerConfig, modelConfig)
-	if base == "" {
-		return ""
-	}
 	return base + `
 resource "terraform_data" "test" {
   lifecycle {
@@ -834,4 +924,34 @@ func getAgentVersionFromState(s *terraform.State) (*version.Number, error) {
 	}
 
 	return &parsedVersion, nil
+}
+
+func testAccCheckJaasControllerRegistered(t *testing.T, name string, checkExists bool) resource.TestCheckFunc {
+	return func(_ *terraform.State) error {
+		testAccPreCheck(t)
+		if TestClient == nil {
+			return fmt.Errorf("TestClient is not set")
+		}
+
+		controllers, err := TestClient.Jaas.ListControllers()
+		if err != nil {
+			return err
+		}
+
+		found := false
+		for _, c := range controllers {
+			if c.Name == name {
+				found = true
+				break
+			}
+		}
+
+		if checkExists && !found {
+			return fmt.Errorf("expected controller %q to be registered", name)
+		}
+		if !checkExists && found {
+			return fmt.Errorf("controller %q still registered", name)
+		}
+		return nil
+	}
 }
