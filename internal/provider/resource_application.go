@@ -534,7 +534,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	resourceRevisions := make(map[string]string)
-	resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &resourceRevisions, false)...)
+	resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &resourceRevisions, true)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
