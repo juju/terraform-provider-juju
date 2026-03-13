@@ -205,7 +205,7 @@ func (r *jaasControllerResource) Create(ctx context.Context, req resource.Create
 		}
 	}
 
-	info, err := r.client.Jaas.AddController(&params.AddControllerRequest{
+	info, err := r.client.Jaas.AddController(ctx, &params.AddControllerRequest{
 		UUID:          plan.UUID.ValueString(),
 		Name:          plan.Name.ValueString(),
 		PublicAddress: plan.PublicAddress.ValueString(),
@@ -249,7 +249,7 @@ func (r *jaasControllerResource) Read(ctx context.Context, req resource.ReadRequ
 		return
 	}
 
-	controllers, err := r.client.Jaas.ListControllers()
+	controllers, err := r.client.Jaas.ListControllers(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to list JAAS controllers, got error: %s", err))
 		return
@@ -298,7 +298,7 @@ func (r *jaasControllerResource) Delete(ctx context.Context, req resource.Delete
 		return
 	}
 
-	_, err := r.client.Jaas.RemoveController(&params.RemoveControllerRequest{Name: state.Name.ValueString(), Force: state.Force.ValueBool()})
+	_, err := r.client.Jaas.RemoveController(ctx, &params.RemoveControllerRequest{Name: state.Name.ValueString(), Force: state.Force.ValueBool()})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to remove JAAS controller %q, got error: %s", state.Name.ValueString(), err))
 		return

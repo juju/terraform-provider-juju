@@ -253,7 +253,7 @@ func (s *JaasSuite) TestAddController() {
 	s.mockJaasClient.EXPECT().AddController(req).Return(resp, nil)
 
 	client := s.getJaasClient()
-	info, err := client.AddController(req)
+	info, err := client.AddController(s.T().Context(), req)
 	s.Require().NoError(err)
 	s.Require().Equal(resp, info)
 }
@@ -273,7 +273,7 @@ func (s *JaasSuite) TestAddControllerError() {
 	s.mockJaasClient.EXPECT().AddController(req).Return(params.ControllerInfo{}, expectedErr)
 
 	client := s.getJaasClient()
-	_, err := client.AddController(req)
+	_, err := client.AddController(s.T().Context(), req)
 	s.Require().Error(err)
 	s.Assert().Equal(expectedErr, err)
 }
@@ -287,7 +287,7 @@ func (s *JaasSuite) TestRemoveController() {
 	s.mockJaasClient.EXPECT().RemoveController(req).Return(resp, nil)
 
 	client := s.getJaasClient()
-	info, err := client.RemoveController(req)
+	info, err := client.RemoveController(s.T().Context(), req)
 	s.Require().NoError(err)
 	s.Require().Equal(resp, info)
 }
@@ -301,7 +301,7 @@ func (s *JaasSuite) TestRemoveControllerError() {
 	s.mockJaasClient.EXPECT().RemoveController(req).Return(params.ControllerInfo{}, expectedErr)
 
 	client := s.getJaasClient()
-	_, err := client.RemoveController(req)
+	_, err := client.RemoveController(s.T().Context(), req)
 	s.Require().Error(err)
 	s.Assert().Equal(expectedErr, err)
 }

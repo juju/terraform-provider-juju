@@ -306,8 +306,8 @@ func (jc *jaasClient) ListControllers(ctx context.Context) ([]params.ControllerI
 }
 
 // AddController registers a controller with JIMM.
-func (jc *jaasClient) AddController(req *params.AddControllerRequest) (params.ControllerInfo, error) {
-	conn, err := jc.GetConnection(nil)
+func (jc *jaasClient) AddController(ctx context.Context, req *params.AddControllerRequest) (params.ControllerInfo, error) {
+	conn, err := jc.GetConnection(ctx, nil)
 	if err != nil {
 		return params.ControllerInfo{}, err
 	}
@@ -318,8 +318,8 @@ func (jc *jaasClient) AddController(req *params.AddControllerRequest) (params.Co
 }
 
 // RemoveController removes a controller registration from JIMM.
-func (jc *jaasClient) RemoveController(req *params.RemoveControllerRequest) (params.ControllerInfo, error) {
-	conn, err := jc.GetConnection(nil)
+func (jc *jaasClient) RemoveController(ctx context.Context, req *params.RemoveControllerRequest) (params.ControllerInfo, error) {
+	conn, err := jc.GetConnection(ctx, nil)
 	if err != nil {
 		return params.ControllerInfo{}, err
 	}

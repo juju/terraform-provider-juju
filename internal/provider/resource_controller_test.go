@@ -933,7 +933,7 @@ func testAccCheckJaasControllerRegistered(t *testing.T, name string, checkExists
 			return fmt.Errorf("TestClient is not set")
 		}
 
-		controllers, err := TestClient.Jaas.ListControllers()
+		controllers, err := TestClient.Jaas.ListControllers(t.Context())
 		if err != nil {
 			return err
 		}
