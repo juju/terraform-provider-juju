@@ -12,6 +12,7 @@ A resource that represents a Juju machine deployment. Refer to the juju add-mach
 
 ## Example Usage
 ```terraform
+# A manually provisioned machine based on any provider other than the manual provider.
 resource "juju_machine" "this_machine" {
   model_uuid  = juju_model.development.uuid
   base        = "ubuntu@22.04"
@@ -26,6 +27,20 @@ resource "juju_machine" "this_machine" {
   lifecycle {
     create_before_destroy = true
   }
+}
+
+
+# A manually provisioned machine using a provisioning user to setup the ubuntu user.
+locals {
+  provisioning_user_priv = pathexpand("~/path/to/provisioning/user/key")
+  ubuntu_user_pub        = pathexpand("~/path/to/ubuntu/user/key.pub")
+}
+
+resource "juju_machine" "manual_machine" {
+  model_uuid       = juju_model.test_model.uuid
+  ssh_address      = "provisioning-user@1.1.1.1"
+  private_key_file = local.provisioning_user_priv
+  public_key_file  = local.ubuntu_user_pub
 }
 ```
 
@@ -44,8 +59,8 @@ resource "juju_machine" "this_machine" {
 - `disks` (String) Storage constraints for disks to attach to the machine(s). Changing this value will cause the machine to be destroyed and recreated by terraform.
 - `name` (String) A name for the machine resource in Terraform.
 - `placement` (String) Additional information about how to allocate the machine in the cloud. Changing this value will cause the application to be destroyed and recreated by terraform.
-- `private_key_file` (String) The file path to read the private key from.
-- `public_key_file` (String) The file path to read the public key from.
+- `private_key_file` (String) The provisioning user's private key file path.
+- `public_key_file` (String) The public key for the ubuntu user that will be created by the provisioning user.
 - `ssh_address` (String) The user@host directive for manual provisioning an existing machine via ssh. Requires public_key_file & private_key_file arguments. Changing this value will cause the machine to be destroyed and recreated by terraform.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `wait_for_hostname` (Boolean) If true, waits for the machine's hostname to be set during creation. A side effect is that this also waits for the machine to reach 'active' state in Juju.
@@ -80,3 +95,21 @@ Import is supported using the following syntax:
 # name "machine_one":
 $ terraform import juju_machine.machine_one 4ffb2226-6ced-458b-8b38-5143ca190f75:1:machine_one
 ```
+
+## Manually Provisioned Machines
+Juju has two modes for manually provisioned machines via the manual provider:
+1. A "provisioning user" mode, where an existing user on the target machine is used to SSH into the machine and create
+   a new `ubuntu` user for Juju to use going forward.
+2. A "direct ubuntu user" mode, where the `ubuntu` user already exists on the target machine and Juju can SSH directly into
+   that user.
+
+### Provisioning User Mode
+The Terraform Provider does supports the provisioning user mode, via the public_key_file and private_key_file attributes.
+The public_key_file attribute specifies the public key for the ubuntu user that will be created by the provisioning user.
+The private_key_file attribute specifies the provisioning user's private key file path.
+
+### Ubuntu User Mode
+The Terraform Provider does not "directly" support the direct ubuntu user mode, but it can be achieved by setting the 
+public_key_file and private_key_file attributes to arbitrary values and the user of the ssh_address to "ubuntu".
+The Terraform Provider, like the Juju CLI, will then check the local ~/.ssh directory from where the apply is called,
+for SSH keys that can be used to connect to the ubuntu user on the target machine. 
