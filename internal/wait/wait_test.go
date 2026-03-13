@@ -19,6 +19,7 @@ import (
 func TestWaitFor(t *testing.T) {
 	autoAdvancingClock := createAutoAdvancingClock(time.Now())
 	counter := atomic.Int32{}
+	logCounter := atomic.Int32{}
 	testFunc := func(context.Context, string) (string, error) {
 		if counter.Load() < 10 {
 			counter.Add(1)
@@ -50,15 +51,33 @@ func TestWaitFor(t *testing.T) {
 			Clock:       autoAdvancingClock,
 			MaxDelay:    time.Second,
 		},
+		Logf: func(msg string, additionalFields ...map[string]interface{}) {
+			if msg != "waiting for condition" {
+				t.Fatalf("expected retry log message, got %q", msg)
+			}
+			if len(additionalFields) != 1 {
+				t.Fatalf("expected one map of additional fields, got %d", len(additionalFields))
+			}
+			if _, ok := additionalFields[0]["attempt"].(int); !ok {
+				t.Fatalf("expected attempt field to be an int, got %T", additionalFields[0]["attempt"])
+			}
+			if got := additionalFields[0]["last_error"]; !errors.Is(got.(error), juju.RetryReadError) {
+				t.Fatalf("expected last_error field to match retry error, got %v", got)
+			}
+			logCounter.Add(1)
+		},
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	if counter.Load() != 11 {
-		t.Fatalf("expected 10 calls, got %d", counter.Load())
+		t.Fatalf("expected 11 calls, got %d", counter.Load())
 	}
 	if result != "success" {
 		t.Fatalf("expected success, got %v", result)
+	}
+	if logCounter.Load() != 11 {
+		t.Fatalf("expected 11 log calls, got %d", logCounter.Load())
 	}
 }
 
@@ -126,6 +145,7 @@ func TestWaitForMaxDuration(t *testing.T) {
 func TestWaitForError(t *testing.T) {
 	autoAdvancingClock := createAutoAdvancingClock(time.Now())
 	counter := atomic.Int32{}
+	logCounter := atomic.Int32{}
 	testFunc := func(context.Context, string) (string, error) {
 		if counter.Load() < 10 {
 			counter.Add(1)
@@ -139,6 +159,24 @@ func TestWaitForError(t *testing.T) {
 		Input:          "test",
 		ExpectedErr:    juju.ApplicationNotFoundError,
 		NonFatalErrors: []error{juju.RetryReadError},
+		Logf: func(msg string, additionalFields ...map[string]interface{}) {
+			if msg != "waiting for expected error" {
+				t.Fatalf("expected retry log message, got %q", msg)
+			}
+			if len(additionalFields) != 1 {
+				t.Fatalf("expected one map of additional fields, got %d", len(additionalFields))
+			}
+			if got := additionalFields[0]["expected_error"]; got != juju.ApplicationNotFoundError {
+				t.Fatalf("expected expected_error field to match, got %v", got)
+			}
+			if _, ok := additionalFields[0]["attempt"].(int); !ok {
+				t.Fatalf("expected attempt field to be an int, got %T", additionalFields[0]["attempt"])
+			}
+			if got := additionalFields[0]["last_error"]; !errors.Is(got.(error), juju.RetryReadError) {
+				t.Fatalf("expected last_error field to match retry error, got %v", got)
+			}
+			logCounter.Add(1)
+		},
 		RetryConf: &wait.RetryConf{
 			MaxDuration: 60 * time.Second,
 			Delay:       1 * time.Second,
@@ -151,6 +189,9 @@ func TestWaitForError(t *testing.T) {
 	}
 	if counter.Load() != 10 {
 		t.Fatalf("expected 10 calls, got %d", counter.Load())
+	}
+	if logCounter.Load() != 10 {
+		t.Fatalf("expected 10 log calls, got %d", logCounter.Load())
 	}
 }
 
