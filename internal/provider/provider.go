@@ -605,6 +605,7 @@ func (p *jujuProvider) Actions(_ context.Context) []func() action.Action {
 func (p *jujuProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		func() datasource.DataSource { return NewApplicationDataSource() },
+		func() datasource.DataSource { return NewCharmDataSource() },
 		func() datasource.DataSource { return NewMachineDataSource() },
 		func() datasource.DataSource { return NewModelDataSource() },
 		func() datasource.DataSource { return NewOfferDataSource() },
