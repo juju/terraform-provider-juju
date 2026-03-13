@@ -17,6 +17,7 @@ import (
 //	@module=juju.resource-application
 const (
 	LogDataSourceApplication = "datasource-application"
+	LogDataSourceCharm       = "datasource-charm"
 	LogDataSourceMachine     = "datasource-machine"
 	LogDataSourceModel       = "datasource-model"
 	LogDataSourceOffer       = "datasource-offer"
