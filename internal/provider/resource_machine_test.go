@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
@@ -141,6 +142,97 @@ func TestAcc_ResourceMachine_WithPlacement(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceMachine_ConstraintsSetOnModelAreHonoured(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.0.0") < 0 {
+		t.Skipf("%s is not set or is below 3.0.0", TestJujuAgentVersion)
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-machine")
+	resourceName := "juju_machine.this"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceMachineWithModelConstraints(modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", resourceName, "model_uuid"),
+					resource.TestCheckResourceAttrSet(resourceName, "machine_id"),
+					resource.TestCheckResourceAttr(resourceName, "constraints", "arch=arm64 mem=1024M"),
+				),
+			},
+			// Plan again to ensure model inherited constraints do not cause drift (i.e., architecture).
+			{
+				Config:   testAccResourceMachineWithModelConstraints(modelName),
+				PlanOnly: true,
+			},
+		},
+	})
+}
+
+// Concrete scenario for UseStateForUnknown on machine.constraints:
+//  1. First apply creates a machine without explicit machine constraints.
+//     Juju reports model-inherited constraints (e.g. "arch=arm64 mem=1024M"),
+//     and that value is stored in Terraform state.
+//  2. Second apply changes only annotations (an unrelated in-place update).
+//  3. During planning, constraints may be unknown because it is computed and
+//     omitted in config. UseStateForUnknown keeps the prior known state value
+//     in the plan instead of letting constraints temporarily become unknown.
+//  4. Apply/refresh finishes with an empty post-refresh plan.
+//
+// In short: unrelated updates do not cause computed constraints to churn from
+// known -> unknown -> known.
+func TestAcc_ResourceMachine_ConstraintsSetOnModelUseStateForUnknown(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "3.0.0") < 0 {
+		t.Skipf("%s is not set or is below 3.0.0", TestJujuAgentVersion)
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-machine")
+	resourceName := "juju_machine.this"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceMachineWithModelConstraintsAndAnnotation(modelName, "value-one"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "annotations.test", "value-one"),
+					resource.TestCheckResourceAttr(resourceName, "constraints", "arch=arm64 mem=1024M"),
+				),
+			},
+			{
+				Config: testAccResourceMachineWithModelConstraintsAndAnnotation(modelName, "value-two"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+					PostApplyPostRefresh: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "annotations.test", "value-two"),
+					resource.TestCheckResourceAttr(resourceName, "constraints", "arch=arm64 mem=1024M"),
+				),
+			},
+		},
+	})
+}
+
 func testAccResourceMachineBasicMinimal(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
@@ -227,6 +319,39 @@ resource "juju_machine" "this" {
 	base = "ubuntu@22.04"
 }
 `, modelName)
+}
+
+func testAccResourceMachineWithModelConstraints(modelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+	constraints = "arch=arm64 mem=1024M"
+}
+
+resource "juju_machine" "this" {
+	name = "this_machine"
+	model_uuid = juju_model.this.uuid
+	base = "ubuntu@22.04"
+}
+`, modelName)
+}
+
+func testAccResourceMachineWithModelConstraintsAndAnnotation(modelName, annotationValue string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+	constraints = "arch=arm64 mem=1024M"
+}
+
+resource "juju_machine" "this" {
+	name = "this_machine"
+	model_uuid = juju_model.this.uuid
+	base = "ubuntu@22.04"
+	annotations = {
+		test = %q
+	}
+}
+`, modelName, annotationValue)
 }
 
 func testAccResourceMachineWithConstraints(modelName, constraints string) string {

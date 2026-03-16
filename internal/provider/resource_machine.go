@@ -156,8 +156,13 @@ func (r *machineResource) Schema(ctx context.Context, req resource.SchemaRequest
 					"and provider's defaults. Changing this value will cause the application to be destroyed and" +
 					" recreated by terraform.",
 				Optional: true,
+				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIf(constraintsRequiresReplacefunc, "", ""),
+					// UseStateForUnknown because if any constraints are set at the model level, they'll be
+					// returned in the API response and we want to avoid unnecessary diffs if the user didn't
+					// explicitly set constraints per machine.
+					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(path.Expressions{
@@ -372,6 +377,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 
 	plan.Base = types.StringValue(readResponse.Base)
 	plan.Hostname = types.StringValue(readResponse.Hostname)
+	plan.Constraints = NewCustomConstraintsValue(readResponse.Constraints)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -485,9 +491,10 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 	//    It could happen that the hostname is set to an empty string during import, but unlikely because
 	//    that means you've created a machine and then imported it immediately afterwards.
 	data.Hostname = types.StringValue(response.Hostname)
-	if response.Constraints != "" {
-		data.Constraints = NewCustomConstraintsValue(response.Constraints)
-	}
+	// Always set constraints from Juju, as they're optional + computed for the scenario where the model sets the
+	// constraints. We're also using UseStateForUnknown plan modifier, so if the user doesn't set constraints and
+	// the API returns them from the model, we won't get unnecessary diffs.
+	data.Constraints = NewCustomConstraintsValue(response.Constraints)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
