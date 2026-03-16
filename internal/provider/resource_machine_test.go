@@ -165,7 +165,7 @@ func TestAcc_ResourceMachine_ConstraintsSetOnModelAreHonoured(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", resourceName, "model_uuid"),
 					resource.TestCheckResourceAttrSet(resourceName, "machine_id"),
-					resource.TestCheckResourceAttr(resourceName, "constraints", "arch=arm64 mem=1024M"),
+					resource.TestCheckResourceAttr(resourceName, "constraints", "mem=1024M"),
 				),
 			},
 			// Plan again to ensure model inherited constraints do not cause drift (i.e., architecture).
@@ -211,7 +211,7 @@ func TestAcc_ResourceMachine_ConstraintsSetOnModelUseStateForUnknown(t *testing.
 				Config: testAccResourceMachineWithModelConstraintsAndAnnotation(modelName, "value-one"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "annotations.test", "value-one"),
-					resource.TestCheckResourceAttr(resourceName, "constraints", "arch=arm64 mem=1024M"),
+					resource.TestCheckResourceAttr(resourceName, "constraints", "mem=1024M"),
 				),
 			},
 			{
@@ -226,7 +226,7 @@ func TestAcc_ResourceMachine_ConstraintsSetOnModelUseStateForUnknown(t *testing.
 				},
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "annotations.test", "value-two"),
-					resource.TestCheckResourceAttr(resourceName, "constraints", "arch=arm64 mem=1024M"),
+					resource.TestCheckResourceAttr(resourceName, "constraints", "mem=1024M"),
 				),
 			},
 		},
@@ -325,7 +325,7 @@ func testAccResourceMachineWithModelConstraints(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
-	constraints = "arch=arm64 mem=1024M"
+	constraints = "mem=1024M"
 }
 
 resource "juju_machine" "this" {
@@ -340,7 +340,7 @@ func testAccResourceMachineWithModelConstraintsAndAnnotation(modelName, annotati
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
-	constraints = "arch=arm64 mem=1024M"
+	constraints = "mem=1024M"
 }
 
 resource "juju_machine" "this" {
