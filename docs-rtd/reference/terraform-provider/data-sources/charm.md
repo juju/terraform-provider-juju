@@ -21,6 +21,7 @@ A data source that fetches charm metadata from CharmHub, including the resolved 
 
 ### Optional
 
+- `architecture` (String) The architecture of the charm, e.g. "amd64". Defaults to "amd64" when not set.
 - `base` (String) The OS base for the charm in the form os@channel, e.g. "ubuntu@22.04".
 - `channel` (String) The channel to resolve, e.g. "3/stable". Required when revision is set.
 - `revision` (Number) The revision of the charm to fetch.

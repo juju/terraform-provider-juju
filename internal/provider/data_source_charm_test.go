@@ -25,11 +25,12 @@ func TestAcc_DataSourceCharm_Basic(t *testing.T) {
 		ProtoV6ProviderFactories: charmProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccDataSourceCharm_basic("juju-jimm-k8s", "3/stable", "ubuntu@22.04", 0),
+				Config: testAccDataSourceCharm_basic("juju-jimm-k8s", "3/stable", "ubuntu@22.04", "amd64", 0),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestMatchResourceAttr("data.juju_charm.test", "revision",
 						regexp.MustCompile(`^[1-9][0-9]*$`)),
 					resource.TestCheckResourceAttr("data.juju_charm.test", "channel", "3/stable"),
+					resource.TestCheckResourceAttr("data.juju_charm.test", "architecture", "amd64"),
 					resource.TestCheckResourceAttr("data.juju_charm.test", "requires.ingress", "ingress"),
 				),
 			},
@@ -37,13 +38,14 @@ func TestAcc_DataSourceCharm_Basic(t *testing.T) {
 	})
 }
 
-func testAccDataSourceCharm_basic(name string, channel string, base string, revision int) string {
+func testAccDataSourceCharm_basic(name string, channel string, base string, architecture string, revision int) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccDataSourceCharm_basic",
 		`
 data "juju_charm" "test" {
-  charm   = "{{ .Name }}"
-  base    = "{{ .Base }}"
+  charm        = "{{ .Name }}"
+  base         = "{{ .Base }}"
+  architecture = "{{ .Architecture }}"
   {{- if ne .Revision 0 }}
   	revision = {{ .Revision }}
   {{- end }}
@@ -52,10 +54,11 @@ data "juju_charm" "test" {
   {{- end }}
 }
 `, internaltesting.TemplateData{
-			"Name":     name,
-			"Channel":  channel,
-			"Base":     base,
-			"Revision": revision,
+			"Name":         name,
+			"Channel":      channel,
+			"Base":         base,
+			"Architecture": architecture,
+			"Revision":     revision,
 		})
 }
 
@@ -64,10 +67,11 @@ func TestAcc_DataSourceCharm_RelationInterface(t *testing.T) {
 		ProtoV6ProviderFactories: charmProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccDataSourceCharm_basic("juju-jimm-k8s", "3/edge", "ubuntu@22.04", 104),
+				Config: testAccDataSourceCharm_basic("juju-jimm-k8s", "3/edge", "ubuntu@22.04", "amd64", 104),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.juju_charm.test", "revision", "104"),
 					resource.TestCheckResourceAttr("data.juju_charm.test", "channel", "3/edge"),
+					resource.TestCheckResourceAttr("data.juju_charm.test", "architecture", "amd64"),
 					resource.TestCheckResourceAttr("data.juju_charm.test", "requires.internal-ingress", "ingress"),
 					resource.TestCheckResourceAttr("data.juju_charm.test", "requires.ingress", "ingress"),
 					resource.TestCheckResourceAttr("data.juju_charm.test", "resources.jimm-image", "60"),
@@ -82,15 +86,15 @@ func TestUnit_DataSourceCharm_InvalidBase(t *testing.T) {
 		ProtoV6ProviderFactories: charmProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccDataSourceCharm_basic("juju-jimm-k8s", "3/edge", "ubuntu-22.04", 0),
+				Config:      testAccDataSourceCharm_basic("juju-jimm-k8s", "3/edge", "ubuntu-22.04", "amd64", 0),
 				ExpectError: regexp.MustCompile(`must be in the form os@channel`),
 			},
 			{
-				Config:      testAccDataSourceCharm_basic("juju-jimm-k8s", "3/edge", "ubuntu@", 0),
+				Config:      testAccDataSourceCharm_basic("juju-jimm-k8s", "3/edge", "ubuntu@", "amd64", 0),
 				ExpectError: regexp.MustCompile(`must be in the form os@channel`),
 			},
 			{
-				Config:      testAccDataSourceCharm_basic("juju-jimm-k8s", "3/edge", "@22.04", 0),
+				Config:      testAccDataSourceCharm_basic("juju-jimm-k8s", "3/edge", "@22.04", "amd64", 0),
 				ExpectError: regexp.MustCompile(`must be in the form os@channel`),
 			},
 		},

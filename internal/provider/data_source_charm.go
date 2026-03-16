@@ -31,11 +31,12 @@ type charmDataSource struct {
 }
 
 type charmDataSourceModel struct {
-	Name     types.String `tfsdk:"charm"`
-	Base     types.String `tfsdk:"base"`
-	Channel  types.String `tfsdk:"channel"`
-	Revision types.Int64  `tfsdk:"revision"`
-	StoreURL types.String `tfsdk:"store_url"`
+	Name         types.String `tfsdk:"charm"`
+	Base         types.String `tfsdk:"base"`
+	Channel      types.String `tfsdk:"channel"`
+	Architecture types.String `tfsdk:"architecture"`
+	Revision     types.Int64  `tfsdk:"revision"`
+	StoreURL     types.String `tfsdk:"store_url"`
 	// Resources is a map that keys the resource name to the revision.
 	Resources map[string]types.String `tfsdk:"resources"`
 	// Provides and Requires are maps that key the endpoint name to the interface name.
@@ -84,6 +85,10 @@ func (d *charmDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 					stringvalidator.AlsoRequires(path.MatchRoot("base")),
 				},
 			},
+			"architecture": schema.StringAttribute{
+				Description: "The architecture of the charm, e.g. \"amd64\". Defaults to \"amd64\" when not set.",
+				Optional:    true,
+			},
 			"revision": schema.Int64Attribute{
 				Description: "The revision of the charm to fetch.",
 				Optional:    true,
@@ -124,9 +129,10 @@ func (d *charmDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	client := charmhub.New(storeURL, nil)
 
 	input := charmhub.CharmRefreshInput{
-		Name:    data.Name.ValueString(),
-		Base:    data.Base.ValueString(),
-		Channel: data.Channel.ValueString(),
+		Name:         data.Name.ValueString(),
+		Base:         data.Base.ValueString(),
+		Channel:      data.Channel.ValueString(),
+		Architecture: data.Architecture.ValueString(),
 	}
 	if !data.Revision.IsNull() && !data.Revision.IsUnknown() {
 		r := int(data.Revision.ValueInt64())
@@ -134,11 +140,12 @@ func (d *charmDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	}
 
 	tflog.Debug(ctx, "Refreshing charm from CharmHub", map[string]interface{}{
-		"charm":    input.Name,
-		"channel":  input.Channel,
-		"base":     input.Base,
-		"revision": input.Revision,
-		"storeURL": storeURL,
+		"charm":        input.Name,
+		"channel":      input.Channel,
+		"base":         input.Base,
+		"architecture": input.Architecture,
+		"revision":     input.Revision,
+		"storeURL":     storeURL,
 	})
 
 	result, err := client.Refresh(ctx, input)
