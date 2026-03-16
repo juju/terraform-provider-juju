@@ -3,12 +3,12 @@
 page_title: "juju_charm Data Source - terraform-provider-juju"
 subcategory: ""
 description: |-
-  A data source that fetches charm metadata from CharmHub, including the resolved revision, and the names and interfaces of all integrations the charm provides or requires.
+  A data source that fetches charm metadata from CharmHub, including the resolved revision, the names and interfaces of all integrations the charm provides or requires.
 ---
 
 # juju_charm (Data Source)
 
-A data source that fetches charm metadata from CharmHub, including the resolved revision, and the names and interfaces of all integrations the charm provides or requires.
+A data source that fetches charm metadata from CharmHub, including the resolved revision, the names and interfaces of all integrations the charm provides or requires.
 
 
 
@@ -24,7 +24,7 @@ A data source that fetches charm metadata from CharmHub, including the resolved 
 - `base` (String) The OS base for the charm in the form os@channel, e.g. "ubuntu@22.04".
 - `channel` (String) The channel to resolve, e.g. "3/stable". Required when revision is set.
 - `revision` (Number) The revision of the charm to fetch.
-- `store_url` (String) Base URL of the charm store. Defaults to the CharmHub production URL.
+- `store_url` (String) Base URL of the charm store. Defaults to https://charmhub.io/.
 
 ### Read-Only
 

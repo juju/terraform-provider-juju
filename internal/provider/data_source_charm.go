@@ -81,7 +81,6 @@ func (d *charmDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 				Optional:    true,
 				Computed:    true,
 				Validators: []validator.String{
-
 					stringvalidator.AlsoRequires(path.MatchRoot("base")),
 				},
 			},
