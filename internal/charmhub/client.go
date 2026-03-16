@@ -1,3 +1,6 @@
+// Copyright 2026 Canonical Ltd.
+// Licensed under the Apache License, Version 2.0, see LICENCE file for details.
+
 // Package charmhub provides a minimal HTTP client for the CharmHub refresh endpoint.
 package charmhub
 
@@ -17,8 +20,8 @@ import (
 )
 
 const (
+	// ProductionURL is the base URL of the production CharmHub API.
 	ProductionURL = "https://api.charmhub.io"
-	StagingURL    = "https://api.staging.charmhub.io"
 
 	refreshPath    = "/v2/charms/refresh"
 	defaultTimeout = 30 * time.Second
@@ -27,6 +30,7 @@ const (
 
 var refreshFields = []string{"bases", "metadata-yaml", "name", "resources", "revision"}
 
+// CharmRefreshInput contains the parameters for a charm refresh request.
 type CharmRefreshInput struct {
 	Name         string
 	Base         string // "os@channel", e.g. "ubuntu@22.04"
@@ -35,6 +39,7 @@ type CharmRefreshInput struct {
 	Revision     *int // nil = latest in channel; non-nil requires Channel to be set
 }
 
+// CharmRefreshResult contains the results of a charm refresh request.
 type CharmRefreshResult struct {
 	Name      string
 	Channel   string
@@ -45,6 +50,7 @@ type CharmRefreshResult struct {
 	Requires  map[string]charm.Relation
 }
 
+// Client is the CharmHub API client.
 type Client struct {
 	baseURL    string
 	httpClient *http.Client

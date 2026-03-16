@@ -28,18 +28,20 @@ func NewCharmDataSource() datasource.DataSource {
 }
 
 type charmDataSource struct {
-	subCtx context.Context
 }
 
 type charmDataSourceModel struct {
-	Name      types.String            `tfsdk:"charm"`
-	Base      types.String            `tfsdk:"base"`
-	Channel   types.String            `tfsdk:"channel"`
-	Revision  types.Int64             `tfsdk:"revision"`
-	StoreURL  types.String            `tfsdk:"store_url"`
-	Resources map[string]types.String `tfsdk:"resources"` // key: resource name, value: revision
-	Provides  map[string]types.String `tfsdk:"provides"`  // key: endpoint name, value: interface name
-	Requires  map[string]types.String `tfsdk:"requires"`  // key: endpoint name, value: interface name
+	Name     types.String `tfsdk:"charm"`
+	Base     types.String `tfsdk:"base"`
+	Channel  types.String `tfsdk:"channel"`
+	Revision types.Int64  `tfsdk:"revision"`
+	StoreURL types.String `tfsdk:"store_url"`
+	// Resources is a map that keys the resource name to the revision.
+	Resources map[string]types.String `tfsdk:"resources"`
+	// Provides and Requires are maps that key the endpoint name to the interface name.
+	Provides map[string]types.String `tfsdk:"provides"`
+	// Requires and Provides are maps that key the endpoint name to the interface name.
+	Requires map[string]types.String `tfsdk:"requires"`
 }
 
 // Metadata returns the full data source name as used in Terraform plans.
@@ -51,7 +53,7 @@ func (d *charmDataSource) Metadata(_ context.Context, req datasource.MetadataReq
 func (d *charmDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A data source that fetches charm metadata from CharmHub, " +
-			"including the resolved revision, and the names and interfaces of " +
+			"including the resolved revision, the names and interfaces of " +
 			"all integrations the charm provides or requires.",
 		Attributes: map[string]schema.Attribute{
 			"charm": schema.StringAttribute{
@@ -59,7 +61,7 @@ func (d *charmDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 				Required:    true,
 			},
 			"store_url": schema.StringAttribute{
-				Description: "Base URL of the charm store. Defaults to the CharmHub production URL.",
+				Description: "Base URL of the charm store. Defaults to https://charmhub.io/.",
 				Optional:    true,
 			},
 			"base": schema.StringAttribute{
@@ -137,6 +139,7 @@ func (d *charmDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		"channel":  input.Channel,
 		"base":     input.Base,
 		"revision": input.Revision,
+		"storeURL": storeURL,
 	})
 
 	result, err := client.Refresh(ctx, input)
