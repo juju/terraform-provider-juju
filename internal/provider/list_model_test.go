@@ -43,6 +43,17 @@ func TestAccListModels_Query(t *testing.T) {
 					}),
 				},
 			},
+			{
+				Config: testAccListModelsWithUUID(),
+				Query:  true,
+				QueryResultChecks: []querycheck.QueryResultCheck{
+					querycheck.ExpectIdentity("juju_model.test", map[string]knownvalue.Check{
+						"id": knownvalue.StringFunc(func(actual string) error {
+							return knownvalue.StringExact(modelUUID).CheckValue(actual)
+						}),
+					}),
+				},
+			},
 		},
 	})
 }
@@ -52,6 +63,19 @@ func testAccListModels() string {
 list "juju_model" "test" {
   provider         = juju
   include_resource = true
+}
+`
+}
+
+func testAccListModelsWithUUID() string {
+	return `
+list "juju_model" "test" {
+  provider         = juju
+  include_resource = true
+
+  config {
+    model_uuid = juju_model.model.uuid
+  }
 }
 `
 }
