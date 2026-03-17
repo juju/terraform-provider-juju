@@ -60,7 +60,13 @@ This keeps your deployments reproducible. However, it can be cumbersome.
 
 This section shows how to compute a charm's latest revision (based on a channel and a base) automatically using the built-in `juju_charm` data source.
 
-Use the `juju_charm` data source to resolve the current revision for a given charm, channel, and base:
+The way it works is:
+- The `juju_charm` data source queries Charmhub for the specified charm, channel, and base.
+- The resolved revision is available as `data.juju_charm.<name>.revision`.
+- The `juju_application` resource references this revision, ensuring reproducible deployments.
+- When you change the `channel` or `base` variables and run `terraform apply`, the data source fetches the new latest revision, and Terraform refreshes the charm.
+
+For example:
 
 ```terraform
 locals {
@@ -123,13 +129,6 @@ resource "juju_application" "apps" {
 }
 ```
 
-This works as follows:
-
-- The `juju_charm` data source queries Charmhub for the specified charm, channel, and base.
-- The resolved revision is available as `data.juju_charm.<name>.revision`.
-- The `juju_application` resource uses this revision, ensuring reproducible deployments.
-- When you change the `channel` or `base` variables and run `terraform apply`, the data source fetches the new latest revision, and Terraform refreshes the charm.
-
 (update-a-charm)=
 ## Update a charm
 
@@ -155,19 +154,19 @@ When the charm is changed, its resources will also be updated unless pinned.
 > 
 > See more: [`juju_application` > `charm` > nested schema ](../reference/terraform-provider/resources/application)
 
-(upgrade-a-charm-when-an-integration-would-break)=
-### Upgrade a charm when an integration would break
+(update-a-charm-when-an-relation-would-break)=
+### Update a charm when a relation would break
 
-When a charm's relation interface changes between revisions, upgrading the application while an existing integration is in place causes an error similar to:
+When a charm's relation interface changes between revisions, updating the application while an existing relation is in place causes an error similar to:
 
 ```
 cannot upgrade application "<consumer>" to charm "ch:amd64/<consumer>-<revision>":
-would break relation "<consumer>:<integration> <offerer>:<integration>"
+would break relation "<consumer>:<relation> <offerer>:<relation>"
 ```
 
-This happens because Juju refuses to upgrade an application when doing so would invalidate a live integration.
+This happens because Juju refuses to update an application when doing so would invalidate a live relation.
 
-The solution is to use the `juju_charm` data source to track the integration's interface name, store it in a `terraform_data` resource, and attach a `replace_triggered_by` lifecycle to the `juju_integration`. When the interface name changes, Terraform will destroy the integration, upgrade the application, and recreate the integration — in the correct order.
+The solution is to use the `juju_charm` data source to track the relation's interface name, store it in a `terraform_data` resource, and attach a `replace_triggered_by` lifecycle to the `juju_integration`. When the interface name changes, Terraform will destroy the relation, update the application, and recreate the relation — in the correct order.
 
 ```terraform
 locals {
@@ -230,7 +229,7 @@ This works as follows:
 - The `juju_charm` data source fetches the current interface name for the `ingress` endpoint from Charmhub.
 - The `terraform_data` resource stores that interface name. When the channel or revision changes and the interface name changes with it, `terraform_data.interface` is updated.
 - The `replace_triggered_by` lifecycle on `juju_integration` detects the change to `terraform_data.interface` and triggers a replacement of the integration resource.
-- Terraform destroys the integration first, then upgrades the application, then recreates the integration with the correct endpoint — avoiding the "would break relation" error.
+- Terraform destroys the integration first, then updates the application, then recreates the integration with the correct endpoint — avoiding the "would break relation" error.
 
 ## Remove a charm
 
