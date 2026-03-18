@@ -42,6 +42,10 @@ This documentation follows the [Diataxis framework](https://diataxis.fr/):
   - Use "the `juju` CLI" not "the Juju CLI" (backticks clarify it's the juju command, not any CLI that works with Juju)
   - Use "the `terraform` CLI" not "the Terraform CLI"
   - Rationale: Prevents confusion with other tools (e.g., Terraform Provider for Juju also qualifies as "a Juju CLI")
+- **Em-dashes with spaces**: Use ` -- ` (space-dash-dash-space) for em-dashes
+  - Good: "does not unset it on the controller -- it remains at its previous value"
+  - Bad: "does not unset it on the controller - it remains at its previous value"
+  - Rationale: Consistent punctuation style across documentation
 
 ## Structure & Organization
 - **Headings follow "Do X" pattern**: E.g., "Bootstrap a controller", "Import an existing controller"

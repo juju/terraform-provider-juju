@@ -17,6 +17,33 @@ To bootstrap a new Juju controller, configure the Terraform provider in controll
 ````{dropdown} Preview an example workflow: Bootstrap to LXD
 This example bootstraps a controller onto the local LXD cloud using certificate authentication.
 
+First, obtain credential values by running:
+
+```bash
+juju show-credentials --client localhost localhost --show-secrets
+```
+
+From the output, extract the certificate values and save them to `~/lxd-credentials.yaml`:
+
+```{code-block} yaml
+:caption: `~/lxd-credentials.yaml`
+
+client-cert: |
+  -----BEGIN CERTIFICATE-----
+  <your client certificate>
+  -----END CERTIFICATE-----
+client-key: |
+  -----BEGIN PRIVATE KEY-----
+  <your client key>
+  -----END PRIVATE KEY-----
+server-cert: |
+  -----BEGIN CERTIFICATE-----
+  <your server certificate>
+  -----END CERTIFICATE-----
+```
+
+Then, create your Terraform configuration:
+
 ```{code-block} terraform
 :caption: `main.tf`
 
@@ -71,33 +98,8 @@ resource "juju_controller" "this" {
 }
 ```
 
-```{code-block} yaml
-:caption: `~/lxd-credentials.yaml`
-
-client-cert: |
-  -----BEGIN CERTIFICATE-----
-  <your client certificate>
-  -----END CERTIFICATE-----
-client-key: |
-  -----BEGIN PRIVATE KEY-----
-  <your client key>
-  -----END PRIVATE KEY-----
-server-cert: |
-  -----BEGIN CERTIFICATE-----
-  <your server certificate>
-  -----END CERTIFICATE-----
-```
-
-Obtain credential values by running:
-
-```bash
-juju show-credentials --client localhost localhost --show-secrets
-```
-
-From the output, extract the certificate values and save them to `~/lxd-credentials.yaml`.
-
 ```{important}
-If you have installed Juju as a snap, use the path `/snap/juju/current/bin/juju` to avoid snap confinement issues.
+If you have installed Juju as a snap, use the path `/snap/juju/current/bin/juju` for `juju_binary` to avoid snap confinement issues.
 ```
 ````
 
@@ -183,13 +185,13 @@ resource "juju_controller" "this" {
 
 ```{important}
 **Configuration update behaviors:**
-1. **Removing a key** from `controller_config` does not unset it on the controller - it remains at its previous value
+1. **Removing a key** from `controller_config` does not unset it on the controller -- it remains at its previous value
 2. **Some settings cannot be changed** after bootstrap. Attempting to change them will result in an error, requiring you to destroy and recreate the controller
 3. **Boolean values** must be specified as strings: `"true"` or `"false"`, not bare boolean values
 
 To restore a setting to its default value, you must explicitly set it to the default value rather than removing it from the configuration.
 
-To discover valid configuration keys and values, use `juju bootstrap --help` or consult the Juju documentation. Many `juju_controller` resource attributes correspond directly to the flags and config options used by the `juju bootstrap` CLI.
+To discover valid configuration keys and values, use `juju bootstrap --help` or consult the Juju documentation. Many `juju_controller` resource attributes correspond directly to the flags and config options used by the `juju bootstrap` command.
 ```
 
 ### View controller configuration
