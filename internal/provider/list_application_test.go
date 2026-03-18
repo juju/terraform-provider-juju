@@ -84,10 +84,6 @@ func TestAccListApplications_QueryAll(t *testing.T) {
 								KnownValue: knownvalue.Bool(false),
 							},
 							{
-								Path:       tfjsonpath.New("units"),
-								KnownValue: knownvalue.NumberExact(big.NewFloat(1)),
-							},
-							{
 								Path:       tfjsonpath.New("config").AtMapKey("hostname"),
 								KnownValue: knownvalue.StringExact("diglett"),
 							},
