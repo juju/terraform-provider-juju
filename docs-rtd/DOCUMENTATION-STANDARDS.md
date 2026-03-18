@@ -54,7 +54,7 @@ This documentation follows the [Diataxis framework](https://diataxis.fr/):
 
 ## Anchor Standards
 - **Hyphenated lowercase of title**: `(bootstrap-a-controller)=`, `(set-up-the-terraform-provider-for-juju)=`
-- **Use correct verb forms**: "set-up" (verb) not "setup" (noun) when title uses "Set up"
+- **Use correct verb forms**: "set up" (verb) not "setup" (noun) when title uses "Set up"
 - **Match title structure**: `(enable-controller-high-availability)=` for "Enable controller high availability"
 
 ## Consistency Rules

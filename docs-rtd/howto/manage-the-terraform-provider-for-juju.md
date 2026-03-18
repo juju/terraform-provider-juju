@@ -48,7 +48,7 @@ In the same plan, define a `juju_controller` resource to bootstrap your controll
 
 ### In regular mode (using existing controllers)
 
-To set up the provider in regular mode, i.e., using existing an existing controller, choose one of three authentication methods:
+To set up the provider in regular mode, i.e., using an existing controller, choose one of three authentication methods:
 
 1. Static credentials in your Terraform plan;
 2. Environment variables;
