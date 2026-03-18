@@ -34,6 +34,14 @@ This documentation follows the [Diataxis framework](https://diataxis.fr/):
 - **Be direct**: No introductory phrases like "Here's how..." or "I will now..."
 - **Use brief bullets**: Not lengthy prose
 - **Action-oriented**: Start with what the user needs to do
+- **Location before action**: Specify where something should be done before stating what to do
+  - Good: "In your `juju_controller` resource, specify the `controller_config` attribute"
+  - Bad: "Specify the `controller_config` attribute in your `juju_controller` resource"
+  - Rationale: Reader needs context (where) before instruction (what)
+- **CLI references with precision**: Use backticks for command names to avoid ambiguity
+  - Use "the `juju` CLI" not "the Juju CLI" (backticks clarify it's the juju command, not any CLI that works with Juju)
+  - Use "the `terraform` CLI" not "the Terraform CLI"
+  - Rationale: Prevents confusion with other tools (e.g., Terraform Provider for Juju also qualifies as "a Juju CLI")
 
 ## Structure & Organization
 - **Headings follow "Do X" pattern**: E.g., "Bootstrap a controller", "Import an existing controller"
@@ -55,6 +63,7 @@ This documentation follows the [Diataxis framework](https://diataxis.fr/):
     - Rationale: Shows "proof it works" early, clear scope binding, doesn't bury example
     - Pattern: `[Title] → [Verbal recipe overview] → [Dropdown example] → [Generic procedure steps]`
     - **Verbal recipe overview**: 1-2 sentences listing the main elements/actions (e.g., "configure provider in controller mode, obtain credentials, define resource"). This primes readers for both the example and the generic workflow.
+    - **Consistency requirement**: The opening recipe overview and the detailed steps (after the example) must match. If the intro says "configure X, obtain Y, define Z", the detailed section must have corresponding numbered steps for X, Y, and Z in the same order. This prevents confusion when readers see the example first then read the details.
   - **Configuration sections** (parameters, options): Place dropdown **after generic procedure**
     - Rationale: Example needs context from procedure to make sense
   - **Short sections**: Use judgment - if example dominates, consider inline code blocks instead of dropdown

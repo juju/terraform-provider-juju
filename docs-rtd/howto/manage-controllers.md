@@ -12,7 +12,7 @@ myst:
 (bootstrap-a-controller)=
 ## Bootstrap a controller
 
-To bootstrap a new Juju controller, configure the Terraform provider in controller mode, obtain cloud credentials for your target cloud, and define a `juju_controller` resource specifying the controller name, cloud configuration, and credentials.
+To bootstrap a new Juju controller, configure the Terraform provider in controller mode, obtain cloud credentials for your target cloud, and define a `juju_controller` resource specifying the controller name, cloud configuration, and credentials. You can also configure the controller with various settings during bootstrap or update them later.
 
 ````{dropdown} Preview an example workflow: Bootstrap to LXD
 This example bootstraps a controller onto the local LXD cloud using certificate authentication.
@@ -115,20 +115,102 @@ Gather the necessary cloud credentials for your target cloud (e.g., LXD, AWS, Ku
 
 **3. Define the controller resource**
 
-Create a `juju_controller` resource with your controller name, cloud configuration, and credentials.
+Create a `juju_controller` resource with your controller name, cloud configuration, and credentials. You can also include `controller_config` and `controller_model_config` to configure the controller during bootstrap.
 
 After `terraform apply`, the resource exposes useful read-only attributes such as the controller `api_addresses`, `ca_cert`, `username`, and `password`.
 
-```{tip}
-**Changing configuration post-bootstrap:** After bootstrap, you can modify `controller_config` and `controller_model_config`. Note the following behaviors:
-1. Removing a key from `controller_config` will not unset it on the controller; it remains unchanged.
-2. Attempting to change a config value that Juju doesn't support changing after bootstrap will result in an error. You must destroy and recreate the controller to change these values.
-3. Boolean values must be specified as either "true" or "false".
+> See more: [`juju_controller` (resource)](../reference/terraform-provider/resources/controller), {ref}`configure-a-controller`
 
-To discover valid configuration keys and values, use `juju bootstrap --help` or consult the Juju documentation. Many `juju_controller` fields correspond directly to the flags and config options used by the `juju bootstrap` CLI.
+
+(configure-a-controller)=
+## Configure a controller
+
+> See also: {external+juju:ref}`Juju | Configuration <configuration>`, {external+juju:ref}`Juju | List of controller configuration keys <list-of-controller-configuration-keys>`
+
+A Juju controller can be configured with various settings that control its behavior. There are two types of configuration:
+
+- **Controller configuration** (`controller_config`) - Settings specific to the controller itself
+- **Controller model configuration** (`controller_model_config`) - Default model settings for the controller model
+
+You can configure these settings either during bootstrap or after the controller is created.
+
+### Configure during bootstrap
+
+To configure a controller during bootstrap, in your `juju_controller` resource specify the `controller_config` and/or `controller_model_config` attributes. For example:
+
+```terraform
+resource "juju_controller" "this" {
+  name        = "configured-controller"
+  juju_binary = "/snap/juju/current/bin/juju"
+
+  cloud = {
+    # cloud configuration...
+  }
+
+  cloud_credential = {
+    # credential configuration...
+  }
+
+  # Controller-specific configuration
+  controller_config = {
+    "audit-log-max-backups"  = "10"
+    "query-tracing-enabled"  = "true"
+  }
+
+  # Controller model configuration
+  controller_model_config = {
+    "juju-http-proxy"   = "http://my-proxy.internal"
+    "disable-telemetry" = "true"
+  }
+}
 ```
 
-> See more: [`juju_controller` (resource)](../reference/terraform-provider/resources/controller)
+### Configure post-bootstrap
+
+To update controller configuration after bootstrap, modify the `controller_config` or `controller_model_config` attributes in your Terraform configuration and run `terraform apply`:
+
+```terraform
+resource "juju_controller" "this" {
+  # ... existing configuration ...
+
+  controller_config = {
+    "audit-log-max-backups"  = "15"      # Updated from 10
+    "query-tracing-enabled"  = "true"
+    "audit-log-capture-args" = "true"    # Newly added
+  }
+}
+```
+
+```{important}
+**Configuration update behaviors:**
+1. **Removing a key** from `controller_config` does not unset it on the controller - it remains at its previous value
+2. **Some settings cannot be changed** after bootstrap. Attempting to change them will result in an error, requiring you to destroy and recreate the controller
+3. **Boolean values** must be specified as strings: `"true"` or `"false"`, not bare boolean values
+
+To restore a setting to its default value, you must explicitly set it to the default value rather than removing it from the configuration.
+
+To discover valid configuration keys and values, use `juju bootstrap --help` or consult the Juju documentation. Many `juju_controller` resource attributes correspond directly to the flags and config options used by the `juju bootstrap` CLI.
+```
+
+### View controller configuration
+
+To view the current controller configuration managed by Terraform:
+
+```bash
+# View full controller state including configuration
+terraform state show juju_controller.this
+
+# Or view specific attributes
+terraform state show juju_controller.this | grep -A 10 controller_config
+```
+
+The Terraform state reflects the configuration values you've set. To see all configuration values including defaults set by Juju, use the `juju` CLI:
+
+```bash
+juju controller-config -c <controller-name>
+```
+
+> See more: {external+juju:ref}`juju controller-config <command-juju-controller-config>`
 
 
 (enable-controller-high-availability)=
@@ -471,3 +553,12 @@ resource "juju_jaas_access_controller" "development" {
 ```
 
 > See more: [`juju_jaas_access_controller`](../reference/terraform-provider/resources/jaas_access_controller), {external+jaas:ref}`JAAS | Controller access levels <list-of-controller-permissions>`
+
+(remove-a-controller)=
+## Remove a controller
+
+> See also: {external+juju:ref}`Juju | Removing things <removing-things>`
+
+To remove a controller, remove its resource definition from your Terraform plan.
+
+> See more: [`juju_controller` (resource)](../reference/terraform-provider/resources/controller)
