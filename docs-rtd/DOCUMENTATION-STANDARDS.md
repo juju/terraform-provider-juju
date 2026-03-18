@@ -51,13 +51,15 @@ This documentation follows the [Diataxis framework](https://diataxis.fr/):
 - **Steps = workflow actions only**: Non-workflow info goes in notes/tips, not numbered steps
 - **Examples in dropdowns**: Labeled "Example workflow:" or "Preview an example workflow:" not "Complete example:"
 - **Example placement by content type**:
-  - **Workflow sections** (Bootstrap, Import, Deploy, etc.): Place dropdown **after opening sentence(s)** that explain what/why, but **before generic procedure**
+  - **Workflow sections** (Bootstrap, Import, Deploy, etc.): Place dropdown **after opening recipe overview**, but **before generic procedure**
     - Rationale: Shows "proof it works" early, clear scope binding, doesn't bury example
-    - Pattern: `[Title] → [1-2 sentences: what and why] → [Dropdown example] → [Generic procedure steps]`
+    - Pattern: `[Title] → [Verbal recipe overview] → [Dropdown example] → [Generic procedure steps]`
+    - **Verbal recipe overview**: 1-2 sentences listing the main elements/actions (e.g., "configure provider in controller mode, obtain credentials, define resource"). This primes readers for both the example and the generic workflow.
   - **Configuration sections** (parameters, options): Place dropdown **after generic procedure**
     - Rationale: Example needs context from procedure to make sense
   - **Short sections**: Use judgment - if example dominates, consider inline code blocks instead of dropdown
 - **No unnecessary subsections**: Examples shouldn't create TOC clutter
+- **Code blocks with filenames**: Use `{code-block}` directive with `:caption: `filename`` for semantic file labeling
 
 ## Anchor Standards
 - **Hyphenated lowercase of title**: `(bootstrap-a-controller)=`, `(set-up-the-terraform-provider-for-juju)=`

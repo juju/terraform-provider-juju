@@ -12,14 +12,14 @@ myst:
 (bootstrap-a-controller)=
 ## Bootstrap a controller
 
-To bootstrap a new Juju controller, use the `juju_controller` resource.
+To bootstrap a new Juju controller, configure the Terraform provider in controller mode, obtain cloud credentials for your target cloud, and define a `juju_controller` resource specifying the controller name, cloud configuration, and credentials.
 
 ````{dropdown} Preview an example workflow: Bootstrap to LXD
-This example shows a complete workflow for bootstrapping a controller onto the local LXD cloud using certificate authentication.
+This example bootstraps a controller onto the local LXD cloud using certificate authentication.
 
-**1. Configure the provider for controller mode:**
+```{code-block} terraform
+:caption: `main.tf`
 
-```terraform
 terraform {
   required_providers {
     juju = {
@@ -32,22 +32,7 @@ terraform {
 provider "juju" {
   controller_mode = true
 }
-```
 
-**2. Obtain your LXD credential values (including secrets):**
-
-```bash
-juju show-credentials --client localhost localhost --show-secrets
-```
-
-From the output, you will need the values `client-cert`, `client-key`, and `server-cert`.
-Keep them out of version control (for example, pass them via `TF_VAR_...` environment variables, a secrets manager, or a `.tfvars` file you do not commit).
-
-**3. Declare the controller:**
-
-Here we use the `localhost` cloud which is already known to the Juju CLI. Private clouds can be specified by filling the remainder of the fields in the `cloud` object.
-
-```terraform
 resource "juju_controller" "this" {
   name = "test-controller"
 
@@ -79,9 +64,38 @@ resource "juju_controller" "this" {
   controller_model_config = {
     "juju-http-proxy" = "http://my-proxy.internal"
   }
-
 }
 ```
+
+```{code-block} terraform
+:caption: `variables.tf`
+
+variable "lxd_client_cert" {
+  description = "LXD client certificate"
+  type        = string
+  sensitive   = true
+}
+
+variable "lxd_client_key" {
+  description = "LXD client key"
+  type        = string
+  sensitive   = true
+}
+
+variable "lxd_server_cert" {
+  description = "LXD server certificate"
+  type        = string
+  sensitive   = true
+}
+```
+
+Obtain credential values by running:
+
+```bash
+juju show-credentials --client localhost localhost --show-secrets
+```
+
+From the output, extract `client-cert`, `client-key`, and `server-cert`. Pass them via `TF_VAR_*` environment variables, a secrets manager, or a `.tfvars` file (not committed to version control).
 
 ```{important}
 If you have installed Juju as a snap, use the path `/snap/juju/current/bin/juju` to avoid snap confinement issues.
@@ -102,12 +116,7 @@ Gather the necessary cloud credentials for your target cloud (e.g., LXD, AWS, Ku
 
 **3. Define the controller resource**
 
-Create a `juju_controller` resource specifying:
-- Controller name
-- Path to the Juju binary
-- Cloud configuration (name, type, auth types)
-- Cloud credentials
-- Optional: Controller and model configuration
+Create a `juju_controller` resource with your controller name, cloud configuration, and credentials.
 
 After `terraform apply`, the resource exposes useful read-only attributes such as the controller `api_addresses`, `ca_cert`, `username`, and `password`.
 
@@ -221,7 +230,7 @@ To scale an HA controller in, remove its backing machines manually  via the `juj
 (import-an-existing-controller)=
 ## Import an existing controller
 
-If you have a controller that was created outside of Terraform (for example, via `juju bootstrap`), you can import it into your Terraform state as a managed resource.
+To import an existing controller into Terraform, gather its connection details from `juju show-controller`, define a matching `juju_controller` resource with cloud and credential configuration, create an import block with the connection information, and add lifecycle rules to ignore attributes that differ between your plan and the controller's actual state.
 
 ```{note}
 This operation imports the controller as a **resource** that Terraform will manage. Controllers cannot be referenced as data sources (read-only). Once imported, Terraform will track the controller's state and can make changes to its configuration.
@@ -230,7 +239,9 @@ This operation imports the controller as a **resource** that Terraform will mana
 ````{dropdown} Preview an example workflow: Import LXD controller
 This example shows a complete workflow for importing an LXD controller.
 
-```terraform
+```{code-block} terraform
+:caption: `main.tf`
+
 provider "juju" {
   controller_mode = true
 }
@@ -289,7 +300,9 @@ The `cloud_credential.attributes["client-cert"]` and `cloud_credential.attribute
 ````{dropdown} Preview an example workflow: Import MicroK8s controller
 This example shows a complete workflow for importing a MicroK8s controller.
 
-```terraform
+```{code-block} terraform
+:caption: `main.tf`
+
 provider "juju" {
   controller_mode = true
 }
@@ -357,15 +370,6 @@ To import a controller, you need its connection details. You can obtain these by
 juju show-controller --show-password
 ```
 
-From the output, you will need:
-- Controller name
-- API addresses
-- CA certificate
-- Admin username (typically `admin`)
-- Admin password
-- Controller UUID
-- Credential name
-
 **2. Create an import block.**
 
 Create an `import` block with the identity schema containing the controller's connection information:
@@ -416,6 +420,9 @@ resource "juju_controller" "imported" {
 
 Then run `terraform plan`. Terraform will detect the import block and import the controller during the next `terraform apply`.
 
+
+> See more: [`juju_controller` (resource)](../reference/terraform-provider/resources/controller)
+
 **4. Verify the imported controller.**
 
 After importing:
@@ -432,9 +439,6 @@ c. Run `terraform plan` again. You should see either no changes or only expected
 ```{tip}
 If you see `controller_config` or `controller_model_config` showing changes to set default values, you can either apply them (they will update the controller configuration which is idempotent) or add these blocks to `ignore_changes` to prevent the updates.
 ```
-
-> See more: [`juju_controller` (resource)](../reference/terraform-provider/resources/controller)
-
 
 (add-a-cloud-to-a-controller)=
 ## Add a cloud to a controller
