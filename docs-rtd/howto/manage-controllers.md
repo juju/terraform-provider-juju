@@ -33,6 +33,10 @@ provider "juju" {
   controller_mode = true
 }
 
+locals {
+  lxd_creds = yamldecode(file("~/lxd-credentials.yaml"))
+}
+
 resource "juju_controller" "this" {
   name = "test-controller"
 
@@ -48,9 +52,9 @@ resource "juju_controller" "this" {
     name      = "localhost"
     auth_type = "certificate"
     attributes = {
-      "client-cert" = var.lxd_client_cert
-      "client-key"  = var.lxd_client_key
-      "server-cert" = var.lxd_server_cert
+      "client-cert" = local.lxd_creds.client-cert
+      "client-key"  = local.lxd_creds.client-key
+      "server-cert" = local.lxd_creds.server-cert
     }
   }
 
@@ -67,26 +71,21 @@ resource "juju_controller" "this" {
 }
 ```
 
-```{code-block} terraform
-:caption: `variables.tf`
+```{code-block} yaml
+:caption: `~/lxd-credentials.yaml`
 
-variable "lxd_client_cert" {
-  description = "LXD client certificate"
-  type        = string
-  sensitive   = true
-}
-
-variable "lxd_client_key" {
-  description = "LXD client key"
-  type        = string
-  sensitive   = true
-}
-
-variable "lxd_server_cert" {
-  description = "LXD server certificate"
-  type        = string
-  sensitive   = true
-}
+client-cert: |
+  -----BEGIN CERTIFICATE-----
+  <your client certificate>
+  -----END CERTIFICATE-----
+client-key: |
+  -----BEGIN PRIVATE KEY-----
+  <your client key>
+  -----END PRIVATE KEY-----
+server-cert: |
+  -----BEGIN CERTIFICATE-----
+  <your server certificate>
+  -----END CERTIFICATE-----
 ```
 
 Obtain credential values by running:
@@ -95,14 +94,14 @@ Obtain credential values by running:
 juju show-credentials --client localhost localhost --show-secrets
 ```
 
-From the output, extract `client-cert`, `client-key`, and `server-cert`. Pass them via `TF_VAR_*` environment variables, a secrets manager, or a `.tfvars` file (not committed to version control).
+From the output, extract the certificate values and save them to `~/lxd-credentials.yaml`.
 
 ```{important}
 If you have installed Juju as a snap, use the path `/snap/juju/current/bin/juju` to avoid snap confinement issues.
 ```
 ````
 
-The general workflow is:
+In more detail:
 
 **1. Set up the provider in controller mode**
 
@@ -360,7 +359,7 @@ The `cloud.region` is not required during bootstrap but may be set by Juju and n
 ```
 ````
 
-The general workflow is:
+In more detail:
 
 **1. Get controller connection information.**
 
