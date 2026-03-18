@@ -18,7 +18,7 @@ To bootstrap a new Juju controller, use the `juju_controller` resource. The gene
 
 Configure the provider with `controller_mode = true`. This enables bootstrapping and restricts resource creation to controllers only.
 
-> See more: {ref}`For controller mode (bootstrapping) <setup-provider>`
+> See more: {ref}`Set up the provider in controller mode (bootstrapping) <set-up-the-terraform-provider-for-juju>`
 
 **2. Obtain cloud credentials**
 

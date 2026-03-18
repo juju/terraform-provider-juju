@@ -27,14 +27,14 @@ For example, on a Linux that supports snaps:
 sudo snap install terraform --classic
 ```
 
-(setup-provider)=
+(set-up-the-terraform-provider-for-juju)=
 ## Set up the Terraform Provider for Juju
 
 The provider supports two modes: **controller mode** (for bootstrapping) and **regular mode** (for using existing controllers).
 
-### For controller mode (bootstrapping)
+### In controller mode (bootstrapping)
 
-To bootstrap a new controller, in your Terraform plan (e.g., `main.tf`) define the provider with `controller_mode = true`:
+To set up the provider in controller mode for the purpose of bootstrapping a new controller, in your Terraform plan (e.g., `main.tf`) define the provider with `controller_mode = true`:
 
 ```terraform
 provider "juju" {
@@ -46,9 +46,9 @@ In the same plan, define a `juju_controller` resource to bootstrap your controll
 
 > See more: {ref}`bootstrap-a-controller`
 
-### For regular mode (using existing controllers)
+### In regular mode (using existing controllers)
 
-To connect to an existing controller, choose one of three authentication methods:
+To set up the provider in regular mode, i.e., using existing an existing controller, choose one of three authentication methods:
 
 1. Static credentials in your Terraform plan;
 2. Environment variables;
@@ -159,7 +159,7 @@ terraform {
 
 In your Terraform plan, configure the `provider` with the details of your existing, Juju or JIMM controller.
 
-> See more: {ref}`setup-provider`
+> See more: {ref}`set-up-the-terraform-provider-for-juju`
 
 #### c. Build your deployment
 
