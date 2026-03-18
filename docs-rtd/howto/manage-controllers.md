@@ -111,7 +111,7 @@ Configure the provider with `controller_mode = true`. This enables bootstrapping
 
 **2. Obtain cloud credentials**
 
-Gather the necessary cloud credentials for your target cloud (e.g., LXD, AWS, Kubernetes). These typically include authentication certificates, keys, or tokens.
+Gather the necessary cloud credentials for your target cloud (e.g., LXD, AWS, Kubernetes). These typically include authentication certificates, keys, or tokens. Keep them out of version control; for example, pass them via `TF_VAR_...` environment variables, a secrets manager, or a `.tfvars` file you do not commit.
 
 **3. Define the controller resource**
 
