@@ -537,14 +537,14 @@ func (r *machineResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	// Only the name or annotations can be updated in the terraform data.
-	if plan.Name.Equal(state.Name) && state.Annotations.Equal(plan.Annotations) {
+	if plan.Name.Equal(state.Name) && state.Annotations.Equal(plan.Annotations) && plan.Timeouts.Equal(state.Timeouts) {
 		return
 	}
 	state.Name = plan.Name
 	id := newMachineID(plan.ModelUUID.ValueString(), state.MachineID.ValueString(), plan.Name.ValueString())
 	state.ID = types.StringValue(id)
 	state.Annotations = plan.Annotations
-
+	state.Timeouts = plan.Timeouts
 	r.trace(fmt.Sprintf("update machine resource %q", plan.MachineID.ValueString()))
 
 	// Save updated data into Terraform state

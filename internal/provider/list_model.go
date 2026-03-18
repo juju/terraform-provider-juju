@@ -19,6 +19,10 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
+type listModelRequest struct {
+	ModelUUID types.String `tfsdk:"model_uuid"`
+}
+
 type modelLister struct {
 	client *juju.Client
 	config juju.Config
@@ -60,23 +64,41 @@ func (r *modelLister) Metadata(_ context.Context, req resource.MetadataRequest, 
 // ListResourceConfigSchema implements the ListResourceSchema interface.
 func (r *modelLister) ListResourceConfigSchema(_ context.Context, _ list.ListResourceSchemaRequest, resp *list.ListResourceSchemaResponse) {
 	resp.Schema = listschema.Schema{
-		Attributes: map[string]listschema.Attribute{},
+		Attributes: map[string]listschema.Attribute{
+			"model_uuid": listschema.StringAttribute{
+				Description: "Filter results to a specific model UUID.",
+				Optional:    true,
+			},
+		},
 	}
 }
 
 // List implements the ListResource interface, retrieving the list of models and sending them to the framework.
 func (r *modelLister) List(ctx context.Context, req list.ListRequest, stream *list.ListResultsStream) {
-	ids, err := r.client.Models.ListModels()
-	if err != nil {
-		stream.Results = list.ListResultsStreamDiagnostics(
-			diag.Diagnostics{
-				diag.NewErrorDiagnostic(
-					"Client error",
-					fmt.Sprintf("Unable to list models, got error: %s", err),
-				),
-			},
-		)
+	var listRequest listModelRequest
+	diags := req.Config.Get(ctx, &listRequest)
+	if diags.HasError() {
+		stream.Results = list.ListResultsStreamDiagnostics(diags)
 		return
+	}
+
+	var ids []string
+	if !listRequest.ModelUUID.IsNull() && !listRequest.ModelUUID.IsUnknown() {
+		ids = []string{listRequest.ModelUUID.ValueString()}
+	} else {
+		var err error
+		ids, err = r.client.Models.ListModels()
+		if err != nil {
+			stream.Results = list.ListResultsStreamDiagnostics(
+				diag.Diagnostics{
+					diag.NewErrorDiagnostic(
+						"Client error",
+						fmt.Sprintf("Unable to list models, got error: %s", err),
+					),
+				},
+			)
+			return
+		}
 	}
 
 	stream.Results = func(push func(list.ListResult) bool) {

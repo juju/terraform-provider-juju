@@ -326,11 +326,14 @@ func (r *applicationLister) getApplicationResource(
 	// Set trust
 	appModel.Trust = types.BoolValue(res.Trust)
 
-	// Set units
-	if res.Principal || res.Units > 0 {
-		appModel.UnitCount = types.Int64Value(int64(res.Units))
-	} else {
-		appModel.UnitCount = types.Int64Value(1)
+	// Set units for caas models.
+	// In case of iaas models, we set `machines`.
+	if res.ModelType == names.CAASModelTagKind {
+		if res.Principal || res.Units > 0 {
+			appModel.UnitCount = types.Int64Value(int64(res.Units))
+		} else {
+			appModel.UnitCount = types.Int64Value(1)
+		}
 	}
 
 	return appModel, nil
