@@ -12,30 +12,9 @@ myst:
 (bootstrap-a-controller)=
 ## Bootstrap a controller
 
-To bootstrap a new Juju controller, use the `juju_controller` resource. The general workflow is:
+To bootstrap a new Juju controller, use the `juju_controller` resource.
 
-**1. Set up the provider in controller mode**
-
-Configure the provider with `controller_mode = true`. This enables bootstrapping and restricts resource creation to controllers only.
-
-> See more: {ref}`Set up the provider in controller mode (bootstrapping) <set-up-the-terraform-provider-for-juju>`
-
-**2. Obtain cloud credentials**
-
-Gather the necessary cloud credentials for your target cloud (e.g., LXD, AWS, Kubernetes). These typically include authentication certificates, keys, or tokens.
-
-**3. Define the controller resource**
-
-Create a `juju_controller` resource specifying:
-- Controller name
-- Path to the Juju binary
-- Cloud configuration (name, type, auth types)
-- Cloud credentials
-- Optional: Controller and model configuration
-
-After `terraform apply`, the resource exposes useful read-only attributes such as the controller `api_addresses`, `ca_cert`, `username`, and `password`.
-
-````{dropdown} Example workflow: Bootstrap to LXD
+````{dropdown} Preview an example workflow: Bootstrap to LXD
 This example shows a complete workflow for bootstrapping a controller onto the local LXD cloud using certificate authentication.
 
 **1. Configure the provider for controller mode:**
@@ -108,6 +87,29 @@ resource "juju_controller" "this" {
 If you have installed Juju as a snap, use the path `/snap/juju/current/bin/juju` to avoid snap confinement issues.
 ```
 ````
+
+The general workflow is:
+
+**1. Set up the provider in controller mode**
+
+Configure the provider with `controller_mode = true`. This enables bootstrapping and restricts resource creation to controllers only.
+
+> See more: {ref}`Set up the provider in controller mode (bootstrapping) <set-up-the-terraform-provider-for-juju>`
+
+**2. Obtain cloud credentials**
+
+Gather the necessary cloud credentials for your target cloud (e.g., LXD, AWS, Kubernetes). These typically include authentication certificates, keys, or tokens.
+
+**3. Define the controller resource**
+
+Create a `juju_controller` resource specifying:
+- Controller name
+- Path to the Juju binary
+- Cloud configuration (name, type, auth types)
+- Cloud credentials
+- Optional: Controller and model configuration
+
+After `terraform apply`, the resource exposes useful read-only attributes such as the controller `api_addresses`, `ca_cert`, `username`, and `password`.
 
 ```{tip}
 **Changing configuration post-bootstrap:** After bootstrap, you can modify `controller_config` and `controller_model_config`. Note the following behaviors:
@@ -225,6 +227,128 @@ If you have a controller that was created outside of Terraform (for example, via
 This operation imports the controller as a **resource** that Terraform will manage. Controllers cannot be referenced as data sources (read-only). Once imported, Terraform will track the controller's state and can make changes to its configuration.
 ```
 
+````{dropdown} Preview an example workflow: Import LXD controller
+This example shows a complete workflow for importing an LXD controller.
+
+```terraform
+provider "juju" {
+  controller_mode = true
+}
+
+resource "juju_controller" "imported" {
+  name = "my-lxd-controller"
+
+  juju_binary = "/snap/juju/current/bin/juju"
+
+  cloud = {
+    name       = "localhost"
+    type       = "lxd"
+    auth_types = ["certificate"]
+  }
+
+  cloud_credential = {
+    name      = "localhost"
+    auth_type = "certificate"
+    attributes = {
+      <attrs>
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      cloud.endpoint,
+      cloud.region,
+      cloud_credential.attributes["client-cert"],
+      cloud_credential.attributes["client-key"],
+    ]
+  }
+}
+
+import {
+  to = juju_controller.imported
+  identity = {
+    name            = "my-lxd-controller"
+    api_addresses   = ["<ip>:17070"]
+    username        = "admin"
+    password        = "<password>"
+    ca_cert         = <<-EOT
+      -----BEGIN CERTIFICATE-----
+      -----END CERTIFICATE-----
+    EOT
+    controller_uuid = "<controller-uuid>"
+    credential_name = "<credential-name>"
+  }
+}
+```
+
+```{note}
+The `cloud_credential.attributes["client-cert"]` and `cloud_credential.attributes["client-key"]` are not required to bootstrap an LXD controller, but they are populated in the state during import because they are fetched from the controller. The same applies to `cloud.endpoint` and `cloud.region`, which may be set by Juju during bootstrap even if not explicitly specified.
+```
+````
+
+````{dropdown} Preview an example workflow: Import MicroK8s controller
+This example shows a complete workflow for importing a MicroK8s controller.
+
+```terraform
+provider "juju" {
+  controller_mode = true
+}
+
+resource "juju_controller" "imported" {
+  name = "my-k8s-controller"
+
+  juju_binary = "/snap/juju/current/bin/juju"
+
+  cloud = {
+    name                = "test-k8s"
+    type                = "kubernetes"
+    auth_types          = ["clientcertificate"]
+    endpoint            = var.k8s_endpoint
+    ca_certificates     = [var.k8s_ca_cert]
+    host_cloud_region   = "localhost"
+  }
+
+  cloud_credential = {
+    name      = "test-credential"
+    auth_type = "clientcertificate"
+    attributes = {
+      "ClientCertificateData" = var.k8s_client_cert
+      "ClientKeyData"         = var.k8s_client_key
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      cloud.region,
+      cloud.host_cloud_region
+    ]
+  }
+}
+
+import {
+  to = juju_controller.imported
+  identity = {
+    name            = "my-k8s-controller"
+    api_addresses   = ["<ip>:17070"]
+    username        = "admin"
+    password        = "<password>"
+    ca_cert         = <<-EOT
+      -----BEGIN CERTIFICATE-----
+      -----END CERTIFICATE-----
+    EOT
+    controller_uuid = "<controller-uuid>"
+    credential_name = "<credential-name>"
+  }
+}
+```
+
+```{note}
+The `cloud.region` is not required during bootstrap but may be set by Juju and needs to be ignored. The `cloud.host_cloud_region` cannot be fetched from the controller after bootstrap, so it must be ignored to prevent Terraform from attempting to replace the controller.
+```
+````
+
+The general workflow is:
+
 **1. Get controller connection information.**
 
 To import a controller, you need its connection details. You can obtain these by running:
@@ -309,125 +433,7 @@ c. Run `terraform plan` again. You should see either no changes or only expected
 If you see `controller_config` or `controller_model_config` showing changes to set default values, you can either apply them (they will update the controller configuration which is idempotent) or add these blocks to `ignore_changes` to prevent the updates.
 ```
 
-````{dropdown} Example workflow: Import LXD controller
-This example shows a complete workflow for importing an LXD controller.
-
-```terraform
-provider "juju" {
-  controller_mode = true
-}
-
-resource "juju_controller" "imported" {
-  name = "my-lxd-controller"
-
-  juju_binary = "/snap/juju/current/bin/juju"
-
-  cloud = {
-    name       = "localhost"
-    type       = "lxd"
-    auth_types = ["certificate"]
-  }
-
-  cloud_credential = {
-    name      = "localhost"
-    auth_type = "certificate"
-    attributes = {
-      <attrs>
-    }
-  }
-
-  lifecycle {
-    ignore_changes = [
-      cloud.endpoint,
-      cloud.region,
-      cloud_credential.attributes["client-cert"],
-      cloud_credential.attributes["client-key"],
-    ]
-  }
-}
-
-import {
-  to = juju_controller.imported
-  identity = {
-    name            = "my-lxd-controller"
-    api_addresses   = ["<ip>:17070"]
-    username        = "admin"
-    password        = "<password>"
-    ca_cert         = <<-EOT
-      -----BEGIN CERTIFICATE-----
-      -----END CERTIFICATE-----
-    EOT
-    controller_uuid = "<controller-uuid>"
-    credential_name = "<credential-name>"
-  }
-}
-```
-
-```{note}
-The `cloud_credential.attributes["client-cert"]` and `cloud_credential.attributes["client-key"]` are not required to bootstrap an LXD controller, but they are populated in the state during import because they are fetched from the controller. The same applies to `cloud.endpoint` and `cloud.region`, which may be set by Juju during bootstrap even if not explicitly specified.
-```
-````
-
-````{dropdown} Example workflow: Import MicroK8s controller
-This example shows a complete workflow for importing a MicroK8s controller.
-
-```terraform
-provider "juju" {
-  controller_mode = true
-}
-
-resource "juju_controller" "imported" {
-  name = "my-k8s-controller"
-
-  juju_binary = "/snap/juju/current/bin/juju"
-
-  cloud = {
-    name                = "test-k8s"
-    type                = "kubernetes"
-    auth_types          = ["clientcertificate"]
-    endpoint            = var.k8s_endpoint
-    ca_certificates     = [var.k8s_ca_cert]
-    host_cloud_region   = "localhost"
-  }
-
-  cloud_credential = {
-    name      = "test-credential"
-    auth_type = "clientcertificate"
-    attributes = {
-      "ClientCertificateData" = var.k8s_client_cert
-      "ClientKeyData"         = var.k8s_client_key
-    }
-  }
-
-  lifecycle {
-    ignore_changes = [
-      cloud.region,
-      cloud.host_cloud_region
-    ]
-  }
-}
-
-import {
-  to = juju_controller.imported
-  identity = {
-    name            = "my-k8s-controller"
-    api_addresses   = ["<ip>:17070"]
-    username        = "admin"
-    password        = "<password>"
-    ca_cert         = <<-EOT
-      -----BEGIN CERTIFICATE-----
-      -----END CERTIFICATE-----
-    EOT
-    controller_uuid = "<controller-uuid>"
-    credential_name = "<credential-name>"
-  }
-}
-```
-
-```{note}
-The `cloud.region` is not required during bootstrap but may be set by Juju and needs to be ignored. The `cloud.host_cloud_region` cannot be fetched from the controller after bootstrap, so it must be ignored to prevent Terraform from attempting to replace the controller.
-```
-````
+> See more: [`juju_controller` (resource)](../reference/terraform-provider/resources/controller)
 
 
 (add-a-cloud-to-a-controller)=

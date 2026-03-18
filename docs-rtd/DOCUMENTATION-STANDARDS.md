@@ -49,7 +49,14 @@ This documentation follows the [Diataxis framework](https://diataxis.fr/):
   - The TOC becomes a quick outline of what's possible and in what order
   - Example sequence: "Install the provider → Set up the provider → Bootstrap a controller → Enable HA → Import a controller"
 - **Steps = workflow actions only**: Non-workflow info goes in notes/tips, not numbered steps
-- **Examples in dropdowns**: Labeled "Example workflow:" not "Complete example:"
+- **Examples in dropdowns**: Labeled "Example workflow:" or "Preview an example workflow:" not "Complete example:"
+- **Example placement by content type**:
+  - **Workflow sections** (Bootstrap, Import, Deploy, etc.): Place dropdown **after opening sentence(s)** that explain what/why, but **before generic procedure**
+    - Rationale: Shows "proof it works" early, clear scope binding, doesn't bury example
+    - Pattern: `[Title] → [1-2 sentences: what and why] → [Dropdown example] → [Generic procedure steps]`
+  - **Configuration sections** (parameters, options): Place dropdown **after generic procedure**
+    - Rationale: Example needs context from procedure to make sense
+  - **Short sections**: Use judgment - if example dominates, consider inline code blocks instead of dropdown
 - **No unnecessary subsections**: Examples shouldn't create TOC clutter
 
 ## Anchor Standards
