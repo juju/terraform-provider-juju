@@ -3,6 +3,7 @@ list "juju_model" "this" {
   include_resource = true
 
   config {
-    model_uuid = "<model-uuid>"
+    # Optional: filter by model uuid
+    # model_uuid = "<model-uuid>"
   }
 }
