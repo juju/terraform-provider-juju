@@ -1023,9 +1023,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 
 	if !plan.UnitCount.Equal(state.UnitCount) && (plan.Machines.IsNull() || plan.Machines.IsUnknown()) {
 		updateApplicationInput.Units = intPtr(plan.UnitCount)
-
-		// TODO (simonedutto): add assertion that the application has the
-		// desired number of units
+		asserts = append(asserts, assertEqualsUnitCount(int(plan.UnitCount.ValueInt64())))
 	}
 
 	if !plan.Trust.Equal(state.Trust) {
@@ -1566,6 +1564,20 @@ func assertEqualsMachines(machinesToCompare []string) func(outputFromAPI *juju.R
 
 		if !slices.Equal(machineFromAPI, machinesToCompare) {
 			return juju.NewRetryReadError("plan machines differ from application machines")
+		}
+
+		return nil
+	}
+}
+
+func assertEqualsUnitCount(unitsToCompare int) func(outputFromAPI *juju.ReadApplicationResponse) error {
+	return func(outputFromAPI *juju.ReadApplicationResponse) error {
+		if outputFromAPI.Units != unitsToCompare {
+			return juju.NewRetryReadError("plan units differ from application units")
+		}
+
+		if unitsToCompare == 0 && len(outputFromAPI.Machines) > 0 {
+			return juju.NewRetryReadError("expected no machines for zero-unit application")
 		}
 
 		return nil
