@@ -268,13 +268,15 @@ To export the Terraform configuration from a model, you can leverage `terraform 
 
 To do this:
 
-### Define the connection details for the controller
+### Ensure the provider is connected to the model's host controller
 
 To export the Terraform configuration for a model, configure the provider to connect to the controller that hosts the model.
 
-Create the `main.tf` file:
+For example:
 
-```terraform
+```{code-block} terraform
+:caption: `main.tf`
+
 terraform {
   required_providers {
     juju = {
@@ -293,7 +295,7 @@ provider "juju" {
 
 ### Define what you want to query for
 
-Then, you need to define the resources you want to export from a model using the `list` resources in the query file.
+Then, you define the resources you want to export from a model using the `list` resources in the query file.
 
 > The query file must have the `.tfquery.hcl` extension.
 
@@ -306,7 +308,9 @@ For example, create `example.tfquery.hcl` with:
 - integrations
 - offers
 
-```terraform
+```{code-block} terraform
+:caption: `example.tfquery.hcl`
+
 variable "model_uuid" {
   description = "UUID of the model to export"
   type        = string
@@ -452,7 +456,7 @@ import {
 ```
 
 Run `terraform apply` to import all resources into your Terraform state.
-Before confirming, verify that the plan shows no resources being replaced, all changes should be either no-op or in-place.
+Before confirming, verify that the plan shows no resources being replaced -- all changes should be either no-op or in-place.
 
 The `terraform apply` output should look something like this:
 ```
@@ -463,9 +467,9 @@ Plan: 19 to import, 0 to add, 6 to change, 0 to destroy.
 Apply complete! Resources: 19 imported, 0 added, 6 changed, 0 destroyed.
 ```
 
-#### The generated configuration contains no cross-references between resources
+#### Note: The generated configuration contains no cross-references between resources
 
-The generated configuration contains the *literal values* for all the fields, there is no reference between resources.
+The generated configuration contains the *literal values* for all the fields; that is, there is no reference between resources.
 
 An example is:
 
@@ -514,7 +518,7 @@ You need to cross-reference resources to ensure the correct dependency graph is 
 
 Some resources are generated because they exist in the Juju model, but they are typically implicit resources that are not ordinarily managed by Terraform.
 
-In particular:
+This includes:
 - default storage pools
 - default ssh keys
 
