@@ -136,7 +136,8 @@ A Juju controller can be configured with various settings that control its behav
 
 You can configure these settings either during bootstrap or after the controller is created.
 
-### Configure during bootstrap
+(configure-a-controller-during-bootstrap)=
+### During bootstrap
 
 To configure a controller during bootstrap, in your `juju_controller` resource specify the `controller_config` and/or `controller_model_config` attributes. For example:
 
@@ -167,9 +168,12 @@ resource "juju_controller" "this" {
 }
 ```
 
-### Configure post-bootstrap
+> See more: [`juju_controller` (resource)](../reference/terraform-provider/resources/controller), {external+juju:ref}`Juju | List of controller configuration keys <list-of-controller-configuration-keys>`
 
-To update controller configuration after bootstrap, modify the `controller_config` or `controller_model_config` attributes in your Terraform configuration and run `terraform apply`:
+(configure-a-controller-post-bootstrap)=
+### Post-bootstrap
+
+To configure a controller post-bootstrap, modify the `controller_config` or `controller_model_config` attributes in your Terraform configuration and run `terraform apply`:
 
 ```terraform
 resource "juju_controller" "this" {
@@ -194,25 +198,7 @@ To restore a setting to its default value, you must explicitly set it to the def
 To discover valid configuration keys and values, use `juju bootstrap --help` or consult the Juju documentation. Many `juju_controller` resource attributes correspond directly to the flags and config options used by the `juju bootstrap` command.
 ```
 
-### View controller configuration
-
-To view the current controller configuration managed by Terraform:
-
-```bash
-# View full controller state including configuration
-terraform state show juju_controller.this
-
-# Or view specific attributes
-terraform state show juju_controller.this | grep -A 10 controller_config
-```
-
-The Terraform state reflects the configuration values you've set. To see all configuration values including defaults set by Juju, use the `juju` CLI:
-
-```bash
-juju controller-config -c <controller-name>
-```
-
-> See more: {external+juju:ref}`juju controller-config <command-juju-controller-config>`
+> See more: [`juju_controller` (resource)](../reference/terraform-provider/resources/controller), {external+juju:ref}`Juju | List of controller configuration keys <list-of-controller-configuration-keys>`
 
 
 (enable-controller-high-availability)=
@@ -224,9 +210,10 @@ Enabling HA relies on Terraform actions, which require **Terraform 1.14** or lat
 
 High availability (HA) for a Juju controller ensures that multiple controller units are running so the controller remains available if individual units fail. You can enable HA either during bootstrap or post-bootstrap, and in the latter case you can scale out as well as in.
 
-### Enable controller high availability during bootstrap
+(enable-controller-high-availability-during-bootstrap)=
+### During bootstrap
 
-To enable HA during bootstrap, in your `juju_controller` resource, in the `lifecycle` block, define the `action_trigger` field.
+To enable controller high availability during bootstrap, in your `juju_controller` resource, in the `lifecycle` block, define the `action_trigger` field. For example:
 
 ```terraform
 resource "juju_controller" "this" {
@@ -272,9 +259,10 @@ action "juju_enable_ha" "this" {
 }
 ```
 
-### Enable controller high availability post bootstrap
+(enable-controller-high-availability-post-bootstrap)=
+### Post-bootstrap
 
-To enable controller HA post bootstrap, define a Terraform juju_enable_ha action block:
+To enable controller high availability post-bootstrap, define a Terraform `juju_enable_ha` action block:
 
 ```terraform
 action "juju_enable_ha" "this" {
@@ -296,18 +284,16 @@ terraform apply -invoke=action.juju_enable_ha.this
 
 Terraform will execute the `juju_enable_ha` action and ensure the controller has the requested number of units.
 
-### Update the number of units
+To scale out the number of units after HA is enabled, update the `units` value in your `juju_enable_ha` action and run the `terraform apply -invoke=action.juju_enable_ha.this` command again. The number of units must always be an odd number.
 
 ```{note}
-  As with the `juju` CLI, constraints set while scaling in post bootstrap always apply only to the new units being created.
+As with the `juju` CLI, constraints set while scaling post-bootstrap always apply only to the new units being created.
 ```
 
-To scale out the number of units via the terraform *enable_ha* action. The number of units must always be an odd number.
-
-To scale an HA controller in, remove its backing machines manually  via the `juju` CLI [`juju remove-machine`](https://documentation.ubuntu.com/terraform-provider-juju/latest/howto/manage-machines/#remove-a-machine).
+To scale in, remove backing machines manually via the `juju` CLI [`juju remove-machine`](https://documentation.ubuntu.com/terraform-provider-juju/latest/howto/manage-machines/#remove-a-machine).
 
 ```{note}
-  While it _is_ possible to control the number of units or remove machines directly through Terraform, that is currently supported only for regular applications.
+While it is possible to control the number of units or remove machines directly through Terraform, that is currently supported only for regular applications.
 ```
 
 (import-an-existing-controller)=
