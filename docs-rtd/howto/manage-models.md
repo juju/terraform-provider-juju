@@ -262,11 +262,9 @@ To destroy a model, remove its resource definition from your Terraform plan.
 
 ## Export a model
 
-To export the Terraform configuration from a model, you can leverage `terraform query`.
+To export the Terraform configuration from a model, you can use `terraform query`.
 
 > See also: [terraform query](https://developer.hashicorp.com/terraform/language/v1.14.x/import/bulk?page=import&page=bulk)
-
-To do this:
 
 ### Ensure the provider is connected to the model's host controller
 
@@ -295,7 +293,7 @@ provider "juju" {
 
 ### Define what you want to query for
 
-Then, you define the resources you want to export from a model using the `list` resources in the query file.
+Define the resources you want to export from a model using the `list` resources in the query file.
 
 > The query file must have the `.tfquery.hcl` extension.
 
@@ -417,13 +415,11 @@ list "juju_storage_pool" "all_storage_pools" {
 
 ### Query and generate the configuration file
 
-Run:
+To generate the config with the specified list resources into the `test.tf` file, run:
 
 `TF_VAR_model_uuid="<model-uuid>" terraform query --generate-config-out=test.tf`
 
-This command will generate the Terraform configuration in the `test.tf` file, along with the import blocks.
-
-For example:
+An example of the generated config:
 
 ```terraform
 resource "juju_application" "all_apps_0" {
