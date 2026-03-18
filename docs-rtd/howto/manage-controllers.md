@@ -12,18 +12,33 @@ myst:
 (bootstrap-a-controller)=
 ## Bootstrap a controller
 
-To bootstrap a new Juju controller use the `juju_controller` resource.
+To bootstrap a new Juju controller, use the `juju_controller` resource. The general workflow is:
 
-### Bootstrap to LXD (localhost)
+**1. Set up the provider in controller mode**
 
-This example bootstraps a controller onto the local LXD cloud using certificate authentication.
+Configure the provider with `controller_mode = true`. This enables bootstrapping and restricts resource creation to controllers only.
 
-**1. Configure the provider for controller mode.**
+> See more: {ref}`For controller mode (bootstrapping) <setup-provider>`
 
-Bootstrapping is a unique situation as there is no controller to connect to yet so our `provider` block will be mostly empty.
+**2. Obtain cloud credentials**
 
-Set `controller_mode = true` in the provider to enable bootstrapping.\
-No resources besides controllers can be created when this flag is set.
+Gather the necessary cloud credentials for your target cloud (e.g., LXD, AWS, Kubernetes). These typically include authentication certificates, keys, or tokens.
+
+**3. Define the controller resource**
+
+Create a `juju_controller` resource specifying:
+- Controller name
+- Path to the Juju binary
+- Cloud configuration (name, type, auth types)
+- Cloud credentials
+- Optional: Controller and model configuration
+
+After `terraform apply`, the resource exposes useful read-only attributes such as the controller `api_addresses`, `ca_cert`, `username`, and `password`.
+
+````{dropdown} Example workflow: Bootstrap to LXD
+This example shows a complete workflow for bootstrapping a controller onto the local LXD cloud using certificate authentication.
+
+**1. Configure the provider for controller mode:**
 
 ```terraform
 terraform {
@@ -58,7 +73,7 @@ resource "juju_controller" "this" {
   name = "test-controller"
 
   juju_binary = "/snap/juju/current/bin/juju"
-  
+
   cloud = {
     name       = "localhost"
     type       = "lxd"
@@ -92,41 +107,21 @@ resource "juju_controller" "this" {
 ```{important}
 If you have installed Juju as a snap, use the path `/snap/juju/current/bin/juju` to avoid snap confinement issues.
 ```
+````
 
-After `terraform apply`, the resource exposes useful read-only attributes such as the controller `api_addresses`, `ca_cert`, `username`, and `password`.
-
-**4. Change config post-bootstrap:**
-
-After bootstrap, the controller config and controller-model config can be changed.
-
-Note the following behaviors:
-1. If you remove a key from `controller_config`, it will not be unset on the controller; it is left unchanged.
+```{tip}
+**Changing configuration post-bootstrap:** After bootstrap, you can modify `controller_config` and `controller_model_config`. Note the following behaviors:
+1. Removing a key from `controller_config` will not unset it on the controller; it remains unchanged.
 2. Attempting to change a config value that Juju doesn't support changing after bootstrap will result in an error. You must destroy and recreate the controller to change these values.
 3. Boolean values must be specified as either "true" or "false".
 
-```{tip}
-Many `juju_controller` fields correspond to the same flags used by the `juju bootstrap` CLI. When in doubt, `juju bootstrap --help` and the Juju docs are a good way to discover valid keys and values.
-```
-
-```terraform
-resource "juju_controller" "this" {
-  # additional fields ommitted
-
-  controller_config = {
-    "audit-log-max-backups"     = "10"
-  }
-
-  controller_model_config = {
-    "juju-http-proxy"              = "http://my-proxy.internal"
-    "update-status-hook-interval"  = "1m"
-  }
-}
+To discover valid configuration keys and values, use `juju bootstrap --help` or consult the Juju documentation. Many `juju_controller` fields correspond directly to the flags and config options used by the `juju bootstrap` CLI.
 ```
 
 > See more: [`juju_controller` (resource)](../reference/terraform-provider/resources/controller)
 
 
-(enable-high-availability)=
+(enable-controller-high-availability)=
 ## Enable controller high availability
 
 ```{note}
@@ -224,9 +219,13 @@ To scale an HA controller in, remove its backing machines manually  via the `juj
 (import-an-existing-controller)=
 ## Import an existing controller
 
-If you have a controller that was created outside of Terraform (for example, via `juju bootstrap`), you can import it into your Terraform state.
+If you have a controller that was created outside of Terraform (for example, via `juju bootstrap`), you can import it into your Terraform state as a managed resource.
 
-**1: Getting controller connection information:**
+```{note}
+This operation imports the controller as a **resource** that Terraform will manage. Controllers cannot be referenced as data sources (read-only). Once imported, Terraform will track the controller's state and can make changes to its configuration.
+```
+
+**1. Get controller connection information.**
 
 To import a controller, you need its connection details. You can obtain these by running:
 
@@ -243,7 +242,7 @@ From the output, you will need:
 - Controller UUID
 - Credential name
 
-**2: Import block structure:**
+**2. Create an import block.**
 
 Create an `import` block with the identity schema containing the controller's connection information:
 
@@ -259,13 +258,13 @@ import {
       -----BEGIN CERTIFICATE-----
       -----END CERTIFICATE-----
     EOT
-    controller_uuid = "<controller-uudi>"
+    controller_uuid = "<controller-uuid>"
     credential_name = "<credential-name>"
   }
 }
 ```
 
-**3: Define a `juju_controller` resource:**
+**3. Define a `juju_controller` resource.**
 
 You also need to define the corresponding `juju_controller` resource with the cloud and credential information:
 
@@ -291,16 +290,27 @@ resource "juju_controller" "imported" {
 }
 ```
 
-Then run:
+Then run `terraform plan`. Terraform will detect the import block and import the controller during the next `terraform apply`.
 
-```bash
-terraform plan
+**4. Verify the imported controller.**
+
+After importing:
+
+a. Run `terraform plan` to see which attributes Terraform cannot determine or that differ from your configuration. These differences are expected after an import.
+
+b. Add any fields showing unexpected changes to the `lifecycle.ignore_changes` block. Common fields to ignore include:
+   - Credential attributes that may differ between your plan and the ones fetched from the controller
+   - Cloud region and endpoint fields, which may be set by Juju during bootstrap even if not explicitly specified
+   - Bootstrap-time configuration that cannot be changed and can't be fetched from the controller
+
+c. Run `terraform plan` again. You should see either no changes or only expected configuration updates.
+
+```{tip}
+If you see `controller_config` or `controller_model_config` showing changes to set default values, you can either apply them (they will update the controller configuration which is idempotent) or add these blocks to `ignore_changes` to prevent the updates.
 ```
 
-Terraform will detect the import block and import the controller during the next `terraform apply`.
-
-(import-example-lxd)=
-### Import example: LXD controller
+````{dropdown} Example workflow: Import LXD controller
+This example shows a complete workflow for importing an LXD controller.
 
 ```terraform
 provider "juju" {
@@ -347,7 +357,7 @@ import {
       -----BEGIN CERTIFICATE-----
       -----END CERTIFICATE-----
     EOT
-    controller_uuid = "<controller-uudi>"
+    controller_uuid = "<controller-uuid>"
     credential_name = "<credential-name>"
   }
 }
@@ -356,9 +366,10 @@ import {
 ```{note}
 The `cloud_credential.attributes["client-cert"]` and `cloud_credential.attributes["client-key"]` are not required to bootstrap an LXD controller, but they are populated in the state during import because they are fetched from the controller. The same applies to `cloud.endpoint` and `cloud.region`, which may be set by Juju during bootstrap even if not explicitly specified.
 ```
+````
 
-(import-example-microk8s)=
-### Import example: MicroK8s controller
+````{dropdown} Example workflow: Import MicroK8s controller
+This example shows a complete workflow for importing a MicroK8s controller.
 
 ```terraform
 provider "juju" {
@@ -407,7 +418,7 @@ import {
       -----BEGIN CERTIFICATE-----
       -----END CERTIFICATE-----
     EOT
-    controller_uuid = "<controller-uudi>"
+    controller_uuid = "<controller-uuid>"
     credential_name = "<credential-name>"
   }
 }
@@ -416,43 +427,13 @@ import {
 ```{note}
 The `cloud.region` is not required during bootstrap but may be set by Juju and needs to be ignored. The `cloud.host_cloud_region` cannot be fetched from the controller after bootstrap, so it must be ignored to prevent Terraform from attempting to replace the controller.
 ```
-
-(import-post-import-workflow)=
-### Post-import workflow
-
-After importing a controller:
-
-**1. Review the plan:**
-
-Run `terraform plan` to see which attributes Terraform cannot determine or that differ from your configuration. These differences are expected after an import.
-
-```bash
-terraform plan
-```
-
-**2. Add necessary ignore_changes:**
-
-Based on the plan output, add any fields showing unexpected changes to the `lifecycle.ignore_changes` block that would require a replace of the controller resource.  
-Common fields to ignore include:
-
-- Credential attributes that may differ between your plan and the ones fetched from the controller. 
-- Cloud region and endpoint fields, which can be default when a controller is bootstrap, but it's returned when it's set in the state when it's fetched from the controller.
-- Bootstrap-time configuration that cannot be changed, and can't be fetched from the controller.
-
-**3. Verify the configuration:**
-
-After adding the appropriate `lifecycle.ignore_changes` directives, run `terraform plan` again. You should see either no changes or only expected configuration updates.
-
-```{tip}
-If you see `controller_config` or `controller_model_config` showing changes to set default values, you can either apply them (they will update the controller configuration which is idempotent) or add these blocks to `ignore_changes` to prevent the updates.
-```
+````
 
 
 (add-a-cloud-to-a-controller)=
 ## Add a cloud to a controller
 
-> See more: {ref}`add-a-machine-cloud`
-> See more: {ref}`add-a-kubernetes-cloud`
+> See more: {ref}`add-a-machine-cloud`, {ref}`add-a-kubernetes-cloud`
 
 (add-a-credential-to-a-controller)=
 ## Add a credential to a controller
