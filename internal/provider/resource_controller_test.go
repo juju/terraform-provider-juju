@@ -32,6 +32,7 @@ import (
 	controllerapi "github.com/juju/juju/api/controller/controller"
 	"github.com/juju/names/v6"
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 	"github.com/juju/version/v2"
 )
 
@@ -412,12 +413,10 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 					if testingCloud != LXDCloudTesting {
 						return true, nil
 					}
-					version, err := TestClient.Applications.GetControllerVersion(t.Context())
-					if err != nil {
-						t.Fatalf("failed to get controller version: %v", err)
-						return true, nil
-					}
-					if version.Major > 3 {
+					agentVersion := os.Getenv(TestJujuAgentVersion)
+					if agentVersion == "" {
+						t.Fatal("Juju agent version not set")
+					} else if internaltesting.CompareVersions(agentVersion, "4.0.0") >= 0 {
 						return true, nil
 					}
 					return false, nil
