@@ -1983,6 +1983,45 @@ func (m *MockJaasAPIClient) EXPECT() *MockJaasAPIClientMockRecorder {
 	return m.recorder
 }
 
+// AddController mocks base method.
+func (m *MockJaasAPIClient) AddController(req *params.AddControllerRequest) (params.ControllerInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddController", req)
+	ret0, _ := ret[0].(params.ControllerInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddController indicates an expected call of AddController.
+func (mr *MockJaasAPIClientMockRecorder) AddController(req any) *MockJaasAPIClientAddControllerCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddController", reflect.TypeOf((*MockJaasAPIClient)(nil).AddController), req)
+	return &MockJaasAPIClientAddControllerCall{Call: call}
+}
+
+// MockJaasAPIClientAddControllerCall wrap *gomock.Call
+type MockJaasAPIClientAddControllerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockJaasAPIClientAddControllerCall) Return(arg0 params.ControllerInfo, arg1 error) *MockJaasAPIClientAddControllerCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockJaasAPIClientAddControllerCall) Do(f func(*params.AddControllerRequest) (params.ControllerInfo, error)) *MockJaasAPIClientAddControllerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockJaasAPIClientAddControllerCall) DoAndReturn(f func(*params.AddControllerRequest) (params.ControllerInfo, error)) *MockJaasAPIClientAddControllerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // AddGroup mocks base method.
 func (m *MockJaasAPIClient) AddGroup(req *params.AddGroupRequest) (params.AddGroupResponse, error) {
 	m.ctrl.T.Helper()
@@ -2290,6 +2329,45 @@ func (c *MockJaasAPIClientListRelationshipTuplesCall) Do(f func(*params.ListRela
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockJaasAPIClientListRelationshipTuplesCall) DoAndReturn(f func(*params.ListRelationshipTuplesRequest) (*params.ListRelationshipTuplesResponse, error)) *MockJaasAPIClientListRelationshipTuplesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// RemoveController mocks base method.
+func (m *MockJaasAPIClient) RemoveController(req *params.RemoveControllerRequest) (params.ControllerInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveController", req)
+	ret0, _ := ret[0].(params.ControllerInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RemoveController indicates an expected call of RemoveController.
+func (mr *MockJaasAPIClientMockRecorder) RemoveController(req any) *MockJaasAPIClientRemoveControllerCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveController", reflect.TypeOf((*MockJaasAPIClient)(nil).RemoveController), req)
+	return &MockJaasAPIClientRemoveControllerCall{Call: call}
+}
+
+// MockJaasAPIClientRemoveControllerCall wrap *gomock.Call
+type MockJaasAPIClientRemoveControllerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockJaasAPIClientRemoveControllerCall) Return(arg0 params.ControllerInfo, arg1 error) *MockJaasAPIClientRemoveControllerCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockJaasAPIClientRemoveControllerCall) Do(f func(*params.RemoveControllerRequest) (params.ControllerInfo, error)) *MockJaasAPIClientRemoveControllerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockJaasAPIClientRemoveControllerCall) DoAndReturn(f func(*params.RemoveControllerRequest) (params.ControllerInfo, error)) *MockJaasAPIClientRemoveControllerCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -30,6 +30,12 @@ func (v StringIsResourceKeyValidator) ValidateMap(ctx context.Context, req valid
 	if req.ConfigValue.IsUnknown() || req.ConfigValue.IsNull() {
 		return
 	}
+	// if any of the values in the map are unknown or null, there is nothing to validate.
+	for _, v := range req.ConfigValue.Elements() {
+		if v.IsNull() || v.IsUnknown() {
+			return
+		}
+	}
 
 	var resourceKey map[string]string
 	resp.Diagnostics.Append(req.ConfigValue.ElementsAs(ctx, &resourceKey, false)...)

@@ -368,7 +368,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 
 	waitForHostname := plan.WaitForHostname.ValueBool()
 	modelUUID := plan.ModelUUID.ValueString()
-	readResponse, err := waitForMachine(ctx, r.client, waitForHostname, modelUUID, response.ID, createTimeout)
+	readResponse, err := waitForMachine(ctx, r.client, waitForHostname, modelUUID, response.ID, createTimeout, r.trace)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for machine %q readiness, got error: %s", response.ID, err))
 		return
@@ -385,7 +385,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
-func waitForMachine(ctx context.Context, client *juju.Client, waitForHostname bool, modelUUID, machineID string, timeout time.Duration) (*juju.ReadMachineResponse, error) {
+func waitForMachine(ctx context.Context, client *juju.Client, waitForHostname bool, modelUUID, machineID string, timeout time.Duration, logFn wait.LogFunc) (*juju.ReadMachineResponse, error) {
 	asserts := []wait.Assert[*juju.ReadMachineResponse]{assertMachineRunning}
 	if waitForHostname {
 		asserts = append(asserts, assertHostnamePopulated)
@@ -405,11 +405,12 @@ func waitForMachine(ctx context.Context, client *juju.Client, waitForHostname bo
 			MaxDelay:    time.Minute,
 			Clock:       clock.WallClock,
 		},
+		Logf: logFn,
 	})
 	return readResponse, err
 }
 
-func readMachine(ctx context.Context, client *juju.Client, modelUUID, machineID string, waitForHostname bool) (*machineResourceModelV1, error) {
+func readMachine(ctx context.Context, client *juju.Client, modelUUID, machineID string, waitForHostname bool, logFn wait.LogFunc) (*machineResourceModelV1, error) {
 	// Prevent panic if the provider has not been configured.
 	if client == nil {
 		return nil, fmt.Errorf("unconfigured HTTP client: expected configured HTTP client")
@@ -417,7 +418,7 @@ func readMachine(ctx context.Context, client *juju.Client, modelUUID, machineID 
 
 	// During import, we don't know whether to wait for the machine hostname.
 	// So we opt not to wait, assuming the machine is ready.
-	response, err := waitForMachine(ctx, client, false, modelUUID, machineID, defaultCreateTimeout)
+	response, err := waitForMachine(ctx, client, false, modelUUID, machineID, defaultCreateTimeout, logFn)
 	if err != nil {
 		return nil, err
 	}
@@ -481,7 +482,7 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	machine, err := readMachine(ctx, r.client, modelUUID, machineID, false)
+	machine, err := readMachine(ctx, r.client, modelUUID, machineID, false, r.trace)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read machine, got error: %s", err))
 		return
@@ -596,6 +597,7 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 	if err := wait.WaitForError(wait.WaitForErrorCfg[*juju.ReadMachineInput, *juju.ReadMachineResponse]{
 		Context: ctx,
 		GetData: r.client.Machines.ReadMachine,
+		Logf:    r.trace,
 		Input: &juju.ReadMachineInput{
 			ModelUUID: modelUUID,
 			ID:        machineID,

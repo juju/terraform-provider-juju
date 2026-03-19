@@ -124,7 +124,7 @@ func (r *machineLister) List(ctx context.Context, req list.ListRequest, stream *
 				return
 			}
 			if req.IncludeResource {
-				machine, err := readMachine(ctx, r.client, listRequest.ModelUUID.ValueString(), machineID, false)
+				machine, err := readMachine(ctx, r.client, listRequest.ModelUUID.ValueString(), machineID, false, r.trace)
 				if err != nil {
 					result.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read machine %s, got error: %s", machineID, err))
 					if !push(result) {
@@ -152,4 +152,15 @@ func (r *machineLister) List(ctx context.Context, req list.ListRequest, stream *
 			}
 		}
 	}
+}
+
+func (r *machineLister) trace(msg string, additionalFields ...map[string]interface{}) {
+	if r.subCtx == nil {
+		return
+	}
+
+	//SubsystemTrace(subCtx, "my-subsystem", "hello, world", map[string]interface{}{"foo": 123})
+	// Output:
+	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
+	tflog.SubsystemTrace(r.subCtx, LogResourceMachine, msg, additionalFields...)
 }

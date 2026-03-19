@@ -58,112 +58,26 @@ The Terraform Provider for Juju requires you to specify both the charm `channel`
 
 This keeps your deployments reproducible. However, it can be cumbersome. 
 
-This section shows a way to compute a charm's latest revision (based on a channel and a base) automatically using an external HTTP provider and the Charmhub API.
+This section shows how to compute a charm's latest revision (based on a channel and a base) automatically using the built-in `juju_charm` data source.
 
-First, place this in `modules/charmhub/main.tf`:
+The way it works is:
+- The `juju_charm` data source queries Charmhub for the specified charm, channel, and base.
+- The resolved revision is available as `data.juju_charm.<name>.revision`.
+- The `juju_application` resource references this revision, ensuring reproducible deployments.
+- When you change the `channel` or `base` variables and run `terraform apply`, the data source fetches the new latest revision, and Terraform refreshes the charm.
 
-```terraform
-terraform {
-  required_providers {
-    http = {
-      source  = "hashicorp/http"
-      version = "~> 3.0"
-    }
-  }
-}
-
-variable "charm" {
-  description = "Name of the charm (e.g., postgresql)"
-  type        = string
-}
-
-variable "channel" {
-  description = "Channel name (e.g., 14/stable, 16/edge)"
-  type        = string
-}
-
-variable "base" {
-  description = "Base Ubuntu (e.g., ubuntu@22.04, ubuntu@24.04)"
-  type        = string
-}
-
-variable "architecture" {
-  description = "Architecture (e.g., amd64, arm64)"
-  type        = string
-  default     = "amd64"
-}
-
-data "http" "charmhub_info" {
-  url = "https://api.charmhub.io/v2/charms/info/${var.charm}?fields=channel-map.revision.revision"
-
-  request_headers = {
-    Accept = "application/json"
-  }
-
-  lifecycle {
-    postcondition {
-      condition     = self.status_code == 200
-      error_message = "Failed to fetch charm info from Charmhub API"
-    }
-  }
-}
-
-locals {
-  charmhub_response = jsondecode(data.http.charmhub_info.response_body)
-  base_version      = split("@", var.base)[1]
-  
-  matching_channels = [
-    for entry in local.charmhub_response["channel-map"] :
-    entry if(
-      entry.channel.name == var.channel &&
-      entry.channel.base.channel == local.base_version &&
-      entry.channel.base.architecture == var.architecture
-    )
-  ]
-
-  revision = length(local.matching_channels) > 0 ? local.matching_channels[0].revision.revision : null
-}
-
-check "revision_found" {
-  assert {
-    condition     = local.revision != null
-    error_message = "No matching revision found for charm '${var.charm}' with channel '${var.channel}', base '${var.base}', and architecture '${var.architecture}'. Please verify the combination exists in Charmhub."
-  }
-}
-
-output "charm_revision" {
-  description = "The revision number for the specified charm channel and base"
-  value       = local.revision
-}
-```
-
-Then, use the module in your Terraform plan:
+For example:
 
 ```terraform
-terraform {
-  required_providers {
-    juju = {
-      source = "juju/juju"
-    }
-    http = {
-      source  = "hashicorp/http"
-      version = "~> 3.0"
-    }
-  }
-}
-
 locals {
   channel = "2/edge"
-  base = "ubuntu@24.04"
+  base    = "ubuntu@24.04"
 }
 
-module "charmhub" {
-  source = "./modules/charmhub"
-
-  charm        = "alertmanager-k8s"
-  channel      = local.channel
-  base      = local.base
-  architecture = "amd64"
+data "juju_charm" "alertmanager" {
+  charm   = "alertmanager-k8s"
+  channel = local.channel
+  base    = local.base
 }
 
 resource "juju_application" "alertmanager" {
@@ -173,7 +87,7 @@ resource "juju_application" "alertmanager" {
   charm {
     name     = "alertmanager-k8s"
     channel  = local.channel
-    revision = module.charmhub.charm_revision
+    revision = data.juju_charm.alertmanager.revision
     base     = local.base
   }
 }
@@ -184,8 +98,8 @@ For deployments with multiple charms, use `for_each` to query revisions efficien
 ```terraform
 locals {
   channel = "2/edge"
-  base = "ubuntu@24.04"
-  
+  base    = "ubuntu@24.04"
+
   charms = {
     alertmanager = "alertmanager-k8s"
     prometheus   = "prometheus-k8s"
@@ -193,37 +107,27 @@ locals {
   }
 }
 
-module "charmhubs" {
-  source   = "./modules/charmhub"
+data "juju_charm" "charms" {
   for_each = local.charms
 
-  charm        = each.value
-  channel      = local.channel
-  base      = local.base
-  architecture = "amd64"
+  charm   = each.value
+  channel = local.channel
+  base    = local.base
 }
 
 resource "juju_application" "apps" {
   for_each = local.charms
-  
+
   model_uuid = juju_model.development.uuid
 
   charm {
     name     = each.value
     channel  = local.channel
-    revision = module.charmhubs[each.key].charm_revision
+    revision = data.juju_charm.charms[each.key].revision
     base     = local.base
   }
 }
 ```
-
-This works as follows:
-
-- The module queries the Charmhub API for the specified charm's channel map.
-- It filters the results to match the requested channel, base, and architecture.
-- The latest revision matching these criteria is returned as output.
-- The `juju_application` resource uses this revision, ensuring reproducible deployments.
-- When you change the `channel` or `base` variables and run `terraform apply`, the module fetches the new latest revision, and Terraform refreshes the charm.
 
 (update-a-charm)=
 ## Update a charm
@@ -246,9 +150,86 @@ The Terraform provider does not support refreshing the charm when the revision i
 
 When the charm is changed, its resources will also be updated unless pinned.
 
-> **Tip:** You can also use an external HTTP provider to automatically fetch the latest revision for a given channel. See {ref}`compute-a-charms-revision-automatically`.
+> **Tip:** You can also use the `juju_charm` data source to automatically fetch the latest revision for a given channel. See {ref}`compute-a-charms-revision-automatically`.
 > 
 > See more: [`juju_application` > `charm` > nested schema ](../reference/terraform-provider/resources/application)
+
+(update-a-charm-when-an-relation-would-break)=
+### Update a charm when a relation would break
+
+When a charm's relation interface changes between revisions, updating the application while an existing relation is in place causes an error similar to:
+
+```
+cannot upgrade application "<consumer>" to charm "ch:amd64/<consumer>-<revision>":
+would break relation "<consumer>:<relation> <offerer>:<relation>"
+```
+
+This happens because Juju refuses to update an application when doing so would invalidate a live relation.
+
+The solution is to use the `juju_charm` data source to track the relation's interface name, store it in a `terraform_data` resource, and attach a `replace_triggered_by` lifecycle to the `juju_integration`. When the interface name changes, Terraform will destroy the relation, update the application, and recreate the relation — in the correct order.
+
+```terraform
+locals {
+  channel = "dev/edge"
+}
+
+data "juju_charm" "grafana_info" {
+  charm   = "grafana-k8s"
+  channel = local.channel
+  base    = "ubuntu@24.04"
+}
+
+resource "juju_application" "grafana" {
+  model_uuid = juju_model.development.uuid
+  trust      = true
+
+  charm {
+    name     = "grafana-k8s"
+    channel  = local.channel
+    revision = data.juju_charm.grafana_info.revision
+  }
+}
+
+resource "juju_application" "traefik" {
+  model_uuid = juju_model.development.uuid
+  trust      = true
+
+  charm {
+    name    = "traefik-k8s"
+    channel = "latest/stable"
+  }
+}
+
+resource "terraform_data" "interface" {
+  input = data.juju_charm.grafana_info.requires["ingress"]
+}
+
+resource "juju_integration" "ingress" {
+  model_uuid = juju_model.development.uuid
+
+  application {
+    name = juju_application.traefik.name
+  }
+
+  application {
+    name     = juju_application.grafana.name
+    endpoint = "ingress"
+  }
+
+  lifecycle {
+    replace_triggered_by = [
+      terraform_data.interface
+    ]
+  }
+}
+```
+
+This works as follows:
+
+- The `juju_charm` data source fetches the current interface name for the `ingress` endpoint from Charmhub.
+- The `terraform_data` resource stores that interface name. When the channel or revision changes and the interface name changes with it, `terraform_data.interface` is updated.
+- The `replace_triggered_by` lifecycle on `juju_integration` detects the change to `terraform_data.interface` and triggers a replacement of the integration resource.
+- Terraform destroys the integration first, then updates the application, then recreates the integration with the correct endpoint — avoiding the "would break relation" error.
 
 ## Remove a charm
 
