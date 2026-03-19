@@ -292,6 +292,7 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 			Delay:       time.Second,
 			Clock:       clock.WallClock,
 		},
+		Logf: r.trace,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create model %q, got error: %s", plan.Name, err))
@@ -581,6 +582,7 @@ func (r *modelResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	err = wait.WaitForError(wait.WaitForErrorCfg[string, *juju.ReadModelStatusResponse]{
 		Context:        ctx,
 		GetData:        r.client.Models.ReadModelStatus,
+		Logf:           r.trace,
 		Input:          modelUUID,
 		ExpectedErr:    juju.ModelNotFoundError,
 		RetryAllErrors: true,

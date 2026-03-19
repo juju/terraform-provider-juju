@@ -405,6 +405,7 @@ func waitForMachine(ctx context.Context, client *juju.Client, waitForHostname bo
 			MaxDelay:    time.Minute,
 			Clock:       clock.WallClock,
 		},
+		Logf: r.trace,
 	})
 	return readResponse, err
 }
@@ -596,6 +597,7 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 	if err := wait.WaitForError(wait.WaitForErrorCfg[*juju.ReadMachineInput, *juju.ReadMachineResponse]{
 		Context: ctx,
 		GetData: r.client.Machines.ReadMachine,
+		Logf:    r.trace,
 		Input: &juju.ReadMachineInput{
 			ModelUUID: modelUUID,
 			ID:        machineID,
