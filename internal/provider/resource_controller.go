@@ -184,7 +184,7 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 		Description: "A resource that represents a Juju Controller.",
 		Attributes: map[string]schema.Attribute{
 			"agent_version": schema.StringAttribute{
-				Description: "The version of agent binaries.",
+				Description: "Specifies a controller version to bootstrap. If not specified, the latest stable agent version will be used.",
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
@@ -664,7 +664,7 @@ func (r *controllerResource) ImportState(ctx context.Context, req resource.Impor
 
 	cloudInfo, err := juju.GetCloudInformation(ctx, connInfo)
 	if err != nil {
-		resp.Diagnostics.AddWarning(
+		resp.Diagnostics.AddError(
 			"Failed to fetch cloud information",
 			fmt.Sprintf("Could not fetch cloud and credential information from controller: %s. ", err.Error()),
 		)
