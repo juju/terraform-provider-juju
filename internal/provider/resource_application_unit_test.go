@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	jujuerrors "github.com/juju/errors"
+	"github.com/stretchr/testify/require"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -58,18 +59,12 @@ func TestAssertEqualsUnitCount(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := assertEqualsUnitCount(tc.units)(tc.response)
 			if tc.expectError {
-				if err == nil {
-					t.Fatalf("expected error, got nil")
-				}
-				if !jujuerrors.Is(err, juju.RetryReadError) {
-					t.Fatalf("expected RetryReadError, got %v", err)
-				}
+				require.Error(t, err)
+				require.True(t, jujuerrors.Is(err, juju.RetryReadError), "expected RetryReadError, got %v", err)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
+			require.NoError(t, err)
 		})
 	}
 }

@@ -1570,13 +1570,13 @@ func assertEqualsMachines(machinesToCompare []string) func(outputFromAPI *juju.R
 	}
 }
 
-func assertEqualsUnitCount(unitsToCompare int) func(outputFromAPI *juju.ReadApplicationResponse) error {
+func assertEqualsUnitCount(desiredUnits int) func(outputFromAPI *juju.ReadApplicationResponse) error {
 	return func(outputFromAPI *juju.ReadApplicationResponse) error {
-		if outputFromAPI.Units != unitsToCompare {
+		if outputFromAPI.Units != desiredUnits {
 			return juju.NewRetryReadError("plan units differ from application units")
 		}
 
-		if unitsToCompare == 0 && len(outputFromAPI.Machines) > 0 {
+		if desiredUnits == 0 && len(outputFromAPI.Machines) > 0 {
 			return juju.NewRetryReadError("expected no machines for zero-unit application")
 		}
 
