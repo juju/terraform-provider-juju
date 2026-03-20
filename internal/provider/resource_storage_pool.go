@@ -11,6 +11,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -27,6 +28,7 @@ import (
 var _ resource.Resource = &storagePoolResource{}
 var _ resource.ResourceWithConfigure = &storagePoolResource{}
 var _ resource.ResourceWithImportState = &storagePoolResource{}
+var _ resource.ResourceWithIdentity = &storagePoolResource{}
 
 // NewStoragePoolResource returns a new instance of the storage pool resource.
 func NewStoragePoolResource() resource.Resource {
@@ -47,6 +49,10 @@ type storagePoolResourceModel struct {
 	Attributes      types.Map    `tfsdk:"attributes"`
 
 	// ID required by the testing framework
+	ID types.String `tfsdk:"id"`
+}
+
+type storagePoolResourceIdentityModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
@@ -128,33 +134,61 @@ To learn more about storage pools, please visit: https://documentation.ubuntu.co
 	}
 }
 
+// IdentitySchema implements [resource.ResourceWithIdentity].
+func (r *storagePoolResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
+	resp.IdentitySchema = identityschema.Schema{
+		Attributes: map[string]identityschema.Attribute{
+			"id": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+		},
+	}
+}
+
 func (r *storagePoolResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	idStr := ""
+
+	if req.ID != "" {
+		idStr = req.ID
+	} else {
+		var identityData storagePoolResourceIdentityModel
+		resp.Diagnostics.Append(req.Identity.Get(ctx, &identityData)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		idStr = identityData.ID.ValueString()
+	}
+
 	if r.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "secret", "import")
+		addClientNotConfiguredError(&resp.Diagnostics, "storagepool", "import")
 		return
 	}
 
 	// modelUUID:poolname
-	parts := strings.Split(req.ID, ":")
+	parts := strings.Split(idStr, ":")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		resp.Diagnostics.AddError(
 			"Unexpected Import Identifier",
-			fmt.Sprintf("Expected import identifier with format: <model uuid>:<pool name>. Got: %q", req.ID),
+			fmt.Sprintf("Expected import identifier with format: <model uuid>:<pool name>. Got: %q", idStr),
 		)
 		return
 	}
 	modelUUID := parts[0]
 	poolName := parts[1]
 
-	var state storagePoolResourceModel
-
-	state.StorageProvider = types.StringNull()
-	state.Attributes = types.MapNull(types.StringType)
-	state.Name = types.StringValue(poolName)
-	state.ModelUUID = types.StringValue(modelUUID)
+	state := storagePoolResourceModel{
+		StorageProvider: types.StringNull(),
+		Attributes:      types.MapNull(types.StringType),
+		Name:            types.StringValue(poolName),
+		ModelUUID:       types.StringValue(modelUUID),
+	}
 	state.ID = generateResourceID(state)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+
+	identity := storagePoolResourceIdentityModel{ID: state.ID}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 // Create implements resource.Resource.
@@ -222,6 +256,9 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 	plan.ID = generateResourceID(plan)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+
+	identity := storagePoolResourceIdentityModel{ID: plan.ID}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 // Read implements resource.Resource.
@@ -265,6 +302,9 @@ func (r *storagePoolResource) Read(ctx context.Context, req resource.ReadRequest
 	state.StorageProvider = types.StringValue(getPoolResp.Pool.Provider)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+
+	identity := storagePoolResourceIdentityModel{ID: state.ID}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 // Update implements resource.Resource.
@@ -424,6 +464,6 @@ func (s storagePoolResourceModel) getAttributesAsGoMap(ctx context.Context) (map
 
 func generateResourceID(plan storagePoolResourceModel) basetypes.StringValue {
 	return types.StringValue(
-		fmt.Sprintf("%s-%s", plan.ModelUUID.ValueString(), plan.Name.ValueString()),
+		fmt.Sprintf("%s:%s", plan.ModelUUID.ValueString(), plan.Name.ValueString()),
 	)
 }

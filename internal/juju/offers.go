@@ -115,6 +115,23 @@ type GrantRevokeOfferInput struct {
 	OfferURL string
 }
 
+// ListOffersInput represents input for listing offers.
+type ListOffersInput struct {
+	// OfferURL is an optional filter for a specific offer URL.
+	OfferURL string
+	// ModelUUID is an optional filter for offers in a specific model.
+	ModelUUID string
+}
+
+// ListOffersOutput represents an offer in the list response.
+type ListOffersOutput struct {
+	Name            string
+	ApplicationName string
+	ModelUUID       string
+	Endpoints       []string
+	OfferURL        string
+}
+
 func newOffersClient(sc SharedClient) *offersClient {
 	return &offersClient{
 		SharedClient: sc,
@@ -238,8 +255,6 @@ func (c offersClient) ReadOffer(input *ReadOfferInput) (*ReadOfferResponse, erro
 	response.Users = result.Users
 
 	if input.GetModelUUID {
-		// TODO(JUJU-8299): The modelUUID method needs to be changed to also use the model owner.
-		// Do this after all resources reference models by UUID and we can clean up the model cache.
 		response.ModelUUID, err = c.ModelUUID(resultURL.ModelName, resultURL.User)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get model UUID for model %q: %w", resultURL.ModelName, err)
@@ -606,4 +621,84 @@ func (c offersClient) RevokeOffer(input *GrantRevokeOfferInput) error {
 	}
 
 	return nil
+}
+
+// ListOffers lists offers, optionally filtered by model UUID or offer URL.
+func (c offersClient) ListOffers(input *ListOffersInput) ([]ListOffersOutput, error) {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := applicationoffers.NewClient(conn)
+
+	filter := crossmodel.ApplicationOfferFilter{}
+
+	// If ModelUUID is set, filter by model
+	if input.ModelUUID != "" {
+		modelOwner, modelName, err := c.ModelOwnerAndName(input.ModelUUID)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get model name for model UUID %q: %w", input.ModelUUID, err)
+		}
+		filter.ModelName = modelName
+		filter.OwnerName = modelOwner
+	}
+
+	// If OfferURL is set, parse it and use it to refine the filter
+	if input.OfferURL != "" {
+		parsedURL, err := crossmodel.ParseOfferURL(input.OfferURL)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse offer URL %q: %w", input.OfferURL, err)
+		}
+		filter.OfferName = parsedURL.ApplicationName
+		// If ModelUUID was not set, use the model from the URL
+		if input.ModelUUID == "" && parsedURL.ModelName != "" {
+			filter.ModelName = parsedURL.ModelName
+			filter.OwnerName = parsedURL.User
+		}
+	}
+
+	offers, err := client.FindApplicationOffers(filter)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []ListOffersOutput
+	for _, offer := range offers {
+		// Parse and normalize the offer URL
+		resultURL, err := crossmodel.ParseOfferURL(offer.OfferURL)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse offer URL %q: %w", offer.OfferURL, err)
+		}
+		resultURL.Source = "" // Ensure the source is empty for consistency
+
+		// Extract endpoint names
+		var endpoints []string
+		for _, endpoint := range offer.Endpoints {
+			endpoints = append(endpoints, endpoint.Name)
+		}
+
+		modelUUID, err := c.ModelUUID(resultURL.ModelName, resultURL.User)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get model UUID for model %q: %w", resultURL.ModelName, err)
+		}
+
+		output := ListOffersOutput{
+			Name:            offer.OfferName,
+			ApplicationName: offer.ApplicationName,
+			Endpoints:       endpoints,
+			OfferURL:        resultURL.String(),
+			ModelUUID:       modelUUID,
+		}
+
+		// If OfferURL filter is set, only include exact matches
+		if input.OfferURL != "" && output.OfferURL != input.OfferURL {
+			continue
+		}
+
+		results = append(results, output)
+	}
+
+	return results, nil
 }

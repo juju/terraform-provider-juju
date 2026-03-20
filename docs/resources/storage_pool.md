@@ -48,6 +48,8 @@ resource "juju_storage_pool" "mypool" {
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Storage pools can be imported with the UUID of the model and the name of the pool.
 $ terraform import juju_storage_pool.my_pool 1d10a751-02c1-43d5-b46b-d84fe04d6fde:my_pool
