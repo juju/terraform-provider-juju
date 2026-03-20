@@ -1,0 +1,9 @@
+# Actions
+
+```{toctree}
+:titlesonly:
+:glob:
+
+*
+
+```
