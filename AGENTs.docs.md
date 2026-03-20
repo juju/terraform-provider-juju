@@ -1,4 +1,6 @@
-# Terraform Provider for Juju Documentation Standards
+# Documentation Standards for AI Agents
+
+This guide provides documentation standards for AI agents working on the Terraform Provider for Juju documentation.
 
 ## Documentation Framework (Diataxis)
 
@@ -17,12 +19,13 @@ This documentation follows the [Diataxis framework](https://diataxis.fr/):
 ### How-to Guides Structure
 - **Entity lifecycle organization**: Docs grouped by the entity being managed (controllers, models, applications, etc.)
 - **Full lifecycle coverage**: Each entity doc covers all basic operations from creation through destruction
-- **Generic procedures first**: Focus on the logic and flow of the procedure, not specific implementations
-  - Example: "1. Set up provider in controller mode, 2. Obtain cloud credentials, 3. Define controller resource"
-  - Keep the main workflow abstract enough to apply to any cloud/environment
-- **Specific examples in dropdowns**: Cloud-specific or detailed workflows go in expandable sections
-  - Label as "Example workflow:" followed by the specific scenario (e.g., "Example workflow: Bootstrap to LXD")
-  - Show complete end-to-end implementations with actual values, commands, and code
+- **Continuous prose over numbered steps**: Use flowing text with "First," "Then," "Next" rather than boldface numbered steps
+  - Reduces repetition and visual clutter
+  - Makes the workflow feel more natural and less mechanical
+- **Examples integrated throughout**: Show relevant examples at each step rather than complete workflows upfront
+  - Use "For example:" or "For example, for a [specific cloud/scenario]:" to introduce snippets
+  - Keep examples contextual - show just what's relevant to the current step
+  - When complete workflow examples are valuable (e.g., for import operations), place them in dropdowns at the end of the relevant step where cloud-specific details matter most
 - **Entity-focused naming**: `manage-{entity}.md` pattern (manage-controllers, manage-models, manage-applications)
 - **Bridge to related entities**: Include sections that link to other entity lifecycles when they intersect
   - Example: In `manage-controllers.md`, include "Add a cloud to a controller" → links to `manage-clouds.md`
@@ -60,17 +63,11 @@ This documentation follows the [Diataxis framework](https://diataxis.fr/):
 - **Titles tell the story**: Reading just the titles in sequence should preview the workflow
   - The TOC becomes a quick outline of what's possible and in what order
   - Example sequence: "Install the provider → Set up the provider → Bootstrap a controller → Enable HA → Import a controller"
-- **Steps = workflow actions only**: Non-workflow info goes in notes/tips, not numbered steps
-- **Examples in dropdowns**: Labeled "Example workflow:" or "Preview an example workflow:" not "Complete example:"
-- **Example placement by content type**:
-  - **Workflow sections** (Bootstrap, Import, Deploy, etc.): Place dropdown **after opening recipe overview**, but **before generic procedure**
-    - Rationale: Shows "proof it works" early, clear scope binding, doesn't bury example
-    - Pattern: `[Title] → [Verbal recipe overview] → [Dropdown example] → [Generic procedure steps]`
-    - **Verbal recipe overview**: 1-2 sentences listing the main elements/actions (e.g., "configure provider in controller mode, obtain credentials, define resource"). This primes readers for both the example and the generic workflow.
-    - **Consistency requirement**: The opening recipe overview and the detailed steps (after the example) must match. If the intro says "configure X, obtain Y, define Z", the detailed section must have corresponding numbered steps for X, Y, and Z in the same order. This prevents confusion when readers see the example first then read the details.
-  - **Configuration sections** (parameters, options): Place dropdown **after generic procedure**
-    - Rationale: Example needs context from procedure to make sense
-  - **Short sections**: Use judgment - if example dominates, consider inline code blocks instead of dropdown
+- **Steps = workflow actions only**: Non-workflow info goes in notes/tips, not prose steps
+- **Example dropdowns for complete workflows**: When showing full end-to-end examples (especially for operations where cloud-specific details vary significantly, like import), place them in dropdowns at the step where they're most relevant
+  - Label as "Example: [specific scenario]" (e.g., "Example: LXD controller resource definition for import")
+  - Place at the end of the step that defines the resource or where cloud-specific variations matter most
+  - Rationale: Shows complete working configuration exactly where users need to see how all the pieces fit together for their specific cloud
 - **No unnecessary subsections**: Examples shouldn't create TOC clutter
 - **Code blocks with filenames**: Use `{code-block}` directive with `:caption: `filename`` for semantic file labeling
 

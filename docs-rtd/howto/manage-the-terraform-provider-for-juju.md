@@ -62,31 +62,45 @@ To view your controller's details, run `juju show-controller --show-password`. N
 
 #### Using static credentials
 
-In your Terraform plan add:
+In your Terraform plan add your provider definition. The exact details depend on whether your controller is a Juju controller or a JAAS controller, as follows:
 
-```terraform
+- For a Juju controller:
+
+```{code-block} terraform
+:caption: `main.tf`
+
 provider "juju" {
   controller_addresses = "<controller addresses>"
   # For a controller deployed with a self-signed certificate:
   ca_certificate = file("<path to certificate file>")
-  # For a regular Juju controller, provide the username and password for a user:
   username = "<username>"
   password = "<password>"
-  # For a JAAS controller, provide the client ID and client secret for a service account
-  # (OAuth 2.0 credentials from your external identity provider):
+}
+```
+
+- For a JAAS controller:
+
+```{code-block} terraform
+:caption: `main.tf`
+
+provider "juju" {
+  controller_addresses = "<controller addresses>"
+  # For a controller deployed with a self-signed certificate:
+  ca_certificate = file("<path to certificate file>")
+  # OAuth 2.0 credentials from your external identity provider:
   client_id     = "<clientID>"
   client_secret = "<clientSecret>"
 }
 ```
 
-All parameters can alternatively be set via environment variables:
+where the fields are as below:
 
-- `ca_certificate` → `JUJU_CA_CERT`
-- `client_id` → `JUJU_CLIENT_ID`
-- `client_secret` → `JUJU_CLIENT_SECRET`
-- `controller_addresses` → `JUJU_CONTROLLER_ADDRESSES` (defaults to localhost:17070; supports multiple: `<host>:<port>,<host>:<port>,...`)
-- `password` → `JUJU_PASSWORD`
-- `username` → `JUJU_USERNAME`
+- `ca_certificate` (String) If the controller was deployed with a self-signed certificate: This is the certificate to use for identification. This can also be set by the `JUJU_CA_CERT` environment variable
+- `client_id` (String) If using JAAS: This is the client ID (OAuth2.0, created by the external identity provider) to be used. This can also be set by the `JUJU_CLIENT_ID` environment variable
+- `client_secret` (String, Sensitive) If using JAAS: This is the client secret (OAuth2.0, created by the external identity provider) to be used. This can also be set by the `JUJU_CLIENT_SECRET` environment variable
+- `controller_addresses` (String) This is the controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: `<host>:<port>,<host>:<port>,...` This can also be set by the `JUJU_CONTROLLER_ADDRESSES` environment variable.
+- `password` (String, Sensitive) This is the password of the username to be used. This can also be set by the `JUJU_PASSWORD` environment variable
+- `username` (String) This is the username registered with the controller to be used. This can also be set by the `JUJU_USERNAME` environment variable
 
 Keep sensitive values out of version control (use `TF_VAR_...` environment variables, a secrets manager, or an uncommitted `.tfvars` file).
 
