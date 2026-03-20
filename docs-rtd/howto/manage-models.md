@@ -12,7 +12,7 @@ myst:
 
 ## Reference an externally managed model
 
-To reference a model that you've created outside of the current Terraform plan, in your Terraform plan add a data source of the `juju_model` type, specifying the name of the model. For example:
+To reference a model that you've created outside of the current Terraform plan (read-only access), in your Terraform plan add a data source of the `juju_model` type, specifying the name of the model. For example:
 
 ```terraform
 data "juju_model" "mymodel" {
