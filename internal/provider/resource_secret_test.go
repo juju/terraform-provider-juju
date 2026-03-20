@@ -5,7 +5,6 @@ package provider
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"testing"
 
@@ -17,12 +16,7 @@ import (
 )
 
 func TestAcc_ResourceSecret_CreateWithoutName(t *testing.T) {
-	agentVersion := os.Getenv(TestJujuAgentVersion)
-	if agentVersion == "" {
-		t.Errorf("%s is not set", TestJujuAgentVersion)
-	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
-		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
-	}
+	skipTestIfSecretsNotSupported(t)
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	secretInfo := "test-info"
@@ -52,12 +46,7 @@ func TestAcc_ResourceSecret_CreateWithoutName(t *testing.T) {
 }
 
 func TestAcc_ResourceSecret_CreateWithInfo(t *testing.T) {
-	agentVersion := os.Getenv(TestJujuAgentVersion)
-	if agentVersion == "" {
-		t.Errorf("%s is not set", TestJujuAgentVersion)
-	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
-		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
-	}
+	skipTestIfSecretsNotSupported(t)
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	secretName := "tf-test-secret"
@@ -102,12 +91,7 @@ func TestAcc_ResourceSecret_CreateWithInfo(t *testing.T) {
 }
 
 func TestAcc_ResourceSecret_CreateWithNoInfo(t *testing.T) {
-	agentVersion := os.Getenv(TestJujuAgentVersion)
-	if agentVersion == "" {
-		t.Errorf("%s is not set", TestJujuAgentVersion)
-	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
-		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
-	}
+	skipTestIfSecretsNotSupported(t)
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	secretName := "tf-test-secret"
@@ -134,12 +118,7 @@ func TestAcc_ResourceSecret_CreateWithNoInfo(t *testing.T) {
 }
 
 func TestAcc_ResourceSecret_Update(t *testing.T) {
-	agentVersion := os.Getenv(TestJujuAgentVersion)
-	if agentVersion == "" {
-		t.Errorf("%s is not set", TestJujuAgentVersion)
-	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
-		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
-	}
+	skipTestIfSecretsNotSupported(t)
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	secretName := "tf-test-secret"
@@ -188,12 +167,7 @@ func TestAcc_ResourceSecret_Update(t *testing.T) {
 }
 
 func TestAcc_ResourceSecret_UpgradeV0ToV1(t *testing.T) {
-	agentVersion := os.Getenv(TestJujuAgentVersion)
-	if agentVersion == "" {
-		t.Errorf("%s is not set", TestJujuAgentVersion)
-	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
-		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
-	}
+	skipTestIfSecretsNotSupported(t)
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	secretName := "tf-test-secret"

@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/list"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
@@ -106,7 +107,7 @@ func getEnvVar(field string) types.String {
 }
 
 // Ensure jujuProvider satisfies various provider interfaces.
-var _ provider.Provider = &jujuProvider{}
+var _ provider.ProviderWithListResources = &jujuProvider{}
 var _ provider.ProviderWithActions = &jujuProvider{}
 
 type ProviderConfiguration struct {
@@ -483,6 +484,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 
 	resp.ResourceData = providerData
 	resp.DataSourceData = providerData
+	resp.ListResourceData = providerData
 	resp.ActionData = providerData
 }
 
@@ -640,6 +642,21 @@ func checkClientErr(err error, config juju.ControllerConfiguration) diag.Diagnos
 	}
 	diags.AddError("Client Error", err.Error())
 	return diags
+}
+
+// ListResources returns a slice of functions to instantiate each ListResource
+// implementation.
+func (p *jujuProvider) ListResources(_ context.Context) []func() list.ListResource {
+	return []func() list.ListResource{
+		func() list.ListResource { return NewApplicationLister() },
+		func() list.ListResource { return NewIntegrationLister() },
+		func() list.ListResource { return NewModelLister() },
+		func() list.ListResource { return NewOfferLister() },
+		func() list.ListResource { return NewMachineLister() },
+		func() list.ListResource { return NewSSHKeyLister() },
+		func() list.ListResource { return NewStoragePoolLister() },
+		func() list.ListResource { return NewSecretLister() },
+	}
 }
 
 // checkControllerMode checks if the provider is in controller mode and if the

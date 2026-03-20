@@ -260,3 +260,291 @@ To destroy a model, remove its resource definition from your Terraform plan.
 
 > See more: [`juju_model` (resource)](../reference/terraform-provider/resources/model)
 
+## Export a model
+
+To export the Terraform configuration from a model, you can use `terraform query`.
+
+> See also: [terraform query](https://developer.hashicorp.com/terraform/language/v1.14.x/import/bulk?page=import&page=bulk)
+
+### Ensure the provider is connected to the model's host controller
+
+To export the Terraform configuration for a model, configure the provider to connect to the controller that hosts the model.
+
+For example:
+
+```{code-block} terraform
+:caption: `main.tf`
+
+terraform {
+  required_providers {
+    juju = {
+      source = "juju/juju"
+    }
+  }
+}
+
+provider "juju" {
+  controller_addresses = "<addr>"
+  username             = "<username>"
+  password             = "<password>"
+  ca_certificate       = "<ca_cert>
+}
+```
+
+### Define what you want to query for
+
+Define the resources you want to export from a model using the `list` resources in the query file.
+
+> The query file must have the `.tfquery.hcl` extension.
+
+For example, create `example.tfquery.hcl` with:
+- model
+- applications
+- machines
+- ssh keys
+- storage pools
+- integrations
+- offers
+
+```{code-block} terraform
+:caption: `example.tfquery.hcl`
+
+variable "model_uuid" {
+  description = "UUID of the model to export"
+  type        = string
+}
+
+
+# ---------------------------------------------------------------------------
+# List the model
+# ---------------------------------------------------------------------------
+list "juju_model" "model" {
+  provider         = juju
+  include_resource = true
+
+  config {
+    model_uuid = var.model_uuid
+  }
+}
+
+# ---------------------------------------------------------------------------
+# List all applications in the test model
+# ---------------------------------------------------------------------------
+list "juju_application" "all_apps" {
+  provider         = juju
+  include_resource = true
+
+  config {
+    model_uuid = var.model_uuid
+  }
+}
+
+
+# ---------------------------------------------------------------------------
+# List all offers in the test model
+# ---------------------------------------------------------------------------
+list "juju_offer" "all_offers" {
+  provider         = juju
+  include_resource = true
+
+  config {
+    model_uuid = var.model_uuid
+  }
+}
+
+# ---------------------------------------------------------------------------
+# List all machines in the test model
+# ---------------------------------------------------------------------------
+list "juju_machine" "all_machines" {
+  provider         = juju
+  include_resource = true
+
+  config {
+    model_uuid = var.model_uuid
+  }
+}
+
+# ---------------------------------------------------------------------------
+# List all SSH keys in the test model
+# ---------------------------------------------------------------------------
+list "juju_ssh_key" "all_ssh_keys" {
+  provider         = juju
+  include_resource = true
+
+  config {
+    model_uuid = var.model_uuid
+  }
+}
+
+# ---------------------------------------------------------------------------
+# List all integrations in the test model
+# ---------------------------------------------------------------------------
+list "juju_integration" "all_integrations" {
+  provider         = juju
+  include_resource = true
+
+  config {
+    model_uuid = var.model_uuid
+  }
+}
+
+# ---------------------------------------------------------------------------
+# List all secrets in the test model
+# ---------------------------------------------------------------------------
+list "juju_secret" "all_secrets" {
+  provider         = juju
+  include_resource = true
+
+  config {
+    model_uuid = var.model_uuid
+  }
+}
+
+# ---------------------------------------------------------------------------
+# List all storage pools in the test model
+# ---------------------------------------------------------------------------
+list "juju_storage_pool" "all_storage_pools" {
+  provider         = juju
+  include_resource = true
+
+  config {
+    model_uuid = var.model_uuid
+  }
+}
+```
+
+### Query and generate the configuration file
+
+To generate the config with the specified list resources into the `test.tf` file, run:
+
+`TF_VAR_model_uuid="<model-uuid>" terraform query --generate-config-out=test.tf`
+
+An example of the generated config:
+
+```terraform
+resource "juju_application" "all_apps_0" {
+  provider             = juju
+  config               = null
+  constraints          = "arch=amd64"
+  endpoint_bindings    = null
+  machines             = ["1"]
+  model_uuid           = "<model-uuid>"
+  name                 = "<app-name>"
+  registry_credentials = null
+  resources            = null
+  storage_directives   = {}
+  trust                = false
+  charm {
+    base     = "ubuntu@20.04"
+    channel  = "latest/stable"
+    name     = "<charm>"
+    revision = <revision>
+  }
+}
+
+import {
+  to       = juju_application.all_apps_0
+  provider = juju
+  identity = {
+    id = "<model-uuid>:<app-name>"
+  }
+}
+```
+
+Run `terraform apply` to import all resources into your Terraform state.
+Before confirming, verify that the plan shows no resources being replaced -- all changes should be either no-op or in-place.
+
+The `terraform apply` output should look something like this:
+```
+Plan: 19 to import, 0 to add, 6 to change, 0 to destroy.
+...
+...
+...
+Apply complete! Resources: 19 imported, 0 added, 6 changed, 0 destroyed.
+```
+
+#### Note: The generated configuration contains no cross-references between resources
+
+The generated configuration contains the *literal values* for all the fields; that is, there is no reference between resources.
+
+An example is:
+
+```terraform
+resource "juju_model" "model_0" {
+  provider    = juju
+  annotations = {}
+  constraints       = null
+  credential        = "localhost"
+  name              = "test4"
+  target_controller = null
+  cloud {
+    name   = "localhost"
+    region = "localhost"
+  }
+}
+
+resource "juju_application" "all_apps_0" {
+  provider             = juju
+  config               = null
+  constraints          = "arch=amd64"
+  endpoint_bindings    = null
+  machines             = ["1"]
+  model_uuid           = "c1cecf1e-fe66-4589-8585-e579edd6f58b"
+  name                 = "dummy-sink"
+  registry_credentials = null
+  resources            = null
+  storage_directives   = {}
+  trust                = false
+  charm {
+    base     = "ubuntu@20.04"
+    channel  = "latest/stable"
+    name     = "juju-qa-dummy-sink"
+    revision = 7
+  }
+}
+```
+
+As shown above, the `model_uuid` in the `juju_application` resource is a hard-coded UUID rather than a reference to the `juju_model` resource.
+If you copy this plan to deploy the same infrastructure on another controller, it will fail because Terraform will attempt to create the model and the application simultaneously without knowing their dependency.
+
+The generated plan therefore requires manual intervention before it can be reused to reproduce the same model elsewhere.
+You need to cross-reference resources to ensure the correct dependency graph is built.
+
+#### The generated configuration includes some default resources
+
+Some resources are generated because they exist in the Juju model, but they are typically implicit resources that are not ordinarily managed by Terraform.
+
+This includes:
+- default storage pools
+- default ssh keys
+
+For example the `loop` storage pool is default in each model.
+```terraform
+resource "juju_storage_pool" "all_storage_pools_3" {
+  provider         = juju
+  attributes       = null
+  model_uuid       = "c1cecf1e-fe66-4589-8585-e579edd6f58b"
+  name             = "loop"
+  storage_provider = "loop"
+}
+
+import {
+  to       = juju_storage_pool.all_storage_pools_3
+  provider = juju
+  identity = {
+    id = "c1cecf1e-fe66-4589-8585-e579edd6f58b:loop"
+  }
+}
+```
+
+Importing it is harmless, but attempting to destroy it via Terraform will result in an error:
+```
+juju_storage_pool.all_storage_pools_3: Destroying... [id=c1cecf1e-fe66-4589-8585-e579edd6f58b:loop]
+╷
+│ Error: Client Error
+│ 
+│ Unable to delete storage pool resource, got error: storage pool "loop" not found
+╵
+```
+
+It is advisable to either remove these resources from the generated configuration before importing, or to simply avoid deleting them via Terraform.
