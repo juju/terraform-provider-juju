@@ -240,6 +240,7 @@ linkcheck_ignore = [
     "http://registry.example.com/*",
     "http://registry.example.com:5000/*",
     "https://example.com",
+    "https://www.hashicorp.com/en/blog/terraform-security-5-foundational-practices"
     ]
 
 # A regex list of URLs where anchors are ignored by 'make linkcheck'

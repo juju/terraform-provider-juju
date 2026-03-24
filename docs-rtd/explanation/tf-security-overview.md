@@ -11,6 +11,13 @@ This document provides an overview of security hardening considerations for the
 Juju Terraform Provider, focusing on state security, communication, and general
 Terraform best practices.
 
+```{note}
+Throughout this document, **Terraform** refers to the [Terraform CLI](https://developer.hashicorp.com/terraform/cli),
+and **provider** refers to the [Juju Terraform Provider](https://registry.terraform.io/providers/juju/juju/latest).
+The provider is a plugin invoked by the Terraform CLI to manage Juju resources;
+the two work together as a single client-side toolchain.
+```
+
 ## Provider scope
 
 The Juju Terraform Provider is a **client-only** tool — it does not run any
@@ -18,12 +25,12 @@ server-side processes or store data of its own. All state about managed
 infrastructure is handled by Terraform itself and stored in the Terraform state
 file.
 
-Because the provider is a client, the primary security surface areas to consider
+Because the provider is a Juju client, the primary security surface areas to consider
 are:
 
 - The **Terraform state file**, which may contain sensitive information.
 - The **credentials** used to authenticate with the Juju controller.
-- The **network communication** between the provider and the Juju controller.
+- The **network layer** between the provider and the Juju controller.
 
 ## Terraform state security
 
