@@ -15,6 +15,7 @@ relatedlinks: "[Charmcraft](https://documentation.ubuntu.com/charmcraft/), [Char
 tutorial
 howto/index
 Reference <reference/index>
+Explanation <explanation/index>
 ```
 
 The Terraform Provider for Juju is a [Terraform Provider](https://developer.hashicorp.com/terraform/language/providers) that extends [Terraform](https://developer.hashicorp.com/terraform) with [Juju](https://documentation.ubuntu.com/juju) and [JAAS](https://documentation.ubuntu.com/jaas) functionality.
@@ -33,7 +34,7 @@ Like all of Juju, the Terraform Provider for Juju is for SREs, or anyone looking
 - **Handle authentication and authorization:** {ref}`SSH keys <manage-ssh-keys>`, {ref}`Users <manage-users>`, {ref}`Service accounts <manage-service-accounts>`, {ref}`Roles <manage-roles>`, {ref}`Groups <manage-groups>`
 - **Deploy infrastructure and applications:** {ref}`Deploy <deploy-an-application>`, {ref}`Configure <configure-an-application>`, {ref}`Integrate <integrate-an-application-with-another-application>`, {ref}`Scale <scale-an-application>`, {ref}`Upgrade <upgrade-an-application>`, etc.
 
-````{grid} 1 1 1 1
+````{grid} 1 1 2 2
 
 ```{grid-item-card} [Tutorial](tutorial)
 :link: tutorial
@@ -54,6 +55,13 @@ Like all of Juju, the Terraform Provider for Juju is for SREs, or anyone looking
 :link-type: doc
 
 **Technical information** - specifications, APIs, architecture
+```
+
+```{grid-item-card} [Explanation](/index)
+:link: explanation/index
+:link-type: doc
+
+**Discussion and clarification** of key topics
 ```
 ````
 
