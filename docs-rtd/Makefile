@@ -6,10 +6,10 @@
 # from the environment for the first two.
 SPHINXDIR       = .sphinx
 SPHINXOPTS      ?= -c . -d $(SPHINXDIR)/.doctrees -j auto
+VENVDIR         ?= .venv
 SPHINXBUILD     ?= $(VENVDIR)/bin/sphinx-build
 SOURCEDIR       ?= .
 BUILDDIR        = _build
-VENVDIR         ?= $(SPHINXDIR)/venv
 PA11Y           = $(SPHINXDIR)/node_modules/pa11y/bin/pa11y.js --config $(SPHINXDIR)/pa11y.json
 VENV            = $(VENVDIR)/bin/activate
 TARGET          = *
@@ -17,7 +17,7 @@ METRICSDIR      = $(SOURCEDIR)/.sphinx/metrics
 REQPDFPACKS     = latexmk fonts-freefont-otf texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-font-utils texlive-lang-cjk texlive-xetex plantuml xindy tex-gyre dvipng
 CONFIRM_SUDO    ?= N
 VALE_CONFIG     = $(SPHINXDIR)/vale.ini
-VALEDIR         = $(SPHINXDIR)/venv/lib/python*/site-packages/vale
+VALEDIR         = $(VENVDIR)/lib/python*/site-packages/vale
 VOCAB_CANONICAL = $(SPHINXDIR)/styles/config/vocabularies/Canonical
 SPHINX_HOST     ?= 127.0.0.1
 SPHINX_PORT     ?= 8000
