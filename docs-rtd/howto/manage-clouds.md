@@ -12,7 +12,9 @@ myst:
 
 (add-a-machine-cloud)=
 ## Add a machine cloud
+
 To add a machine cloud to the controller that your Terraform plan is connected to, in your Terraform plan add a resource of the `juju_cloud` type. For example:
+
 ```terraform
 resource "juju_cloud" "this" {
   name = "my-cloud"

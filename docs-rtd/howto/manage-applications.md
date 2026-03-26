@@ -75,6 +75,7 @@ resource "juju_application" "this" {
    }
 }
 ```
+
 > See more: [`juju_application` (resource)](../reference/terraform-provider/resources/application)
 
 

@@ -6,26 +6,17 @@ myst:
 
 # Tutorial
 
-<!--
-```{toctree}
-:maxdepth: 1
-
-self
-```
--->
-
 Imagine your business needs a chat service such as Mattermost backed up by a database such as PostgreSQL. In a traditional setup, this can be quite a challenge, but with Juju you'll find yourself deploying, configuring, scaling, integrating, etc., applications in no time. Let's get started!
 
-----------
 **What you'll need:**
+
 - A workstation, e.g., a laptop, that has sufficient resources to launch a virtual machine with 4 CPUs, 8 GB RAM, and 50 GB disk space.
 
 **What you'll do:**
+
 - Set up an isolated test environment with Multipass and the `charm-dev` blueprint, which will provide all the necessary tools and configuration for the tutorial (a localhost machine cloud and Kubernetes cloud, Juju, etc.).
 
 - Plan, then deploy, configure, and scale a chat service based on Mattermost and backed by PostgreSQL on a local Kubernetes cloud with Juju.
-----------
-
 
 ## Set up an isolated test environment
 
