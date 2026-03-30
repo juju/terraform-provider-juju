@@ -238,7 +238,7 @@ func createJAASModel(ctx context.Context, conn jujuapi.Connection,
 	modelInfo, err := client.AddModelToController(&jaasparams.AddModelToControllerRequest{
 		ModelCreateArgs: params.ModelCreateArgs{
 			Name:               name,
-			Qualifier:          names.NewUserTag(owner).String(),
+			Qualifier:          owner,
 			CloudTag:           cloudTag,
 			CloudRegion:        cloudRegion,
 			CloudCredentialTag: cloudCredential.String(),
