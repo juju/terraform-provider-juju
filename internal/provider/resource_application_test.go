@@ -2351,9 +2351,7 @@ func testCheckEndpointsAreSetToCorrectSpace(ctx context.Context, modelUUID, appN
 		for i := 0; i < 50; i++ {
 			status, err := clientAPIClient.Status(
 				context.Background(),
-				&apiclient.StatusArgs{
-					Patterns: []string{appName},
-				})
+				&apiclient.StatusArgs{})
 			if err != nil {
 				return err
 			}
