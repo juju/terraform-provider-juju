@@ -664,7 +664,7 @@ func (r *controllerResource) ImportState(ctx context.Context, req resource.Impor
 
 	cloudInfo, err := juju.GetCloudInformation(ctx, connInfo)
 	if err != nil {
-		resp.Diagnostics.AddWarning(
+		resp.Diagnostics.AddError(
 			"Failed to fetch cloud information",
 			fmt.Sprintf("Could not fetch cloud and credential information from controller: %s. ", err.Error()),
 		)

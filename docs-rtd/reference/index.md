@@ -6,7 +6,9 @@
 :glob:
 :hidden:
 
+terraform-provider/actions/index
 terraform-provider/data-sources/index
+terraform-provider/list-resources/index
 terraform-provider/resources/index
 
 

@@ -299,6 +299,14 @@ func (sc *sharedClient) IsOfferingController(name string) bool {
 	return ok
 }
 
+// GetUser returns the username of the user connecting to the Juju controller.
+func (sc *sharedClient) GetUser() string {
+	if sc.isJAAS {
+		return sc.controllerConfig.ClientID
+	}
+	return sc.controllerConfig.Username
+}
+
 // GetConnection returns a juju connection for use creating juju
 // api clients. A model UUID can optionally be provided to connect
 // to a specific model.
