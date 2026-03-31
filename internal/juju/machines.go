@@ -378,8 +378,8 @@ func (c *machinesClient) DestroyMachine(ctx context.Context, input *DestroyMachi
 }
 
 // ListMachines returns the list of machine IDs in the given model.
-func (c *machinesClient) ListMachines(modelUUID string) ([]string, error) {
-	conn, err := c.GetConnection(&modelUUID)
+func (c *machinesClient) ListMachines(ctx context.Context, modelUUID string) ([]string, error) {
+	conn, err := c.GetConnection(ctx, &modelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +387,7 @@ func (c *machinesClient) ListMachines(modelUUID string) ([]string, error) {
 
 	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
 
-	status, err := clientAPIClient.Status(nil)
+	status, err := clientAPIClient.Status(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

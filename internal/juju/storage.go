@@ -132,8 +132,8 @@ func (c *storageClient) GetPool(ctx context.Context, input GetStoragePoolInput) 
 }
 
 // ListPools lists pools, optionally filtered by provider and/or name.
-func (c *storageClient) ListPools(input ListStoragePoolsInput) ([]ListStoragePoolsOutput, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c *storageClient) ListPools(ctx context.Context, input ListStoragePoolsInput) ([]ListStoragePoolsOutput, error) {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ func (c *storageClient) ListPools(input ListStoragePoolsInput) ([]ListStoragePoo
 
 	client := storage.NewClient(conn)
 
-	pools, err := client.ListPools(input.Providers, input.Names)
+	pools, err := client.ListPools(ctx, input.Providers, input.Names)
 	if err != nil {
 		return nil, err
 	}

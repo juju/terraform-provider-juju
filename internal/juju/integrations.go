@@ -223,14 +223,14 @@ func (c *integrationsClient) DestroyIntegration(ctx context.Context, input *Inte
 }
 
 // ListIntegrations lists the integrations in a model
-func (c integrationsClient) ListIntegrations(input *ListIntegrationsInput) ([]ListIntegrationsOutput, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c integrationsClient) ListIntegrations(ctx context.Context, input *ListIntegrationsInput) ([]ListIntegrationsOutput, error) {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = conn.Close() }()
 
-	status, err := c.ModelStatus(input.ModelUUID, conn)
+	status, err := c.ModelStatus(ctx, input.ModelUUID, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func (c integrationsClient) ListIntegrations(input *ListIntegrationsInput) ([]Li
 
 	results := make([]ListIntegrationsOutput, 0, len(status.Relations))
 	for _, relation := range status.Relations {
-		applications, err := parseApplications(status.RemoteApplications, relation.Endpoints)
+		applications, err := parseApplications(status.RemoteApplicationOfferers, relation.Endpoints)
 		if err != nil {
 			return nil, err
 		}

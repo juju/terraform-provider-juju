@@ -229,8 +229,8 @@ func (c *secretsClient) ReadSecret(ctx context.Context, input *ReadSecretInput) 
 }
 
 // ListSecrets lists secrets in a model.
-func (c *secretsClient) ListSecrets(input *ListSecretsInput) ([]ListSecretsOutput, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c *secretsClient) ListSecrets(ctx context.Context, input *ListSecretsInput) ([]ListSecretsOutput, error) {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +242,7 @@ func (c *secretsClient) ListSecrets(input *ListSecretsInput) ([]ListSecretsOutpu
 		Label: input.Name,
 	}
 
-	results, err := secretAPIClient.ListSecrets(true, secretFilter)
+	results, err := secretAPIClient.ListSecrets(ctx, true, secretFilter)
 	if err != nil {
 		return nil, typedError(err)
 	}

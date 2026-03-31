@@ -87,7 +87,7 @@ func (r *modelLister) List(ctx context.Context, req list.ListRequest, stream *li
 		ids = []string{listRequest.ModelUUID.ValueString()}
 	} else {
 		var err error
-		ids, err = r.client.Models.ListModels()
+		ids, err = r.client.Models.ListModels(ctx)
 		if err != nil {
 			stream.Results = list.ListResultsStreamDiagnostics(
 				diag.Diagnostics{
@@ -143,7 +143,7 @@ func (r *modelLister) List(ctx context.Context, req list.ListRequest, stream *li
 func (r *modelLister) getModelResource(ctx context.Context, modelUUID string, sc schema.Schema) (modelResourceModel, diag.Diagnostics) {
 	resource := modelResourceModel{}
 	diags := diag.Diagnostics{}
-	response, err := r.client.Models.ReadModel(modelUUID)
+	response, err := r.client.Models.ReadModel(ctx, modelUUID)
 	if err != nil {
 		diags.AddError("Client Error", fmt.Sprintf("Unable to read model with UUID %s, got error: %s", modelUUID, err))
 		return modelResourceModel{}, diags
@@ -184,7 +184,7 @@ func (r *modelLister) getModelResource(ctx context.Context, modelUUID string, sc
 	}
 
 	// Annotations
-	annotations, err := r.client.Annotations.GetAnnotations(&juju.GetAnnotationsInput{
+	annotations, err := r.client.Annotations.GetAnnotations(ctx, &juju.GetAnnotationsInput{
 		EntityTag: names.NewModelTag(response.ModelInfo.UUID),
 		ModelUUID: modelUUID,
 	})

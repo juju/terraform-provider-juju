@@ -99,7 +99,7 @@ func (r *integrationLister) List(ctx context.Context, req list.ListRequest, stre
 	modelUUID := listRequest.ModelUUID.ValueString()
 	filterName := listRequest.ApplicationName.ValueString()
 
-	integrations, err := r.client.Integrations.ListIntegrations(&juju.ListIntegrationsInput{
+	integrations, err := r.client.Integrations.ListIntegrations(ctx, &juju.ListIntegrationsInput{
 		ModelUUID: modelUUID,
 	})
 	if err != nil {

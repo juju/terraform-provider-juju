@@ -25,7 +25,6 @@ import (
 var _ resource.Resource = &secretResource{}
 var _ resource.ResourceWithConfigure = &secretResource{}
 var _ resource.ResourceWithImportState = &secretResource{}
-var _ resource.ResourceWithUpgradeState = &secretResource{}
 var _ resource.ResourceWithIdentity = &secretResource{}
 
 func NewSecretResource() resource.Resource {

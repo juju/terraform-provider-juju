@@ -192,8 +192,8 @@ func (c *sshKeysClient) DeleteSSHKey(ctx context.Context, input *DeleteSSHKeyInp
 }
 
 // ListKeys returns the authorised ssh keys for the specified users.
-func (c *sshKeysClient) ListKeys(input ListSSHKeysInput) ([]string, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c *sshKeysClient) ListKeys(ctx context.Context, input ListSSHKeysInput) ([]string, error) {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +203,7 @@ func (c *sshKeysClient) ListKeys(input ListSSHKeysInput) ([]string, error) {
 
 	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
 	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
-	results, err := client.ListKeys(ssh.FullKeys, input.Username)
+	results, err := client.ListKeys(ctx, ssh.FullKeys, input.Username)
 	if err != nil {
 		return nil, err
 	}
