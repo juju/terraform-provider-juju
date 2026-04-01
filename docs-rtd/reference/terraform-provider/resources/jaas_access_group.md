@@ -44,8 +44,6 @@ resource "juju_jaas_access_group" "development" {
 
 Import is supported using the following syntax:
 
-The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
-
 ```shell
 # JAAS group access can be imported using the group UUID and access level
 $ terraform import juju_jaas_access_group.development UUID:member

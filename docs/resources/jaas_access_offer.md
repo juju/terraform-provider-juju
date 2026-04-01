@@ -45,8 +45,6 @@ resource "juju_jaas_access_offer" "development" {
 
 Import is supported using the following syntax:
 
-The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
-
 ```shell
 # JAAS offer access can be imported by using the URL as in the juju show-offers output and the access level.
 # Example:
