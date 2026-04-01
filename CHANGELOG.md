@@ -1,3 +1,53 @@
+# 1.4.0
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.11 release.
+
+ENHANCEMENTS
+
+* Add model export support via `terraform query` by @SimoneDutto in [#1053](https://github.com/juju/terraform-provider-juju/pull/1053)
+* Implement machine listing to support export flows by @alesstimec in [#1072](https://github.com/juju/terraform-provider-juju/pull/1072)
+* Implement offer listing for export generation by @kian99 in [#1077](https://github.com/juju/terraform-provider-juju/pull/1077)
+* Implement SSH key listing for export by @ale8k in [#1074](https://github.com/juju/terraform-provider-juju/pull/1074)
+* Add application export support by @ale8k in [#1078](https://github.com/juju/terraform-provider-juju/pull/1078)
+* Add `enable-ha` action support and controller HA enablement by @SimoneDutto in [#1087](https://github.com/juju/terraform-provider-juju/pull/1087) and [#1081](https://github.com/juju/terraform-provider-juju/pull/1081)
+* Add integration export support by @luci1900 in [#1089](https://github.com/juju/terraform-provider-juju/pull/1089)
+* Add storage pool export support by @ale8k in [#1092](https://github.com/juju/terraform-provider-juju/pull/1092)
+* Add secrets export support by @ale8k in [#1097](https://github.com/juju/terraform-provider-juju/pull/1097)
+* Introduce the `juju_jaas_controller` resource by @kian99 in [#1099](https://github.com/juju/terraform-provider-juju/pull/1099)
+* Add wait-for logging to improve provider diagnostics during long operations by @kian99 in [#1115](https://github.com/juju/terraform-provider-juju/pull/1115)
+* Add `juju_charm` data source by @SimoneDutto in [#1123](https://github.com/juju/terraform-provider-juju/pull/1123)
+* Pass process environment variables to Juju command runner for improved runtime compatibility by @kian99 in [#1130](https://github.com/juju/terraform-provider-juju/pull/1130)
+
+BUG FIXES
+
+* Fix JAAS export user detection by returning client ID from `GetUser()` when connected to JAAS by @SimoneDutto in [#1084](https://github.com/juju/terraform-provider-juju/pull/1084)
+* Fix provider behavior to honor `http_proxy`, `https_proxy`, and related proxy variables by @SimoneDutto in [#1103](https://github.com/juju/terraform-provider-juju/pull/1103)
+* Use `addError` instead of `addWarning` when controller import cannot read remote details by @kian99 in [#1128](https://github.com/juju/terraform-provider-juju/pull/1128)
+
+DOCUMENTATION
+
+* Document the new `enable-ha` action by @SimoneDutto in [#1098](https://github.com/juju/terraform-provider-juju/pull/1098)
+* Add examples for `juju_controller` and `juju_jaas_controller` resources by @kian99 in [#1114](https://github.com/juju/terraform-provider-juju/pull/1114)
+* Add `juju_charm` use-case documentation by @SimoneDutto in [#1125](https://github.com/juju/terraform-provider-juju/pull/1125)
+* Add export feature docs and associated fly-by documentation fixes by @SimoneDutto in [#1127](https://github.com/juju/terraform-provider-juju/pull/1127)
+* Add a how-to for exporting a model by @SimoneDutto in [#1132](https://github.com/juju/terraform-provider-juju/pull/1132)
+* Refactor and clean up controller management docs after bootstrap changes by @tmihoc in [#1131](https://github.com/juju/terraform-provider-juju/pull/1131)
+
+CI & MAINTENANCE
+
+* Update Trivy GitHub Action version in CI by @alesstimec in [#1120](https://github.com/juju/terraform-provider-juju/pull/1120)
+* Merge `main` into feature branch during release work by @SimoneDutto in [#1106](https://github.com/juju/terraform-provider-juju/pull/1106)
+* Merge `v1.3` branch back into `main` to align release history by @kian99 in [#1109](https://github.com/juju/terraform-provider-juju/pull/1109)
+* Merge `main` during final release synchronization by @SimoneDutto in [#1135](https://github.com/juju/terraform-provider-juju/pull/1135)
+* Merge `feature/export` into `main` by @SimoneDutto in [#1138](https://github.com/juju/terraform-provider-juju/pull/1138)
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v1.3.1...v1.4.0
+
 ## 1.3.1
 
 NOTES:

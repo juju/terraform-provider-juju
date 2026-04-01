@@ -40,6 +40,30 @@ func TestNewConfig(t *testing.T) {
 	assert.Equal(t, config, expectedConfig, fmt.Sprintf("config mismatch: got %+v, want %+v", config, expectedConfig))
 }
 
+func TestNewConfigFromMap_CastToJujuConfig(t *testing.T) {
+	input := map[string]interface{}{
+		"int":        42,
+		"slice":      []string{"a", "b"},
+		"map":        map[string]interface{}{"k": "v"},
+		"nil":        nil,
+		"emptySlice": []string{},
+		"emptyMap":   map[string]interface{}{},
+	}
+
+	config := newConfigFromMap(input)
+
+	expected := map[string]*string{
+		"int":        stringP("42"),
+		"slice":      stringP("a,b"),
+		"map":        stringP("k=v"),
+		"nil":        nil,
+		"emptySlice": nil,
+		"emptyMap":   nil,
+	}
+
+	assert.Equal(t, expected, config, fmt.Sprintf("config mismatch: got %+v, want %+v", config, expected))
+}
+
 func TestNewConfigFromModelConfigAPI(t *testing.T) {
 	mapFromAPI := map[string]interface{}{
 		"key1": "value1",

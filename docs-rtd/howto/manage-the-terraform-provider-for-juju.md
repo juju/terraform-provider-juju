@@ -27,41 +27,73 @@ For example, on a Linux that supports snaps:
 sudo snap install terraform --classic
 ```
 
-(setup-provider)=
+(set-up-the-terraform-provider-for-juju)=
 ## Set up the Terraform Provider for Juju
 
-To set up the provider, connect it to a Juju controller. You can do this in one of 3 ways:
+The provider supports two modes: **controller mode** (for bootstrapping) and **regular mode** (for using existing controllers).
 
-1. Using static credentials;
-2. Using environment variables;
-3. Using the `juju` client. 
+### In controller mode (bootstrapping)
 
-Use of the `juju` client for configuration is not supported for JAAS controllers. 
-
-Across all the supported methods, for authentication with a Juju controller you must provide the username and password for a user, whereas for authentication with a JAAS controller you must provide the client ID and client secret for a service account (where the service account must be created through the external identity provider connected to the JAAS controller).
-
-
-```{tip}
-To view your controller’s details, run `juju show-controller --show-password`. No password will be shown for JAAS controllers.
-```
-
-### Using static credentials
-
-In your Terraform plan add:
+To set up the provider in controller mode for the purpose of bootstrapping a new controller, in your Terraform plan (e.g., `main.tf`) define the provider with `controller_mode = true`:
 
 ```terraform
+provider "juju" {
+  controller_mode = true
+}
+```
+
+In the same plan, define a `juju_controller` resource to bootstrap your controller. No other resources can be created when this flag is set.
+
+> See more: {ref}`bootstrap-a-controller`
+
+### In regular mode (using existing controllers)
+
+To set up the provider in regular mode, i.e., using an existing controller, choose one of three authentication methods:
+
+1. Static credentials in your Terraform plan;
+2. Environment variables;
+3. The `juju` CLI (not supported for JAAS controllers).
+
+For Juju controllers, provide username and password. For JAAS controllers, provide client ID and client secret from your external identity provider.
+
+```{tip}
+To view your controller's details, run `juju show-controller --show-password`. No password will be shown for JAAS controllers.
+```
+
+#### Using static credentials
+
+In your Terraform plan add your provider definition. The exact details depend on whether your controller is a Juju controller or a JAAS controller, as follows:
+
+- For a Juju controller:
+
+```{code-block} terraform
+:caption: `main.tf`
+
 provider "juju" {
   controller_addresses = "<controller addresses>"
   # For a controller deployed with a self-signed certificate:
   ca_certificate = file("<path to certificate file>")
-  # For a regular Juju controller, provide the username and password for a user:
   username = "<username>"
   password = "<password>"
-  # For a JAAS controller, provide the client ID and client secret for a service account:
+}
+```
+
+- For a JAAS controller:
+
+```{code-block} terraform
+:caption: `main.tf`
+
+provider "juju" {
+  controller_addresses = "<controller addresses>"
+  # For a controller deployed with a self-signed certificate:
+  ca_certificate = file("<path to certificate file>")
+  # OAuth 2.0 credentials from your external identity provider:
   client_id     = "<clientID>"
   client_secret = "<clientSecret>"
 }
 ```
+
+where the fields are as below:
 
 - `ca_certificate` (String) If the controller was deployed with a self-signed certificate: This is the certificate to use for identification. This can also be set by the `JUJU_CA_CERT` environment variable
 - `client_id` (String) If using JAAS: This is the client ID (OAuth2.0, created by the external identity provider) to be used. This can also be set by the `JUJU_CLIENT_ID` environment variable
@@ -70,14 +102,13 @@ provider "juju" {
 - `password` (String, Sensitive) This is the password of the username to be used. This can also be set by the `JUJU_PASSWORD` environment variable
 - `username` (String) This is the username registered with the controller to be used. This can also be set by the `JUJU_USERNAME` environment variable
 
-Sensitive values should be kept of version control (for example, pass them via `TF_VAR_...` environment variables, a secrets manager, or a `.tfvars` file you do not commit).
+Keep sensitive values out of version control (use `TF_VAR_...` environment variables, a secrets manager, or an uncommitted `.tfvars` file).
 
 > See more: [`juju` provider](../reference/index)
 
-### Using environment variables
+#### Using environment variables
 
-The provider also supports specific environment variables for configuration.\
-In your Terraform plan, leave the `provider` specification empty:
+In your Terraform plan, define an empty provider:
 
 ```terraform
 provider "juju" {}
@@ -99,11 +130,10 @@ export JUJU_CLIENT_SECRET="<client secret>"
 
 > See more: [`juju` provider](../reference/index)
 
-
-### Using the `juju` CLI
+#### Using the `juju` CLI
 
 ```{important}
-This method is only supported for regular Juju controllers.
+Not supported for JAAS controllers.
 ```
 
 In your Terraform plan, leave the `provider` specification empty:
@@ -143,7 +173,7 @@ terraform {
 
 In your Terraform plan, configure the `provider` with the details of your existing, Juju or JIMM controller.
 
-> See more: {ref}`setup-provider`
+> See more: {ref}`set-up-the-terraform-provider-for-juju`
 
 #### c. Build your deployment
 

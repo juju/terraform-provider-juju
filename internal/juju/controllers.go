@@ -126,6 +126,8 @@ func (r *commandRunner) Run(ctx context.Context, args ...string) error {
 	cmd.Stderr = logFile
 
 	// Build environment vars
+	// Set env vars from the current process to ensure things like proxy settings are preserved, then add JUJU_DATA.
+	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, fmt.Sprintf("JUJU_DATA=%s", r.workingDir))
 
 	if err := cmd.Run(); err != nil {

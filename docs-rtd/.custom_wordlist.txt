@@ -4,6 +4,7 @@ backends
 Charmcraft
 cjk
 cryptographically
+Diataxis
 dvipng
 fonts
 freefont

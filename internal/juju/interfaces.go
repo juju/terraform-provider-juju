@@ -25,9 +25,13 @@ import (
 	"github.com/juju/names/v6"
 )
 
+// SharedClient defines the set of methods that the provider's shared client must implement.
 type SharedClient interface {
 	// GetControllerVersion returns the version of the controller that the client is connected to.
 	GetControllerVersion(context.Context) (semversion.Number, error)
+
+	// GetUser returns the name of the currently authenticated user.
+	GetUser() string
 
 	// AddModel adds a model to the cache of model data. If any of the required
 	// pieces of data are empty, nothing is added to the cache of model data. If the UUID

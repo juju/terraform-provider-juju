@@ -14,7 +14,7 @@ GOOS=$(shell go env GOOS)
 GOARCH=$(shell go env GOARCH)
 GOPATH=$(shell go env GOPATH)
 PARALLEL_TEST_COUNT ?= 3
-EDGE_VERSION ?= 1.3.0
+EDGE_VERSION ?= 1.3.1
 REGISTRY_DIR=~/.terraform.d/plugins/registry.terraform.io/juju/juju/${EDGE_VERSION}/${GOOS}_${GOARCH}
 
 .PHONY: install
@@ -51,6 +51,8 @@ ifneq ($(HAS_TERRAFORM),)
 	@go generate ./...
 	cp docs-rtd/reference/index_terraform_provider_data_sources._md docs-rtd/reference/terraform-provider/data-sources/index.md
 	cp docs-rtd/reference/index_terraform_provider_resources._md docs-rtd/reference/terraform-provider/resources/index.md
+	cp docs-rtd/reference/index_terraform_provider_actions._md docs-rtd/reference/terraform-provider/actions/index.md
+	cp docs-rtd/reference/index_terraform_provider_list_resources._md docs-rtd/reference/terraform-provider/list-resources/index.md
 else
 	@echo "Unable to generate docs, terraform not installed"
 endif
