@@ -49,6 +49,7 @@ const (
 	RevokeAccess
 )
 
+// CreateSecretInput is the input for CreateSecret.
 type CreateSecretInput struct {
 	ModelUUID string
 	Name      string
@@ -56,11 +57,13 @@ type CreateSecretInput struct {
 	Info      string
 }
 
+// CreateSecretOutput is the output for CreateSecret.
 type CreateSecretOutput struct {
 	SecretId  string
 	SecretURI string
 }
 
+// ReadSecretInput is the input for ReadSecret.
 type ReadSecretInput struct {
 	SecretId  string
 	ModelUUID string
@@ -68,6 +71,7 @@ type ReadSecretInput struct {
 	Revision  *int
 }
 
+// ReadSecretOutput is the output for ReadSecret.
 type ReadSecretOutput struct {
 	SecretId     string
 	SecretURI    string
@@ -77,6 +81,23 @@ type ReadSecretOutput struct {
 	Info         string
 }
 
+// ListSecretsInput is the input for ListSecrets.
+type ListSecretsInput struct {
+	ModelUUID string
+	Name      *string
+}
+
+// ListSecretsOutput is the output for ListSecrets.
+type ListSecretsOutput struct {
+	SecretId     string
+	SecretURI    string
+	Name         string
+	Value        map[string]string
+	Applications []string
+	Info         string
+}
+
+// UpdateSecretInput is the input for UpdateSecret.
 type UpdateSecretInput struct {
 	SecretId  string
 	ModelUUID string
@@ -86,15 +107,31 @@ type UpdateSecretInput struct {
 	Info      *string
 }
 
+// DeleteSecretInput is the input for DeleteSecret.
 type DeleteSecretInput struct {
 	SecretId  string
 	ModelUUID string
 }
 
+// GrantRevokeAccessSecretInput is the input for Grant/RevokeAccessSecret.
 type GrantRevokeAccessSecretInput struct {
 	SecretId     string
 	ModelUUID    string
 	Applications []string
+}
+
+// MultiError is a custom error type that can hold multiple errors.
+type MultiError struct {
+	Errors []error
+}
+
+// Error returns a string representation of the MultiError.
+func (m *MultiError) Error() string {
+	errStrs := make([]string, 0, len(m.Errors))
+	for _, err := range m.Errors {
+		errStrs = append(errStrs, err.Error())
+	}
+	return strings.Join(errStrs, ", ")
 }
 
 func newSecretsClient(sc SharedClient) *secretsClient {
@@ -189,6 +226,51 @@ func (c *secretsClient) ReadSecret(ctx context.Context, input *ReadSecretInput) 
 		Applications: applications,
 		Info:         results[0].Metadata.Description,
 	}, nil
+}
+
+// ListSecrets lists secrets in a model.
+func (c *secretsClient) ListSecrets(ctx context.Context, input *ListSecretsInput) ([]ListSecretsOutput, error) {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	secretAPIClient := c.getSecretAPIClient(conn)
+
+	secretFilter := coresecrets.Filter{
+		Label: input.Name,
+	}
+
+	results, err := secretAPIClient.ListSecrets(ctx, true, secretFilter)
+	if err != nil {
+		return nil, typedError(err)
+	}
+
+	output := make([]ListSecretsOutput, 0, len(results))
+	for _, result := range results {
+		if result.Error != "" {
+			return nil, errors.New(result.Error)
+		}
+
+		decodedValue, err := result.Value.Values()
+		if err != nil {
+			return nil, err
+		}
+
+		applications := getApplicationsFromAccessInfo(result.Access)
+
+		output = append(output, ListSecretsOutput{
+			SecretId:     result.Metadata.URI.ID,
+			SecretURI:    result.Metadata.URI.String(),
+			Name:         result.Metadata.Label,
+			Value:        decodedValue,
+			Applications: applications,
+			Info:         result.Metadata.Description,
+		})
+	}
+
+	return output, nil
 }
 
 // UpdateSecret updates a secret.

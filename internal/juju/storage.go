@@ -53,6 +53,18 @@ type GetStoragePoolResponse struct {
 	Pool params.StoragePool
 }
 
+// ListStoragePoolsInput is the input to ListPools.
+type ListStoragePoolsInput struct {
+	ModelUUID string
+	Providers []string
+	Names     []string
+}
+
+// ListStoragePoolsOutput is an entry from ListPools.
+type ListStoragePoolsOutput struct {
+	Pool params.StoragePool
+}
+
 func newStorageClient(sc SharedClient) *storageClient {
 	return &storageClient{
 		SharedClient: sc,
@@ -117,4 +129,27 @@ func (c *storageClient) GetPool(ctx context.Context, input GetStoragePoolInput) 
 	}
 
 	return GetStoragePoolResponse{Pool: pools[0]}, nil
+}
+
+// ListPools lists pools, optionally filtered by provider and/or name.
+func (c *storageClient) ListPools(ctx context.Context, input ListStoragePoolsInput) ([]ListStoragePoolsOutput, error) {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := storage.NewClient(conn)
+
+	pools, err := client.ListPools(ctx, input.Providers, input.Names)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]ListStoragePoolsOutput, 0, len(pools))
+	for _, pool := range pools {
+		result = append(result, ListStoragePoolsOutput{Pool: pool})
+	}
+
+	return result, nil
 }
