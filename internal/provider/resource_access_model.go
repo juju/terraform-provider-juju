@@ -30,6 +30,7 @@ var _ resource.ResourceWithConfigure = &accessModelResource{}
 var _ resource.ResourceWithImportState = &accessModelResource{}
 var _ resource.ResourceWithConfigValidators = &accessModelResource{}
 
+// NewAccessModelResource returns an access model resource.
 func NewAccessModelResource() resource.Resource {
 	return &accessModelResource{}
 }
@@ -66,17 +67,19 @@ type accessModelResourceModelV2 struct {
 	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
+// Metadata implements resource.ResourceWithConfigure interface.
 func (a *accessModelResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_access_model"
 }
 
-// ConfigValidators sets validators for the resource.
+// ConfigValidators implements resource.ResourceWithConfigure interface.
 func (r *accessModelResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
 	return []resource.ConfigValidator{
 		NewAvoidJAASValidator(r.client, "juju_jaas_access_model"),
 	}
 }
 
+// Schema implements resource.ResourceWithConfigure interface.
 func (a *accessModelResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:     2,

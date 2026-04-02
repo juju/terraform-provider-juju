@@ -15,6 +15,7 @@ type usersClient struct {
 	SharedClient
 }
 
+// CreateUserInput contains the parameters for creating a user.
 type CreateUserInput struct {
 	Name        string
 	DisplayName string
@@ -22,23 +23,28 @@ type CreateUserInput struct {
 	Password    string
 }
 
+// CreateUserResponse contains the created user tag and secret.
 type CreateUserResponse struct {
 	UserTag names.UserTag
 	Secret  []byte
 }
 
+// ReadUserInput contains the parameters for reading a user.
 type ReadUserInput struct {
 	Name string
 }
 
+// ReadUserResponse contains the user information returned by a read request.
 type ReadUserResponse struct {
 	UserInfo params.UserInfo
 }
 
+// ReadModelUserResponse contains the list of model users.
 type ReadModelUserResponse struct {
 	ModelUserInfo []params.ModelUserInfo
 }
 
+// UpdateUserInput contains the parameters for updating a user.
 type UpdateUserInput struct {
 	Name        string
 	DisplayName string
@@ -46,6 +52,7 @@ type UpdateUserInput struct {
 	Password    string
 }
 
+// DestroyUserInput contains the parameters for removing a user.
 type DestroyUserInput struct {
 	Name string
 }
@@ -56,6 +63,7 @@ func newUsersClient(sc SharedClient) *usersClient {
 	}
 }
 
+// CreateUser creates a new user.
 func (c *usersClient) CreateUser(input CreateUserInput) (*CreateUserResponse, error) {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
@@ -73,6 +81,7 @@ func (c *usersClient) CreateUser(input CreateUserInput) (*CreateUserResponse, er
 	return &CreateUserResponse{UserTag: userTag, Secret: userSecret}, nil
 }
 
+// ReadUser retrieves details for the named user.
 func (c *usersClient) ReadUser(name string) (*ReadUserResponse, error) {
 	usermanagerConn, err := c.GetConnection(nil)
 	if err != nil {
@@ -101,6 +110,7 @@ func (c *usersClient) ReadUser(name string) (*ReadUserResponse, error) {
 	}, nil
 }
 
+// ModelUserInfo lists users and access for the specified model.
 func (c *usersClient) ModelUserInfo(modelUUID string) (*ReadModelUserResponse, error) {
 	usermanagerConn, err := c.GetConnection(nil)
 	if err != nil {
@@ -123,6 +133,7 @@ func (c *usersClient) ModelUserInfo(modelUUID string) (*ReadModelUserResponse, e
 	}, nil
 }
 
+// UpdateUser updates user fields such as password.
 func (c *usersClient) UpdateUser(input UpdateUserInput) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
@@ -142,6 +153,7 @@ func (c *usersClient) UpdateUser(input UpdateUserInput) error {
 	return nil
 }
 
+// DestroyUser removes a user.
 func (c *usersClient) DestroyUser(input DestroyUserInput) error {
 	conn, err := c.GetConnection(nil)
 	if err != nil {
