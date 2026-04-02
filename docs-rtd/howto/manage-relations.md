@@ -16,6 +16,7 @@ myst:
 ### Add a same-model relation
 
 To add a same-model relation, create a resource of the `juju_integration` type, give it a label (below, `this`), and in its body add:
+
 - a `model` attribute specifying the name of the model where you want to create the relation;
 - two `application` blocks, specifying the names of the applications that you want to integrate (and, if necessary, their endpoints_;
 - a `lifecycle` block with the `replace_triggered_by` argument specifying the list of application attributes (always the name, model, constraints, placement, and charm name) for which, if they are changed = destroyed and recreated, the relation must be recreated as well.

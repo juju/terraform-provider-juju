@@ -83,10 +83,12 @@ resource "juju_integration" "wordpress-db" {
 
 The Juju Terraform provider is configured to connect to a single controller; however we support the consuming of cross controller offers. 
 To integrate with an offer coming from a different controller: 
+
 - In the `provider` definition specify the `offering_controllers` block.
 - In the `juju_integration` resource, in the definition of the application representing the offer, specify the `offer_url` and the `offering_controller`. In the `lifecycle > replace_triggered_by_block` only include triggers for the regular application (not the offer).
 
 For example:
+
 ```terraform
 locals {
   external_controller_name = "my-controller"

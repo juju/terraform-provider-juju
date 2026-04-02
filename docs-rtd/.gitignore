@@ -1,6 +1,7 @@
 # Environment
 *env*/
-.sphinx/venv/
+.venv/  # Changed from .sphinx/venv/ to .venv/ in starter pack 1.6
+.sphinx/venv/  # Keep for backward compatibility during transition
 
 # Sphinx
 .sphinx/warnings.txt

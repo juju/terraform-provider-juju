@@ -455,6 +455,7 @@ Run `terraform apply` to import all resources into your Terraform state.
 Before confirming, verify that the plan shows no resources being replaced -- all changes should be either no-op or in-place.
 
 The `terraform apply` output should look something like this:
+
 ```
 Plan: 19 to import, 0 to add, 6 to change, 0 to destroy.
 ...
@@ -519,6 +520,7 @@ This includes:
 - default ssh keys
 
 For example the `loop` storage pool is default in each model.
+
 ```terraform
 resource "juju_storage_pool" "all_storage_pools_3" {
   provider         = juju
@@ -538,6 +540,7 @@ import {
 ```
 
 Importing it is harmless, but attempting to destroy it via Terraform will result in an error:
+
 ```
 juju_storage_pool.all_storage_pools_3: Destroying... [id=c1cecf1e-fe66-4589-8585-e579edd6f58b:loop]
 ╷
