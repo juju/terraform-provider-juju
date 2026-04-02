@@ -172,6 +172,7 @@ func (r *machineResource) Schema(ctx context.Context, req resource.SchemaRequest
 					"and provider's defaults. Changing this value will cause the application to be destroyed and" +
 					" recreated by terraform.",
 				Optional: true,
+				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIf(constraintsRequiresReplacefunc, "", ""),
 				},
@@ -388,6 +389,9 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 
 	plan.Base = types.StringValue(readResponse.Base)
 	plan.Hostname = types.StringValue(readResponse.Hostname)
+	if plan.Constraints.IsUnknown() {
+		plan.Constraints = NewCustomConstraintsValue(readResponse.Constraints)
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 
