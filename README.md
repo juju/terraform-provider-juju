@@ -68,8 +68,11 @@ Please see the [Developing wiki](https://github.com/juju/terraform-provider-juju
 To debug, setup environment variables:
 
 ```shell
-export TF_LOG_PROVIDER=TRACE ; export TF_LOG_PATH=./terraform.log
+export TF_LOG_PROVIDER_JUJU=TRACE ; export TF_LOG_PATH=./terraform.log
 ```
+
+See https://developer.hashicorp.com/terraform/plugin/log/managing for more
+useful information on adjusting the log output and verbosity.
 
 Run your terraform commands.
 

@@ -31,6 +31,8 @@ type RetryOnErrorsCfg[I any, D any] struct {
 	DataAssertions []Assert[D]
 	// RetriableErrors is to retry on.
 	RetriableErrors []error
+	// Logf logs retry attempts.
+	Logf wait.LogFunc
 
 	// RetryConf is a configuration for retrying the operation.
 	// If not provided, default values will be used.
@@ -49,5 +51,6 @@ func RetryOnErrors[I any, D any](retryConf RetryOnErrorsCfg[I, D]) (D, error) {
 			DataAssertions: retryConf.DataAssertions,
 			NonFatalErrors: retryConf.RetriableErrors,
 			RetryConf:      retryConf.RetryConf,
+			Logf:           retryConf.Logf,
 		})
 }

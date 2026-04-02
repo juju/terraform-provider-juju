@@ -25,9 +25,13 @@ import (
 	"github.com/juju/names/v6"
 )
 
+// SharedClient defines the set of methods that the provider's shared client must implement.
 type SharedClient interface {
 	// GetControllerVersion returns the version of the controller that the client is connected to.
 	GetControllerVersion(context.Context) (semversion.Number, error)
+
+	// GetUser returns the name of the currently authenticated user.
+	GetUser() string
 
 	// AddModel adds a model to the cache of model data. If any of the required
 	// pieces of data are empty, nothing is added to the cache of model data. If the UUID
@@ -127,7 +131,9 @@ type SecretAPIClient interface {
 // JaasAPIClient defines the set of methods that the JAAS API provides.
 type JaasAPIClient interface {
 	AddModelToController(req *jaasparams.AddModelToControllerRequest) (params.ModelInfo, error)
+	AddController(req *jaasparams.AddControllerRequest) (jaasparams.ControllerInfo, error)
 	ListControllers() ([]jaasparams.ControllerInfo, error)
+	RemoveController(req *jaasparams.RemoveControllerRequest) (jaasparams.ControllerInfo, error)
 	ListRelationshipTuples(req *jaasparams.ListRelationshipTuplesRequest) (*jaasparams.ListRelationshipTuplesResponse, error)
 	AddRelation(req *jaasparams.AddRelationRequest) error
 	RemoveRelation(req *jaasparams.RemoveRelationRequest) error

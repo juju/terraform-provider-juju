@@ -238,7 +238,7 @@ func createJAASModel(ctx context.Context, conn jujuapi.Connection,
 	modelInfo, err := client.AddModelToController(&jaasparams.AddModelToControllerRequest{
 		ModelCreateArgs: params.ModelCreateArgs{
 			Name:               name,
-			Qualifier:          names.NewUserTag(owner).String(),
+			Qualifier:          owner,
 			CloudTag:           cloudTag,
 			CloudRegion:        cloudRegion,
 			CloudCredentialTag: cloudCredential.String(),
@@ -293,6 +293,31 @@ func createJujuModel(ctx context.Context, conn jujuapi.Connection,
 	resp.Type = modelInfo.Type.String()
 	resp.UUID = modelInfo.UUID
 	return resp, nil
+}
+
+// ListModels retrieves the list of model UUIDs.
+func (c *modelsClient) ListModels(ctx context.Context) ([]string, error) {
+	conn, err := c.GetConnection(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := modelmanager.NewClient(conn)
+	models, err := client.ListModels(ctx, c.GetUser())
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0, len(models))
+	for _, model := range models {
+		if model.Name == "controller" {
+			continue
+		}
+		ids = append(ids, model.UUID)
+	}
+
+	return ids, nil
 }
 
 func (c *modelsClient) ReadModel(ctx context.Context, modelUUID string) (*ReadModelResponse, error) {

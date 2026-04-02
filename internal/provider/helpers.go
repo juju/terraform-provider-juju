@@ -17,6 +17,7 @@ import (
 //	@module=juju.resource-application
 const (
 	LogDataSourceApplication = "datasource-application"
+	LogDataSourceCharm       = "datasource-charm"
 	LogDataSourceMachine     = "datasource-machine"
 	LogDataSourceModel       = "datasource-model"
 	LogDataSourceOffer       = "datasource-offer"
@@ -51,6 +52,7 @@ const (
 	LogResourceJAASAccessSvcAcc     = "resource-jaas-access-service-account"
 	LogResourceJAASGroup            = "resource-jaas-group"
 	LogResourceJAASRole             = "resource-jaas-role"
+	LogResourceJAASController       = "resource-jaas-controller"
 )
 
 const LogResourceIntegration = "resource-integration"

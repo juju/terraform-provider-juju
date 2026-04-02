@@ -56,6 +56,11 @@ JUJU_PASSWORD="$JUJU_PASSWORD"
 JUJU_CA_CERT="$JUJU_CA_CERT"
 TEST_CLOUD="$CLOUD_TYPE"
 JUJU_AGENT_VERSION="$JUJU_AGENT_VERSION"
+# Useful for debugging
+# See https://developer.hashicorp.com/terraform/plugin/log/managing
+TF_LOG_CORE="ERROR"
+TF_LOG_SDK="ERROR"
+TF_LOG_PROVIDER_JUJU="TRACE"
 EOF
 
 if [ -n "$OFFERING_CONTROLLER" ]; then

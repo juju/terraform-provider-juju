@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/list"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
@@ -106,7 +107,7 @@ func getEnvVar(field string) types.String {
 }
 
 // Ensure jujuProvider satisfies various provider interfaces.
-var _ provider.Provider = &jujuProvider{}
+var _ provider.ProviderWithListResources = &jujuProvider{}
 var _ provider.ProviderWithActions = &jujuProvider{}
 
 type ProviderConfiguration struct {
@@ -384,21 +385,30 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		resp.Diagnostics.Append(diags...)
 		return
 	}
-	if data.ControllerMode.ValueBool() {
-		providerData := juju.ProviderData{
-			Config: juju.Config{
-				ControllerMode: true,
-			},
-		}
+	controllerDetailsRequired := !data.ControllerMode.ValueBool()
+
+	// Get data required for configuring the juju client.
+	data, diags = getJujuProviderModel(ctx, data, controllerDetailsRequired)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+	resp.Diagnostics.Append(diags...)
+
+	providerData := juju.ProviderData{
+		Config: juju.Config{
+			ControllerMode:     data.ControllerMode.ValueBool(),
+			SkipFailedDeletion: data.SkipFailedDeletion.ValueBool(),
+		},
+	}
+
+	// If we are in controller-mode without valid connection
+	// details, we return early without setting up the client.
+	if !controllerDetailsRequired && !data.valid() {
+		tflog.Info(ctx, "Provider configured in controller mode without connection details. Skipping client configuration.")
 		resp.ResourceData = providerData
 		resp.DataSourceData = providerData
 		resp.ActionData = providerData
-		return
-	}
-	// Get data required for configuring the juju client.
-	data, diags = getJujuProviderModel(ctx, data)
-	if diags.HasError() {
-		resp.Diagnostics.Append(diags...)
 		return
 	}
 
@@ -421,14 +431,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create juju client, got error: %s", err))
 		return
 	}
-	config := juju.Config{
-		SkipFailedDeletion: data.SkipFailedDeletion.ValueBool(),
-	}
-
-	providerData := juju.ProviderData{
-		Client: client,
-		Config: config,
-	}
+	providerData.Client = client
 
 	// Here we are testing that we can connect successfully to the Juju server
 	// this prevents having logic to check the connection is OK in every function
@@ -482,13 +485,14 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 
 	resp.ResourceData = providerData
 	resp.DataSourceData = providerData
+	resp.ListResourceData = providerData
 	resp.ActionData = providerData
 }
 
 // getJujuProviderModel a filled in jujuProviderModel if able. First check
 // the plan being used, then fall back to the JUJU_ environment variables,
 // lastly check to see if an active juju can supply the data.
-func getJujuProviderModel(ctx context.Context, planData jujuProviderModel) (jujuProviderModel, diag.Diagnostics) {
+func getJujuProviderModel(ctx context.Context, planData jujuProviderModel, requireControllerDetails bool) (jujuProviderModel, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	// If validation failed because we have both username/password
@@ -530,6 +534,10 @@ func getJujuProviderModel(ctx context.Context, planData jujuProviderModel) (juju
 		errMsgDataModel = livePlanEnvVarDataModel
 	} else {
 		tflog.Debug(ctx, "Live discovery of juju controller failed. The Juju CLI could not be accessed.")
+	}
+
+	if !requireControllerDetails {
+		return errMsgDataModel, diags
 	}
 
 	// Validate controller config and return helpful error messages.
@@ -579,6 +587,7 @@ func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
 		func() resource.Resource { return NewJAASAccessControllerResource() },
 		func() resource.Resource { return NewJAASGroupResource() },
 		func() resource.Resource { return NewJAASRoleResource() },
+		func() resource.Resource { return NewJAASControllerResource() },
 		func() resource.Resource { return NewStoragePoolResource() },
 		func() resource.Resource { return NewCloudResource() },
 	}
@@ -599,6 +608,7 @@ func (p *jujuProvider) Actions(_ context.Context) []func() action.Action {
 func (p *jujuProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		func() datasource.DataSource { return NewApplicationDataSource() },
+		func() datasource.DataSource { return NewCharmDataSource() },
 		func() datasource.DataSource { return NewMachineDataSource() },
 		func() datasource.DataSource { return NewModelDataSource() },
 		func() datasource.DataSource { return NewOfferDataSource() },
@@ -635,11 +645,29 @@ func checkClientErr(err error, config juju.ControllerConfiguration) diag.Diagnos
 	return diags
 }
 
-func checkControllerMode(diags diag.Diagnostics, config juju.Config, isControllerResource bool) diag.Diagnostics {
-	if config.ControllerMode && !isControllerResource {
+// ListResources returns a slice of functions to instantiate each ListResource
+// implementation.
+func (p *jujuProvider) ListResources(_ context.Context) []func() list.ListResource {
+	return []func() list.ListResource{
+		func() list.ListResource { return NewApplicationLister() },
+		func() list.ListResource { return NewIntegrationLister() },
+		func() list.ListResource { return NewModelLister() },
+		func() list.ListResource { return NewOfferLister() },
+		func() list.ListResource { return NewMachineLister() },
+		func() list.ListResource { return NewSSHKeyLister() },
+		func() list.ListResource { return NewStoragePoolLister() },
+		func() list.ListResource { return NewSecretLister() },
+	}
+}
+
+// checkControllerMode checks if the provider is in controller mode and if the
+// resource being configured can be used in controller mode (i.e. when bootstrapping).
+// If the resource cannot be used in controller mode, an error is added to the diagnostics.
+func checkControllerMode(diags diag.Diagnostics, config juju.Config, allowWithBootstrap bool) diag.Diagnostics {
+	if config.ControllerMode && !allowWithBootstrap {
 		diags.AddError("when controller_mode is true this resource cannot be used.", "")
 		return diags
-	} else if !config.ControllerMode && isControllerResource {
+	} else if !config.ControllerMode && allowWithBootstrap {
 		diags.AddError("when controller_mode is false this resource cannot be used.", "")
 	}
 	return diags
@@ -647,7 +675,7 @@ func checkControllerMode(diags diag.Diagnostics, config juju.Config, isControlle
 
 // getProviderData extracts and validates provider data from a ConfigureRequest.
 // It performs type assertion and controller mode validation in one step.
-func getProviderData(req resource.ConfigureRequest, isControllerResource bool) (juju.ProviderData, diag.Diagnostics) {
+func getProviderData(req resource.ConfigureRequest, allowWithBootstrap bool) (juju.ProviderData, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	provider, ok := req.ProviderData.(juju.ProviderData)
 	if !ok {
@@ -657,7 +685,7 @@ func getProviderData(req resource.ConfigureRequest, isControllerResource bool) (
 		)
 		return juju.ProviderData{}, diags
 	}
-	diags = checkControllerMode(diags, provider.Config, isControllerResource)
+	diags = checkControllerMode(diags, provider.Config, allowWithBootstrap)
 	if diags.HasError() {
 		return juju.ProviderData{}, diags
 	}
@@ -666,7 +694,7 @@ func getProviderData(req resource.ConfigureRequest, isControllerResource bool) (
 
 // getProviderDataForDataSource extracts and validates provider data from a data source ConfigureRequest.
 // It performs type assertion and controller mode validation in one step.
-func getProviderDataForDataSource(req datasource.ConfigureRequest, isControllerResource bool) (juju.ProviderData, diag.Diagnostics) {
+func getProviderDataForDataSource(req datasource.ConfigureRequest, allowWithBootstrap bool) (juju.ProviderData, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	provider, ok := req.ProviderData.(juju.ProviderData)
 	if !ok {
@@ -676,7 +704,7 @@ func getProviderDataForDataSource(req datasource.ConfigureRequest, isControllerR
 		)
 		return juju.ProviderData{}, diags
 	}
-	diags = checkControllerMode(diags, provider.Config, isControllerResource)
+	diags = checkControllerMode(diags, provider.Config, allowWithBootstrap)
 	if diags.HasError() {
 		return juju.ProviderData{}, diags
 	}

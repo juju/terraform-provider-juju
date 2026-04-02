@@ -5,7 +5,6 @@ package provider
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -19,12 +18,7 @@ import (
 // the applications used don't actually require a user secret.
 // TODO(anvial): Add a test that uses a secret that is actually required by the application.
 func TestAcc_ResourceAccessSecret_GrantRevoke(t *testing.T) {
-	agentVersion := os.Getenv(TestJujuAgentVersion)
-	if agentVersion == "" {
-		t.Errorf("%s is not set", TestJujuAgentVersion)
-	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
-		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
-	}
+	skipTestIfSecretsNotSupported(t)
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 
@@ -59,12 +53,7 @@ func TestAcc_ResourceAccessSecret_GrantRevoke(t *testing.T) {
 }
 
 func TestAcc_ResourceAccessSecret_Import(t *testing.T) {
-	agentVersion := os.Getenv(TestJujuAgentVersion)
-	if agentVersion == "" {
-		t.Errorf("%s is not set", TestJujuAgentVersion)
-	} else if internaltesting.CompareVersions(agentVersion, "3.3.0") < 0 {
-		t.Skipf("%s is not set or is below 3.3.0", TestJujuAgentVersion)
-	}
+	skipTestIfSecretsNotSupported(t)
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 

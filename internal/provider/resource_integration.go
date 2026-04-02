@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -32,6 +33,7 @@ import (
 var _ resource.Resource = &integrationResource{}
 var _ resource.ResourceWithConfigure = &integrationResource{}
 var _ resource.ResourceWithImportState = &integrationResource{}
+var _ resource.ResourceWithIdentity = &integrationResource{}
 
 func NewIntegrationResource() resource.Resource {
 	return &integrationResource{}
@@ -58,6 +60,10 @@ type integrationResourceModelV1 struct {
 	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
+type integrationResourceIdentityModel struct {
+	ID types.String `tfsdk:"id"`
+}
+
 // nestedApplication represents an element in an Application set of an
 // integration resource
 type nestedApplication struct {
@@ -69,7 +75,7 @@ type nestedApplication struct {
 
 func (r *integrationResource) ImportState(ctx context.Context, req resource.ImportStateRequest,
 	resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughWithIdentity(ctx, path.Root("id"), path.Root("id"), req, resp)
 }
 
 func (r *integrationResource) Configure(ctx context.Context, req resource.ConfigureRequest,
@@ -91,6 +97,17 @@ func (r *integrationResource) Configure(ctx context.Context, req resource.Config
 
 func (r *integrationResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_integration"
+}
+
+// IdentitySchema implements [resource.ResourceWithIdentity].
+func (r *integrationResource) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
+	resp.IdentitySchema = identityschema.Schema{
+		Attributes: map[string]identityschema.Attribute{
+			"id": identityschema.StringAttribute{
+				RequiredForImport: true,
+			},
+		},
+	}
 }
 
 func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -264,7 +281,7 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 	r.trace(fmt.Sprintf("integration created on Juju between %q at %q on model %q", appNames, endpoints, modelUUID))
 
-	parsedApplications, err := r.parseApplications(response.Applications)
+	parsedApplications, err := parseApplications(r.client, response.Applications)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse applications, got error: %s", err))
 		return
@@ -284,6 +301,11 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	r.trace(fmt.Sprintf("integration resource created: %q", id))
 	// Write the state plan into the Response.State
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+
+	identity := integrationResourceIdentityModel{
+		ID: plan.ID,
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -324,7 +346,7 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 
 	state.ModelUUID = types.StringValue(modelUUID)
 
-	applications, err := r.parseApplications(response.Applications)
+	applications, err := parseApplications(r.client, response.Applications)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse applications, got error: %s", err))
 		return
@@ -341,6 +363,11 @@ func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest
 	r.trace(fmt.Sprintf("read integration resource: %v", state.ID.ValueString()))
 	// Set the state onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+
+	identity := integrationResourceIdentityModel{
+		ID: state.ID,
+	}
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 // Update is a no-op, as all fields force replacement.
@@ -381,6 +408,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 		wait.WaitForErrorCfg[*juju.IntegrationInput, *juju.ReadIntegrationResponse]{
 			Context: ctx,
 			GetData: r.client.Integrations.ReadIntegration,
+			Logf:    r.trace,
 			Input: &juju.IntegrationInput{
 				ModelUUID: modelUUID,
 				Endpoints: endpoints,
@@ -501,7 +529,7 @@ func parseEndpoints(apps []nestedApplication) (endpoints []string, of *offer, ap
 // so we need to include the offering_controller field when parsing the applications.
 // This is required because if an offer is created via the CLI, the offer URL contains the external controller even
 // if the remote app is on the same controller.
-func (r *integrationResource) parseApplications(apps []juju.Application) ([]nestedApplication, error) {
+func parseApplications(client *juju.Client, apps []juju.Application) ([]nestedApplication, error) {
 	applications := make([]nestedApplication, 2)
 
 	for i, app := range apps {
@@ -516,7 +544,7 @@ func (r *integrationResource) parseApplications(apps []juju.Application) ([]nest
 			// Determine if the controller on the offer is one of the provider's
 			// configured `offering_controllers`.
 			// If so, we assume this is a cross-controller integration.
-			if r.client.Offers.IsOfferingController(url.Source) {
+			if client.Offers.IsOfferingController(url.Source) {
 				a.OfferingController = types.StringValue(url.Source)
 			}
 			a.Endpoint = types.StringValue(app.Endpoint)
