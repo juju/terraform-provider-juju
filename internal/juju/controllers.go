@@ -16,7 +16,9 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
+	"github.com/juju/juju/api/client/cloud"
 	"github.com/juju/juju/api/client/modelconfig"
+	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/api/connector"
 	controllerapi "github.com/juju/juju/api/controller/controller"
 	jujucloud "github.com/juju/juju/cloud"
@@ -816,7 +818,13 @@ func GetCloudInformation(ctx context.Context, connInfo *ControllerConnectionInfo
 	modelConfigAPI := modelconfig.NewClient(apiConn)
 	defer modelConfigAPI.Close()
 
-	// Get model config to obtain model UUID
+	cloudAPI := cloud.NewClient(apiConn)
+	defer cloudAPI.Close()
+
+	modelmanagerAPI := modelmanager.NewClient(apiConn)
+	defer modelmanagerAPI.Close()
+
+	// Get model config to obtain the controller model UUID
 	modelAttrs, err := modelConfigAPI.ModelGet()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get model config: %w", err)
@@ -827,38 +835,59 @@ func GetCloudInformation(ctx context.Context, connInfo *ControllerConnectionInfo
 		return nil, errors.Trace(err)
 	}
 
-	// Get cloud spec from the controller
-	cloudSpec, err := controllerAPI.CloudSpec(names.NewModelTag(cfg.UUID()))
+	mi, err := modelmanagerAPI.ModelInfo([]names.ModelTag{names.NewModelTag(cfg.UUID())})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get cloud spec: %w", err)
+		return nil, fmt.Errorf("failed to get model info: %w", err)
+	}
+	if len(mi) == 0 {
+		return nil, fmt.Errorf("model info not found for model UUID %s", cfg.UUID())
 	}
 
-	// Extract auth types
-	authTypes := make([]string, 0)
-	if cloudSpec.Credential != nil {
-		authTypes = []string{string(cloudSpec.Credential.AuthType())}
+	controllerModelInfo := mi[0].Result
+	cloudCredentialTag, err := names.ParseCloudCredentialTag(controllerModelInfo.CloudCredentialTag)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse cloud credential tag: %w", err)
+	}
+	cloudTag, err := names.ParseCloudTag(controllerModelInfo.CloudTag)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse cloud tag: %w", err)
 	}
 
-	// Extract credential attributes
-	credentialAttrs := make(map[string]string)
-	if cloudSpec.Credential != nil {
-		credentialAttrs = cloudSpec.Credential.Attributes()
+	// Get the information for the cloud credential used by the controller model.
+	// This is needed to determine the auth type and attributes used for the credential.
+	credentials, err := cloudAPI.CredentialContents(cloudTag.Id(), cloudCredentialTag.Name(), true)
+	if err != nil || len(credentials) != 1 {
+		return nil, fmt.Errorf("failed to get cloud credential contents: %w", err)
+	}
+
+	if credentials[0].Error != nil {
+		return nil, fmt.Errorf("error in cloud credential contents: %w", credentials[0].Error)
+	}
+
+	authType := string(credentials[0].Result.Content.AuthType)
+	credentialAttrs := credentials[0].Result.Content.Attributes
+	authTypes := []string{authType}
+
+	// Get the cloud information for the cloud used by the controller model.
+	cloud, err := cloudAPI.Cloud(cloudTag)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cloud details: %w", err)
 	}
 
 	// Extract CA certificates if present
 	var caCerts []string
-	if len(cloudSpec.CACertificates) > 0 {
-		caCerts = cloudSpec.CACertificates
+	if len(cloud.CACertificates) > 0 {
+		caCerts = cloud.CACertificates
 	}
 
 	cloudInfo := &CloudInformation{
-		CloudName:            cloudSpec.Name,
-		CloudType:            cloudSpec.Type,
-		CloudRegion:          cloudSpec.Region,
-		CloudEndpoint:        cloudSpec.Endpoint,
+		CloudName:            cloud.Name,
+		CloudType:            cloud.Type,
+		CloudRegion:          controllerModelInfo.CloudRegion,
+		CloudEndpoint:        cloud.Endpoint,
 		CloudAuthTypes:       authTypes,
 		CloudCACertificates:  caCerts,
-		CredentialAuthType:   string(cloudSpec.Credential.AuthType()),
+		CredentialAuthType:   authType,
 		CredentialAttributes: credentialAttrs,
 	}
 
