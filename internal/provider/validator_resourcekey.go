@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
+// StringIsResourceKeyValidator validates charm resource keys in maps.
 type StringIsResourceKeyValidator struct{}
 
 // Description returns a plain text description of the validator's behavior, suitable for a practitioner to understand its impact.
