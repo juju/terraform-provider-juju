@@ -43,6 +43,7 @@ type machinesClient struct {
 	createMu sync.Mutex
 }
 
+// CreateMachineInput contains the parameters for creating a machine.
 type CreateMachineInput struct {
 	ModelUUID   string
 	Constraints string
@@ -62,15 +63,18 @@ type CreateMachineInput struct {
 	PrivateKeyFile string
 }
 
+// CreateMachineResponse contains the created machine identifier.
 type CreateMachineResponse struct {
 	ID string
 }
 
+// ReadMachineInput contains the parameters for reading a machine.
 type ReadMachineInput struct {
 	ModelUUID string
 	ID        string
 }
 
+// ReadMachineResponse contains the machine details returned by ReadMachine.
 type ReadMachineResponse struct {
 	ID          string
 	Base        string
@@ -79,6 +83,7 @@ type ReadMachineResponse struct {
 	Status      string
 }
 
+// DestroyMachineInput contains the parameters for removing a machine.
 type DestroyMachineInput struct {
 	ModelUUID string
 	ID        string
@@ -125,6 +130,7 @@ func getTargetStatusFunc(machineID string) targetStatusFunc {
 	return getMachineStatusFunc(machineID)
 }
 
+// CreateMachine provisions a new machine in the specified model.
 func (c *machinesClient) CreateMachine(ctx context.Context, input *CreateMachineInput) (*CreateMachineResponse, error) {
 	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
@@ -314,6 +320,7 @@ func manualProvision(ctx context.Context, client manual.ProvisioningClientAPI,
 	return machineId, nil
 }
 
+// ReadMachine retrieves a machine by ID from the specified model.
 func (c *machinesClient) ReadMachine(ctx context.Context, input *ReadMachineInput) (*ReadMachineResponse, error) {
 	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
@@ -360,6 +367,7 @@ func (c *machinesClient) ReadMachine(ctx context.Context, input *ReadMachineInpu
 	}, nil
 }
 
+// DestroyMachine removes a machine from the specified model.
 func (c *machinesClient) DestroyMachine(ctx context.Context, input *DestroyMachineInput) error {
 	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {

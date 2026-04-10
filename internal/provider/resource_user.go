@@ -26,6 +26,7 @@ var _ resource.ResourceWithConfigure = &userResource{}
 var _ resource.ResourceWithImportState = &userResource{}
 var _ resource.ResourceWithConfigValidators = &userResource{}
 
+// NewUserResource returns a user resource.
 func NewUserResource() resource.Resource {
 	return &userResource{}
 }
@@ -48,6 +49,7 @@ type userResourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
+// Metadata implements resource.ResourceWithConfigure interface.
 func (r *userResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_user"
 }
@@ -60,6 +62,7 @@ func (r *userResource) ConfigValidators(ctx context.Context) []resource.ConfigVa
 	}
 }
 
+// Schema implements resource.ResourceWithConfigure interface.
 func (r *userResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	// The User resource maps to a juju user that is operated via
 	// `juju add-user`, `juju remove-user`

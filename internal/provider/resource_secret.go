@@ -27,6 +27,7 @@ var _ resource.ResourceWithConfigure = &secretResource{}
 var _ resource.ResourceWithImportState = &secretResource{}
 var _ resource.ResourceWithIdentity = &secretResource{}
 
+// NewSecretResource returns a secret resource.
 func NewSecretResource() resource.Resource {
 	return &secretResource{}
 }
@@ -153,10 +154,12 @@ func (s *secretResource) ImportState(ctx context.Context, req resource.ImportSta
 	s.trace(fmt.Sprintf("import secret resource %q", state.SecretId))
 }
 
+// Metadata implements resource.ResourceWithConfigure interface.
 func (s *secretResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_secret"
 }
 
+// Schema implements resource.ResourceWithConfigure interface.
 func (s *secretResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:     1,

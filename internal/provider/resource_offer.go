@@ -31,6 +31,7 @@ var _ resource.ResourceWithConfigure = &offerResource{}
 var _ resource.ResourceWithImportState = &offerResource{}
 var _ resource.ResourceWithIdentity = &offerResource{}
 
+// NewOfferResource returns an offer resource.
 func NewOfferResource() resource.Resource {
 	return &offerResource{}
 }
@@ -60,6 +61,7 @@ type offerResourceIdentityModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
+// Metadata implements resource.ResourceWithConfigure interface.
 func (o *offerResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_offer"
 }
@@ -75,6 +77,7 @@ func (o *offerResource) IdentitySchema(_ context.Context, _ resource.IdentitySch
 	}
 }
 
+// Schema implements resource.ResourceWithConfigure interface.
 func (o *offerResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:     2,

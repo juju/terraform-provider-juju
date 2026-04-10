@@ -35,6 +35,7 @@ var _ resource.ResourceWithConfigure = &integrationResource{}
 var _ resource.ResourceWithImportState = &integrationResource{}
 var _ resource.ResourceWithIdentity = &integrationResource{}
 
+// NewIntegrationResource returns an integration resource.
 func NewIntegrationResource() resource.Resource {
 	return &integrationResource{}
 }
@@ -73,11 +74,13 @@ type nestedApplication struct {
 	OfferingController types.String `tfsdk:"offering_controller"`
 }
 
+// ImportState imports a resource by ID.
 func (r *integrationResource) ImportState(ctx context.Context, req resource.ImportStateRequest,
 	resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughWithIdentity(ctx, path.Root("id"), path.Root("id"), req, resp)
 }
 
+// Configure implements resource.ResourceWithConfigure interface.
 func (r *integrationResource) Configure(ctx context.Context, req resource.ConfigureRequest,
 	resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
@@ -95,6 +98,7 @@ func (r *integrationResource) Configure(ctx context.Context, req resource.Config
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceIntegration)
 }
 
+// Metadata implements resource.ResourceWithConfigure interface.
 func (r *integrationResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_integration"
 }
@@ -110,6 +114,7 @@ func (r *integrationResource) IdentitySchema(_ context.Context, _ resource.Ident
 	}
 }
 
+// Schema implements resource.ResourceWithConfigure interface.
 func (r *integrationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:     1,

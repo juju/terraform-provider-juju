@@ -20,6 +20,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ datasource.DataSource = &machineDataSource{}
 
+// NewMachineDataSource returns a new machine data source.
 func NewMachineDataSource() datasource.DataSourceWithConfigure {
 	return &machineDataSource{}
 }
@@ -43,6 +44,7 @@ func (d *machineDataSource) Metadata(_ context.Context, req datasource.MetadataR
 	resp.TypeName = req.ProviderTypeName + "_machine"
 }
 
+// Schema defines the schema for the machine data source.
 func (d *machineDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A data source representing a Juju Machine.",
