@@ -19,6 +19,7 @@ are supported.
 The most significant change is the replacement of the `model` field with `model_uuid` across multiple resources and data sources.
 
 **Affected resources:**
+
 - `juju_application`
 - `juju_offer`
 - `juju_ssh_key`
@@ -36,6 +37,7 @@ The most significant change is the replacement of the `model` field with `model_
 For example:
 
 **Before v1.0.0:**
+
 ```terraform
 resource "juju_application" "app" {
   name  = "postgresql"
@@ -52,6 +54,7 @@ data "juju_application" "existing" {
 ```
 
 **After `v1.0.0`:**
+
 ```terraform
 resource "juju_application" "app" {
   name       = "postgresql"
@@ -75,11 +78,13 @@ and only the Terraform state will be updated.
 Import syntax for model-scoped resources has changed to require model UUIDs instead of model names.
 
 **Before `v1.0.0`:**
+
 ```bash
 terraform import juju_application.myapp model-name:application-name
 ```
 
 **After `v1.0.0`:**
+
 ```bash
 terraform import juju_application.myapp model-uuid:application-name
 ```
@@ -112,6 +117,7 @@ Several deprecated fields have been removed from the `juju_application` resource
 The deprecated `series` field has been removed from the `juju_machine` resource. Use `base` instead.
 
 **Before v1.0.0:**
+
 ```terraform
 resource "juju_machine" "machine" {
   model  = juju_model.test.name
@@ -120,6 +126,7 @@ resource "juju_machine" "machine" {
 ```
 
 **After v1.0.0:**
+
 ```terraform
 resource "juju_machine" "machine" {
   model_uuid = juju_model.test.uuid
@@ -188,6 +195,7 @@ to specify your provider version.
 **Example**
 
 **Before v1.0.0:**
+
 ```terraform
 terraform {
   required_providers {
@@ -200,6 +208,7 @@ terraform {
 ```
 
 **After v1.0.0:**
+
 ```terraform
 terraform {
   required_providers {

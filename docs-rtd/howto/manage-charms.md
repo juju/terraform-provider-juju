@@ -54,9 +54,9 @@ If the charm has any resources, and your Terraform plan does not specify them ex
 (compute-a-charms-revision-automatically)=
 ### Compute a charm's revision automatically
 
-The Terraform Provider for Juju requires you to specify both the charm `channel` and the charm `revision`. 
+The Terraform Provider for Juju requires you to specify both the charm `channel` and the charm `revision`.
 
-This keeps your deployments reproducible. However, it can be cumbersome. 
+This keeps your deployments reproducible. However, it can be cumbersome.
 
 This section shows how to compute a charm's latest revision (based on a channel and a base) automatically using the built-in `juju_charm` data source.
 
@@ -151,7 +151,7 @@ The Terraform provider does not support refreshing the charm when the revision i
 When the charm is changed, its resources will also be updated unless pinned.
 
 > **Tip:** You can also use the `juju_charm` data source to automatically fetch the latest revision for a given channel. See {ref}`compute-a-charms-revision-automatically`.
-> 
+>
 > See more: [`juju_application` > `charm` > nested schema ](../reference/terraform-provider/resources/application)
 
 (update-a-charm-when-an-relation-would-break)=

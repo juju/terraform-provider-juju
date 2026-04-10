@@ -81,10 +81,12 @@ type SharedClient interface {
 	WaitForResource() bool
 }
 
+// ClientAPIClient defines the subset of client API methods used by the provider.
 type ClientAPIClient interface {
 	Status(ctx context.Context, args *apiclient.StatusArgs) (*params.FullStatus, error)
 }
 
+// ApplicationAPIClient defines the subset of application API methods used by the provider.
 type ApplicationAPIClient interface {
 	AddUnits(ctx context.Context, args apiapplication.AddUnitsParams) ([]string, error)
 	ApplicationsInfo(ctx context.Context, applications []names.ApplicationTag) ([]params.ApplicationInfoResult, error)
@@ -105,10 +107,12 @@ type ApplicationAPIClient interface {
 	Unexpose(ctx context.Context, application string, endpoints []string) error
 }
 
+// ModelConfigAPIClient defines the subset of model config API methods used by the provider.
 type ModelConfigAPIClient interface {
 	ModelGet(ctx context.Context) (map[string]interface{}, error)
 }
 
+// ResourceAPIClient defines the subset of resource API methods used by the provider.
 type ResourceAPIClient interface {
 	AddPendingResources(ctx context.Context, args apiresources.AddPendingResourcesArgs) ([]string, error)
 	ListResources(ctx context.Context, applications []string) ([]resource.ApplicationResources, error)
@@ -116,6 +120,7 @@ type ResourceAPIClient interface {
 	UploadPendingResource(ctx context.Context, args apiresources.UploadPendingResourceArgs) (string, error)
 }
 
+// SecretAPIClient defines the subset of secret API methods used by the provider.
 type SecretAPIClient interface {
 	CreateSecret(ctx context.Context, name, description string, data map[string]string) (string, error)
 	ListSecrets(ctx context.Context, reveal bool, filter secrets.Filter) ([]apisecrets.SecretDetails, error)

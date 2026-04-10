@@ -37,6 +37,7 @@ type modelsClient struct {
 		config map[string]interface{}, targetController string) (CreateModelResponse, error)
 }
 
+// CreateModelInput contains the parameters for creating a model.
 type CreateModelInput struct {
 	Name             string
 	CloudName        string
@@ -47,6 +48,7 @@ type CreateModelInput struct {
 	TargetController string
 }
 
+// CreateModelResponse contains details about a created model.
 type CreateModelResponse struct {
 	Cloud               string
 	CloudRegion         string
@@ -55,6 +57,7 @@ type CreateModelResponse struct {
 	UUID                string
 }
 
+// ReadModelResponse contains the model data and configuration details.
 type ReadModelResponse struct {
 	ModelInfo        params.ModelInfo
 	ModelConfig      map[string]interface{}
@@ -66,6 +69,7 @@ type ReadModelStatusResponse struct {
 	ModelStatus base.ModelStatus
 }
 
+// UpdateModelInput contains the parameters for updating a model.
 type UpdateModelInput struct {
 	Name        string
 	UUID        string
@@ -76,16 +80,19 @@ type UpdateModelInput struct {
 	Credential  string
 }
 
+// DestroyModelInput contains the parameters for destroying a model.
 type DestroyModelInput struct {
 	UUID string
 }
 
+// GrantModelInput contains the parameters for granting access to a model.
 type GrantModelInput struct {
 	User      string
 	Access    string
 	ModelUUID string
 }
 
+// UpdateAccessModelInput contains the parameters for updating model access.
 type UpdateAccessModelInput struct {
 	ModelUUID string
 	OldAccess string
@@ -94,6 +101,7 @@ type UpdateAccessModelInput struct {
 	Access    string
 }
 
+// DestroyAccessModelInput contains the parameters for removing model access.
 type DestroyAccessModelInput struct {
 	ModelUUID string
 	Revoke    []string
@@ -142,6 +150,7 @@ func (c *modelsClient) GetModel(ctx context.Context, modelUUID string) (*params.
 	return modelInfo, nil
 }
 
+// CreateModel creates a model.
 func (c *modelsClient) CreateModel(ctx context.Context, input CreateModelInput) (CreateModelResponse, error) {
 	resp := CreateModelResponse{}
 
@@ -320,6 +329,7 @@ func (c *modelsClient) ListModels(ctx context.Context) ([]string, error) {
 	return ids, nil
 }
 
+// ReadModel retrieves model details and configuration by UUID.
 func (c *modelsClient) ReadModel(ctx context.Context, modelUUID string) (*ReadModelResponse, error) {
 	modelmanagerConn, err := c.GetConnection(ctx, nil)
 	if err != nil {
@@ -411,6 +421,7 @@ func (c *modelsClient) ReadModelStatus(ctx context.Context, modelUUID string) (*
 	}, nil
 }
 
+// UpdateModel updates model configuration, constraints, or credentials.
 func (c *modelsClient) UpdateModel(ctx context.Context, input UpdateModelInput) error {
 	conn, err := c.GetConnection(ctx, &input.UUID)
 	if err != nil {
@@ -471,6 +482,7 @@ func (c *modelsClient) UpdateModel(ctx context.Context, input UpdateModelInput) 
 	return nil
 }
 
+// DestroyModel removes the model identified by the input UUID.
 func (c *modelsClient) DestroyModel(ctx context.Context, input DestroyModelInput) error {
 	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
@@ -497,6 +509,7 @@ func (c *modelsClient) DestroyModel(ctx context.Context, input DestroyModelInput
 	return nil
 }
 
+// GrantModel grants access to a model for a user.
 func (c *modelsClient) GrantModel(ctx context.Context, input GrantModelInput) error {
 	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
@@ -514,6 +527,7 @@ func (c *modelsClient) GrantModel(ctx context.Context, input GrantModelInput) er
 	return nil
 }
 
+// UpdateAccessModel updates model access by granting or revoking users.
 // Note we do a revoke against `read` to remove the user from the model access
 // If a user has had `write`, then removing that access would decrease their
 // access to `read` and the user will remain part of the model access.
@@ -543,6 +557,7 @@ func (c *modelsClient) UpdateAccessModel(ctx context.Context, input UpdateAccess
 	return nil
 }
 
+// DestroyAccessModel removes model access for specified users.
 // Note we do a revoke against `read` to remove the user from the model access
 // If a user has had `write`, then removing that access would decrease their
 // access to `read` and the user will remain part of the model access.

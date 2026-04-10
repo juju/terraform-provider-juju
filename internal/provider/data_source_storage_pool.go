@@ -19,6 +19,7 @@ import (
 
 var _ datasource.DataSourceWithConfigure = &storagePoolDataSource{}
 
+// NewStoragePoolDataSource returns a storage pool data source.
 func NewStoragePoolDataSource() datasource.DataSource {
 	return &storagePoolDataSource{}
 }
