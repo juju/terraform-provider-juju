@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/boolvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -235,11 +234,6 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 			ControllerMode: schema.BoolAttribute{
 				Description: "If set to true, the provider will only allow managing `juju_controller` resources.",
 				Optional:    true,
-				Validators: []validator.Bool{
-					boolvalidator.ConflictsWith(
-						path.Expressions{path.MatchRoot(JujuController)}...,
-					),
-				},
 			},
 			JujuController: schema.StringAttribute{
 				Description: fmt.Sprintf("This is the controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `%s` environment variable.", JujuControllerEnvKey),
