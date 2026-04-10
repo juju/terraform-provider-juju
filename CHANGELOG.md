@@ -1,3 +1,27 @@
+# 1.4.3
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.11 release.
+
+ENHANCEMENTS
+
+* Allow setting the controller-mode and addresses field simultaneously by @kian99 in [#1160](https://github.com/juju/terraform-provider-juju/pull/1160).
+
+# 1.4.1 and 1.4.2
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher Juju.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.11 release.
+
+CI & MAINTENANCE
+
+- Pin Goreleaser to last known working version due to https://github.com/opentofu/registry/issues/3974 by @alesstimec in [#1153](https://github.com/juju/terraform-provider-juju/pull/1153).
+
 # 1.4.0
 
 NOTES:
