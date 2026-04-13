@@ -389,9 +389,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 
 	plan.Base = types.StringValue(readResponse.Base)
 	plan.Hostname = types.StringValue(readResponse.Hostname)
-	if plan.Constraints.IsUnknown() {
-		plan.Constraints = NewNormalizedCustomConstraintsValue(readResponse.Constraints)
-	}
+	plan.Constraints = NewNormalizedCustomConstraintsValue(readResponse.Constraints)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 
