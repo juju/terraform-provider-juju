@@ -378,6 +378,8 @@ func TestAcc_ResourceMachine_InheritsModelConstraintsWithoutDrift(t *testing.T) 
 					resource.TestCheckResourceAttrSet(resourceName, "constraints"),
 				),
 			},
+			// We plan again to ensure that upon planning with the constraint being user set,
+			// we see no drift and that the value is compared to exactly what the user set previously.
 			{
 				Config:   testAccResourceMachineWithModelConstraints(modelName, "mem=512M"),
 				PlanOnly: true,
