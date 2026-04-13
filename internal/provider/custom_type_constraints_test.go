@@ -10,6 +10,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestNewNormalizedCustomConstraintsValue(t *testing.T) {
+	t.Run("empty string becomes null", func(t *testing.T) {
+		value := NewNormalizedCustomConstraintsValue("")
+		assert.True(t, value.IsNull())
+	})
+
+	t.Run("non-empty string stays non-null", func(t *testing.T) {
+		value := NewNormalizedCustomConstraintsValue("mem=512M")
+		assert.False(t, value.IsNull())
+		assert.Equal(t, "mem=512M", value.ValueString())
+	})
+}
+
 func TestCustomConstraintsValue_StringSemanticEquals(t *testing.T) {
 	ctx := t.Context()
 
