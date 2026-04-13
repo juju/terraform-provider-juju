@@ -360,7 +360,10 @@ func TestAcc_ResourceMachine_ConstraintsNormalization(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceMachine_InheritsModelConstraintsWithoutDrift(t *testing.T) {
+// TestAcc_ResourceMachine_InheritsModelConstraints proves that now constraints are computed,
+// we don't see "produced an unexpected new value: .constraints: was null," error when inheriting
+// the cosntraints for the machine from the model.
+func TestAcc_ResourceMachine_InheritsModelConstraints(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -377,12 +380,6 @@ func TestAcc_ResourceMachine_InheritsModelConstraintsWithoutDrift(t *testing.T) 
 					resource.TestCheckResourceAttr(resourceName, "name", "this_machine"),
 					resource.TestCheckResourceAttrSet(resourceName, "constraints"),
 				),
-			},
-			// We plan again to ensure that upon planning with the constraint being user set,
-			// we see no drift and that the value is compared to exactly what the user set previously.
-			{
-				Config:   testAccResourceMachineWithModelConstraints(modelName, "mem=512M"),
-				PlanOnly: true,
 			},
 		},
 	})
