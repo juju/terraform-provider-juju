@@ -360,6 +360,31 @@ func TestAcc_ResourceMachine_ConstraintsNormalization(t *testing.T) {
 	})
 }
 
+// TestAcc_ResourceMachine_InheritsModelConstraints proves that now constraints are computed,
+// we don't see "produced an unexpected new value: .constraints: was null," error when inheriting
+// the cosntraints for the machine from the model.
+func TestAcc_ResourceMachine_InheritsModelConstraints(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-machine-model-constraints")
+	resourceName := "juju_machine.this"
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceMachineWithModelConstraints(modelName, "mem=512M"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", resourceName, "model_uuid"),
+					resource.TestCheckResourceAttr(resourceName, "name", "this_machine"),
+					resource.TestCheckResourceAttrSet(resourceName, "constraints"),
+				),
+			},
+		},
+	})
+}
+
 func testAccResourceMachineAddMachine(modelName string, IP string, pubKeyPath string, privKeyPath string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this_model" {
@@ -375,6 +400,21 @@ resource "juju_machine" "this_machine" {
     private_key_file = %q
 }
 `, modelName, IP, pubKeyPath, privKeyPath)
+}
+
+func testAccResourceMachineWithModelConstraints(modelName, constraints string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+	constraints = %q
+}
+
+resource "juju_machine" "this" {
+	name = "this_machine"
+	model_uuid = juju_model.this.uuid
+	base = "ubuntu@22.04"
+}
+`, modelName, constraints)
 }
 
 func testAccResourceMachineWithPlacement(modelName string) string {
