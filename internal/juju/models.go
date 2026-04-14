@@ -583,3 +583,21 @@ func (c *modelsClient) DestroyAccessModel(input DestroyAccessModelInput) error {
 
 	return nil
 }
+
+// SetModelDefaults sets the default model configuration for a cloud and region.
+func (c *modelsClient) SetModelDefaults(cloud string, region string, config map[string]interface{}) error {
+	conn, err := c.GetConnection(nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := modelmanager.NewClient(conn)
+
+	err = client.SetModelDefaults(cloud, region, config)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
