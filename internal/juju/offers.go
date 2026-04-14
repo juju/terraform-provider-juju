@@ -297,6 +297,8 @@ func (c *offersClient) DestroyOffer(ctx context.Context, input *DestroyOfferInpu
 				return err
 			}
 		}
+	} else {
+		c.Tracef(fmt.Sprintf("offer %q has no connections, destroying", offer.OfferURL))
 	}
 
 	err = client.DestroyOffers(ctx, forceDestroy, input.OfferURL)

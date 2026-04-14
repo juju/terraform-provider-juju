@@ -45,7 +45,6 @@ func TestAcc_ResourceOffer(t *testing.T) {
 				),
 			},
 			{
-				Destroy:           true,
 				ImportStateVerify: true,
 				ImportState:       true,
 				ResourceName:      "juju_offer.offerone",
