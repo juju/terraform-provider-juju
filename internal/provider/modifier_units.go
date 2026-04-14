@@ -44,6 +44,13 @@ func (m unitCountModifier) PlanModifyInt64(ctx context.Context, req planmodifier
 		return
 	}
 
+	// If machines is unknown (e.g. machine IDs not yet known from a dependency),
+	// defer the unit count so Terraform can resolve it after apply.
+	if machines.IsUnknown() {
+		resp.PlanValue = types.Int64Unknown()
+		return
+	}
+
 	if len(machines.Elements()) > 0 {
 		resp.PlanValue = types.Int64Value(int64(len(machines.Elements())))
 		return
