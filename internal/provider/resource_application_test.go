@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/api/client/resources"
@@ -2927,4 +2928,70 @@ resource "juju_application" "test_app" {
 			"Revision":  revision,
 			"ConfigNew": configNew,
 		})
+}
+
+// TestAcc_ResourceApplication_UnknownMachinesUnitsDeferred verifies that when
+// the machines set is unknown at plan time (simulated via terraform_data whose
+// output is not yet known), the units attribute is also marked unknown rather
+// than incorrectly defaulting to 1.
+func TestAcc_ResourceApplication_UnknownMachinesUnitsDeferred(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-application-unknown-machines")
+	resourceName := "juju_application.testapp"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// On the first plan the terraform_data output is unknown, so
+				// toset(...) produces an unknown set — exactly what happens when
+				// machine IDs come from a not-yet-applied juju_machine inside a
+				// module. The modifier must defer units (mark it unknown) rather
+				// than falling through to the default of 1.
+				Config: testAccResourceApplicationUnknownMachines(modelName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectUnknownValue(resourceName, tfjsonpath.New("units")),
+					},
+				},
+			},
+		},
+	})
+}
+
+func testAccResourceApplicationUnknownMachines(modelName string) string {
+	return fmt.Sprintf(`
+		resource "juju_model" "model" {
+		  name = %q
+		}
+
+		resource "juju_machine" "machine1" {
+		  model_uuid = juju_model.model.uuid
+		  base       = "ubuntu@22.04"
+		}
+
+		resource "juju_machine" "machine2" {
+		  model_uuid = juju_model.model.uuid
+		  base       = "ubuntu@22.04"
+		}
+
+		# terraform_data.output is unknown on the first plan because it mirrors
+		# its input, which depends on juju_machine.machine.machine_id that has
+		# not been applied yet. This produces an unknown set for machines.
+		resource "terraform_data" "machine_ids" {
+		  input = [juju_machine.machine1.machine_id, juju_machine.machine2.machine_id]
+		}
+
+		resource "juju_application" "testapp" {
+		  model_uuid = juju_model.model.uuid
+		  machines   = toset(terraform_data.machine_ids.output)
+		  charm {
+			name = "juju-qa-test"
+			base = "ubuntu@22.04"
+		  }
+		}
+		`, modelName)
 }
