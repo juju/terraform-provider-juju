@@ -50,17 +50,17 @@ func (m *MockConnection) EXPECT() *MockConnectionMockRecorder {
 }
 
 // APICall mocks base method.
-func (m *MockConnection) APICall(objType string, version int, id, request string, params, response any) error {
+func (m *MockConnection) APICall(objType string, arg1 int, id, request string, params, response any) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "APICall", objType, version, id, request, params, response)
+	ret := m.ctrl.Call(m, "APICall", objType, arg1, id, request, params, response)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // APICall indicates an expected call of APICall.
-func (mr *MockConnectionMockRecorder) APICall(objType, version, id, request, params, response any) *MockConnectionAPICallCall {
+func (mr *MockConnectionMockRecorder) APICall(objType, arg1, id, request, params, response any) *MockConnectionAPICallCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "APICall", reflect.TypeOf((*MockConnection)(nil).APICall), objType, version, id, request, params, response)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "APICall", reflect.TypeOf((*MockConnection)(nil).APICall), objType, arg1, id, request, params, response)
 	return &MockConnectionAPICallCall{Call: call}
 }
 
@@ -431,44 +431,6 @@ func (c *MockConnectionConnectStreamCall) DoAndReturn(f func(string, url.Values)
 	return c
 }
 
-// Context mocks base method.
-func (m *MockConnection) Context() context.Context {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Context")
-	ret0, _ := ret[0].(context.Context)
-	return ret0
-}
-
-// Context indicates an expected call of Context.
-func (mr *MockConnectionMockRecorder) Context() *MockConnectionContextCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Context", reflect.TypeOf((*MockConnection)(nil).Context))
-	return &MockConnectionContextCall{Call: call}
-}
-
-// MockConnectionContextCall wrap *gomock.Call
-type MockConnectionContextCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockConnectionContextCall) Return(arg0 context.Context) *MockConnectionContextCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockConnectionContextCall) Do(f func() context.Context) *MockConnectionContextCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockConnectionContextCall) DoAndReturn(f func() context.Context) *MockConnectionContextCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // ControllerAccess mocks base method.
 func (m *MockConnection) ControllerAccess() string {
 	m.ctrl.T.Helper()
@@ -661,17 +623,17 @@ func (c *MockConnectionIPAddrCall) DoAndReturn(f func() string) *MockConnectionI
 }
 
 // IsBroken mocks base method.
-func (m *MockConnection) IsBroken() bool {
+func (m *MockConnection) IsBroken(ctx context.Context) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsBroken")
+	ret := m.ctrl.Call(m, "IsBroken", ctx)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // IsBroken indicates an expected call of IsBroken.
-func (mr *MockConnectionMockRecorder) IsBroken() *MockConnectionIsBrokenCall {
+func (mr *MockConnectionMockRecorder) IsBroken(ctx any) *MockConnectionIsBrokenCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsBroken", reflect.TypeOf((*MockConnection)(nil).IsBroken))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsBroken", reflect.TypeOf((*MockConnection)(nil).IsBroken), ctx)
 	return &MockConnectionIsBrokenCall{Call: call}
 }
 
@@ -687,13 +649,13 @@ func (c *MockConnectionIsBrokenCall) Return(arg0 bool) *MockConnectionIsBrokenCa
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockConnectionIsBrokenCall) Do(f func() bool) *MockConnectionIsBrokenCall {
+func (c *MockConnectionIsBrokenCall) Do(f func(context.Context) bool) *MockConnectionIsBrokenCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockConnectionIsBrokenCall) DoAndReturn(f func() bool) *MockConnectionIsBrokenCall {
+func (c *MockConnectionIsBrokenCall) DoAndReturn(f func(context.Context) bool) *MockConnectionIsBrokenCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

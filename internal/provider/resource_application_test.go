@@ -1011,7 +1011,7 @@ func testAccCheckApplicationResource(appResource string, checks charmResourceChe
 			return fmt.Errorf("expected origin %q, got %q", checks.origin, resource.Origin)
 		}
 		if strconv.Itoa(resource.Revision) != checks.revision {
-			return fmt.Errorf("expected revision %q, got %q", checks.revision, resource.Revision)
+			return fmt.Errorf("expected revision %q, got %d", checks.revision, resource.Revision)
 		}
 		return nil
 	}
