@@ -286,6 +286,22 @@ func setupAcceptanceTests(t *testing.T) {
 	providerData, ok := confResp.ResourceData.(juju.ProviderData)
 	require.Truef(t, ok, "ResourceData, not of type ProviderData")
 	TestClient = providerData.Client
+
+	// Disable OS updates to speed up tests.
+	clouds, err := TestClient.Clouds.ListClouds()
+	if err != nil {
+		t.Fatalf("failed to list clouds: %v", err)
+	}
+	for _, cloud := range clouds {
+		err := TestClient.Models.SetModelDefaults(cloud, "", map[string]any{
+			"enable-os-upgrade":        false,
+			"enable-os-refresh-update": false,
+		})
+		if err != nil {
+			t.Fatalf("failed to set model defaults: %v", err)
+		}
+	}
+
 	createCloudCredential(t)
 }
 

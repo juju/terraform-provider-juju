@@ -125,6 +125,7 @@ type JaasAPIClient interface {
 type CloudAPIClient interface {
 	AddCloud(cloud jujucloud.Cloud, force bool) error
 	Cloud(tag names.CloudTag) (jujucloud.Cloud, error)
+	Clouds() (map[names.CloudTag]jujucloud.Cloud, error)
 	UpdateCloud(cloud jujucloud.Cloud) error
 	RemoveCloud(cloud string) error
 	AddCredential(cloud string, credential jujucloud.Credential) error

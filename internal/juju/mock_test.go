@@ -2701,6 +2701,45 @@ func (c *MockCloudAPIClientCloudCall) DoAndReturn(f func(names.CloudTag) (cloud.
 	return c
 }
 
+// Clouds mocks base method.
+func (m *MockCloudAPIClient) Clouds() (map[names.CloudTag]cloud.Cloud, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Clouds")
+	ret0, _ := ret[0].(map[names.CloudTag]cloud.Cloud)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Clouds indicates an expected call of Clouds.
+func (mr *MockCloudAPIClientMockRecorder) Clouds() *MockCloudAPIClientCloudsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clouds", reflect.TypeOf((*MockCloudAPIClient)(nil).Clouds))
+	return &MockCloudAPIClientCloudsCall{Call: call}
+}
+
+// MockCloudAPIClientCloudsCall wrap *gomock.Call
+type MockCloudAPIClientCloudsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockCloudAPIClientCloudsCall) Return(arg0 map[names.CloudTag]cloud.Cloud, arg1 error) *MockCloudAPIClientCloudsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockCloudAPIClientCloudsCall) Do(f func() (map[names.CloudTag]cloud.Cloud, error)) *MockCloudAPIClientCloudsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockCloudAPIClientCloudsCall) DoAndReturn(f func() (map[names.CloudTag]cloud.Cloud, error)) *MockCloudAPIClientCloudsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // RemoveCloud mocks base method.
 func (m *MockCloudAPIClient) RemoveCloud(cloud string) error {
 	m.ctrl.T.Helper()

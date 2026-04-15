@@ -229,6 +229,9 @@ jobs:
           export TEST_SSH_PRIV_KEY_PATH=$(pwd)/test-add-machine
           echo "Testing with machine at $TEST_ADD_MACHINE_IP with keys $TEST_SSH_PUB_KEY_PATH and $TEST_SSH_PRIV_KEY_PATH"
 
+          echo "Running apt update"
+          /snap/bin/lxc exec mtest -- sudo apt update
+
           echo "Pushing the ssh public key at $TEST_SSH_PUB_KEY_PATH into the container"
           /snap/bin/lxc file push $TEST_SSH_PUB_KEY_PATH mtest/home/ubuntu/.ssh/authorized_keys
 
