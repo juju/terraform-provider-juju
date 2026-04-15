@@ -239,9 +239,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Description: "The number of application units to deploy for the charm.",
 				Optional:    true,
 				Computed:    true,
-				//Default:     int64default.StaticInt64(int64(1)),
 				PlanModifiers: []planmodifier.Int64{
-					UnitCountModifier(),
 					int64planmodifier.UseStateForUnknown(),
 				},
 			},
@@ -1147,7 +1145,6 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 				return
 			}
 		}
-
 		addMachines := []string{}
 		removeMachines := []string{}
 		for _, planMachine := range planMachines {
@@ -1165,6 +1162,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 
 		if len(planMachines) > 0 {
 			asserts = append(asserts, assertEqualsMachines(planMachines))
+			plan.UnitCount = types.Int64Value(int64(len(planMachines)))
 		}
 	}
 
