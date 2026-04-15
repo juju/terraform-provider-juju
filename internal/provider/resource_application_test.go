@@ -1519,6 +1519,9 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
+	// Storage is not supported in Juju 4.
+	SkipAgainstJuju4(t)
+
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
