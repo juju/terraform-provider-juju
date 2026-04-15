@@ -46,6 +46,7 @@ jobs:
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "3" }
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "4.0/edge" }
           - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.32-strict", juju: "3" }
+          # remove the bootstrap-options once we use a `stable` track.
           - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.32-strict", juju: "4.0/edge" }
     timeout-minutes: 90
     steps:
@@ -75,6 +76,7 @@ jobs:
           channel: ${{ matrix.action-operator.cloud-channel }}
           juju-channel: ${{ matrix.action-operator.juju }}
           lxd-channel: ${{ matrix.action-operator.lxd-channel }}
+          bootstrap-options: "--config \"caas-image-repo=docker.io/jujuqabot\""
       - name: Setup operator environment (retry 1)
         id: setup-op-1
         continue-on-error: true
@@ -85,6 +87,7 @@ jobs:
           channel: ${{ matrix.action-operator.cloud-channel }}
           juju-channel: ${{ matrix.action-operator.juju }}
           lxd-channel: ${{ matrix.action-operator.lxd-channel }}
+          bootstrap-options: "--config \"caas-image-repo=docker.io/jujuqabot\""
       - name: Setup operator environment (retry 2)
         id: setup-op-2
         continue-on-error: true
@@ -95,6 +98,7 @@ jobs:
           channel: ${{ matrix.action-operator.cloud-channel }}
           juju-channel: ${{ matrix.action-operator.juju }}
           lxd-channel: ${{ matrix.action-operator.lxd-channel }}
+          bootstrap-options: "--config \"caas-image-repo=docker.io/jujuqabot\""
       - name: Setup operator environment (set status)
         if: always()
         run: |
