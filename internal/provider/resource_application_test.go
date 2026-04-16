@@ -2054,7 +2054,7 @@ func testAccApplicationUpdateBaseCharm(modelName string, base string) string {
 		
 		resource "juju_application" "this" {
 		  model_uuid = juju_model.this.uuid
-		  name = "test-app2"
+		  name = "test-app"
 		  charm {
 			name     = "ubuntu"
 			base = %q
