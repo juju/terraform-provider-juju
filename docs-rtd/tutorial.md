@@ -377,15 +377,3 @@ Follow the instructions for the `juju` CLI.
 
 In addition to that, on your host machine, delete your the `terraform-juju` directory.
 
-
-<!--
-## Next steps
-
-This tutorial has introduced you to all the basic things you can do with the Terraform Provider for Juju. But there is a lot more to explore:
-
-| If you are wondering... | visit our...                             |
-|-------------------------|------------------------------------------|
-| "How do I...?"          | [How-to docs](../how-to/index)           |
-| "What is...?"           | [Reference docs](../reference/index)     |
-| "Why...?", "So what?"   | [Explanation docs](../explanation/index) |
--->
