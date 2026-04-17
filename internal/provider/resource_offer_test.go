@@ -12,6 +12,14 @@ import (
 )
 
 func TestAcc_ResourceOffer(t *testing.T) {
+	t.Skip(`See https://github.com/juju/juju/issues/22238.
+	
+	Removing test step 1 i.e. config 'testAccResourceOffer' makes the test pass.
+	Removing test step 2 i.e. config 'testAccResourceOfferXIntegration' makes the test pass.
+	
+	Running both steps together causes the test to fail. Keeping this test as-is but marking
+	as skipped to allow for investigation into the underlying issue.`)
+
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}

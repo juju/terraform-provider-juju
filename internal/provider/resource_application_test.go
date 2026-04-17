@@ -550,6 +550,8 @@ func TestAcc_CharmUpdatesWithRevision(t *testing.T) {
 }
 
 func TestAcc_CharmUpdateBase(t *testing.T) {
+	t.Skip(t.Name() + " Waiting on issue 21717 for LXD, and PR 22237 for K8s to be resolved")
+
 	modelName := acctest.RandomWithPrefix("tf-test-charmbaseupdates")
 
 	resource.ParallelTest(t, resource.TestCase{
@@ -1519,6 +1521,9 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
+	// Storage is not supported in Juju 4.
+	SkipAgainstJuju4(t)
+
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
