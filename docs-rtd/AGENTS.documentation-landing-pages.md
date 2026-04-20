@@ -25,11 +25,12 @@ applyTo:
 **Standard structure**: Four brief paragraphs covering:
 
 1. **What the product is** - Succinct, memorable definition
-2. **What the product does** - Core capabilities in plain language  
+2. **What the product does** - Core capabilities in plain language
 3. **What problem the product solves** - The need it meets
 4. **Who the product is for** - Target audience
 
 **Template example**:
+
 ```markdown
 Something that says what the product is, succinctly and memorably consectetur adipiscing elit, sed do eiusmod tempor.
 
