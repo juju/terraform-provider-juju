@@ -30,7 +30,7 @@ require (
 	github.com/juju/utils v0.0.0-20200604140309-9d78121a29e0
 	github.com/juju/utils/v3 v3.2.3
 	github.com/juju/version/v2 v2.0.1
-	github.com/rs/zerolog v1.33.0
+	github.com/rs/zerolog v1.35.0
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
 	gopkg.in/httprequest.v1 v1.2.1
@@ -73,7 +73,7 @@ require (
 	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
 	github.com/cloudflare/circl v1.6.1 // indirect
-	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
+	github.com/coreos/go-systemd/v22 v22.7.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
@@ -87,7 +87,7 @@ require (
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
-	github.com/godbus/dbus/v5 v5.0.4 // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/gnostic-models v0.7.0 // indirect
