@@ -35,7 +35,11 @@ Like all of Juju, the Terraform Provider for Juju is for SREs, or anyone looking
 ## How this documentation is organised
 
 This documentation uses the [Diátaxis documentation structure](https://diataxis.fr/).
-The {ref}`Tutorial <tutorial>` takes you step-by-step through using the provider to deploy an application. {ref}`How-to guides <howtos>` assume you have basic familiarity with Terraform and Juju. {ref}`Reference <reference>` provides technical specifications for provider resources and data sources. {ref}`Explanation <explanation>` includes security models and integration patterns.
+
+- The {ref}`Tutorial <tutorial>` takes you step-by-step through using the provider to deploy an application.
+- {ref}`How-to guides <howtos>` assume you have basic familiarity with Terraform and Juju.
+- {ref}`Reference <reference>` provides technical specifications for provider resources and data sources.
+- {ref}`Explanation <explanation>` includes security models and integration patterns.
 
 
 ## Project and community
