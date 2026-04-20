@@ -26,6 +26,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
+	"github.com/juju/juju/api"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -650,6 +651,11 @@ func checkClientErr(err error, config juju.ControllerConfiguration) diag.Diagnos
 	if errors.As(err, &netOpError) {
 		errDetail = "Connection error, please check the controller_addresses property set on the provider"
 		diags.AddError(netOpError.Error(), errDetail)
+		return diags
+	}
+	if errors.Is(err, api.ConnectionOpenTimedOut) {
+		errDetail = "Connection error, please check the controller_addresses property set on the provider"
+		diags.AddError(err.Error(), errDetail)
 		return diags
 	}
 	diags.AddError("Client Error", err.Error())

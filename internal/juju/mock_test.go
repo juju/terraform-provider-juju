@@ -1035,17 +1035,17 @@ func (c *MockApplicationAPIClientDestroyUnitsCall) DoAndReturn(f func(applicatio
 }
 
 // Expose mocks base method.
-func (m *MockApplicationAPIClient) Expose(application string, exposedEndpoints map[string]params0.ExposedEndpoint) error {
+func (m *MockApplicationAPIClient) Expose(arg0 string, exposedEndpoints map[string]params0.ExposedEndpoint) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Expose", application, exposedEndpoints)
+	ret := m.ctrl.Call(m, "Expose", arg0, exposedEndpoints)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Expose indicates an expected call of Expose.
-func (mr *MockApplicationAPIClientMockRecorder) Expose(application, exposedEndpoints any) *MockApplicationAPIClientExposeCall {
+func (mr *MockApplicationAPIClientMockRecorder) Expose(arg0, exposedEndpoints any) *MockApplicationAPIClientExposeCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Expose", reflect.TypeOf((*MockApplicationAPIClient)(nil).Expose), application, exposedEndpoints)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Expose", reflect.TypeOf((*MockApplicationAPIClient)(nil).Expose), arg0, exposedEndpoints)
 	return &MockApplicationAPIClientExposeCall{Call: call}
 }
 
@@ -1073,18 +1073,18 @@ func (c *MockApplicationAPIClientExposeCall) DoAndReturn(f func(string, map[stri
 }
 
 // Get mocks base method.
-func (m *MockApplicationAPIClient) Get(branchName, application string) (*params0.ApplicationGetResults, error) {
+func (m *MockApplicationAPIClient) Get(branchName, arg1 string) (*params0.ApplicationGetResults, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", branchName, application)
+	ret := m.ctrl.Call(m, "Get", branchName, arg1)
 	ret0, _ := ret[0].(*params0.ApplicationGetResults)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockApplicationAPIClientMockRecorder) Get(branchName, application any) *MockApplicationAPIClientGetCall {
+func (mr *MockApplicationAPIClientMockRecorder) Get(branchName, arg1 any) *MockApplicationAPIClientGetCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockApplicationAPIClient)(nil).Get), branchName, application)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockApplicationAPIClient)(nil).Get), branchName, arg1)
 	return &MockApplicationAPIClientGetCall{Call: call}
 }
 
@@ -1310,17 +1310,17 @@ func (c *MockApplicationAPIClientSetCharmCall) DoAndReturn(f func(string, applic
 }
 
 // SetConfig mocks base method.
-func (m *MockApplicationAPIClient) SetConfig(branchName, application, configYAML string, config map[string]string) error {
+func (m *MockApplicationAPIClient) SetConfig(branchName, arg1, configYAML string, config map[string]string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetConfig", branchName, application, configYAML, config)
+	ret := m.ctrl.Call(m, "SetConfig", branchName, arg1, configYAML, config)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetConfig indicates an expected call of SetConfig.
-func (mr *MockApplicationAPIClientMockRecorder) SetConfig(branchName, application, configYAML, config any) *MockApplicationAPIClientSetConfigCall {
+func (mr *MockApplicationAPIClientMockRecorder) SetConfig(branchName, arg1, configYAML, config any) *MockApplicationAPIClientSetConfigCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetConfig", reflect.TypeOf((*MockApplicationAPIClient)(nil).SetConfig), branchName, application, configYAML, config)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetConfig", reflect.TypeOf((*MockApplicationAPIClient)(nil).SetConfig), branchName, arg1, configYAML, config)
 	return &MockApplicationAPIClientSetConfigCall{Call: call}
 }
 
@@ -1348,17 +1348,17 @@ func (c *MockApplicationAPIClientSetConfigCall) DoAndReturn(f func(string, strin
 }
 
 // SetConstraints mocks base method.
-func (m *MockApplicationAPIClient) SetConstraints(application string, constraints constraints.Value) error {
+func (m *MockApplicationAPIClient) SetConstraints(arg0 string, arg1 constraints.Value) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetConstraints", application, constraints)
+	ret := m.ctrl.Call(m, "SetConstraints", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetConstraints indicates an expected call of SetConstraints.
-func (mr *MockApplicationAPIClientMockRecorder) SetConstraints(application, constraints any) *MockApplicationAPIClientSetConstraintsCall {
+func (mr *MockApplicationAPIClientMockRecorder) SetConstraints(arg0, arg1 any) *MockApplicationAPIClientSetConstraintsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetConstraints", reflect.TypeOf((*MockApplicationAPIClient)(nil).SetConstraints), application, constraints)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetConstraints", reflect.TypeOf((*MockApplicationAPIClient)(nil).SetConstraints), arg0, arg1)
 	return &MockApplicationAPIClientSetConstraintsCall{Call: call}
 }
 
@@ -1386,17 +1386,17 @@ func (c *MockApplicationAPIClientSetConstraintsCall) DoAndReturn(f func(string, 
 }
 
 // Unexpose mocks base method.
-func (m *MockApplicationAPIClient) Unexpose(application string, endpoints []string) error {
+func (m *MockApplicationAPIClient) Unexpose(arg0 string, endpoints []string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Unexpose", application, endpoints)
+	ret := m.ctrl.Call(m, "Unexpose", arg0, endpoints)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Unexpose indicates an expected call of Unexpose.
-func (mr *MockApplicationAPIClientMockRecorder) Unexpose(application, endpoints any) *MockApplicationAPIClientUnexposeCall {
+func (mr *MockApplicationAPIClientMockRecorder) Unexpose(arg0, endpoints any) *MockApplicationAPIClientUnexposeCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unexpose", reflect.TypeOf((*MockApplicationAPIClient)(nil).Unexpose), application, endpoints)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unexpose", reflect.TypeOf((*MockApplicationAPIClient)(nil).Unexpose), arg0, endpoints)
 	return &MockApplicationAPIClientUnexposeCall{Call: call}
 }
 
@@ -1424,17 +1424,17 @@ func (c *MockApplicationAPIClientUnexposeCall) DoAndReturn(f func(string, []stri
 }
 
 // UnsetApplicationConfig mocks base method.
-func (m *MockApplicationAPIClient) UnsetApplicationConfig(branchName, application string, keys []string) error {
+func (m *MockApplicationAPIClient) UnsetApplicationConfig(branchName, arg1 string, keys []string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UnsetApplicationConfig", branchName, application, keys)
+	ret := m.ctrl.Call(m, "UnsetApplicationConfig", branchName, arg1, keys)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UnsetApplicationConfig indicates an expected call of UnsetApplicationConfig.
-func (mr *MockApplicationAPIClientMockRecorder) UnsetApplicationConfig(branchName, application, keys any) *MockApplicationAPIClientUnsetApplicationConfigCall {
+func (mr *MockApplicationAPIClientMockRecorder) UnsetApplicationConfig(branchName, arg1, keys any) *MockApplicationAPIClientUnsetApplicationConfigCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnsetApplicationConfig", reflect.TypeOf((*MockApplicationAPIClient)(nil).UnsetApplicationConfig), branchName, application, keys)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnsetApplicationConfig", reflect.TypeOf((*MockApplicationAPIClient)(nil).UnsetApplicationConfig), branchName, arg1, keys)
 	return &MockApplicationAPIClientUnsetApplicationConfigCall{Call: call}
 }
 
@@ -1627,17 +1627,17 @@ func (c *MockResourceAPIClientListResourcesCall) DoAndReturn(f func([]string) ([
 }
 
 // Upload mocks base method.
-func (m *MockResourceAPIClient) Upload(application, name, filename, pendingID string, reader io.ReadSeeker) error {
+func (m *MockResourceAPIClient) Upload(arg0, name, filename, pendingID string, reader io.ReadSeeker) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Upload", application, name, filename, pendingID, reader)
+	ret := m.ctrl.Call(m, "Upload", arg0, name, filename, pendingID, reader)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Upload indicates an expected call of Upload.
-func (mr *MockResourceAPIClientMockRecorder) Upload(application, name, filename, pendingID, reader any) *MockResourceAPIClientUploadCall {
+func (mr *MockResourceAPIClientMockRecorder) Upload(arg0, name, filename, pendingID, reader any) *MockResourceAPIClientUploadCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upload", reflect.TypeOf((*MockResourceAPIClient)(nil).Upload), application, name, filename, pendingID, reader)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upload", reflect.TypeOf((*MockResourceAPIClient)(nil).Upload), arg0, name, filename, pendingID, reader)
 	return &MockResourceAPIClientUploadCall{Call: call}
 }
 
@@ -1665,18 +1665,18 @@ func (c *MockResourceAPIClientUploadCall) DoAndReturn(f func(string, string, str
 }
 
 // UploadPendingResource mocks base method.
-func (m *MockResourceAPIClient) UploadPendingResource(applicationID string, resource resource.Resource, filename string, r io.ReadSeeker) (string, error) {
+func (m *MockResourceAPIClient) UploadPendingResource(applicationID string, arg1 resource.Resource, filename string, r io.ReadSeeker) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UploadPendingResource", applicationID, resource, filename, r)
+	ret := m.ctrl.Call(m, "UploadPendingResource", applicationID, arg1, filename, r)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UploadPendingResource indicates an expected call of UploadPendingResource.
-func (mr *MockResourceAPIClientMockRecorder) UploadPendingResource(applicationID, resource, filename, r any) *MockResourceAPIClientUploadPendingResourceCall {
+func (mr *MockResourceAPIClientMockRecorder) UploadPendingResource(applicationID, arg1, filename, r any) *MockResourceAPIClientUploadPendingResourceCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UploadPendingResource", reflect.TypeOf((*MockResourceAPIClient)(nil).UploadPendingResource), applicationID, resource, filename, r)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UploadPendingResource", reflect.TypeOf((*MockResourceAPIClient)(nil).UploadPendingResource), applicationID, arg1, filename, r)
 	return &MockResourceAPIClientUploadPendingResourceCall{Call: call}
 }
 
@@ -2587,17 +2587,17 @@ func (m *MockCloudAPIClient) EXPECT() *MockCloudAPIClientMockRecorder {
 }
 
 // AddCloud mocks base method.
-func (m *MockCloudAPIClient) AddCloud(cloud cloud.Cloud, force bool) error {
+func (m *MockCloudAPIClient) AddCloud(arg0 cloud.Cloud, force bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddCloud", cloud, force)
+	ret := m.ctrl.Call(m, "AddCloud", arg0, force)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddCloud indicates an expected call of AddCloud.
-func (mr *MockCloudAPIClientMockRecorder) AddCloud(cloud, force any) *MockCloudAPIClientAddCloudCall {
+func (mr *MockCloudAPIClientMockRecorder) AddCloud(arg0, force any) *MockCloudAPIClientAddCloudCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddCloud", reflect.TypeOf((*MockCloudAPIClient)(nil).AddCloud), cloud, force)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddCloud", reflect.TypeOf((*MockCloudAPIClient)(nil).AddCloud), arg0, force)
 	return &MockCloudAPIClientAddCloudCall{Call: call}
 }
 
@@ -2625,17 +2625,17 @@ func (c *MockCloudAPIClientAddCloudCall) DoAndReturn(f func(cloud.Cloud, bool) e
 }
 
 // AddCredential mocks base method.
-func (m *MockCloudAPIClient) AddCredential(cloud string, credential cloud.Credential) error {
+func (m *MockCloudAPIClient) AddCredential(arg0 string, credential cloud.Credential) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddCredential", cloud, credential)
+	ret := m.ctrl.Call(m, "AddCredential", arg0, credential)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddCredential indicates an expected call of AddCredential.
-func (mr *MockCloudAPIClientMockRecorder) AddCredential(cloud, credential any) *MockCloudAPIClientAddCredentialCall {
+func (mr *MockCloudAPIClientMockRecorder) AddCredential(arg0, credential any) *MockCloudAPIClientAddCredentialCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddCredential", reflect.TypeOf((*MockCloudAPIClient)(nil).AddCredential), cloud, credential)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddCredential", reflect.TypeOf((*MockCloudAPIClient)(nil).AddCredential), arg0, credential)
 	return &MockCloudAPIClientAddCredentialCall{Call: call}
 }
 
@@ -2741,17 +2741,17 @@ func (c *MockCloudAPIClientCloudsCall) DoAndReturn(f func() (map[names.CloudTag]
 }
 
 // RemoveCloud mocks base method.
-func (m *MockCloudAPIClient) RemoveCloud(cloud string) error {
+func (m *MockCloudAPIClient) RemoveCloud(arg0 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveCloud", cloud)
+	ret := m.ctrl.Call(m, "RemoveCloud", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RemoveCloud indicates an expected call of RemoveCloud.
-func (mr *MockCloudAPIClientMockRecorder) RemoveCloud(cloud any) *MockCloudAPIClientRemoveCloudCall {
+func (mr *MockCloudAPIClientMockRecorder) RemoveCloud(arg0 any) *MockCloudAPIClientRemoveCloudCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveCloud", reflect.TypeOf((*MockCloudAPIClient)(nil).RemoveCloud), cloud)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveCloud", reflect.TypeOf((*MockCloudAPIClient)(nil).RemoveCloud), arg0)
 	return &MockCloudAPIClientRemoveCloudCall{Call: call}
 }
 
@@ -2779,17 +2779,17 @@ func (c *MockCloudAPIClientRemoveCloudCall) DoAndReturn(f func(string) error) *M
 }
 
 // UpdateCloud mocks base method.
-func (m *MockCloudAPIClient) UpdateCloud(cloud cloud.Cloud) error {
+func (m *MockCloudAPIClient) UpdateCloud(arg0 cloud.Cloud) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateCloud", cloud)
+	ret := m.ctrl.Call(m, "UpdateCloud", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdateCloud indicates an expected call of UpdateCloud.
-func (mr *MockCloudAPIClientMockRecorder) UpdateCloud(cloud any) *MockCloudAPIClientUpdateCloudCall {
+func (mr *MockCloudAPIClientMockRecorder) UpdateCloud(arg0 any) *MockCloudAPIClientUpdateCloudCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateCloud", reflect.TypeOf((*MockCloudAPIClient)(nil).UpdateCloud), cloud)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateCloud", reflect.TypeOf((*MockCloudAPIClient)(nil).UpdateCloud), arg0)
 	return &MockCloudAPIClientUpdateCloudCall{Call: call}
 }
 
@@ -2817,18 +2817,18 @@ func (c *MockCloudAPIClientUpdateCloudCall) DoAndReturn(f func(cloud.Cloud) erro
 }
 
 // UserCredentials mocks base method.
-func (m *MockCloudAPIClient) UserCredentials(user names.UserTag, cloud names.CloudTag) ([]names.CloudCredentialTag, error) {
+func (m *MockCloudAPIClient) UserCredentials(user names.UserTag, arg1 names.CloudTag) ([]names.CloudCredentialTag, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UserCredentials", user, cloud)
+	ret := m.ctrl.Call(m, "UserCredentials", user, arg1)
 	ret0, _ := ret[0].([]names.CloudCredentialTag)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UserCredentials indicates an expected call of UserCredentials.
-func (mr *MockCloudAPIClientMockRecorder) UserCredentials(user, cloud any) *MockCloudAPIClientUserCredentialsCall {
+func (mr *MockCloudAPIClientMockRecorder) UserCredentials(user, arg1 any) *MockCloudAPIClientUserCredentialsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UserCredentials", reflect.TypeOf((*MockCloudAPIClient)(nil).UserCredentials), user, cloud)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UserCredentials", reflect.TypeOf((*MockCloudAPIClient)(nil).UserCredentials), user, arg1)
 	return &MockCloudAPIClientUserCredentialsCall{Call: call}
 }
 
