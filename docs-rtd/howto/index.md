@@ -13,17 +13,19 @@ myst:
 :maxdepth: 2
 :hidden:
 
-create-deployment-dependencies
 manage-the-terraform-provider-for-juju
 manage-controllers
 manage-clouds
 manage-credentials
-manage-models
+use-a-bootstrapped-controller
+use-the-juju-cli
 manage-ssh-keys
 manage-users
 manage-service-accounts
 manage-roles
 manage-groups
+create-deployment-dependencies
+manage-models
 manage-charms
 manage-charm-resources
 manage-applications
@@ -32,19 +34,18 @@ manage-offers
 manage-units
 manage-secrets
 manage-machines
-use-a-bootstrapped-controller
-use-the-juju-cli
 ```
 
 ## Set up the Terraform Provider for Juju
 
-Install the client, connect a Juju controller, connect clouds, add models.
+Install the client, connect a Juju controller, connect clouds.
 
 - {ref}`manage-the-terraform-provider-for-juju`
 - {ref}`manage-controllers`
 - {ref}`manage-clouds`
 - {ref}`manage-credentials`
-- {ref}`manage-models`
+- {ref}`use-a-bootstrapped-controller`
+- {ref}`use-the-juju-cli-in-terraform`
 
 ## Handle authentication and authorization
 
@@ -61,6 +62,7 @@ Set up SSH keys. Add users, service accounts, roles, and groups and control thei
 Deploy, configure, integrate, scale, etc., charmed applications. This will automatically provision infrastructure, but you can customise it before, during, or after deploy too.
 
 - {ref}`create-deployment-dependencies`
+- {ref}`manage-models`
 - {ref}`manage-charms`
 - {ref}`manage-charm-resources`
 - {ref}`manage-applications`
@@ -69,5 +71,3 @@ Deploy, configure, integrate, scale, etc., charmed applications. This will autom
 - {ref}`manage-units`
 - {ref}`manage-secrets`
 - {ref}`manage-machines`
-- {ref}`use-the-juju-cli-in-terraform`
-- {ref}`use-a-bootstrapped-controller`
