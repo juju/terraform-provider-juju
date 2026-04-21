@@ -13,6 +13,7 @@ ENHANCEMENTS
 BUG FIXES
 
 * Fix `juju_machine` constraints state inconsistency when constraints are inherited from model defaults rather than being set directly on the machine by @ale8k in [#1157](https://github.com/juju/terraform-provider-juju/pull/1157).
+* Fix `juju_ssh_key` to allow deletion of the final key within a model by @ale8k in [#1188](https://github.com/juju/terraform-provider-juju/pull/1188).
 
 DOCUMENTATION
 
