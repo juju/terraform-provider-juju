@@ -1,3 +1,36 @@
+# 1.5.0
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.21 release.
+
+ENHANCEMENTS
+
+* Replace the CloudSpec controller facade call with calls to retrieve model summaries, cloud definitions, and bootstrap credentials by @alesstimec in [#1158](https://github.com/juju/terraform-provider-juju/pull/1158).
+
+BUG FIXES
+
+* Fix `juju_machine` constraints state inconsistency when constraints are inherited from model defaults rather than being set directly on the machine by @ale8k in [#1157](https://github.com/juju/terraform-provider-juju/pull/1157).
+
+DOCUMENTATION
+
+* Add a security overview document to comply with SSDLC requirements by @SimoneDutto in [#1140](https://github.com/juju/terraform-provider-juju/pull/1140).
+* Update documentation landing pages by @tmihoc in [#1165](https://github.com/juju/terraform-provider-juju/pull/1165).
+* Add the `sphinx-llm` extension to make documentation more AI-friendly by @tmihoc in [#1177](https://github.com/juju/terraform-provider-juju/pull/1177).
+
+CI & MAINTENANCE
+
+* Add Go documentation for all exported types and methods by @alesstimec in [#1083](https://github.com/juju/terraform-provider-juju/pull/1083).
+* Upgrade the Canonical Sphinx Starter Pack to v1.6 for inclusive language compliance by @tmihoc in [#1141](https://github.com/juju/terraform-provider-juju/pull/1141).
+* Merge the 1.4 branch into main by @kian99 in [#1162](https://github.com/juju/terraform-provider-juju/pull/1162).
+* Disable OS updates during machine provisioning in tests to significantly reduce test execution time by @kian99 in [#1170](https://github.com/juju/terraform-provider-juju/pull/1170).
+* Update Juju dependency to 3.6.21 and Terraform plugin framework to 1.19.0 by @alesstimec in [#1174](https://github.com/juju/terraform-provider-juju/pull/1174).
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v1.4.3...v1.5.0
+
 # 1.4.3
 
 NOTES:
