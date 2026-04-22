@@ -397,6 +397,7 @@ resource "juju_integration" "a" {
 }
 
 func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
+	SkipAgainstJuju4WithReason(t, "See https://github.com/juju/juju/issues/22213")
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
