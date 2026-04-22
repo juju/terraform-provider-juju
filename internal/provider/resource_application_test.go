@@ -1552,6 +1552,8 @@ func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_StorageK8s(t *testing.T) {
+	// Storage is not supported in Juju 4.
+	SkipAgainstJuju4(t)
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
