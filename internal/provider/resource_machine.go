@@ -165,6 +165,7 @@ func (r *machineResource) Schema(ctx context.Context, req resource.SchemaRequest
 					"and provider's defaults. Changing this value will cause the application to be destroyed and" +
 					" recreated by terraform.",
 				Optional: true,
+				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIf(constraintsRequiresReplacefunc, "", ""),
 				},
@@ -381,6 +382,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 
 	plan.Base = types.StringValue(readResponse.Base)
 	plan.Hostname = types.StringValue(readResponse.Hostname)
+	plan.Constraints = NewNormalizedCustomConstraintsValue(readResponse.Constraints)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 
@@ -448,7 +450,7 @@ func readMachine(ctx context.Context, client *juju.Client, modelUUID, machineID 
 		machineResourceModel: machineResourceModel{
 			Annotations: annotationsValue,
 			Base:        types.StringValue(response.Base),
-			Constraints: NewCustomConstraintsValue(response.Constraints),
+			Constraints: NewNormalizedCustomConstraintsValue(response.Constraints),
 			Hostname:    types.StringValue(response.Hostname),
 			MachineID:   types.StringValue(response.ID),
 		},
@@ -507,9 +509,7 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 	//    It could happen that the hostname is set to an empty string during import, but unlikely because
 	//    that means you've created a machine and then imported it immediately afterwards.
 	data.Hostname = machine.Hostname
-	if machine.Constraints.ValueString() != "" {
-		data.Constraints = machine.Constraints
-	}
+	data.Constraints = machine.Constraints
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
 	id := newMachineID(modelUUID, machineID, machineName)

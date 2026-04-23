@@ -213,7 +213,7 @@ func TestProviderConfigureAddresses(t *testing.T) {
 	assert.Equal(t, confResp.Diagnostics.HasError(), true)
 	err := confResp.Diagnostics.Errors()[0]
 	assert.Equal(t, diag.SeverityError, err.Severity())
-	assert.Equal(t, "api connection open timed out", err.Detail())
+	assert.Equal(t, "Connection error, please check the controller_addresses property set on the provider", err.Detail())
 }
 
 // This is a valid certificate allowing the client to attempt a connection but failing certificate validation
@@ -310,6 +310,22 @@ func setupAcceptanceTests(t *testing.T) {
 	providerData, ok := confResp.ResourceData.(juju.ProviderData)
 	require.Truef(t, ok, "ResourceData, not of type ProviderData")
 	TestClient = providerData.Client
+
+	// Disable OS updates to speed up tests.
+	clouds, err := TestClient.Clouds.ListClouds()
+	if err != nil {
+		t.Fatalf("failed to list clouds: %v", err)
+	}
+	for _, cloud := range clouds {
+		err := TestClient.Models.SetModelDefaults(context.Background(), cloud, "", map[string]any{
+			"enable-os-upgrade":        false,
+			"enable-os-refresh-update": false,
+		})
+		if err != nil {
+			t.Fatalf("failed to set model defaults: %v", err)
+		}
+	}
+
 	createCloudCredential(t)
 }
 

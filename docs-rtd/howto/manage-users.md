@@ -24,7 +24,8 @@ resource "juju_user" "alex" {
 > See more: [`juju_user` (resource)](../reference/terraform-provider/resources/user)
 
 
-## Manage a user's access to a controller, cloud, model, offer, role, or group
+(manage-user-access)=
+## Manage user access
 
 > See more: {ref}`manage-access-to-a-controller`, {ref}`manage-access-to-a-cloud`, {ref}`manage-access-to-a-model`, {ref}`manage-access-to-an-offer`, {ref}`manage-access-to-a-role`, {ref}`manage-access-to-a-group`
 

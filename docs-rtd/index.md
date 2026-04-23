@@ -26,66 +26,42 @@ The Terraform Provider for Juju combines the power of Terraform -- comprehensive
 
 Like all of Juju, the Terraform Provider for Juju is for SREs, or anyone looking to take control of cloud.
 
----------
-
 ## In this documentation
 
-- **Set up the Terraform Provider for Juju:** {ref}`Install <install-the-terraform-provider-for-juju>`, {ref}`Connect a controller <manage-controllers>`, {ref}`Connect a cloud <manage-clouds>`, {ref}`Add a model <manage-models>`
-- **Handle authentication and authorization:** {ref}`SSH keys <manage-ssh-keys>`, {ref}`Users <manage-users>`, {ref}`Service accounts <manage-service-accounts>`, {ref}`Roles <manage-roles>`, {ref}`Groups <manage-groups>`
-- **Deploy infrastructure and applications:** {ref}`Deploy <deploy-an-application>`, {ref}`Configure <configure-an-application>`, {ref}`Integrate <integrate-an-application-with-another-application>`, {ref}`Scale <scale-an-application>`, {ref}`Upgrade <upgrade-an-application>`, etc.
+- **Set up the Terraform Provider for Juju:** {ref}`Install <install-the-terraform-provider-for-juju>` • {ref}`Connect a controller <manage-controllers>` • {ref}`Connect a cloud <manage-clouds>`
+- **Handle authentication and authorization:** {ref}`Manage users <manage-users>` • {ref}`Manage service accounts <manage-service-accounts>`
+- **Deploy infrastructure and applications:** {ref}`Deploy <deploy-an-application>` • {ref}`Configure <configure-an-application>` • {ref}`Integrate <integrate-an-application-with-another-application>` • {ref}`Scale <scale-an-application>` • {ref}`Upgrade <upgrade-an-application>`
 
-````{grid} 1 1 2 2
+## How this documentation is organised
 
-```{grid-item-card} [Tutorial](tutorial)
-:link: tutorial
-:link-type: doc
+This documentation uses the [Diátaxis documentation structure](https://diataxis.fr/).
 
-**Start here**: a hands-on introduction to the Terraform Provider for Juju for new users <br>
-```
-
-```{grid-item-card} [How-to guides](/index)
-:link: howto/index
-:link-type: doc
-
-**Step-by-step guides** covering key operations and common tasks
-```
-
-```{grid-item-card} [Reference](/index)
-:link: reference/index
-:link-type: doc
-
-**Technical information** - specifications, APIs, architecture
-```
-
-```{grid-item-card} [Explanation](/index)
-:link: explanation/index
-:link-type: doc
-
-**Discussion and clarification** of key topics
-```
-````
-
----------
-
-<!-- {ref}`tutorial-plan` | {ref}`tutorial-deploy-configure-integrate` | {ref}`tutorial-scale` -->
+- The {ref}`Tutorial <tutorial>` takes you step-by-step through using the provider to deploy an application.
+- {ref}`How-to guides <howtos>` assume you have basic familiarity with Terraform and Juju.
+- {ref}`Reference <reference>` provides technical specifications for provider resources and data sources.
+- {ref}`Explanation <explanation>` includes security models and integration patterns.
 
 
 ## Project and community
 
-The Terraform Provider for Juju is a member of the Ubuntu family. It’s an open source project that warmly welcomes community projects, contributions, suggestions, fixes and constructive feedback.
+The Terraform Provider for Juju is a member of the Ubuntu family. It's an open source project that warmly welcomes community contributions, suggestions, fixes and constructive feedback.
 
-* [Release notes](https://github.com/juju/terraform-provider-juju/releases )
+### Get involved
+
+* [Join our chat](https://matrix.to/#/#terraform-provider-juju:ubuntu.com)
+* [Join our forum](https://discourse.charmhub.io/)
+* [Report a bug](https://github.com/juju/terraform-provider-juju/issues/new?title=doc%3A+ADD+A+TITLE&body=DESCRIBE+THE+ISSUE%0A%0A---%0ADocument:%20index.md)
+* [Contribute](https://github.com/juju/terraform-provider-juju/blob/main/CONTRIBUTING.md)
+* [Visit our careers page](https://canonical.com/careers/engineering)
+
+### Releases
+
+* [Release notes](https://github.com/juju/terraform-provider-juju/releases)
+
+### Governance and policies
 
 * [Code of conduct](https://ubuntu.com/community/ethos/code-of-conduct)
 
-* [Join our chat](https://matrix.to/#/#terraform-provider-juju:ubuntu.com)
+### Commercial support
 
-* [Join our forum](https://discourse.charmhub.io/)
-
-* [Report a bug](https://github.com/juju/terraform-provider-juju/issues/new?title=doc%3A+ADD+A+TITLE&body=DESCRIBE+THE+ISSUE%0A%0A---%0ADocument:%20index.md)
-
-* [Contribute](https://github.com/juju/terraform-provider-juju/blob/main/CONTRIBUTING.md)
-
-* [Visit our careers page](https://canonical.com/careers)
-
-Thinking about using Juju for your next project? [Get in touch!](https://canonical.com/contact-us)
+Thinking about using the Terraform Provider for Juju for your next project? [Get in touch!](https://canonical.com/contact-us)
