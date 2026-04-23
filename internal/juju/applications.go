@@ -1519,6 +1519,10 @@ func addPendingResources(ctx context.Context, appName string, charmResourcesToAd
 		}
 		toRequestUpload, err := resourceAPIClient.UploadPendingResource(
 			ctx, apiresources.UploadPendingResourceArgs{
+				CharmID: apiresources.CharmID{
+					URL:    charmID.URL,
+					Origin: charmID.Origin,
+				},
 				ApplicationID: appName,
 				Resource:      localResource,
 				Filename:      resource.String(),

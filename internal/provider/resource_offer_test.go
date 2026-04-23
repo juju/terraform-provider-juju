@@ -173,6 +173,7 @@ resource "juju_offer" "this" {
 }
 
 func TestAcc_ResourceOfferMultipleEndpoints(t *testing.T) {
+	SkipAgainstJuju4WithReason(t, "See https://github.com/juju/juju/issues/22213")
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
