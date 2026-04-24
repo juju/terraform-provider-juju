@@ -12,8 +12,8 @@ relatedlinks: "[Charmcraft](https://documentation.ubuntu.com/charmcraft/), [Char
 :maxdepth: 2
 :hidden: true
 
-tutorial
-howto/index
+Tutorial <tutorial>
+How-to guides <howto/index>
 Reference <reference/index>
 Explanation <explanation/index>
 ```

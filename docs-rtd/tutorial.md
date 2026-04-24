@@ -4,9 +4,9 @@ myst:
     description: "Learn to manage Juju deployments as code with the Terraform Provider, using declarative configuration files, version control, and infrastructure-as-code workflows."
 ---
 
-# Manage your first Juju deployment as code
+# Get started with the Terraform Provider for Juju
 
-The Terraform Provider for Juju brings infrastructure-as-code capabilities to Juju. With it, you can define your cloud infrastructure and applications in version-controlled configuration files, preview changes before applying them, and collaborate with your team using familiar GitOps workflows.
+The Terraform Provider for Juju brings infrastructure-as-code capabilities to {external+juju:doc}`Juju <index>`. With it, you can define your cloud infrastructure and applications in version-controlled configuration files, preview changes before applying them, and collaborate with your team using familiar GitOps workflows.
 
 In this tutorial you will define and deploy a chat service (Mattermost backed by PostgreSQL) as code, experiencing the benefits of declarative infrastructure management.
 
@@ -19,17 +19,31 @@ In this tutorial you will define and deploy a chat service (Mattermost backed by
 
 **What you'll do:**
 
-- Set up an isolated test environment with Multipass, then set up Terraform with the Juju provider to bootstrap a controller and deploy applications on MicroK8s.
-- Define your infrastructure as code, preview changes before applying them, and experience infrastructure-as-code workflows.
+- Set up your environment: launch a VM with MicroK8s, install Terraform, initialize version control, and bootstrap a Juju controller.
+- Define your application infrastructure as code, preview changes before applying them, and deploy a chat service.
+- Experience infrastructure-as-code workflows: manage your infrastructure, track changes in version control, and tear down resources.
 
-## Set up an isolated test environment
+## Set up your environment
 
-```{important}
+```{tip}
+**Recommended workflow setup:**
 
-**Tempted to skip this step?** We strongly recommend that you do not! As you will see in a minute, the VM you set up in this step does not just provide you with an isolated test environment but also with almost everything else you’ll need in the rest of this tutorial (and the non-VM alternative may not yield exactly the same results).
+You'll be working across two contexts: your local workstation and a VM. To work efficiently:
+
+1. **Two terminal windows (or one split terminal):**
+   - One terminal for your local workstation (where you'll run `multipass` commands and `git` commands)
+   - One terminal for the VM shell (where you'll run `terraform` and `juju` commands)
+
+2. **Your favorite text editor** on your local workstation to create and edit `.tf` files. Changes you make locally will be automatically visible in the VM via the mounted directory.
 ```
 
-When you're trying things out it's nice to work in an isolated test environment. Let's spin up an Ubuntu virtual machine (VM) with Multipass!
+To work with the Terraform Provider for Juju, you'll need:
+- A cloud (MicroK8s for this tutorial)
+- The `juju` CLI (to extract cloud credentials)
+- The `terraform` CLI (to run your infrastructure-as-code definitions)
+- A Juju controller (which you'll bootstrap with Terraform)
+
+You'll get most of these automatically by launching a Juju-ready Ubuntu VM with Multipass using the `charm-dev` cloud-init configuration, then install Terraform manually.
 
 First, [install Multipass](https://documentation.ubuntu.com/multipass/en/latest/how-to-guides/install-multipass/). For example, on Linux with `snapd`:
 
@@ -93,24 +107,69 @@ At any point:
 Congratulations! Your cloud is ready, and thanks to the `charm-dev` cloud-init, you already have:
 - MicroK8s configured and running
 - The `juju` CLI installed
-- Terraform installed
 - A MicroK8s cloud registered with Juju
 
-On your local workstation (not the VM), create a directory for your Terraform configuration and mount it to your VM:
+Verify this in your VM:
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+microk8s status --wait-ready
+
+microk8s is running
+```
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+juju version
+
+3.6.0-ubuntu-amd64
+```
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+juju clouds --client
+
+Cloud      Regions  Default    Type
+localhost  1        localhost  lxd
+microk8s   1        localhost  k8s
+```
+
+Now install Terraform in your VM:
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+sudo snap install terraform --classic
+```
+
+Verify the installation:
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+terraform version
+```
+
+Now, on your local workstation (not the VM), create a directory for your Terraform configuration and mount it to your VM:
 
 ```{terminal}
 :copy:
 :user:
 :host:
-mkdir ~/terraform-juju && cd ~/terraform-juju
-multipass mount ~/terraform-juju my-juju-vm:~/terraform-juju
+mkdir ~/terraform-juju && cd ~/terraform-juju && multipass mount ~/terraform-juju my-juju-vm:terraform-juju
 ```
 
-This setup will enable you to create and edit Terraform files in your local editor while running them inside your VM.
+This lets you create and edit Terraform files in your local editor while running them inside the VM.
 
-## Set up version control
-
-A key benefit of infrastructure-as-code is version control. Your infrastructure definitions become code that can be tracked, reviewed, and collaborated on.
+Now set up version control. A key benefit of infrastructure-as-code is version control -- your infrastructure definitions become code that can be tracked, reviewed, and collaborated on.
 
 On your local workstation, in your `terraform-juju` directory, initialize a git repository:
 
@@ -123,42 +182,63 @@ git init
 
 As you create and modify files in this tutorial, you'll commit them to track your infrastructure's evolution.
 
-## Set up Terraform with the Juju provider
+Before bootstrapping a controller, it's helpful to understand how the Terraform Provider for Juju works. The provider is a Juju client -- it talks to a Juju controller just like the `juju` CLI does. You define your desired infrastructure state in `.tf` files, the `terraform` CLI reads those files and uses the Juju provider plugin to communicate with a Juju controller, and the controller provisions resources and deploys applications. Your infrastructure definitions are code that can be version-controlled, reviewed, and shared with your team.
 
-The way Terraform with the Juju provider works is: you define your desired infrastructure state in `.tf` files, the `terraform` CLI reads those files and talks to a Juju controller via the `juju` provider plugin, and the controller provisions resources and deploys applications. Your infrastructure definitions are code that can be version-controlled, reviewed, and shared with your team.
+```{figure}
+:align: center
 
-Thanks to the `charm-dev` cloud-init, the `terraform` CLI is already installed in your VM. You can verify this:
+:::{mermaid}
+graph LR
+    A[.tf files<br/>Infrastructure as Code] --> B[terraform CLI]
+    B --> C[Juju Provider<br/>Juju client]
+    C --> D[Juju Controller]
+    D --> E[Cloud<br/>MicroK8s]
+    D --> F[Charmhub]
+
+    style A fill:#e1f5ff
+    style C fill:#fff3e0
+    style D fill:#f3e5f5
+:::
+
+The Terraform Provider acts as a Juju client, translating your infrastructure-as-code definitions into API calls to the Juju controller. The controller then provisions resources on the cloud and deploys charms from Charmhub.
+```
+
+Now bootstrap a Juju controller. A Juju controller is your Juju control plane -- the entity that holds the Juju API server and Juju's database. With the Terraform Provider, you can bootstrap a controller by defining it in your Terraform configuration.
+
+View the MicroK8s credentials that you'll need for your Terraform configuration:
 
 ```{terminal}
 :copy:
 :user: ubuntu
 :host: my-juju-vm
-terraform version
+juju credentials microk8s --show-secrets --format yaml
+
+client-credentials:
+  microk8s:
+    default-credential: microk8s
+    microk8s:
+      auth-type: oauth2
+      Token: eyJhbGciOiJSUzI1NiIsImtpZCI6IldBbERh...
 ```
 
-## Bootstrap a Juju controller
-
-A Juju controller is your Juju control plane -- the entity that holds the Juju API server and Juju's database. With the Terraform Provider, you can bootstrap a controller declaratively by defining it in your Terraform configuration.
-
-Thanks to the `charm-dev` cloud-init, the `juju` CLI is already installed and the MicroK8s cloud is already registered with Juju. You can verify this in your VM:
+From the output, copy the full `Token` value (it will be much longer than shown here). You'll also need the MicroK8s endpoint and CA certificate, which you can get from the kubeconfig:
 
 ```{terminal}
 :copy:
 :user: ubuntu
 :host: my-juju-vm
-juju clouds --client
+microk8s config
+
+apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority-data: LS0tLS1CRUdJTi...
+    server: https://10.x.x.x:16443
+  name: microk8s-cluster
+...
 ```
 
-You should see `microk8s` listed. Now, view the MicroK8s credentials that you'll need for your Terraform configuration:
-
-```{terminal}
-:copy:
-:user: ubuntu
-:host: my-juju-vm
-juju show-credentials microk8s --show-secrets --client
-```
-
-From the output, note the values for the client certificate, client key, server certificate, and endpoint. You'll use these in your Terraform configuration.
+From the output, copy the full `certificate-authority-data` value and the `server` (endpoint) URL.
 
 Now, on your local workstation, in your `terraform-juju` directory, create your Terraform configuration files.
 
@@ -170,7 +250,7 @@ First, create `terraform.tf` to configure Terraform to use the Juju provider in 
 terraform {
   required_providers {
     juju = {
-      version = "~> 1.0.0"
+      version = "~> 1.4"
       source  = "juju/juju"
     }
   }
@@ -197,41 +277,34 @@ variable "k8s_ca_cert" {
   sensitive   = true
 }
 
-variable "k8s_client_cert" {
-  description = "MicroK8s client certificate"
-  type        = string
-  sensitive   = true
-}
-
-variable "k8s_client_key" {
-  description = "MicroK8s client key"
+variable "k8s_token" {
+  description = "MicroK8s authentication token"
   type        = string
   sensitive   = true
 }
 ```
 
-Create `terraform.tfvars` with your actual credential values (from the `juju show-credentials` output):
+Create `terraform.tfvars` with your actual credential values (from the commands above):
 
 ```{code-block} terraform
 :caption: `terraform.tfvars`
 
-k8s_endpoint    = "https://<your-microk8s-ip>:16443"
-k8s_ca_cert     = "<your-ca-certificate>"
-k8s_client_cert = "<your-client-certificate>"
-k8s_client_key  = "<your-client-key>"
+k8s_token    = "eyJhbGciOiJSUzI1NiIsImtpZCI6IldBbERh..."
+k8s_ca_cert  = "LS0tLS1CRUdJTi..."
+k8s_endpoint = "https://10.x.x.x:16443"
 ```
 
-```{important}
-**Keep credentials out of version control!** Add `terraform.tfvars` to your `.gitignore` file:
+```{note}
+The values shown above are examples only. Use your actual values from the previous commands - the token and certificate will be much longer than shown here.
+```
+
+Before continuing, keep credentials and Terraform state out of version control. On your local workstation, in your `terraform-juju` directory, create a `.gitignore` file:
 
 ```{terminal}
 :copy:
 :user:
 :host:
-echo "terraform.tfvars" >> .gitignore
-echo ".terraform*" >> .gitignore
-echo "terraform.tfstate*" >> .gitignore
-```
+echo "terraform.tfvars" >> .gitignore && echo ".terraform*" >> .gitignore && echo "terraform.tfstate*" >> .gitignore
 ```
 
 Now, create `main.tf` to define your controller:
@@ -248,7 +321,7 @@ resource "juju_controller" "microk8s" {
   cloud = {
     name       = "microk8s"
     type       = "kubernetes"
-    auth_types = ["clientcertificate"]
+    auth_types = ["oauth2"]
     endpoint   = var.k8s_endpoint
     ca_certificates = [var.k8s_ca_cert]
     host_cloud_region = "localhost"
@@ -256,10 +329,9 @@ resource "juju_controller" "microk8s" {
 
   cloud_credential = {
     name      = "microk8s-cred"
-    auth_type = "clientcertificate"
+    auth_type = "oauth2"
     attributes = {
-      "ClientCertificateData" = var.k8s_client_cert
-      "ClientKeyData"         = var.k8s_client_key
+      "Token" = var.k8s_token
     }
   }
 
@@ -272,7 +344,7 @@ resource "juju_controller" "microk8s" {
 }
 ```
 
-Notice how this declarative definition makes your infrastructure intentions clear: you want a Juju controller named "my-chat-controller" on MicroK8s with specific credentials.
+Notice how this declarative definition makes your infrastructure intentions clear: you want a Juju controller named `my-chat-controller` on MicroK8s with specific credentials.
 
 Commit your infrastructure definition (excluding sensitive files):
 
@@ -280,19 +352,29 @@ Commit your infrastructure definition (excluding sensitive files):
 :copy:
 :user:
 :host:
-git add terraform.tf variables.tf main.tf .gitignore
-git commit -m "feat: define Juju controller infrastructure"
+git add terraform.tf variables.tf main.tf .gitignore && git commit -m "feat: define Juju controller infrastructure"
 ```
 
-> **Infrastructure-as-code benefit**: Your controller infrastructure is now tracked in version control. You can see the history of changes, revert if needed, and share with your team for review.
+```{tip}
+**Infrastructure-as-code benefit**: Your controller infrastructure is now tracked in version control. You can see the history of changes, revert if needed, and share with your team for review.
+```
 
-Now, in your VM, initialize Terraform and preview your changes:
+Now, in your VM, initialize Terraform. If you exited the VM shell, reopen it:
+
+```{terminal}
+:copy:
+:user:
+:host:
+multipass shell my-juju-vm
+```
+
+Navigate to your Terraform directory and initialize:
 
 ```{terminal}
 :copy:
 :user: ubuntu
 :host: my-juju-vm
-cd ~/terraform-juju
+:dir: ~/terraform-juju
 terraform init
 ```
 
@@ -309,7 +391,9 @@ terraform plan
 
 This shows what Terraform will create without actually creating anything. Review the output carefully -- this is your opportunity to catch issues before they affect your infrastructure.
 
-> **Infrastructure-as-code benefit**: The plan step lets you (and your team) review changes before applying them. In a team setting, you'd commit your `.tf` changes, open a pull request, and have teammates review the plan output before merging and applying.
+```{tip}
+**Infrastructure-as-code benefit**: The plan step lets you (and your team) review changes before applying them. In a team setting, you'd commit your `.tf` changes, open a pull request, and have teammates review the plan output before merging and applying.
+```
 
 Apply your infrastructure definition:
 
@@ -324,8 +408,7 @@ Terraform will show you the plan again and ask for confirmation. Type `yes` to p
 
 The bootstrap process will take a few minutes. Once complete, your Juju controller is running on MicroK8s, and Terraform has recorded its state.
 
-Congratulations! You've bootstrapped a Juju controller as code.
-
+Your environment is now fully set up. You have a cloud, the necessary tools, version control, and a Juju controller -- all ready for you to define and deploy applications as code.
 
 ## Define your application infrastructure as code
 
@@ -339,7 +422,7 @@ First, update your Terraform configuration to switch from controller mode to reg
 terraform {
   required_providers {
     juju = {
-      version = "~> 1.0.0"
+      version = "~> 1.4"
       source  = "juju/juju"
     }
   }
@@ -364,7 +447,7 @@ resource "juju_controller" "microk8s" {
   cloud = {
     name       = "microk8s"
     type       = "kubernetes"
-    auth_types = ["clientcertificate"]
+    auth_types = ["oauth2"]
     endpoint   = var.k8s_endpoint
     ca_certificates = [var.k8s_ca_cert]
     host_cloud_region = "localhost"
@@ -372,10 +455,9 @@ resource "juju_controller" "microk8s" {
 
   cloud_credential = {
     name      = "microk8s-cred"
-    auth_type = "clientcertificate"
+    auth_type = "oauth2"
     attributes = {
-      "ClientCertificateData" = var.k8s_client_cert
-      "ClientKeyData"         = var.k8s_client_key
+      "Token" = var.k8s_token
     }
   }
 
@@ -496,15 +578,37 @@ Commit your application infrastructure definition:
 :copy:
 :user:
 :host:
-git add main.tf terraform.tf
-git commit -m "feat: define chat application infrastructure"
+git add main.tf terraform.tf && git commit -m "feat: define chat application infrastructure"
 ```
 
-> **Infrastructure-as-code benefit**: Your entire application infrastructure is now defined as code and tracked in version control. Anyone reviewing your git history can see exactly what applications are deployed, how they're configured, and how they integrate.
+```{tip}
+**Infrastructure-as-code benefit**: Your entire application infrastructure is now defined as code and tracked in version control. Anyone reviewing your git history can see exactly what applications are deployed, how they're configured, and how they integrate.
+```
 
 ## Deploy your application infrastructure
 
 Unlike imperative commands that execute immediately, Terraform's workflow includes a review step. You'll see what Terraform plans to do before any changes are made.
+
+```{figure}
+:align: center
+
+:::{mermaid}
+graph TB
+    A[Modify .tf files] --> B[terraform plan]
+    B --> C{Review changes}
+    C -->|Approve| D[terraform apply]
+    C -->|Revise| A
+    D --> E[Update infrastructure]
+    E --> F[Update state file]
+
+    style B fill:#e3f2fd
+    style C fill:#fff9c4
+    style D fill:#e8f5e9
+    style F fill:#fce4ec
+:::
+
+Terraform's plan-review-apply workflow ensures you always preview infrastructure changes before they're executed. This is a key infrastructure-as-code benefit for team collaboration and change management.
+```
 
 In your VM, preview the changes:
 
@@ -517,7 +621,9 @@ terraform plan
 
 This shows what Terraform will create without actually creating anything. Review the output carefully -- you'll see the model, applications, and integrations that will be created.
 
-> **Infrastructure-as-code benefit**: The plan step lets you (and your team) review changes before applying them. In a team setting, you'd commit your `.tf` changes, open a pull request, and have teammates review the plan output before merging and applying.
+```{tip}
+**Infrastructure-as-code benefit**: The plan step lets you (and your team) review changes before applying them. In a team setting, you'd commit your `.tf` changes, open a pull request, and have teammates review the plan output before merging and applying.
+```
 
 Apply your infrastructure definition:
 
@@ -558,7 +664,49 @@ Sample output:
 
 Congratulations! Your chat service is up and running, and your entire infrastructure is defined as code.
 
-> **Infrastructure-as-code benefit**: Terraform's state tracking means you can't accidentally create duplicate resources. It knows what exists and only makes necessary changes.
+```{figure}
+:align: center
+
+:::{mermaid}
+graph TB
+    subgraph "MicroK8s Cloud"
+        subgraph "Controller Model"
+            C[Juju Controller]
+        end
+
+        subgraph "Chat Model"
+            M[Mattermost<br/>mattermost-k8s/0]
+            P1[PostgreSQL<br/>postgresql-k8s/0<br/>Primary]
+            P2[PostgreSQL<br/>postgresql-k8s/1]
+            S[Self-signed Certs<br/>self-signed-certificates/0]
+
+            P1 -.db relation.-> M
+            S -.certificates relation.-> P1
+            S -.certificates relation.-> P2
+            P1 -.peer relation.-> P2
+        end
+    end
+
+    T[Terraform State] -.tracks.-> C
+    T -.tracks.-> M
+    T -.tracks.-> P1
+    T -.tracks.-> P2
+    T -.tracks.-> S
+
+    style C fill:#f3e5f5
+    style M fill:#e1f5ff
+    style P1 fill:#e8f5e9
+    style P2 fill:#e8f5e9
+    style S fill:#fff3e0
+    style T fill:#fce4ec
+:::
+
+Your deployed infrastructure: a Juju controller, a chat model with integrated applications (Mattermost, PostgreSQL with high availability, and TLS certificates), all tracked by Terraform state.
+```
+
+```{tip}
+**Infrastructure-as-code benefit**: Terraform's state tracking means you can't accidentally create duplicate resources. It knows what exists and only makes necessary changes.
+```
 
 ## Manage your infrastructure
 
@@ -597,7 +745,9 @@ terraform plan
 
 Notice Terraform detected the difference between your desired state (3 units) and actual state (2 units), and shows it will add one unit. This is the power of declarative infrastructure -- you describe what you want, and Terraform figures out how to get there.
 
-> **Infrastructure-as-code benefit**: Terraform's state tracking prevents accidental changes. It knows the current state and only makes necessary modifications to reach your desired state.
+```{tip}
+**Infrastructure-as-code benefit**: Terraform's state tracking prevents accidental changes. It knows the current state and only makes necessary modifications to reach your desired state.
+```
 
 Apply the change:
 
@@ -616,11 +766,12 @@ On your local workstation, commit your change:
 :copy:
 :user:
 :host:
-git add main.tf
-git commit -m "feat: scale postgresql to 3 units for improved availability"
+git add main.tf && git commit -m "feat: scale postgresql to 3 units for improved availability"
 ```
 
-> **Infrastructure-as-code benefit**: Your git history now shows why and when you scaled. Anyone on your team can see the evolution of your infrastructure and the reasoning behind each change (captured in commit messages).
+```{tip}
+**Infrastructure-as-code benefit**: Your git history now shows why and when you scaled. Anyone on your team can see the evolution of your infrastructure and the reasoning behind each change (captured in commit messages).
+```
 
 ## Next steps
 
