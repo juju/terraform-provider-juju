@@ -4,12 +4,16 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
+
+	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
 func TestAcc_ResourceSSHKey(t *testing.T) {
@@ -37,6 +41,11 @@ func TestAcc_ResourceSSHKey(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_ssh_key.this", "model_uuid"),
 					testCheckSSHKeyPayload("juju_ssh_key.this", sshKey2)),
+			},
+			// remove the ssh key resource but keep the model, then verify the key is gone in Juju
+			{
+				Config: testAccResourceSSHKeyModelOnly(modelName),
+				Check:  testAccCheckSSHKeyAbsent(modelName, sshKey2),
 			},
 		},
 	})
@@ -167,6 +176,52 @@ func TestAcc_ResourceSSHKey_UpgradeProvider(t *testing.T) {
 			},
 		},
 	})
+}
+
+func testAccCheckSSHKeyAbsent(modelName string, payload string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		if TestClient == nil {
+			return fmt.Errorf("TestClient is not configured")
+		}
+
+		// Retrieve the model UUID from state so we can query the key manager.
+		var modelUUID string
+		for _, rs := range s.RootModule().Resources {
+			if rs.Type == "juju_model" && rs.Primary != nil {
+				modelUUID = rs.Primary.Attributes["uuid"]
+				break
+			}
+		}
+		if modelUUID == "" {
+			return fmt.Errorf("could not find model UUID in state")
+		}
+
+		keys, err := TestClient.SSHKeys.ListKeys(
+			context.Background(),
+			juju.ListSSHKeysInput{
+				Username:  TestClient.Username(),
+				ModelUUID: modelUUID,
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("error listing ssh keys in model %q: %w", modelName, err)
+		}
+
+		for _, k := range keys {
+			if k == payload {
+				return fmt.Errorf("ssh key still exists in model %q", modelName)
+			}
+		}
+		return nil
+	}
+}
+
+func testAccResourceSSHKeyModelOnly(modelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+`, modelName)
 }
 
 func testAccResourceSSHKey(modelName string, sshKey string) string {

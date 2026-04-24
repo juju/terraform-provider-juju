@@ -479,6 +479,29 @@ func (c *cloudsClient) ReadCloud(ctx context.Context, input ReadCloudInput) (*Re
 	}, nil
 }
 
+// ListClouds returns the names of all clouds available on the controller.
+func (c *cloudsClient) ListClouds() ([]string, error) {
+	conn, err := c.GetConnection(context.Background(), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	cloudClient := c.getCloudAPIClient(conn)
+
+	jjClouds, err := cloudClient.Clouds(context.Background())
+	if err != nil {
+		return nil, errors.Annotate(err, "getting clouds")
+	}
+
+	clouds := make([]string, 0, len(jjClouds))
+	for cloudTag := range jjClouds {
+		clouds = append(clouds, cloudTag.Id())
+	}
+
+	return clouds, nil
+}
+
 // createKubernetesConfig creates a Kubernetes configuration from the provided config data.
 // If createServiceAccount is true, it will create or get the Juju admin service account credentials.
 // If createServiceAccount is false, it will use the credentials already present in the config data.

@@ -284,6 +284,7 @@ extensions = [
     "sphinx_config_options",
     "sphinx_contributor_listing",
     "sphinx_filtered_toctree",
+    "sphinx_llm.txt",
     "sphinx_related_links",
     "sphinx_roles",
     "sphinx_terminal",
@@ -316,6 +317,17 @@ new_tab_link_show_external_link_icon = True
 # rediraffe_branch = "3.6"
 rediraffe_redirects = "redirects.txt"
 rediraffe_dir_only = True  # Strips '/index.html' from destination URLs when building with 'dirhtml'
+
+######################
+# sphinx-llm options #
+######################
+
+llms_txt_description = (
+    "The Terraform Provider for Juju is a Terraform provider that provides a declarative"
+    "way to use Juju and JAAS."
+)
+llms_txt_suffix_mode = "url-suffix"
+markdown_http_base = "https://documentation.ubuntu.com/terraform-provider-juju/latest"
 
 # Excludes files or directories from processing
 

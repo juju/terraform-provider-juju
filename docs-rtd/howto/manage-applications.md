@@ -133,25 +133,6 @@ resource "juju_application" "this" {
 
 This will expose all of the application's endpoints. To restrict exposure to just specific endpoints, spaces, or CIDRs, specify nested attributes.
 
-<!--
-```terraform
-resource "juju_application" "this" {
-  model_uuid = juju_model.development.uuid
-
-  charm {
-    name = "hello-kubecon"
-  }
-
-  expose = {
-    endpoints = "..., ..."
-    spaces =
-    cidrs =
-  }
-}
-```
--->
-
-
 > See more: [`juju_application` > `expose` > nested schema](../reference/terraform-provider/resources/application#nested-schema-for-expose)
 
 

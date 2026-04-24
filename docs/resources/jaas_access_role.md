@@ -44,6 +44,8 @@ resource "juju_jaas_access_role" "development" {
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # JAAS role access can be imported using the role UUID and access level
 $ terraform import juju_jaas_access_role.development UUID:assignee
