@@ -31,6 +31,7 @@ import (
 )
 
 func TestAcc_ResourceApplication(t *testing.T) {
+	SkipAgainstJuju4WithReason(t, "See  https://github.com/juju/juju/issues/21717")
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 
@@ -906,9 +907,10 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 				Config: testAccResourceApplicationFromPrivateRegistry(modelName, appName, "user", "pass", "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
-						fingerprint: "5cf445e5cccb7c02f60491b1c379038d6b5be46ec86efc1e75d90452f557b8a3bb5f7f085e814986e4e2dc07812b4a56",
-						origin:      "upload",
-						revision:    "0",
+						fingerprintJuju3: "5cf445e5cccb7c02f60491b1c379038d6b5be46ec86efc1e75d90452f557b8a3bb5f7f085e814986e4e2dc07812b4a56",
+						fingerprintJuju4: "fc15a3374f0051849b218544ad39e3c6b6446d7ac411a9843c0f0f7102587219c1716dd4a217fbba1519b182e89cfda9",
+						origin:           "upload",
+						revision:         "0",
 					}),
 				),
 			},
@@ -922,9 +924,10 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 				},
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
-						fingerprint: "7307af1e23462be0a8101ce884ed1ba7b5743922cfab99d4ceeb08d65c96400938a344832cf033a110a1b2a0c3e8d0b9",
-						origin:      "upload",
-						revision:    "0",
+						fingerprintJuju3: "7307af1e23462be0a8101ce884ed1ba7b5743922cfab99d4ceeb08d65c96400938a344832cf033a110a1b2a0c3e8d0b9",
+						fingerprintJuju4: "fc15a3374f0051849b218544ad39e3c6b6446d7ac411a9843c0f0f7102587219c1716dd4a217fbba1519b182e89cfda9",
+						origin:           "upload",
+						revision:         "0",
 					}),
 				),
 			},
@@ -938,9 +941,10 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 				},
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
-						fingerprint: "19ece2bcbac52dbbbf7ec48345ab9f7d9a963e43270cf984be42ee7141e636d4ed8e65e7ab35bc97edd138cb468c0659",
-						origin:      "upload",
-						revision:    "0",
+						fingerprintJuju3: "19ece2bcbac52dbbbf7ec48345ab9f7d9a963e43270cf984be42ee7141e636d4ed8e65e7ab35bc97edd138cb468c0659",
+						fingerprintJuju4: "fc15a3374f0051849b218544ad39e3c6b6446d7ac411a9843c0f0f7102587219c1716dd4a217fbba1519b182e89cfda9",
+						origin:           "upload",
+						revision:         "0",
 					}),
 				),
 			},
@@ -954,9 +958,10 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 				},
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
-						fingerprint: "398048a2c483cd10a5e358f0d45ed8e21ed077079779fecce58772d443a3c9b53e871cf43dba94fcb3463adee154c440",
-						origin:      "store",
-						revision:    "74",
+						fingerprintJuju3: "398048a2c483cd10a5e358f0d45ed8e21ed077079779fecce58772d443a3c9b53e871cf43dba94fcb3463adee154c440",
+						fingerprintJuju4: "",
+						origin:           "store",
+						revision:         "74",
 					}),
 				),
 			},
@@ -965,11 +970,13 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 }
 
 type charmResourceChecks struct {
-	// fingerprint is a SHA356 fingerprint of the resource
-	// composed from the image URL, username and password.
-	// If we start uploading files, this would represent
-	// the fingerprint of the file.
-	fingerprint string
+	// fingerprintJuju3 is a SHA384 fingerprint of the resource as computed by Juju 3.
+	// Juju 3 and Juju 4 compute fingerprints differently for container image resources
+	// because Juju 4 re-serializes the image metadata as JSON while Juju 3 stores the
+	// raw uploaded blob.
+	fingerprintJuju3 string
+	// fingerprintJuju4 is a SHA384 fingerprint of the resource as computed by Juju 4.
+	fingerprintJuju4 string
 	// origin is either "store" or "upload".
 	origin string
 	// revision is "0" when origin is "store", otherwise it's the revision number.
@@ -1011,8 +1018,12 @@ func testAccCheckApplicationResource(ctx context.Context, appResource string, ch
 			return fmt.Errorf("expected one resource for application %q, got %d", appName, len(resources))
 		}
 		resource := resources[0].Resources[0]
-		if resource.Fingerprint.String() != checks.fingerprint {
-			return fmt.Errorf("expected fingerprint %q, got %q", checks.fingerprint, resource.Fingerprint)
+		expectedFingerprint := checks.fingerprintJuju3
+		if internaltesting.CompareVersions(os.Getenv(TestJujuAgentVersion), "4.0.0") >= 0 {
+			expectedFingerprint = checks.fingerprintJuju4
+		}
+		if resource.Fingerprint.String() != expectedFingerprint {
+			return fmt.Errorf("expected fingerprint %q, got %q", expectedFingerprint, resource.Fingerprint)
 		}
 		if resource.Origin.String() != checks.origin {
 			return fmt.Errorf("expected origin %q, got %q", checks.origin, resource.Origin)
@@ -1453,6 +1464,7 @@ func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
+	SkipAgainstJuju4WithReason(t, "See https://github.com/juju/juju/issues/22233.")
 	ctx := t.Context()
 
 	if testingCloud != LXDCloudTesting {
@@ -1552,6 +1564,8 @@ func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_StorageK8s(t *testing.T) {
+	// Storage is not supported in Juju 4.
+	SkipAgainstJuju4(t)
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}

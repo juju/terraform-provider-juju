@@ -132,6 +132,17 @@ func SkipAgainstJuju4(t *testing.T) {
 	}
 }
 
+// SkipAgainstJuju4WithReason should be called at the top of any tests
+// that are not appropriate to run against Juju 4, with a reason provided.
+func SkipAgainstJuju4WithReason(t *testing.T, reason string) {
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "4.0.0") >= 0 {
+		t.Skipf("Skipping test against Juju 4.0.0 and above: %s", reason)
+	}
+}
+
 // jujuExternalHostname returns the juju-external-hostname config line for use
 // in Terraform HCL templates. In Juju < 4.0 this config is an implicit config and
 // it's required to expose an application.
