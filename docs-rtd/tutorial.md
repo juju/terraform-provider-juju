@@ -1,22 +1,26 @@
 ---
 myst:
   html_meta:
-    description: "Learn how to deploy Mattermost and PostgreSQL on Kubernetes using the Terraform Provider for Juju in this hands-on introductory tutorial."
+    description: "Learn to manage Juju deployments as code with the Terraform Provider, using declarative configuration files, version control, and infrastructure-as-code workflows."
 ---
 
-# Tutorial
+# Manage your first Juju deployment as code
 
-Imagine your business needs a chat service such as Mattermost backed up by a database such as PostgreSQL. In a traditional setup, this can be quite a challenge, but with Juju you'll find yourself deploying, configuring, scaling, integrating, etc., applications in no time. Let's get started!
+The Terraform Provider for Juju brings infrastructure-as-code capabilities to Juju. With it, you can define your cloud infrastructure and applications in version-controlled configuration files, preview changes before applying them, and collaborate with your team using familiar GitOps workflows.
+
+In this tutorial you will define and deploy a chat service (Mattermost backed by PostgreSQL) as code, experiencing the benefits of declarative infrastructure management.
 
 **What you'll need:**
 
 - A workstation, e.g., a laptop, that has sufficient resources to launch a virtual machine with 4 CPUs, 8 GB RAM, and 50 GB disk space.
+- Familiarity with a terminal.
+- Basic familiarity with Juju concepts (controllers, models, charms, applications).
+- Basic familiarity with Terraform (providers, resources, state).
 
 **What you'll do:**
 
-- Set up an isolated test environment with Multipass and the `charm-dev` blueprint, which will provide all the necessary tools and configuration for the tutorial (a localhost machine cloud and Kubernetes cloud, Juju, etc.).
-
-- Plan, then deploy, configure, and scale a chat service based on Mattermost and backed by PostgreSQL on a local Kubernetes cloud with Juju.
+- Set up an isolated test environment with Multipass, then set up Terraform with the Juju provider to bootstrap a controller and deploy applications on MicroK8s.
+- Define your infrastructure as code, preview changes before applying them, and experience infrastructure-as-code workflows.
 
 ## Set up an isolated test environment
 
@@ -25,118 +29,410 @@ Imagine your business needs a chat service such as Mattermost backed up by a dat
 **Tempted to skip this step?** We strongly recommend that you do not! As you will see in a minute, the VM you set up in this step does not just provide you with an isolated test environment but also with almost everything else you’ll need in the rest of this tutorial (and the non-VM alternative may not yield exactly the same results).
 ```
 
-Follow the instructions for the `juju` CLI.
+When you're trying things out it's nice to work in an isolated test environment. Let's spin up an Ubuntu virtual machine (VM) with Multipass!
 
-> See more: {external+juju:ref}`Juju | Set things up <set-things-up>`
+First, [install Multipass](https://documentation.ubuntu.com/multipass/en/latest/how-to-guides/install-multipass/). For example, on Linux with `snapd`:
 
-In addition to that, on your local workstation, create a directory called `terraform-juju`, then use Multipass to mount it to your Multipass VM. For example, on Linux:
+```{terminal}
+:copy:
+:user:
+:host:
+sudo snap install multipass
+```
 
-```text
-user@ubuntu:~$ mkdir terraform-juju
-user@ubuntu:~$ cd terraform-juju/
-user@ubuntu:~$ multipass mount ~/terraform-juju my-juju-vm:~/terraform-juju
+```{important}
+If on Windows: Note that Multipass can only be installed on Windows 10 Pro or Enterprise. If you are using a different version, you'll need to manually set up MicroK8s and the `juju` CLI outside of a Multipass VM.
+```
+
+Now, use Multipass to launch a Juju-ready VM using the `charm-dev` cloud-init configuration:
+
+```{note}
+This step may take a few minutes to complete (e.g., 10 mins).
+
+This is because the command downloads, installs, (updates,) and configures a number of packages (including MicroK8s, the `juju` CLI, Terraform, and development tools), and the speed will be affected by network bandwidth.
+
+However, once it's done, you'll have everything you'll need -- all in a nice isolated environment that you can clean up easily.
+```
+
+```{terminal}
+:copy:
+:user:
+:host:
+multipass launch 24.04 \
+  --name my-juju-vm \
+  --cpus 4 \
+  --memory 8G \
+  --disk 50G \
+  --timeout 1800 \
+  --cloud-init https://raw.githubusercontent.com/canonical/multipass/refs/heads/main/data/cloud-init-yaml/cloud-init-charm-dev.yaml
+```
+
+```{dropdown} Tips for troubleshooting
+If the VM launch fails, run `multipass delete --purge my-juju-vm` to clean up, then try the launch command again.
+```
+
+Open a shell into the VM:
+
+```{terminal}
+:copy:
+:user:
+:host:
+multipass shell my-juju-vm
+```
+
+Anything you type after the VM shell prompt (`ubuntu@my-juju-vm:~$`) will run on the VM.
+
+```{dropdown} Tips for usage
+
+At any point:
+- To exit the shell, press {kbd}`Ctrl` + {kbd}`D` or type `exit`.
+- To stop the VM after exiting the VM shell, run `multipass stop my-juju-vm`.
+- To restart the VM and re-open a shell into it, type `multipass shell my-juju-vm`.
+```
+
+Congratulations! Your cloud is ready, and thanks to the `charm-dev` cloud-init, you already have:
+- MicroK8s configured and running
+- The `juju` CLI installed
+- Terraform installed
+- A MicroK8s cloud registered with Juju
+
+On your local workstation (not the VM), create a directory for your Terraform configuration and mount it to your VM:
+
+```{terminal}
+:copy:
+:user:
+:host:
+mkdir ~/terraform-juju && cd ~/terraform-juju
+multipass mount ~/terraform-juju my-juju-vm:~/terraform-juju
 ```
 
 This setup will enable you to create and edit Terraform files in your local editor while running them inside your VM.
 
-(tutorial-plan)=
-## Plan
+## Set up version control
 
-In this tutorial your goal is to set up a chat service on a cloud.
+A key benefit of infrastructure-as-code is version control. Your infrastructure definitions become code that can be tracked, reviewed, and collaborated on.
 
-First, decide which cloud (i.e., anything that provides storage, compute, and networking) you want to use. Juju supports a long list of clouds; in this tutorial we will use a low-ops, minimal production Kubernetes called 'MicroK8s'. In a terminal, open a shell into your VM and verify that you already have MicroK8s installed (`microk8s version`).
+On your local workstation, in your `terraform-juju` directory, initialize a git repository:
 
-> See more: {external+juju:ref}`Juju | Cloud <cloud>`, {external+juju:ref}`Juju | List of supported clouds <list-of-supported-clouds>`, {external+juju:ref}`Juju | The MicroK8s cloud and Juju <cloud-kubernetes-microk8s>`, {external+juju:ref}`Juju | Set things up automatically <set-things-up>`
-
-Next, decide which charms (i.e., software operators) you want to use. Charmhub provides a large collection. For this tutorial we will use `mattermost-k8s`  for the chat service,  `postgresql-k8s` for its backing database, and `self-signed-certificates` to TLS-encrypt traffic from PostgreSQL.
-
-> See more: {external+juju:ref}`Juju | Charm <charm>`, [Charmhub](https://charmhub.io/), Charmhub | [`mattermost-k8s`](https://charmhub.io/mattermost-k8s), [`postgresql-k8s`](https://charmhub.io/postgresql-k8s), [`self-signed-certificates`](https://charmhub.io/self-signed-certificates)
-
-
-(tutorial-deploy-configure-integrate)=
-## Deploy, configure, integrate
-
-You will need to install a Juju client; on the client, add your cloud and cloud credentials; on the cloud, bootstrap a controller (i.e., control plan); on the controller, add a model (i.e., canvas to deploy things on; namespace); on the model, deploy, configure, and integrate the charms that make up your chat service.
-
-the Terraform Provider for Juju is not self-sufficient -- follow the instructions for the `juju` CLI all the way up to and including the step where you create the  `34microk8s` controller. Also get the details of that controller: `juju show-controller --show-password 34microk8s`.
-
-> See more: {external+juju:ref}`Juju | Tutorial: Deploy <tutorial>`
-
-Then, on your VM, install the `terraform` CLI:
-
-```text
-ubuntu@my-juju-vm:~$ sudo snap install terraform --classic
-terraform 1.7.5 from Snapcrafters✪ installed
+```{terminal}
+:copy:
+:user:
+:host:
+git init
 ```
 
-Next, in your local `terraform-juju` directory, create three files as follows:
+As you create and modify files in this tutorial, you'll commit them to track your infrastructure's evolution.
 
-(a) a `terraform.tf`file , where you'll configure `terraform` to use the `juju` provider:
+## Set up Terraform with the Juju provider
 
-```text
+The way Terraform with the Juju provider works is: you define your desired infrastructure state in `.tf` files, the `terraform` CLI reads those files and talks to a Juju controller via the `juju` provider plugin, and the controller provisions resources and deploys applications. Your infrastructure definitions are code that can be version-controlled, reviewed, and shared with your team.
+
+Thanks to the `charm-dev` cloud-init, the `terraform` CLI is already installed in your VM. You can verify this:
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+terraform version
+```
+
+## Bootstrap a Juju controller
+
+A Juju controller is your Juju control plane -- the entity that holds the Juju API server and Juju's database. With the Terraform Provider, you can bootstrap a controller declaratively by defining it in your Terraform configuration.
+
+Thanks to the `charm-dev` cloud-init, the `juju` CLI is already installed and the MicroK8s cloud is already registered with Juju. You can verify this in your VM:
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+juju clouds --client
+```
+
+You should see `microk8s` listed. Now, view the MicroK8s credentials that you'll need for your Terraform configuration:
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+juju show-credentials microk8s --show-secrets --client
+```
+
+From the output, note the values for the client certificate, client key, server certificate, and endpoint. You'll use these in your Terraform configuration.
+
+Now, on your local workstation, in your `terraform-juju` directory, create your Terraform configuration files.
+
+First, create `terraform.tf` to configure Terraform to use the Juju provider in controller mode:
+
+```{code-block} terraform
+:caption: `terraform.tf`
+
 terraform {
   required_providers {
     juju = {
-      version = "~> 0.11.0"
+      version = "~> 1.0.0"
       source  = "juju/juju"
     }
   }
 }
+
+provider "juju" {
+  controller_mode = true
+}
 ```
 
-(b) a `ca-cert.pem` file, where you'll copy-paste the `ca_certificate` from the details of your `juju`-client-bootstrapped controller; and
+Next, create `variables.tf` to define variables for your sensitive credentials:
 
-(c) a `main.tf` file, where you'll configure the `juju` provider to point to the `juju`-client-bootstrapped controller and the `ca-cert.pem` file where you've saved it's certificate, then create resources to add a model and deploy, configure, and integrate applications:
+```{code-block} terraform
+:caption: `variables.tf`
 
-```terraform
-provider "juju" {
-   controller_addresses = "10.152.183.27:17070"
-   username = "admin"
-   password = "40ec19f8bebe353e122f7f020cdb6949"
-   ca_certificate = file("~/terraform-juju/ca-cert.pem")
+variable "k8s_endpoint" {
+  description = "MicroK8s API endpoint"
+  type        = string
 }
 
+variable "k8s_ca_cert" {
+  description = "MicroK8s CA certificate"
+  type        = string
+  sensitive   = true
+}
+
+variable "k8s_client_cert" {
+  description = "MicroK8s client certificate"
+  type        = string
+  sensitive   = true
+}
+
+variable "k8s_client_key" {
+  description = "MicroK8s client key"
+  type        = string
+  sensitive   = true
+}
+```
+
+Create `terraform.tfvars` with your actual credential values (from the `juju show-credentials` output):
+
+```{code-block} terraform
+:caption: `terraform.tfvars`
+
+k8s_endpoint    = "https://<your-microk8s-ip>:16443"
+k8s_ca_cert     = "<your-ca-certificate>"
+k8s_client_cert = "<your-client-certificate>"
+k8s_client_key  = "<your-client-key>"
+```
+
+```{important}
+**Keep credentials out of version control!** Add `terraform.tfvars` to your `.gitignore` file:
+
+```{terminal}
+:copy:
+:user:
+:host:
+echo "terraform.tfvars" >> .gitignore
+echo ".terraform*" >> .gitignore
+echo "terraform.tfstate*" >> .gitignore
+```
+```
+
+Now, create `main.tf` to define your controller:
+
+```{code-block} terraform
+:caption: `main.tf`
+
+resource "juju_controller" "microk8s" {
+  name = "my-chat-controller"
+
+  # Use the snap-installed juju binary to avoid confinement issues
+  juju_binary = "/snap/juju/current/bin/juju"
+
+  cloud = {
+    name       = "microk8s"
+    type       = "kubernetes"
+    auth_types = ["clientcertificate"]
+    endpoint   = var.k8s_endpoint
+    ca_certificates = [var.k8s_ca_cert]
+    host_cloud_region = "localhost"
+  }
+
+  cloud_credential = {
+    name      = "microk8s-cred"
+    auth_type = "clientcertificate"
+    attributes = {
+      "ClientCertificateData" = var.k8s_client_cert
+      "ClientKeyData"         = var.k8s_client_key
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      cloud.region,
+      cloud.host_cloud_region
+    ]
+  }
+}
+```
+
+Notice how this declarative definition makes your infrastructure intentions clear: you want a Juju controller named "my-chat-controller" on MicroK8s with specific credentials.
+
+Commit your infrastructure definition (excluding sensitive files):
+
+```{terminal}
+:copy:
+:user:
+:host:
+git add terraform.tf variables.tf main.tf .gitignore
+git commit -m "feat: define Juju controller infrastructure"
+```
+
+> **Infrastructure-as-code benefit**: Your controller infrastructure is now tracked in version control. You can see the history of changes, revert if needed, and share with your team for review.
+
+Now, in your VM, initialize Terraform and preview your changes:
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+cd ~/terraform-juju
+terraform init
+```
+
+This downloads the Juju provider plugin and prepares your workspace.
+
+Preview what Terraform will create:
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+terraform plan
+```
+
+This shows what Terraform will create without actually creating anything. Review the output carefully -- this is your opportunity to catch issues before they affect your infrastructure.
+
+> **Infrastructure-as-code benefit**: The plan step lets you (and your team) review changes before applying them. In a team setting, you'd commit your `.tf` changes, open a pull request, and have teammates review the plan output before merging and applying.
+
+Apply your infrastructure definition:
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+terraform apply
+```
+
+Terraform will show you the plan again and ask for confirmation. Type `yes` to proceed.
+
+The bootstrap process will take a few minutes. Once complete, your Juju controller is running on MicroK8s, and Terraform has recorded its state.
+
+Congratulations! You've bootstrapped a Juju controller as code.
+
+
+## Define your application infrastructure as code
+
+With your controller bootstrapped, now define the applications that make up your chat service. You'll deploy Mattermost for the chat service, PostgreSQL for its backing database, and self-signed certificates to TLS-encrypt traffic from PostgreSQL.
+
+First, update your Terraform configuration to switch from controller mode to regular mode. On your local workstation, in `terraform.tf`, remove the `controller_mode` setting and configure the provider to use your bootstrapped controller:
+
+```{code-block} terraform
+:caption: `terraform.tf`
+
+terraform {
+  required_providers {
+    juju = {
+      version = "~> 1.0.0"
+      source  = "juju/juju"
+    }
+  }
+}
+
+provider "juju" {
+  # The provider will automatically use the controller bootstrapped by Terraform
+  # by reading from the terraform state
+}
+```
+
+Now, update `main.tf` to add your application resources. Replace the entire contents with:
+
+```{code-block} terraform
+:caption: `main.tf`
+
+resource "juju_controller" "microk8s" {
+  name = "my-chat-controller"
+
+  juju_binary = "/snap/juju/current/bin/juju"
+
+  cloud = {
+    name       = "microk8s"
+    type       = "kubernetes"
+    auth_types = ["clientcertificate"]
+    endpoint   = var.k8s_endpoint
+    ca_certificates = [var.k8s_ca_cert]
+    host_cloud_region = "localhost"
+  }
+
+  cloud_credential = {
+    name      = "microk8s-cred"
+    auth_type = "clientcertificate"
+    attributes = {
+      "ClientCertificateData" = var.k8s_client_cert
+      "ClientKeyData"         = var.k8s_client_key
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      cloud.region,
+      cloud.host_cloud_region
+    ]
+  }
+}
+
+# Define the workspace for your applications
 resource "juju_model" "chat" {
   name = "chat"
+
+  # Ensure the controller is bootstrapped first
+  depends_on = [juju_controller.microk8s]
 }
 
+# Define the chat application
 resource "juju_application" "mattermost-k8s" {
-  model_uuid = juju_model.chat.uuid
+  model = juju_model.chat.name
 
   charm {
     name = "mattermost-k8s"
   }
-
 }
 
+# Define the database with high availability
 resource "juju_application" "postgresql-k8s" {
-
-  model_uuid = juju_model.chat.uuid
+  model = juju_model.chat.name
 
   charm {
-    name = "postgresql-k8s"
-    channel  = "14/stable"
+    name    = "postgresql-k8s"
+    channel = "14/stable"
   }
 
   trust = true
+  units = 2  # High availability configuration
 
   config = {
     profile = "testing"
-   }
-
+  }
 }
 
+# Define the TLS certificate provider
 resource "juju_application" "self-signed-certificates" {
-  model_uuid = juju_model.chat.uuid
+  model = juju_model.chat.name
 
   charm {
     name = "self-signed-certificates"
   }
-
 }
 
+# Integrate PostgreSQL with Mattermost
 resource "juju_integration" "postgresql-mattermost" {
-  model_uuid = juju_model.chat.uuid
+  model = juju_model.chat.name
 
   application {
     name     = juju_application.postgresql-k8s.name
@@ -144,13 +440,9 @@ resource "juju_integration" "postgresql-mattermost" {
   }
 
   application {
-    name     = juju_application.mattermost-k8s.name
+    name = juju_application.mattermost-k8s.name
   }
 
-  # Add any RequiresReplace schema attributes of
-  # an application in this integration to ensure
-  # it is recreated if one of the applications
-  # is Destroyed and Recreated by terraform. E.G.:
   lifecycle {
     replace_triggered_by = [
       juju_application.postgresql-k8s.name,
@@ -167,21 +459,18 @@ resource "juju_integration" "postgresql-mattermost" {
   }
 }
 
+# Integrate PostgreSQL with TLS certificates
 resource "juju_integration" "postgresql-tls" {
-  model_uuid = juju_model.chat.uuid
+  model = juju_model.chat.name
 
   application {
-    name     = juju_application.postgresql-k8s.name
+    name = juju_application.postgresql-k8s.name
   }
 
   application {
-    name     = juju_application.self-signed-certificates.name
+    name = juju_application.self-signed-certificates.name
   }
 
-  # Add any RequiresReplace schema attributes of
-  # an application in this integration to ensure
-  # it is recreated if one of the applications
-  # is Destroyed and Recreated by terraform. E.G.:
   lifecycle {
     replace_triggered_by = [
       juju_application.postgresql-k8s.name,
@@ -199,181 +488,188 @@ resource "juju_integration" "postgresql-tls" {
 }
 ```
 
-Next, in your Multipass VM, initialise your provider's configuration (`terraform init`), preview your plan (`terraform plan`), and apply your plan to your infrastructure (`terraform apply`):
+Notice how this declarative definition makes your infrastructure intentions clear: you want a chat model with Mattermost, PostgreSQL (with 2 units for high availability), TLS certificates, and specific integrations between them.
 
-```{important}
-You can always repeat all three, though technically you only need to run `terraform init` if your `terraform.tf` or the `provider` bit of your `main.tf` has changed, and you only need to run `terraform plan` if you want to preview the changes before applying them.
+Commit your application infrastructure definition:
+
+```{terminal}
+:copy:
+:user:
+:host:
+git add main.tf terraform.tf
+git commit -m "feat: define chat application infrastructure"
 ```
 
-```text
-ubuntu@my-juju-vm:~/terraform-juju$ terraform init && terraform plan && terraform apply
+> **Infrastructure-as-code benefit**: Your entire application infrastructure is now defined as code and tracked in version control. Anyone reviewing your git history can see exactly what applications are deployed, how they're configured, and how they integrate.
+
+## Deploy your application infrastructure
+
+Unlike imperative commands that execute immediately, Terraform's workflow includes a review step. You'll see what Terraform plans to do before any changes are made.
+
+In your VM, preview the changes:
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+terraform plan
 ```
 
-Finally, use the `juju` client to inspect the results:
+This shows what Terraform will create without actually creating anything. Review the output carefully -- you'll see the model, applications, and integrations that will be created.
 
-```text
-ubuntu@my-juju-vm:~/terraform-juju$ juju status --relations
+> **Infrastructure-as-code benefit**: The plan step lets you (and your team) review changes before applying them. In a team setting, you'd commit your `.tf` changes, open a pull request, and have teammates review the plan output before merging and applying.
+
+Apply your infrastructure definition:
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+terraform apply
 ```
 
-Done!
+Terraform will show you the plan again and ask for confirmation. Type `yes` to proceed.
 
-Now, from the output of `juju status`> `Unit` > `mattermost-k8s/0`, retrieve the IP address and the port and feed them to `curl` on the template below:
+Watch the deployment progress. You can use the `juju` CLI to inspect status:
 
-```text
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+juju status --relations --watch 1s
+```
+
+Things are all set when your `App Status` shows `active` and your `Unit - Workload` shows `active`.
+
+Once deployed, test your chat service. From the output of `juju status` > `Unit` > `mattermost-k8s/0`, retrieve the IP address and port, then use `curl` to test:
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
 curl <IP address>:<port>/api/v4/system/ping
 ```
 
-Sample session:
+Sample output:
 
 ```text
-ubuntu@my-juju-vm:~$ curl 10.1.170.150:8065/api/v4/system/ping
 {"ActiveSearchBackend":"database","AndroidLatestVersion":"","AndroidMinVersion":"","IosLatestVersion":"","IosMinVersion":"","status":"OK"}
 ```
 
-Congratulations, your chat service is up and running!
+Congratulations! Your chat service is up and running, and your entire infrastructure is defined as code.
 
-> See more: {external+juju:ref}`Juju | Set things up <set-things-up>`, {ref}`manage-the-terraform-provider-for-juju`, {external+juju:ref}`Juju | Manage clouds <manage-clouds>`, {external+juju:ref}`Juju | Manage credentials <manage-credentials>`, {external+juju:ref}`Juju | Manage controllers <manage-controllers>`, {external+juju:ref}`Juju | Manage models <manage-models>`, {external+juju:ref}`Juju | Manage applications <manage-applications>`
+> **Infrastructure-as-code benefit**: Terraform's state tracking means you can't accidentally create duplicate resources. It knows what exists and only makes necessary changes.
 
-(tutorial-scale)=
-## Scale
+## Manage your infrastructure
 
-A database failure can be very costly. Let's scale it!
+A key benefit of infrastructure-as-code is that the same workflow handles all changes. Let's scale your PostgreSQL database for improved availability.
 
-On your local machine, in you `main.tf` file, in the definition of the resource for `postgresql-k8s`, add a `units` block and set it to `3`:
+On your local workstation, in `main.tf`, modify the `postgresql-k8s` resource to change `units` from `2` to `3`:
 
-```terraform
-provider "juju" {
-   controller_addresses = "10.152.183.27:17070"
-   username = "admin"
-   password = "40ec19f8bebe353e122f7f020cdb6949"
-   ca_certificate = file("~/terraform-juju/ca-cert.pem")
-}
-
-resource "juju_model" "chat" {
-  name = "chat"
-}
-
-
-resource "juju_application" "mattermost-k8s" {
-  model_uuid = juju_model.chat.uuid
-
-  charm {
-    name = "mattermost-k8s"
-  }
-
-}
-
+```{code-block} terraform
+:caption: `main.tf`
 
 resource "juju_application" "postgresql-k8s" {
-
-  model_uuid = juju_model.chat.uuid
+  model = juju_model.chat.name
 
   charm {
-    name = "postgresql-k8s"
-    channel  = "14/stable"
+    name    = "postgresql-k8s"
+    channel = "14/stable"
   }
 
   trust = true
+  units = 3  # Changed from 2
 
   config = {
     profile = "testing"
-   }
-
-  units = 3
-
-}
-
-
-resource "juju_application" "self-signed-certificates" {
-  model_uuid = juju_model.chat.uuid
-
-  charm {
-    name = "self-signed-certificates"
-  }
-
-}
-
-
-resource "juju_integration" "postgresql-mattermost" {
-  model_uuid = juju_model.chat.uuid
-
-  application {
-    name     = juju_application.postgresql-k8s.name
-    endpoint = "db"
-  }
-
-  application {
-    name     = juju_application.mattermost-k8s.name
-  }
-
-  # Add any RequiresReplace schema attributes of
-  # an application in this integration to ensure
-  # it is recreated if one of the applications
-  # is Destroyed and Recreated by terraform. E.G.:
-  lifecycle {
-    replace_triggered_by = [
-      juju_application.postgresql-k8s.name,
-      juju_application.postgresql-k8s.model,
-      juju_application.postgresql-k8s.constraints,
-      juju_application.postgresql-k8s.placement,
-      juju_application.postgresql-k8s.charm.name,
-      juju_application.mattermost-k8s.name,
-      juju_application.mattermost-k8s.model,
-      juju_application.mattermost-k8s.constraints,
-      juju_application.mattermost-k8s.placement,
-      juju_application.mattermost-k8s.charm.name,
-    ]
-  }
-}
-
-
-resource "juju_integration" "postgresql-tls" {
-  model_uuid = juju_model.chat.uuid
-
-  application {
-    name     = juju_application.postgresql-k8s.name
-  }
-
-  application {
-    name     = juju_application.self-signed-certificates.name
-  }
-
-  # Add any RequiresReplace schema attributes of
-  # an application in this integration to ensure
-  # it is recreated if one of the applications
-  # is Destroyed and Recreated by terraform. E.G.:
-  lifecycle {
-    replace_triggered_by = [
-      juju_application.postgresql-k8s.name,
-      juju_application.postgresql-k8s.model,
-      juju_application.postgresql-k8s.constraints,
-      juju_application.postgresql-k8s.placement,
-      juju_application.postgresql-k8s.charm.name,
-      juju_application.self-signed-certificates.name,
-      juju_application.self-signed-certificates.model,
-      juju_application.self-signed-certificates.constraints,
-      juju_application.self-signed-certificates.placement,
-      juju_application.self-signed-certificates.charm.name,
-    ]
   }
 }
 ```
 
-Then, in your VM, use `terraform` to apply the changes and `juju` to inspect the results:
+In your VM, preview the change:
 
-```text
-ubuntu@my-juju-vm:~/terraform-juju$ terraform init && terraform plan && terraform apply
-ubuntu@my-juju-vm:~/terraform-juju$ juju status --relations
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+terraform plan
 ```
 
-> See more: {ref}`scale-an-application`
+Notice Terraform detected the difference between your desired state (3 units) and actual state (2 units), and shows it will add one unit. This is the power of declarative infrastructure -- you describe what you want, and Terraform figures out how to get there.
+
+> **Infrastructure-as-code benefit**: Terraform's state tracking prevents accidental changes. It knows the current state and only makes necessary modifications to reach your desired state.
+
+Apply the change:
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+terraform apply
+```
+
+Watch the scaling operation with `juju status --relations`.
+
+On your local workstation, commit your change:
+
+```{terminal}
+:copy:
+:user:
+:host:
+git add main.tf
+git commit -m "feat: scale postgresql to 3 units for improved availability"
+```
+
+> **Infrastructure-as-code benefit**: Your git history now shows why and when you scaled. Anyone on your team can see the evolution of your infrastructure and the reasoning behind each change (captured in commit messages).
+
+## Next steps
+
+You've experienced the core infrastructure-as-code workflow with the Terraform Provider for Juju. To build on what you've learned:
+
+- **Bootstrap with more control**: Configure controller and model settings during bootstrap. See: {ref}`configure-a-controller`
+- **Manage controllers post-bootstrap**: Configure controllers, enable high availability, or import existing controllers. See: {ref}`manage-controllers`
+- **Manage multiple environments**: Use Terraform workspaces or separate configurations to manage dev, staging, and production. See: {ref}`manage-models`
+- **Integrate with other cloud resources**: Combine the Juju provider with AWS, GCP, or Azure providers to manage applications and underlying cloud resources together in a single Terraform plan.
+- **Enable team collaboration**: Set up remote state storage and implement GitOps workflows for infrastructure changes.
+- **Explore all provider features**: The provider supports credentials, users, offers, secrets, and more. See: {ref}`reference`
 
 
 ## Tear down your test environment
 
-Follow the instructions for the `juju` CLI.
+With Terraform, tearing down your infrastructure is as simple as deploying it.
 
-> See more: {external+juju:ref}`Juju | Set things up <tear-things-down>`
+In your VM, destroy all Terraform-managed infrastructure:
 
-In addition to that, on your host machine, delete your the `terraform-juju` directory.
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+terraform destroy
+```
+
+Terraform will show you everything it will remove and ask for confirmation. Type `yes` to proceed.
+
+This removes all infrastructure Terraform created: applications, integrations, model, and controller. Notice how Terraform maintains consistency -- it knows exactly what it created from the state, so it can cleanly remove everything.
+
+Exit the VM:
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+exit
+```
+
+From your local workstation, delete the VM:
+
+```{terminal}
+:copy:
+:user:
+:host:
+multipass delete --purge my-juju-vm
+```
+
+Finally, [uninstall Multipass](https://documentation.ubuntu.com/multipass/en/latest/how-to-guides/install-multipass/#uninstall) if you no longer need it.
+
+Your local `terraform-juju` directory contains your infrastructure definitions -- keep this git repository to preserve your infrastructure history, or delete it if you're done experimenting.
 
