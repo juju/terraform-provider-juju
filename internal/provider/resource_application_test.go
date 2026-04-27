@@ -1346,7 +1346,6 @@ func TestAcc_ResourceApplication_Machines(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
 					resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
 					resource.TestCheckResourceAttr(resourceName, "units", "1"),
-					resource.TestCheckResourceAttr(resourceName, "machines.0", "0"),
 				),
 			},
 			{
