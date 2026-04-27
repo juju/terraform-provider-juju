@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/juju/version/v2"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -209,6 +210,16 @@ func testAccCheckSSHKeyAbsent(modelName string, payload string) resource.TestChe
 	return func(s *terraform.State) error {
 		if TestClient == nil {
 			return fmt.Errorf("TestClient is not configured")
+		}
+
+		conn, err := TestClient.Models.GetConnection(nil)
+		if err != nil {
+			return fmt.Errorf("error getting connection: %w", err)
+		}
+		defer func() { _ = conn.Close() }()
+		ctrlVers, _ := conn.ServerVersion()
+		if ctrlVers.Compare(version.MustParse("3.0.0")) < 0 {
+			return nil
 		}
 
 		// Retrieve the model UUID from state so we can query the key manager.
