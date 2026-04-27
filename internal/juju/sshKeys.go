@@ -9,6 +9,7 @@ import (
 
 	"github.com/juju/juju/api/client/keymanager"
 	"github.com/juju/utils/v3/ssh"
+	"github.com/juju/version/v2"
 )
 
 type sshKeysClient struct {
@@ -135,6 +136,22 @@ func (c *sshKeysClient) ReadSSHKey(input *ReadSSHKeyInput) (*ReadSSHKeyOutput, e
 }
 
 // DeleteSSHKey removes an SSH key from the specified model.
+//
+// There's nuance to key deletion depending on if the controller is running Juju 2.9 or Juju 3+.
+//
+// When Juju creates a controller model, an admin/controller SSH key
+// is automatically added to the controller model.
+//
+// In Juju 2.9, this key is ALSO added to all subsequent user created models
+// and is VISIBLE AND DELETABLE by users. But, as it is the last key,
+// it is disallowed. As such, we return early and simply warn that it is
+// the last key and cannot be deleted.
+//
+// In Juju 3+, this key is ALSO added to all subsequent user created models,
+// but it is HIDDEN and UNDELETABLE by users.
+// It is still disallowed to delete it, but the user does not have the means
+// as they cannot view it (it is marked as "internal" in the API).
+// So this issue does not exist and we can delete all keys.
 func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	c.KeyLock.Lock()
 	defer c.KeyLock.Unlock()
@@ -145,6 +162,26 @@ func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	defer func() { _ = conn.Close() }()
 
 	client := keymanager.NewClient(conn)
+
+	ctrlVers, _ := conn.ServerVersion()
+
+	if ctrlVers.Compare(version.MustParse("3.0.0")) == -1 {
+		returnedKeys, err := client.ListKeys(ssh.FullKeys, input.Username)
+		if err != nil {
+			return err
+		}
+		if len(returnedKeys) == 1 {
+			fingerprint, comment, err := ssh.KeyFingerprint(returnedKeys[0].Result[0])
+			if err != nil {
+				return fmt.Errorf("error getting fingerprint for ssh key: %w", err)
+			}
+			if input.KeyIdentifier == fingerprint || input.KeyIdentifier == comment {
+				c.Warnf(fmt.Sprintf("ssh key from user %s is the last one and will not be removed", input.KeyIdentifier))
+				return nil
+			}
+		}
+		return nil
+	}
 
 	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
 	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
