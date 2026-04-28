@@ -22,7 +22,7 @@ In this tutorial you will define and deploy a chat service (Mattermost backed by
 - Set things up: launch a Juju-ready VM using Multipass, install Terraform, and bootstrap a Juju controller.
 - See how to manage users and access control as code.
 - Deploy infrastructure and applications with Terraform configuration files.
-- Scale your deployment and clean up resources.
+- Clean up resources.
 
 ## Set things up
 
@@ -236,7 +236,7 @@ This design requires separating controller bootstrap from application deployment
 
 Now bootstrap a Juju controller. A Juju controller is your Juju control plane -- the entity that holds the Juju API server and Juju's database. With the Terraform Provider, you can bootstrap a controller by defining it in your Terraform configuration.
 
-View the MicroK8s credentials that you'll need for your Terraform configuration:
+On your VM, view the MicroK8s credentials that you'll need for your Terraform configuration:
 
 ```{terminal}
 :copy:
@@ -357,19 +357,25 @@ k8s_endpoint = "https://10.x.x.x:16443"
 The values shown above are examples only. Use your actual values from the previous commands -- the token and certificate will be much longer than shown here.
 ```
 
-Before continuing, keep credentials, connection info, and Terraform state safe and out of version control:
+Before continuing, keep credentials, connection info, and Terraform state safe and out of version control.
+
+Create `1-bootstrap/.gitignore`:
 
 ```{terminal}
 :copy:
 :user:
 :host:
 :dir: ~/terraform-juju
-cat > 1-bootstrap/.gitignore << 'EOF'
+touch 1-bootstrap/.gitignore
+```
+
+```{code-block} text
+:caption: `1-bootstrap/.gitignore`
+
 terraform.tfvars
 conn_info.json
 .terraform*
 terraform.tfstate*
-EOF
 ```
 
 Now create `1-bootstrap/main.tf` to define your controller:
@@ -459,8 +465,7 @@ Initialize the bootstrap directory:
 :copy:
 :user: ubuntu
 :host: my-juju-vm
-:dir: ~/terraform-juju
-terraform -chdir=1-bootstrap init
+terraform -chdir=terraform-juju/1-bootstrap init
 ```
 
 This downloads the Juju provider plugin and prepares your workspace.
@@ -471,8 +476,7 @@ Preview what Terraform will create:
 :copy:
 :user: ubuntu
 :host: my-juju-vm
-:dir: ~/terraform-juju
-terraform -chdir=1-bootstrap plan
+terraform -chdir=terraform-juju/1-bootstrap plan
 ```
 
 This shows what Terraform will create without actually creating anything. Review the output carefully -- you'll see the controller resource that will be created.
@@ -487,8 +491,7 @@ Apply your infrastructure definition:
 :copy:
 :user: ubuntu
 :host: my-juju-vm
-:dir: ~/terraform-juju
-terraform -chdir=1-bootstrap apply
+terraform -chdir=terraform-juju/1-bootstrap apply
 ```
 
 Terraform will show you the plan again and ask for confirmation. Type `yes` to proceed.
@@ -497,7 +500,7 @@ Terraform will show you the plan again and ask for confirmation. Type `yes` to p
 The bootstrap process typically takes 1-2 minutes, but may vary depending on your system and network speed. Terraform will show progress as it creates the controller.
 ```
 
-Once complete, your Juju controller is running on MicroK8s, and Terraform has recorded its state.
+Once complete, your Juju controller is running on MicroK8s, and Terraform has recorded its state. Terraform has also created `1-bootstrap/conn_info.json` with the controller's connection details (minified JSON on one line; to view formatted, run `cat terraform-juju/1-bootstrap/conn_info.json | jq .`).
 
 ## Handle authentication and authorization
 
@@ -507,7 +510,7 @@ While you could manage users via the `juju` CLI, the Terraform Provider lets you
 
 > See more: {ref}`Manage users <manage-users>`, {ref}`Manage access to a controller <manage-access-to-a-controller>`, {ref}`Manage access to a model <manage-access-to-a-model>`
 
-For this tutorial, we'll continue using the admin credentials created during bootstrap.
+For this tutorial, you'll use the admin user that was automatically created during bootstrap. The deployment configuration will read this user's controller login credentials from the `conn_info.json` file.
 
 ## Deploy infrastructure and applications
 
@@ -565,10 +568,14 @@ Create `2-deploy/.gitignore` to keep Terraform state out of version control:
 :user:
 :host:
 :dir: ~/terraform-juju
-cat > 2-deploy/.gitignore << 'EOF'
+touch 2-deploy/.gitignore
+```
+
+```{code-block} text
+:caption: `2-deploy/.gitignore`
+
 .terraform*
 terraform.tfstate*
-EOF
 ```
 
 Now create `2-deploy/main.tf` to define your application resources:
@@ -706,16 +713,14 @@ Now deploy your infrastructure. In your VM, initialize and preview the deploymen
 :copy:
 :user: ubuntu
 :host: my-juju-vm
-:dir: ~/terraform-juju
-terraform -chdir=2-deploy init
+terraform -chdir=terraform-juju/2-deploy init
 ```
 
 ```{terminal}
 :copy:
 :user: ubuntu
 :host: my-juju-vm
-:dir: ~/terraform-juju
-terraform -chdir=2-deploy plan
+terraform -chdir=terraform-juju/2-deploy plan
 ```
 
 This shows what Terraform will create without actually creating anything. Review the output carefully -- you'll see the model, applications, and integrations that will be created.
@@ -726,24 +731,34 @@ Apply your infrastructure definition:
 :copy:
 :user: ubuntu
 :host: my-juju-vm
-:dir: ~/terraform-juju
-terraform -chdir=2-deploy apply
+terraform -chdir=terraform-juju/2-deploy apply
 ```
 
 Terraform will show you the plan again and ask for confirmation. Type `yes` to proceed.
 
 The deployment will take a few minutes. Terraform will show you the progress as it creates each resource.
 
-Once complete, verify your applications are running:
+Once complete, verify your applications are running. Wait for all pods to be ready:
 
 ```{terminal}
 :copy:
 :user: ubuntu
 :host: my-juju-vm
-microk8s kubectl get pods -n chat
+microk8s kubectl wait --for=condition=ready pod -l operator.juju.is/name -n chat --timeout=300s
 ```
 
-Wait until all pods show `Running` status. Then test your chat service:
+The Mattermost charm needs time to complete database setup before creating its workload pod. Monitor the pods until the `mattermost-k8s-0` pod appears and shows `Running` status:
+
+```{terminal}
+:copy:
+:user: ubuntu
+:host: my-juju-vm
+watch microk8s kubectl get pods -n chat
+```
+
+Press {kbd}`Ctrl` + {kbd}`C` to exit once all pods show `Running`. This may take several minutes.
+
+Once all pods are running, get the service address:
 
 ```{terminal}
 :copy:
@@ -752,7 +767,7 @@ Wait until all pods show `Running` status. Then test your chat service:
 microk8s kubectl get svc -n chat mattermost-k8s -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}'
 ```
 
-This displays the service address. Use it to test the service (replace `<address>` with the output from above):
+Test your chat service (replace `<address>` with the output from above):
 
 ```{terminal}
 :copy:
@@ -773,77 +788,7 @@ Congratulations! Your chat service is up and running, and your entire infrastruc
 **Infrastructure-as-code benefit**: Terraform's state tracking means you can't accidentally create duplicate resources. It knows what exists and only makes necessary changes.
 ```
 
-Now let's scale your PostgreSQL database to enable high availability. On your local workstation, open `terraform-juju/2-deploy/main.tf` in your IDE and modify the `postgresql-k8s` resource to change `units` from `1` to `3`:
-
-```{code-block} terraform
-:caption: `2-deploy/main.tf` (partial)
-
-resource "juju_application" "postgresql-k8s" {
-  model_uuid = juju_model.chat.uuid
-
-  charm {
-    name    = "postgresql-k8s"
-    channel = "14/stable"
-  }
-
-  trust = true
-  units = 3  # Changed from 1 - enables high availability
-
-  config = {
-    profile = "testing"
-  }
-}
-```
-
-In your VM, preview the change:
-
-```{terminal}
-:copy:
-:user: ubuntu
-:host: my-juju-vm
-:dir: ~/terraform-juju
-terraform -chdir=2-deploy plan
-```
-
-Notice Terraform detected the difference between your desired state (3 units) and actual state (1 unit), and shows it will add two units. This is the power of declarative infrastructure -- you describe what you want, and Terraform figures out how to get there.
-
-```{tip}
-**Infrastructure-as-code benefit**: Terraform's state tracking prevents accidental changes. It knows the current state and only makes necessary modifications to reach your desired state.
-```
-
-Apply the change:
-
-```{terminal}
-:copy:
-:user: ubuntu
-:host: my-juju-vm
-:dir: ~/terraform-juju
-terraform -chdir=2-deploy apply
-```
-
-The scaling operation will complete in a few moments.
-
-Back on your local workstation, commit your change:
-
-```{terminal}
-:copy:
-:user:
-:host:
-:dir: ~/terraform-juju
-git add 2-deploy/main.tf && git commit -m "feat: scale postgresql to 3 units for high availability"
-```
-
-## Next steps
-
-You've experienced the core infrastructure-as-code workflow with the Terraform Provider for Juju. To build on what you've learned:
-
-- **Bootstrap with more control**: Configure controller and model settings during bootstrap. See: {ref}`configure-a-controller`.
-- **Manage controllers post-bootstrap**: Configure controllers, enable high availability, or import existing controllers. See: {ref}`manage-controllers`.
-- **Manage multiple environments**: Use Terraform workspaces or separate configurations to manage development, staging, and production. See: {ref}`manage-models`.
-- **Integrate with other cloud resources**: Combine the Juju provider with AWS, GCP, or Azure providers to manage applications and underlying cloud resources together in a single Terraform plan.
-- **Enable team collaboration**: Set up remote state storage and implement GitOps workflows for infrastructure changes.
-- **Explore all provider features**: The provider supports credentials, users, offers, secrets, and more. See: {ref}`reference`.
-
+To build on what you've learned: configure controller and model settings during bootstrap ({ref}`configure-a-controller`), manage controllers post-bootstrap ({ref}`manage-controllers`), use Terraform workspaces for multiple environments ({ref}`manage-models`), integrate with other cloud providers, set up remote state storage for team collaboration, and explore all provider features ({ref}`reference`).
 
 ## Tear things down
 
@@ -855,8 +800,7 @@ In your VM, destroy the application infrastructure first, then the controller:
 :copy:
 :user: ubuntu
 :host: my-juju-vm
-:dir: ~/terraform-juju
-terraform -chdir=2-deploy destroy
+terraform -chdir=terraform-juju/2-deploy destroy
 ```
 
 Terraform will show you everything it will remove and ask for confirmation. Type `yes` to proceed.
@@ -867,8 +811,7 @@ This removes the applications, integrations, and model. Now destroy the controll
 :copy:
 :user: ubuntu
 :host: my-juju-vm
-:dir: ~/terraform-juju
-terraform -chdir=1-bootstrap destroy
+terraform -chdir=terraform-juju/1-bootstrap destroy
 ```
 
 Type `yes` to confirm. This removes the Juju controller.
