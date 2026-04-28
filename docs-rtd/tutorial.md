@@ -20,6 +20,7 @@ In this tutorial you will define and deploy a chat service (Mattermost backed by
 **What you'll do:**
 
 - Set things up: launch a Juju-ready VM using Multipass, install Terraform, and bootstrap a Juju controller.
+- See how to manage users and access control as code.
 - Deploy infrastructure and applications with Terraform configuration files.
 - Scale your deployment and clean up resources.
 
@@ -513,7 +514,17 @@ Terraform will show you the plan again and ask for confirmation. Type `yes` to p
 The bootstrap process typically takes 1-2 minutes, but may vary depending on your system and network speed. Terraform will show progress as it creates the controller.
 ```
 
-Once complete, your Juju controller is running on MicroK8s, and Terraform has recorded its state. Your environment is ready!
+Once complete, your Juju controller is running on MicroK8s, and Terraform has recorded its state.
+
+## Handle authentication and authorization
+
+When you bootstrap a controller, Juju automatically creates an admin user with superuser access. This user's credentials are available in the controller outputs that you defined earlier.
+
+While you could manage users via the `juju` CLI, the Terraform Provider lets you manage users as code using `juju_user` resources. You can also manage access control for users across controllers, models, and other resources using `juju_access_*` resources.
+
+> See more: {ref}`Manage users <manage-users>`, {ref}`Manage access to a controller <manage-access-to-a-controller>`, {ref}`Manage access to a model <manage-access-to-a-model>`
+
+For this tutorial, we'll continue using the admin credentials created during bootstrap.
 
 ## Deploy infrastructure and applications
 
