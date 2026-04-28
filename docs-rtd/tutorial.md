@@ -289,6 +289,9 @@ terraform {
       version = "~> 1.4"
       source  = "juju/juju"
     }
+    local = {
+      source = "hashicorp/local"
+    }
   }
 }
 
@@ -354,7 +357,7 @@ k8s_endpoint = "https://10.x.x.x:16443"
 The values shown above are examples only. Use your actual values from the previous commands -- the token and certificate will be much longer than shown here.
 ```
 
-Before continuing, keep credentials and Terraform state safe and out of version control:
+Before continuing, keep credentials, connection info, and Terraform state safe and out of version control:
 
 ```{terminal}
 :copy:
@@ -363,6 +366,7 @@ Before continuing, keep credentials and Terraform state safe and out of version 
 :dir: ~/terraform-juju
 cat > 1-bootstrap/.gitignore << 'EOF'
 terraform.tfvars
+conn_info.json
 .terraform*
 terraform.tfstate*
 EOF
@@ -414,40 +418,19 @@ resource "juju_controller" "microk8s" {
 
 Notice how this declarative definition makes your infrastructure intentions clear: you want a Juju controller named `my-chat-controller` on MicroK8s with specific credentials.
 
-To allow the deployment configuration to connect to this controller, add outputs that expose the connection details. Create `1-bootstrap/outputs.tf`:
-
-```{terminal}
-:copy:
-:user:
-:host:
-:dir: ~/terraform-juju
-touch 1-bootstrap/outputs.tf
-```
+To allow the deployment configuration to connect to this controller, add a resource that writes the connection details to a JSON file. Add this to `1-bootstrap/main.tf`:
 
 ```{code-block} terraform
-:caption: `1-bootstrap/outputs.tf`
+:caption: `1-bootstrap/main.tf` (add after juju_controller resource)
 
-output "controller_addresses" {
-  description = "API addresses of the bootstrapped controller"
-  value       = juju_controller.microk8s.api_addresses
-}
-
-output "username" {
-  description = "Admin username for the controller"
-  value       = juju_controller.microk8s.username
-  sensitive   = true
-}
-
-output "password" {
-  description = "Admin password for the controller"
-  value       = juju_controller.microk8s.password
-  sensitive   = true
-}
-
-output "ca_cert" {
-  description = "CA certificate for the controller"
-  value       = juju_controller.microk8s.ca_cert
-  sensitive   = true
+resource "local_file" "conn_info" {
+  filename = "${path.module}/conn_info.json"
+  content = jsonencode({
+    addresses = juju_controller.microk8s.api_addresses
+    username  = juju_controller.microk8s.username
+    password  = juju_controller.microk8s.password
+    ca_cert   = juju_controller.microk8s.ca_cert
+  })
 }
 ```
 
@@ -518,7 +501,7 @@ Once complete, your Juju controller is running on MicroK8s, and Terraform has re
 
 ## Handle authentication and authorization
 
-When you bootstrap a controller, Juju automatically creates an admin user with superuser access. This user's credentials are available in the controller outputs that you defined earlier.
+When you bootstrap a controller, Juju automatically creates an admin user with superuser access. This user's credentials are available in the connection info JSON file created by the bootstrap plan.
 
 While you could manage users via the `juju` CLI, the Terraform Provider lets you manage users as code using `juju_user` resources. You can also manage access control for users across controllers, models, and other resources using `juju_access_*` resources.
 
@@ -530,7 +513,7 @@ For this tutorial, we'll continue using the admin credentials created during boo
 
 With your controller bootstrapped, you'll now define and deploy the applications that make up your chat service. You'll deploy Mattermost for the chat service, PostgreSQL for its backing database, and self-signed certificates to TLS-encrypt traffic from PostgreSQL.
 
-To connect to your bootstrapped controller, you'll need to extract its connection details from the bootstrap state. The bootstrap created a controller with specific API addresses, credentials, and a CA certificate -- you'll use these to configure the provider for application deployment.
+To connect to your bootstrapped controller, you'll read its connection details from the JSON file created by the bootstrap plan. This file contains the controller's API addresses, credentials, and CA certificate.
 
 On your local workstation, in your `terraform-juju` directory, create your application deployment configuration.
 
@@ -556,27 +539,23 @@ terraform {
   }
 }
 
-# Read connection details from the bootstrap state
-data "terraform_remote_state" "bootstrap" {
-  backend = "local"
-
-  config = {
-    path = "${path.module}/../1-bootstrap/terraform.tfstate"
-  }
+# Read connection details from the bootstrap JSON file
+locals {
+  conn_info = jsondecode(file("${path.module}/../1-bootstrap/conn_info.json"))
 }
 
 provider "juju" {
-  controller_addresses = join(",", data.terraform_remote_state.bootstrap.outputs.controller_addresses)
-  username             = data.terraform_remote_state.bootstrap.outputs.username
-  password             = data.terraform_remote_state.bootstrap.outputs.password
-  ca_certificate       = data.terraform_remote_state.bootstrap.outputs.ca_cert
+  controller_addresses = join(",", local.conn_info.addresses)
+  username             = local.conn_info.username
+  password             = local.conn_info.password
+  ca_certificate       = local.conn_info.ca_cert
 }
 ```
 
 ```{important}
 Notice there's no `controller_mode` setting (it defaults to `false`). This configuration can manage models, applications, and integrations, but cannot manage `juju_controller` resources.
 
-The provider connects to the bootstrapped controller by reading its connection details from the bootstrap state via `terraform_remote_state`. This is necessary because Terraform cannot configure a provider from resource outputs in the same plan.
+The provider connects to the bootstrapped controller by reading connection details from the JSON file created by the bootstrap plan. This separation is necessary because Terraform cannot configure a provider from resource outputs in the same plan.
 ```
 
 Create `2-deploy/.gitignore` to keep Terraform state out of version control:
