@@ -783,11 +783,7 @@ Congratulations! Your chat service is up and running, and your entire infrastruc
 **Infrastructure-as-code benefit**: Terraform's state tracking means you can't accidentally create duplicate resources. It knows what exists and only makes necessary changes.
 ```
 
-## Manage your infrastructure
-
-A key benefit of infrastructure-as-code is that the same workflow handles all changes. Let's scale your PostgreSQL database to enable high availability.
-
-On your local workstation, open `terraform-juju/2-deploy/main.tf` in your IDE and modify the `postgresql-k8s` resource to change `units` from `1` to `3`:
+Now let's scale your PostgreSQL database to enable high availability. On your local workstation, open `terraform-juju/2-deploy/main.tf` in your IDE and modify the `postgresql-k8s` resource to change `units` from `1` to `3`:
 
 ```{code-block} terraform
 :caption: `2-deploy/main.tf` (partial)
