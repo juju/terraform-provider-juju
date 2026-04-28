@@ -53,7 +53,7 @@ This step may take a few minutes to complete (e.g., 10 mins).
 
 This is because the command downloads, installs, (updates,) and configures a number of packages (including MicroK8s, the `juju` CLI, Terraform, and development tools), and the speed will be affected by network bandwidth.
 
-However, once it's done, you'll have everything you'll need -- all in a nice isolated environment that you can clean up easily.
+You'll have everything you need in an isolated environment.
 ```
 
 ```{terminal}
@@ -353,7 +353,7 @@ k8s_endpoint = "https://10.x.x.x:16443"
 The values shown above are examples only. Use your actual values from the previous commands -- the token and certificate will be much longer than shown here.
 ```
 
-Before continuing, keep credentials and Terraform state out of version control:
+Before continuing, keep credentials and Terraform state safe and out of version control:
 
 ```{terminal}
 :copy:
