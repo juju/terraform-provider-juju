@@ -19,11 +19,11 @@ In this tutorial you will define and deploy a chat service (Mattermost backed by
 
 **What you'll do:**
 
-- Set up your environment: launch a Juju-ready VM using Multipass, install Terraform, and bootstrap a Juju controller.
-- Define and deploy a chat service with Terraform configuration files.
+- Set things up: launch a Juju-ready VM using Multipass, install Terraform, and bootstrap a Juju controller.
+- Deploy infrastructure and applications with Terraform configuration files.
 - Scale your deployment and clean up resources.
 
-## Set up your environment
+## Set things up
 
 To work with the Terraform Provider for Juju, you'll need:
 - A cloud (MicroK8s for this tutorial)
@@ -515,7 +515,7 @@ The bootstrap process typically takes 1-2 minutes, but may vary depending on you
 
 Once complete, your Juju controller is running on MicroK8s, and Terraform has recorded its state. Your environment is ready!
 
-## Provision infrastructure and operate applications
+## Deploy infrastructure and applications
 
 With your controller bootstrapped, you'll now define and deploy the applications that make up your chat service. You'll deploy Mattermost for the chat service, PostgreSQL for its backing database, and self-signed certificates to TLS-encrypt traffic from PostgreSQL.
 
@@ -855,7 +855,7 @@ You've experienced the core infrastructure-as-code workflow with the Terraform P
 - **Explore all provider features**: The provider supports credentials, users, offers, secrets, and more. See: {ref}`reference`.
 
 
-## Tear down your test environment
+## Tear things down
 
 With Terraform, tearing down your infrastructure is as simple as deploying it.
 
