@@ -45,7 +45,9 @@ For **oauth2** authentication (common with Kubernetes clouds like MicroK8s):
 juju credentials <cloud-name> --show-secrets --format yaml
 ```
 
-From the output, copy the `Token` value. You'll also need the Kubernetes endpoint and CA certificate from the kubeconfig (e.g., `microk8s config`).
+From this output, copy the `Token` value.
+
+You'll also need the Kubernetes endpoint and CA certificate. Get these from the kubeconfig (e.g., run `microk8s config`).
 
 For **certificate** authentication (common with LXD):
 
@@ -53,7 +55,7 @@ For **certificate** authentication (common with LXD):
 juju show-credentials --client <cloud-name> <credential-name> --show-secrets
 ```
 
-From the output, you'll need the `client-cert`, `client-key`, and `server-cert` values.
+From this output, copy the `client-cert`, `client-key`, and `server-cert` values.
 
 Keep these credentials out of version control (for example, pass them via `TF_VAR_...` environment variables, a secrets manager, or a `.tfvars` file you do not commit).
 
