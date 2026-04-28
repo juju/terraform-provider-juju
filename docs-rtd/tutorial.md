@@ -267,9 +267,7 @@ clusters:
 
 From the output, copy the full `certificate-authority-data` value and the `server` (endpoint) URL.
 
-## Bootstrap a controller
-
-Now, on your local workstation, in your `terraform-juju` directory, create your controller bootstrap configuration.
+On your local workstation, in your `terraform-juju` directory, create your controller bootstrap configuration.
 
 First, create `1-bootstrap/terraform.tf` to configure Terraform to use the Juju provider in controller mode:
 
@@ -515,13 +513,11 @@ Terraform will show you the plan again and ask for confirmation. Type `yes` to p
 The bootstrap process typically takes 1-2 minutes, but may vary depending on your system and network speed. Terraform will show progress as it creates the controller.
 ```
 
-Once complete, your Juju controller is running on MicroK8s, and Terraform has recorded its state.
+Once complete, your Juju controller is running on MicroK8s, and Terraform has recorded its state. Your environment is ready!
 
-Your controller is now bootstrapped and ready. Next, you'll define and deploy applications.
+## Provision infrastructure and operate applications
 
-## Define your application infrastructure as code
-
-With your controller bootstrapped, now define the applications that make up your chat service in a separate configuration. You'll deploy Mattermost for the chat service, PostgreSQL for its backing database, and self-signed certificates to TLS-encrypt traffic from PostgreSQL.
+With your controller bootstrapped, you'll now define and deploy the applications that make up your chat service. You'll deploy Mattermost for the chat service, PostgreSQL for its backing database, and self-signed certificates to TLS-encrypt traffic from PostgreSQL.
 
 To connect to your bootstrapped controller, you'll need to extract its connection details from the bootstrap state. The bootstrap created a controller with specific API addresses, credentials, and a CA certificate -- you'll use these to configure the provider for application deployment.
 
@@ -714,9 +710,7 @@ On your local workstation, in your `terraform-juju` directory, commit your appli
 git add 2-deploy && git commit -m "feat: define chat application infrastructure"
 ```
 
-## Deploy your application infrastructure
-
-In your VM, initialize and preview the deployment:
+Now deploy your infrastructure. In your VM, initialize and preview the deployment:
 
 ```{terminal}
 :copy:
