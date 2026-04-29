@@ -1322,21 +1322,31 @@ func TestAcc_ResourceApplication_Machines(t *testing.T) {
 	charmName := "juju-qa-test"
 
 	resourceName := "juju_application.testapp"
-	checkResourceAttrMachines := []resource.TestCheckFunc{
-		resource.TestCheckResourceAttr(resourceName, "name", charmName),
-		resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
-		resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
-		resource.TestCheckResourceAttr(resourceName, "units", "1"),
-		resource.TestCheckResourceAttr(resourceName, "machines.0", "0"),
-	}
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
+			// Start with 2 machines
 			{
-				Config: testAccResourceApplicationBasic_Machines(modelName, charmName),
+				Config: testAccResourceApplicationBasic_Machines(modelName, charmName, 2),
 				Check: resource.ComposeTestCheckFunc(
-					checkResourceAttrMachines...),
+					resource.TestCheckResourceAttr(resourceName, "name", charmName),
+					resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
+					resource.TestCheckResourceAttr(resourceName, "units", "2"),
+					resource.TestCheckResourceAttr(resourceName, "machines.0", "0"),
+					resource.TestCheckResourceAttr(resourceName, "machines.1", "1"),
+				),
+			},
+			// Scale down to 1 machine — exercises RemoveUnitsFromMachine before machine destroy
+			{
+				Config: testAccResourceApplicationBasic_Machines(modelName, charmName, 1),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", charmName),
+					resource.TestCheckResourceAttr(resourceName, "charm.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
+					resource.TestCheckResourceAttr(resourceName, "units", "1"),
+				),
 			},
 			{
 				ImportStateVerify: true,
@@ -1347,29 +1357,29 @@ func TestAcc_ResourceApplication_Machines(t *testing.T) {
 	})
 }
 
-func testAccResourceApplicationBasic_Machines(modelName, charmName string) string {
+func testAccResourceApplicationBasic_Machines(modelName, charmName string, machineCount int) string {
 	return fmt.Sprintf(`
 		resource "juju_model" "model" {
 		  name = %q
 		}
 
 		resource "juju_machine" "machine" {
-		  name = "test machine"
+		  count      = %d
 		  model_uuid = juju_model.model.uuid
-		  base = "ubuntu@22.04"
+		  base       = "ubuntu@22.04"
 		}
 
 		resource "juju_application" "testapp" {
 		  model_uuid = juju_model.model.uuid
 
-		  machines = [juju_machine.machine.machine_id]
+		  machines = [for m in juju_machine.machine : m.machine_id]
 
 		  charm {
 			name = %q
 			base = "ubuntu@22.04"
 		  }
 		}
-		`, modelName, charmName)
+		`, modelName, machineCount, charmName)
 }
 
 func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
