@@ -152,7 +152,7 @@ func (c *sshKeysClient) ReadSSHKey(ctx context.Context, input *ReadSSHKeyInput) 
 // It is still disallowed to delete it, but the user does not have the means
 // as they cannot view it (it is marked as "internal" in the API).
 // So this issue does not exist and we can delete all keys.
-func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
+func (c *sshKeysClient) DeleteSSHKey(ctx context.Context, input *DeleteSSHKeyInput) error {
 	c.KeyLock.Lock()
 	defer c.KeyLock.Unlock()
 	conn, err := c.GetConnection(ctx, &input.ModelUUID)
@@ -169,7 +169,7 @@ func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	}
 
 	// Juju 4 allows the deletion of the final key per model.
-	if ctrlvers.Major <= 3 {
+	if ctrlvers.Major < 3 {
 		// NOTE: Unfortunately Juju will return an error if we try to
 		// remove the last ssh key from the controller. This is something
 		// that impacts the current Juju logic. As a temporal workaround

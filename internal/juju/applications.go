@@ -1243,14 +1243,14 @@ type RemoveUnitsFromMachineInput struct {
 // This should be called before destroying a machine to ensure Juju can
 // cleanly remove it (Juju rejects machine destruction while units remain).
 func (c applicationsClient) RemoveUnitsFromMachine(ctx context.Context, input *RemoveUnitsFromMachineInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = conn.Close() }()
 
 	clientAPIClient := c.getClientAPIClient(conn)
-	status, err := clientAPIClient.Status(nil)
+	status, err := clientAPIClient.Status(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -1269,7 +1269,7 @@ func (c applicationsClient) RemoveUnitsFromMachine(ctx context.Context, input *R
 	}
 
 	applicationAPIClient := c.getApplicationAPIClient(conn)
-	_, err = applicationAPIClient.DestroyUnits(apiapplication.DestroyUnitsParams{
+	_, err = applicationAPIClient.DestroyUnits(ctx, apiapplication.DestroyUnitsParams{
 		Units:          unitsToDestroy,
 		DestroyStorage: true,
 	})

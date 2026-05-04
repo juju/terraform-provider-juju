@@ -624,9 +624,7 @@ func (c *MockConnectionIPAddrCall) DoAndReturn(f func() string) *MockConnectionI
 
 // IsBroken mocks base method.
 func (m *MockConnection) IsBroken(ctx context.Context) bool {
-func (m *MockConnection) IsBroken(ctx context.Context) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsBroken", ctx)
 	ret := m.ctrl.Call(m, "IsBroken", ctx)
 	ret0, _ := ret[0].(bool)
 	return ret0
@@ -634,9 +632,7 @@ func (m *MockConnection) IsBroken(ctx context.Context) bool {
 
 // IsBroken indicates an expected call of IsBroken.
 func (mr *MockConnectionMockRecorder) IsBroken(ctx any) *MockConnectionIsBrokenCall {
-func (mr *MockConnectionMockRecorder) IsBroken(ctx any) *MockConnectionIsBrokenCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsBroken", reflect.TypeOf((*MockConnection)(nil).IsBroken), ctx)
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsBroken", reflect.TypeOf((*MockConnection)(nil).IsBroken), ctx)
 	return &MockConnectionIsBrokenCall{Call: call}
 }
@@ -654,13 +650,11 @@ func (c *MockConnectionIsBrokenCall) Return(arg0 bool) *MockConnectionIsBrokenCa
 
 // Do rewrite *gomock.Call.Do
 func (c *MockConnectionIsBrokenCall) Do(f func(context.Context) bool) *MockConnectionIsBrokenCall {
-func (c *MockConnectionIsBrokenCall) Do(f func(context.Context) bool) *MockConnectionIsBrokenCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockConnectionIsBrokenCall) DoAndReturn(f func(context.Context) bool) *MockConnectionIsBrokenCall {
 func (c *MockConnectionIsBrokenCall) DoAndReturn(f func(context.Context) bool) *MockConnectionIsBrokenCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c

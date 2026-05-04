@@ -480,8 +480,8 @@ func (c *cloudsClient) ReadCloud(ctx context.Context, input ReadCloudInput) (*Re
 }
 
 // ListClouds returns the names of all clouds available on the controller.
-func (c *cloudsClient) ListClouds() ([]string, error) {
-	conn, err := c.GetConnection(nil)
+func (c *cloudsClient) ListClouds(ctx context.Context) ([]string, error) {
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -489,7 +489,7 @@ func (c *cloudsClient) ListClouds() ([]string, error) {
 
 	cloudClient := c.getCloudAPIClient(conn)
 
-	jjClouds, err := cloudClient.Clouds()
+	jjClouds, err := cloudClient.Clouds(ctx)
 	if err != nil {
 		return nil, errors.Annotate(err, "getting clouds")
 	}
