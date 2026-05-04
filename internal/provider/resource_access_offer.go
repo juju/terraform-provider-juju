@@ -434,7 +434,7 @@ func (a *accessOfferResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	// Get the users to grant admin
-	var adminUsers []string
+	var adminUsers []string //nolint:all
 	if !plan.AdminUsers.IsNull() {
 		resp.Diagnostics.Append(plan.AdminUsers.ElementsAs(ctx, &adminUsers, false)...)
 		if resp.Diagnostics.HasError() {

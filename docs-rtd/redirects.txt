@@ -1,3 +1,4 @@
 # <old URL> <new URL>
 
+contributing index
 howto/manage-terraform-provider-juju howto/manage-the-terraform-provider-for-juju

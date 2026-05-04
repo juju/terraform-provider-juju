@@ -136,7 +136,23 @@ func (c *sshKeysClient) ReadSSHKey(ctx context.Context, input *ReadSSHKeyInput) 
 }
 
 // DeleteSSHKey removes an SSH key from the specified model.
-func (c *sshKeysClient) DeleteSSHKey(ctx context.Context, input *DeleteSSHKeyInput) error {
+//
+// There's nuance to key deletion depending on if the controller is running Juju 2.9 or Juju 3+.
+//
+// When Juju creates a controller model, an admin/controller SSH key
+// is automatically added to the controller model.
+//
+// In Juju 2.9, this key is ALSO added to all subsequent user created models
+// and is VISIBLE AND DELETABLE by users. But, as it is the last key,
+// it is disallowed. As such, we return early and simply warn that it is
+// the last key and cannot be deleted.
+//
+// In Juju 3+, this key is ALSO added to all subsequent user created models,
+// but it is HIDDEN and UNDELETABLE by users.
+// It is still disallowed to delete it, but the user does not have the means
+// as they cannot view it (it is marked as "internal" in the API).
+// So this issue does not exist and we can delete all keys.
+func (c *sshKeysClient) DeleteSSHKey(input *DeleteSSHKeyInput) error {
 	c.KeyLock.Lock()
 	defer c.KeyLock.Unlock()
 	conn, err := c.GetConnection(ctx, &input.ModelUUID)
