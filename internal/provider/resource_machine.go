@@ -598,6 +598,14 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 		r.trace(fmt.Sprintf("delete machine resource %q", machineID))
 	}()
 
+	if err := r.client.Applications.RemoveUnitsFromMachine(ctx, &juju.RemoveUnitsFromMachineInput{
+		ModelUUID: modelUUID,
+		MachineID: machineID,
+	}); err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to remove units from machine %q before deletion, got error: %s", machineID, err))
+		return
+	}
+
 	if err := r.client.Machines.DestroyMachine(&juju.DestroyMachineInput{
 		ModelUUID: modelUUID,
 		ID:        machineID,

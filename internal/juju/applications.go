@@ -1539,7 +1539,9 @@ func (c applicationsClient) removeUnits(input *UpdateApplicationInput, client Ap
 		for _, machine := range input.RemoveMachines {
 			unitName, ok := machineUnits[machine]
 			if !ok {
-				return fmt.Errorf("no machines deployed on machine: %v", machine)
+				// When a machine is removed, all the units running on it are removed as well.
+				// So if we don't find any unit for a machine, we can safely continue.
+				continue
 			}
 			unitsToDestroy = append(unitsToDestroy, unitName)
 		}
@@ -1552,6 +1554,49 @@ func (c applicationsClient) removeUnits(input *UpdateApplicationInput, client Ap
 		}
 	}
 	return nil
+}
+
+// RemoveUnitsFromMachineInput contains the parameters for removing units from a machine.
+type RemoveUnitsFromMachineInput struct {
+	ModelUUID string
+	MachineID string
+}
+
+// RemoveUnitsFromMachine destroys all units running on the given machine.
+// This should be called before destroying a machine to ensure Juju can
+// cleanly remove it (Juju rejects machine destruction while units remain).
+func (c applicationsClient) RemoveUnitsFromMachine(ctx context.Context, input *RemoveUnitsFromMachineInput) error {
+	conn, err := c.GetConnection(&input.ModelUUID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	clientAPIClient := c.getClientAPIClient(conn)
+	status, err := clientAPIClient.Status(nil)
+	if err != nil {
+		return err
+	}
+
+	var unitsToDestroy []string
+	for _, appStatus := range status.Applications {
+		for unitName, unitStatus := range appStatus.Units {
+			if unitStatus.Machine == input.MachineID {
+				unitsToDestroy = append(unitsToDestroy, unitName)
+			}
+		}
+	}
+
+	if len(unitsToDestroy) == 0 {
+		return nil
+	}
+
+	applicationAPIClient := c.getApplicationAPIClient(conn)
+	_, err = applicationAPIClient.DestroyUnits(apiapplication.DestroyUnitsParams{
+		Units:          unitsToDestroy,
+		DestroyStorage: true,
+	})
+	return err
 }
 
 // UpdateCharmAndResources is a helper function to update the charm and resources

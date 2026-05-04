@@ -189,7 +189,7 @@ func newSSHKeyID(modelUUID string, keyIdentifier string) string {
 // Keys can be imported with the name of the model and the identifier of the key
 // ssh_key:<modelUUID>:<ssh-key-identifier>
 // the key identifier is currently based on the comment section of the ssh key
-// (e.g. user@hostname) (TODO: issue #267)
+// (e.g. user@hostname)
 func retrieveModelKeyNameFromID(id string, d *diag.Diagnostics) (string, string) {
 	tokens := strings.SplitN(id, ":", 3)
 	//If importing with an incorrect ID we need to catch and provide a user-friendly error
