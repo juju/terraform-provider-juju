@@ -37,15 +37,58 @@ This enables bootstrapping and restricts resource creation to controllers only.
 
 > See more: {ref}`Set up the provider in controller mode (bootstrapping) <set-up-the-terraform-provider-for-juju>`
 
-2. Gather the necessary cloud credentials for your target cloud (e.g., LXD, AWS, Kubernetes).
+2. Gather the necessary cloud credentials for your target cloud. The required credentials depend on the cloud type and authentication method:
+
+For **oauth2** authentication (common with Kubernetes clouds like MicroK8s):
 
 ```bash
-juju show-credentials --client localhost localhost --show-secrets
+juju credentials <cloud-name> --show-secrets --format yaml
 ```
 
-From the output, you will need the values `client-cert`, `client-key`, and `server-cert`. Keep them out of version control (for example, pass them via `TF_VAR_...` environment variables, a secrets manager, or a `.tfvars` file you do not commit).
+From this output, copy the `Token` value.
 
-3. Create a `juju_controller` resource with your controller name, cloud configuration, and credentials. You can also include `controller_config` and `controller_model_config` to configure the controller during bootstrap. For example, for a LXD cloud:
+You'll also need the Kubernetes endpoint and CA certificate. Get these from the kubeconfig (e.g., run `microk8s config`).
+
+For **certificate** authentication (common with LXD):
+
+```bash
+juju show-credentials --client <cloud-name> <credential-name> --show-secrets
+```
+
+From this output, copy the `client-cert`, `client-key`, and `server-cert` values.
+
+Keep these credentials out of version control (for example, pass them via `TF_VAR_...` environment variables, a secrets manager, or a `.tfvars` file you do not commit).
+
+3. Create a `juju_controller` resource with your controller name, cloud configuration, and credentials. You can also include `controller_config` and `controller_model_config` to configure the controller during bootstrap.
+
+**Example for Kubernetes with oauth2:**
+
+```{code-block} terraform
+:caption: `main.tf`
+
+resource "juju_controller" "microk8s" {
+  name = "my-k8s-controller"
+  juju_binary = "/snap/juju/current/bin/juju"
+
+  cloud = {
+    name       = "microk8s"
+    type       = "kubernetes"
+    auth_types = ["oauth2"]
+    endpoint   = var.k8s_endpoint
+    ca_certificates = [var.k8s_ca_cert]
+  }
+
+  cloud_credential = {
+    name      = "microk8s-cred"
+    auth_type = "oauth2"
+    attributes = {
+      "Token" = var.k8s_token
+    }
+  }
+}
+```
+
+**Example for LXD with certificate auth:**
 
 ```{code-block} terraform
 :caption: `main.tf`
@@ -71,13 +114,20 @@ resource "juju_controller" "this" {
       "server-cert" = var.lxd_server_cert
     }
   }
+}
+```
 
-  # Bootstrap is a good time to set configurations, constraints, etc.
+You can also configure the controller and controller model during bootstrap:
 
-  # Settings here map to flags/config used by `juju controller-config`.
+```{code-block} terraform
+:caption: `main.tf`
+
+resource "juju_controller" "this" {
+  # ... cloud and credential configuration ...
+
   controller_config = {
-    "audit-log-max-backups"     = "10"
-    "query-tracing-enabled"     = "true"
+    "audit-log-max-backups"  = "10"
+    "query-tracing-enabled"  = "true"
   }
 
   # Settings here map to flags/config used by `juju model-config`.
@@ -86,6 +136,8 @@ resource "juju_controller" "this" {
   }
 }
 ```
+
+The cloud type, auth method, and required attributes will vary based on your cloud provider. See {external+juju:doc}`Juju | Clouds <clouds>` for cloud-specific requirements.
 
 After `terraform apply`, the resource will expose useful read-only attributes such as the controller `api_addresses`, `ca_cert`, `username`, and `password`.
 

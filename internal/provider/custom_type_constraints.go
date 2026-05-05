@@ -81,11 +81,27 @@ func (t CustomConstraintsType) ValueType(ctx context.Context) attr.Value {
 
 var _ basetypes.StringValuable = CustomConstraintsValue{}
 
+// NewNullCustomConstraintsValue creates a null CustomConstraintsValue.
+func NewNullCustomConstraintsValue() CustomConstraintsValue {
+	return CustomConstraintsValue{
+		StringValue: basetypes.NewStringNull(),
+	}
+}
+
 // NewCustomConstraintsValue creates a new CustomConstraintsValue from a string.
 func NewCustomConstraintsValue(in string) CustomConstraintsValue {
 	return CustomConstraintsValue{
 		StringValue: basetypes.StringValue(types.StringValue(in)),
 	}
+}
+
+// NewNormalizedCustomConstraintsValue creates a CustomConstraintsValue and
+// normalizes an empty string to null.
+func NewNormalizedCustomConstraintsValue(in string) CustomConstraintsValue {
+	if in == "" {
+		return NewNullCustomConstraintsValue()
+	}
+	return NewCustomConstraintsValue(in)
 }
 
 // CustomConstraintsValue is a custom value type that represents a string

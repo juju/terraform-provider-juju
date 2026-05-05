@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/boolvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -27,6 +26,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
+	"github.com/juju/juju/api"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -253,11 +253,6 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 			ControllerMode: schema.BoolAttribute{
 				Description: "If set to true, the provider will only allow managing `juju_controller` resources.",
 				Optional:    true,
-				Validators: []validator.Bool{
-					boolvalidator.ConflictsWith(
-						path.Expressions{path.MatchRoot(JujuController)}...,
-					),
-				},
 			},
 			JujuController: schema.StringAttribute{
 				Description: fmt.Sprintf("This is the controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `%s` environment variable.", JujuControllerEnvKey),
@@ -657,6 +652,11 @@ func checkClientErr(err error, config juju.ControllerConfiguration) diag.Diagnos
 	if errors.As(err, &netOpError) {
 		errDetail = "Connection error, please check the controller_addresses property set on the provider"
 		diags.AddError(netOpError.Error(), errDetail)
+		return diags
+	}
+	if errors.Is(err, api.ConnectionOpenTimedOut) {
+		errDetail = "Connection error, please check the controller_addresses property set on the provider"
+		diags.AddError(err.Error(), errDetail)
 		return diags
 	}
 	diags.AddError("Client Error", err.Error())

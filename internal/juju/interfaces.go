@@ -156,6 +156,7 @@ type JaasAPIClient interface {
 type CloudAPIClient interface {
 	AddCloud(ctx context.Context, cloud jujucloud.Cloud, force bool) error
 	Cloud(ctx context.Context, tag names.CloudTag) (jujucloud.Cloud, error)
+	Clouds(ctx context.Context) (map[names.CloudTag]jujucloud.Cloud, error)
 	UpdateCloud(ctx context.Context, cloud jujucloud.Cloud) error
 	RemoveCloud(ctx context.Context, cloud string) error
 	AddCredential(ctx context.Context, cloud string, credential jujucloud.Credential) error
