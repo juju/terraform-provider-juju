@@ -1,3 +1,26 @@
+# 1.5.1
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.21 release.
+
+BUG FIXES
+
+* Fix `juju_machine` resource to remove units when a machine is removed by @SimoneDutto in [#1198](https://github.com/juju/terraform-provider-juju/pull/1198).
+
+DOCUMENTATION
+
+* Update tutorial to better reflect Terraform nature by @tmihoc in [#1199](https://github.com/juju/terraform-provider-juju/pull/1199).
+
+CI & MAINTENANCE
+
+* Remove resolved todo by @kian99 in [#1202](https://github.com/juju/terraform-provider-juju/pull/1202).
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v1.5.0...v1.5.1
+
 # 1.5.0
 
 NOTES:
