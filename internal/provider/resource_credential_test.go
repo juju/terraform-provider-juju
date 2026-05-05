@@ -54,6 +54,9 @@ func TestAcc_ResourceCredential(t *testing.T) {
 }
 
 func TestAcc_ResourceCredential_UpgradeProvider(t *testing.T) {
+	// This skip is temporary until we have a stable version of the provider that supports
+	// Juju 4.0.0 and above, at which point we can re-enable it.
+	SkipAgainstJuju4(t)
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}

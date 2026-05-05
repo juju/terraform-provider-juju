@@ -150,49 +150,10 @@ func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceIntegration_UpgradeV0ToV1(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-	modelName := acctest.RandomWithPrefix("tf-test-integration")
-	idCheck := regexp.MustCompile(fmt.Sprintf(".+:%v:%v", "one:source", "two:sink"))
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		CheckDestroy: testAccCheckIntegrationDestroy,
-		Steps: []resource.TestStep{
-			{
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						VersionConstraint: TestProviderPreV1Version,
-						Source:            "juju/juju",
-					},
-				},
-				Config: testAccResourceIntegrationV0(modelName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_integration.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_integration.this", "id", fmt.Sprintf("%v:%v:%v", modelName, "one:source", "two:sink")),
-					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "one", "endpoint": "source"}),
-				),
-			},
-			{
-				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceIntegration(modelName),
-				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue("juju_integration.this", tfjsonpath.New("id"), knownvalue.StringRegexp(idCheck)),
-				},
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_integration.this", "model_uuid"),
-					resource.TestCheckResourceAttr("juju_integration.this", "application.#", "2"),
-					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.this", "application.*", map[string]string{"name": "one", "endpoint": "source"}),
-				),
-			},
-		},
-	})
-}
-
 func TestAcc_ResourceIntegration_UpgradeProvider(t *testing.T) {
+	// This skip is temporary until we have a stable version of the provider that supports
+	// Juju 4.0.0 and above, at which point we can re-enable it.
+	SkipAgainstJuju4(t)
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -324,48 +285,6 @@ resource "juju_integration" "this" {
 `, modelName)
 }
 
-func testAccResourceIntegrationV0(modelName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "this" {
-	name = %q
-}
-
-resource "juju_application" "one" {
-	model = juju_model.this.name
-	name  = "one" 
-	
-	charm {
-		name = "juju-qa-dummy-sink"
-		base = "ubuntu@22.04"
-	}
-}
-
-resource "juju_application" "two" {
-	model = juju_model.this.name
-	name  = "two"
-
-	charm {
-		name = "juju-qa-dummy-source"
-		base = "ubuntu@22.04"
-	}
-}
-
-resource "juju_integration" "this" {
-	model = juju_model.this.name
-
-	application {
-		name     = juju_application.one.name
-		endpoint = "source"
-	}
-
-	application {
-		name = juju_application.two.name
-		endpoint = "sink"
-	}
-}
-`, modelName)
-}
-
 func testUpdateIntegrationToAppWithSameInterface(modelName string, relateToNewApp bool) string {
 	appToRelate := "two"
 	if relateToNewApp {
@@ -478,6 +397,7 @@ resource "juju_integration" "a" {
 }
 
 func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
+	SkipAgainstJuju4WithReason(t, "See https://github.com/juju/juju/issues/22213")
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}

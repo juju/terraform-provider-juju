@@ -54,7 +54,7 @@ func (c *EnableHAClient) EnableHA(ctx context.Context, input EnableHAInput) erro
 		return fmt.Errorf("failed to create connector: %w", err)
 	}
 
-	conn, err := connr.Connect()
+	conn, err := connr.Connect(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to connect to controller: %w", err)
 	}
@@ -70,10 +70,8 @@ func (c *EnableHAClient) EnableHA(ctx context.Context, input EnableHAInput) erro
 			return fmt.Errorf("failed to parse constraints %q: %w", input.Constraints, err)
 		}
 	}
-
-	if _, err = haClient.EnableHA(input.Units, cons, input.To); err != nil {
+	if _, err = haClient.EnableHA(ctx, input.Units, cons, input.To); err != nil {
 		return fmt.Errorf("failed to enable HA: %w", err)
 	}
-
 	return nil
 }

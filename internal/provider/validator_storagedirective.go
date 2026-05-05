@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
-	jujustorage "github.com/juju/juju/storage"
+	jujustorage "github.com/juju/juju/core/storage"
 )
 
 type stringIsStorageDirectiveValidator struct{}
@@ -47,7 +47,7 @@ func (v stringIsStorageDirectiveValidator) ValidateMap(ctx context.Context, req 
 	}
 
 	for label, directive := range storageDirectives {
-		_, err := jujustorage.ParseConstraints(directive)
+		_, err := jujustorage.ParseDirective(directive)
 		if err != nil {
 			resp.Diagnostics.AddAttributeError(
 				req.Path,

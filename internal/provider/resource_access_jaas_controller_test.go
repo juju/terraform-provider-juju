@@ -26,6 +26,8 @@ import (
 // resource_access_jaas_model_test.go
 
 func TestAcc_ResourceJaasAccessController(t *testing.T) {
+	ctx := t.Context()
+
 	OnlyTestAgainstJAAS(t)
 	// Resource names
 	controllerAccessResourceName := "juju_jaas_access_controller.test"
@@ -58,10 +60,10 @@ func TestAcc_ResourceJaasAccessController(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
-			testAccCheckJaasResourceAccess(accessSuccess, &userTag, &controllerTag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, &controllerTag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, roleCheck.tag, &controllerTag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, &controllerTag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTag, &controllerTag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, groupCheck.tag, &controllerTag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, roleCheck.tag, &controllerTag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, &controllerTag, false),
 		),
 		Steps: []resource.TestStep{
 			{
@@ -73,10 +75,10 @@ func TestAcc_ResourceJaasAccessController(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(groupCheck),
 					testAccCheckAttributeNotEmpty(roleCheck),
-					testAccCheckJaasResourceAccess(accessSuccess, &userTag, &controllerTag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, &controllerTag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, &controllerTag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, roleCheck.tag, &controllerTag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTag, &controllerTag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, groupCheck.tag, &controllerTag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, &controllerTag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, roleCheck.tag, &controllerTag, true),
 					resource.TestCheckResourceAttr(controllerAccessResourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(controllerAccessResourceName, "users.*", user),
 					resource.TestCheckResourceAttr(controllerAccessResourceName, "users.#", "1"),

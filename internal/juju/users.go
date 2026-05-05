@@ -4,11 +4,12 @@
 package juju
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/juju/juju/api/client/usermanager"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/names/v5"
+	"github.com/juju/names/v6"
 )
 
 type usersClient struct {
@@ -64,8 +65,8 @@ func newUsersClient(sc SharedClient) *usersClient {
 }
 
 // CreateUser creates a new user.
-func (c *usersClient) CreateUser(input CreateUserInput) (*CreateUserResponse, error) {
-	conn, err := c.GetConnection(nil)
+func (c *usersClient) CreateUser(ctx context.Context, input CreateUserInput) (*CreateUserResponse, error) {
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +74,7 @@ func (c *usersClient) CreateUser(input CreateUserInput) (*CreateUserResponse, er
 
 	client := usermanager.NewClient(conn)
 
-	userTag, userSecret, err := client.AddUser(input.Name, input.DisplayName, input.Password)
+	userTag, userSecret, err := client.AddUser(ctx, input.Name, input.DisplayName, input.Password)
 	if err != nil {
 		return nil, err
 	}
@@ -82,8 +83,8 @@ func (c *usersClient) CreateUser(input CreateUserInput) (*CreateUserResponse, er
 }
 
 // ReadUser retrieves details for the named user.
-func (c *usersClient) ReadUser(name string) (*ReadUserResponse, error) {
-	usermanagerConn, err := c.GetConnection(nil)
+func (c *usersClient) ReadUser(ctx context.Context, name string) (*ReadUserResponse, error) {
+	usermanagerConn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func (c *usersClient) ReadUser(name string) (*ReadUserResponse, error) {
 
 	usermanagerClient := usermanager.NewClient(usermanagerConn)
 
-	users, err := usermanagerClient.UserInfo([]string{name}, false) //don't list disabled users
+	users, err := usermanagerClient.UserInfo(ctx, []string{name}, usermanager.IncludeDisabled(false)) //don't list disabled users
 	if err != nil {
 		return nil, err
 	}
@@ -111,15 +112,15 @@ func (c *usersClient) ReadUser(name string) (*ReadUserResponse, error) {
 }
 
 // ModelUserInfo lists users and access for the specified model.
-func (c *usersClient) ModelUserInfo(modelUUID string) (*ReadModelUserResponse, error) {
-	usermanagerConn, err := c.GetConnection(nil)
+func (c *usersClient) ModelUserInfo(ctx context.Context, modelUUID string) (*ReadModelUserResponse, error) {
+	usermanagerConn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = usermanagerConn.Close() }()
 	usermanagerClient := usermanager.NewClient(usermanagerConn)
 
-	users, err := usermanagerClient.ModelUserInfo(modelUUID)
+	users, err := usermanagerClient.ModelUserInfo(ctx, modelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -134,8 +135,8 @@ func (c *usersClient) ModelUserInfo(modelUUID string) (*ReadModelUserResponse, e
 }
 
 // UpdateUser updates user fields such as password.
-func (c *usersClient) UpdateUser(input UpdateUserInput) error {
-	conn, err := c.GetConnection(nil)
+func (c *usersClient) UpdateUser(ctx context.Context, input UpdateUserInput) error {
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -144,7 +145,7 @@ func (c *usersClient) UpdateUser(input UpdateUserInput) error {
 	client := usermanager.NewClient(conn)
 
 	if input.Password != "" {
-		err = client.SetPassword(input.Name, input.Password)
+		err = client.SetPassword(ctx, input.Name, input.Password)
 		if err != nil {
 			return err
 		}
@@ -154,8 +155,8 @@ func (c *usersClient) UpdateUser(input UpdateUserInput) error {
 }
 
 // DestroyUser removes a user.
-func (c *usersClient) DestroyUser(input DestroyUserInput) error {
-	conn, err := c.GetConnection(nil)
+func (c *usersClient) DestroyUser(ctx context.Context, input DestroyUserInput) error {
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -163,7 +164,7 @@ func (c *usersClient) DestroyUser(input DestroyUserInput) error {
 
 	client := usermanager.NewClient(conn)
 
-	err = client.RemoveUser(input.Name)
+	err = client.RemoveUser(ctx, input.Name)
 	if err != nil {
 		return err
 	}

@@ -99,7 +99,7 @@ func (r *secretLister) List(ctx context.Context, req list.ListRequest, stream *l
 		secretName = &value
 	}
 
-	secrets, err := r.client.Secrets.ListSecrets(&juju.ListSecretsInput{
+	secrets, err := r.client.Secrets.ListSecrets(ctx, &juju.ListSecretsInput{
 		ModelUUID: modelUUID,
 		Name:      secretName,
 	})

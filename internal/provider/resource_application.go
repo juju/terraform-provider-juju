@@ -30,7 +30,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
 	"github.com/juju/juju/core/constraints"
-	jujustorage "github.com/juju/juju/storage"
+	jujustorage "github.com/juju/juju/core/storage"
 	"github.com/juju/names/v5"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -87,7 +87,6 @@ Notes:
 var _ resource.Resource = &applicationResource{}
 var _ resource.ResourceWithConfigure = &applicationResource{}
 var _ resource.ResourceWithImportState = &applicationResource{}
-var _ resource.ResourceWithUpgradeState = &applicationResource{}
 var _ resource.ResourceWithIdentity = &applicationResource{}
 
 // NewApplicationResource returns a new instance of the application resource responsible
@@ -126,15 +125,6 @@ type applicationResourceModel struct {
 	UnitCount         types.Int64            `tfsdk:"units"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
-}
-
-// applicationResourceModelV0 describes the application data model.
-// tfsdk must match user resource schema attribute names.
-type applicationResourceModelV0 struct {
-	applicationResourceModel
-	ModelName types.String `tfsdk:"model"`
-	Placement types.String `tfsdk:"placement"`
-	Principal types.Bool   `tfsdk:"principal"`
 }
 
 // applicationResourceModelV1 describes the application data model.
@@ -614,16 +604,16 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	// Parse storage
-	var storageConstraints map[string]jujustorage.Constraints
+	var storageConstraints map[string]jujustorage.Directive
 	if !plan.StorageDirectives.IsUnknown() {
 		storageDirectives := make(map[string]string)
 		resp.Diagnostics.Append(plan.StorageDirectives.ElementsAs(ctx, &storageDirectives, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		storageConstraints = make(map[string]jujustorage.Constraints, len(storageDirectives))
+		storageConstraints = make(map[string]jujustorage.Directive, len(storageDirectives))
 		for k, v := range storageDirectives {
-			result, err := jujustorage.ParseConstraints(v)
+			result, err := jujustorage.ParseDirective(v)
 			if err != nil {
 				resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse storage directives, got error: %s", err))
 				return
@@ -861,7 +851,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	response, err := r.client.Applications.ReadApplication(&juju.ReadApplicationInput{
+	response, err := r.client.Applications.ReadApplication(ctx, &juju.ReadApplicationInput{
 		ModelUUID: modelUUID,
 		AppName:   appName,
 	})
@@ -874,7 +864,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 	r.trace("read application", map[string]interface{}{"resource": appName, "response": response})
 
-	modelType, err := r.client.Applications.ModelType(modelUUID)
+	modelType, err := r.client.Applications.ModelType(ctx, modelUUID)
 	if err != nil {
 		resp.Diagnostics.Append(handleApplicationNotFoundError(ctx, err, &resp.State)...)
 		return
@@ -1075,9 +1065,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 
 	if !plan.UnitCount.Equal(state.UnitCount) && (plan.Machines.IsNull() || plan.Machines.IsUnknown()) {
 		updateApplicationInput.Units = intPtr(plan.UnitCount)
-
-		// TODO (simonedutto): add assertion that the application has the
-		// desired number of units
+		asserts = append(asserts, assertEqualsUnitCount(int(plan.UnitCount.ValueInt64())))
 	}
 
 	if !plan.Trust.Equal(state.Trust) {
@@ -1253,10 +1241,10 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		updateApplicationInput.StorageConstraints = directives
+		updateApplicationInput.StorageDirectives = directives
 	}
 
-	if err := r.client.Applications.UpdateApplication(&updateApplicationInput); err != nil {
+	if err := r.client.Applications.UpdateApplication(ctx, &updateApplicationInput); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update application resource, got error: %s", err))
 		return
 	}
@@ -1336,9 +1324,9 @@ func (r *applicationResource) updateStorage(
 	ctx context.Context,
 	plan applicationResourceModelV1,
 	state applicationResourceModelV1,
-) (map[string]jujustorage.Constraints, diag.Diagnostics) {
+) (map[string]jujustorage.Directive, diag.Diagnostics) {
 	diagnostics := diag.Diagnostics{}
-	var updatedStorageDirectivesMap map[string]jujustorage.Constraints
+	var updatedStorageDirectivesMap map[string]jujustorage.Directive
 
 	var planStorageDirectives, stateStorageDirectives map[string]string
 	diagnostics.Append(plan.StorageDirectives.ElementsAs(ctx, &planStorageDirectives, false)...)
@@ -1351,10 +1339,10 @@ func (r *applicationResource) updateStorage(
 	}
 
 	// Create a map of updated storage directives that are in the plan but not in the state
-	updatedStorageDirectivesMap = make(map[string]jujustorage.Constraints)
+	updatedStorageDirectivesMap = make(map[string]jujustorage.Directive)
 	for label, constraintString := range planStorageDirectives {
 		if _, ok := stateStorageDirectives[label]; !ok {
-			cons, err := jujustorage.ParseConstraints(constraintString)
+			cons, err := jujustorage.ParseDirective(constraintString)
 			if err != nil {
 				// Just in case, as this should have been validated out before now.
 				diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse storage directives, got error: %s", err))
@@ -1515,7 +1503,7 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 		resp.Diagnostics.Append(dErr...)
 	}
 
-	if err := r.client.Applications.DestroyApplication(&juju.DestroyApplicationInput{
+	if err := r.client.Applications.DestroyApplication(ctx, &juju.DestroyApplicationInput{
 		ApplicationName: appName,
 		ModelUUID:       modelUUID,
 	}); err != nil {
@@ -1553,41 +1541,6 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	r.trace(fmt.Sprintf("deleted application resource %q", state.ID.ValueString()))
-}
-
-// UpgradeState upgrades the state of the application resource.
-// This is used to handle changes in the resource schema between versions.
-func (o *applicationResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
-	return map[int64]resource.StateUpgrader{
-		0: {
-			PriorSchema: &appV0Schema,
-			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-				appV0 := applicationResourceModelV0{}
-				resp.Diagnostics.Append(req.State.Get(ctx, &appV0)...)
-
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				modelUUID, err := o.client.Models.ModelUUID(appV0.ModelName.ValueString(), "")
-				if err != nil {
-					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", appV0.ModelName.ValueString(), err))
-					return
-				}
-
-				newID := newAppID(modelUUID, appV0.ApplicationName.ValueString())
-				// appV0.ID is embedded in the applicationResourceModel struct.
-				appV0.ID = types.StringValue(newID)
-
-				upgradedStateData := applicationResourceModelV1{
-					ModelUUID:                types.StringValue(modelUUID),
-					applicationResourceModel: appV0.applicationResourceModel,
-				}
-
-				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
-			},
-		},
-	}
 }
 
 // ImportState is called when the provider must import the state of a
@@ -1659,138 +1612,16 @@ func assertEqualsMachines(machinesToCompare []string) func(outputFromAPI *juju.R
 	}
 }
 
-// Below we store old schema definitions for the application resource.
-// These are used to upgrade the state of the resource when the schema version changes.
-// Keeping the v0 schema verbatim is the simplest solution currently and permits
-// the design to change to something like a schema factory in the future.
+func assertEqualsUnitCount(desiredUnits int) func(outputFromAPI *juju.ReadApplicationResponse) error {
+	return func(outputFromAPI *juju.ReadApplicationResponse) error {
+		if outputFromAPI.Units != desiredUnits {
+			return juju.NewRetryReadError("plan units differ from application units")
+		}
 
-var appV0Schema = schema.Schema{
-	Description: "A resource that represents a single Juju application deployment from a charm. Deployment of bundles" +
-		" is not supported.",
-	Version: 0,
-	Attributes: map[string]schema.Attribute{
-		"name": schema.StringAttribute{
-			Optional: true,
-			Computed: true,
-		},
-		MachinesKey: schema.SetAttribute{
-			ElementType: types.StringType,
-			Optional:    true,
-			Computed:    true,
-		},
-		"model": schema.StringAttribute{
-			Required: true,
-		},
-		"model_type": schema.StringAttribute{
-			Computed: true,
-		},
-		UnitsKey: schema.Int64Attribute{
-			Optional: true,
-			Computed: true,
-		},
-		ConfigKey: schema.MapAttribute{
-			Optional:    true,
-			ElementType: types.StringType,
-		},
-		ConstraintsKey: schema.StringAttribute{
-			CustomType: CustomConstraintsType{},
-			Optional:   true,
-			// Set as "computed" to pre-populate and preserve any implicit constraints
-			Computed: true,
-		},
-		"storage_directives": schema.MapAttribute{
-			ElementType: types.StringType,
-			Optional:    true,
-		},
-		"storage": schema.SetNestedAttribute{
-			Optional: true,
-			Computed: true,
-			NestedObject: schema.NestedAttributeObject{
-				Attributes: map[string]schema.Attribute{
-					"label": schema.StringAttribute{
-						Computed: true,
-					},
-					"size": schema.StringAttribute{
-						Computed: true,
-					},
-					"pool": schema.StringAttribute{
-						Computed: true,
-					},
-					"count": schema.Int64Attribute{
-						Computed: true,
-					},
-				},
-			},
-		},
-		"trust": schema.BoolAttribute{
-			Optional: true,
-			Computed: true,
-			Default:  booldefault.StaticBool(false),
-		},
-		"placement": schema.StringAttribute{
-			Optional: true,
-			Computed: true,
-		},
-		"principal": schema.BoolAttribute{
-			Computed: true,
-		},
-		"id": schema.StringAttribute{
-			Computed: true,
-		},
-		EndpointBindingsKey: schema.SetNestedAttribute{
-			Optional: true,
-			NestedObject: schema.NestedAttributeObject{
-				Attributes: map[string]schema.Attribute{
-					"endpoint": schema.StringAttribute{
-						Optional: true,
-					},
-					"space": schema.StringAttribute{
-						Required: true,
-					},
-				},
-			},
-		},
-		ResourceKey: schema.MapAttribute{
-			Optional:    true,
-			ElementType: types.StringType,
-		},
-	},
-	Blocks: map[string]schema.Block{
-		CharmKey: schema.ListNestedBlock{
-			NestedObject: schema.NestedBlockObject{
-				Attributes: map[string]schema.Attribute{
-					"name": schema.StringAttribute{
-						Required: true,
-					},
-					"channel": schema.StringAttribute{
-						Optional: true,
-						Computed: true,
-					},
-					"revision": schema.Int64Attribute{
-						Optional: true,
-						Computed: true,
-					},
-					BaseKey: schema.StringAttribute{
-						Optional: true,
-						Computed: true,
-					},
-				},
-			},
-		},
-		ExposeKey: schema.ListNestedBlock{
-			NestedObject: schema.NestedBlockObject{
-				Attributes: map[string]schema.Attribute{
-					EndpointsKey: schema.StringAttribute{
-						Optional: true,
-					},
-					SpacesKey: schema.StringAttribute{
-						Optional: true,
-					},
-					CidrsKey: schema.StringAttribute{
-						Optional: true,
-					},
-				},
-			},
-		},
-	},
+		if desiredUnits == 0 && len(outputFromAPI.Machines) > 0 {
+			return juju.NewRetryReadError("expected no machines for zero-unit application")
+		}
+
+		return nil
+	}
 }

@@ -92,7 +92,7 @@ func (r *sshKeyLister) List(ctx context.Context, req list.ListRequest, stream *l
 
 	modelUUID := listRequest.ModelUUID.ValueString()
 
-	keys, err := r.client.SSHKeys.ListKeys(juju.ListSSHKeysInput{
+	keys, err := r.client.SSHKeys.ListKeys(ctx, juju.ListSSHKeysInput{
 		Username:  r.client.Username(),
 		ModelUUID: modelUUID,
 	})

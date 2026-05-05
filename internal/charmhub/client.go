@@ -14,9 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juju/terraform-provider-juju/internal/charmhub/transport"
+
 	"github.com/juju/charm/v12"
 	"github.com/juju/errors"
-	"github.com/juju/juju/charmhub/transport"
 )
 
 const (

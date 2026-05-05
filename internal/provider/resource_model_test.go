@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"testing"
@@ -57,6 +58,8 @@ func TestAcc_ResourceModel(t *testing.T) {
 }
 
 func TestAcc_ResourceModel_UnsetConfig(t *testing.T) {
+	ctx := t.Context()
+
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 
 	resourceName := "juju_model.this"
@@ -86,7 +89,8 @@ resource "juju_model" "this" {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
-					testAccCheckDevelopmentConfigIsUnset("juju_model.this"),
+					testAccCheckDevelopmentConfigIsUnset(ctx, "juju_model.this"),
+					testAccCheckDevelopmentConfigIsUnset(ctx, "juju_model.this"),
 				),
 			},
 		},
@@ -94,6 +98,8 @@ resource "juju_model" "this" {
 }
 
 func TestAcc_ResourceModel_UnsetConfigUsingNull(t *testing.T) {
+	ctx := t.Context()
+
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 
 	resourceName := "juju_model.this"
@@ -129,7 +135,7 @@ resource "juju_model" "this" {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
-					testAccCheckDevelopmentConfigIsUnset(resourceName),
+					testAccCheckDevelopmentConfigIsUnset(ctx, resourceName),
 				),
 			},
 			{
@@ -144,7 +150,7 @@ resource "juju_model" "this" {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
-					testAccCheckDevelopmentConfigIsUnset(resourceName),
+					testAccCheckDevelopmentConfigIsUnset(ctx, resourceName),
 				),
 			},
 			{
@@ -157,7 +163,7 @@ resource "juju_model" "this" {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckNoResourceAttr(resourceName, "config.development"),
-					testAccCheckDevelopmentConfigIsUnset(resourceName),
+					testAccCheckDevelopmentConfigIsUnset(ctx, resourceName),
 				),
 			},
 		},
@@ -188,7 +194,7 @@ func TestAcc_ResourceModel_TargetController(t *testing.T) {
 
 	testAccPreCheck(t)
 
-	controllers, err := TestClient.Jaas.ListControllers()
+	controllers, err := TestClient.Jaas.ListControllers(t.Context())
 	if err != nil || len(controllers) == 0 {
 		t.Fatalf("unable to list controllers from JAAS: %v", err)
 	}
@@ -235,6 +241,9 @@ resource "juju_model" "testmodel" {
 }
 
 func TestAcc_ResourceModel_UpgradeProvider(t *testing.T) {
+	// This skip is temporary until we have a stable version of the provider that supports
+	// Juju 4.0.0 and above, at which point we can re-enable it.
+	SkipAgainstJuju4(t)
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	logLevelDebug := "DEBUG"
 
@@ -353,7 +362,7 @@ func TestAcc_ResourceModel_WaitForDelete(t *testing.T) {
 	})
 }
 
-func testAccCheckDevelopmentConfigIsUnset(resourceID string) resource.TestCheckFunc {
+func testAccCheckDevelopmentConfigIsUnset(ctx context.Context, resourceID string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[resourceID]
 		if !ok {
@@ -363,7 +372,7 @@ func testAccCheckDevelopmentConfigIsUnset(resourceID string) resource.TestCheckF
 		if modelUUID == "" {
 			return fmt.Errorf("uuid is empty in state")
 		}
-		conn, err := TestClient.Models.GetConnection(&modelUUID)
+		conn, err := TestClient.Models.GetConnection(ctx, &modelUUID)
 		if err != nil {
 			return err
 		}
@@ -372,7 +381,7 @@ func testAccCheckDevelopmentConfigIsUnset(resourceID string) resource.TestCheckF
 		// TODO: consider adding to client so we don't expose this layer (even in tests)
 		modelconfigClient := modelconfig.NewClient(conn)
 
-		metadata, err := modelconfigClient.ModelGetWithMetadata()
+		metadata, err := modelconfigClient.ModelGetWithMetadata(context.Background())
 		if err != nil {
 			return err
 		}

@@ -52,12 +52,12 @@ func (s *SecretSuite) TestCreateSecret() {
 	secretId := "secret:9m4e2mr0ui3e8a215n4g"
 	secretURI, err := coresecrets.ParseURI(secretId)
 	s.Require().NoError(err)
-	s.mockSecretClient.EXPECT().CreateSecret(
+	s.mockSecretClient.EXPECT().CreateSecret(gomock.Any(),
 		"test-secret", "test info", encodedValue,
 	).Return(secretURI.ID, nil).AnyTimes()
 
 	client := s.getSecretsClient()
-	output, err := client.CreateSecret(&CreateSecretInput{
+	output, err := client.CreateSecret(s.T().Context(), &CreateSecretInput{
 		ModelUUID: *s.testModelName,
 		Name:      "test-secret",
 		Value:     decodedValue,
@@ -79,11 +79,12 @@ func (s *SecretSuite) TestCreateSecretError() {
 	encodedValue := map[string]string{"key": base64.StdEncoding.EncodeToString([]byte("value"))}
 
 	s.mockSecretClient.EXPECT().CreateSecret(
+		gomock.Any(),
 		"test-secret", "test info", encodedValue,
 	).Return("", errBoom).AnyTimes()
 
 	client := s.getSecretsClient()
-	output, err := client.CreateSecret(&CreateSecretInput{
+	output, err := client.CreateSecret(s.T().Context(), &CreateSecretInput{
 		ModelUUID: *s.testModelName,
 		Name:      "test-secret",
 		Value:     decodedValue,
@@ -106,7 +107,7 @@ func (s *SecretSuite) TestReadSecret() {
 	secretRevision := 1
 
 	value := base64.StdEncoding.EncodeToString([]byte("value"))
-	s.mockSecretClient.EXPECT().ListSecrets(
+	s.mockSecretClient.EXPECT().ListSecrets(gomock.Any(),
 		true, coresecrets.Filter{
 			URI:      secretURI,
 			Label:    &secretName,
@@ -129,7 +130,7 @@ func (s *SecretSuite) TestReadSecret() {
 	}, nil).AnyTimes()
 
 	client := s.getSecretsClient()
-	output, err := client.ReadSecret(&ReadSecretInput{
+	output, err := client.ReadSecret(s.T().Context(), &ReadSecretInput{
 		SecretId:  secretId,
 		ModelUUID: *s.testModelName,
 		Name:      &secretName,
@@ -151,6 +152,7 @@ func (s *SecretSuite) TestReadSecretError() {
 
 	errBoom := errors.New("boom")
 	s.mockSecretClient.EXPECT().ListSecrets(
+		gomock.Any(),
 		true, coresecrets.Filter{
 			URI: secretURI,
 		},
@@ -161,7 +163,7 @@ func (s *SecretSuite) TestReadSecretError() {
 	}, nil).AnyTimes()
 
 	client := s.getSecretsClient()
-	output, err := client.ReadSecret(&ReadSecretInput{
+	output, err := client.ReadSecret(s.T().Context(), &ReadSecretInput{
 		SecretId:  secretId,
 		ModelUUID: *s.testModelName,
 	})
@@ -187,11 +189,12 @@ func (s *SecretSuite) TestUpdateSecretWithRenaming() {
 	s.Require().NoError(err)
 
 	s.mockSecretClient.EXPECT().UpdateSecret(
+		gomock.Any(),
 		secretURI, "", &autoPrune, newSecretName, "secret info", encodedValue,
 	).Return(nil).AnyTimes()
 
 	client := s.getSecretsClient()
-	err = client.UpdateSecret(&UpdateSecretInput{
+	err = client.UpdateSecret(s.T().Context(), &UpdateSecretInput{
 		SecretId:  secretId,
 		ModelUUID: *s.testModelName,
 		Name:      &newSecretName,
@@ -202,6 +205,7 @@ func (s *SecretSuite) TestUpdateSecretWithRenaming() {
 	s.Require().NoError(err)
 
 	s.mockSecretClient.EXPECT().ListSecrets(
+		gomock.Any(),
 		true, coresecrets.Filter{URI: secretURI},
 	).Return([]apisecrets.SecretDetails{
 		{
@@ -220,7 +224,7 @@ func (s *SecretSuite) TestUpdateSecretWithRenaming() {
 	}, nil).Times(1)
 
 	// read secret and check if value is updated
-	output, err := client.ReadSecret(&ReadSecretInput{
+	output, err := client.ReadSecret(s.T().Context(), &ReadSecretInput{
 		SecretId:  secretId,
 		ModelUUID: *s.testModelName,
 	})
@@ -244,11 +248,12 @@ func (s *SecretSuite) TestUpdateSecret() {
 	s.Require().NoError(err)
 
 	s.mockSecretClient.EXPECT().UpdateSecret(
+		gomock.Any(),
 		secretURI, "", &autoPrune, "", secretInfo, encodedValue,
 	).Return(nil).AnyTimes()
 
 	client := s.getSecretsClient()
-	err = client.UpdateSecret(&UpdateSecretInput{
+	err = client.UpdateSecret(s.T().Context(), &UpdateSecretInput{
 		SecretId:  secretId,
 		ModelUUID: *s.testModelName,
 		Value:     &decodedValue,
@@ -258,6 +263,7 @@ func (s *SecretSuite) TestUpdateSecret() {
 	s.Require().NoError(err)
 
 	s.mockSecretClient.EXPECT().ListSecrets(
+		gomock.Any(),
 		true, coresecrets.Filter{URI: secretURI},
 	).Return([]apisecrets.SecretDetails{
 		{
@@ -277,7 +283,7 @@ func (s *SecretSuite) TestUpdateSecret() {
 	}, nil).Times(1)
 
 	// read secret and check if secret info is updated
-	output, err := client.ReadSecret(&ReadSecretInput{
+	output, err := client.ReadSecret(s.T().Context(), &ReadSecretInput{
 		SecretId:  secretId,
 		ModelUUID: *s.testModelName,
 	})
@@ -295,10 +301,10 @@ func (s *SecretSuite) TestDeleteSecret() {
 	secretURI, err := coresecrets.ParseURI(secretId)
 	s.Require().NoError(err)
 
-	s.mockSecretClient.EXPECT().RemoveSecret(secretURI, "", nil).Return(nil).AnyTimes()
+	s.mockSecretClient.EXPECT().RemoveSecret(gomock.Any(), secretURI, "", nil).Return(nil).AnyTimes()
 
 	client := s.getSecretsClient()
-	err = client.DeleteSecret(&DeleteSecretInput{
+	err = client.DeleteSecret(s.T().Context(), &DeleteSecretInput{
 		SecretId:  secretId,
 		ModelUUID: *s.testModelName,
 	})
@@ -315,18 +321,18 @@ func (s *SecretSuite) TestUpdateAccessSecret() {
 	secretURI, err := coresecrets.ParseURI(secretId)
 	s.Require().NoError(err)
 
-	s.mockSecretClient.EXPECT().GrantSecret(secretURI, "", applications).Return([]error{nil}, nil).AnyTimes()
-	s.mockSecretClient.EXPECT().RevokeSecret(secretURI, "", applications).Return([]error{nil}, nil).AnyTimes()
+	s.mockSecretClient.EXPECT().GrantSecret(gomock.Any(), secretURI, "", applications).Return([]error{nil}, nil).AnyTimes()
+	s.mockSecretClient.EXPECT().RevokeSecret(gomock.Any(), secretURI, "", applications).Return([]error{nil}, nil).AnyTimes()
 
 	client := s.getSecretsClient()
-	err = client.UpdateAccessSecret(&GrantRevokeAccessSecretInput{
+	err = client.UpdateAccessSecret(s.T().Context(), &GrantRevokeAccessSecretInput{
 		SecretId:     secretId,
 		ModelUUID:    *s.testModelName,
 		Applications: applications,
 	}, GrantAccess)
 	s.Require().NoError(err)
 
-	err = client.UpdateAccessSecret(&GrantRevokeAccessSecretInput{
+	err = client.UpdateAccessSecret(s.T().Context(), &GrantRevokeAccessSecretInput{
 		SecretId:     secretId,
 		ModelUUID:    *s.testModelName,
 		Applications: applications,

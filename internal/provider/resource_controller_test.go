@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -29,8 +30,9 @@ import (
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/api/connector"
 	controllerapi "github.com/juju/juju/api/controller/controller"
-	"github.com/juju/names/v5"
+	"github.com/juju/names/v6"
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 	"github.com/juju/version/v2"
 )
 
@@ -352,12 +354,12 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 					func(s *terraform.State) error {
 						// Check with Juju that the controller config is the same - Juju doesn't support
 						// unsetting config keys, so the previous value should still be present.
-						conn, err := newBootstrappedControllerClient(s)
+						conn, err := newBootstrappedControllerClient(t.Context(), s)
 						if err != nil {
 							return fmt.Errorf("failed to create controller client: %w", err)
 						}
 						controllerClient := controllerapi.NewClient(conn)
-						configValues, err := controllerClient.ControllerConfig()
+						configValues, err := controllerClient.ControllerConfig(t.Context())
 						if err != nil {
 							return fmt.Errorf("failed to get controller config via Juju API: %w", err)
 						}
@@ -389,12 +391,12 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.disable-telemetry", "true"),
 					func(s *terraform.State) error {
 						// Check with Juju that the controller model config is actually unset.
-						conn, err := newBootstrappedControllerClient(s)
+						conn, err := newBootstrappedControllerClient(t.Context(), s)
 						if err != nil {
 							return fmt.Errorf("failed to create controller client: %w", err)
 						}
 						modelCfgClient := modelconfig.NewClient(conn)
-						configValues, err := modelCfgClient.ModelGet()
+						configValues, err := modelCfgClient.ModelGet(t.Context())
 						if err != nil {
 							return fmt.Errorf("failed to get controller config via Juju API: %w", err)
 						}
@@ -406,22 +408,32 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				),
 			},
 			{
+				// enable-ha is skipped for k8s controllers, and juju 4.
 				SkipFunc: func() (bool, error) {
-					return testingCloud != LXDCloudTesting, nil
+					if testingCloud != LXDCloudTesting {
+						return true, nil
+					}
+					agentVersion := os.Getenv(TestJujuAgentVersion)
+					if agentVersion == "" {
+						t.Fatal("Juju agent version not set")
+					} else if internaltesting.CompareVersions(agentVersion, "4.0.0") >= 0 {
+						return true, nil
+					}
+					return false, nil
 				},
 				Config: testAccResourceControllerWithEnableHA(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", controllerName),
 					func(s *terraform.State) error {
 						// Here we check that the enable-HA action has successfully added 3 controller units by checking the WantsVote field via the API.
-						conn, err := newBootstrappedControllerClient(s)
+						conn, err := newBootstrappedControllerClient(t.Context(), s)
 						if err != nil {
 							return fmt.Errorf("failed to create controller client for HA check: %w", err)
 						}
 						defer conn.Close()
 
 						// Find the controller model UUID.
-						models, err := controllerapi.NewClient(conn).AllModels()
+						models, err := controllerapi.NewClient(conn).AllModels(t.Context())
 						if err != nil {
 							return fmt.Errorf("failed to list models for HA check: %w", err)
 						}
@@ -438,6 +450,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 
 						// ModelInfo returns machine details including WantsVote for HA nodes.
 						results, err := modelmanager.NewClient(conn).ModelInfo(
+							t.Context(),
 							[]names.ModelTag{names.NewModelTag(controllerModelUUID)},
 						)
 						if err != nil {
@@ -480,9 +493,9 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 
 			// Attempt to connect and expect a timeout after 10s
 			// This doesn't definitely prove the controller is destroyed, but is a good heuristic.
-			_, err = newBootstrappedControllerClient(s, api.WithDialOpts(api.DialOpts{Timeout: 10 * time.Second}))
+			_, err = newBootstrappedControllerClient(t.Context(), s, api.WithDialOpts(api.DialOpts{Timeout: 10 * time.Second}))
 			if err != nil {
-				if strings.Contains(err.Error(), "failed to connect to controller: api connection open timed out") {
+				if ok, err := regexp.MatchString("failed to connect to controller: .*", err.Error()); ok && err == nil {
 					return nil
 				}
 				return fmt.Errorf("unexpected error when connecting to detroyed controller: %w", err)
@@ -821,7 +834,7 @@ func renderStringMapAsHCL(values map[string]string) string {
 	return b.String()
 }
 
-func newBootstrappedControllerClient(state *terraform.State, dialOptions ...api.DialOption) (api.Connection, error) {
+func newBootstrappedControllerClient(ctx context.Context, state *terraform.State, dialOptions ...api.DialOption) (api.Connection, error) {
 	resourceState, ok := state.RootModule().Resources["juju_controller.controller"]
 	if !ok {
 		return nil, fmt.Errorf("resource juju_controller.controller not found in state")
@@ -857,7 +870,7 @@ func newBootstrappedControllerClient(state *terraform.State, dialOptions ...api.
 		return nil, fmt.Errorf("failed to create connector to controller: %w", err)
 	}
 
-	conn, err := connr.Connect(dialOptions...)
+	conn, err := connr.Connect(ctx, dialOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to controller: %w", err)
 	}
@@ -919,7 +932,7 @@ func testAccCheckJaasControllerRegistered(t *testing.T, name string, checkExists
 			return fmt.Errorf("TestClient is not set")
 		}
 
-		controllers, err := TestClient.Jaas.ListControllers()
+		controllers, err := TestClient.Jaas.ListControllers(t.Context())
 		if err != nil {
 			return err
 		}

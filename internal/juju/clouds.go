@@ -4,6 +4,7 @@
 package juju
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -18,7 +19,7 @@ import (
 	"github.com/juju/juju/caas/kubernetes/clientconfig"
 	k8scloud "github.com/juju/juju/caas/kubernetes/cloud"
 	jujucloud "github.com/juju/juju/cloud"
-	"github.com/juju/names/v5"
+	"github.com/juju/names/v6"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
@@ -227,14 +228,14 @@ func newCloudsClient(sc SharedClient) *cloudsClient {
 
 // CreateKubernetesCloud creates a new Kubernetes cloud with juju cloud facade.
 // The credential name for this cloud is returned.
-func (c *cloudsClient) CreateKubernetesCloud(input *CreateKubernetesCloudInput) (string, error) {
-	conn, err := c.GetConnection(nil)
+func (c *cloudsClient) CreateKubernetesCloud(ctx context.Context, input *CreateKubernetesCloudInput) (string, error) {
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = conn.Close() }()
 
-	k8sConf, err := createKubernetesConfig([]byte(input.KubernetesConfig), input.CreateServiceAccount)
+	k8sConf, err := createKubernetesConfig(ctx, []byte(input.KubernetesConfig), input.CreateServiceAccount)
 	if err != nil {
 		return "", errors.Annotate(err, "parsing kubernetes configuration data")
 	}
@@ -265,7 +266,7 @@ func (c *cloudsClient) CreateKubernetesCloud(input *CreateKubernetesCloudInput) 
 	}
 
 	cloudClient := c.getCloudAPIClient(conn)
-	err = cloudClient.AddCloud(newCloud, false)
+	err = cloudClient.AddCloud(ctx, newCloud, false)
 	if err != nil {
 		return "", errors.Annotate(err, "adding kubernetes cloud")
 	}
@@ -284,7 +285,7 @@ func (c *cloudsClient) CreateKubernetesCloud(input *CreateKubernetesCloudInput) 
 	if err != nil {
 		return "", errors.Trace(err)
 	}
-	err = cloudClient.AddCredential(cloudCredTag.String(), newCredential)
+	err = cloudClient.AddCredential(ctx, cloudCredTag.String(), newCredential)
 	if err != nil {
 		return "", errors.Annotate(err, "adding kubernetes cloud credential")
 	}
@@ -293,8 +294,8 @@ func (c *cloudsClient) CreateKubernetesCloud(input *CreateKubernetesCloudInput) 
 }
 
 // ReadKubernetesCloud reads a Kubernetes cloud with juju cloud facade.
-func (c *cloudsClient) ReadKubernetesCloud(input ReadKubernetesCloudInput) (*ReadKubernetesCloudOutput, error) {
-	conn, err := c.GetConnection(nil)
+func (c *cloudsClient) ReadKubernetesCloud(ctx context.Context, input ReadKubernetesCloudInput) (*ReadKubernetesCloudOutput, error) {
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -302,14 +303,14 @@ func (c *cloudsClient) ReadKubernetesCloud(input ReadKubernetesCloudInput) (*Rea
 
 	cloudClient := c.getCloudAPIClient(conn)
 
-	cld, err := cloudClient.Cloud(names.NewCloudTag(input.Name))
+	cld, err := cloudClient.Cloud(ctx, names.NewCloudTag(input.Name))
 	if err != nil {
 		return nil, errors.Annotate(err, "getting clouds")
 	}
 
 	userName := getCurrentJujuUser(conn)
 
-	cloudCredentialTags, err := cloudClient.UserCredentials(names.NewUserTag(userName), names.NewCloudTag(input.Name))
+	cloudCredentialTags, err := cloudClient.UserCredentials(ctx, names.NewUserTag(userName), names.NewCloudTag(input.Name))
 	if err != nil {
 		return nil, errors.Annotate(err, "getting user credentials")
 	}
@@ -329,15 +330,15 @@ func (c *cloudsClient) ReadKubernetesCloud(input ReadKubernetesCloudInput) (*Rea
 }
 
 // UpdateKubernetesCloud updates a Kubernetes cloud with juju cloud facade.
-func (c *cloudsClient) UpdateKubernetesCloud(input UpdateKubernetesCloudInput) error {
-	conn, err := c.GetConnection(nil)
+func (c *cloudsClient) UpdateKubernetesCloud(ctx context.Context, input UpdateKubernetesCloudInput) error {
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = conn.Close() }()
 
 	cloudClient := c.getCloudAPIClient(conn)
-	k8sConf, err := createKubernetesConfig([]byte(input.KubernetesConfig), input.CreateServiceAccount)
+	k8sConf, err := createKubernetesConfig(ctx, []byte(input.KubernetesConfig), input.CreateServiceAccount)
 	if err != nil {
 		return errors.Annotate(err, "parsing kubernetes configuration data")
 	}
@@ -361,7 +362,7 @@ func (c *cloudsClient) UpdateKubernetesCloud(input UpdateKubernetesCloudInput) e
 		return errors.Trace(err)
 	}
 
-	err = cloudClient.UpdateCloud(newCloud)
+	err = cloudClient.UpdateCloud(ctx, newCloud)
 	if err != nil {
 		return errors.Annotate(err, "updating kubernetes cloud")
 	}
@@ -370,8 +371,8 @@ func (c *cloudsClient) UpdateKubernetesCloud(input UpdateKubernetesCloudInput) e
 }
 
 // AddCloud adds a cloud definition to the controller.
-func (c *cloudsClient) AddCloud(input AddCloudInput) error {
-	conn, err := c.GetConnection(nil)
+func (c *cloudsClient) AddCloud(ctx context.Context, input AddCloudInput) error {
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -398,12 +399,12 @@ func (c *cloudsClient) AddCloud(input AddCloudInput) error {
 		IsControllerCloud: false,
 	}
 
-	return cloudClient.AddCloud(cloud, input.Force)
+	return cloudClient.AddCloud(ctx, cloud, input.Force)
 }
 
 // UpdateCloud updates a cloud definition on the controller.
-func (c *cloudsClient) UpdateCloud(input UpdateCloudInput) error {
-	conn, err := c.GetConnection(nil)
+func (c *cloudsClient) UpdateCloud(ctx context.Context, input UpdateCloudInput) error {
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -425,12 +426,12 @@ func (c *cloudsClient) UpdateCloud(input UpdateCloudInput) error {
 		IsControllerCloud: false,
 	}
 
-	return cloudClient.UpdateCloud(cloud)
+	return cloudClient.UpdateCloud(ctx, cloud)
 }
 
 // RemoveCloud removes a cloud.
-func (c *cloudsClient) RemoveCloud(input RemoveCloudInput) error {
-	conn, err := c.GetConnection(nil)
+func (c *cloudsClient) RemoveCloud(ctx context.Context, input RemoveCloudInput) error {
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -438,12 +439,12 @@ func (c *cloudsClient) RemoveCloud(input RemoveCloudInput) error {
 
 	cloudClient := c.getCloudAPIClient(conn)
 
-	return cloudClient.RemoveCloud(input.Name)
+	return cloudClient.RemoveCloud(ctx, input.Name)
 }
 
 // ReadCloud reads a cloud.
-func (c *cloudsClient) ReadCloud(input ReadCloudInput) (*ReadCloudOutput, error) {
-	conn, err := c.GetConnection(nil)
+func (c *cloudsClient) ReadCloud(ctx context.Context, input ReadCloudInput) (*ReadCloudOutput, error) {
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -451,7 +452,7 @@ func (c *cloudsClient) ReadCloud(input ReadCloudInput) (*ReadCloudOutput, error)
 
 	cloudClient := c.getCloudAPIClient(conn)
 
-	jjCloud, err := cloudClient.Cloud(names.NewCloudTag(input.Name))
+	jjCloud, err := cloudClient.Cloud(ctx, names.NewCloudTag(input.Name))
 	if errors.Is(err, errors.NotFound) {
 		return nil, CloudNotFoundError
 	}
@@ -479,8 +480,8 @@ func (c *cloudsClient) ReadCloud(input ReadCloudInput) (*ReadCloudOutput, error)
 }
 
 // ListClouds returns the names of all clouds available on the controller.
-func (c *cloudsClient) ListClouds() ([]string, error) {
-	conn, err := c.GetConnection(nil)
+func (c *cloudsClient) ListClouds(ctx context.Context) ([]string, error) {
+	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -488,7 +489,7 @@ func (c *cloudsClient) ListClouds() ([]string, error) {
 
 	cloudClient := c.getCloudAPIClient(conn)
 
-	jjClouds, err := cloudClient.Clouds()
+	jjClouds, err := cloudClient.Clouds(ctx)
 	if err != nil {
 		return nil, errors.Annotate(err, "getting clouds")
 	}
@@ -504,7 +505,7 @@ func (c *cloudsClient) ListClouds() ([]string, error) {
 // createKubernetesConfig creates a Kubernetes configuration from the provided config data.
 // If createServiceAccount is true, it will create or get the Juju admin service account credentials.
 // If createServiceAccount is false, it will use the credentials already present in the config data.
-func createKubernetesConfig(config []byte, createServiceAccount bool) (*clientcmdapi.Config, error) {
+func createKubernetesConfig(ctx context.Context, config []byte, createServiceAccount bool) (*clientcmdapi.Config, error) {
 	conf, err := clientcmd.NewClientConfigFromBytes(config)
 	if err != nil {
 		return nil, errors.Annotate(err, "parsing kubernetes configuration data")
@@ -524,7 +525,7 @@ func createKubernetesConfig(config []byte, createServiceAccount bool) (*clientcm
 	if err != nil {
 		return nil, errors.Annotate(err, "generating new credential UID")
 	}
-	credResolver := clientconfig.GetJujuAdminServiceAccountResolver(jujuclock.WallClock)
+	credResolver := clientconfig.GetJujuAdminServiceAccountResolver(ctx, jujuclock.WallClock)
 	k8sConfWithCreds, err := credResolver(credentialUUID, &k8sConf, k8sConf.CurrentContext)
 	if err != nil {
 		return nil, errors.Annotate(err, "resolving k8s credential")

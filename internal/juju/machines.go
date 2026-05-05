@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juju/cmd/v3"
 	"github.com/juju/errors"
 	"github.com/juju/juju/api"
 	apiclient "github.com/juju/juju/api/client/client"
@@ -22,11 +21,11 @@ import (
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
 	"github.com/juju/juju/core/model"
+	"github.com/juju/juju/core/storage"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/environs/manual"
 	"github.com/juju/juju/environs/manual/sshprovisioner"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/juju/storage"
 	"github.com/juju/names/v5"
 )
 
@@ -133,13 +132,13 @@ func getTargetStatusFunc(machineID string) targetStatusFunc {
 
 // CreateMachine provisions a new machine in the specified model.
 func (c *machinesClient) CreateMachine(ctx context.Context, input *CreateMachineInput) (*CreateMachineResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = conn.Close() }()
 
-	machineID, err := c.createMachine(conn, input)
+	machineID, err := c.createMachine(ctx, conn, input)
 	if err != nil {
 		return nil, err
 	}
@@ -148,12 +147,12 @@ func (c *machinesClient) CreateMachine(ctx context.Context, input *CreateMachine
 	}, nil
 }
 
-func (c *machinesClient) createMachine(conn api.Connection, input *CreateMachineInput) (string, error) {
+func (c *machinesClient) createMachine(ctx context.Context, conn api.Connection, input *CreateMachineInput) (string, error) {
 	machineAPIClient := apimachinemanager.NewClient(conn)
 	modelConfigAPIClient := apimodelconfig.NewClient(conn)
 
 	if input.SSHAddress != "" {
-		configAttrs, err := modelConfigAPIClient.ModelGet()
+		configAttrs, err := modelConfigAPIClient.ModelGet(ctx)
 		if err != nil {
 			return "", errors.Trace(err)
 		}
@@ -161,7 +160,7 @@ func (c *machinesClient) createMachine(conn api.Connection, input *CreateMachine
 		if err != nil {
 			return "", errors.Trace(err)
 		}
-		return manualProvision(machineAPIClient, cfg,
+		return manualProvision(ctx, machineAPIClient, cfg,
 			input.SSHAddress, input.PublicKeyFile, input.PrivateKeyFile)
 	}
 
@@ -181,7 +180,7 @@ func (c *machinesClient) createMachine(conn api.Connection, input *CreateMachine
 	}
 
 	if input.Constraints == "" {
-		modelConstraints, err := modelConfigAPIClient.GetModelConstraints()
+		modelConstraints, err := modelConfigAPIClient.GetModelConstraints(ctx)
 		if err != nil {
 			return "", err
 		}
@@ -195,12 +194,12 @@ func (c *machinesClient) createMachine(conn api.Connection, input *CreateMachine
 	}
 
 	if input.Disks != "" {
-		userDisks, err := storage.ParseConstraints(input.Disks)
+		userDisks, err := storage.ParseDirective(input.Disks)
 		if err != nil {
 			return "", err
 		}
 		fmt.Println(userDisks)
-		machineParams.Disks = []storage.Constraints{userDisks}
+		machineParams.Disks = []storage.Directive{userDisks}
 	} else {
 		machineParams.Disks = nil
 	}
@@ -221,7 +220,7 @@ func (c *machinesClient) createMachine(conn api.Connection, input *CreateMachine
 	// all AddMachine calls sequential.
 	// TODO (alesstimec): remove once this bug in Juju is fixed.
 	c.createMu.Lock()
-	machines, err := machineAPIClient.AddMachines(addMachineArgs)
+	machines, err := machineAPIClient.AddMachines(ctx, addMachineArgs)
 	if err != nil {
 		c.createMu.Unlock()
 		return "", err
@@ -258,10 +257,7 @@ func baseFromOperatingSystem(opSys string) (*params.Base, error) {
 	// opSys is a base or a series, check base first.
 	info, err := base.ParseBaseFromString(opSys)
 	if err != nil {
-		info, err = base.GetBaseFromSeries(opSys)
-		if err != nil {
-			return nil, errors.NotValidf("Base or Series %q", opSys)
-		}
+		return nil, errors.NotValidf("Base or Series %q", opSys)
 	}
 	base := &params.Base{
 		Name:    info.OS,
@@ -281,15 +277,11 @@ func fromLegacyCentosChannel(series string) string {
 // manualProvision calls the sshprovisioner.ProvisionMachine on the Juju side
 // to provision an existing machine using ssh_address, public_key and
 // private_key in the CreateMachineInput.
-func manualProvision(client manual.ProvisioningClientAPI,
+func manualProvision(ctx context.Context, client manual.ProvisioningClientAPI,
 	config *config.Config, sshAddress string, publicKey string,
 	privateKey string) (string, error) {
 	// Read the public keys
-	cmdCtx, err := cmd.DefaultContext()
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	authKeys, err := common.ReadAuthorizedKeys(cmdCtx, publicKey)
+	authKeys, err := common.ReadAuthorizedKeys(publicKey)
 	if err != nil {
 		return "", errors.Annotatef(err, "cannot read authorized-keys from : %v", publicKey)
 	}
@@ -320,7 +312,7 @@ func manualProvision(client manual.ProvisioningClientAPI,
 	}
 
 	// Call ProvisionMachine
-	machineId, err := sshprovisioner.ProvisionMachine(provisionArgs)
+	machineId, err := sshprovisioner.ProvisionMachine(ctx, provisionArgs)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
@@ -329,8 +321,8 @@ func manualProvision(client manual.ProvisioningClientAPI,
 }
 
 // ReadMachine retrieves a machine by ID from the specified model.
-func (c *machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c *machinesClient) ReadMachine(ctx context.Context, input *ReadMachineInput) (*ReadMachineResponse, error) {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +330,7 @@ func (c *machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineRespo
 
 	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
 
-	status, err := clientAPIClient.Status(nil)
+	status, err := clientAPIClient.Status(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -376,8 +368,8 @@ func (c *machinesClient) ReadMachine(input *ReadMachineInput) (*ReadMachineRespo
 }
 
 // DestroyMachine removes a machine from the specified model.
-func (c *machinesClient) DestroyMachine(input *DestroyMachineInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c *machinesClient) DestroyMachine(ctx context.Context, input *DestroyMachineInput) error {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -385,7 +377,7 @@ func (c *machinesClient) DestroyMachine(input *DestroyMachineInput) error {
 
 	machineAPIClient := apimachinemanager.NewClient(conn)
 
-	_, err = machineAPIClient.DestroyMachinesWithParams(false, false, false, (*time.Duration)(nil), input.ID)
+	_, err = machineAPIClient.DestroyMachinesWithParams(ctx, false, false, false, (*time.Duration)(nil), input.ID)
 	if err != nil {
 		return err
 	}
@@ -394,8 +386,8 @@ func (c *machinesClient) DestroyMachine(input *DestroyMachineInput) error {
 }
 
 // ListMachines returns the list of machine IDs in the given model.
-func (c *machinesClient) ListMachines(modelUUID string) ([]string, error) {
-	conn, err := c.GetConnection(&modelUUID)
+func (c *machinesClient) ListMachines(ctx context.Context, modelUUID string) ([]string, error) {
+	conn, err := c.GetConnection(ctx, &modelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +395,7 @@ func (c *machinesClient) ListMachines(modelUUID string) ([]string, error) {
 
 	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
 
-	status, err := clientAPIClient.Status(nil)
+	status, err := clientAPIClient.Status(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

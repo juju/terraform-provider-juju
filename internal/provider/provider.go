@@ -448,7 +448,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 
 	// Here we are testing that we can connect successfully to the Juju server
 	// this prevents having logic to check the connection is OK in every function
-	testConn, err := providerData.Client.Models.GetConnection(nil)
+	testConn, err := providerData.Client.Models.GetConnection(ctx, nil)
 	if err != nil {
 		resp.Diagnostics.Append(checkClientErr(err, controllerConfig)...)
 		return
@@ -470,6 +470,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 			})
 
 			err := providerData.Client.Offers.AddOfferingController(
+				ctx,
 				controllerName,
 				juju.ControllerConfiguration{
 					ControllerAddresses: strings.Split(controller.ControllerAddrs.ValueString(), ","),

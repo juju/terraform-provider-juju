@@ -212,6 +212,7 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	if err := r.client.Storage.CreatePool(
+		ctx,
 		juju.CreateStoragePoolInput{
 			ModelUUID: plan.ModelUUID.ValueString(),
 			PoolName:  plan.Name.ValueString(),
@@ -276,6 +277,7 @@ func (r *storagePoolResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 
 	getPoolResp, err := r.client.Storage.GetPool(
+		ctx,
 		juju.GetStoragePoolInput{
 			ModelUUID: state.ModelUUID.ValueString(),
 			PoolName:  state.Name.ValueString(),
@@ -332,7 +334,7 @@ func (r *storagePoolResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	if err := r.client.Storage.UpdatePool(
+	if err := r.client.Storage.UpdatePool(ctx,
 		state.ModelUUID.ValueString(),
 		state.Name.ValueString(),
 		state.StorageProvider.ValueString(),
@@ -405,6 +407,7 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	if err := r.client.Storage.RemovePool(
+		ctx,
 		juju.RemoveStoragePoolInput{
 			ModelUUID: state.ModelUUID.ValueString(),
 			PoolName:  state.Name.ValueString(),

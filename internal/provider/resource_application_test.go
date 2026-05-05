@@ -24,13 +24,14 @@ import (
 	"github.com/juju/juju/api/client/resources"
 	apispaces "github.com/juju/juju/api/client/spaces"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/names/v5"
+	"github.com/juju/names/v6"
 
 	internaljuju "github.com/juju/terraform-provider-juju/internal/juju"
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
 func TestAcc_ResourceApplication(t *testing.T) {
+	SkipAgainstJuju4WithReason(t, "See  https://github.com/juju/juju/issues/21717")
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 
@@ -111,7 +112,7 @@ resource "juju_application" "app" {
   charm {
     name     = "apache2"
     channel  = "latest/stable"
-    revision = 64
+    revision = 59
     base     = "ubuntu@22.04"
   }
 }
@@ -271,7 +272,7 @@ func TestAcc_ResourceApplication_Updates(t *testing.T) {
 					return testingCloud != MicroK8sTesting, nil
 				},
 				Config: testAccResourceApplicationUpdates(modelName, 2, true, "machinename"),
-				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "165"),
+				Check:  resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "191"),
 			},
 			{
 				Config: testAccResourceApplicationUpdates(modelName, 2, false, "machinename"),
@@ -305,7 +306,7 @@ func TestAcc_ResourceApplication_RefreshCharmUpdatesResources(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationRefreshCharmUpdatesResources(modelName, 165),
+				Config: testAccResourceApplicationRefreshCharmUpdatesResources(modelName, 191),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 					// Use a check to grab the model UUID and update the application's resource
@@ -326,22 +327,22 @@ func TestAcc_ResourceApplication_RefreshCharmUpdatesResources(t *testing.T) {
 								},
 							},
 						}
-						err := TestClient.Applications.UpdateApplication(&input)
+						err := TestClient.Applications.UpdateApplication(t.Context(), &input)
 						if err != nil {
 							return err
 						}
 						// Read the application to verify the resource revision is set to 60
-						// and the charm revision is 165.
+						// and the charm revision is 191.
 						readInput := internaljuju.ReadApplicationInput{
 							ModelUUID: modelUUID,
 							AppName:   "test-app",
 						}
-						readRes, err := TestClient.Applications.ReadApplication(&readInput)
+						readRes, err := TestClient.Applications.ReadApplication(t.Context(), &readInput)
 						if err != nil {
 							return err
 						}
-						if readRes.Revision != 165 {
-							return fmt.Errorf("expected charm revision to be 165, got %d", readRes.Revision)
+						if readRes.Revision != 191 {
+							return fmt.Errorf("expected charm revision to be 191, got %d", readRes.Revision)
 						}
 						coreDNSImage, ok := readRes.Resources["coredns-image"]
 						if !ok {
@@ -355,9 +356,9 @@ func TestAcc_ResourceApplication_RefreshCharmUpdatesResources(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceApplicationRefreshCharmUpdatesResources(modelName, 166),
+				Config: testAccResourceApplicationRefreshCharmUpdatesResources(modelName, 199),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "166"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "199"),
 					// Use a check to grab the model UUID and verify that the application's
 					// resource revision has been updated to the latest (greater than 60).
 					func(s *terraform.State) error {
@@ -370,7 +371,7 @@ func TestAcc_ResourceApplication_RefreshCharmUpdatesResources(t *testing.T) {
 							ModelUUID: modelUUID,
 							AppName:   "test-app",
 						}
-						res, err := TestClient.Applications.ReadApplication(&input)
+						res, err := TestClient.Applications.ReadApplication(t.Context(), &input)
 						if err != nil {
 							return err
 						}
@@ -404,9 +405,12 @@ func TestAcc_ResourceApplication_UpdateImportedSubordinate(t *testing.T) {
 
 	ctx := context.Background()
 
-	resp, err := TestClient.Models.CreateModel(internaljuju.CreateModelInput{
-		Name: modelName,
-	})
+	resp, err := TestClient.Models.CreateModel(
+		t.Context(),
+		internaljuju.CreateModelInput{
+			Name: modelName,
+		},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -547,6 +551,8 @@ func TestAcc_CharmUpdatesWithRevision(t *testing.T) {
 }
 
 func TestAcc_CharmUpdateBase(t *testing.T) {
+	t.Skip(t.Name() + " Waiting on issue 21717 for LXD, and PR 22237 for K8s to be resolved")
+
 	modelName := acctest.RandomWithPrefix("tf-test-charmbaseupdates")
 
 	resource.ParallelTest(t, resource.TestCase{
@@ -882,6 +888,8 @@ func TestAcc_CustomResourcesRemovedFromPlanMicrok8s(t *testing.T) {
 }
 
 func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
+	ctx := t.Context()
+
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
@@ -898,10 +906,11 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 				// A custom resource from a private registry.
 				Config: testAccResourceApplicationFromPrivateRegistry(modelName, appName, "user", "pass", "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
-						fingerprint: "1b94afe549b44328f2350ae24633b31265a01e466cf0469faa798acb9c637bea30c3c711f25937795eff34d2f920e074",
-						origin:      "upload",
-						revision:    "0",
+					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
+						fingerprintJuju3: "5cf445e5cccb7c02f60491b1c379038d6b5be46ec86efc1e75d90452f557b8a3bb5f7f085e814986e4e2dc07812b4a56",
+						fingerprintJuju4: "fc15a3374f0051849b218544ad39e3c6b6446d7ac411a9843c0f0f7102587219c1716dd4a217fbba1519b182e89cfda9",
+						origin:           "upload",
+						revision:         "0",
 					}),
 				),
 			},
@@ -914,10 +923,11 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 					},
 				},
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
-						fingerprint: "953991156cf1e0a601f52b2b2b16c7042ad13bf765655c024f384385306404b7eb30bf72bdfcfda3c570b076b3aa96dc",
-						origin:      "upload",
-						revision:    "0",
+					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
+						fingerprintJuju3: "7307af1e23462be0a8101ce884ed1ba7b5743922cfab99d4ceeb08d65c96400938a344832cf033a110a1b2a0c3e8d0b9",
+						fingerprintJuju4: "fc15a3374f0051849b218544ad39e3c6b6446d7ac411a9843c0f0f7102587219c1716dd4a217fbba1519b182e89cfda9",
+						origin:           "upload",
+						revision:         "0",
 					}),
 				),
 			},
@@ -930,10 +940,11 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 					},
 				},
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
-						fingerprint: "591c30e2a2730c206d65771cfa2302c90a2c90b0860207d82f041d24b7c16409e35465d2be987c4bf562734b9e62f248",
-						origin:      "upload",
-						revision:    "0",
+					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
+						fingerprintJuju3: "19ece2bcbac52dbbbf7ec48345ab9f7d9a963e43270cf984be42ee7141e636d4ed8e65e7ab35bc97edd138cb468c0659",
+						fingerprintJuju4: "fc15a3374f0051849b218544ad39e3c6b6446d7ac411a9843c0f0f7102587219c1716dd4a217fbba1519b182e89cfda9",
+						origin:           "upload",
+						revision:         "0",
 					}),
 				),
 			},
@@ -946,10 +957,11 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 					},
 				},
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckApplicationResource(appResourceFullName, charmResourceChecks{
-						fingerprint: "398048a2c483cd10a5e358f0d45ed8e21ed077079779fecce58772d443a3c9b53e871cf43dba94fcb3463adee154c440",
-						origin:      "store",
-						revision:    "74",
+					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
+						fingerprintJuju3: "398048a2c483cd10a5e358f0d45ed8e21ed077079779fecce58772d443a3c9b53e871cf43dba94fcb3463adee154c440",
+						fingerprintJuju4: "",
+						origin:           "store",
+						revision:         "74",
 					}),
 				),
 			},
@@ -958,18 +970,20 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 }
 
 type charmResourceChecks struct {
-	// fingerprint is a SHA356 fingerprint of the resource
-	// composed from the image URL, username and password.
-	// If we start uploading files, this would represent
-	// the fingerprint of the file.
-	fingerprint string
+	// fingerprintJuju3 is a SHA384 fingerprint of the resource as computed by Juju 3.
+	// Juju 3 and Juju 4 compute fingerprints differently for container image resources
+	// because Juju 4 re-serializes the image metadata as JSON while Juju 3 stores the
+	// raw uploaded blob.
+	fingerprintJuju3 string
+	// fingerprintJuju4 is a SHA384 fingerprint of the resource as computed by Juju 4.
+	fingerprintJuju4 string
 	// origin is either "store" or "upload".
 	origin string
 	// revision is "0" when origin is "store", otherwise it's the revision number.
 	revision string
 }
 
-func testAccCheckApplicationResource(appResource string, checks charmResourceChecks) resource.TestCheckFunc {
+func testAccCheckApplicationResource(ctx context.Context, appResource string, checks charmResourceChecks) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		// retrieve the resource by name from state
 		rs, ok := s.RootModule().Resources[appResource]
@@ -986,7 +1000,7 @@ func testAccCheckApplicationResource(appResource string, checks charmResourceChe
 			return fmt.Errorf("name is not set")
 		}
 
-		conn, err := TestClient.Models.GetConnection(&model_uuid)
+		conn, err := TestClient.Models.GetConnection(ctx, &model_uuid)
 		if err != nil {
 			return err
 		}
@@ -996,7 +1010,7 @@ func testAccCheckApplicationResource(appResource string, checks charmResourceChe
 			return err
 		}
 
-		resources, err := jc.ListResources([]string{appName})
+		resources, err := jc.ListResources(context.TODO(), []string{appName})
 		if err != nil {
 			return err
 		}
@@ -1004,8 +1018,12 @@ func testAccCheckApplicationResource(appResource string, checks charmResourceChe
 			return fmt.Errorf("expected one resource for application %q, got %d", appName, len(resources))
 		}
 		resource := resources[0].Resources[0]
-		if resource.Fingerprint.String() != checks.fingerprint {
-			return fmt.Errorf("expected fingerprint %q, got %q", checks.fingerprint, resource.Fingerprint)
+		expectedFingerprint := checks.fingerprintJuju3
+		if internaltesting.CompareVersions(os.Getenv(TestJujuAgentVersion), "4.0.0") >= 0 {
+			expectedFingerprint = checks.fingerprintJuju4
+		}
+		if resource.Fingerprint.String() != expectedFingerprint {
+			return fmt.Errorf("expected fingerprint %q, got %q", expectedFingerprint, resource.Fingerprint)
 		}
 		if resource.Origin.String() != checks.origin {
 			return fmt.Errorf("expected origin %q, got %q", checks.origin, resource.Origin)
@@ -1383,6 +1401,9 @@ func testAccResourceApplicationBasic_Machines(modelName, charmName string, machi
 }
 
 func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
+	// This skip is temporary until we have a stable version of the provider that supports
+	// Juju 4.0.0 and above, at which point we can re-enable it.
+	SkipAgainstJuju4(t)
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 
@@ -1415,41 +1436,9 @@ func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceApplication_UpgradeV0ToV1(t *testing.T) {
-	modelName := acctest.RandomWithPrefix("tf-test-application")
-	appName := "test-app"
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-
-		Steps: []resource.TestStep{
-			{
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						VersionConstraint: TestProviderPreV1Version,
-						Source:            "juju/juju",
-					},
-				},
-				Config: testAccResourceApplicationVersioned(modelName, appName, 0),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
-					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
-				),
-			},
-			{
-				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceApplicationVersioned(modelName, appName, 1),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
-					resource.TestCheckNoResourceAttr("juju_application.this", "model"),
-				),
-			},
-		},
-	})
-}
-
 func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
+	ctx := t.Context()
+
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -1472,7 +1461,7 @@ func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "ubuntu", "space": publicSpace}),
-					testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(ctx, modelUUID, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace}),
 				),
 			},
 			{
@@ -1485,6 +1474,9 @@ func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
+	SkipAgainstJuju4WithReason(t, "See https://github.com/juju/juju/issues/22233.")
+	ctx := t.Context()
+
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -1506,7 +1498,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "1"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
-					testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, managementSpace, map[string]string{"": managementSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(ctx, modelUUID, appName, managementSpace, map[string]string{"": managementSpace}),
 				),
 			},
 			{
@@ -1517,7 +1509,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "1"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": publicSpace}),
-					testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, publicSpace, map[string]string{"": publicSpace, "ubuntu": publicSpace, "another": publicSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(ctx, modelUUID, appName, publicSpace, map[string]string{"": publicSpace, "ubuntu": publicSpace, "another": publicSpace}),
 				),
 			},
 			{
@@ -1529,7 +1521,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "", "space": managementSpace}),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_application."+appName, "endpoint_bindings.*", map[string]string{"endpoint": "ubuntu", "space": publicSpace}),
-					testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace, "another": managementSpace}),
+					testCheckEndpointsAreSetToCorrectSpace(ctx, modelUUID, appName, managementSpace, map[string]string{"": managementSpace, "ubuntu": publicSpace, "another": managementSpace}),
 				),
 			},
 			{
@@ -1538,7 +1530,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("data.juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "endpoint_bindings.#", "0"),
-					testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, "alpha", map[string]string{"": "alpha", "ubuntu": "alpha", "another": "alpha"}),
+					testCheckEndpointsAreSetToCorrectSpace(ctx, modelUUID, appName, "alpha", map[string]string{"": "alpha", "ubuntu": "alpha", "another": "alpha"}),
 				),
 			},
 			{
@@ -1551,6 +1543,9 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
+	// Storage is not supported in Juju 4.
+	SkipAgainstJuju4(t)
+
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -1579,6 +1574,8 @@ func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_StorageK8s(t *testing.T) {
+	// Storage is not supported in Juju 4.
+	SkipAgainstJuju4(t)
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
@@ -1711,41 +1708,6 @@ func testAccResourceApplicationBasic_Minimal(modelName, charmName string) string
 		`, modelName, charmName)
 }
 
-func testAccResourceApplicationVersioned(modelName, appName string, version int) string {
-	switch version {
-	case 0:
-		return fmt.Sprintf(`
-			resource "juju_model" "this" {
-			  name = %q
-			}
-			
-			resource "juju_application" "this" {
-			  model = juju_model.this.name
-			  name = %q
-			  charm {
-				name = "ubuntu-lite"
-			  }
-			}
-			`, modelName, appName)
-	case 1:
-		return fmt.Sprintf(`
-			resource "juju_model" "this" {
-			  name = %q
-			}
-			
-			resource "juju_application" "this" {
-			  model_uuid = juju_model.this.uuid
-			  name = %q
-			  charm {
-				name = "ubuntu-lite"
-			  }
-			}
-			`, modelName, appName)
-	default:
-		panic(fmt.Sprintf("Unsupported version %d", version))
-	}
-}
-
 func testAccResourceApplicationBasic(modelName, appName string) string {
 	if testingCloud == LXDCloudTesting {
 		return fmt.Sprintf(`
@@ -1779,10 +1741,10 @@ func testAccResourceApplicationBasic(modelName, appName string) string {
 		  trust = true
 		  expose{}
 		  config = {
-			juju-external-hostname="myhostname"
+			%s
 		  }
 		}
-		`, modelName, appName)
+		`, modelName, appName, jujuExternalHostname())
 	}
 }
 
@@ -1821,10 +1783,10 @@ func testAccResourceApplicationScaleUp(modelName, appName, numberOfUnits string)
 		  expose{}
 		  units = %q
 		  config = {
-			juju-external-hostname="myhostname"
+			%s
 		  }
 		}
-		`, modelName, appName, numberOfUnits)
+		`, modelName, appName, numberOfUnits, jujuExternalHostname())
 	}
 }
 
@@ -1934,10 +1896,10 @@ resource "juju_application" "this" {
     "%s" = "%s"
   }
   config = {
-    juju-external-hostname="myhostname"
+    %s
   }
 }
-`, modelName, channel, resourceName, customResource)
+`, modelName, channel, resourceName, customResource, jujuExternalHostname())
 }
 
 func testAccResourceApplicationWithChannelAndRevision(modelName, channel string, revision int) string {
@@ -1974,10 +1936,10 @@ resource "juju_application" "this" {
   trust = true
   expose{}
   config = {
-    juju-external-hostname="myhostname"
+    %s
   }
 }
-`, modelName, channel)
+`, modelName, channel, jujuExternalHostname())
 }
 
 func testAccResourceApplicationUpdates(modelName string, units int, expose bool, hostname string) string {
@@ -2019,16 +1981,16 @@ func testAccResourceApplicationUpdates(modelName string, units int, expose bool,
 		  name = "test-app"
 		  charm {
 			name     = "coredns"
-			revision = 165
+			revision = 191
 		  }
 		  trust = true
 		  %s
 		  config = {
 		  	# hostname = "%s"
-			juju-external-hostname="myhostname"
+			%s
 		  }
 		}
-		`, modelName, units, exposeStr, hostname)
+		`, modelName, units, exposeStr, hostname, jujuExternalHostname())
 	}
 }
 
@@ -2044,9 +2006,6 @@ func testAccResourceApplicationRefreshCharmUpdatesResources(modelName string, re
 		  charm {
 			name     = "coredns"
 			revision = %d
-		  }
-		  config = {
-			juju-external-hostname="myhostname"
 		  }
 		}
 		`, modelName, revision)
@@ -2186,10 +2145,10 @@ resource "juju_application" "this" {
   expose{}
   constraints = "%s"
   config = {
-    juju-external-hostname="myhostname"
+    %s
   }
 }
-`, modelName, constraints)
+`, modelName, constraints, jujuExternalHostname())
 	}
 }
 
@@ -2241,7 +2200,7 @@ func setupModelAndSpaces(t *testing.T, modelName string) (string, string, string
 	// All the space setup is needed until https://github.com/juju/terraform-provider-juju/issues/336 is implemented
 	// called to have TestClient populated
 	testAccPreCheck(t)
-	model, err := TestClient.Models.CreateModel(internaljuju.CreateModelInput{
+	model, err := TestClient.Models.CreateModel(t.Context(), internaljuju.CreateModelInput{
 		Name: modelName,
 	})
 	if err != nil {
@@ -2249,12 +2208,12 @@ func setupModelAndSpaces(t *testing.T, modelName string) (string, string, string
 	}
 	modelUUID := model.UUID
 
-	conn, err := TestClient.Models.GetConnection(&model.UUID)
+	conn, err := TestClient.Models.GetConnection(t.Context(), &model.UUID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	cleanUp := func() {
-		_ = TestClient.Models.DestroyModel(internaljuju.DestroyModelInput{UUID: model.UUID})
+		_ = TestClient.Models.DestroyModel(t.Context(), internaljuju.DestroyModelInput{UUID: model.UUID})
 		_ = conn.Close()
 	}
 
@@ -2267,11 +2226,11 @@ func setupModelAndSpaces(t *testing.T, modelName string) (string, string, string
 	publicSpace := "public"
 	managementSpace := "management"
 	spaceAPIClient := apispaces.NewAPI(conn)
-	err = spaceAPIClient.CreateSpace(managementSpace, []string{managementBridgeCidr}, true)
+	err = spaceAPIClient.CreateSpace(t.Context(), managementSpace, []string{managementBridgeCidr}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = spaceAPIClient.CreateSpace(publicSpace, []string{publicBridgeCidr}, true)
+	err = spaceAPIClient.CreateSpace(t.Context(), publicSpace, []string{publicBridgeCidr}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2382,9 +2341,9 @@ resource "juju_application" "{{.AppName}}" {
 	})
 }
 
-func testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, defaultSpace string, configuredEndpoints map[string]string) resource.TestCheckFunc {
+func testCheckEndpointsAreSetToCorrectSpace(ctx context.Context, modelUUID, appName, defaultSpace string, configuredEndpoints map[string]string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		conn, err := TestClient.Models.GetConnection(&modelUUID)
+		conn, err := TestClient.Models.GetConnection(ctx, &modelUUID)
 		if err != nil {
 			return err
 		}
@@ -2393,7 +2352,10 @@ func testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, defaultSpace str
 		applicationAPIClient := apiapplication.NewClient(conn)
 		clientAPIClient := apiclient.NewClient(conn, TestClient.Applications.JujuLogger())
 
-		apps, err := applicationAPIClient.ApplicationsInfo([]names.ApplicationTag{names.NewApplicationTag(appName)})
+		apps, err := applicationAPIClient.ApplicationsInfo(
+			context.Background(),
+			[]names.ApplicationTag{names.NewApplicationTag(appName)},
+		)
 		if err != nil {
 			return err
 		}
@@ -2416,9 +2378,9 @@ func testCheckEndpointsAreSetToCorrectSpace(modelUUID, appName, defaultSpace str
 		// This is needed to make sure the units have access
 		// to ip addresses part of the spaces
 		for i := 0; i < 50; i++ {
-			status, err := clientAPIClient.Status(&apiclient.StatusArgs{
-				Patterns: []string{appName},
-			})
+			status, err := clientAPIClient.Status(
+				context.Background(),
+				&apiclient.StatusArgs{})
 			if err != nil {
 				return err
 			}

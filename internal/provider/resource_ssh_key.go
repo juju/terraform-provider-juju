@@ -28,7 +28,6 @@ import (
 var _ resource.Resource = &sshKeyResource{}
 var _ resource.ResourceWithConfigure = &sshKeyResource{}
 var _ resource.ResourceWithImportState = &sshKeyResource{}
-var _ resource.ResourceWithUpgradeState = &sshKeyResource{}
 var _ resource.ResourceWithIdentity = &sshKeyResource{}
 
 // NewSSHKeyResource returns an SSH key resource.
@@ -47,11 +46,6 @@ type sshKeyResourceModel struct {
 	Payload types.String `tfsdk:"payload"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
-}
-
-type sshKeyResourceModelV0 struct {
-	sshKeyResourceModel
-	ModelName types.String `tfsdk:"model"`
 }
 
 type sshKeyResourceModelV1 struct {
@@ -121,6 +115,7 @@ func (s *sshKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Description: "SSH key payload.",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
+					SSHKeyCommentInsensitiveModifier(),
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
@@ -163,7 +158,7 @@ func (s *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	modelUUID := plan.ModelUUID.ValueString()
 
-	if err := s.client.SSHKeys.CreateSSHKey(&juju.CreateSSHKeyInput{
+	if err := s.client.SSHKeys.CreateSSHKey(ctx, &juju.CreateSSHKeyInput{
 		Username:  s.client.Username(),
 		ModelUUID: plan.ModelUUID.ValueString(),
 		Payload:   payload,
@@ -221,7 +216,7 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	result, err := s.client.SSHKeys.ReadSSHKey(&juju.ReadSSHKeyInput{
+	result, err := s.client.SSHKeys.ReadSSHKey(ctx, &juju.ReadSSHKeyInput{
 		Username:      s.client.Username(),
 		ModelUUID:     modelUUID,
 		KeyIdentifier: identifier,
@@ -279,7 +274,7 @@ func (s *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 
 	// Delete the key
-	if err := s.client.SSHKeys.DeleteSSHKey(&juju.DeleteSSHKeyInput{
+	if err := s.client.SSHKeys.DeleteSSHKey(ctx, &juju.DeleteSSHKeyInput{
 		Username:      s.client.Username(),
 		ModelUUID:     modelName,
 		KeyIdentifier: identifier,
@@ -288,43 +283,6 @@ func (s *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 	s.trace(fmt.Sprintf("delete ssh_key resource : %q", state.ID.ValueString()))
-}
-
-// UpgradeState upgrades the state of the sshKey resource.
-// This is used to handle changes in the resource schema between versions.
-// V0->V1: Convert attribute `model` to `model_uuid`.
-func (s *sshKeyResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
-	return map[int64]resource.StateUpgrader{
-		0: {
-			PriorSchema: sshKeyV0Schema(),
-			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-				sshKeyV0 := sshKeyResourceModelV0{}
-				resp.Diagnostics.Append(req.State.Get(ctx, &sshKeyV0)...)
-
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				modelUUID, err := s.client.Models.ModelUUID(sshKeyV0.ModelName.ValueString(), "")
-				if err != nil {
-					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", sshKeyV0.ModelName.ValueString(), err))
-					return
-				}
-
-				newID := strings.Replace(sshKeyV0.ID.ValueString(), sshKeyV0.ModelName.ValueString(), modelUUID, 1)
-
-				upgradedStateData := sshKeyResourceModelV1{
-					ModelUUID: types.StringValue(modelUUID),
-					sshKeyResourceModel: sshKeyResourceModel{
-						Payload: sshKeyV0.Payload,
-						ID:      types.StringValue(newID),
-					},
-				}
-
-				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
-			},
-		},
-	}
 }
 
 func (s *sshKeyResource) trace(msg string, additionalFields ...map[string]interface{}) {
@@ -336,29 +294,4 @@ func (s *sshKeyResource) trace(msg string, additionalFields ...map[string]interf
 	// Output:
 	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
 	tflog.SubsystemTrace(s.subCtx, LogResourceSSHKey, msg, additionalFields...)
-}
-
-func sshKeyV0Schema() *schema.Schema {
-	return &schema.Schema{
-		Attributes: map[string]schema.Attribute{
-			"model": schema.StringAttribute{
-				Description: "The name of the model to operate in.",
-				Required:    true,
-			},
-			"payload": schema.StringAttribute{
-				Description: "SSH key payload.",
-				Required:    true,
-				Sensitive:   true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-			},
-			"id": schema.StringAttribute{
-				Computed: true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
-			},
-		},
-	}
 }

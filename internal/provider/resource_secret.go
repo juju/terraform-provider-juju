@@ -25,7 +25,6 @@ import (
 var _ resource.Resource = &secretResource{}
 var _ resource.ResourceWithConfigure = &secretResource{}
 var _ resource.ResourceWithImportState = &secretResource{}
-var _ resource.ResourceWithUpgradeState = &secretResource{}
 var _ resource.ResourceWithIdentity = &secretResource{}
 
 // NewSecretResource returns a secret resource.
@@ -55,12 +54,6 @@ type secretResourceModel struct {
 	Info types.String `tfsdk:"info"`
 	// ID is used during terraform import.
 	ID types.String `tfsdk:"id"`
-}
-
-type secretResourceModelV0 struct {
-	secretResourceModel
-	// Model to which the secret belongs. This attribute is required for all actions.
-	Model types.String `tfsdk:"model"`
 }
 
 type secretResourceModelV1 struct {
@@ -119,7 +112,7 @@ func (s *secretResource) ImportState(ctx context.Context, req resource.ImportSta
 	modelUUID := parts[0]
 	secretName := parts[1]
 
-	readSecretOutput, err := s.client.Secrets.ReadSecret(&juju.ReadSecretInput{
+	readSecretOutput, err := s.client.Secrets.ReadSecret(ctx, &juju.ReadSecretInput{
 		ModelUUID: modelUUID,
 		Name:      &secretName,
 	})
@@ -260,12 +253,14 @@ func (s *secretResource) Create(ctx context.Context, req resource.CreateRequest,
 	secretValue := make(map[string]string)
 	resp.Diagnostics.Append(plan.Value.ElementsAs(ctx, &secretValue, false)...)
 
-	createSecretOutput, err := s.client.Secrets.CreateSecret(&juju.CreateSecretInput{
-		ModelUUID: plan.ModelUUID.ValueString(),
-		Name:      plan.Name.ValueString(),
-		Value:     secretValue,
-		Info:      plan.Info.ValueString(),
-	})
+	createSecretOutput, err := s.client.Secrets.CreateSecret(ctx,
+		&juju.CreateSecretInput{
+			ModelUUID: plan.ModelUUID.ValueString(),
+			Name:      plan.Name.ValueString(),
+			Value:     secretValue,
+			Info:      plan.Info.ValueString(),
+		},
+	)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to add secret, got error: %s", err))
 		return
@@ -312,7 +307,7 @@ func (s *secretResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	s.trace(fmt.Sprintf("reading secret resource %q", state.SecretId))
 
-	readSecretOutput, err := s.client.Secrets.ReadSecret(&juju.ReadSecretInput{
+	readSecretOutput, err := s.client.Secrets.ReadSecret(ctx, &juju.ReadSecretInput{
 		SecretId:  state.SecretId.ValueString(),
 		ModelUUID: state.ModelUUID.ValueString(),
 	})
@@ -410,7 +405,7 @@ func (s *secretResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	err = s.client.Secrets.UpdateSecret(&updatedSecretInput)
+	err = s.client.Secrets.UpdateSecret(ctx, &updatedSecretInput)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update secret, got error: %s", err))
 		return
@@ -440,7 +435,7 @@ func (s *secretResource) Delete(ctx context.Context, req resource.DeleteRequest,
 
 	s.trace(fmt.Sprintf("deleting secret resource %q", state.SecretId))
 
-	err := s.client.Secrets.DeleteSecret(&juju.DeleteSecretInput{
+	err := s.client.Secrets.DeleteSecret(ctx, &juju.DeleteSecretInput{
 		ModelUUID: state.ModelUUID.ValueString(),
 		SecretId:  state.SecretId.ValueString(),
 	})
@@ -461,63 +456,4 @@ func (s *secretResource) trace(msg string, additionalFields ...map[string]interf
 
 func newSecretID(modelUUID, secret string) string {
 	return fmt.Sprintf("%s:%s", modelUUID, secret)
-}
-
-func (o *secretResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
-	return map[int64]resource.StateUpgrader{
-		0: {
-			PriorSchema: &schema.Schema{
-				Attributes: map[string]schema.Attribute{
-					"model": schema.StringAttribute{
-						Required: true,
-					},
-					"name": schema.StringAttribute{
-						Optional: true,
-					},
-					"value": schema.MapAttribute{
-						ElementType: types.StringType,
-						Required:    true,
-						Sensitive:   true,
-					},
-					"secret_id": schema.StringAttribute{
-						Computed: true,
-					},
-					"secret_uri": schema.StringAttribute{
-						Computed: true,
-					},
-					"info": schema.StringAttribute{
-						Optional: true,
-					},
-					"id": schema.StringAttribute{
-						Computed: true,
-					},
-				},
-			},
-			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
-				var priorStateData secretResourceModelV0
-
-				resp.Diagnostics.Append(req.State.Get(ctx, &priorStateData)...)
-				if resp.Diagnostics.HasError() {
-					return
-				}
-
-				modelStr := priorStateData.Model.ValueString()
-				modelUUID, err := o.client.Models.ModelUUID(modelStr, "")
-				if err != nil {
-					resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get model UUID for model %q, got error: %s", modelStr, err))
-					return
-				}
-
-				newID := newSecretID(modelUUID, priorStateData.SecretId.ValueString())
-				priorStateData.ID = types.StringValue(newID)
-
-				upgradedStateData := secretResourceModelV1{
-					ModelUUID:           types.StringValue(modelUUID),
-					secretResourceModel: priorStateData.secretResourceModel,
-				}
-
-				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
-			},
-		},
-	}
 }

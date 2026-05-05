@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/juju/juju/api/jujuclient"
 	"github.com/juju/juju/juju/osenv"
-	"github.com/juju/juju/jujuclient"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )

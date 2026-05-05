@@ -4,9 +4,10 @@ go 1.26.1
 
 require (
 	github.com/bflad/tfproviderlint v0.30.0
-	github.com/hashicorp/terraform-plugin-docs v0.24.0
-	// v3.6.21
-	github.com/juju/juju v0.0.0-20260408003526-d395054dc2c3
+	github.com/hashicorp/terraform-plugin-docs v0.19.4
+	// It's from commit 5a3bd0894d47ebe818daaf60ccc2b86aa2bb13bc in the 4.0 branch of juju
+	// We will need to track an actual release once 4.0.2 is released.
+	github.com/juju/juju v0.0.0-20260310131343-a6375b53c21e
 )
 
 require (
@@ -21,18 +22,20 @@ require (
 	github.com/hashicorp/terraform-plugin-testing v1.14.0
 	github.com/juju/charm/v12 v12.1.1
 	github.com/juju/clock v1.1.1
-	github.com/juju/cmd/v3 v3.2.2
 	github.com/juju/collections v1.0.4
 	github.com/juju/errors v1.0.0
 	github.com/juju/names/v5 v5.0.0
+	github.com/juju/names/v6 v6.0.0-20250512075813-b50ca77a4137
 	github.com/juju/proxy v1.0.0
 	github.com/juju/retry v1.0.1
 	github.com/juju/utils v0.0.0-20200604140309-9d78121a29e0
 	github.com/juju/utils/v3 v3.2.3
+	github.com/juju/utils/v4 v4.0.5
 	github.com/juju/version/v2 v2.0.1
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
+	golang.org/x/crypto v0.48.0
 	gopkg.in/httprequest.v1 v1.2.1
 	gopkg.in/macaroon.v2 v2.1.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -64,24 +67,22 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.29.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.17 // indirect
 	github.com/aws/smithy-go v1.22.3 // indirect
-	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bflad/gopaniccheck v0.1.0 // indirect
 	github.com/bgentry/speakeasy v0.1.0 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.9.1 // indirect
-	github.com/canonical/lxd v0.0.0-20251125210512-b190d213bd11 // indirect
-	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/canonical/sqlair v0.0.0-20260218132926-bd54c4999dea // indirect
 	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
 	github.com/cloudflare/circl v1.6.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/distribution/reference v0.6.0 // indirect
-	github.com/docker/distribution v2.8.3+incompatible // indirect
+	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
-	github.com/go-macaroon-bakery/macaroon-bakery/v3 v3.0.1 // indirect
+	github.com/go-macaroon-bakery/macaroon-bakery/v3 v3.0.2 // indirect
 	github.com/go-macaroon-bakery/macaroonpb v1.0.0 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
@@ -118,38 +119,27 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/juju/ansiterm v1.0.0 // indirect
-	github.com/juju/blobstore/v3 v3.2.2 // indirect
-	github.com/juju/description/v10 v10.0.0 // indirect
-	github.com/juju/featureflag v1.0.0 // indirect
+	github.com/juju/cmd/v3 v3.2.2 // indirect
+	github.com/juju/description/v11 v11.0.0-20260205224702-ea6d3105b20c // indirect
 	github.com/juju/gnuflag v1.0.0 // indirect
 	github.com/juju/go4 v0.0.0-20160222163258-40d72ab9641a // indirect
 	github.com/juju/gojsonpointer v0.0.0-20150204194629-afe8b77aa08f // indirect
 	github.com/juju/gojsonreference v0.0.0-20150204194633-f0d24ac5ee33 // indirect
 	github.com/juju/gojsonschema v1.0.0 // indirect
-	github.com/juju/http/v2 v2.0.1 // indirect
-	github.com/juju/idmclient/v2 v2.0.0 // indirect
+	github.com/juju/idmclient/v2 v2.0.1 // indirect
 	github.com/juju/jsonschema v1.0.0 // indirect
 	github.com/juju/loggo v1.0.0 // indirect
 	github.com/juju/loggo/v2 v2.2.0 // indirect
-	github.com/juju/lru v1.0.0 // indirect
 	github.com/juju/lumberjack/v2 v2.0.2 // indirect
 	github.com/juju/mgo/v3 v3.0.9 // indirect
 	github.com/juju/mutex/v2 v2.0.0 // indirect
 	github.com/juju/os/v2 v2.2.5 // indirect
-	github.com/juju/packaging/v4 v4.0.0 // indirect
 	github.com/juju/persistent-cookiejar v1.0.0 // indirect
-	github.com/juju/pubsub/v2 v2.0.0 // indirect
-	github.com/juju/replicaset/v3 v3.0.1 // indirect
-	github.com/juju/rfc/v2 v2.0.0 // indirect
-	github.com/juju/romulus v1.0.0 // indirect
-	github.com/juju/rpcreflect v1.2.0 // indirect
 	github.com/juju/schema v1.2.0 // indirect
-	github.com/juju/txn/v3 v3.2.1 // indirect
 	github.com/juju/usso v1.0.1 // indirect
 	github.com/juju/webbrowser v1.0.0 // indirect
-	github.com/juju/worker/v3 v3.5.0 // indirect
+	github.com/juju/worker/v4 v4.3.0 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
-	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lestrrat/go-jspointer v0.0.0-20160229021354-f4881e611bdb // indirect
@@ -180,10 +170,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/posener/complete v1.2.3 // indirect
-	github.com/prometheus/client_golang v1.23.2 // indirect
-	github.com/prometheus/client_model v0.6.2 // indirect
-	github.com/prometheus/common v0.67.4 // indirect
-	github.com/prometheus/procfs v0.19.2 // indirect
 	github.com/rogpeppe/fastuuid v1.2.0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/rs/xid v1.6.0 // indirect
@@ -196,24 +182,22 @@ require (
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	github.com/xdg-go/stringprep v1.0.4 // indirect
-	github.com/yuin/goldmark v1.7.7 // indirect
+	github.com/yuin/goldmark v1.7.1 // indirect
 	github.com/yuin/goldmark-meta v1.1.0 // indirect
 	github.com/zclconf/go-cty v1.17.0 // indirect
 	go.abhg.dev/goldmark/frontmatter v0.2.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.50.0 // indirect
 	golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6 // indirect
-	golang.org/x/mod v0.35.0 // indirect
-	golang.org/x/net v0.53.0 // indirect
-	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/term v0.42.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
-	golang.org/x/time v0.15.0 // indirect
-	golang.org/x/tools v0.44.0 // indirect
+	golang.org/x/mod v0.33.0 // indirect
+	golang.org/x/net v0.51.0 // indirect
+	golang.org/x/oauth2 v0.35.0 // indirect
+	golang.org/x/sync v0.19.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/term v0.40.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/time v0.14.0 // indirect
+	golang.org/x/tools v0.42.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/grpc v1.79.2 // indirect
@@ -242,3 +226,6 @@ require (
 // It is needed to avoid this error when running go list -m
 // go: google.golang.org/grpc/naming@v0.0.0-00010101000000-000000000000: invalid version: unknown revision 000000000000
 replace google.golang.org/grpc/naming => google.golang.org/grpc v1.29.1
+
+// Fix compatibility between docker/distribution and distribution/reference
+exclude github.com/docker/distribution v2.8.3+incompatible

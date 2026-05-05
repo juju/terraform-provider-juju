@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -139,7 +140,7 @@ func testAccCheckAttributeNotEmpty(check fetchComputedAttribute) resource.TestCh
 // between the object and target.
 // Object and target are expected to be Juju tags of the form <resource-type>:<id>
 // Use newCheckAttribute to fetch and format resource tags from computed resources.
-func testAccCheckJaasResourceAccess(relation string, object, target *string, expectedAccess bool) resource.TestCheckFunc {
+func testAccCheckJaasResourceAccess(ctx context.Context, relation string, object, target *string, expectedAccess bool) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		if object == nil || *object == "" {
 			return fmt.Errorf("no object set")
@@ -147,12 +148,12 @@ func testAccCheckJaasResourceAccess(relation string, object, target *string, exp
 		if target == nil || *target == "" {
 			return fmt.Errorf("no target set")
 		}
-		conn, err := TestClient.Models.GetConnection(nil)
+		conn, err := TestClient.Models.GetConnection(ctx, nil)
 		if err != nil {
 			return err
 		}
 		defer func() { _ = conn.Close() }()
-		jc := api.NewClient(conn)
+		jc := api.NewClient(juju.JaasConnShim{Connection: conn})
 		req := params.ListRelationshipTuplesRequest{
 			Tuple: params.RelationshipTuple{
 				Object:       *object,

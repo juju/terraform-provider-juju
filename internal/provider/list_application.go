@@ -18,7 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/juju/api/base"
-	jujustorage "github.com/juju/juju/storage"
+	jujustorage "github.com/juju/juju/core/storage"
 	"github.com/juju/names/v5"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -102,7 +102,7 @@ func (r *applicationLister) List(ctx context.Context, req list.ListRequest, stre
 
 	modelUUID := listRequest.ModelUUID.ValueString()
 
-	status, err := r.client.Models.ReadModelStatus(modelUUID)
+	status, err := r.client.Models.ReadModelStatus(ctx, modelUUID)
 	if err != nil {
 		stream.Results = list.ListResultsStreamDiagnostics(
 			diag.Diagnostics{
@@ -215,7 +215,7 @@ func (r *applicationLister) getApplicationResource(
 	diags := diag.Diagnostics{}
 
 	// Read the application
-	res, err := r.client.Applications.ReadApplication(&juju.ReadApplicationInput{
+	res, err := r.client.Applications.ReadApplication(ctx, &juju.ReadApplicationInput{
 		ModelUUID: modelUUID,
 		AppName:   appName,
 	})

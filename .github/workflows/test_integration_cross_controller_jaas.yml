@@ -41,12 +41,12 @@ jobs:
       - name: Set up Docker Compose
         uses: docker/setup-compose-action@v1
 
-      - name: Setup JAAS as offering controller
-        uses: canonical/jimm/.github/actions/test-server@v3
+      - name: Setup JAAS
+        uses: canonical/jimm/.github/actions/test-server@feature/juju-4
         id: jaas
         with:
-          juju-channel: 3/stable
-          jimm-version: v3.3.8
+          juju-channel: 4.0/edge
+          jimm-version: v3.4.0-alpha3
           ghcr-pat: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup the main controller

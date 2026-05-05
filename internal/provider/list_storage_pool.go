@@ -109,7 +109,7 @@ func (r *storagePoolLister) List(ctx context.Context, req list.ListRequest, stre
 		names = append(names, listRequest.Name.ValueString())
 	}
 
-	pools, err := r.client.Storage.ListPools(juju.ListStoragePoolsInput{
+	pools, err := r.client.Storage.ListPools(ctx, juju.ListStoragePoolsInput{
 		ModelUUID: modelUUID,
 		Providers: providers,
 		Names:     names,

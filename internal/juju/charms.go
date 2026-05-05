@@ -4,6 +4,7 @@
 package juju
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/juju/juju/api"
@@ -58,14 +59,14 @@ func newCharmsClient(conn api.Connection) *charmsClient {
 }
 
 // IsSubordinateCharm checks if the given charm is a subordinate charm.
-func (c *charmsClient) IsSubordinateCharm(input IsSubordinateCharmParameters) (bool, error) {
+func (c *charmsClient) IsSubordinateCharm(ctx context.Context, input IsSubordinateCharmParameters) (bool, error) {
 	args := infoParameters{
 		Tag:     names.NewApplicationTag(input.Name).String(),
 		Channel: input.Channel,
 	}
 	result := charmHubEntityInfoResult{}
 
-	err := c.Connection.APICall("CharmHub", 1, "", "Info", args, &result)
+	err := c.Connection.APICall(ctx, "CharmHub", 1, "", "Info", args, &result)
 	if err != nil {
 		return false, err
 	}

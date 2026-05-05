@@ -10,6 +10,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/juju/juju/core/permission"
+	"github.com/stretchr/testify/assert"
 
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
@@ -170,6 +172,69 @@ func TestAcc_ResourceAccessOffer_ErrorWhenUsedWithAdmin(t *testing.T) {
 			},
 		},
 	})
+}
+
+func TestUsersRequiringGrant(t *testing.T) {
+	testCases := []struct {
+		name          string
+		planUsers     []string
+		desiredAccess permission.Access
+		stateUsers    map[string]permission.Access
+		expected      []string
+	}{
+		{
+			name:          "new read user is granted",
+			planUsers:     []string{"alice"},
+			desiredAccess: permission.ReadAccess,
+			stateUsers:    map[string]permission.Access{},
+			expected:      []string{"alice"},
+		},
+		{
+			name:          "unchanged consume user is skipped",
+			planUsers:     []string{"alice"},
+			desiredAccess: permission.ConsumeAccess,
+			stateUsers: map[string]permission.Access{
+				"alice": permission.ConsumeAccess,
+			},
+			expected: []string{},
+		},
+		{
+			name:          "demoted admin user is skipped",
+			planUsers:     []string{"alice"},
+			desiredAccess: permission.ReadAccess,
+			stateUsers: map[string]permission.Access{
+				"alice": permission.AdminAccess,
+			},
+			expected: []string{},
+		},
+		{
+			name:          "promoted read user is granted consume",
+			planUsers:     []string{"alice"},
+			desiredAccess: permission.ConsumeAccess,
+			stateUsers: map[string]permission.Access{
+				"alice": permission.ReadAccess,
+			},
+			expected: []string{"alice"},
+		},
+		{
+			name:          "mixed users only grant additions and promotions",
+			planUsers:     []string{"alice", "bob", "carol", "dave"},
+			desiredAccess: permission.ConsumeAccess,
+			stateUsers: map[string]permission.Access{
+				"alice": permission.ReadAccess,
+				"bob":   permission.ConsumeAccess,
+				"carol": permission.AdminAccess,
+			},
+			expected: []string{"alice", "dave"},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			result := usersRequiringGrant(testCase.planUsers, testCase.desiredAccess, testCase.stateUsers)
+			assert.Equal(t, testCase.expected, result)
+		})
+	}
 }
 
 func testAccResourceAccessOfferFixedUser() string {

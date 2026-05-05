@@ -19,9 +19,11 @@ import (
 	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/api/connector"
+	proxy "github.com/juju/juju/api/proxy/config"
+	"github.com/juju/juju/core/logger"
 	"github.com/juju/juju/core/model"
+	"github.com/juju/juju/core/semversion"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/juju/utils/proxy"
 	"github.com/juju/names/v5"
 	proxyutils "github.com/juju/proxy"
 	"github.com/juju/utils/cache"
@@ -177,7 +179,7 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 		user = fmt.Sprintf("%s%s", config.ClientID, serviceAccountSuffix)
 	}
 
-	isJAAS := sc.IsJAAS(defaultJAASCheck)
+	isJAAS := sc.IsJAAS(ctx, defaultJAASCheck)
 
 	return &Client{
 		Applications: *newApplicationClient(sc),
@@ -193,9 +195,23 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 		Jaas:         *newJaasClient(sc),
 		Annotations:  *newAnnotationsClient(sc),
 		Storage:      *newStorageClient(sc),
-		isJAAS:       func() bool { return sc.IsJAAS(defaultJAASCheck) },
+		isJAAS:       func() bool { return sc.IsJAAS(ctx, defaultJAASCheck) },
 		username:     user,
 	}, nil
+}
+
+// GetControllerVersion returns the version of the controller that the client is connected to.
+func (sc *sharedClient) GetControllerVersion(ctx context.Context) (semversion.Number, error) {
+	conn, err := sc.GetConnection(ctx, nil)
+	if err != nil {
+		return semversion.Number{}, err
+	}
+	defer func() { _ = conn.Close() }()
+	v, ok := conn.ServerVersion()
+	if !ok {
+		return semversion.Number{}, errors.New("failed to get controller version")
+	}
+	return v, nil
 }
 
 // SetProxy sets the default HTTP transport to use the proxy configuration detected by the juju proxyutils package.
@@ -219,15 +235,15 @@ func SetProxy() error {
 // whether they are connecting to JAAS.
 //
 // IsJAAS uses a synchronisation object to only perform the check once and return the same result.
-func (sc *sharedClient) IsJAAS(defaultVal bool) bool {
+func (sc *sharedClient) IsJAAS(ctx context.Context, defaultVal bool) bool {
 	sc.checkJAASOnce.Do(func() {
 		sc.isJAAS = defaultVal
-		conn, err := sc.GetConnection(nil)
+		conn, err := sc.GetConnection(ctx, nil)
 		if err != nil {
 			return
 		}
 		defer conn.Close()
-		jc := jaasApi.NewClient(conn)
+		jc := jaasApi.NewClient(JaasConnShim{conn})
 		_, err = jc.ListControllers()
 		if err == nil {
 			sc.isJAAS = true
@@ -258,12 +274,12 @@ func (sc *sharedClient) WaitForResource() bool {
 
 // GetOfferingControllerConn returns a connection to a controller
 // specified in the offering_controllers configuration.
-func (sc *sharedClient) GetOfferingControllerConn(name string) (api.Connection, error) {
+func (sc *sharedClient) GetOfferingControllerConn(ctx context.Context, name string) (api.Connection, error) {
 	controllerConfig, ok := sc.offeringControllerConfigs[name]
 	if !ok {
 		return nil, errors.NotFoundf("offering controller configuration for %q", name)
 	}
-	return sc.connect(connector.SimpleConfig{
+	return sc.connect(ctx, connector.SimpleConfig{
 		ControllerAddresses: controllerConfig.ControllerAddresses,
 		Username:            controllerConfig.Username,
 		Password:            controllerConfig.Password,
@@ -275,10 +291,10 @@ func (sc *sharedClient) GetOfferingControllerConn(name string) (api.Connection, 
 
 // AddOfferingController adds an offering controller configuration
 // to the sharedClient.
-func (sc *sharedClient) AddOfferingController(name string, conf ControllerConfiguration) error {
+func (sc *sharedClient) AddOfferingController(ctx context.Context, name string, conf ControllerConfiguration) error {
 	sc.offeringControllerConfigs[name] = conf
 	// Test the connection
-	conn, err := sc.GetOfferingControllerConn(name)
+	conn, err := sc.GetOfferingControllerConn(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -304,13 +320,13 @@ func (sc *sharedClient) GetUser() string {
 // GetConnection returns a juju connection for use creating juju
 // api clients. A model UUID can optionally be provided to connect
 // to a specific model.
-func (sc *sharedClient) GetConnection(modelUUID *string) (api.Connection, error) {
+func (sc *sharedClient) GetConnection(ctx context.Context, modelUUID *string) (api.Connection, error) {
 	var modelUUIDStr string
 	if modelUUID != nil {
 		modelUUIDStr = *modelUUID
 	}
 
-	conn, err := sc.connect(connector.SimpleConfig{
+	conn, err := sc.connect(ctx, connector.SimpleConfig{
 		ControllerAddresses: sc.controllerConfig.ControllerAddresses,
 		Username:            sc.controllerConfig.Username,
 		Password:            sc.controllerConfig.Password,
@@ -325,7 +341,7 @@ func (sc *sharedClient) GetConnection(modelUUID *string) (api.Connection, error)
 	return conn, nil
 }
 
-func (sc *sharedClient) connect(conf connector.SimpleConfig) (api.Connection, error) {
+func (sc *sharedClient) connect(ctx context.Context, conf connector.SimpleConfig) (api.Connection, error) {
 	dialOptions := func(do *api.DialOpts) {
 		//this is set as a const above, in case we need to use it elsewhere to manage connection timings
 		do.Timeout = getConnectionTimeout()
@@ -338,7 +354,7 @@ func (sc *sharedClient) connect(conf connector.SimpleConfig) (api.Connection, er
 		return nil, err
 	}
 
-	conn, err := connr.Connect()
+	conn, err := connr.Connect(ctx)
 	if err != nil {
 		sc.Errorf(err, "connection not established")
 		return nil, err
@@ -349,9 +365,9 @@ func (sc *sharedClient) connect(conf connector.SimpleConfig) (api.Connection, er
 // initializeModelCache is a helper function to ensure that the model cache is filled at
 // least once. It should be called before accessing the model cache to ensure that
 // the cache is populated with model data.
-func (sc *sharedClient) initializeModelCache() {
+func (sc *sharedClient) initializeModelCache(ctx context.Context) {
 	sc.modelCacheOnce.Do(func() {
-		if err := sc.fillModelCache(); err != nil {
+		if err := sc.fillModelCache(ctx); err != nil {
 			// Log the error and continue
 			sc.Errorf(err, "failed to do initial fill of the model cache")
 		}
@@ -359,11 +375,11 @@ func (sc *sharedClient) initializeModelCache() {
 }
 
 // ModelOwnerAndName returns the owner and name of the model identified by its UUID.
-func (sc *sharedClient) ModelOwnerAndName(modelUUID string) (owner, name string, err error) {
+func (sc *sharedClient) ModelOwnerAndName(ctx context.Context, modelUUID string) (owner, name string, err error) {
 	sc.modelUUIDmu.Lock()
 	defer sc.modelUUIDmu.Unlock()
 
-	sc.initializeModelCache()
+	sc.initializeModelCache(ctx)
 	modelInfo, ok := sc.modelUUIDcache[modelUUID]
 	if !ok {
 		return "", "", errors.NotFoundf("model %q", modelUUID)
@@ -372,34 +388,15 @@ func (sc *sharedClient) ModelOwnerAndName(modelUUID string) (owner, name string,
 }
 
 // ModelUUID returns the model uuid for the requested model name and owner.
-// The modelName is required while the modelOwner is optional.
-//
-// In pre-v1.0 releases of the provider, resources referred to models by name
-// only. This was deprecated in favor of using the model uuid to avoid ambiguity
-// when multiple models with the same name but different owners exist.
-//
-// To allow for upgrades from pre-v1.0 versions of the provider, the modelOwner
-// can be excluded and the method will search only by model name. This may
-// return an incorrect model if multiple models with the same name exist.
-// In these scenarios the user will find that their plan will specify a different
-// model uuid to the one they expect requiring manual intervention.
-func (sc *sharedClient) ModelUUID(modelName, modelOwner string) (string, error) {
+func (sc *sharedClient) ModelUUID(ctx context.Context, modelName, modelOwner string) (string, error) {
 	sc.modelUUIDmu.Lock()
 	defer sc.modelUUIDmu.Unlock()
 
-	sc.initializeModelCache()
+	sc.initializeModelCache(ctx)
 
-	if modelOwner != "" {
-		sc.Tracef(fmt.Sprintf("ModelUUID cache looking for %q owned by %q", modelName, modelOwner))
-	} else {
-		sc.Tracef(fmt.Sprintf("ModelUUID cache looking for %q with no owner specified", modelName))
-	}
+	sc.Tracef(fmt.Sprintf("ModelUUID cache looking for %q owned by %q", modelName, modelOwner))
 	for uuid, m := range sc.modelUUIDcache {
 		if m.name == modelName {
-			if modelOwner == "" {
-				sc.Tracef(fmt.Sprintf("Found uuid for %q in cache", modelName))
-				return uuid, nil
-			}
 			if modelOwner == m.owner {
 				sc.Tracef(fmt.Sprintf("Found uuid for %q owned by %q in cache", modelName, modelOwner))
 				return uuid, nil
@@ -412,8 +409,8 @@ func (sc *sharedClient) ModelUUID(modelName, modelOwner string) (string, error) 
 // fillModelCache checks with the juju controller for all
 // models and puts the relevant data in the model info cache.
 // Callers are expected to hold the modelUUIDmu lock.
-func (sc *sharedClient) fillModelCache() error {
-	conn, err := sc.GetConnection(nil)
+func (sc *sharedClient) fillModelCache(ctx context.Context) error {
+	conn, err := sc.GetConnection(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -423,7 +420,7 @@ func (sc *sharedClient) fillModelCache() error {
 
 	// Calling ListModelSummaries because other Model endpoints require
 	// the UUID, here we're trying to get the model UUID for other calls.
-	modelSummaries, err := client.ListModelSummaries(conn.AuthTag().Id(), false)
+	modelSummaries, err := client.ListModelSummaries(ctx, conn.AuthTag().Id(), false)
 	if err != nil {
 		return err
 	}
@@ -431,7 +428,7 @@ func (sc *sharedClient) fillModelCache() error {
 		modelWithUUID := jujuModel{
 			name:      modelSummary.Name,
 			modelType: modelSummary.Type,
-			owner:     modelSummary.Owner,
+			owner:     modelSummary.Qualifier.String(),
 		}
 		sc.modelUUIDcache[modelSummary.UUID] = modelWithUUID
 	}
@@ -440,10 +437,10 @@ func (sc *sharedClient) fillModelCache() error {
 
 // ModelType returns the model type for the provided modelUUID from
 // the cache of model data.
-func (sc *sharedClient) ModelType(modelUUID string) (model.ModelType, error) {
+func (sc *sharedClient) ModelType(ctx context.Context, modelUUID string) (model.ModelType, error) {
 	sc.modelUUIDmu.Lock()
 	defer sc.modelUUIDmu.Unlock()
-	sc.initializeModelCache()
+	sc.initializeModelCache(ctx)
 	if !names.IsValidModel(modelUUID) {
 		return "", errors.NotValidf("modelUUID %q is not a valid model UUID", modelUUID)
 	}
@@ -488,18 +485,18 @@ func (sc *sharedClient) AddModel(modelName, modelOwner, modelUUID string, modelT
 	}
 }
 
-func (sc *sharedClient) getModelStatusFunc(uuid string, conn api.Connection) func() (interface{}, error) {
+func (sc *sharedClient) getModelStatusFunc(ctx context.Context, uuid string, conn api.Connection) func() (interface{}, error) {
 	return func() (interface{}, error) {
 		var err error
 		if conn == nil {
-			conn, err = sc.GetConnection(&uuid)
+			conn, err = sc.GetConnection(ctx, &uuid)
 			if err != nil {
 				return nil, err
 			}
 		}
 
 		client := apiclient.NewClient(conn, sc.JujuLogger())
-		status, err := client.Status(nil)
+		status, err := client.Status(ctx, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -509,8 +506,8 @@ func (sc *sharedClient) getModelStatusFunc(uuid string, conn api.Connection) fun
 }
 
 // ModelStatus returns the status of the model identified by its UUID.
-func (sc *sharedClient) ModelStatus(modelUUID string, conn api.Connection) (*params.FullStatus, error) {
-	status, err := sc.modelStatusCache.Get(modelUUID, sc.getModelStatusFunc(modelUUID, conn))
+func (sc *sharedClient) ModelStatus(ctx context.Context, modelUUID string, conn api.Connection) (*params.FullStatus, error) {
+	status, err := sc.modelStatusCache.Get(modelUUID, sc.getModelStatusFunc(ctx, modelUUID, conn))
 	if err != nil {
 		return nil, err
 	}
@@ -566,11 +563,67 @@ type jujuLoggerShim struct {
 	sc *sharedClient
 }
 
-func (j jujuLoggerShim) Errorf(msg string, in ...interface{}) {
+func (j jujuLoggerShim) Errorf(ctx context.Context, msg string, in ...interface{}) {
 	stringInt := make(map[string]interface{}, len(in)+1)
 	stringInt["error"] = msg
 	for i, v := range in {
 		stringInt[strconv.Itoa(i)] = v
 	}
 	tflog.SubsystemError(j.sc.subCtx, LogJujuClient, "juju api logging", map[string]interface{}{"error": msg})
+}
+
+func (j jujuLoggerShim) Criticalf(ctx context.Context, msg string, args ...any) {
+	tflog.SubsystemError(j.sc.subCtx, LogJujuClient, fmt.Sprintf(msg, args...))
+}
+
+func (j jujuLoggerShim) Warningf(ctx context.Context, msg string, args ...any) {
+	tflog.SubsystemWarn(j.sc.subCtx, LogJujuClient, fmt.Sprintf(msg, args...))
+}
+
+func (j jujuLoggerShim) Infof(ctx context.Context, msg string, args ...any) {
+	tflog.SubsystemInfo(j.sc.subCtx, LogJujuClient, fmt.Sprintf(msg, args...))
+}
+
+func (j jujuLoggerShim) Debugf(ctx context.Context, msg string, args ...any) {
+	tflog.SubsystemDebug(j.sc.subCtx, LogJujuClient, fmt.Sprintf(msg, args...))
+}
+
+func (j jujuLoggerShim) Tracef(ctx context.Context, msg string, args ...any) {
+	tflog.SubsystemTrace(j.sc.subCtx, LogJujuClient, fmt.Sprintf(msg, args...))
+}
+
+func (j jujuLoggerShim) Logf(ctx context.Context, level logger.Level, labels logger.Labels, format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	additionalFields := make(map[string]interface{}, len(labels))
+	for k, v := range labels {
+		additionalFields[k] = v
+	}
+	switch level {
+	case 0: // Trace
+		tflog.SubsystemTrace(j.sc.subCtx, LogJujuClient, msg, additionalFields)
+	case 1: // Debug
+		tflog.SubsystemDebug(j.sc.subCtx, LogJujuClient, msg, additionalFields)
+	case 2: // Info
+		tflog.SubsystemInfo(j.sc.subCtx, LogJujuClient, msg, additionalFields)
+	case 3: // Warning
+		tflog.SubsystemWarn(j.sc.subCtx, LogJujuClient, msg, additionalFields)
+	case 4: // Error/Critical
+		tflog.SubsystemError(j.sc.subCtx, LogJujuClient, msg, additionalFields)
+	}
+}
+
+func (j jujuLoggerShim) IsLevelEnabled(level logger.Level) bool {
+	return true
+}
+
+func (j jujuLoggerShim) GetChildByName(name string) logger.Logger {
+	return jujuLoggerShim{sc: j.sc}
+}
+
+func (j jujuLoggerShim) Helper() {
+	// No-op for terraform logging
+}
+
+func (j jujuLoggerShim) Child(name string, tags ...string) logger.Logger {
+	return jujuLoggerShim{sc: j.sc}
 }

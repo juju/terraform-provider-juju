@@ -92,7 +92,7 @@ func (r *machineLister) List(ctx context.Context, req list.ListRequest, stream *
 		return
 	}
 
-	machineIDs, err := r.client.Machines.ListMachines(listRequest.ModelUUID.ValueString())
+	machineIDs, err := r.client.Machines.ListMachines(ctx, listRequest.ModelUUID.ValueString())
 	if err != nil {
 		stream.Results = list.ListResultsStreamDiagnostics(
 			diag.Diagnostics{

@@ -40,8 +40,6 @@ resource "juju_access_offer" "this" {
 
 Import is supported using the following syntax:
 
-The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
-
 ```shell
 # Access Offers can be imported by using the Offer URL as in the juju show-offers output.
 # Example:

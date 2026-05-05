@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -11,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
-	"github.com/juju/version/v2"
+	"github.com/juju/juju/core/semversion"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -33,14 +34,14 @@ func TestAcc_ResourceSSHKey(t *testing.T) {
 				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_ssh_key.this", "model_uuid"),
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
+					testCheckSSHKeyPayload("juju_ssh_key.this", sshKey1)),
 			},
 			// we update the key
 			{
 				Config: testAccResourceSSHKey(modelName, sshKey2),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_ssh_key.this", "model_uuid"),
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey2)),
+					testCheckSSHKeyPayload("juju_ssh_key.this", sshKey2)),
 			},
 			// remove the ssh key resource but keep the model, then verify the key is gone in Juju
 			{
@@ -66,7 +67,7 @@ func TestAcc_ResourceSSHKey_ColonInKeyIdentifier(t *testing.T) {
 				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_ssh_key.this", "model_uuid"),
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
+					testCheckSSHKeyPayload("juju_ssh_key.this", sshKey1)),
 			},
 		},
 	})
@@ -87,7 +88,7 @@ func TestAcc_ResourceSSHKey_WithoutComment(t *testing.T) {
 				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_ssh_key.this", "model_uuid"),
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
+					testCheckSSHKeyPayload("juju_ssh_key.this", sshKey1)),
 			},
 		},
 	})
@@ -136,13 +137,16 @@ func TestAcc_ResourceSSHKey_ED25519(t *testing.T) {
 				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_ssh_key.this", "model_uuid"),
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
+					testCheckSSHKeyPayload("juju_ssh_key.this", sshKey1)),
 			},
 		},
 	})
 }
 
 func TestAcc_ResourceSSHKey_UpgradeProvider(t *testing.T) {
+	// This skip is temporary until we have a stable version of the provider that supports
+	// Juju 4.0.0 and above, at which point we can re-enable it.
+	SkipAgainstJuju4(t)
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -165,42 +169,11 @@ func TestAcc_ResourceSSHKey_UpgradeProvider(t *testing.T) {
 				Config: testAccResourceSSHKey(modelName, sshKey1),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_ssh_key.this", "model_uuid"),
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
+					testCheckSSHKeyPayload("juju_ssh_key.this", sshKey1)),
 			},
 			{
 				ProtoV6ProviderFactories: frameworkProviderFactories,
 				Config:                   testAccResourceSSHKey(modelName, sshKey2),
-			},
-		},
-	})
-}
-
-func TestAcc_ResourceSSHKey_UpgradeV0ToV1(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-	modelName := acctest.RandomWithPrefix("tf-test-sshkey")
-	sshKey1 := `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC1I8QDP79MaHEIAlfh933zqcE8LyUt9doytF3YySBUDWippk8MAaKAJJtNb+Qsi+Kx/RsSY02VxMy9xRTp9d/Vr+U5BctKqhqf3ZkJdTIcy+z4hYpFS8A4bECJFHOnKIekIHD9glHkqzS5Vm6E4g/KMNkKylHKlDXOafhNZAiJ1ynxaZIuedrceFJNC47HnocQEtusPKpR09HGXXYhKMEubgF5tsTO4ks6pplMPvbdjxYcVOg4Wv0N/LJ4ffAucG9edMcKOTnKqZycqqZPE6KsTpSZMJi2Kl3mBrJE7JbR1YMlNwG6NlUIdIqVoTLZgLsTEkHqWi6OExykbVTqFuoWJJY2BmRAcP9T3FdLYbqcajfWshwvPM2AmYb8V3zBvzEKL1rpvG26fd3kGhk3Vu07qAUhHLMi3P0McEky4cLiEWgI7UyHFLI2yMRZgz23UUtxhRSkvCJagRlVG/s4yoylzBQJir8G3qmb36WjBXxpqAXhfLxw05EQI1JGV3ReYOs= jimmy@somewhere`
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-
-		Steps: []resource.TestStep{
-			{
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						VersionConstraint: TestProviderPreV1Version,
-						Source:            "juju/juju",
-					},
-				},
-				Config: testAccResourceSSHKeyV0(modelName, sshKey1),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_ssh_key.this", "payload", sshKey1)),
-			},
-			{
-				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceSSHKey(modelName, sshKey1),
 			},
 		},
 	})
@@ -212,13 +185,13 @@ func testAccCheckSSHKeyAbsent(modelName string, payload string) resource.TestChe
 			return fmt.Errorf("TestClient is not configured")
 		}
 
-		conn, err := TestClient.Models.GetConnection(nil)
+		conn, err := TestClient.Models.GetConnection(context.Background(), nil)
 		if err != nil {
 			return fmt.Errorf("error getting connection: %w", err)
 		}
 		defer func() { _ = conn.Close() }()
 		ctrlVers, _ := conn.ServerVersion()
-		if ctrlVers.Compare(version.MustParse("3.0.0")) < 0 {
+		if ctrlVers.Compare(semversion.MustParse("3.0.0")) < 0 {
 			return nil
 		}
 
@@ -234,7 +207,7 @@ func testAccCheckSSHKeyAbsent(modelName string, payload string) resource.TestChe
 			return fmt.Errorf("could not find model UUID in state")
 		}
 
-		keys, err := TestClient.SSHKeys.ListKeys(juju.ListSSHKeysInput{
+		keys, err := TestClient.SSHKeys.ListKeys(context.Background(), juju.ListSSHKeysInput{
 			Username:  TestClient.Username(),
 			ModelUUID: modelUUID,
 		})
@@ -257,19 +230,6 @@ resource "juju_model" "this" {
 	name = %q
 }
 `, modelName)
-}
-
-func testAccResourceSSHKeyV0(modelName string, sshKey string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "this" {
-	name = %q
-}
-
-resource "juju_ssh_key" "this" {
-	model   = juju_model.this.name
-	payload = %q
-}
-`, modelName, sshKey)
 }
 
 func testAccResourceSSHKey(modelName string, sshKey string) string {
@@ -306,4 +266,21 @@ func testAccMultipleSSHKeys(modelName string, sshKeys []string) string {
 		payload     = var.ssh_keys[count.index]
 	}
 	`, modelName, strings.Join(quotedKeys, ","))
+}
+
+func testCheckSSHKeyPayload(resourceName, expected string) resource.TestCheckFunc {
+	return resource.TestCheckResourceAttrWith(resourceName, "payload", func(actual string) error {
+		expectedClean, err := extractCleanSSHKey(expected)
+		if err != nil {
+			return fmt.Errorf("clean expected ssh key: %w", err)
+		}
+		actualClean, err := extractCleanSSHKey(actual)
+		if err != nil {
+			return fmt.Errorf("clean actual ssh key: %w", err)
+		}
+		if expectedClean != actualClean {
+			return fmt.Errorf("payload mismatch: expected %q got %q", expectedClean, actualClean)
+		}
+		return nil
+	})
 }

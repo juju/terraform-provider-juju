@@ -4,6 +4,7 @@
 package juju
 
 import (
+	"context"
 	"errors"
 
 	"github.com/juju/juju/api/client/storage"
@@ -71,8 +72,8 @@ func newStorageClient(sc SharedClient) *storageClient {
 }
 
 // CreatePool creates pool with specified parameters.
-func (c *storageClient) CreatePool(input CreateStoragePoolInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c *storageClient) CreatePool(ctx context.Context, input CreateStoragePoolInput) error {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -80,12 +81,12 @@ func (c *storageClient) CreatePool(input CreateStoragePoolInput) error {
 
 	client := storage.NewClient(conn)
 
-	return client.CreatePool(input.PoolName, input.Provider, input.Attrs)
+	return client.CreatePool(ctx, input.PoolName, input.Provider, input.Attrs)
 }
 
 // UpdatePool updates a pool with specified parameters.
-func (c *storageClient) UpdatePool(modeluuid, pname, provider string, attrs map[string]interface{}) error {
-	conn, err := c.GetConnection(&modeluuid)
+func (c *storageClient) UpdatePool(ctx context.Context, modeluuid, pname, provider string, attrs map[string]interface{}) error {
+	conn, err := c.GetConnection(ctx, &modeluuid)
 	if err != nil {
 		return err
 	}
@@ -93,12 +94,12 @@ func (c *storageClient) UpdatePool(modeluuid, pname, provider string, attrs map[
 
 	client := storage.NewClient(conn)
 
-	return client.UpdatePool(pname, provider, attrs)
+	return client.UpdatePool(ctx, pname, provider, attrs)
 }
 
 // RemovePool removes the named pool.
-func (c *storageClient) RemovePool(input RemoveStoragePoolInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c *storageClient) RemovePool(ctx context.Context, input RemoveStoragePoolInput) error {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -106,12 +107,12 @@ func (c *storageClient) RemovePool(input RemoveStoragePoolInput) error {
 
 	client := storage.NewClient(conn)
 
-	return client.RemovePool(input.PoolName)
+	return client.RemovePool(ctx, input.PoolName)
 }
 
 // GetPool gets a pool by name.
-func (c *storageClient) GetPool(input GetStoragePoolInput) (GetStoragePoolResponse, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c *storageClient) GetPool(ctx context.Context, input GetStoragePoolInput) (GetStoragePoolResponse, error) {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return GetStoragePoolResponse{}, err
 	}
@@ -119,7 +120,7 @@ func (c *storageClient) GetPool(input GetStoragePoolInput) (GetStoragePoolRespon
 
 	client := storage.NewClient(conn)
 
-	pools, err := client.ListPools([]string{}, []string{input.PoolName})
+	pools, err := client.ListPools(ctx, []string{}, []string{input.PoolName})
 	if err != nil {
 		return GetStoragePoolResponse{}, err
 	}
@@ -131,8 +132,8 @@ func (c *storageClient) GetPool(input GetStoragePoolInput) (GetStoragePoolRespon
 }
 
 // ListPools lists pools, optionally filtered by provider and/or name.
-func (c *storageClient) ListPools(input ListStoragePoolsInput) ([]ListStoragePoolsOutput, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c *storageClient) ListPools(ctx context.Context, input ListStoragePoolsInput) ([]ListStoragePoolsOutput, error) {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +141,7 @@ func (c *storageClient) ListPools(input ListStoragePoolsInput) ([]ListStoragePoo
 
 	client := storage.NewClient(conn)
 
-	pools, err := client.ListPools(input.Providers, input.Names)
+	pools, err := client.ListPools(ctx, input.Providers, input.Names)
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@
 package juju
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -147,8 +148,8 @@ func newSecretsClient(sc SharedClient) *secretsClient {
 }
 
 // CreateSecret creates a new secret.
-func (c *secretsClient) CreateSecret(input *CreateSecretInput) (CreateSecretOutput, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c *secretsClient) CreateSecret(ctx context.Context, input *CreateSecretInput) (CreateSecretOutput, error) {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return CreateSecretOutput{}, err
 	}
@@ -162,7 +163,7 @@ func (c *secretsClient) CreateSecret(input *CreateSecretInput) (CreateSecretOutp
 		encodedValue[k] = base64.StdEncoding.EncodeToString([]byte(v))
 	}
 
-	secretId, err := secretAPIClient.CreateSecret(input.Name, input.Info, encodedValue)
+	secretId, err := secretAPIClient.CreateSecret(ctx, input.Name, input.Info, encodedValue)
 	if err != nil {
 		return CreateSecretOutput{}, typedError(err)
 	}
@@ -177,8 +178,8 @@ func (c *secretsClient) CreateSecret(input *CreateSecretInput) (CreateSecretOutp
 }
 
 // ReadSecret reads a secret.
-func (c *secretsClient) ReadSecret(input *ReadSecretInput) (ReadSecretOutput, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c *secretsClient) ReadSecret(ctx context.Context, input *ReadSecretInput) (ReadSecretOutput, error) {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return ReadSecretOutput{}, err
 	}
@@ -201,7 +202,7 @@ func (c *secretsClient) ReadSecret(input *ReadSecretInput) (ReadSecretOutput, er
 		Revision: input.Revision,
 	}
 
-	results, err := secretAPIClient.ListSecrets(true, secretFilter)
+	results, err := secretAPIClient.ListSecrets(ctx, true, secretFilter)
 	if err != nil {
 		return ReadSecretOutput{}, typedError(err)
 	}
@@ -232,8 +233,8 @@ func (c *secretsClient) ReadSecret(input *ReadSecretInput) (ReadSecretOutput, er
 }
 
 // ListSecrets lists secrets in a model.
-func (c *secretsClient) ListSecrets(input *ListSecretsInput) ([]ListSecretsOutput, error) {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c *secretsClient) ListSecrets(ctx context.Context, input *ListSecretsInput) ([]ListSecretsOutput, error) {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +246,7 @@ func (c *secretsClient) ListSecrets(input *ListSecretsInput) ([]ListSecretsOutpu
 		Label: input.Name,
 	}
 
-	results, err := secretAPIClient.ListSecrets(true, secretFilter)
+	results, err := secretAPIClient.ListSecrets(ctx, true, secretFilter)
 	if err != nil {
 		return nil, typedError(err)
 	}
@@ -277,8 +278,8 @@ func (c *secretsClient) ListSecrets(input *ListSecretsInput) ([]ListSecretsOutpu
 }
 
 // UpdateSecret updates a secret.
-func (c *secretsClient) UpdateSecret(input *UpdateSecretInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c *secretsClient) UpdateSecret(ctx context.Context, input *UpdateSecretInput) error {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -319,13 +320,13 @@ func (c *secretsClient) UpdateSecret(input *UpdateSecretInput) error {
 		}
 		if input.Name == nil {
 			// Update secret without changing the name
-			err = secretAPIClient.UpdateSecret(secretURI, "", input.AutoPrune, "", info, value)
+			err = secretAPIClient.UpdateSecret(ctx, secretURI, "", input.AutoPrune, "", info, value)
 			if err != nil {
 				return typedError(err)
 			}
 		} else {
 			// Update secret with a new name
-			err = secretAPIClient.UpdateSecret(secretURI, "", input.AutoPrune, *input.Name, info, value)
+			err = secretAPIClient.UpdateSecret(ctx, secretURI, "", input.AutoPrune, *input.Name, info, value)
 			if err != nil {
 				return typedError(err)
 			}
@@ -338,8 +339,8 @@ func (c *secretsClient) UpdateSecret(input *UpdateSecretInput) error {
 }
 
 // DeleteSecret deletes a secret.
-func (c *secretsClient) DeleteSecret(input *DeleteSecretInput) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c *secretsClient) DeleteSecret(ctx context.Context, input *DeleteSecretInput) error {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -350,7 +351,7 @@ func (c *secretsClient) DeleteSecret(input *DeleteSecretInput) error {
 		return err
 	}
 	// TODO: think about removing concrete revision.
-	err = secretAPIClient.RemoveSecret(secretURI, "", nil)
+	err = secretAPIClient.RemoveSecret(ctx, secretURI, "", nil)
 	if !errors.Is(err, jujuerrors.NotFound) {
 		return typedError(err)
 	}
@@ -359,8 +360,8 @@ func (c *secretsClient) DeleteSecret(input *DeleteSecretInput) error {
 }
 
 // UpdateAccessSecret updates access to a secret.
-func (c *secretsClient) UpdateAccessSecret(input *GrantRevokeAccessSecretInput, op AccessSecretAction) error {
-	conn, err := c.GetConnection(&input.ModelUUID)
+func (c *secretsClient) UpdateAccessSecret(ctx context.Context, input *GrantRevokeAccessSecretInput, op AccessSecretAction) error {
+	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
 		return err
 	}
@@ -376,9 +377,9 @@ func (c *secretsClient) UpdateAccessSecret(input *GrantRevokeAccessSecretInput, 
 	var results []error
 	switch op {
 	case GrantAccess:
-		results, err = secretAPIClient.GrantSecret(secretURI, "", input.Applications)
+		results, err = secretAPIClient.GrantSecret(ctx, secretURI, "", input.Applications)
 	case RevokeAccess:
-		results, err = secretAPIClient.RevokeSecret(secretURI, "", input.Applications)
+		results, err = secretAPIClient.RevokeSecret(ctx, secretURI, "", input.Applications)
 	default:
 		return errors.New("invalid op")
 	}

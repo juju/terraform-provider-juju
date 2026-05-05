@@ -12,6 +12,14 @@ import (
 )
 
 func TestAcc_ResourceOffer(t *testing.T) {
+	t.Skip(`See https://github.com/juju/juju/issues/22238.
+	
+	Removing test step 1 i.e. config 'testAccResourceOffer' makes the test pass.
+	Removing test step 2 i.e. config 'testAccResourceOfferXIntegration' makes the test pass.
+	
+	Running both steps together causes the test to fail. Keeping this test as-is but marking
+	as skipped to allow for investigation into the underlying issue.`)
+
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -106,6 +114,9 @@ resource "juju_integration" "int" {
 }
 
 func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
+	// This skip is temporary until we have a stable version of the provider that supports
+	// Juju 4.0.0 and above, at which point we can re-enable it.
+	SkipAgainstJuju4(t)
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -125,72 +136,6 @@ func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
 				Config: testAccResourceOffer(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_offer.this", "model_uuid"),
-					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
-					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
-				),
-			},
-			{
-				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceOffer(modelName),
-			},
-		},
-	})
-}
-
-func TestAcc_ResourceOffer_Upgradev0Tov2(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-	modelName := acctest.RandomWithPrefix("tf-test-offer")
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-
-		Steps: []resource.TestStep{
-			{
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						// This is the version with `endpoint` instead of `endpoints`
-						VersionConstraint: "0.19.0",
-						Source:            "juju/juju",
-					},
-				},
-				Config: testAccResourceOfferv0(modelName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
-					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
-					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
-				),
-			},
-			{
-				ProtoV6ProviderFactories: frameworkProviderFactories,
-				Config:                   testAccResourceOffer(modelName),
-			},
-		},
-	})
-}
-
-func TestAcc_ResourceOffer_UpgradeV1ToV2(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-	modelName := acctest.RandomWithPrefix("tf-test-offer")
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck: func() { testAccPreCheck(t) },
-
-		Steps: []resource.TestStep{
-			{
-				ExternalProviders: map[string]resource.ExternalProvider{
-					"juju": {
-						// This is a version using v1 of the offer schema.
-						VersionConstraint: TestProviderPreV1Version,
-						Source:            "juju/juju",
-					},
-				},
-				Config: testAccResourceOfferv1(modelName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_offer.this", "model", modelName),
 					resource.TestCheckResourceAttr("juju_offer.this", "url", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 					resource.TestCheckResourceAttr("juju_offer.this", "id", fmt.Sprintf("%v/%v.%v", expectedResourceOwner(), modelName, "this")),
 				),
@@ -227,57 +172,8 @@ resource "juju_offer" "this" {
 `, modelName)
 }
 
-func testAccResourceOfferv0(modelName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "this" {
-	name = %q
-}
-
-resource "juju_application" "this" {
-	model = juju_model.this.name
-	name  = "this"
-
-	charm {
-		name = "juju-qa-dummy-source"
-		channel = "latest/stable"
-		base = "ubuntu@22.04"
-	}
-}
-
-resource "juju_offer" "this" {
-	model       = juju_model.this.name
-	application_name = juju_application.this.name
-	endpoint         = "sink"
-}
-`, modelName)
-}
-
-func testAccResourceOfferv1(modelName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "this" {
-	name = %q
-}
-
-resource "juju_application" "this" {
-	model = juju_model.this.name
-	name  = "this"
-
-	charm {
-		name = "juju-qa-dummy-source"
-		channel = "latest/stable"
-		base = "ubuntu@22.04"
-	}
-}
-
-resource "juju_offer" "this" {
-	model       = juju_model.this.name
-	application_name = juju_application.this.name
-	endpoints        = ["sink"]
-}
-`, modelName)
-}
-
 func TestAcc_ResourceOfferMultipleEndpoints(t *testing.T) {
+	SkipAgainstJuju4WithReason(t, "See https://github.com/juju/juju/issues/22213")
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
@@ -333,7 +229,7 @@ resource "juju_application" "that" {
 	name  = "that"
 	charm {
 	    name = "grafana-agent-k8s"
-		revision = 149
+		revision = 164
 		channel = "1/stable"
     }
 }
@@ -355,7 +251,7 @@ resource "juju_application" "toc" {
 	name  = "toc"
 	charm {
 	    name = "grafana-agent-k8s"
-		revision = 149
+		revision = 164
 		channel = "1/stable"
     }
 }

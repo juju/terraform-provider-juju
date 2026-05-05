@@ -14,6 +14,8 @@ import (
 )
 
 func TestAcc_DataSourceStoragePool(t *testing.T) {
+	// Storage is not supported in Juju 4.
+	SkipAgainstJuju4(t)
 	// Rootfs, tmpfs and loop are currently not "listable" on k8s (3.6.9) when listing them.
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")

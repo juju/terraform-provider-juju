@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
 const (
@@ -118,6 +119,40 @@ func OnlyTestAgainstJAAS(t *testing.T) {
 	if _, ok := os.LookupEnv("IS_JAAS"); !ok {
 		t.Skip("Skipping JAAS specific test against Juju")
 	}
+}
+
+// SkipAgainstJuju4 should be called at the top of any tests
+// that are not appropriate to run against Juju 4.
+func SkipAgainstJuju4(t *testing.T) {
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "4.0.0") >= 0 {
+		t.Skipf("%s is not set or is below 4.0.0", TestJujuAgentVersion)
+	}
+}
+
+// SkipAgainstJuju4WithReason should be called at the top of any tests
+// that are not appropriate to run against Juju 4, with a reason provided.
+func SkipAgainstJuju4WithReason(t *testing.T, reason string) {
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, "4.0.0") >= 0 {
+		t.Skipf("Skipping test against Juju 4.0.0 and above: %s", reason)
+	}
+}
+
+// jujuExternalHostname returns the juju-external-hostname config line for use
+// in Terraform HCL templates. In Juju < 4.0 this config is an implicit config and
+// it's required to expose an application.
+// In Juju 4.0+ it must be omitted, so an empty string is returned instead.
+func jujuExternalHostname() string {
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion != "" && internaltesting.CompareVersions(agentVersion, "4.0.0") >= 0 {
+		return ""
+	}
+	return `juju-external-hostname="myhostname"`
 }
 
 func TestProviderConfigure(t *testing.T) {
@@ -288,12 +323,12 @@ func setupAcceptanceTests(t *testing.T) {
 	TestClient = providerData.Client
 
 	// Disable OS updates to speed up tests.
-	clouds, err := TestClient.Clouds.ListClouds()
+	clouds, err := TestClient.Clouds.ListClouds(t.Context())
 	if err != nil {
 		t.Fatalf("failed to list clouds: %v", err)
 	}
 	for _, cloud := range clouds {
-		err := TestClient.Models.SetModelDefaults(cloud, "", map[string]any{
+		err := TestClient.Models.SetModelDefaults(t.Context(), cloud, "", map[string]any{
 			"enable-os-upgrade":        false,
 			"enable-os-refresh-update": false,
 		})
@@ -332,7 +367,7 @@ func createCloudCredential(t *testing.T) {
 	cloudName := canonicalCloudName(strings.ToLower(os.Getenv(TestCloudEnvKey)))
 
 	// List controller credentials to bail out early if one already exists.
-	controllerCreds, _ := TestClient.Credentials.ListControllerCredentials()
+	controllerCreds, _ := TestClient.Credentials.ListControllerCredentials(t.Context())
 	// skip checking the error here, because the controller
 	// returns a not found error if no credentials exist
 	// and for any other errors we want to continue anyway.
@@ -346,7 +381,7 @@ func createCloudCredential(t *testing.T) {
 	}
 
 	// List client credentials to check if we have any cloud-credentials.
-	clientCreds, err := TestClient.Credentials.ListClientCredentials()
+	clientCreds, err := TestClient.Credentials.ListClientCredentials(t.Context())
 	if err != nil {
 		t.Fatalf("failed to read cloud-credential from client store: %v", err)
 	}
@@ -366,7 +401,7 @@ func createCloudCredential(t *testing.T) {
 		break
 	}
 
-	_, err = TestClient.Credentials.CreateCredential(createCredential)
+	_, err = TestClient.Credentials.CreateCredential(t.Context(), createCredential)
 	if err != nil {
 		t.Fatalf("failed to create controller credential: %v", err)
 	}

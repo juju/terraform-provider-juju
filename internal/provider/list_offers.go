@@ -99,7 +99,7 @@ func (r *offerLister) List(ctx context.Context, req list.ListRequest, stream *li
 		}
 
 		// List offers
-		offers, err := r.client.Offers.ListOffers(input)
+		offers, err := r.client.Offers.ListOffers(ctx, input)
 		if err != nil {
 			errDiags := diag.NewErrorDiagnostic("Client Error", fmt.Sprintf("Unable to list offers, got error: %s", err))
 			stream.Results = list.ListResultsStreamDiagnostics(diag.Diagnostics{errDiags})

@@ -324,7 +324,7 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 	if len(annotations) > 0 {
-		err = r.client.Annotations.SetAnnotations(&juju.SetAnnotationsInput{
+		err = r.client.Annotations.SetAnnotations(ctx, &juju.SetAnnotationsInput{
 			ModelUUID:   response.UUID,
 			Annotations: annotations,
 			EntityTag:   names.NewModelTag(response.UUID),
@@ -375,7 +375,7 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	imported := state.UUID.ValueString() == "" && state.ID.ValueString() != ""
 	modelUUID := state.ID.ValueString()
-	response, err := r.client.Models.ReadModel(modelUUID)
+	response, err := r.client.Models.ReadModel(ctx, modelUUID)
 	if err != nil {
 		resp.Diagnostics.Append(handleModelNotFoundError(ctx, err, &resp.State)...)
 		return
@@ -426,7 +426,7 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		}
 	}
 
-	annotations, err := r.client.Annotations.GetAnnotations(&juju.GetAnnotationsInput{
+	annotations, err := r.client.Annotations.GetAnnotations(ctx, &juju.GetAnnotationsInput{
 		EntityTag: names.NewModelTag(response.ModelInfo.UUID),
 		ModelUUID: modelUUID,
 	})
@@ -535,7 +535,7 @@ func (r *modelResource) Update(ctx context.Context, req resource.UpdateRequest, 
 			cloudNameInput = clouds[0].Name.ValueString()
 		}
 
-		err = r.client.Models.UpdateModel(juju.UpdateModelInput{
+		err = r.client.Models.UpdateModel(ctx, juju.UpdateModelInput{
 			UUID:        plan.UUID.ValueString(),
 			CloudName:   cloudNameInput,
 			Config:      configMap,
@@ -577,7 +577,7 @@ func (r *modelResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	arg := juju.DestroyModelInput{
 		UUID: modelUUID,
 	}
-	err := r.client.Models.DestroyModel(arg)
+	err := r.client.Models.DestroyModel(ctx, arg)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete model, got error: %s", err))
 		return

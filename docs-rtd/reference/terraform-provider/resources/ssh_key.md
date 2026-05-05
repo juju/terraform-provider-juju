@@ -35,8 +35,6 @@ resource "juju_ssh_key" "mykey" {
 
 Import is supported using the following syntax:
 
-The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
-
 ```shell
 # Keys can be imported with the UUID of the model and the username of the key
 $ terraform import juju_ssh_key.dev-user ssh_key:1d10a751-02c1-43d5-b46b-d84fe04d6fde:dev-user

@@ -183,6 +183,7 @@ func (r *kubernetesCloudResource) Create(ctx context.Context, req resource.Creat
 
 	// Create the kubernetes cloud.
 	cloudCredentialName, err := r.client.Clouds.CreateKubernetesCloud(
+		ctx,
 		&juju.CreateKubernetesCloudInput{
 			Name:                 plan.CloudName.ValueString(),
 			KubernetesConfig:     plan.KubernetesConfig.ValueString(),
@@ -223,6 +224,7 @@ func (r *kubernetesCloudResource) Read(ctx context.Context, req resource.ReadReq
 
 	// Read the kubernetes readKubernetesCloudOutput.
 	readKubernetesCloudOutput, err := r.client.Clouds.ReadKubernetesCloud(
+		ctx,
 		juju.ReadKubernetesCloudInput{
 			Name: state.CloudName.ValueString(),
 		},
@@ -264,6 +266,7 @@ func (r *kubernetesCloudResource) Update(ctx context.Context, req resource.Updat
 
 	// Update the kubernetes cloud.
 	err := r.client.Clouds.UpdateKubernetesCloud(
+		ctx,
 		juju.UpdateKubernetesCloudInput{
 			Name:                 plan.CloudName.ValueString(),
 			KubernetesConfig:     plan.KubernetesConfig.ValueString(),
@@ -299,6 +302,7 @@ func (r *kubernetesCloudResource) Delete(ctx context.Context, req resource.Delet
 
 	// Remove the kubernetes cloud.
 	err := r.client.Clouds.RemoveCloud(
+		ctx,
 		juju.RemoveCloudInput{
 			Name: plan.CloudName.ValueString(),
 		},

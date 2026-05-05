@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -364,7 +365,7 @@ func testAccCheckCloudDestroy(cloudName string) resource.TestCheckFunc {
 			return fmt.Errorf("TestClient is not configured")
 		}
 
-		_, err := TestClient.Clouds.ReadCloud(juju.ReadCloudInput{Name: cloudName})
+		_, err := TestClient.Clouds.ReadCloud(context.Background(), juju.ReadCloudInput{Name: cloudName})
 		if err == nil {
 			return fmt.Errorf("cloud %q still exists", cloudName)
 		}
