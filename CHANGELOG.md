@@ -1,3 +1,26 @@
+# 2.0.0
+
+NOTES:
+* * **This release requires Juju controller version 3 or higher. This version drops the support for 2.9**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the tip of the Juju 4.0 branch.
+
+ENHANCEMENTS
+
+* Enable the Terraform provider to run against Juju 3 & 4 controllers.
+* If you were using a v1 of the Terraform Provider and a Juju 3 controller, if you upgrade to v2 
+  it should require no changes.
+
+BREAKING CHANGES
+
+* Drop support for 2.9 controllers. We will keep supporting 2.9 controllers in the v1 track.
+
+CI & MAINTENANCE
+
+* Enable testing of the Terraform Provider against Juju 3 and 4.
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v1.5.1...v2.0.0
+
 # 1.5.1
 
 NOTES:
