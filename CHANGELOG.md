@@ -8,7 +8,7 @@ NOTES:
 ENHANCEMENTS
 
 * Enable the Terraform provider to run against Juju 3 & 4 controllers.
-* If you are running against a Juju 3 controller, upgrading from latest v1 of the Terraform Provider to v2 should require no changes. See the [upgrade to v2 guide](https://documentation.ubuntu.com/terraform-provider-juju/latest/howto/manage-provider/upgrade-provider-to-v2/) for more information.
+* If you are running against a Juju 3 controller, upgrading from the latest v1 of the Terraform Provider to v2 should require no changes. See the [upgrade to v2 guide](https://documentation.ubuntu.com/terraform-provider-juju/latest/howto/manage-provider/upgrade-provider-to-v2/) for more information.
 
 BREAKING CHANGES
 
