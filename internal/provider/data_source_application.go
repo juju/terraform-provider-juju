@@ -6,8 +6,10 @@ package provider
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -34,6 +36,7 @@ type applicationDataSource struct {
 type applicationDataSourceModel struct {
 	ApplicationName types.String `tfsdk:"name"`
 	ModelUUID       types.String `tfsdk:"model_uuid"`
+	Machines        types.Set    `tfsdk:"machines"`
 }
 
 // Metadata returns the full data source name as used in terraform plans.
@@ -56,6 +59,11 @@ func (d *applicationDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 				Validators: []validator.String{
 					ValidatorMatchString(names.IsValidModel, "must be a valid UUID"),
 				},
+			},
+			MachinesKey: schema.SetAttribute{
+				ElementType: types.StringType,
+				Description: "The machines on which the application's units are placed.",
+				Computed:    true,
 			},
 		},
 	}
@@ -121,6 +129,17 @@ func (d *applicationDataSource) Read(ctx context.Context, req datasource.ReadReq
 
 	data.ApplicationName = types.StringValue(appName)
 	data.ModelUUID = types.StringValue(modelUUID)
+
+	if len(response.Machines) > 0 {
+		var dErr diag.Diagnostics
+		data.Machines, dErr = types.SetValueFrom(ctx, types.StringType, response.Machines)
+		if dErr.HasError() {
+			resp.Diagnostics.Append(dErr...)
+			return
+		}
+	} else {
+		data.Machines = types.SetValueMust(types.StringType, []attr.Value{})
+	}
 
 	d.trace("Found", applicationDataSourceModelForLogging(ctx, &data))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
