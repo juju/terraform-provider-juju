@@ -12,6 +12,7 @@ myst:
 :hidden:
 
 manage-provider/upgrade-provider-to-v1.md
+manage-provider/upgrade-provider-to-v2.md
 ```
 
 (install-the-terraform-provider-for-juju)=
