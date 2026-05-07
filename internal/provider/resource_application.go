@@ -398,9 +398,6 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Description: "The revision of the charm to deploy. During the update phase, the charm revision should be update before config update, to avoid issues with config parameters parsing.",
 							Optional:    true,
 							Computed:    true,
-							PlanModifiers: []planmodifier.Int64{
-								int64planmodifier.UseStateForUnknown(),
-							},
 						},
 						BaseKey: schema.StringAttribute{
 							Description: "The operating system on which to deploy. E.g. ubuntu@22.04. Changing this value for machine charms will trigger a replace by terraform.",
@@ -1099,10 +1096,12 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 			updateApplicationInput.Channel = stateCharm.Channel.ValueString()
 		}
 
-		if !planCharm.Revision.Equal(stateCharm.Revision) {
-			updateApplicationInput.Revision = intPtr(planCharm.Revision)
-		} else {
-			updateApplicationInput.Revision = intPtr(stateCharm.Revision)
+		if !planCharm.Revision.IsNull() && !planCharm.Revision.IsUnknown() {
+			if !planCharm.Revision.Equal(stateCharm.Revision) {
+				updateApplicationInput.Revision = intPtr(planCharm.Revision)
+			} else {
+				updateApplicationInput.Revision = intPtr(stateCharm.Revision)
+			}
 		}
 
 		if !planCharm.Base.Equal(stateCharm.Base) {
@@ -1278,6 +1277,19 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read application resource after update, got error: %s", err))
 		return
 	}
+
+	charmType := req.Config.Schema.GetBlocks()[CharmKey].(schema.ListNestedBlock).NestedObject.Type()
+	updatedCharm, charmDiags := types.ListValueFrom(ctx, charmType, []nestedCharm{{
+		Name:     types.StringValue(readResp.Name),
+		Channel:  types.StringValue(readResp.Channel),
+		Revision: types.Int64Value(int64(readResp.Revision)),
+		Base:     types.StringValue(readResp.Base),
+	}})
+	if charmDiags.HasError() {
+		resp.Diagnostics.Append(charmDiags...)
+		return
+	}
+	plan.Charm = updatedCharm
 
 	// If the plan has refreshed the charm, changed the unit count,
 	// or changed placement, wait for the changes to be seen in

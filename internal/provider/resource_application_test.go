@@ -480,31 +480,83 @@ func TestAcc_ResourceApplication_UpdatesRevisionConfig(t *testing.T) {
 	})
 }
 
-func TestAcc_CharmUpdates(t *testing.T) {
+func TestAcc_CharmUpdatesNoRevision(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-charmupdates")
+	initialVersion := 0
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/stable"),
+				Config: testAccResourceApplicationUpdatesCharm(modelName, "1.33/stable"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "1.33/stable"),
+					func(s *terraform.State) error {
+						// Use a check to grab the application revision and set it to initialVersion variable to be used in the next step.
+						rs, ok := s.RootModule().Resources["juju_application.this"]
+						if !ok {
+							return fmt.Errorf("not found: juju_application.this")
+						}
+						initialVersionStr := rs.Primary.Attributes["charm.0.revision"]
+						var err error
+						initialVersion, err = strconv.Atoi(initialVersionStr)
+						if err != nil {
+							return fmt.Errorf("error converting revision to int: %v", err)
+						}
+						if initialVersion == 0 {
+							return fmt.Errorf("expected initial charm revision to be non-zero, got %d", initialVersion)
+						}
+						return nil
+					},
 				),
 			},
 			{
-				// move to latest/edge
-				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/edge"),
+				// move to 1.34/stable
+				Config: testAccResourceApplicationUpdatesCharm(modelName, "1.34/stable"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/edge"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "1.34/stable"),
+					func(s *terraform.State) error {
+						// Check that the charm revision has been updated to a new revision different from the initialVersion.
+						rs, ok := s.RootModule().Resources["juju_application.this"]
+						if !ok {
+							return fmt.Errorf("not found: juju_application.this")
+						}
+						newVersionStr := rs.Primary.Attributes["charm.0.revision"]
+						var err error
+						newVersion, err := strconv.Atoi(newVersionStr)
+						if err != nil {
+							return fmt.Errorf("error converting revision to int: %v", err)
+						}
+						if newVersion == initialVersion {
+							return fmt.Errorf("expected charm revision to be updated from %d, but it is still %d", initialVersion, newVersion)
+						}
+						return nil
+					},
 				),
 			},
 			{
-				// move back to latest/stable
-				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/stable"),
+				// move back to 1.33/stable
+				Config: testAccResourceApplicationUpdatesCharm(modelName, "1.33/stable"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "1.33/stable"),
+					func(s *terraform.State) error {
+						// Check that the charm revision has been updated back to the initialVersion.
+						rs, ok := s.RootModule().Resources["juju_application.this"]
+						if !ok {
+							return fmt.Errorf("not found: juju_application.this")
+						}
+						revisionStr := rs.Primary.Attributes["charm.0.revision"]
+						var err error
+						revision, err := strconv.Atoi(revisionStr)
+						if err != nil {
+							return fmt.Errorf("error converting revision to int: %v", err)
+						}
+						if revision != initialVersion {
+							return fmt.Errorf("expected charm revision to be updated back to initial version %d, but it is %d", initialVersion, revision)
+						}
+						return nil
+					},
 				),
 			},
 		},
@@ -2063,7 +2115,7 @@ func testAccResourceApplicationUpdatesCharm(modelName string, channel string) st
 		  model_uuid = juju_model.this.uuid
 		  name = "test-app"
 		  charm {
-			name     = "ubuntu"
+			name     = "k8s-worker"
 			channel = %q
 		  }
 		}
