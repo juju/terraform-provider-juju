@@ -239,10 +239,8 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Description: "The number of application units to deploy for the charm.",
 				Optional:    true,
 				Computed:    true,
-				//Default:     int64default.StaticInt64(int64(1)),
 				PlanModifiers: []planmodifier.Int64{
 					UnitCountModifier(),
-					int64planmodifier.UseStateForUnknown(),
 				},
 			},
 			ConfigKey: schema.MapAttribute{

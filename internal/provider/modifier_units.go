@@ -44,8 +44,24 @@ func (m unitCountModifier) PlanModifyInt64(ctx context.Context, req planmodifier
 		return
 	}
 
+	// If machines is unknown (e.g. machine IDs not yet known from a dependency),
+	// defer the unit count so Terraform can resolve it after apply.
+	if machines.IsUnknown() {
+		resp.PlanValue = types.Int64Unknown()
+		return
+	}
+
 	if len(machines.Elements()) > 0 {
 		resp.PlanValue = types.Int64Value(int64(len(machines.Elements())))
+		return
+	}
+
+	// No machines set. Preserve the existing state value when updating an
+	// existing resource (avoids spurious diffs when Juju transiently reports
+	// zero units right after deployment). Only default to 1 when creating a
+	// new resource (state is null).
+	if !req.StateValue.IsNull() && !req.StateValue.IsUnknown() {
+		resp.PlanValue = req.StateValue
 		return
 	}
 
