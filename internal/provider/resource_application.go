@@ -398,6 +398,10 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Description: "The revision of the charm to deploy. During the update phase, the charm revision should be update before config update, to avoid issues with config parameters parsing.",
 							Optional:    true,
 							Computed:    true,
+							PlanModifiers: []planmodifier.Int64{
+								int64planmodifier.UseStateForUnknown(),
+								InvalidateRevisionIfChannelChanges(),
+							},
 						},
 						BaseKey: schema.StringAttribute{
 							Description: "The operating system on which to deploy. E.g. ubuntu@22.04. Changing this value for machine charms will trigger a replace by terraform.",
@@ -1082,30 +1086,21 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	if !plan.Charm.Equal(state.Charm) {
-		var planCharms, stateCharms []nestedCharm
+		var planCharms []nestedCharm
 		resp.Diagnostics.Append(plan.Charm.ElementsAs(ctx, &planCharms, false)...)
-		resp.Diagnostics.Append(state.Charm.ElementsAs(ctx, &stateCharms, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 		planCharm := planCharms[0]
-		stateCharm := stateCharms[0]
-		if !planCharm.Channel.Equal(stateCharm.Channel) {
-			updateApplicationInput.Channel = planCharm.Channel.ValueString()
+		updateApplicationInput.Channel = planCharm.Channel.ValueString()
+		updateApplicationInput.Base = planCharm.Base.ValueString()
+
+		// If the revision was left empty in the plan, leave it empty here
+		// to ensure we use the latest from the channel, otherwise keep it pinned.
+		if planCharm.Revision.IsUnknown() || planCharm.Revision.IsNull() {
+			updateApplicationInput.Revision = nil
 		} else {
-			updateApplicationInput.Channel = stateCharm.Channel.ValueString()
-		}
-
-		if !planCharm.Revision.IsNull() && !planCharm.Revision.IsUnknown() {
-			if !planCharm.Revision.Equal(stateCharm.Revision) {
-				updateApplicationInput.Revision = intPtr(planCharm.Revision)
-			} else {
-				updateApplicationInput.Revision = intPtr(stateCharm.Revision)
-			}
-		}
-
-		if !planCharm.Base.Equal(stateCharm.Base) {
-			updateApplicationInput.Base = planCharm.Base.ValueString()
+			updateApplicationInput.Revision = intPtr(planCharm.Revision)
 		}
 	}
 
