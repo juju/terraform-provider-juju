@@ -236,11 +236,11 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				},
 			},
 			UnitsKey: schema.Int64Attribute{
-				Description:   "The number of application units to deploy for the charm.",
-				Optional:      true,
-				Computed:      true,
+				Description: "The number of application units to deploy for the charm.",
+				Optional:    true,
+				Computed:    true,
 				PlanModifiers: []planmodifier.Int64{
-					// int64planmodifier.UseStateForUnknown(),
+					int64planmodifier.UseStateForUnknown(),
 				},
 			},
 			ConfigKey: schema.MapAttribute{
@@ -1162,6 +1162,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 
 		if len(planMachines) > 0 {
 			asserts = append(asserts, assertEqualsMachines(planMachines))
+			plan.UnitCount = types.Int64Value(int64(len(planMachines)))
 		}
 	}
 
@@ -1319,11 +1320,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 			plan.Storage.IsNull()
 		}
 	}
-	if readResp.Principal || readResp.Units > 0 {
-		plan.UnitCount = types.Int64Value(int64(readResp.Units))
-	} else {
-		plan.UnitCount = types.Int64Value(1)
-	}
+
 	plan.ModelType = state.ModelType
 	plan.ID = types.StringValue(newAppID(plan.ModelUUID.ValueString(), plan.ApplicationName.ValueString()))
 	r.trace("Updated", applicationResourceModelForLogging(ctx, &plan))
