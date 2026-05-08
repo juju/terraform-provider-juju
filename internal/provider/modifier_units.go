@@ -56,5 +56,14 @@ func (m unitCountModifier) PlanModifyInt64(ctx context.Context, req planmodifier
 		return
 	}
 
+	// No machines set. Preserve the existing state value when updating an
+	// existing resource (avoids spurious diffs when Juju transiently reports
+	// zero units right after deployment). Only default to 1 when creating a
+	// new resource (state is null).
+	if !req.StateValue.IsNull() && !req.StateValue.IsUnknown() {
+		resp.PlanValue = req.StateValue
+		return
+	}
+
 	resp.PlanValue = types.Int64Value(1)
 }

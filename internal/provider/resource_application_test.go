@@ -2968,6 +2968,16 @@ func TestAcc_ResourceApplication_UnknownMachinesUnitsDeferred(t *testing.T) {
 					},
 				},
 			},
+			{
+				// After apply the machines are known; units must equal the
+				// number of machines (2) and the plan must be stable — i.e.
+				// the modifier must NOT drift units back to 1 from the state
+				// value of 2.
+				Config: testAccResourceApplicationUnknownMachines(modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "units", "2"),
+				),
+			},
 		},
 	})
 }
