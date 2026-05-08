@@ -20,7 +20,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -237,10 +236,12 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 				},
 			},
 			UnitsKey: schema.Int64Attribute{
-				Description: "The number of application units to deploy for the charm.",
-				Optional:    true,
-				Computed:    true,
-				Default:     int64default.StaticInt64(1),
+				Description:   "The number of application units to deploy for the charm.",
+				Optional:      true,
+				Computed:      true,
+				PlanModifiers: []planmodifier.Int64{
+					// int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			ConfigKey: schema.MapAttribute{
 				Description: "Application specific configuration. Must evaluate to a string, integer or boolean.",
