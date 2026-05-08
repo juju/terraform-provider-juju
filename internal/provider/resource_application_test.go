@@ -1103,7 +1103,7 @@ func TestAcc_ResourceApplication_MachinesWithSubordinates(t *testing.T) {
 	charmName := "juju-qa-test"
 
 	resourceName := "juju_application.testapp"
-	numberOfMachines := 3
+	numberOfMachines := 10
 
 	checkResourceAttrMachines := func(numberOfMachines int) []resource.TestCheckFunc {
 		return []resource.TestCheckFunc{
@@ -1135,11 +1135,11 @@ func TestAcc_ResourceApplication_MachinesWithSubordinates(t *testing.T) {
 				checkResourceAttrMachines(numberOfMachines - 1)...),
 		}, {
 			ConfigVariables: config.Variables{
-				"machines": config.IntegerVariable(1),
+				"machines": config.IntegerVariable(2),
 			},
 			Config: testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmName),
 			Check: resource.ComposeTestCheckFunc(
-				checkResourceAttrMachines(1)...),
+				checkResourceAttrMachines(2)...),
 		}, {
 			ImportStateVerify: true,
 			ImportState:       true,
