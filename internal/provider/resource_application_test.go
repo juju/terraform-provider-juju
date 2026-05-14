@@ -1694,18 +1694,31 @@ resource "juju_application" "{{.AppName}}" {
 }
 
 func testAccResourceApplicationBasic_Minimal(modelName, charmName string) string {
+	arch := os.Getenv("ARCH")
+	if arch == "" {
+		arch = "amd64"
+	}
 	return fmt.Sprintf(`
+		data "juju_charm" "test" {
+		  charm        = %q
+		  architecture = %q
+		  channel      = "latest/stable"
+		  base         = "ubuntu@22.04"
+		}
+		
 		resource "juju_model" "testmodel" {
 		  name = %q
 		}
 		
 		resource "juju_application" "testapp" {
-		  model_uuid = juju_model.testmodel.uuid
+		  model_uuid  = juju_model.testmodel.uuid
+		  constraints = "arch=%s"
 		  charm {
-			name = %q
+			name     = %q
+			revision = data.juju_charm.test.revision
 		  }
 		}
-		`, modelName, charmName)
+		`, charmName, arch, modelName, arch, charmName)
 }
 
 func testAccResourceApplicationBasic(modelName, appName string) string {
