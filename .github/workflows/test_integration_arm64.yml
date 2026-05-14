@@ -1,0 +1,71 @@
+# Terraform Provider arm64 testing workflow
+# This workflow runs a single test on arm64 architecture
+# to verify compatibility with ARM-based deployments.
+name: Integration tests (arm64)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "internal/provider/resource_application_test.go"
+      - ".github/workflows/test_integration_arm64.yml"
+  workflow_dispatch:
+    inputs:
+      juju_channel:
+        description: "Juju channel to test"
+        required: false
+        default: "3/stable"
+        type: choice
+        options:
+          - "3/stable"
+          - "3.6/stable"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-arm64-lxd:
+    name: Integration (arm64, LXD)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    env:
+      ARCH: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.*"
+          terraform_wrapper: false
+          skip_checksum_verification: true
+      - name: Setup operator environment
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: lxd
+          channel: "5.21/stable"
+          juju-channel: ${{ github.event.inputs.juju_channel || '3/stable' }}
+          lxd-channel: "5.21/stable"
+      - name: "Set environment to configure provider"
+        run: |
+          CONTROLLER=$(juju whoami --format yaml | yq .controller)
+
+          echo "JUJU_AGENT_VERSION=$(juju show-controller | yq .$CONTROLLER.details.agent-version |tr -d '"')" >> $GITHUB_ENV
+          echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq .$CONTROLLER.details.api-endpoints | yq -r '. | join(",")')" >> $GITHUB_ENV
+          echo "JUJU_USERNAME=$(juju show-controller | yq .$CONTROLLER.account.user)"  >> $GITHUB_ENV
+          echo "JUJU_PASSWORD=$(cat ~/.local/share/juju/accounts.yaml | yq .controllers.$CONTROLLER.password)"  >> $GITHUB_ENV
+          echo "JUJU_CA_CERT<<EOF" >> $GITHUB_ENV
+          juju show-controller | yq .$CONTROLLER.details.ca-cert >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "JUJU_SKIP_FAILED_DELETION=true" >> $GITHUB_ENV
+      - env:
+          TF_ACC: "1"
+          TEST_CLOUD: lxd
+          ARCH: arm64
+        run: go test -v -timeout 90m -run TestAcc_ResourceApplication_Minimal ./internal/provider/
