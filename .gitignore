@@ -26,4 +26,3 @@ vendor/
 __debug_bin
 test.env
 /tmp
-modules/
