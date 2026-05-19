@@ -38,6 +38,7 @@ func NewOfferResource() resource.Resource {
 
 type offerResource struct {
 	client *juju.Client
+	config juju.Config
 
 	// subCtx is the context created with the new tflog subsystem for applications.
 	subCtx context.Context
@@ -275,7 +276,8 @@ func (o *offerResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 
 	err := o.client.Offers.DestroyOffer(ctx, &juju.DestroyOfferInput{
-		OfferURL: plan.URL.ValueString(),
+		OfferURL:            plan.URL.ValueString(),
+		ForceFailedDeletion: o.config.ForceFailedDeletion,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete offer, got error: %s", err))
@@ -297,6 +299,7 @@ func (o *offerResource) Configure(ctx context.Context, req resource.ConfigureReq
 	}
 
 	o.client = provider.Client
+	o.config = provider.Config
 	// Create the local logging subsystem here, using the TF context when creating it.
 	o.subCtx = tflog.NewSubsystem(ctx, LogResourceOffer)
 }

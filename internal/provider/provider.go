@@ -45,6 +45,8 @@ const (
 	JujuClientSecretEnvKey = "JUJU_CLIENT_SECRET"
 	// SkipFailedDeletionEnvKey is the env var for skip-failed-deletion behavior.
 	SkipFailedDeletionEnvKey = "JUJU_SKIP_FAILED_DELETION"
+	// ForceFailedDeletionEnvKey is the env var for force-failed-deletion behavior.
+	ForceFailedDeletionEnvKey = "JUJU_FORCE_FAILED_DELETION"
 
 	// ControllerMode is the provider config key for controller mode.
 	ControllerMode = "controller_mode"
@@ -62,6 +64,8 @@ const (
 	JujuCACert = "ca_certificate"
 	// SkipFailedDeletion is the provider config key for skip-failed-deletion behavior.
 	SkipFailedDeletion = "skip_failed_deletion"
+	// ForceFailedDeletion is the provider config key for force-failed-deletion behavior.
+	ForceFailedDeletion = "force_failed_deletion"
 	// JujuOfferingControllers is the provider config key for offering controllers.
 	JujuOfferingControllers = "offering_controllers"
 
@@ -80,14 +84,30 @@ func jujuProviderModelEnvVar(diags diag.Diagnostics) jujuProviderModel {
 			fmt.Sprintf("The value %q is not a valid boolean. Defaulting to false.", skipFailedDeletionStrVal))
 	}
 
+	forceFailedDeletionStrVal := os.Getenv(ForceFailedDeletionEnvKey)
+	var forceFailedDeletion types.Bool
+	if forceFailedDeletionStrVal == "" {
+		forceFailedDeletion = types.BoolNull()
+	} else {
+		parsed, err := strconv.ParseBool(forceFailedDeletionStrVal)
+		if err != nil {
+			diags.AddWarning(fmt.Sprintf("Invalid value for %s", ForceFailedDeletion),
+				fmt.Sprintf("The value %q is not a valid boolean. Defaulting to true.", forceFailedDeletionStrVal))
+			forceFailedDeletion = types.BoolNull()
+		} else {
+			forceFailedDeletion = types.BoolValue(parsed)
+		}
+	}
+
 	return jujuProviderModel{
-		ControllerAddrs:    getEnvVar(JujuControllerEnvKey),
-		CACert:             getEnvVar(JujuCACertEnvKey),
-		ClientID:           getEnvVar(JujuClientIDEnvKey),
-		ClientSecret:       getEnvVar(JujuClientSecretEnvKey),
-		UserName:           getEnvVar(JujuUsernameEnvKey),
-		Password:           getEnvVar(JujuPasswordEnvKey),
-		SkipFailedDeletion: types.BoolValue(skipFailedDeletion),
+		ControllerAddrs:     getEnvVar(JujuControllerEnvKey),
+		CACert:              getEnvVar(JujuCACertEnvKey),
+		ClientID:            getEnvVar(JujuClientIDEnvKey),
+		ClientSecret:        getEnvVar(JujuClientSecretEnvKey),
+		UserName:            getEnvVar(JujuUsernameEnvKey),
+		Password:            getEnvVar(JujuPasswordEnvKey),
+		SkipFailedDeletion:  types.BoolValue(skipFailedDeletion),
+		ForceFailedDeletion: forceFailedDeletion,
 	}
 }
 
@@ -172,7 +192,8 @@ type jujuProviderModel struct {
 	ClientID        types.String `tfsdk:"client_id"`
 	ClientSecret    types.String `tfsdk:"client_secret"`
 
-	SkipFailedDeletion types.Bool `tfsdk:"skip_failed_deletion"`
+	SkipFailedDeletion  types.Bool `tfsdk:"skip_failed_deletion"`
+	ForceFailedDeletion types.Bool `tfsdk:"force_failed_deletion"`
 
 	OfferingControllers types.Map `tfsdk:"offering_controllers"`
 }
@@ -206,6 +227,9 @@ func (j jujuProviderModel) merge(in jujuProviderModel, from string) (jujuProvide
 	mergedModel := j
 	if mergedModel.SkipFailedDeletion.IsNull() {
 		mergedModel.SkipFailedDeletion = in.SkipFailedDeletion
+	}
+	if mergedModel.ForceFailedDeletion.IsNull() {
+		mergedModel.ForceFailedDeletion = in.ForceFailedDeletion
 	}
 	if mergedModel.ControllerAddrs.ValueString() == "" {
 		mergedModel.ControllerAddrs = in.ControllerAddrs
@@ -306,6 +330,10 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 			},
 			SkipFailedDeletion: schema.BoolAttribute{
 				Description: fmt.Sprintf("Whether to issue a warning instead of an error and continue if a resource deletion fails. This can also be set by the `%s` environment variable. Defaults to false.", SkipFailedDeletionEnvKey),
+				Optional:    true,
+			},
+			ForceFailedDeletion: schema.BoolAttribute{
+				Description: fmt.Sprintf("Whether to force-destroy an offer that still has active connections after the timeout period has elapsed, instead of returning an error. This can also be set by the `%s` environment variable. Defaults to true.", ForceFailedDeletionEnvKey),
 				Optional:    true,
 			},
 			JujuOfferingControllers: schema.MapNestedAttribute{
@@ -410,8 +438,9 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 
 	providerData := juju.ProviderData{
 		Config: juju.Config{
-			ControllerMode:     data.ControllerMode.ValueBool(),
-			SkipFailedDeletion: data.SkipFailedDeletion.ValueBool(),
+			ControllerMode:      data.ControllerMode.ValueBool(),
+			SkipFailedDeletion:  data.SkipFailedDeletion.ValueBool(),
+			ForceFailedDeletion: data.ForceFailedDeletion.IsNull() || data.ForceFailedDeletion.ValueBool(),
 		},
 	}
 
