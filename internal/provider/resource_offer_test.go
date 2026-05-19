@@ -53,6 +53,9 @@ func TestAcc_ResourceOffer(t *testing.T) {
 				),
 			},
 			{
+				Config: testAccResourceOfferWithoutIntegration(modelName2, destModelName),
+			},
+			{
 				Destroy:           true,
 				ImportStateVerify: true,
 				ImportState:       true,
@@ -108,6 +111,44 @@ resource "juju_integration" "int" {
 
 	application {
 		offer_url = juju_offer.offerone.url
+	}
+}
+`, srcModelName, destModelName)
+}
+
+func testAccResourceOfferWithoutIntegration(srcModelName string, destModelName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "modelone" {
+	name = %q
+}
+
+resource "juju_application" "appone" {
+	model_uuid = juju_model.modelone.uuid
+	name  = "appone"
+
+	charm {
+		name = "juju-qa-dummy-source"
+		base = "ubuntu@22.04"
+	}
+}
+
+resource "juju_offer" "offerone" {
+	model_uuid = juju_model.modelone.uuid
+	application_name = juju_application.appone.name
+	endpoints         = ["sink"]
+}
+
+resource "juju_model" "modeldest" {
+	name = %q
+}
+
+resource "juju_application" "apptwo" {
+	model_uuid = juju_model.modeldest.uuid
+	name = "apptwo"
+
+	charm {
+		name = "juju-qa-dummy-sink"
+		base = "ubuntu@22.04"
 	}
 }
 `, srcModelName, destModelName)
