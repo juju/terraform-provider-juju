@@ -280,7 +280,7 @@ func (c *offersClient) DestroyOffer(ctx context.Context, input *DestroyOfferInpu
 	}
 	if len(offer.Connections) > 0 {
 		return fmt.Errorf(
-			"cannot destroy offer %q because it still has %d active connection(s); remove the juju_integration resources consuming the offer and apply that change before removing the offer",
+			"cannot destroy offer %q: it still has %d active connection(s); remove all consumers first",
 			input.OfferURL,
 			len(offer.Connections),
 		)
