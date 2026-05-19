@@ -198,8 +198,8 @@ resource "juju_jaas_access_offer" "development" {
 ## Remove an offer
 > Who: User with {external+juju:ref}`offer admin access <user-access-offer-admin>`.
 
-To remove an offer, remove the `juju_offer` resource definition from your Terraform plan.
+To remove an offer, remove the `juju_offer` resource definition.
 
-If the offer still has active consumers, the provider returns an error instead of force-destroying the offer.
+If the offer still has active consumers, the provider returns an error instead of force-destroying the offer. In that case, first remove the `juju_integration` resources consuming the offer and apply, then remove the `juju_offer` and apply again.
 
 > See more: [`juju_offer`](../reference/terraform-provider/resources/offer)
