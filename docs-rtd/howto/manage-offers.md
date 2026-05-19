@@ -200,6 +200,6 @@ resource "juju_jaas_access_offer" "development" {
 
 To remove an offer, remove the `juju_offer` resource definition.
 
-If the offer still has active consumers, the provider returns an error. Remove all consumers (whether added through terraform or manually) then retry.
+If the offer still has active consumers that can't be removed, the provider will return an error. Remove all consumers (whether added through terraform or manually) then retry.
 
 > See more: [`juju_offer`](../reference/terraform-provider/resources/offer)
