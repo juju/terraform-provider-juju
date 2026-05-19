@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
 func TestAcc_ResourceOffer(t *testing.T) {
@@ -40,7 +41,7 @@ func TestAcc_ResourceOffer(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceOfferXIntegration(modelName2, destModelName),
+				Config: testAccResourceOfferWithIntegrationTemplate(modelName2, destModelName, true),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.modeldest", "uuid", "juju_integration.int", "model_uuid"),
 
@@ -53,7 +54,7 @@ func TestAcc_ResourceOffer(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceOfferWithoutIntegration(modelName2, destModelName),
+				Config: testAccResourceOfferWithIntegrationTemplate(modelName2, destModelName, false),
 			},
 			{
 				Destroy:           true,
@@ -65,10 +66,12 @@ func TestAcc_ResourceOffer(t *testing.T) {
 	})
 }
 
-func testAccResourceOfferXIntegration(srcModelName string, destModelName string) string {
-	return fmt.Sprintf(`
+func testAccResourceOfferWithIntegrationTemplate(srcModelName string, destModelName string, includeIntegration bool) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceOfferWithIntegration",
+		`
 resource "juju_model" "modelone" {
-	name = %q
+	name = "{{.SrcModelName}}"
 }
 
 resource "juju_application" "appone" {
@@ -88,7 +91,7 @@ resource "juju_offer" "offerone" {
 }
 
 resource "juju_model" "modeldest" {
-	name = %q
+	name = "{{.DestModelName}}"
 }
 
 resource "juju_application" "apptwo" {
@@ -100,7 +103,7 @@ resource "juju_application" "apptwo" {
 		base = "ubuntu@22.04"
 	}
 }
-
+{{ if .IncludeIntegration }}
 resource "juju_integration" "int" {
 	model_uuid = juju_model.modeldest.uuid
 
@@ -113,45 +116,14 @@ resource "juju_integration" "int" {
 		offer_url = juju_offer.offerone.url
 	}
 }
-`, srcModelName, destModelName)
-}
-
-func testAccResourceOfferWithoutIntegration(srcModelName string, destModelName string) string {
-	return fmt.Sprintf(`
-resource "juju_model" "modelone" {
-	name = %q
-}
-
-resource "juju_application" "appone" {
-	model_uuid = juju_model.modelone.uuid
-	name  = "appone"
-
-	charm {
-		name = "juju-qa-dummy-source"
-		base = "ubuntu@22.04"
-	}
-}
-
-resource "juju_offer" "offerone" {
-	model_uuid = juju_model.modelone.uuid
-	application_name = juju_application.appone.name
-	endpoints         = ["sink"]
-}
-
-resource "juju_model" "modeldest" {
-	name = %q
-}
-
-resource "juju_application" "apptwo" {
-	model_uuid = juju_model.modeldest.uuid
-	name = "apptwo"
-
-	charm {
-		name = "juju-qa-dummy-sink"
-		base = "ubuntu@22.04"
-	}
-}
-`, srcModelName, destModelName)
+{{ end }}
+`,
+		internaltesting.TemplateData{
+			"SrcModelName":       srcModelName,
+			"DestModelName":      destModelName,
+			"IncludeIntegration": includeIntegration,
+		},
+	)
 }
 
 func TestAcc_ResourceOffer_UpgradeProvider(t *testing.T) {
