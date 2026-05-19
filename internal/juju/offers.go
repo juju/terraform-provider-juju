@@ -278,12 +278,24 @@ func (c *offersClient) DestroyOffer(ctx context.Context, input *DestroyOfferInpu
 	if err != nil {
 		return err
 	}
+	// This code loops until it detects 0 connections in the offer or 5 minutes elapses
 	if len(offer.Connections) > 0 {
-		return fmt.Errorf(
-			"cannot destroy offer %q: it still has %d active connection(s); remove all consumers first",
-			input.OfferURL,
-			len(offer.Connections),
-		)
+		end := time.Now().Add(5 * time.Minute)
+		c.Tracef(fmt.Sprintf("offer %q has %d connections, waiting for them to be removed before destroying", offer.OfferURL, len(offer.Connections)))
+		for ok := true; ok; ok = len(offer.Connections) > 0 {
+			if time.Now().After(end) {
+				return fmt.Errorf(
+					"cannot destroy offer %q: it still has %d active connection(s) after waiting 5 minutes; remove all consumers first",
+					input.OfferURL,
+					len(offer.Connections),
+				)
+			}
+			time.Sleep(10 * time.Second)
+			offer, err = client.ApplicationOffer(ctx, input.OfferURL)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	err = client.DestroyOffers(ctx, false, input.OfferURL)
