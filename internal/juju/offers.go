@@ -285,7 +285,7 @@ func (c *offersClient) DestroyOffer(ctx context.Context, input *DestroyOfferInpu
 		for ok := true; ok; ok = len(offer.Connections) > 0 {
 			if time.Now().After(end) {
 				return fmt.Errorf(
-					"cannot destroy offer %q: it still has %d active connection(s) after waiting 5 minutes; remove all consumers first",
+					"cannot destroy offer %q: it still has %d active connection(s) after waiting; remove all consumers first",
 					input.OfferURL,
 					len(offer.Connections),
 				)
