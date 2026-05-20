@@ -97,11 +97,11 @@ type Config struct {
 	// This avoids making the user manipulate Terraform state manually to get rid of the resource.
 	SkipFailedDeletion bool
 
-	// ForceFailedDeletion indicates whether the provider should force-destroy a resource
-	// when it still has active connections after the timeout period has elapsed.
-	// Defaults to true, which force-destroys instead of returning an error.
-	// Currently, this only applies to deleting offers.
-	ForceFailedDeletion bool
+	// AllowForceDeleteOffers indicates whether the provider should force-destroy an offer
+	// when it still has active connections, after it has timed out attempting to delete
+	// normally.
+	// Defaults to false, which returns an error on timeout.
+	AllowForceDeleteOffers bool
 
 	// ControllerMode indicates whether the provider is operating in controller mode.
 	ControllerMode bool

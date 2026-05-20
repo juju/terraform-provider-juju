@@ -89,18 +89,17 @@ func jujuProviderModelEnvVar(diags diag.Diagnostics) jujuProviderModel {
 	if err != nil {
 		diags.AddWarning(fmt.Sprintf("Invalid value for %s", ForceFailedDeletion),
 			fmt.Sprintf("The value %q is not a valid boolean. Defaulting to true.", forceFailedDeletionStrVal))
-		forceFailedDeletion = true
 	}
 
 	return jujuProviderModel{
-		ControllerAddrs:     getEnvVar(JujuControllerEnvKey),
-		CACert:              getEnvVar(JujuCACertEnvKey),
-		ClientID:            getEnvVar(JujuClientIDEnvKey),
-		ClientSecret:        getEnvVar(JujuClientSecretEnvKey),
-		UserName:            getEnvVar(JujuUsernameEnvKey),
-		Password:            getEnvVar(JujuPasswordEnvKey),
-		SkipFailedDeletion:  types.BoolValue(skipFailedDeletion),
-		ForceFailedDeletion: types.BoolValue(forceFailedDeletion),
+		ControllerAddrs:        getEnvVar(JujuControllerEnvKey),
+		CACert:                 getEnvVar(JujuCACertEnvKey),
+		ClientID:               getEnvVar(JujuClientIDEnvKey),
+		ClientSecret:           getEnvVar(JujuClientSecretEnvKey),
+		UserName:               getEnvVar(JujuUsernameEnvKey),
+		Password:               getEnvVar(JujuPasswordEnvKey),
+		SkipFailedDeletion:     types.BoolValue(skipFailedDeletion),
+		AllowForceDeleteOffers: types.BoolValue(forceFailedDeletion),
 	}
 }
 
@@ -185,8 +184,8 @@ type jujuProviderModel struct {
 	ClientID        types.String `tfsdk:"client_id"`
 	ClientSecret    types.String `tfsdk:"client_secret"`
 
-	SkipFailedDeletion  types.Bool `tfsdk:"skip_failed_deletion"`
-	ForceFailedDeletion types.Bool `tfsdk:"force_failed_deletion"`
+	SkipFailedDeletion     types.Bool `tfsdk:"skip_failed_deletion"`
+	AllowForceDeleteOffers types.Bool `tfsdk:"allow_force_delete_offers"`
 
 	OfferingControllers types.Map `tfsdk:"offering_controllers"`
 }
@@ -221,8 +220,8 @@ func (j jujuProviderModel) merge(in jujuProviderModel, from string) (jujuProvide
 	if mergedModel.SkipFailedDeletion.IsNull() {
 		mergedModel.SkipFailedDeletion = in.SkipFailedDeletion
 	}
-	if mergedModel.ForceFailedDeletion.IsNull() {
-		mergedModel.ForceFailedDeletion = in.ForceFailedDeletion
+	if mergedModel.AllowForceDeleteOffers.IsNull() {
+		mergedModel.AllowForceDeleteOffers = in.AllowForceDeleteOffers
 	}
 	if mergedModel.ControllerAddrs.ValueString() == "" {
 		mergedModel.ControllerAddrs = in.ControllerAddrs
@@ -431,9 +430,9 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 
 	providerData := juju.ProviderData{
 		Config: juju.Config{
-			ControllerMode:      data.ControllerMode.ValueBool(),
-			SkipFailedDeletion:  data.SkipFailedDeletion.ValueBool(),
-			ForceFailedDeletion: data.ForceFailedDeletion.ValueBool(),
+			ControllerMode:         data.ControllerMode.ValueBool(),
+			SkipFailedDeletion:     data.SkipFailedDeletion.ValueBool(),
+			AllowForceDeleteOffers: data.AllowForceDeleteOffers.ValueBool(),
 		},
 	}
 

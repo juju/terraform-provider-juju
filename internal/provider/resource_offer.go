@@ -276,8 +276,8 @@ func (o *offerResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 
 	err := o.client.Offers.DestroyOffer(ctx, &juju.DestroyOfferInput{
-		OfferURL:            plan.URL.ValueString(),
-		ForceFailedDeletion: o.config.ForceFailedDeletion,
+		OfferURL:               plan.URL.ValueString(),
+		AllowForceDeleteOffers: o.config.AllowForceDeleteOffers,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete offer, got error: %s", err))
