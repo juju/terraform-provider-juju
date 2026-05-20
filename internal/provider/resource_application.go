@@ -400,6 +400,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Computed:    true,
 							PlanModifiers: []planmodifier.Int64{
 								int64planmodifier.UseStateForUnknown(),
+								InvalidateRevisionIfChannelChanges(),
 							},
 						},
 						BaseKey: schema.StringAttribute{
@@ -1085,28 +1086,21 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	if !plan.Charm.Equal(state.Charm) {
-		var planCharms, stateCharms []nestedCharm
+		var planCharms []nestedCharm
 		resp.Diagnostics.Append(plan.Charm.ElementsAs(ctx, &planCharms, false)...)
-		resp.Diagnostics.Append(state.Charm.ElementsAs(ctx, &stateCharms, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 		planCharm := planCharms[0]
-		stateCharm := stateCharms[0]
-		if !planCharm.Channel.Equal(stateCharm.Channel) {
-			updateApplicationInput.Channel = planCharm.Channel.ValueString()
-		} else {
-			updateApplicationInput.Channel = stateCharm.Channel.ValueString()
-		}
+		updateApplicationInput.Channel = planCharm.Channel.ValueString()
+		updateApplicationInput.Base = planCharm.Base.ValueString()
 
-		if !planCharm.Revision.Equal(stateCharm.Revision) {
+		// If the revision was left empty in the plan, leave it empty here
+		// to ensure we use the latest from the channel, otherwise keep it pinned.
+		if planCharm.Revision.IsUnknown() || planCharm.Revision.IsNull() {
+			updateApplicationInput.Revision = nil
+		} else {
 			updateApplicationInput.Revision = intPtr(planCharm.Revision)
-		} else {
-			updateApplicationInput.Revision = intPtr(stateCharm.Revision)
-		}
-
-		if !planCharm.Base.Equal(stateCharm.Base) {
-			updateApplicationInput.Base = planCharm.Base.ValueString()
 		}
 	}
 
@@ -1278,6 +1272,19 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read application resource after update, got error: %s", err))
 		return
 	}
+
+	charmType := req.Config.Schema.GetBlocks()[CharmKey].(schema.ListNestedBlock).NestedObject.Type()
+	updatedCharm, charmDiags := types.ListValueFrom(ctx, charmType, []nestedCharm{{
+		Name:     types.StringValue(readResp.Name),
+		Channel:  types.StringValue(readResp.Channel),
+		Revision: types.Int64Value(int64(readResp.Revision)),
+		Base:     types.StringValue(readResp.Base),
+	}})
+	if charmDiags.HasError() {
+		resp.Diagnostics.Append(charmDiags...)
+		return
+	}
+	plan.Charm = updatedCharm
 
 	// If the plan has refreshed the charm, changed the unit count,
 	// or changed placement, wait for the changes to be seen in
