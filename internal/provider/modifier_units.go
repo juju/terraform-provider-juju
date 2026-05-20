@@ -44,6 +44,14 @@ func (m unitCountModifier) PlanModifyInt64(ctx context.Context, req planmodifier
 		return
 	}
 
+	// If machines is unknown, units cannot be determined yet.
+	// Setting unknown here prevents the plan from committing to a concrete
+	// value that will differ from the actual count once machines are resolved.
+	if machines.IsUnknown() {
+		resp.PlanValue = types.Int64Unknown()
+		return
+	}
+
 	if len(machines.Elements()) > 0 {
 		resp.PlanValue = types.Int64Value(int64(len(machines.Elements())))
 		return

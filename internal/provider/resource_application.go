@@ -633,7 +633,13 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		}
 	}
 
-	unitCount := int(plan.UnitCount.ValueInt64())
+	// When machines is unknown at plan time, UnitCount will be unknown too.
+	// Default to 1 so we don't accidentally deploy 0 units; the machines block
+	// below will override this once machines are resolved.
+	unitCount := 1
+	if !plan.UnitCount.IsUnknown() {
+		unitCount = int(plan.UnitCount.ValueInt64())
+	}
 	machines := []string{}
 	if !plan.Machines.IsUnknown() {
 		resp.Diagnostics.Append(plan.Machines.ElementsAs(ctx, &machines, false)...)
