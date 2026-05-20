@@ -85,18 +85,11 @@ func jujuProviderModelEnvVar(diags diag.Diagnostics) jujuProviderModel {
 	}
 
 	forceFailedDeletionStrVal := os.Getenv(ForceFailedDeletionEnvKey)
-	var forceFailedDeletion types.Bool
-	if forceFailedDeletionStrVal == "" {
-		forceFailedDeletion = types.BoolNull()
-	} else {
-		parsed, err := strconv.ParseBool(forceFailedDeletionStrVal)
-		if err != nil {
-			diags.AddWarning(fmt.Sprintf("Invalid value for %s", ForceFailedDeletion),
-				fmt.Sprintf("The value %q is not a valid boolean. Defaulting to true.", forceFailedDeletionStrVal))
-			forceFailedDeletion = types.BoolNull()
-		} else {
-			forceFailedDeletion = types.BoolValue(parsed)
-		}
+	forceFailedDeletion, err := strconv.ParseBool(forceFailedDeletionStrVal)
+	if err != nil {
+		diags.AddWarning(fmt.Sprintf("Invalid value for %s", ForceFailedDeletion),
+			fmt.Sprintf("The value %q is not a valid boolean. Defaulting to true.", forceFailedDeletionStrVal))
+		forceFailedDeletion = true
 	}
 
 	return jujuProviderModel{
@@ -107,7 +100,7 @@ func jujuProviderModelEnvVar(diags diag.Diagnostics) jujuProviderModel {
 		UserName:            getEnvVar(JujuUsernameEnvKey),
 		Password:            getEnvVar(JujuPasswordEnvKey),
 		SkipFailedDeletion:  types.BoolValue(skipFailedDeletion),
-		ForceFailedDeletion: forceFailedDeletion,
+		ForceFailedDeletion: types.BoolValue(forceFailedDeletion),
 	}
 }
 
@@ -440,7 +433,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		Config: juju.Config{
 			ControllerMode:      data.ControllerMode.ValueBool(),
 			SkipFailedDeletion:  data.SkipFailedDeletion.ValueBool(),
-			ForceFailedDeletion: data.ForceFailedDeletion.IsNull() || data.ForceFailedDeletion.ValueBool(),
+			ForceFailedDeletion: data.ForceFailedDeletion.ValueBool(),
 		},
 	}
 
