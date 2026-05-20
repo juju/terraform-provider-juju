@@ -77,7 +77,7 @@ type ReadOfferResponse struct {
 
 // DestroyOfferInput represents input for destroying an offer.
 type DestroyOfferInput struct {
-	OfferURL          string
+	OfferURL               string
 	AllowForceDeleteOffers bool
 }
 
@@ -279,7 +279,7 @@ func (c *offersClient) DestroyOffer(ctx context.Context, input *DestroyOfferInpu
 	if err != nil {
 		return err
 	}
-	// This code loops until it detects 0 connections in the offer or 5 minutes elapses
+	// Loops until we detect 0 connections in the offer or we time out
 	if len(offer.Connections) > 0 {
 		end := time.Now().Add(5 * time.Minute)
 		c.Tracef(fmt.Sprintf("offer %q has %d connections, waiting for them to be removed before destroying", offer.OfferURL, len(offer.Connections)))
