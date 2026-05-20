@@ -621,12 +621,12 @@ func TestAcc_ConfigChangeKeepsCharm(t *testing.T) {
 						}
 						currentVersionStr := rs.Primary.Attributes["charm.0.revision"]
 						var err error
-						currrentVersion, err := strconv.Atoi(currentVersionStr)
+						currentVersion, err := strconv.Atoi(currentVersionStr)
 						if err != nil {
 							return fmt.Errorf("error converting revision to int: %v", err)
 						}
-						if currrentVersion != initialVersion {
-							return fmt.Errorf("expected charm revision to remain the same, but it changed from %d to %d", initialVersion, currrentVersion)
+						if currentVersion != initialVersion {
+							return fmt.Errorf("expected charm revision to remain the same, but it changed from %d to %d", initialVersion, currentVersion)
 						}
 						return nil
 					},

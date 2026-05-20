@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// InvalidateRevisionIfChannelChanges returns a plan modifier that set the
+// InvalidateRevisionIfChannelChanges returns a plan modifier that sets the
 // revision to Unknown if the channel has changed.
 func InvalidateRevisionIfChannelChanges() planmodifier.Int64 {
 	return &invalidateRevisionModifier{}
@@ -37,8 +37,16 @@ func (m *invalidateRevisionModifier) PlanModifyInt64(ctx context.Context, req pl
 	channelPath := req.Path.ParentPath().AtName("channel")
 
 	var stateChannel, planChannel types.String
-	req.State.GetAttribute(ctx, channelPath, &stateChannel)
-	req.Plan.GetAttribute(ctx, channelPath, &planChannel)
+	diags := req.State.GetAttribute(ctx, channelPath, &stateChannel)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	diags = req.Plan.GetAttribute(ctx, channelPath, &planChannel)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	// If the channel is changing, mark the revision as Unknown (Known After Apply)
 	if !planChannel.Equal(stateChannel) {
