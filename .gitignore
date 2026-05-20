@@ -11,6 +11,7 @@ modules-dev/
 *.backup
 ./*.tfstate
 .terraform*
+.terragrunt-cache/
 *.log
 *.bak
 *~
