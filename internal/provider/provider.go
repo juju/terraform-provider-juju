@@ -45,8 +45,8 @@ const (
 	JujuClientSecretEnvKey = "JUJU_CLIENT_SECRET"
 	// SkipFailedDeletionEnvKey is the env var for skip-failed-deletion behavior.
 	SkipFailedDeletionEnvKey = "JUJU_SKIP_FAILED_DELETION"
-	// ForceFailedDeletionEnvKey is the env var for force-failed-deletion behavior.
-	ForceFailedDeletionEnvKey = "JUJU_FORCE_FAILED_DELETION"
+	// AllowOfferForceDeletionEnvKey is the env var for allow-offer-force-deletion behavior.
+	AllowOfferForceDeletionEnvKey = "JUJU_ALLOW_OFFER_FORCE_DELETION"
 
 	// ControllerMode is the provider config key for controller mode.
 	ControllerMode = "controller_mode"
@@ -64,8 +64,8 @@ const (
 	JujuCACert = "ca_certificate"
 	// SkipFailedDeletion is the provider config key for skip-failed-deletion behavior.
 	SkipFailedDeletion = "skip_failed_deletion"
-	// ForceFailedDeletion is the provider config key for force-failed-deletion behavior.
-	ForceFailedDeletion = "force_failed_deletion"
+	// AllowOfferForceDeletion is the provider config key for allow-offer-force-deletion behavior.
+	AllowOfferForceDeletion = "allow_offer_force_deletion"
 	// JujuOfferingControllers is the provider config key for offering controllers.
 	JujuOfferingControllers = "offering_controllers"
 
@@ -84,11 +84,11 @@ func jujuProviderModelEnvVar(diags diag.Diagnostics) jujuProviderModel {
 			fmt.Sprintf("The value %q is not a valid boolean. Defaulting to false.", skipFailedDeletionStrVal))
 	}
 
-	forceFailedDeletionStrVal := os.Getenv(ForceFailedDeletionEnvKey)
-	forceFailedDeletion, err := strconv.ParseBool(forceFailedDeletionStrVal)
+	allowOfferForceDeletionStrVal := os.Getenv(AllowOfferForceDeletionEnvKey)
+	allowOfferForceDeletion, err := strconv.ParseBool(allowOfferForceDeletionStrVal)
 	if err != nil {
-		diags.AddWarning(fmt.Sprintf("Invalid value for %s", ForceFailedDeletion),
-			fmt.Sprintf("The value %q is not a valid boolean. Defaulting to true.", forceFailedDeletionStrVal))
+		diags.AddWarning(fmt.Sprintf("Invalid value for %s", AllowOfferForceDeletion),
+			fmt.Sprintf("The value %q is not a valid boolean. Defaulting to false.", allowOfferForceDeletionStrVal))
 	}
 
 	return jujuProviderModel{
@@ -99,7 +99,7 @@ func jujuProviderModelEnvVar(diags diag.Diagnostics) jujuProviderModel {
 		UserName:               getEnvVar(JujuUsernameEnvKey),
 		Password:               getEnvVar(JujuPasswordEnvKey),
 		SkipFailedDeletion:     types.BoolValue(skipFailedDeletion),
-		AllowForceDeleteOffers: types.BoolValue(forceFailedDeletion),
+		AllowForceDeleteOffers: types.BoolValue(allowOfferForceDeletion),
 	}
 }
 
@@ -185,7 +185,7 @@ type jujuProviderModel struct {
 	ClientSecret    types.String `tfsdk:"client_secret"`
 
 	SkipFailedDeletion     types.Bool `tfsdk:"skip_failed_deletion"`
-	AllowForceDeleteOffers types.Bool `tfsdk:"allow_force_delete_offers"`
+	AllowForceDeleteOffers types.Bool `tfsdk:"allow_offer_force_deletion"`
 
 	OfferingControllers types.Map `tfsdk:"offering_controllers"`
 }
@@ -324,8 +324,8 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 				Description: fmt.Sprintf("Whether to issue a warning instead of an error and continue if a resource deletion fails. This can also be set by the `%s` environment variable. Defaults to false.", SkipFailedDeletionEnvKey),
 				Optional:    true,
 			},
-			ForceFailedDeletion: schema.BoolAttribute{
-				Description: fmt.Sprintf("Whether to force-destroy an offer that still has active connections after the timeout period has elapsed, instead of returning an error. This can also be set by the `%s` environment variable. Defaults to true.", ForceFailedDeletionEnvKey),
+			AllowOfferForceDeletion: schema.BoolAttribute{
+				Description: fmt.Sprintf("Whether to force-destroy an offer that still has active connections after the timeout period has elapsed, instead of returning an error. This can also be set by the `%s` environment variable. Defaults to false.", AllowOfferForceDeletionEnvKey),
 				Optional:    true,
 			},
 			JujuOfferingControllers: schema.MapNestedAttribute{

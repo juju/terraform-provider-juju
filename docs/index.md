@@ -285,6 +285,7 @@ resource "juju_integration" "wp_to_percona" {
 - `offering_controllers` (Attributes Map) Additional controller details for cross-model integrations. The map key is the controller name. (see [below for nested schema](#nestedatt--offering_controllers))
 - `password` (String, Sensitive) This is the password of the username to be used. This can also be set by the `JUJU_PASSWORD` environment variable
 - `skip_failed_deletion` (Boolean) Whether to issue a warning instead of an error and continue if a resource deletion fails. This can also be set by the `JUJU_SKIP_FAILED_DELETION` environment variable. Defaults to false.
+- `allow_offer_force_deletion` (Boolean) Whether to force-destroy an offer that still has active connections after the timeout period has elapsed, instead of returning an error. This can also be set by the `JUJU_ALLOW_OFFER_FORCE_DELETION` environment variable. Defaults to false.
 - `username` (String) This is the username registered with the controller to be used. This can also be set by the `JUJU_USERNAME` environment variable
 
 <a id="nestedatt--offering_controllers"></a>
