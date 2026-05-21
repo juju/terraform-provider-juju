@@ -45,7 +45,7 @@ inputs = {
     }
   }
 
-  controller_num_units = 0
+  controller_num_units = 1
 
   destroy_flags = {
     destroy_all_models = true
