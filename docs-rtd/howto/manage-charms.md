@@ -54,11 +54,11 @@ If the charm has any resources, and your Terraform plan does not specify them ex
 (compute-a-charms-revision-automatically)=
 ### Compute a charm's revision automatically
 
-For reproducible deployments, specify both the charm `channel` and the charm `revision`.
+For reproducible deployments, we recommend specifing both the charm `channel` and the charm `revision`.
 
-This is not required for every deployment or refresh. If `revision` is left unset, changing only `channel` on an existing `juju_application` still refreshes the charm to the latest revision in the new channel. The `juju_application` resource on its own does not automatically pick up newer revisions from the same channel on later `terraform apply` runs.
+For scenarios where you only specify a channel note that the `juju_application` resource does not automatically pick up newer revisions from the same channel on later `terraform apply` runs.
 
-Fully specifying all inputs keeps your deployments reproducible. However, it can be cumbersome.
+Fully specifying all inputs keeps your deployments reproducible, however, it can be cumbersome.
 
 This section shows how to compute a charm's latest revision (based on a channel and a base) automatically using the built-in `juju_charm` data source.
 
@@ -134,7 +134,7 @@ resource "juju_application" "apps" {
 (update-a-charm)=
 ## Update a charm
 
-To update a charm, change `channel`, `revision`, or `base` in the application's `charm` block and run `terraform apply`. For example, changing only the `channel` refreshes the application to the latest revision available in the new channel:
+To update a charm, change `channel`, `revision`, or `base` in the application's `charm` block and run `terraform apply`.
 
 ```terraform
 resource "juju_application" "this" {
@@ -143,13 +143,12 @@ resource "juju_application" "this" {
   charm {
     name     = "hello-kubecon"
     channel  = "latest/stable"
-    revision = 19
   }
 
 }
 ```
 
-Changing `channel` in Terraform is equivalent to refreshing the application to a new channel with the `juju` CLI. If `revision` is unset, Terraform asks Juju for the latest revision in the new channel and applies it in place.
+Changing `channel` in Terraform is equivalent to refreshing the application to a new channel with the `juju` CLI. If `revision` is unset, the latest revision in the new channel is applied in-place.
 
 If `revision` is unset and the `channel` stays the same, Terraform does not automatically refresh the charm to newer revisions from that same channel on later `terraform apply` runs. In that case, pin `revision` for a reproducible deployment, use the `juju_charm` data source to resolve the current revision automatically, or refresh the application manually with the `juju` CLI.
 
