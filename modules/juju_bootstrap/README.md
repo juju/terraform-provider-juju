@@ -28,10 +28,10 @@ module "juju_bootstrap_example" {
     auth_types = ["certificate"]
     name       = "lxd-cloud"
     type       = "lxd"
-    endpoint   = "https://10.0.0.1:8383"
+    endpoint   = "https://10.0.0.1:8443"
     region = {
       name     = "default"
-      endpoint = "https://10.0.0.1:8383"
+      endpoint = "https://10.0.0.1:8443"
     }
   }
 
