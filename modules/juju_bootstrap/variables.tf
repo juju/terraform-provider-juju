@@ -129,4 +129,9 @@ variable "storage_pool" {
 variable "controller_num_units" {
   description = "Number of controller units to deploy"
   type        = number
+
+  validation {
+    condition     = var.controller_num_units > 0 && floor(var.controller_num_units) == var.controller_num_units
+    error_message = "controller_num_units must be a positive integer greater than 0."
+  }
 }

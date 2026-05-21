@@ -24,7 +24,7 @@ resource "juju_controller" "controller" {
 # TODO: Terraform actions are available to enable HA, however actions are not yet supported by OpenTofu, thus we stick with local-exec for now.
 # https://documentation.ubuntu.com/terraform-provider-juju/v1.4.3/howto/manage-controllers/#enable-controller-high-availability
 resource "terraform_data" "juju_enable_ha" {
-  count = var.controller_num_units > 0 ? 1 : 0
+  count = var.controller_num_units > 1 ? 1 : 0
   provisioner "local-exec" {
     command = <<-EOT
       echo "$JUJU_PASSWORD" | juju login -c "$CONTROLLER_NAME" "$JUJU_CONTROLLER" -u "$JUJU_USERNAME" --trust --no-prompt
