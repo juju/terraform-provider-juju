@@ -571,6 +571,10 @@ variable "enable-b2-consumer" {
 
 func testAccResourceIntegrationMultipleIntegrationsSameEndpoint(srcModelName string, dstModelName string) string {
 	return fmt.Sprintf(`
+provider "juju" {
+  allow_offer_force_deletion = true
+}
+
 resource "juju_model" "offering" {
   name = %q
 }
