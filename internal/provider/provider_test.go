@@ -506,6 +506,7 @@ func newConfigureRequest(t *testing.T, conf jujuProviderModel) provider.Configur
 		JujuClientID:            types.StringType,
 		JujuClientSecret:        types.StringType,
 		SkipFailedDeletion:      types.BoolType,
+		AllowOfferForceDeletion: types.BoolType,
 		JujuOfferingControllers: offeringControllersMapType,
 	}
 
@@ -526,7 +527,7 @@ func TestFrameworkProviderSchema(t *testing.T) {
 	resp := provider.SchemaResponse{}
 	jujuProvider.Schema(context.Background(), req, &resp)
 	assert.Equal(t, resp.Diagnostics.HasError(), false)
-	assert.Len(t, resp.Schema.Attributes, 9)
+	assert.Len(t, resp.Schema.Attributes, 10)
 }
 
 func createOfferingControllerMap(t *testing.T, extControllers map[string]map[string]attr.Value) types.Map {
