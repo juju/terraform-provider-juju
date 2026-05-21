@@ -346,6 +346,10 @@ resource "juju_integration" "this" {
 // and offer of pgbouncer.
 func testAccResourceIntegrationWithVia(srcModelName, aOS, dstModelName, bOS, viaCIDRs string) string {
 	return fmt.Sprintf(`
+provider "juju" {
+  allow_offer_force_deletion = true
+}
+
 resource "juju_model" "a" {
 	name = %q
 }
@@ -488,6 +492,10 @@ func TestAcc_ResourceIntegrationWithMultipleIntegrationsSameEndpoint(t *testing.
 // two juju-qa-dummy-source applications relates to source offer.
 func testAccResourceIntegrationMultipleConsumers(srcModelName string, dstModelName string) string {
 	return fmt.Sprintf(`
+provider "juju" {
+  allow_offer_force_deletion = true
+}
+
 resource "juju_model" "a" {
         name = %q
 }
