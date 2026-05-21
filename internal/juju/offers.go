@@ -77,8 +77,8 @@ type ReadOfferResponse struct {
 
 // DestroyOfferInput represents input for destroying an offer.
 type DestroyOfferInput struct {
-	OfferURL               string
-	AllowForceDeleteOffers bool
+	OfferURL                string
+	AllowOfferForceDeletion bool
 }
 
 // ConsumeRemoteOfferInput represents input for consuming a remote offer.
@@ -279,13 +279,16 @@ func (c *offersClient) DestroyOffer(ctx context.Context, input *DestroyOfferInpu
 	if err != nil {
 		return err
 	}
+
+	forceDelete := false
 	// Loops until we detect 0 connections in the offer or we time out
 	if len(offer.Connections) > 0 {
 		end := time.Now().Add(5 * time.Minute)
 		c.Tracef(fmt.Sprintf("offer %q has %d connections, waiting for them to be removed before destroying", offer.OfferURL, len(offer.Connections)))
 		for ok := true; ok; ok = len(offer.Connections) > 0 {
 			if time.Now().After(end) {
-				if !input.AllowForceDeleteOffers {
+				if input.AllowOfferForceDeletion {
+					forceDelete = true
 					break
 				}
 				return fmt.Errorf(
@@ -303,7 +306,7 @@ func (c *offersClient) DestroyOffer(ctx context.Context, input *DestroyOfferInpu
 	}
 
 	// Potentially fall back to force deletion
-	err = client.DestroyOffers(ctx, input.AllowForceDeleteOffers, input.OfferURL)
+	err = client.DestroyOffers(ctx, forceDelete, input.OfferURL)
 	if err != nil {
 		return err
 	}
