@@ -10,7 +10,23 @@ variable "name" {
 }
 
 variable "cloud" {
-  description = "Cloud to bootstrap juju controller on"
+  description = <<EOT
+Cloud to bootstrap juju controller on.
+
+Fields:
+- auth_types: (set of string) The authentication type(s) supported by the cloud.
+- name: (string) The name of the cloud.
+- type: (string) The type of the cloud.
+- ca_certificates: (optional set of string) CA certificates for the cloud.
+- config: (optional map of string) Configuration options for the cloud.
+- endpoint: (optional string) The API endpoint for the cloud.
+- host_cloud_region: (optional string) The host cloud region for the cloud.
+- region: (optional object)
+    - name: (string) The name of the region.
+    - endpoint: (optional string) The API endpoint for the region.
+    - identity_endpoint: (optional string) The identity endpoint for the region.
+    - storage_endpoint: (optional string) The storage endpoint for the region.
+EOT
   type = object({
     auth_types        = set(string)
     name              = string
@@ -28,19 +44,6 @@ variable "cloud" {
   })
 }
 
-/* Example of LXD cloud
-  cloud = {
-    auth_types = ["certificate"]
-    name       = "lxd-cloud"
-    type       = "lxd"
-    endpoint   = "https://10.0.0.1:8383"
-    region = {
-      name     = "default"
-      endpoint = "https://10.0.0.1:8383"
-    }
-  }
-*/
-
 variable "cloud_credential" {
   description = "Cloud credentials to bootstrap juju controller"
   type = object({
@@ -49,16 +52,6 @@ variable "cloud_credential" {
     name       = string
   })
 }
-
-/* Example of LXD cloud credentials
-  cloud_credential = {
-    auth_type = "interactive"
-    name      = "lxd-token"
-    attributes = {
-      trust-token = trimspace(file("/path/to/token"))
-    }
-  }
-*/
 
 variable "agent_version" {
   description = "juju agent version to use"
@@ -96,26 +89,6 @@ variable "controller_model_config" {
   default     = null
 }
 
-/* Example of controller_model_config
-  controller_model_config = {
-    default-base = "ubuntu@22.04"
-    lxd-snap-channel = "5.0/stable"
-    cloudinit-userdata = <<EOT
-#cloud-config
-
-  ca-certs:
-    trusted:
-    - |
-      -----BEGIN CERTIFICATE-----
-      ROOT CA
-      -----END CERTIFICATE-----
-      -----BEGIN CERTIFICATE-----
-      INTERMEDIATE CA
-      -----END CERTIFICATE-----
-EOT
-  }
-*/
-
 variable "destroy_flags" {
   description = "Flags to pass to juju destroy-controller command"
   type = object({
@@ -142,26 +115,6 @@ variable "model_default" {
   type        = map(string)
   default     = null
 }
-
-/* Example of model_default
-  model_default = {
-    default-base = "ubuntu@22.04"
-    lxd-snap-channel = "5.0/stable"
-    cloudinit-userdata = <<EOT
-#cloud-config
-
-  ca-certs:
-    trusted:
-    - |
-      -----BEGIN CERTIFICATE-----
-      ROOT CA
-      -----END CERTIFICATE-----
-      -----BEGIN CERTIFICATE-----
-      INTERMEDIATE CA
-      -----END CERTIFICATE-----
-EOT
-  }
-*/
 
 variable "storage_pool" {
   description = "Storage pool to use for juju controller"

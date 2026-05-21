@@ -10,8 +10,8 @@ This module bootstraps a Juju controller and optionally enables high availabilit
 
 ## Requirements
 
-- Terraform/OpenTofu compatible with the module syntax used here.
-- Juju provider: `juju/juju ~> 1.0`.
+- Terraform/OpenTofu 1.12+.
+- Juju provider: `juju/juju ~> 1.3`.
 - `juju` CLI available on the machine running apply.
 
 ## Usage
@@ -75,6 +75,27 @@ module "juju_bootstrap_example" {
 }
 ```
 
+### Example of controller_model_config or model_default
+```
+controller_model_config = {
+  default-base = "ubuntu@22.04"
+  lxd-snap-channel = "5.0/stable"
+  cloudinit-userdata = <<EOT
+#cloud-config
+
+ca-certs:
+  trusted:
+  - |
+    -----BEGIN CERTIFICATE-----
+    ROOT CA
+    -----END CERTIFICATE-----
+    -----BEGIN CERTIFICATE-----
+    INTERMEDIATE CA
+    -----END CERTIFICATE-----
+EOT
+}
+```
+
 ## Inputs
 
 | Name | Type | Required | Default | Description |
@@ -104,4 +125,4 @@ module "juju_bootstrap_example" {
 
 ## Notes
 
-- HA enablement is implemented with `terraform_data` + `local-exec` and Juju CLI commands as oppoed to Terraform actions to ensure compatibility with OpenTofu.
+- HA enablement is implemented with `terraform_data` + `local-exec` and Juju CLI commands as oppoed to Terraform actions to ensure compatibility with OpenTofu as actions are not yet supported. See https://github.com/opentofu/opentofu/issues/3309.
