@@ -11,7 +11,7 @@ This module bootstraps a Juju controller and optionally enables high availabilit
 ## Requirements
 
 - Terraform/OpenTofu 1.12+.
-- Juju provider: `juju/juju ~> 1.3`.
+- Juju provider: `juju/juju > 1.3`.
 - `juju` CLI available on the machine running apply.
 
 ## Usage
@@ -103,7 +103,7 @@ EOT
 | `name` | `string` | Yes | n/a | Name of the Juju controller to bootstrap. |
 | `cloud` | `object(...)` | Yes | n/a | Cloud definition used for bootstrap. |
 | `cloud_credential` | `object(...)` | Yes | n/a | Credential used for bootstrap on the target cloud. |
-| `controller_num_units` | `number` | Yes | n/a | Number of controller units to deploy. If greater than `0`, HA enablement runs. |
+| `controller_num_units` | `number` | Yes | n/a | Number of controller units to deploy. If greater than `1`, HA enablement runs. |
 | `path_juju_binary` | `string` | No | `/snap/juju/current/bin/juju` | Path to Juju binary. |
 | `agent_version` | `string` | No | `null` | Juju agent version to use. |
 | `bootstrap_base` | `string` | No | `null` | Bootstrap base for controller machine. |
