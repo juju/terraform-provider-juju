@@ -2,7 +2,7 @@ output "juju_cloud" {
   value = juju_controller.controller.cloud.name
 }
 
-output "juju_credentials" {
+output "juju_controller" {
   value = {
     controller_addresses = juju_controller.controller.api_addresses
     username             = juju_controller.controller.username

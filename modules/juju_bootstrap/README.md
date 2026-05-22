@@ -121,7 +121,7 @@ EOT
 | Name | Sensitive | Description |
 | --- | --- | --- |
 | `juju_cloud` | No | Cloud name used by the created controller. |
-| `juju_credentials` | Yes | Controller API addresses, username, password, and CA certificate. |
+| `juju_controller` | Yes | Controller API addresses, username, password, and CA certificate. |
 
 ## Notes
 
