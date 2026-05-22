@@ -51,7 +51,7 @@ jobs:
 
       - name: Install Terragrunt
         run: |
-          curl -sSfL --proto '=https' --tlsv1.2 https://terragrunt.com/install | bash
+          curl -sSfL --proto '=https' --tlsv1.2 https://terragrunt.com/install | bash -s -- -v v1.0.5
           echo "$HOME/.terragrunt/bin" >> $GITHUB_PATH
 
       - name: Terragrunt apply
