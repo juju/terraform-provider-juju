@@ -1,22 +1,54 @@
 # 2.0.0
 
 NOTES:
-* * **This release requires Juju controller version 3 or higher. This version drops the support for 2.9**
+
+* **This release requires Juju controller version 3 or higher. This version drops support for 2.9.**
 * **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
 * This release uses Juju client api code from the tip of the Juju 4.0 branch.
+
+BREAKING CHANGES
+
+* Drop support for 2.9 controllers. We will keep supporting 2.9 controllers in the v1 track for security updates and bug fixes.
 
 ENHANCEMENTS
 
 * Enable the Terraform provider to run against Juju 3 & 4 controllers.
 * If you are running against a Juju 3 controller, upgrading from the latest v1 of the Terraform Provider to v2 should require no changes. See the [upgrade to v2 guide](https://documentation.ubuntu.com/terraform-provider-juju/latest/howto/manage-provider/upgrade-provider-to-v2/) for more information.
 
-BREAKING CHANGES
+JUJU 4 COMPATIBILITY CHANGES
 
-* Drop support for 2.9 controllers. We will keep supporting 2.9 controllers in the v1 track for security updates and bug fixes.
+* Fix SSH key payload comparison by @ale8k in [#1068](https://github.com/juju/terraform-provider-juju/pull/1068).
+* Fix charm revision to use the correct revision when deploying on amd64 by @SimoneDutto in [#1104](https://github.com/juju/terraform-provider-juju/pull/1104).
+* Fix to only grant offer access when needed by @kian99 in [#1101](https://github.com/juju/terraform-provider-juju/pull/1101).
+* Fix resource application test by @ale8k in [#1133](https://github.com/juju/terraform-provider-juju/pull/1133).
+* Fix qualifier usage by @SimoneDutto in [#1143](https://github.com/juju/terraform-provider-juju/pull/1143).
+* Fix endpoint bindings by not using patterns in the client by @SimoneDutto in [#1144](https://github.com/juju/terraform-provider-juju/pull/1144).
+* Miscellaneous e2e fixes by @SimoneDutto in [#1190](https://github.com/juju/terraform-provider-juju/pull/1190).
 
 CI & MAINTENANCE
 
-* Enable testing of the Terraform Provider against Juju 3 and 4.
+* Add context to client.go by @ale8k in [#1100](https://github.com/juju/terraform-provider-juju/pull/1100).
+* Merge main into feature branch by @SimoneDutto in [#1044](https://github.com/juju/terraform-provider-juju/pull/1044).
+* Use Juju 4.x dependency by @SimoneDutto in [#1039](https://github.com/juju/terraform-provider-juju/pull/1039).
+* Enable testing against a Juju 4 controller by @SimoneDutto in [#1048](https://github.com/juju/terraform-provider-juju/pull/1048).
+* Merge main to feature/juju-4.0 by @kian99 in [#1065](https://github.com/juju/terraform-provider-juju/pull/1065).
+* Address upgrade provider tests by @kian99 in [#1066](https://github.com/juju/terraform-provider-juju/pull/1066).
+* Use 4/edge for tests by @kian99 in [#1059](https://github.com/juju/terraform-provider-juju/pull/1059).
+* Merge main by @SimoneDutto in [#1110](https://github.com/juju/terraform-provider-juju/pull/1110).
+* Fix juju-external-hostname implicit config test for Juju 4 by @SimoneDutto in [#1116](https://github.com/juju/terraform-provider-juju/pull/1116).
+* Merge main into feature/juju-4 by @kian99 in [#1122](https://github.com/juju/terraform-provider-juju/pull/1122).
+* Fix check for testing against Juju 4 by @kian99 in [#1129](https://github.com/juju/terraform-provider-juju/pull/1129).
+* Merge main into feature/juju-4.0 by @kian99 in [#1151](https://github.com/juju/terraform-provider-juju/pull/1151).
+* Use 4/edge to get latest updates from Juju by @SimoneDutto in [#1146](https://github.com/juju/terraform-provider-juju/pull/1146).
+* Merge main into feature/juju-4.0 by @kian99 in [#1159](https://github.com/juju/terraform-provider-juju/pull/1159).
+* Miscellaneous e2e CI fix by @SimoneDutto in [#1167](https://github.com/juju/terraform-provider-juju/pull/1167).
+* Skip TestAcc_ResourceOffer by @kian99 in [#1173](https://github.com/juju/terraform-provider-juju/pull/1173).
+* Skip charmupdatebase application test by @ale8k in [#1176](https://github.com/juju/terraform-provider-juju/pull/1176).
+* Re-enable JAAS integration tests by @SimoneDutto in [#1196](https://github.com/juju/terraform-provider-juju/pull/1196).
+* Merge main into feature/juju-4 by @SimoneDutto in [#1203](https://github.com/juju/terraform-provider-juju/pull/1203).
+* Merge feature/juju-4.0 into main by @SimoneDutto in [#1206](https://github.com/juju/terraform-provider-juju/pull/1206).
+* Update changelog for 2.0.0 rc release by @SimoneDutto in [#1208](https://github.com/juju/terraform-provider-juju/pull/1208).
+
 
 **Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v1.5.1...v2.0.0
 
