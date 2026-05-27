@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
@@ -18,10 +17,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/juju/errors"
 
 	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
-	"github.com/juju/utils/v3/ssh"
+	"github.com/juju/utils/v4/ssh"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -177,22 +177,17 @@ func (s *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
-func newSSHKeyID(modelUUID string, keyIdentifier string) string {
-	return fmt.Sprintf("sshkey:%s:%s", modelUUID, keyIdentifier)
-}
-
-// Keys can be imported with the name of the model and the identifier of the key
+// newSSHKeyID creates a new key ID of the form
 // ssh_key:<modelUUID>:<ssh-key-identifier>
 // the key identifier is currently based on the comment section of the ssh key
 // (e.g. user@hostname)
-func retrieveModelKeyNameFromID(id string, d *diag.Diagnostics) (string, string) {
-	tokens := strings.SplitN(id, ":", 3)
-	//If importing with an incorrect ID we need to catch and provide a user-friendly error
-	if len(tokens) != 3 {
-		d.AddError("Malformed ID", fmt.Sprintf("unable to parse model name and user from provided ID: %q", id))
-		return "", ""
-	}
-	return tokens[1], tokens[2]
+//
+// Note the identifier of the key is an MD5 hash of the key payload. In Juju 4,
+// this has switched to an SHA256 hash, so it is not recommended to use the identifier
+// for API interactions where we need to interact with Juju and Juju 4, instead use
+// the actual key payload.
+func newSSHKeyID(modelUUID string, keyIdentifier string) string {
+	return fmt.Sprintf("sshkey:%s:%s", modelUUID, keyIdentifier)
 }
 
 // Read implements resource.ResourceWithConfigure interface.
@@ -211,24 +206,20 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	modelUUID, identifier := retrieveModelKeyNameFromID(state.ID.ValueString(), &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	result, err := s.client.SSHKeys.ReadSSHKey(ctx, &juju.ReadSSHKeyInput{
-		Username:      s.client.Username(),
-		ModelUUID:     modelUUID,
-		KeyIdentifier: identifier,
+	_, err := s.client.SSHKeys.ReadSSHKey(ctx, &juju.ReadSSHKeyInput{
+		Username:  s.client.Username(),
+		ModelUUID: state.ModelUUID.ValueString(),
+		Payload:   state.Payload.ValueString(),
 	})
 	if err != nil {
+		if errors.Is(err, juju.SSHKeyNotFoundError) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read ssh key, got error: %s", err))
 		return
 	}
 	s.trace(fmt.Sprintf("read ssh key resource %q", state.ID.ValueString()))
-
-	state.ModelUUID = types.StringValue(modelUUID)
-	state.Payload = types.StringValue(result.Payload)
 
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -268,16 +259,11 @@ func (s *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	modelName, identifier := retrieveModelKeyNameFromID(state.ID.ValueString(), &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
 	// Delete the key
 	if err := s.client.SSHKeys.DeleteSSHKey(ctx, &juju.DeleteSSHKeyInput{
-		Username:      s.client.Username(),
-		ModelUUID:     modelName,
-		KeyIdentifier: identifier,
+		Username:  s.client.Username(),
+		ModelUUID: state.ModelUUID.ValueString(),
+		Payload:   state.Payload.ValueString(),
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete ssh key during delete, got error: %s", err))
 		return

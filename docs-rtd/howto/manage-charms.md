@@ -54,7 +54,7 @@ If the charm has any resources, and your Terraform plan does not specify them ex
 (compute-a-charms-revision-automatically)=
 ### Compute a charm's revision automatically
 
-For reproducible deployments, we recommend specifing both the charm `channel` and the charm `revision`.
+For reproducible deployments, we recommend specifying both the charm `channel` and the charm `revision`.
 
 For scenarios where you only specify a channel note that the `juju_application` resource does not automatically pick up newer revisions from the same channel on later `terraform apply` runs.
 
