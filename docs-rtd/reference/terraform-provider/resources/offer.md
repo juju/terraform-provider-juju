@@ -44,12 +44,22 @@ resource "juju_integration" "myintegration" {
 
 ### Optional
 
+- `allow_force_destroy` (Boolean) Allows the offer to be force-destroyed if it has active connections. Force destroy may not actually be used if not necessary.
 - `name` (String) The name of the offer. Changing this value will cause the offer to be destroyed and recreated by terraform.
+- `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
 
 - `id` (String) The ID of this resource.
 - `url` (String) The offer URL.
+
+<a id="nestedblock--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+- `delete` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours). Setting a timeout for a Delete operation is only applicable if changes are saved into state before the destroy operation occurs.
 
 ## Import
 

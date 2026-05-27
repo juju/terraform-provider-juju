@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/list"
 	listschema "github.com/hashicorp/terraform-plugin-framework/list/schema"
@@ -155,6 +157,20 @@ func (r *offerLister) getOfferResource(ctx context.Context, offer juju.ListOffer
 		return offerResourceModelV2{}, diags
 	}
 	resource.Endpoints = endpointSet
+
+	resource.AllowForceDestroy = types.BoolValue(false)
+	resource.Timeouts = timeouts.Value{
+		Object: types.ObjectValueMust(
+			map[string]attr.Type{
+				"create": types.StringType,
+				"delete": types.StringType,
+			},
+			map[string]attr.Value{
+				"create": types.StringValue("1m"),
+				"delete": types.StringValue("5m"),
+			},
+		),
+	}
 
 	return resource, diags
 }

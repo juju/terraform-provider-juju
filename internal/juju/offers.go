@@ -7,11 +7,14 @@ import (
 	"context"
 	stderr "errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/juju/names/v5"
+
 	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
 	"github.com/juju/juju/api/client/applicationoffers"
@@ -19,13 +22,9 @@ import (
 	"github.com/juju/juju/core/crossmodel"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/names/v5"
 )
 
 const (
-	// OfferAppAvailableTimeout is the time to wait for an app to be available
-	// before creating an offer.
-	OfferAppAvailableTimeout = time.Second * 60
 	// OfferApiTickWait is the time to wait between consecutive requests
 	// to the API
 	OfferApiTickWait = time.Second * 5
@@ -34,6 +33,18 @@ const (
 // RemoteAppNotFoundError is returned when a remote app
 // cannot be found when contacting the Juju API.
 var RemoteAppNotFoundError = errors.ConstError("remote-app-not-found")
+
+// OfferHasConnectionsError is returned when a non-forced destroy is attempted
+// while the offer still has active connections.
+var OfferHasConnectionsError = errors.ConstError("offer-has-connections")
+
+// offerHasConnectionsJuju3Re matches error messages returned by Juju 3
+// when attempting to destroy an offer with active connections.
+var offerHasConnectionsJuju3Re = regexp.MustCompile(`cannot delete application offer .+: offer has \d+ relations?`)
+
+// offerHasConnectionsJuju4Re matches error messages returned by Juju 4
+// when attempting to destroy an offer with active connections.
+var offerHasConnectionsJuju4Re = regexp.MustCompile(`cannot delete offer .+, it has \d+ connections?`)
 
 type offersClient struct {
 	SharedClient
@@ -78,6 +89,7 @@ type ReadOfferResponse struct {
 // DestroyOfferInput represents input for destroying an offer.
 type DestroyOfferInput struct {
 	OfferURL string
+	Force    bool
 }
 
 // ConsumeRemoteOfferInput represents input for consuming a remote offer.
@@ -165,9 +177,6 @@ func (c *offersClient) CreateOffer(ctx context.Context, input *CreateOfferInput)
 	applicationClient := apiapplication.NewClient(modelConn)
 
 	// wait for the app to be available
-	ctx, cancel := context.WithTimeout(ctx, OfferAppAvailableTimeout)
-	defer cancel()
-
 	err = WaitForAppsAvailable(ctx, applicationClient, []string{input.ApplicationName}, OfferApiTickWait)
 	if err != nil {
 		return nil, append(errs, errors.New("the application was not available to be offered"))
@@ -265,7 +274,10 @@ func (c *offersClient) ReadOffer(ctx context.Context, input *ReadOfferInput) (*R
 	return &response, nil
 }
 
-// DestroyOffer destroys offer managed by the offer resource.
+// DestroyOffer makes a single attempt to destroy an offer.
+//
+// If the offer still has active connections, OfferHasConnectionsError is
+// returned so the caller can decide whether to retry or force-destroy.
 func (c *offersClient) DestroyOffer(ctx context.Context, input *DestroyOfferInput) error {
 	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
@@ -274,36 +286,29 @@ func (c *offersClient) DestroyOffer(ctx context.Context, input *DestroyOfferInpu
 	defer func() { _ = conn.Close() }()
 
 	client := applicationoffers.NewClient(conn)
-	offer, err := client.ApplicationOffer(ctx, input.OfferURL)
+
+	if input.Force {
+		// Ignore any possible active connections
+		return client.DestroyOffers(ctx, true, input.OfferURL)
+	}
+
+	// Unfortunate string match because Juju client throws away the error `Code`.
+	// Even more unfortunately, the error message differs between Juju 3 and 4.
+	version, err := c.GetControllerVersion(ctx)
 	if err != nil {
 		return err
 	}
+	hasConnectionsRe := offerHasConnectionsJuju3Re
+	if version.Major >= 4 {
+		hasConnectionsRe = offerHasConnectionsJuju4Re
+	}
 
-	forceDestroy := false
-	//This code loops until it detects 0 connections in the offer or 3 minutes elapses
-	if len(offer.Connections) > 0 {
-		end := time.Now().Add(5 * time.Minute)
-		c.Tracef(fmt.Sprintf("offer %q has %d connections, waiting for them to be removed before destroying", offer.OfferURL, len(offer.Connections)))
-		for ok := true; ok; ok = len(offer.Connections) > 0 {
-			//if we have been failing to destroy offer for 5 minutes then force destroy
-			//TODO: investigate cleaner solution (acceptance tests fail even if timeout set to 20m)
-			if time.Now().After(end) {
-				forceDestroy = true
-				break
-			}
-			time.Sleep(10 * time.Second)
-			offer, err = client.ApplicationOffer(ctx, input.OfferURL)
-			if err != nil {
-				return err
-			}
+	if err := client.DestroyOffers(ctx, false, input.OfferURL); err != nil {
+		if hasConnectionsRe.MatchString(err.Error()) {
+			return OfferHasConnectionsError
 		}
-	}
-
-	err = client.DestroyOffers(ctx, forceDestroy, input.OfferURL)
-	if err != nil {
 		return err
 	}
-
 	return nil
 }
 

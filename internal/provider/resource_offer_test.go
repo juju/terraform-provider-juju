@@ -4,11 +4,19 @@
 package provider
 
 import (
+	"context"
 	"fmt"
+	"regexp"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	jujuparams "github.com/juju/juju/rpc/params"
+
+	"github.com/juju/terraform-provider-juju/internal/juju"
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
 func TestAcc_ResourceOffer(t *testing.T) {
@@ -431,4 +439,194 @@ resource "juju_offer" "haproxy_two" {
 	endpoints        = ["sink"]
 }
 `, modelName)
+}
+
+// TestAcc_ResourceOffer_DeleteTimeout simulates a practitioner deleting an offer.
+// At first they don't realise there is an integration created outside Terraform.
+// After investigating whether it's appropriate, they allow force destroy and
+// try again.
+func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	srcModelName := acctest.RandomWithPrefix("tf-test-offer-src-delete")
+	dstModelName := acctest.RandomWithPrefix("tf-test-offer-dst-delete")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceOfferToDelete(srcModelName, dstModelName, internaltesting.TemplateData{
+					"AllowForceDestroy": false,
+					"IncludeOffer":      true,
+				}),
+				Check: testAccCreateIntegration,
+			},
+			{
+				// Drop the offer. Destroy should time out with an active connection error
+				Config: testAccResourceOfferToDelete(srcModelName, dstModelName, internaltesting.TemplateData{
+					"AllowForceDestroy": false,
+					"IncludeOffer":      false,
+				}),
+				ExpectError: regexp.MustCompile(`(?s)still\s+has\s+connection\(s\)\s+after\s+timeout`),
+			},
+			{
+				// Restore the offer and store allow_force_destroy=true in state
+				Config: testAccResourceOfferToDelete(srcModelName, dstModelName, internaltesting.TemplateData{
+					"AllowForceDestroy": true,
+					"IncludeOffer":      true,
+				}),
+			},
+			{
+				// Drop the offer. Force destroy should happen on timeout.
+				// Clean up integration.
+				Config: testAccResourceOfferToDelete(srcModelName, dstModelName, internaltesting.TemplateData{
+					"AllowForceDestroy": true,
+					"IncludeOffer":      false,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckOfferRemoved,
+					testAccRemoveIntegration,
+				),
+			},
+		},
+	})
+}
+
+func testAccResourceOfferToDelete(srcModelName, dstModelName string, data internaltesting.TemplateData) string {
+	data["SrcModelName"] = srcModelName
+	data["DstModelName"] = dstModelName
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceOfferToDelete",
+		`
+resource "juju_model" "src" {
+  name = "{{.SrcModelName}}"
+}
+
+resource "juju_application" "src" {
+  model_uuid = juju_model.src.uuid
+  name       = "src"
+  charm {
+    name = "juju-qa-dummy-source"
+    base = "ubuntu@22.04"
+  }
+  config = {
+    token = "abc"
+  }
+}
+
+resource "juju_model" "dst" {
+  name = "{{.DstModelName}}"
+}
+
+resource "juju_application" "dst" {
+  model_uuid = juju_model.dst.uuid
+  name       = "dst"
+  charm {
+    name = "juju-qa-dummy-sink"
+    base = "ubuntu@22.04"
+  }
+}
+
+{{ if .IncludeOffer }}
+resource "juju_offer" "this" {
+  model_uuid          = juju_model.src.uuid
+  application_name    = juju_application.src.name
+  endpoints           = ["sink"]
+  allow_force_destroy = {{.AllowForceDestroy}}
+  timeouts {
+    delete = "10s"
+  }
+}
+{{ end }}
+`,
+		data,
+	)
+}
+
+func testAccCreateIntegration(s *terraform.State) error {
+	rs, ok := s.RootModule().Resources["juju_model.dst"]
+	if !ok {
+		return fmt.Errorf("not found: juju_model.dst")
+	}
+	modelUUID := rs.Primary.Attributes["uuid"]
+
+	offer, ok := s.RootModule().Resources["juju_offer.this"]
+	if !ok {
+		return fmt.Errorf("not found: juju_offer.this")
+	}
+	offerURL := offer.Primary.Attributes["url"]
+	if offerURL == "" {
+		return fmt.Errorf("missing juju_offer.this.url")
+	}
+
+	_, err := TestClient.Offers.ConsumeRemoteOffer(context.Background(), &juju.ConsumeRemoteOfferInput{
+		ModelUUID: modelUUID,
+		OfferURL:  offerURL,
+	})
+	if err != nil {
+		return fmt.Errorf("creating integration: %w", err)
+	}
+
+	_, err = TestClient.Integrations.CreateIntegration(context.Background(), &juju.IntegrationInput{
+		ModelUUID: modelUUID,
+		Apps:      []string{"dst"},
+		Endpoints: []string{"dst:source", "src"},
+	})
+	if err != nil {
+		return fmt.Errorf("creating integration: %w", err)
+	}
+
+	return nil
+}
+
+func testAccCheckOfferRemoved(s *terraform.State) error {
+	// juju_offer.this has already been destroyed so it is absent from state.
+	// Derive the offer URL from the src model that is still present.
+	srcModel, ok := s.RootModule().Resources["juju_model.src"]
+	if !ok {
+		return fmt.Errorf("not found: juju_model.src")
+	}
+	offerURL := fmt.Sprintf("%s/%s.src", expectedResourceOwner(), srcModel.Primary.Attributes["name"])
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+
+	for {
+		_, err := TestClient.Offers.ReadOffer(ctx, &juju.ReadOfferInput{
+			OfferURL: offerURL,
+		})
+		if err != nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("offer %q still exists after force destroy and timeout", offerURL)
+		case <-time.After(1 * time.Second):
+		}
+	}
+}
+
+func testAccRemoveIntegration(s *terraform.State) error {
+	rs, ok := s.RootModule().Resources["juju_model.dst"]
+	if !ok {
+		return fmt.Errorf("not found: juju_model.dst")
+	}
+	modelUUID := rs.Primary.Attributes["uuid"]
+
+	err := TestClient.Integrations.DestroyIntegration(context.Background(), &juju.IntegrationInput{
+		ModelUUID: modelUUID,
+		Endpoints: []string{"dst:source", "src"},
+	})
+	if err != nil {
+		// We sometimes lose this race
+		if jujuparams.IsCodeNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("destroying integration: %w", err)
+	}
+
+	return nil
 }

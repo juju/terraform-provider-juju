@@ -37,6 +37,27 @@ resource "juju_offer" "percona-cluster" {
 }
 ```
 
+You can optionally configure behaviour:
+
+- `timeouts` — A block to configure custom timeouts for create and delete operations.
+- `allow_force_destroy` (default: `false`) — Allows the offer to be force-destroyed even if it has active connections. Force destroy may not actually be used if not necessary.
+
+Use of `allow_force_destroy` is potentially dangerous and should be avoided if at all possible. Note that changing it to `true` first requires applying the plan, so it is updated on the resource.
+
+```terraform
+resource "juju_offer" "percona-cluster" {
+  model_uuid       = juju_model.development.uuid
+  application_name = juju_application.percona-cluster.name
+  endpoints         = ["server"]
+  allow_force_destroy = true
+
+  timeouts {
+    create = "2m"
+    delete = "10m"
+  }
+}
+```
+
 > See more: [`juju_offer` (resource)](../reference/terraform-provider/resources/offer)
 
 
