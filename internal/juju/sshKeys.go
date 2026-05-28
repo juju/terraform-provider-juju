@@ -187,11 +187,6 @@ func (c *sshKeysClient) DeleteSSHKey(ctx context.Context, input *DeleteSSHKeyInp
 	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
 	// the logged-in user for completeness. In Juju 4, keys are associated per user per model, but note, it isn't the user passed in
 	// via the user argument but rather the API authenticated user.
-	//
-	// Separately, note that JIMM fronts multiple controller versions and reports the oldest attached controller version.
-	// Because the KeyManager facade was not bumped when a breaking change was made to accept SHA256 fingerprints in Juju 4 over MD5 in Juju 3
-	// and because DeleteKeys is a model-scoped call, when JIMM is in front we send both hash formats in one
-	// request and let the backing controller accept the identifier format it understands.
 	params, err := client.DeleteKeys(ctx, input.Username, deleteKeyIdentifiers...)
 	if len(params) != 0 {
 		messages := make([]string, 0)
@@ -236,6 +231,13 @@ func (c *sshKeysClient) ListKeys(ctx context.Context, input ListSSHKeysInput) ([
 	return result.Result, nil
 }
 
+// sshKeyDeleteIdentifiers generates a list of identifiers to attempt to delete the SSH key with, based on the
+// controller version and whether the controller is JIMM/JAAS-backed.
+//
+// Note that JIMM fronts multiple controller versions and reports the oldest attached controller version.
+// Because the KeyManager facade was not bumped when a breaking change was made to accept SHA256 fingerprints in Juju 4
+// over MD5 in Juju 3 and because DeleteKeys is a model-scoped call, when JIMM is in front we send both hash formats in
+// one request and let the backing controller accept the identifier format it understands.
 func sshKeyDeleteIdentifiers(payload string, controllerVersion semversion.Number, isJIMMController bool) ([]string, error) {
 	normalizedPayload := strings.TrimSuffix(payload, "\n")
 	md5Fingerprint, _, err := jujussh.KeyFingerprint(normalizedPayload)
