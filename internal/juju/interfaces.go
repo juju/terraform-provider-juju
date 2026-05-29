@@ -23,12 +23,16 @@ import (
 	"github.com/juju/juju/domain/deployment/charm"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v6"
+	jujussh "github.com/juju/utils/v4/ssh"
 )
 
 // SharedClient defines the set of methods that the provider's shared client must implement.
 type SharedClient interface {
 	// GetControllerVersion returns the version of the controller that the client is connected to.
 	GetControllerVersion(context.Context) (semversion.Number, error)
+
+	// IsJAAS reports whether the configured controller is JIMM/JAAS-backed.
+	IsJAAS(context.Context, bool) bool
 
 	// GetUser returns the name of the currently authenticated user.
 	GetUser() string
@@ -131,6 +135,13 @@ type SecretAPIClient interface {
 	RemoveSecret(ctx context.Context, uri *secrets.URI, name string, revision *int) error
 	GrantSecret(ctx context.Context, uri *secrets.URI, name string, apps []string) ([]error, error)
 	RevokeSecret(ctx context.Context, uri *secrets.URI, name string, apps []string) ([]error, error)
+}
+
+// SSHKeyManagerClient defines the subset of key manager API methods used by the provider.
+type SSHKeyManagerClient interface {
+	AddKeys(context.Context, string, ...string) ([]params.ErrorResult, error)
+	DeleteKeys(context.Context, string, ...string) ([]params.ErrorResult, error)
+	ListKeys(context.Context, jujussh.ListMode, ...string) ([]params.StringsResult, error)
 }
 
 // JaasAPIClient defines the set of methods that the JAAS API provides.
