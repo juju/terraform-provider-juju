@@ -43,8 +43,7 @@ func TestAcc_ResourceSubnet_CreateImportUpdateAndDelete(t *testing.T) {
 		return cidr, nil
 	}
 
-	var steps []resource.TestStep
-	steps = []resource.TestStep{
+	steps := []resource.TestStep{
 		// These first step create the model and extract the CIDR from alpha
 		// space so that we have a valid CIDR to use in the subsequent subnet
 		// resource creation step.
