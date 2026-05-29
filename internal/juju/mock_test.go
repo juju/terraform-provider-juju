@@ -3090,6 +3090,326 @@ func (c *MockCloudAPIClientUserCredentialsCall) DoAndReturn(f func(context.Conte
 	return c
 }
 
+// MockSpacesAPIClient is a mock of SpacesAPIClient interface.
+type MockSpacesAPIClient struct {
+	ctrl     *gomock.Controller
+	recorder *MockSpacesAPIClientMockRecorder
+	isgomock struct{}
+}
+
+// MockSpacesAPIClientMockRecorder is the mock recorder for MockSpacesAPIClient.
+type MockSpacesAPIClientMockRecorder struct {
+	mock *MockSpacesAPIClient
+}
+
+// NewMockSpacesAPIClient creates a new mock instance.
+func NewMockSpacesAPIClient(ctrl *gomock.Controller) *MockSpacesAPIClient {
+	mock := &MockSpacesAPIClient{ctrl: ctrl}
+	mock.recorder = &MockSpacesAPIClientMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockSpacesAPIClient) EXPECT() *MockSpacesAPIClientMockRecorder {
+	return m.recorder
+}
+
+// CreateSpace mocks base method.
+func (m *MockSpacesAPIClient) CreateSpace(ctx context.Context, name string, cidrs []string, public bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateSpace", ctx, name, cidrs, public)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateSpace indicates an expected call of CreateSpace.
+func (mr *MockSpacesAPIClientMockRecorder) CreateSpace(ctx, name, cidrs, public any) *MockSpacesAPIClientCreateSpaceCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSpace", reflect.TypeOf((*MockSpacesAPIClient)(nil).CreateSpace), ctx, name, cidrs, public)
+	return &MockSpacesAPIClientCreateSpaceCall{Call: call}
+}
+
+// MockSpacesAPIClientCreateSpaceCall wrap *gomock.Call
+type MockSpacesAPIClientCreateSpaceCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSpacesAPIClientCreateSpaceCall) Return(arg0 error) *MockSpacesAPIClientCreateSpaceCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSpacesAPIClientCreateSpaceCall) Do(f func(context.Context, string, []string, bool) error) *MockSpacesAPIClientCreateSpaceCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSpacesAPIClientCreateSpaceCall) DoAndReturn(f func(context.Context, string, []string, bool) error) *MockSpacesAPIClientCreateSpaceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// ListSpaces mocks base method.
+func (m *MockSpacesAPIClient) ListSpaces(ctx context.Context) ([]params0.Space, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSpaces", ctx)
+	ret0, _ := ret[0].([]params0.Space)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSpaces indicates an expected call of ListSpaces.
+func (mr *MockSpacesAPIClientMockRecorder) ListSpaces(ctx any) *MockSpacesAPIClientListSpacesCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSpaces", reflect.TypeOf((*MockSpacesAPIClient)(nil).ListSpaces), ctx)
+	return &MockSpacesAPIClientListSpacesCall{Call: call}
+}
+
+// MockSpacesAPIClientListSpacesCall wrap *gomock.Call
+type MockSpacesAPIClientListSpacesCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSpacesAPIClientListSpacesCall) Return(arg0 []params0.Space, arg1 error) *MockSpacesAPIClientListSpacesCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSpacesAPIClientListSpacesCall) Do(f func(context.Context) ([]params0.Space, error)) *MockSpacesAPIClientListSpacesCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSpacesAPIClientListSpacesCall) DoAndReturn(f func(context.Context) ([]params0.Space, error)) *MockSpacesAPIClientListSpacesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MoveSubnets mocks base method.
+func (m *MockSpacesAPIClient) MoveSubnets(ctx context.Context, space names.SpaceTag, subnets []names.SubnetTag, force bool) (params0.MoveSubnetsResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MoveSubnets", ctx, space, subnets, force)
+	ret0, _ := ret[0].(params0.MoveSubnetsResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MoveSubnets indicates an expected call of MoveSubnets.
+func (mr *MockSpacesAPIClientMockRecorder) MoveSubnets(ctx, space, subnets, force any) *MockSpacesAPIClientMoveSubnetsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveSubnets", reflect.TypeOf((*MockSpacesAPIClient)(nil).MoveSubnets), ctx, space, subnets, force)
+	return &MockSpacesAPIClientMoveSubnetsCall{Call: call}
+}
+
+// MockSpacesAPIClientMoveSubnetsCall wrap *gomock.Call
+type MockSpacesAPIClientMoveSubnetsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSpacesAPIClientMoveSubnetsCall) Return(arg0 params0.MoveSubnetsResult, arg1 error) *MockSpacesAPIClientMoveSubnetsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSpacesAPIClientMoveSubnetsCall) Do(f func(context.Context, names.SpaceTag, []names.SubnetTag, bool) (params0.MoveSubnetsResult, error)) *MockSpacesAPIClientMoveSubnetsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSpacesAPIClientMoveSubnetsCall) DoAndReturn(f func(context.Context, names.SpaceTag, []names.SubnetTag, bool) (params0.MoveSubnetsResult, error)) *MockSpacesAPIClientMoveSubnetsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// RemoveSpace mocks base method.
+func (m *MockSpacesAPIClient) RemoveSpace(ctx context.Context, name string, force, dryRun bool) (params0.RemoveSpaceResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveSpace", ctx, name, force, dryRun)
+	ret0, _ := ret[0].(params0.RemoveSpaceResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RemoveSpace indicates an expected call of RemoveSpace.
+func (mr *MockSpacesAPIClientMockRecorder) RemoveSpace(ctx, name, force, dryRun any) *MockSpacesAPIClientRemoveSpaceCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveSpace", reflect.TypeOf((*MockSpacesAPIClient)(nil).RemoveSpace), ctx, name, force, dryRun)
+	return &MockSpacesAPIClientRemoveSpaceCall{Call: call}
+}
+
+// MockSpacesAPIClientRemoveSpaceCall wrap *gomock.Call
+type MockSpacesAPIClientRemoveSpaceCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSpacesAPIClientRemoveSpaceCall) Return(arg0 params0.RemoveSpaceResult, arg1 error) *MockSpacesAPIClientRemoveSpaceCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSpacesAPIClientRemoveSpaceCall) Do(f func(context.Context, string, bool, bool) (params0.RemoveSpaceResult, error)) *MockSpacesAPIClientRemoveSpaceCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSpacesAPIClientRemoveSpaceCall) DoAndReturn(f func(context.Context, string, bool, bool) (params0.RemoveSpaceResult, error)) *MockSpacesAPIClientRemoveSpaceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// ShowSpace mocks base method.
+func (m *MockSpacesAPIClient) ShowSpace(ctx context.Context, name string) (params0.ShowSpaceResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ShowSpace", ctx, name)
+	ret0, _ := ret[0].(params0.ShowSpaceResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ShowSpace indicates an expected call of ShowSpace.
+func (mr *MockSpacesAPIClientMockRecorder) ShowSpace(ctx, name any) *MockSpacesAPIClientShowSpaceCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ShowSpace", reflect.TypeOf((*MockSpacesAPIClient)(nil).ShowSpace), ctx, name)
+	return &MockSpacesAPIClientShowSpaceCall{Call: call}
+}
+
+// MockSpacesAPIClientShowSpaceCall wrap *gomock.Call
+type MockSpacesAPIClientShowSpaceCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSpacesAPIClientShowSpaceCall) Return(arg0 params0.ShowSpaceResult, arg1 error) *MockSpacesAPIClientShowSpaceCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSpacesAPIClientShowSpaceCall) Do(f func(context.Context, string) (params0.ShowSpaceResult, error)) *MockSpacesAPIClientShowSpaceCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSpacesAPIClientShowSpaceCall) DoAndReturn(f func(context.Context, string) (params0.ShowSpaceResult, error)) *MockSpacesAPIClientShowSpaceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockSubnetsAPIClient is a mock of SubnetsAPIClient interface.
+type MockSubnetsAPIClient struct {
+	ctrl     *gomock.Controller
+	recorder *MockSubnetsAPIClientMockRecorder
+	isgomock struct{}
+}
+
+// MockSubnetsAPIClientMockRecorder is the mock recorder for MockSubnetsAPIClient.
+type MockSubnetsAPIClientMockRecorder struct {
+	mock *MockSubnetsAPIClient
+}
+
+// NewMockSubnetsAPIClient creates a new mock instance.
+func NewMockSubnetsAPIClient(ctrl *gomock.Controller) *MockSubnetsAPIClient {
+	mock := &MockSubnetsAPIClient{ctrl: ctrl}
+	mock.recorder = &MockSubnetsAPIClientMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockSubnetsAPIClient) EXPECT() *MockSubnetsAPIClientMockRecorder {
+	return m.recorder
+}
+
+// ListSubnets mocks base method.
+func (m *MockSubnetsAPIClient) ListSubnets(ctx context.Context, spaceTag *names.SpaceTag, zone string) ([]params0.Subnet, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSubnets", ctx, spaceTag, zone)
+	ret0, _ := ret[0].([]params0.Subnet)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSubnets indicates an expected call of ListSubnets.
+func (mr *MockSubnetsAPIClientMockRecorder) ListSubnets(ctx, spaceTag, zone any) *MockSubnetsAPIClientListSubnetsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSubnets", reflect.TypeOf((*MockSubnetsAPIClient)(nil).ListSubnets), ctx, spaceTag, zone)
+	return &MockSubnetsAPIClientListSubnetsCall{Call: call}
+}
+
+// MockSubnetsAPIClientListSubnetsCall wrap *gomock.Call
+type MockSubnetsAPIClientListSubnetsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSubnetsAPIClientListSubnetsCall) Return(arg0 []params0.Subnet, arg1 error) *MockSubnetsAPIClientListSubnetsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSubnetsAPIClientListSubnetsCall) Do(f func(context.Context, *names.SpaceTag, string) ([]params0.Subnet, error)) *MockSubnetsAPIClientListSubnetsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSubnetsAPIClientListSubnetsCall) DoAndReturn(f func(context.Context, *names.SpaceTag, string) ([]params0.Subnet, error)) *MockSubnetsAPIClientListSubnetsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// SubnetsByCIDR mocks base method.
+func (m *MockSubnetsAPIClient) SubnetsByCIDR(ctx context.Context, cidrs []string) ([]params0.SubnetsResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubnetsByCIDR", ctx, cidrs)
+	ret0, _ := ret[0].([]params0.SubnetsResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubnetsByCIDR indicates an expected call of SubnetsByCIDR.
+func (mr *MockSubnetsAPIClientMockRecorder) SubnetsByCIDR(ctx, cidrs any) *MockSubnetsAPIClientSubnetsByCIDRCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetsByCIDR", reflect.TypeOf((*MockSubnetsAPIClient)(nil).SubnetsByCIDR), ctx, cidrs)
+	return &MockSubnetsAPIClientSubnetsByCIDRCall{Call: call}
+}
+
+// MockSubnetsAPIClientSubnetsByCIDRCall wrap *gomock.Call
+type MockSubnetsAPIClientSubnetsByCIDRCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSubnetsAPIClientSubnetsByCIDRCall) Return(arg0 []params0.SubnetsResult, arg1 error) *MockSubnetsAPIClientSubnetsByCIDRCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSubnetsAPIClientSubnetsByCIDRCall) Do(f func(context.Context, []string) ([]params0.SubnetsResult, error)) *MockSubnetsAPIClientSubnetsByCIDRCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSubnetsAPIClientSubnetsByCIDRCall) DoAndReturn(f func(context.Context, []string) ([]params0.SubnetsResult, error)) *MockSubnetsAPIClientSubnetsByCIDRCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockCommandRunner is a mock of CommandRunner interface.
 type MockCommandRunner struct {
 	ctrl     *gomock.Controller
