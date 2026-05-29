@@ -175,10 +175,7 @@ func (c *spacesClient) MoveSubnetToSpace(ctx context.Context, input *MoveSubnetT
 		return typedError(errors.Annotate(err, "looking up subnet IDs by CIDR"))
 	}
 
-	// We only ever expect one, as we're requesting a single CIDR,
-	// but on the off chance Juju is bugged / doesn't behave as expected,
-	// it is safer to check all results for the CIDR match,
-	// rather than just assuming the first result is correct.
+	// Find the CIDR in the returned list, we expect 1 result
 	subnetID, err, shouldReturn := findSubnetIDByCIDR(subnetResults, input.CIDR)
 	if shouldReturn {
 		return err
