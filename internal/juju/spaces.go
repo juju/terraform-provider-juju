@@ -78,7 +78,6 @@ func newSpacesClient(sc SharedClient) *spacesClient {
 }
 
 // CreateSpace creates a space without assigning any subnets at creation time.
-// This is critical we're representing the subnet as a resource.
 func (c *spacesClient) CreateSpace(ctx context.Context, input *CreateSpaceInput) error {
 	conn, err := c.GetConnection(ctx, &input.ModelUUID)
 	if err != nil {
@@ -87,6 +86,8 @@ func (c *spacesClient) CreateSpace(ctx context.Context, input *CreateSpaceInput)
 	defer func() { _ = conn.Close() }()
 
 	spaceClient := c.getSpacesAPIClient(conn)
+	// The public argument isn't actually implemented server side, and defaults to true
+	// in the client - so we do too.
 	if err := spaceClient.CreateSpace(ctx, input.Name, nil, true); err != nil {
 		return typedError(errors.Annotate(err, "creating space"))
 	}
@@ -176,8 +177,8 @@ func (c *spacesClient) MoveSubnetToSpace(ctx context.Context, input *MoveSubnetT
 	}
 
 	// Find the CIDR in the returned list, we expect 1 result
-	subnetID, err, shouldReturn := findSubnetIDByCIDR(subnetResults, input.CIDR)
-	if shouldReturn {
+	subnetID, err := findSubnetIDByCIDR(subnetResults, input.CIDR)
+	if err != nil {
 		return err
 	}
 
@@ -191,7 +192,7 @@ func (c *spacesClient) MoveSubnetToSpace(ctx context.Context, input *MoveSubnetT
 	return nil
 }
 
-func findSubnetIDByCIDR(subnetResults []params.SubnetsResult, cidr string) (string, error, bool) {
+func findSubnetIDByCIDR(subnetResults []params.SubnetsResult, cidr string) (string, error) {
 	var subnetID string
 	for _, result := range subnetResults {
 		for _, subnet := range result.Subnets {
@@ -205,7 +206,7 @@ func findSubnetIDByCIDR(subnetResults []params.SubnetsResult, cidr string) (stri
 		}
 	}
 	if subnetID == "" {
-		return "", errors.NotFoundf("subnet for CIDR %q", cidr), true
+		return "", errors.NotFoundf("subnet for CIDR %q", cidr)
 	}
-	return subnetID, nil, false
+	return subnetID, nil
 }
