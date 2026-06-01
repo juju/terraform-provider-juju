@@ -26,3 +26,7 @@ data "juju_application" "this" {
 
 - `model_uuid` (String) The uuid of the model where the application is deployed.
 - `name` (String) Name of the application.
+
+### Read-Only
+
+- `machines` (Set of String) The machines on which the application's units are placed.
