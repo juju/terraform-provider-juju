@@ -68,7 +68,7 @@ jobs:
           provider: ${{ matrix.cloud }}
           channel: "1.36-strict/stable"
           juju-channel: 3.6/stable
-          microk8s-addons: "ingress"
+          microk8s-addons: "ingress storage"
       - run: go mod download
       - name: "Bring up loadbalancer & access via terraform plan"
         run: |
