@@ -23,6 +23,14 @@ type subnetsClient struct {
 	getSubnetsAPIClient func(api.Connection) SubnetsAPIClient
 }
 
+// SubnetNotFoundError is returned when a subnet cannot be found.
+var SubnetNotFoundError = errors.ConstError("subnet-not-found")
+
+// NewSubnetNotFoundError returns an error indicating that no subnet was found for the given CIDR.
+func NewSubnetNotFoundError(cidr string) error {
+	return errors.WithType(errors.Errorf("subnet %q not found", cidr), SubnetNotFoundError)
+}
+
 // SubnetInfo is the provider-facing representation of a Juju subnet.
 type SubnetInfo struct {
 	ID                string
@@ -75,7 +83,7 @@ func (c *subnetsClient) ListSubnets(ctx context.Context, input *ListSubnetsInput
 	subnetsClient := c.getSubnetsAPIClient(conn)
 	subnets, err := subnetsClient.ListSubnets(ctx, spaceTag, input.Zone)
 	if err != nil {
-		return nil, typedError(errors.Annotate(err, "listing subnets"))
+		return nil, errors.Annotate(err, "listing subnets")
 	}
 
 	result := make([]SubnetInfo, len(subnets))
@@ -97,10 +105,10 @@ func (c *subnetsClient) ReadSubnet(ctx context.Context, input *ReadSubnetInput) 
 	subnetsClient := c.getSubnetsAPIClient(conn)
 	results, err := subnetsClient.SubnetsByCIDR(ctx, []string{input.CIDR})
 	if err != nil {
-		return nil, typedError(errors.Annotate(err, "reading subnet"))
+		return nil, errors.Annotate(err, "reading subnet")
 	}
 	if len(results) == 0 {
-		return nil, errors.NotFoundf("subnet %q", input.CIDR)
+		return nil, NewSubnetNotFoundError(input.CIDR)
 	}
 
 	for _, subnet := range results[0].Subnets {
@@ -110,7 +118,7 @@ func (c *subnetsClient) ReadSubnet(ctx context.Context, input *ReadSubnetInput) 
 		info := subnetFromParamsSubnetV2(subnet)
 		return &info, nil
 	}
-	return nil, errors.NotFoundf("subnet %q", input.CIDR)
+	return nil, NewSubnetNotFoundError(input.CIDR)
 }
 
 func subnetFromParamsSubnet(subnet params.Subnet) SubnetInfo {
