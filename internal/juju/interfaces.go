@@ -163,21 +163,6 @@ type CloudAPIClient interface {
 	UserCredentials(ctx context.Context, user names.UserTag, cloud names.CloudTag) ([]names.CloudCredentialTag, error)
 }
 
-// SpacesAPIClient defines the methods the Juju API client provides for spaces.
-type SpacesAPIClient interface {
-	CreateSpace(ctx context.Context, name string, cidrs []string, public bool) error
-	ShowSpace(ctx context.Context, name string) (params.ShowSpaceResult, error)
-	ListSpaces(ctx context.Context) ([]params.Space, error)
-	RemoveSpace(ctx context.Context, name string, force bool, dryRun bool) (params.RemoveSpaceResult, error)
-	MoveSubnets(ctx context.Context, space names.SpaceTag, subnets []names.SubnetTag, force bool) (params.MoveSubnetsResult, error)
-}
-
-// SubnetsAPIClient defines the methods the Juju API client provides for subnets.
-type SubnetsAPIClient interface {
-	ListSubnets(ctx context.Context, spaceTag *names.SpaceTag, zone string) ([]params.Subnet, error)
-	SubnetsByCIDR(ctx context.Context, cidrs []string) ([]params.SubnetsResult, error)
-}
-
 // AnnotationsAPIClient defines the set of methods that the Annotations API provides.
 type AnnotationsAPIClient interface {
 	Get(ctx context.Context, tags []string) ([]params.AnnotationsGetResult, error)
