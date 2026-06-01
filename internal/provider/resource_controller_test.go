@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -37,6 +38,8 @@ import (
 func TestAcc_ResourceController(t *testing.T) {
 	SkipJAAS(t)
 	controllerName := acctest.RandomWithPrefix("tf-test-controller")
+	currentAgentVersion := "3.6.12"
+	targetAgentVersion := "3.6.13"
 
 	mockCtrl := gomock.NewController(t)
 	mockJujuCommand := NewMockJujuCommand(mockCtrl)
@@ -88,7 +91,7 @@ func TestAcc_ResourceController(t *testing.T) {
 			},
 		},
 		Flags: juju.BootstrapFlags{
-			AgentVersion:  "3.6.12",
+			AgentVersion:  currentAgentVersion,
 			BootstrapBase: "test-base",
 		},
 	}).Return(&juju.ControllerConnectionInformation{
@@ -96,7 +99,7 @@ func TestAcc_ResourceController(t *testing.T) {
 		CACert:       "test controller CA cert",
 		Username:     "admin",
 		Password:     "password",
-		AgentVersion: "3.6.12",
+		AgentVersion: currentAgentVersion,
 	}, nil).AnyTimes()
 
 	mockJujuCommand.EXPECT().Config(
@@ -107,30 +110,60 @@ func TestAcc_ResourceController(t *testing.T) {
 			Username:  "admin",
 			Password:  "password",
 		},
-	).Return(map[string]any{
-		"agent-logfile-max-backups": "3",
-		"audit-log-capture-args":    "true",
-		"autocert-dns-name":         "test-external-name",
-	}, map[string]any{
-		"enable-os-refresh-update": "false",
-		"http-proxy":               "fake-proxy",
-	}, nil).AnyTimes()
+	).DoAndReturn(func(context.Context, *juju.ControllerConnectionInformation) (map[string]any, map[string]any, error) {
+		return map[string]any{
+				"agent-logfile-max-backups": "3",
+				"audit-log-capture-args":    "true",
+				"autocert-dns-name":         "test-external-name",
+			}, map[string]any{
+				"agent-version":            currentAgentVersion,
+				"enable-os-refresh-update": "false",
+				"http-proxy":               "fake-proxy",
+			}, nil
+	}).AnyTimes()
+
+	mockJujuCommand.EXPECT().ControllerVersion(
+		gomock.Any(),
+		&juju.ControllerConnectionInformation{
+			Addresses: []string{"127.0.0.1:17070"},
+			CACert:    "test controller CA cert",
+			Username:  "admin",
+			Password:  "password",
+		},
+	).DoAndReturn(func(ctx context.Context, cci *juju.ControllerConnectionInformation) (version.Number, error) {
+		return version.MustParse(currentAgentVersion), nil
+	}).AnyTimes()
+
+	mockJujuCommand.EXPECT().UpgradeController(
+		gomock.Any(),
+		&juju.ControllerConnectionInformation{
+			Addresses: []string{"127.0.0.1:17070"},
+			CACert:    "test controller CA cert",
+			Username:  "admin",
+			Password:  "password",
+		},
+		version.MustParse(targetAgentVersion),
+	).DoAndReturn(func(_ context.Context, _ *juju.ControllerConnectionInformation, targetVersion version.Number) (version.Number, error) {
+		currentAgentVersion = targetVersion.String()
+		return targetVersion, nil
+	})
+
+	mockJujuCommand.EXPECT().UpdateConfig(
+		gomock.Any(),
+		&juju.ControllerConnectionInformation{
+			Addresses: []string{"127.0.0.1:17070"},
+			CACert:    "test controller CA cert",
+			Username:  "admin",
+			Password:  "password",
+		},
+		map[string]string{},
+		map[string]string{},
+		[]string{},
+	).Return(nil)
 
 	mockJujuCommand.EXPECT().Destroy(
 		gomock.Any(),
-		juju.DestroyArguments{
-			Name:        controllerName,
-			JujuBinary:  "/snap/bin/juju",
-			CloudName:   testingCloud.CloudName(),
-			CloudRegion: "local",
-			ConnectionInfo: juju.ControllerConnectionInformation{
-				Addresses:    []string{"127.0.0.1:17070"},
-				CACert:       "test controller CA cert",
-				Username:     "admin",
-				Password:     "password",
-				AgentVersion: "3.6.12",
-			},
-		},
+		gomock.Any(),
 	).Return(nil).AnyTimes()
 
 	frameworkProviderFactoriesWithMockJujuCommand := map[string]func() (tfprotov6.ProviderServer, error){
@@ -145,23 +178,37 @@ func TestAcc_ResourceController(t *testing.T) {
 	resourceName := "juju_controller.controller"
 	resource.ParallelTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: frameworkProviderFactoriesWithMockJujuCommand,
-		Steps: []resource.TestStep{{
-			Config: testAccResourceController(controllerName, testingCloud.CloudName()),
-			Check: resource.ComposeTestCheckFunc(
-				resource.TestCheckResourceAttr(resourceName, "name", controllerName),
-			),
-		}},
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceController(controllerName, testingCloud.CloudName(), currentAgentVersion),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", controllerName),
+					resource.TestCheckResourceAttr(resourceName, "agent_version", currentAgentVersion),
+				),
+			},
+			{
+				Config: testAccResourceController(controllerName, testingCloud.CloudName(), targetAgentVersion),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "agent_version", targetAgentVersion),
+				),
+			},
+		},
 	})
 }
 
-func testAccResourceController(controllerName, cloudName string) string {
+func testAccResourceController(controllerName, cloudName, agentVersion string) string {
 	return fmt.Sprintf(`
 provider "juju" {
   controller_mode = true
 }
 
 resource "juju_controller" "controller" {
-  agent_version = "3.6.12"
+  agent_version = %q
   name          = %q
 
   juju_binary     = "/snap/bin/juju"
@@ -216,7 +263,62 @@ resource "juju_controller" "controller" {
 	}
   }
 }
-`, controllerName, cloudName)
+`, agentVersion, controllerName, cloudName)
+}
+
+func TestValidateControllerPatchUpgrade(t *testing.T) {
+	tests := []struct {
+		name           string
+		currentVersion string
+		targetVersion  string
+		expected       version.Number
+		errSubstring   string
+	}{
+		{
+			name:           "higher patch allowed",
+			currentVersion: "3.6.12",
+			targetVersion:  "3.6.13",
+			expected:       version.MustParse("3.6.13"),
+		},
+		{
+			name:           "same patch rejected",
+			currentVersion: "3.6.12",
+			targetVersion:  "3.6.12",
+			errSubstring:   "only upgrades to a higher patch version",
+		},
+		{
+			name:           "lower patch rejected",
+			currentVersion: "3.6.12",
+			targetVersion:  "3.6.11",
+			errSubstring:   "only upgrades to a higher patch version",
+		},
+		{
+			name:           "minor upgrade rejected",
+			currentVersion: "3.6.12",
+			targetVersion:  "3.7.0",
+			errSubstring:   "only upgrades to a higher patch version",
+		},
+		{
+			name:           "major upgrade rejected",
+			currentVersion: "3.6.12",
+			targetVersion:  "4.0.0",
+			errSubstring:   "only upgrades to a higher patch version",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := validateControllerPatchUpgrade(tt.currentVersion, tt.targetVersion)
+			if tt.errSubstring != "" {
+				require.Error(t, err)
+				require.ErrorContains(t, err, tt.errSubstring)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, got)
+		})
+	}
 }
 
 func TestBuildStringListFromMap(t *testing.T) {

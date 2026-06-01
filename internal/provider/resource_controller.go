@@ -27,12 +27,18 @@ import (
 
 	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	"github.com/juju/terraform-provider-juju/internal/wait"
+	"github.com/juju/version/v2"
 )
 
 // JujuCommand defines the interface for interacting with Juju controllers.
 type JujuCommand interface {
 	// Bootstrap creates a new controller and returns connection information.
 	Bootstrap(ctx context.Context, model juju.BootstrapArguments) (*juju.ControllerConnectionInformation, error)
+	// ControllerVersion retrieves the agent version of the controller.
+	ControllerVersion(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (version.Number, error)
+	// UpgradeController upgrades an existing controller to the requested target version.
+	UpgradeController(ctx context.Context, connInfo *juju.ControllerConnectionInformation, targetVersion version.Number) (version.Number, error)
 	// UpdateConfig updates controller and controller-model configuration.
 	UpdateConfig(ctx context.Context, connInfo *juju.ControllerConnectionInformation,
 		controllerConfig, controllerModelConfig map[string]string,
@@ -184,12 +190,17 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 		Description: "A resource that represents a Juju Controller.",
 		Attributes: map[string]schema.Attribute{
 			"agent_version": schema.StringAttribute{
-				Description: "Specifies a controller version to bootstrap. If not specified, the latest stable agent version will be used.",
+				Description: "Specifies a controller version to bootstrap. If not specified, the latest stable agent version will be used. Updating this value only supports in-place upgrades to higher patch versions within the same major.minor series.",
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.String{
+					ValidatorMatchString(func(s string) bool {
+						_, err := version.Parse(s)
+						return err == nil
+					}, "invalid version format"),
 				},
 			},
 			"api_addresses": schema.ListAttribute{
@@ -926,6 +937,16 @@ func (r *controllerResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
+	agentVersion, err := command.ControllerVersion(ctx, connInfo)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Controller Version Read Error",
+			fmt.Sprintf("Unable to determine controller %q version: %s", state.Name.ValueString(), err),
+		)
+		return
+	}
+	state.AgentVersion = types.StringValue(agentVersion.String())
+
 	cfg, diags := newConfigFromModelConfigAPI(ctx, controllerConfig, state.ControllerConfig)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -1047,6 +1068,54 @@ func (r *controllerResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
+	currentAgentVersion := state.AgentVersion.ValueString()
+	targetAgentVersion := ""
+	if !plan.AgentVersion.IsNull() && !plan.AgentVersion.IsUnknown() {
+		targetAgentVersion = plan.AgentVersion.ValueString()
+	}
+
+	if targetAgentVersion != "" && targetAgentVersion != currentAgentVersion {
+		validatedTargetVersion, err := validateControllerPatchUpgrade(currentAgentVersion, targetAgentVersion)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Controller Version Update Error",
+				fmt.Sprintf("Unable to update controller %q version: %s", state.Name.ValueString(), err),
+			)
+			return
+		}
+
+		upgradedVersion, err := command.UpgradeController(ctx, connInfo, validatedTargetVersion)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Controller Upgrade Error",
+				fmt.Sprintf("Unable to upgrade controller %q from %s to %s: %s", state.Name.ValueString(), currentAgentVersion, targetAgentVersion, err),
+			)
+			return
+		}
+
+		if _, err := wait.WaitFor(
+			wait.WaitForCfg[*juju.ControllerConnectionInformation, version.Number]{
+				Context: ctx,
+				GetData: controllerVersionShim(ctx, command),
+				Input:   connInfo,
+				DataAssertions: []wait.Assert[version.Number]{
+					func(data version.Number) error {
+						if data != upgradedVersion {
+							return juju.NewRetryReadError("waiting for controller version to change")
+						}
+						return nil
+					},
+				},
+				Logf: r.trace,
+			},
+		); err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Failed waiting for new controller version, got error: %s", err))
+			return
+		}
+
+		plan.AgentVersion = types.StringValue(upgradedVersion.String())
+	}
+
 	r.trace(fmt.Sprintf("controller updated: %q", plan.Name.ValueString()))
 
 	// Write the updated state
@@ -1136,6 +1205,35 @@ func (r *controllerResource) Delete(ctx context.Context, req resource.DeleteRequ
 		}
 		return
 	}
+}
+
+// controllerVersionShim is a helper function to adapt the ControllerVersion method to the signature required by wait.WaitFor.
+func controllerVersionShim(ctx context.Context, command JujuCommand) func(connInfo *juju.ControllerConnectionInformation) (version.Number, error) {
+	return func(connInfo *juju.ControllerConnectionInformation) (version.Number, error) {
+		return command.ControllerVersion(ctx, connInfo)
+	}
+}
+
+func validateControllerPatchUpgrade(currentVersion, targetVersion string) (version.Number, error) {
+	currentPatchVersion, err := version.Parse(currentVersion)
+	if err != nil {
+		return version.Number{}, fmt.Errorf("invalid current controller version %q: %w", currentVersion, err)
+	}
+
+	targetPatchVersion, err := version.Parse(targetVersion)
+	if err != nil {
+		return version.Number{}, fmt.Errorf("invalid requested controller version %q: %w", targetVersion, err)
+	}
+
+	if currentPatchVersion.Major != targetPatchVersion.Major || currentPatchVersion.Minor != targetPatchVersion.Minor || targetPatchVersion.Patch <= currentPatchVersion.Patch {
+		return version.Number{}, fmt.Errorf(
+			"only upgrades to a higher patch version within the same major.minor series are supported (current %s, requested %s)",
+			currentPatchVersion,
+			targetPatchVersion,
+		)
+	}
+
+	return targetPatchVersion, nil
 }
 
 // buildStringListFromMap converts a map to a list of key=value strings.
