@@ -81,8 +81,6 @@ type Client struct {
 	Jaas         jaasClient
 	Annotations  annotationsClient
 	Storage      storageClient
-	Spaces       spacesClient
-	Subnets      subnetsClient
 
 	isJAAS   func() bool
 	username string
@@ -197,8 +195,6 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 		Jaas:         *newJaasClient(sc),
 		Annotations:  *newAnnotationsClient(sc),
 		Storage:      *newStorageClient(sc),
-		Spaces:       *newSpacesClient(sc),
-		Subnets:      *newSubnetsClient(sc),
 		isJAAS:       func() bool { return sc.IsJAAS(ctx, defaultJAASCheck) },
 		username:     user,
 	}, nil
