@@ -365,6 +365,23 @@ func TestBuildStringListFromMap(t *testing.T) {
 func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 	controllerName := acctest.RandomWithPrefix("tf-test-controller")
 	resourceName := "juju_controller.controller"
+	var initialAgentVersion, updatedAgentVersion string
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Error("environment variable JUJU_AGENT_VERSION must be set for this test")
+		return
+	}
+	jujuMajor := version.MustParse(agentVersion).Major
+	switch jujuMajor {
+	case 2:
+		initialAgentVersion = "2.9.58"
+		updatedAgentVersion = "2.9.59"
+	case 3:
+		initialAgentVersion = "3.6.21"
+		updatedAgentVersion = "3.6.23"
+	default:
+		t.Errorf("unsupported Juju agent version %q for this test", agentVersion)
+	}
 
 	// bootstrap config
 	baseBootstrapConfig := map[string]string{
@@ -411,9 +428,10 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 		Steps: append([]resource.TestStep{
 			{
 				// Create the controller
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, baseControllerConfig, baseControllerModelConfig),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, initialAgentVersion, baseBootstrapConfig, baseControllerConfig, baseControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", controllerName),
+					resource.TestCheckResourceAttr(resourceName, "agent_version", initialAgentVersion),
 					resource.TestCheckResourceAttr(resourceName, "bootstrap_config.admin-secret", "my-favorite-admin-password"),
 					resource.TestCheckResourceAttr(resourceName, "controller_config.agent-logfile-max-backups", "3"),
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.disable-telemetry", "true"),
@@ -423,7 +441,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify changing controller config works
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, updatedControllerConfig, baseControllerModelConfig),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, initialAgentVersion, baseBootstrapConfig, updatedControllerConfig, baseControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_config.agent-logfile-max-backups", "4"),
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
@@ -447,7 +465,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify unsetting a controller config value behaves as expected.
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, baseControllerModelConfig),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, initialAgentVersion, baseBootstrapConfig, unsetControllerConfig, baseControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
 					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
@@ -474,7 +492,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify changing controller model config works
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, updatedControllerModelConfig),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, initialAgentVersion, baseBootstrapConfig, unsetControllerConfig, updatedControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "2"),
 					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
@@ -484,7 +502,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify unsetting controller model config works
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, initialAgentVersion, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
 					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
@@ -508,10 +526,19 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				),
 			},
 			{
+				// Verify changing controller agent version works
+				Config: testAccResourceControllerWithJujuBinary(controllerName, updatedAgentVersion, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "agent_version", updatedAgentVersion),
+					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
+					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
+				),
+			},
+			{
 				SkipFunc: func() (bool, error) {
 					return testingCloud != LXDCloudTesting, nil
 				},
-				Config: testAccResourceControllerWithEnableHA(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
+				Config: testAccResourceControllerWithEnableHA(controllerName, updatedAgentVersion, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", controllerName),
 					func(s *terraform.State) error {
@@ -560,10 +587,10 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify that invalid controller config fails
-				Config:      testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, invalidControllerConfig, unsetControllerModelConfig),
+				Config:      testAccResourceControllerWithJujuBinary(controllerName, updatedAgentVersion, baseBootstrapConfig, invalidControllerConfig, unsetControllerModelConfig),
 				ExpectError: regexp.MustCompile("failed to update controller config: unknown controller config"),
 			},
-		}, testJAASControllerResourceSteps(t, resourceName, controllerName, baseBootstrapConfig)...),
+		}, testJAASControllerResourceSteps(t, resourceName, controllerName, updatedAgentVersion, baseBootstrapConfig)...),
 		CheckDestroy: func(s *terraform.State) error {
 			if isJAAS() {
 				if err := testAccCheckJaasControllerRegistered(t, controllerName, false)(s); err != nil {
@@ -752,7 +779,7 @@ resource "juju_controller" "controller" {
 	return ""
 }
 
-func testAccResourceControllerWithJujuBinary(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
+func testAccResourceControllerWithJujuBinary(controllerName, agentVersion string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
 	if isJAAS() {
 		// If JAAS, set the controller's login-token-refresh-url to JAAS.
 		addrs := os.Getenv(JujuControllerEnvKey)
@@ -795,6 +822,7 @@ locals {
 
 resource "juju_controller" "controller" {
   name          = %q
+  agent_version = %q
 
   juju_binary     = "/snap/juju/current/bin/juju"
 
@@ -831,7 +859,7 @@ resource "juju_controller" "controller" {
     }
   }  
 }
-`, controllerName, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL)
+`, controllerName, agentVersion, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL)
 	case MicroK8sTesting:
 		return fmt.Sprintf(`
 provider "juju" {
@@ -844,6 +872,7 @@ locals {
 
 resource "juju_controller" "controller" {
   name          = %q
+  agent_version = %q
 
   juju_binary     = "/snap/juju/current/bin/juju"
 
@@ -876,15 +905,15 @@ resource "juju_controller" "controller" {
 	}
   }
 }
-`, controllerName, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL)
+`, controllerName, agentVersion, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL)
 	}
 	return ""
 }
 
 // testAccResourceControllerWithEnableHA returns HCL that bootstraps a controller
 // and runs the juju_enable_ha action with 3 units.
-func testAccResourceControllerWithEnableHA(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
-	base := testAccResourceControllerWithJujuBinary(controllerName, bootstrapConfig, controllerConfig, modelConfig)
+func testAccResourceControllerWithEnableHA(controllerName, agentVersion string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
+	base := testAccResourceControllerWithJujuBinary(controllerName, agentVersion, bootstrapConfig, controllerConfig, modelConfig)
 	return base + `
 resource "terraform_data" "test" {
   lifecycle {
