@@ -89,7 +89,7 @@ func (c *spacesClient) CreateSpace(ctx context.Context, input *CreateSpaceInput)
 	// The public argument isn't actually implemented server side, and defaults to true
 	// in the client - so we do too.
 	if err := spaceClient.CreateSpace(ctx, input.Name, nil, true); err != nil {
-		return typedError(errors.Annotate(err, "creating space"))
+		return errors.Annotate(err, "creating space")
 	}
 	return nil
 }
@@ -105,7 +105,7 @@ func (c *spacesClient) ReadSpace(ctx context.Context, input *ReadSpaceInput) (*R
 	spaceClient := c.getSpacesAPIClient(conn)
 	result, err := spaceClient.ShowSpace(ctx, input.Name)
 	if err != nil {
-		return nil, typedError(errors.Annotate(err, "reading space"))
+		return nil, errors.Annotate(err, "reading space")
 	}
 
 	return &ReadSpaceOutput{
@@ -126,7 +126,7 @@ func (c *spacesClient) ListSpaces(ctx context.Context, input *ListSpacesInput) (
 	spaceClient := c.getSpacesAPIClient(conn)
 	spaces, err := spaceClient.ListSpaces(ctx)
 	if err != nil {
-		return nil, typedError(errors.Annotate(err, "listing spaces"))
+		return nil, errors.Annotate(err, "listing spaces")
 	}
 
 	result := make([]ListSpacesOutput, len(spaces))
@@ -152,7 +152,7 @@ func (c *spacesClient) DeleteSpace(ctx context.Context, input *DeleteSpaceInput)
 	spaceClient := c.getSpacesAPIClient(conn)
 	_, err = spaceClient.RemoveSpace(ctx, input.Name, false, false)
 	if err != nil {
-		return typedError(errors.Annotate(err, "deleting space"))
+		return errors.Annotate(err, "deleting space")
 	}
 
 	return nil
@@ -173,7 +173,7 @@ func (c *spacesClient) MoveSubnetToSpace(ctx context.Context, input *MoveSubnetT
 	subnetsClient := c.getSubnetsAPIClient(conn)
 	subnetResults, err := subnetsClient.SubnetsByCIDR(ctx, []string{input.CIDR})
 	if err != nil {
-		return typedError(errors.Annotate(err, "looking up subnet IDs by CIDR"))
+		return errors.Annotate(err, "looking up subnet IDs by CIDR")
 	}
 
 	// Find the CIDR in the returned list, we expect 1 result
@@ -187,7 +187,7 @@ func (c *spacesClient) MoveSubnetToSpace(ctx context.Context, input *MoveSubnetT
 	spaceClient := c.getSpacesAPIClient(conn)
 	_, err = spaceClient.MoveSubnets(ctx, names.NewSpaceTag(input.SpaceName), subnetTags, false)
 	if err != nil {
-		return typedError(errors.Annotate(err, "moving subnets"))
+		return errors.Annotate(err, "moving subnets")
 	}
 	return nil
 }
@@ -206,7 +206,7 @@ func findSubnetIDByCIDR(subnetResults []params.SubnetsResult, cidr string) (stri
 		}
 	}
 	if subnetID == "" {
-		return "", errors.NotFoundf("subnet for CIDR %q", cidr)
+		return "", NewSubnetNotFoundError(cidr)
 	}
 	return subnetID, nil
 }

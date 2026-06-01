@@ -126,5 +126,5 @@ func TestSpacesClientMoveSubnetToSpaceCIDRNotFound(t *testing.T) {
 		CIDR:      "10.0.0.0/24",
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), `subnet for CIDR "10.0.0.0/24" not found`)
+	require.Contains(t, err.Error(), `subnet "10.0.0.0/24" not found`)
 }
