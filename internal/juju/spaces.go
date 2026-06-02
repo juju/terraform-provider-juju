@@ -5,6 +5,7 @@ package juju
 
 import (
 	"context"
+	"strings"
 
 	"github.com/juju/errors"
 	"github.com/juju/juju/api"
@@ -105,6 +106,12 @@ func (c *spacesClient) ReadSpace(ctx context.Context, input *ReadSpaceInput) (*R
 	spaceClient := c.getSpacesAPIClient(conn)
 	result, err := spaceClient.ShowSpace(ctx, input.Name)
 	if err != nil {
+		// The client doesn't type the error when the space cannot be found.
+		// We require the typing because we need to check it isn't found
+		// when waiting for the deletion of the space.
+		if strings.Contains(err.Error(), "not found") {
+			err = errors.WithType(err, errors.NotFound)
+		}
 		return nil, errors.Annotate(err, "reading space")
 	}
 
@@ -152,6 +159,9 @@ func (c *spacesClient) DeleteSpace(ctx context.Context, input *DeleteSpaceInput)
 	spaceClient := c.getSpacesAPIClient(conn)
 	_, err = spaceClient.RemoveSpace(ctx, input.Name, false, false)
 	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			err = errors.WithType(err, errors.NotFound)
+		}
 		return errors.Annotate(err, "deleting space")
 	}
 
