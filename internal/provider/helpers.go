@@ -61,6 +61,8 @@ const (
 	LogResourceController = "resource-controller"
 	// LogResourceCloud is the logging subsystem for cloud resources.
 	LogResourceCloud = "resource-cloud"
+	// LogResourceSpace is the logging subsystem for space resources.
+	LogResourceSpace = "resource-space"
 
 	// LogDataSourceJAASGroup is the logging subsystem for JAAS group data sources.
 	LogDataSourceJAASGroup = "datasource-jaas-group"
