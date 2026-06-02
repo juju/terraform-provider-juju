@@ -456,7 +456,6 @@ func (d *DefaultJujuCommand) UpgradeController(
 	}
 	defer conn.Close()
 
-	// We need to fetch the controller model's UUID.
 	modelCfgClient := modelconfig.NewClient(conn)
 	defer modelCfgClient.Close()
 

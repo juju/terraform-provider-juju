@@ -942,6 +942,8 @@ func (r *controllerResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
+	// Controller version is also available inside of controllerModelConfig
+	// but we make an extra call here to decouple the separate use cases.
 	agentVersion, err := command.ControllerVersion(ctx, connInfo)
 	if err != nil {
 		resp.Diagnostics.AddError(
