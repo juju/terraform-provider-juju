@@ -66,7 +66,9 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: ${{ matrix.cloud }}
-          juju-channel: 2.9/stable
+          channel: "1.36-strict/stable"
+          juju-channel: 3.6/stable
+          microk8s-addons: "ingress storage"
       - run: go mod download
       - name: "Bring up loadbalancer & access via terraform plan"
         run: |
@@ -80,9 +82,6 @@ jobs:
           # Ensure Juju controller name
           echo "Controller name: $CONTROLLER"
           echo "Juju Username: $JUJU_USERNAME"
-
-          # Enable Ingress in MicroK8s
-          sudo microk8s enable ingress
 
           # Determine a subnet for MetalLB
           subnet="$(ip route get 1 | head -n 1 | awk '{print $7}' | awk -F. '{print $1 "." $2 "." $3 ".240/24"}')"
