@@ -266,49 +266,55 @@ resource "juju_controller" "controller" {
 `, agentVersion, controllerName, cloudName)
 }
 
-func TestValidateControllerPatchUpgrade(t *testing.T) {
+func TestControllerAgentVersionSeriesChanged(t *testing.T) {
 	tests := []struct {
-		name           string
-		currentVersion string
-		targetVersion  string
-		expected       version.Number
-		errSubstring   string
+		name            string
+		currentVersion  string
+		targetVersion   string
+		requiresReplace bool
+		errSubstring    string
 	}{
 		{
-			name:           "higher patch allowed",
-			currentVersion: "3.6.12",
+			name:            "higher patch does not replace",
+			currentVersion:  "3.6.12",
+			targetVersion:   "3.6.13",
+			requiresReplace: false,
+		},
+		{
+			name:            "lower patch replaces",
+			currentVersion:  "3.6.12",
+			targetVersion:   "3.6.11",
+			requiresReplace: true,
+		},
+		{
+			name:            "minor upgrade replaces",
+			currentVersion:  "3.6.12",
+			targetVersion:   "3.7.0",
+			requiresReplace: true,
+		},
+		{
+			name:            "major upgrade replaces",
+			currentVersion:  "3.6.12",
+			targetVersion:   "4.0.0",
+			requiresReplace: true,
+		},
+		{
+			name:           "invalid current version",
+			currentVersion: "bad-version",
 			targetVersion:  "3.6.13",
-			expected:       version.MustParse("3.6.13"),
+			errSubstring:   "invalid current controller version",
 		},
 		{
-			name:           "same patch rejected",
+			name:           "invalid target version",
 			currentVersion: "3.6.12",
-			targetVersion:  "3.6.12",
-			errSubstring:   "only upgrades to a higher patch version",
-		},
-		{
-			name:           "lower patch rejected",
-			currentVersion: "3.6.12",
-			targetVersion:  "3.6.11",
-			errSubstring:   "only upgrades to a higher patch version",
-		},
-		{
-			name:           "minor upgrade rejected",
-			currentVersion: "3.6.12",
-			targetVersion:  "3.7.0",
-			errSubstring:   "only upgrades to a higher patch version",
-		},
-		{
-			name:           "major upgrade rejected",
-			currentVersion: "3.6.12",
-			targetVersion:  "4.0.0",
-			errSubstring:   "only upgrades to a higher patch version",
+			targetVersion:  "bad-version",
+			errSubstring:   "invalid requested controller version",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := validateControllerPatchUpgrade(tt.currentVersion, tt.targetVersion)
+			got, err := controllerAgentVersionSeriesChanged(tt.currentVersion, tt.targetVersion)
 			if tt.errSubstring != "" {
 				require.Error(t, err)
 				require.ErrorContains(t, err, tt.errSubstring)
@@ -316,7 +322,7 @@ func TestValidateControllerPatchUpgrade(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, tt.expected, got)
+			require.Equal(t, tt.requiresReplace, got)
 		})
 	}
 }

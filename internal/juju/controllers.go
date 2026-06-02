@@ -393,12 +393,11 @@ func (d *DefaultJujuCommand) UpdateConfig(
 	return nil
 }
 
-// UpgradeController upgrades a controller in place to a higher patch version.
+// ControllerVersion retrieves the controller's agent version.
 func (d *DefaultJujuCommand) ControllerVersion(
 	ctx context.Context,
 	connInfo *ControllerConnectionInformation,
 ) (version.Number, error) {
-	// Connect to the controller
 	connr, err := connector.NewSimple(connector.SimpleConfig{
 		ControllerAddresses: connInfo.Addresses,
 		CACert:              connInfo.CACert,
@@ -414,7 +413,6 @@ func (d *DefaultJujuCommand) ControllerVersion(
 		return version.Number{}, err
 	}
 
-	// Fetch controller model config
 	modelCfgClient := modelconfig.NewClient(conn)
 	defer modelCfgClient.Close()
 

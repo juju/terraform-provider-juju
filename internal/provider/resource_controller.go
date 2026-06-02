@@ -194,6 +194,11 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplaceIf(
+						controllerAgentVersionRequiresReplaceIf,
+						"Changing the controller agent version major.minor series or lowering the patch version requires replacement.",
+						"Changing the controller agent version major.minor series or lowering the patch version requires replacement.",
+					),
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
@@ -1075,7 +1080,7 @@ func (r *controllerResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 
 	if targetAgentVersion != "" && targetAgentVersion != currentAgentVersion {
-		validatedTargetVersion, err := validateControllerPatchUpgrade(currentAgentVersion, targetAgentVersion)
+		validatedTargetVersion, err := version.Parse(targetAgentVersion)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Controller Version Update Error",
@@ -1214,26 +1219,38 @@ func controllerVersionShim(ctx context.Context, command JujuCommand) func(connIn
 	}
 }
 
-func validateControllerPatchUpgrade(currentVersion, targetVersion string) (version.Number, error) {
-	currentPatchVersion, err := version.Parse(currentVersion)
+func controllerAgentVersionRequiresReplaceIf(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if req.StateValue.IsNull() || req.StateValue.IsUnknown() {
+		return
+	}
+
+	requiresReplace, err := controllerAgentVersionSeriesChanged(req.StateValue.ValueString(), req.ConfigValue.ValueString())
 	if err != nil {
-		return version.Number{}, fmt.Errorf("invalid current controller version %q: %w", currentVersion, err)
+		resp.Diagnostics.AddError("Invalid controller version", err.Error())
+		return
 	}
 
-	targetPatchVersion, err := version.Parse(targetVersion)
+	resp.RequiresReplace = requiresReplace
+}
+
+// controllerAgentVersionSeriesChanged determines if the major or minor version has changed,
+// or if the patch version has been upgraded, between the current and target controller agent versions.
+// If the target version is invalid, an error is returned.
+func controllerAgentVersionSeriesChanged(currentVersion, targetVersion string) (bool, error) {
+	current, err := version.Parse(currentVersion)
 	if err != nil {
-		return version.Number{}, fmt.Errorf("invalid requested controller version %q: %w", targetVersion, err)
+		return false, fmt.Errorf("invalid current controller version %q: %w", currentVersion, err)
 	}
 
-	if currentPatchVersion.Major != targetPatchVersion.Major || currentPatchVersion.Minor != targetPatchVersion.Minor || targetPatchVersion.Patch <= currentPatchVersion.Patch {
-		return version.Number{}, fmt.Errorf(
-			"only upgrades to a higher patch version within the same major.minor series are supported (current %s, requested %s)",
-			currentPatchVersion,
-			targetPatchVersion,
-		)
+	target, err := version.Parse(targetVersion)
+	if err != nil {
+		return false, fmt.Errorf("invalid requested controller version %q: %w", targetVersion, err)
 	}
 
-	return targetPatchVersion, nil
+	return current.Major != target.Major || current.Minor != target.Minor || current.Patch >= target.Patch, nil
 }
 
 // buildStringListFromMap converts a map to a list of key=value strings.
