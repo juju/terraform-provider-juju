@@ -3,59 +3,12 @@
 page_title: "juju_space Resource - terraform-provider-juju"
 subcategory: ""
 description: |-
-  Juju Space Resource
   A resource that represents a Juju space.
-  What is it?
-  A Juju (network) space is a logical grouping of subnets that can communicate with one another.
-  Why does it matter?
-  A space is used to help segment network traffic for the purpose of:
-  Network performanceSecurityControlling the scope of regulatory compliance
-  Spaces can be specified as constraints – to determine what subnets a machine is connected to – or as
-  application endpoint bindings – to determine the subnets used by application relations.
-  Alpha Space
-  The name of the default space is “alpha”. The default space is NOT manageable by the provider,
-  but subnets available within it can be moved to provider managed spaces. It CAN be used as a data
-  source.
-  Bindings and Constraints
-  A binding associates an application endpoint with a space. This restricts traffic for the endpoint to
-  the subnets in the space. By default, endpoints are bound to the space specified in the default-space
-  model configuration value.
-  Constraints and bindings affect application deployment and machine provisioning as well as the subnets
-  a machine can talk to.
-  Endpoint bindings can be specified with "endpoint bindings" on the application resource.
 ---
 
 # juju_space (Resource)
 
-# Juju Space Resource
 A resource that represents a Juju space.
-
-# What is it?
-A Juju (network) space is a logical grouping of subnets that can communicate with one another.
-
-# Why does it matter?
-A space is used to help segment network traffic for the purpose of:
-- Network performance
-- Security
-- Controlling the scope of regulatory compliance
-
-Spaces can be specified as constraints – to determine what subnets a machine is connected to – or as 
-application endpoint bindings – to determine the subnets used by application relations.
-
-# Alpha Space
-The name of the default space is “alpha”. The default space is NOT manageable by the provider, 
-but subnets available within it can be moved to provider managed spaces. It CAN be used as a data
-source.
-
-# Bindings and Constraints
-A binding associates an application endpoint with a space. This restricts traffic for the endpoint to 
-the subnets in the space. By default, endpoints are bound to the space specified in the default-space 
-model configuration value. 
-
-Constraints and bindings affect application deployment and machine provisioning as well as the subnets
-a machine can talk to.
-
-Endpoint bindings can be specified with "endpoint bindings" on the application resource.
 
 ## Example Usage
 
