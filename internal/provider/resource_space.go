@@ -24,6 +24,7 @@ import (
 )
 
 const alphaSpaceName = "alpha"
+const systemSpaceNotManageableMsg = "alpha is a system space and cannot be managed by juju_space"
 
 var _ resource.Resource = &spaceResource{}
 var _ resource.ResourceWithConfigure = &spaceResource{}
@@ -60,7 +61,37 @@ func (r *spaceResource) Metadata(_ context.Context, req resource.MetadataRequest
 
 func (r *spaceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A resource that represents a Juju space.",
+		MarkdownDescription: `
+# Juju Space Resource
+A resource that represents a Juju space.
+
+# What is it?
+A Juju (network) space is a logical grouping of subnets that can communicate with one another.
+
+# Why does it matter?
+A space is used to help segment network traffic for the purpose of:
+- Network performance
+- Security
+- Controlling the scope of regulatory compliance
+
+Spaces can be specified as constraints – to determine what subnets a machine is connected to – or as 
+application endpoint bindings – to determine the subnets used by application relations.
+
+# Alpha Space
+The name of the default space is “alpha”. The default space is NOT manageable by the provider, 
+but subnets available within it can be moved to provider managed spaces. It CAN be used as a data
+source.
+
+# Bindings and Constraints
+A binding associates an application endpoint with a space. This restricts traffic for the endpoint to 
+the subnets in the space. By default, endpoints are bound to the space specified in the default-space 
+model configuration value. 
+
+Constraints and bindings affect application deployment and machine provisioning as well as the subnets
+a machine can talk to.
+
+Endpoint bindings can be specified with "endpoint bindings" on the application resource.
+`,
 		Attributes: map[string]schema.Attribute{
 			"model_uuid": schema.StringAttribute{
 				Description: "The UUID of the model where the space belongs.",
@@ -77,6 +108,9 @@ func (r *spaceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Required:    true,
 				Validators: []validator.String{
 					ValidatorMatchString(names.IsValidSpace, "must be a valid space name"),
+					ValidatorMatchString(func(name string) bool {
+						return !isSystemSpace(name)
+					}, systemSpaceNotManageableMsg),
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -143,7 +177,7 @@ func (r *spaceResource) ImportState(ctx context.Context, req resource.ImportStat
 		return
 	}
 	if isSystemSpace(spaceName) {
-		resp.Diagnostics.AddError("System Space Not Manageable", "alpha is a system space and cannot be managed by juju_space")
+		resp.Diagnostics.AddError("System Space Not Manageable", systemSpaceNotManageableMsg)
 		return
 	}
 
@@ -167,11 +201,6 @@ func (r *spaceResource) Create(ctx context.Context, req resource.CreateRequest, 
 	var plan spaceResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	if isSystemSpace(plan.Name.ValueString()) {
-		resp.Diagnostics.AddError("System Space Not Manageable", "alpha is a system space and cannot be managed by juju_space")
 		return
 	}
 
@@ -226,11 +255,6 @@ func (r *spaceResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	if isSystemSpace(state.Name.ValueString()) {
-		resp.Diagnostics.AddError("System Space Not Manageable", "alpha is a system space and cannot be managed by juju_space")
-		return
-	}
-
 	_, err := r.client.Spaces.ReadSpace(ctx, &juju.ReadSpaceInput{
 		ModelUUID: state.ModelUUID.ValueString(),
 		Name:      state.Name.ValueString(),
@@ -250,7 +274,7 @@ func (r *spaceResource) Read(ctx context.Context, req resource.ReadRequest, resp
 }
 
 func (r *spaceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// This should never be called because all fields use RequiresReplace.
+	resp.Diagnostics.AddError("Update Not Supported", "space resources cannot be updated. To change the name or model of a space, you must destroy and recreate the resource with the new values.")
 }
 
 func (r *spaceResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -262,11 +286,6 @@ func (r *spaceResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	var state spaceResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	if isSystemSpace(state.Name.ValueString()) {
-		resp.Diagnostics.AddError("System Space Not Manageable", "alpha is a system space and cannot be managed by juju_space")
 		return
 	}
 
