@@ -55,10 +55,12 @@ type spaceResourceIdentityModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
+// Metadata implements [resource.Resource].
 func (r *spaceResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_space"
 }
 
+// Schema implements [resource.Resource].
 func (r *spaceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A resource that represents a Juju space.",
@@ -108,6 +110,7 @@ func (r *spaceResource) IdentitySchema(_ context.Context, _ resource.IdentitySch
 	}
 }
 
+// Configure implements [resource.ResourceWithConfigure].
 func (r *spaceResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
@@ -123,6 +126,7 @@ func (r *spaceResource) Configure(ctx context.Context, req resource.ConfigureReq
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceSpace)
 }
 
+// ImportState implements [resource.ResourceWithImportState].
 func (r *spaceResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	idStr := ""
 	if req.ID != "" {
@@ -162,6 +166,7 @@ func (r *spaceResource) ImportState(ctx context.Context, req resource.ImportStat
 	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
+// Create implements [resource.Resource].
 func (r *spaceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if r.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "space", "create")
@@ -213,6 +218,7 @@ func (r *spaceResource) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
+// Read implements [resource.Resource].
 func (r *spaceResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	if r.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "space", "read")
@@ -243,10 +249,12 @@ func (r *spaceResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
+// Update implements [resource.Resource].
 func (r *spaceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Update Not Supported", "space resources cannot be updated. To change the name or model of a space, you must destroy and recreate the resource with the new values.")
+	resp.Diagnostics.AddError("Update Not Supported", "Space resources cannot be updated. To change the name or model of a space, you must destroy and recreate the resource with the new values.")
 }
 
+// Delete implements [resource.Resource].
 func (r *spaceResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	if r.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "space", "delete")
