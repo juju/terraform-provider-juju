@@ -206,10 +206,15 @@ func (r *machineResource) Schema(ctx context.Context, req resource.SchemaRequest
 			},
 			PlacementKey: schema.StringAttribute{
 				Description: "Additional information about how to allocate the machine in the cloud. Changing" +
-					" this value will cause the application to be destroyed and recreated by terraform.",
+					" this value on a machine that already tracks a placement directive will cause the machine to" +
+					" be destroyed and recreated by terraform. Note that Juju does not expose the placement" +
+					" directive, so it cannot be read back: an imported machine has an empty placement in state" +
+					" and will not be recreated when a placement is set in configuration.",
 				Optional: true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplaceIfConfigured(),
+					stringplanmodifier.RequiresReplaceIf(placementRequiresReplacefunc,
+						"If the placement directive changes on a machine that already tracks one, the machine is replaced.",
+						"If the placement directive changes on a machine that already tracks one, the machine is replaced."),
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
@@ -542,8 +547,12 @@ func (r *machineResource) Update(ctx context.Context, req resource.UpdateRequest
 		}
 	}
 
-	// Only the name or annotations can be updated in the terraform data.
-	if plan.Name.Equal(state.Name) && state.Annotations.Equal(plan.Annotations) && plan.Timeouts.Equal(state.Timeouts) {
+	// Only the name, annotations, timeouts or placement can change in the
+	// terraform data without forcing a replacement. Placement is never applied
+	// back to Juju (it is a deployment-time directive), but it must be
+	// persisted so an imported machine - whose placement is null in state -
+	// converges to the configured value instead of showing a perpetual diff.
+	if plan.Name.Equal(state.Name) && state.Annotations.Equal(plan.Annotations) && plan.Timeouts.Equal(state.Timeouts) && plan.Placement.Equal(state.Placement) {
 		return
 	}
 	state.Name = plan.Name
@@ -551,6 +560,7 @@ func (r *machineResource) Update(ctx context.Context, req resource.UpdateRequest
 	state.ID = types.StringValue(id)
 	state.Annotations = plan.Annotations
 	state.Timeouts = plan.Timeouts
+	state.Placement = plan.Placement
 	r.trace(fmt.Sprintf("update machine resource %q", plan.MachineID.ValueString()))
 
 	// Save updated data into Terraform state
@@ -674,6 +684,34 @@ func (r *machineResource) trace(msg string, additionalFields ...map[string]inter
 
 func newMachineID(model_uuid, machine_id, machine_name string) string {
 	return fmt.Sprintf("%s:%s:%s", model_uuid, machine_id, machine_name)
+}
+
+// placementRequiresReplacefunc decides whether a change to the placement
+// directive should force the machine to be replaced.
+//
+// Placement is a deployment-time directive that Juju does not expose through
+// its status API, so it cannot be read back during Read/Import. As a result an
+// imported (or otherwise previously untracked) machine has a null placement in
+// state. In that case we must not force replacement, otherwise importing a
+// machine that was created with a placement directive would always propose
+// destroying and recreating it (see issue #1149).
+//
+// The framework only calls this function on update, when the plan and state
+// values differ (creation, destruction and no-op changes are filtered out
+// beforehand). We therefore only need to suppress replacement when the prior
+// state has no placement value to compare against.
+func placementRequiresReplacefunc(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+	// Imported or previously untracked machines have no placement recorded in
+	// state. We cannot read the directive back from Juju to compare, so do not
+	// force replacement.
+	if req.StateValue.IsNull() {
+		return
+	}
+	// Placement removed from the configuration: nothing to replace for.
+	if req.ConfigValue.IsNull() {
+		return
+	}
+	resp.RequiresReplace = true
 }
 
 // Machines can be imported using the format: `model_uuid:machine_id:machine_name`.
