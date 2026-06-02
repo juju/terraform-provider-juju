@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	gomock "go.uber.org/mock/gomock"
 
+	jujuerrors "github.com/juju/errors"
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/client/modelmanager"
@@ -32,6 +33,7 @@ import (
 	controllerapi "github.com/juju/juju/api/controller/controller"
 	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	"github.com/juju/terraform-provider-juju/internal/wait"
 	"github.com/juju/version/v2"
 )
 
@@ -613,17 +615,35 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				return nil
 			}
 
-			// Attempt to connect and expect a timeout after 10s
-			// This doesn't definitely prove the controller is destroyed, but is a good heuristic.
-			_, err = newBootstrappedControllerClient(s, api.WithDialOpts(api.DialOpts{Timeout: 10 * time.Second}))
+			// Retry for up to 10s to allow the controller to finish shutting down.
+			_, err = wait.WaitFor(wait.WaitForCfg[*terraform.State, struct{}]{
+				Context: t.Context(),
+				GetData: func(state *terraform.State) (struct{}, error) {
+					conn, err := newBootstrappedControllerClient(state, api.WithDialOpts(api.DialOpts{Timeout: time.Second}))
+					if err != nil {
+						if ok, matchErr := regexp.MatchString("failed to connect to controller: .*", err.Error()); matchErr == nil && ok {
+							return struct{}{}, nil
+						}
+						return struct{}{}, fmt.Errorf("unexpected error when connecting to destroyed controller: %w", err)
+					}
+					defer conn.Close()
+					return struct{}{}, juju.NewRetryReadError("controller is still reachable")
+				},
+				Input:          s,
+				NonFatalErrors: []error{juju.RetryReadError},
+				RetryConf: &wait.RetryConf{
+					MaxDuration: 10 * time.Second,
+					Delay:       time.Second,
+					MaxDelay:    time.Second,
+				},
+			})
 			if err != nil {
-				if strings.Contains(err.Error(), "failed to connect to controller: api connection open timed out") {
-					return nil
+				if jujuerrors.Is(err, juju.RetryReadError) {
+					return fmt.Errorf("controller remained reachable for 10s after destroy: %w", err)
 				}
-				return fmt.Errorf("unexpected error when connecting to detroyed controller: %w", err)
-			} else {
-				return fmt.Errorf("unexpectedly managed to connect to controller")
+				return err
 			}
+			return nil
 		},
 	})
 }
