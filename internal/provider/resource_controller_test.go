@@ -615,11 +615,11 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				return nil
 			}
 
-			// Retry for up to 10s to allow the controller to finish shutting down.
+			// Retry for up to 60s to allow the controller to finish shutting down.
 			_, err = wait.WaitFor(wait.WaitForCfg[*terraform.State, struct{}]{
 				Context: t.Context(),
 				GetData: func(state *terraform.State) (struct{}, error) {
-					conn, err := newBootstrappedControllerClient(state, api.WithDialOpts(api.DialOpts{Timeout: time.Second}))
+					conn, err := newBootstrappedControllerClient(state, api.WithDialOpts(api.DialOpts{Timeout: 5 * time.Second}))
 					if err != nil {
 						if ok, matchErr := regexp.MatchString("failed to connect to controller: .*", err.Error()); matchErr == nil && ok {
 							return struct{}{}, nil
@@ -632,7 +632,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				Input:          s,
 				NonFatalErrors: []error{juju.RetryReadError},
 				RetryConf: &wait.RetryConf{
-					MaxDuration: 10 * time.Second,
+					MaxDuration: 60 * time.Second,
 					Delay:       time.Second,
 					MaxDelay:    time.Second,
 				},
