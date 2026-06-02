@@ -6,11 +6,24 @@ package juju
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
+	jujuerrors "github.com/juju/errors"
+	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/client/keymanager"
-	"github.com/juju/utils/v4/ssh"
+	"github.com/juju/juju/core/semversion"
+	jujussh "github.com/juju/utils/v4/ssh"
+	gossh "golang.org/x/crypto/ssh"
 )
+
+// NewSSHKeyNotFoundError returns a new error indicating that the SSH key was not found.
+func NewSSHKeyNotFoundError(keyIdentifier string) error {
+	return jujuerrors.WithType(jujuerrors.Errorf("ssh key %s not found", keyIdentifier), SSHKeyNotFoundError)
+}
+
+// SSHKeyNotFoundError indicates that the SSH key was not found when contacting the Juju API.
+var SSHKeyNotFoundError = jujuerrors.ConstError("ssh-key-not-found")
 
 type sshKeysClient struct {
 	SharedClient
@@ -18,6 +31,8 @@ type sshKeysClient struct {
 	// KeyLock is used to prevent concurrent calls to AddKeys, ReadKeys and DeleteKeys
 	// which can lead to race conditions in Juju. Issue: https://github.com/juju/juju/issues/20447
 	KeyLock *sync.RWMutex
+
+	getKeyManagerClient func(api.Connection) SSHKeyManagerClient
 }
 
 // CreateSSHKeyInput contains the parameters for creating an SSH key.
@@ -29,9 +44,9 @@ type CreateSSHKeyInput struct {
 
 // ReadSSHKeyInput contains the parameters for reading an SSH key.
 type ReadSSHKeyInput struct {
-	Username      string
-	ModelUUID     string
-	KeyIdentifier string
+	Username  string
+	ModelUUID string
+	Payload   string
 }
 
 // ReadSSHKeyOutput contains the SSH key payload.
@@ -41,9 +56,9 @@ type ReadSSHKeyOutput struct {
 
 // DeleteSSHKeyInput contains the parameters for deleting an SSH key.
 type DeleteSSHKeyInput struct {
-	Username      string
-	ModelUUID     string
-	KeyIdentifier string
+	Username  string
+	ModelUUID string
+	Payload   string
 }
 
 // ListSSHKeysInput is the input for ListSSHKeys.
@@ -61,6 +76,9 @@ func newSSHKeysClient(sc SharedClient) *sshKeysClient {
 	return &sshKeysClient{
 		SharedClient: sc,
 		KeyLock:      &sync.RWMutex{},
+		getKeyManagerClient: func(conn api.Connection) SSHKeyManagerClient {
+			return keymanager.NewClient(conn)
+		},
 	}
 }
 
@@ -74,7 +92,7 @@ func (c *sshKeysClient) CreateSSHKey(ctx context.Context, input *CreateSSHKeyInp
 	}
 	defer func() { _ = conn.Close() }()
 
-	client := keymanager.NewClient(conn)
+	client := c.getKeyManagerClient(conn)
 
 	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
 	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
@@ -112,19 +130,24 @@ func (c *sshKeysClient) ReadSSHKey(ctx context.Context, input *ReadSSHKeyInput) 
 	client := keymanager.NewClient(conn)
 
 	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
-	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
-	returnedKeys, err := client.ListKeys(ctx, ssh.FullKeys, input.Username)
+	// the logged-in user for completeness. In Juju 4 ssh keys are associated with users.
+	returnedKeys, err := client.ListKeys(ctx, jujussh.FullKeys, input.Username)
 	if err != nil {
 		return nil, err
 	}
 
+	inputKey, _, err := jujussh.KeyFingerprint(input.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("error getting fingerprint for input ssh key: %w", err)
+	}
+
 	for _, res := range returnedKeys {
 		for _, k := range res.Result {
-			fingerprint, comment, err := ssh.KeyFingerprint(k)
+			fingerprint, _, err := jujussh.KeyFingerprint(k)
 			if err != nil {
 				return nil, fmt.Errorf("error getting fingerprint for ssh key: %w", err)
 			}
-			if input.KeyIdentifier == fingerprint || input.KeyIdentifier == comment {
+			if inputKey == fingerprint {
 				return &ReadSSHKeyOutput{
 					Payload: k,
 				}, nil
@@ -132,26 +155,10 @@ func (c *sshKeysClient) ReadSSHKey(ctx context.Context, input *ReadSSHKeyInput) 
 		}
 	}
 
-	return nil, fmt.Errorf("no ssh key found for %s", input.KeyIdentifier)
+	return nil, NewSSHKeyNotFoundError(input.Payload)
 }
 
 // DeleteSSHKey removes an SSH key from the specified model.
-//
-// There's nuance to key deletion depending on if the controller is running Juju 2.9 or Juju 3+.
-//
-// When Juju creates a controller model, an admin/controller SSH key
-// is automatically added to the controller model.
-//
-// In Juju 2.9, this key is ALSO added to all subsequent user created models
-// and is VISIBLE AND DELETABLE by users. But, as it is the last key,
-// it is disallowed. As such, we return early and simply warn that it is
-// the last key and cannot be deleted.
-//
-// In Juju 3+, this key is ALSO added to all subsequent user created models,
-// but it is HIDDEN and UNDELETABLE by users.
-// It is still disallowed to delete it, but the user does not have the means
-// as they cannot view it (it is marked as "internal" in the API).
-// So this issue does not exist and we can delete all keys.
 func (c *sshKeysClient) DeleteSSHKey(ctx context.Context, input *DeleteSSHKeyInput) error {
 	c.KeyLock.Lock()
 	defer c.KeyLock.Unlock()
@@ -161,42 +168,26 @@ func (c *sshKeysClient) DeleteSSHKey(ctx context.Context, input *DeleteSSHKeyInp
 	}
 	defer func() { _ = conn.Close() }()
 
-	client := keymanager.NewClient(conn)
+	client := c.getKeyManagerClient(conn)
+	isJIMMController := c.IsJAAS(ctx, false)
 
-	ctrlvers, err := c.GetControllerVersion(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Juju 4 allows the deletion of the final key per model.
-	if ctrlvers.Major < 3 {
-		// NOTE: Unfortunately Juju will return an error if we try to
-		// remove the last ssh key from the controller. This is something
-		// that impacts the current Juju logic. As a temporal workaround
-		// we will check if this is the latest SSH key of this model and
-		// skip the delete.
-		returnedKeys, err := client.ListKeys(ctx, ssh.FullKeys, input.Username)
+	controllerVersion := semversion.Number{}
+	if !isJIMMController {
+		controllerVersion, err = c.GetControllerVersion(ctx)
 		if err != nil {
 			return err
 		}
-		// only check if there is one key
-		if len(returnedKeys) == 1 {
-			fingerprint, comment, err := ssh.KeyFingerprint(returnedKeys[0].Result[0])
-			if err != nil {
-				return fmt.Errorf("error getting fingerprint for ssh key: %w", err)
-			}
-			if input.KeyIdentifier == fingerprint || input.KeyIdentifier == comment {
-				// This is the latest key, do not remove it
-				c.Warnf(fmt.Sprintf("ssh key from user %s is the last one and will not be removed", input.KeyIdentifier))
-				return nil
-			}
-		}
+	}
+
+	deleteKeyIdentifiers, err := sshKeyDeleteIdentifiers(input.Payload, controllerVersion, isJIMMController)
+	if err != nil {
+		return fmt.Errorf("generating delete identifiers for ssh key: %w", err)
 	}
 
 	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
 	// the logged-in user for completeness. In Juju 4, keys are associated per user per model, but note, it isn't the user passed in
 	// via the user argument but rather the API authenticated user.
-	params, err := client.DeleteKeys(ctx, input.Username, input.KeyIdentifier)
+	params, err := client.DeleteKeys(ctx, input.Username, deleteKeyIdentifiers...)
 	if len(params) != 0 {
 		messages := make([]string, 0)
 		for _, e := range params {
@@ -222,11 +213,11 @@ func (c *sshKeysClient) ListKeys(ctx context.Context, input ListSSHKeysInput) ([
 	}
 	defer func() { _ = conn.Close() }()
 
-	client := keymanager.NewClient(conn)
+	client := c.getKeyManagerClient(conn)
 
 	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
 	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
-	results, err := client.ListKeys(ctx, ssh.FullKeys, input.Username)
+	results, err := client.ListKeys(ctx, jujussh.FullKeys, input.Username)
 	if err != nil {
 		return nil, err
 	}
@@ -238,4 +229,33 @@ func (c *sshKeysClient) ListKeys(ctx context.Context, input ListSSHKeysInput) ([
 	}
 
 	return result.Result, nil
+}
+
+// sshKeyDeleteIdentifiers generates a list of identifiers to attempt to delete the SSH key with, based on the
+// controller version and whether the controller is JIMM/JAAS-backed.
+//
+// Note that JIMM fronts multiple controller versions and reports the oldest attached controller version.
+// Because the KeyManager facade was not bumped when a breaking change was made to accept SHA256 fingerprints in Juju 4
+// over MD5 in Juju 3 and because DeleteKeys is a model-scoped call, when JIMM is in front we send both hash formats in
+// one request and let the backing controller accept the identifier format it understands.
+func sshKeyDeleteIdentifiers(payload string, controllerVersion semversion.Number, isJIMMController bool) ([]string, error) {
+	normalizedPayload := strings.TrimSuffix(payload, "\n")
+	md5Fingerprint, _, err := jujussh.KeyFingerprint(normalizedPayload)
+	if err != nil {
+		return nil, err
+	}
+
+	publicKey, _, _, _, err := gossh.ParseAuthorizedKey([]byte(normalizedPayload))
+	if err != nil {
+		return nil, err
+	}
+	sha256Fingerprint := gossh.FingerprintSHA256(publicKey)
+
+	if isJIMMController {
+		return []string{md5Fingerprint, sha256Fingerprint}, nil
+	}
+	if controllerVersion.Major >= 4 {
+		return []string{sha256Fingerprint}, nil
+	}
+	return []string{md5Fingerprint}, nil
 }

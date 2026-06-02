@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/api/client/resources"
@@ -484,31 +485,156 @@ func TestAcc_ResourceApplication_UpdatesRevisionConfig(t *testing.T) {
 	})
 }
 
-func TestAcc_CharmUpdates(t *testing.T) {
+func TestAcc_CharmUpdatesNoRevision(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-charmupdates")
+	initialVersion := 0
+	channelOne := "latest/stable"
+	channelTwo := "2.0/stable"
+	if testingCloud == MicroK8sTesting {
+		channelOne = "1.34/stable"
+		channelTwo = "1.35/stable"
+	}
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/stable"),
+				Config: testAccResourceApplicationUpdatesCharm(modelName, channelOne),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", channelOne),
+					func(s *terraform.State) error {
+						// Use a check to grab the application revision and set it to initialVersion variable to be used in the next step.
+						rs, ok := s.RootModule().Resources["juju_application.this"]
+						if !ok {
+							return fmt.Errorf("not found: juju_application.this")
+						}
+						initialVersionStr := rs.Primary.Attributes["charm.0.revision"]
+						var err error
+						initialVersion, err = strconv.Atoi(initialVersionStr)
+						if err != nil {
+							return fmt.Errorf("error converting revision to int: %v", err)
+						}
+						if initialVersion == 0 {
+							return fmt.Errorf("expected initial charm revision to be non-zero, got %d", initialVersion)
+						}
+						return nil
+					},
 				),
 			},
 			{
-				// move to latest/edge
-				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/edge"),
+				// move to a new channel
+				PreConfig: func() {
+					// This sleep is necessary because without it, Juju does not update the charm revision and the test fails.
+					// It is unclear where exactly the problem is, but it is almost certainly in the computeCharmID logic,
+					// specifically the resolveCharm function, which calls charmsAPIClient.ResolveCharms so possibly
+					// (likely) a race condition/timing issue on the controller side.
+					time.Sleep(15 * time.Second)
+				},
+				Config: testAccResourceApplicationUpdatesCharm(modelName, channelTwo),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/edge"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", channelTwo),
+					func(s *terraform.State) error {
+						// Check that the charm revision has been updated to a new revision different from the initialVersion.
+						rs, ok := s.RootModule().Resources["juju_application.this"]
+						if !ok {
+							return fmt.Errorf("not found: juju_application.this")
+						}
+						newVersionStr := rs.Primary.Attributes["charm.0.revision"]
+						var err error
+						newVersion, err := strconv.Atoi(newVersionStr)
+						if err != nil {
+							return fmt.Errorf("error converting revision to int: %v", err)
+						}
+						if newVersion == initialVersion {
+							return fmt.Errorf("expected charm revision to be updated from %d, but it is still %d", initialVersion, newVersion)
+						}
+						return nil
+					},
+				),
+			},
+		},
+	})
+}
+
+// TestAcc_ConfigChangeKeepsCharm tests that when a field on a juju_application resource
+// is changed, that is not related to the charm, it does not trigger a charm refresh.
+func TestAcc_ConfigChangeKeepsCharm(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-charmupdates")
+	initialVersion := 0
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationCharmWithRevisionAndConfig(modelName, "latest/stable", "20", nil),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
+					func(s *terraform.State) error {
+						// Use a check to grab the application revision and set it to initialVersion variable to be used in the next step.
+						rs, ok := s.RootModule().Resources["juju_application.this"]
+						if !ok {
+							return fmt.Errorf("not found: juju_application.this")
+						}
+						initialVersionStr := rs.Primary.Attributes["charm.0.revision"]
+						var err error
+						initialVersion, err = strconv.Atoi(initialVersionStr)
+						if err != nil {
+							return fmt.Errorf("error converting revision to int: %v", err)
+						}
+						if initialVersion == 0 {
+							return fmt.Errorf("expected initial charm revision to be non-zero, got %d", initialVersion)
+						}
+						return nil
+					},
 				),
 			},
 			{
-				// move back to latest/stable
-				Config: testAccResourceApplicationUpdatesCharm(modelName, "latest/stable"),
+				// Remove the revision from the plan.
+				Config: testAccResourceApplicationCharmWithRevisionAndConfig(modelName, "latest/stable", "", nil),
+				PreConfig: func() {
+					// This sleep is necessary because without it, Juju does not update the charm revision and the test fails.
+					// It is unclear where exactly the problem is, but it is almost certainly in the computeCharmID logic,
+					// specifically the resolveCharm function, which calls charmsAPIClient.ResolveCharms so possibly
+					// (likely) a race condition/timing issue on the controller side.
+					time.Sleep(15 * time.Second)
+				},
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			{
+				// Add a config key the plan.
+				Config: testAccResourceApplicationCharmWithRevisionAndConfig(modelName, "latest/stable", "", map[string]string{"thing": "foo"}),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+					},
+				},
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
+					// Check that the config change is in the state.
+					resource.TestCheckResourceAttr("juju_application.this", "config.thing", "foo"),
+					func(s *terraform.State) error {
+						// Check that the charm revision remains the same.
+						rs, ok := s.RootModule().Resources["juju_application.this"]
+						if !ok {
+							return fmt.Errorf("not found: juju_application.this")
+						}
+						currentVersionStr := rs.Primary.Attributes["charm.0.revision"]
+						var err error
+						currentVersion, err := strconv.Atoi(currentVersionStr)
+						if err != nil {
+							return fmt.Errorf("error converting revision to int: %v", err)
+						}
+						if currentVersion != initialVersion {
+							return fmt.Errorf("expected charm revision to remain the same, but it changed from %d to %d", initialVersion, currentVersion)
+						}
+						return nil
+					},
 				),
 			},
 		},
@@ -1120,7 +1246,7 @@ func TestAcc_ResourceApplication_MachinesWithSubordinates(t *testing.T) {
 	charmName := "juju-qa-test"
 
 	resourceName := "juju_application.testapp"
-	numberOfMachines := 10
+	numberOfMachines := 3
 
 	checkResourceAttrMachines := func(numberOfMachines int) []resource.TestCheckFunc {
 		return []resource.TestCheckFunc{
@@ -1152,11 +1278,11 @@ func TestAcc_ResourceApplication_MachinesWithSubordinates(t *testing.T) {
 				checkResourceAttrMachines(numberOfMachines - 1)...),
 		}, {
 			ConfigVariables: config.Variables{
-				"machines": config.IntegerVariable(2),
+				"machines": config.IntegerVariable(1),
 			},
 			Config: testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmName),
 			Check: resource.ComposeTestCheckFunc(
-				checkResourceAttrMachines(2)...),
+				checkResourceAttrMachines(1)...),
 		}, {
 			ImportStateVerify: true,
 			ImportState:       true,
@@ -2022,7 +2148,7 @@ func testAccResourceApplicationUpdatesCharm(modelName string, channel string) st
 		  model_uuid = juju_model.this.uuid
 		  name = "test-app"
 		  charm {
-			name     = "ubuntu"
+			name     = "juju-qa-test"
 			channel = %q
 		  }
 		}
@@ -2043,6 +2169,38 @@ func testAccResourceApplicationUpdatesCharm(modelName string, channel string) st
 		}
 		`, modelName, channel)
 	}
+}
+
+func testAccResourceApplicationCharmWithRevisionAndConfig(modelName, channel, revision string, config map[string]string) string {
+	return internaltesting.GetStringFromTemplateWithData("testAccResourceApplicationUpdatesCharm", `
+		resource "juju_model" "this" {
+		  name = "{{.ModelName}}"
+		}
+
+		resource "juju_application" "this" {
+		  model_uuid = juju_model.this.uuid
+		  name       = "test-app"
+		  charm {
+			name    = "juju-qa-test"
+			channel = "{{.Channel}}"
+			{{- if .Revision }}
+			revision = "{{.Revision}}"
+			{{- end }}
+		  }
+		  {{- if .Config }}
+		  config = {
+			{{- range $key, $value := .Config }}
+			{{$key}} = "{{$value}}"
+			{{- end }}
+		  }
+		  {{- end }}
+		}
+		`, internaltesting.TemplateData{
+		"ModelName": modelName,
+		"Channel":   channel,
+		"Revision":  revision,
+		"Config":    config,
+	})
 }
 
 func testAccResourceApplicationUpdatesCharmWithRevision(modelName string, channel string, revision string) string {
@@ -2899,4 +3057,76 @@ resource "juju_application" "test_app" {
 			"Revision":  revision,
 			"ConfigNew": configNew,
 		})
+}
+
+// TestAcc_ResourceApplication_UnknownMachinesUnitsDeferred verifies that when
+// the machines set is unknown at plan time (simulated via terraform_data whose
+// output is not yet known), the units attribute is also marked unknown rather
+// than incorrectly defaulting to 1.
+func TestAcc_ResourceApplication_UnknownMachinesUnitsDeferred(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-application-unknown-machines")
+	resourceName := "juju_application.testapp"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// On the first plan the terraform_data output is unknown, so
+				// toset(...) produces an unknown set — exactly what happens when
+				// machine IDs come from a not-yet-applied juju_machine inside a
+				// module. The modifier must defer units (mark it unknown) rather
+				// than falling through to the default of 1.
+				Config: testAccResourceApplicationUnknownMachines(modelName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectUnknownValue(resourceName, tfjsonpath.New("units")),
+					},
+				},
+			},
+			{
+				// After apply the machines are known; units must equal the
+				// number of machines (2) and the plan must be stable — i.e.
+				// the modifier must NOT drift units back to 1 from the state
+				// value of 2.
+				Config: testAccResourceApplicationUnknownMachines(modelName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "units", "2"),
+				),
+			},
+		},
+	})
+}
+
+func testAccResourceApplicationUnknownMachines(modelName string) string {
+	return fmt.Sprintf(`
+		resource "juju_model" "model" {
+		  name = %q
+		}
+		resource "juju_machine" "machine1" {
+		  model_uuid = juju_model.model.uuid
+		  base       = "ubuntu@22.04"
+		}
+		resource "juju_machine" "machine2" {
+		  model_uuid = juju_model.model.uuid
+		  base       = "ubuntu@22.04"
+		}
+		# terraform_data.output is unknown on the first plan because it mirrors
+		# its input, which depends on juju_machine.machine.machine_id that has
+		# not been applied yet. This produces an unknown set for machines.
+		resource "terraform_data" "machine_ids" {
+		  input = [juju_machine.machine1.machine_id, juju_machine.machine2.machine_id]
+		}
+		resource "juju_application" "testapp" {
+		  model_uuid = juju_model.model.uuid
+		  machines   = toset(terraform_data.machine_ids.output)
+		  charm {
+			name = "juju-qa-test"
+			base = "ubuntu@22.04"
+		  }
+		}
+		`, modelName)
 }

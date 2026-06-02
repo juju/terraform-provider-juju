@@ -209,6 +209,14 @@ Read-Only:
 - `size` (String) The size of each volume.
 
 
+## Note on Charm Updates
+Changing `charm.channel` or `charm.revision` on an existing `juju_application` triggers a charm refresh during `terraform apply`.
+
+If `charm.revision` is omitted, Terraform keeps the currently deployed revision until another charm input changes. Changing only `charm.channel` still refreshes the application to the latest revision in the new channel.
+
+Changing `charm.base` updates Kubernetes applications in place, but changing it for machine charms requires replacement.
+
+
 ## Import
 
 Import is supported using the following syntax:

@@ -24,7 +24,7 @@ import (
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
-	"github.com/juju/utils/v3"
+	"github.com/juju/utils/v4"
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/mock/gomock"
 )
