@@ -19,6 +19,10 @@ import (
 )
 
 func TestAcc_ResourceSpace_CreateImportAndReplace(t *testing.T) {
+	// Spaces not implemented on 4.0 for K8S yet.
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	spaceName := "tf-space-a"
 	updatedSpaceName := "tf-space-b"
@@ -78,6 +82,10 @@ func TestAcc_ResourceSpace_CreateImportAndReplace(t *testing.T) {
 }
 
 func TestAcc_ResourceSpace_AlphaImportRejected(t *testing.T) {
+	// Spaces not implemented on 4.0 for K8S yet.
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	spaceName := "tf-space-a"
 	resourceFullName := "juju_space.this"
@@ -110,6 +118,10 @@ func TestAcc_ResourceSpace_AlphaImportRejected(t *testing.T) {
 }
 
 func TestAcc_ResourceSpace_AlphaRejected(t *testing.T) {
+	// Spaces not implemented on 4.0 for K8S yet.
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 
 	resource.ParallelTest(t, resource.TestCase{
