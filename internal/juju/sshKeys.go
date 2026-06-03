@@ -189,19 +189,17 @@ func (c *sshKeysClient) DeleteSSHKey(ctx context.Context, input *DeleteSSHKeyInp
 	// via the user argument but rather the API authenticated user.
 	params, err := client.DeleteKeys(ctx, input.Username, deleteKeyIdentifiers...)
 	if len(params) != 0 {
-		messages := make([]string, 0)
+		messages := make([]string, 0, len(params))
+		// Return an error if all the results are errors.
 		for _, e := range params {
-			if e.Error != nil {
-				messages = append(messages, e.Error.Message)
+			if e.Error == nil {
+				// if any delete was successful, we consider the process a success.
+				return nil
 			}
+			messages = append(messages, e.Error.Message)
 		}
-		if len(messages) == 0 {
-			return nil
-		}
-		err = fmt.Errorf("%s", messages)
-		return err
+		return fmt.Errorf("%s", strings.Join(messages, "; "))
 	}
-
 	return err
 }
 
