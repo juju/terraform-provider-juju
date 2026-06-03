@@ -53,10 +53,12 @@ type subnetResourceIdentityModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
+// Metadata implements [resource.Resource].
 func (r *subnetResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_subnet"
 }
 
+// Schema implements [resource.Resource].
 func (r *subnetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A resource that represents assignment of a subnet to a Juju space.",
@@ -107,6 +109,7 @@ func (r *subnetResource) IdentitySchema(_ context.Context, _ resource.IdentitySc
 	}
 }
 
+// Configure implements [resource.ResourceWithConfigure].
 func (r *subnetResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
@@ -122,6 +125,7 @@ func (r *subnetResource) Configure(ctx context.Context, req resource.ConfigureRe
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceSubnet)
 }
 
+// ImportState implements [resource.ResourceWithImportState].
 func (r *subnetResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	idStr := ""
 	if req.ID != "" {
@@ -167,6 +171,7 @@ func (r *subnetResource) ImportState(ctx context.Context, req resource.ImportSta
 	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
+// Create implements [resource.Resource].
 func (r *subnetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if r.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "subnet", "create")
@@ -240,6 +245,7 @@ func (r *subnetResource) Create(ctx context.Context, req resource.CreateRequest,
 	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
+// Read implements [resource.Resource].
 func (r *subnetResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	if r.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "subnet", "read")
@@ -273,6 +279,7 @@ func (r *subnetResource) Read(ctx context.Context, req resource.ReadRequest, res
 	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
+// Update implements [resource.Resource].
 func (r *subnetResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	if r.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "subnet", "update")
@@ -325,6 +332,7 @@ func (r *subnetResource) Update(ctx context.Context, req resource.UpdateRequest,
 	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
+// Delete implements [resource.Resource].
 func (r *subnetResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	if r.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "subnet", "delete")
