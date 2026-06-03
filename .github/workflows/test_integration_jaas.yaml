@@ -35,7 +35,7 @@ jobs:
       - run: go build -v .
 
   test:
-    name: Integration-JAAS (${{ matrix.jaas.jimm_version }} / ${{ matrix.jaas.juju_channel }})
+    name: Integration-JAAS (${{ matrix.jaas.label }})
     needs: build
     runs-on: [self-hosted, jammy, x64]
     strategy:
@@ -44,8 +44,10 @@ jobs:
         jaas:
           - jimm_version: v3.3.26
             juju_channel: 3/stable
+            label: "jimm-3-juju-3"
           - jimm_version: v3.4.0-alpha3
             juju_channel: 4.0/edge
+            label: "jimm-4-juju-4"
     timeout-minutes: 90
     steps:
       - name: Free Disk Space (Ubuntu)
