@@ -27,7 +27,6 @@ import (
 
 	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
-	"github.com/juju/terraform-provider-juju/internal/wait"
 	"github.com/juju/version/v2"
 )
 
@@ -190,9 +189,11 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 		Description: "A resource that represents a Juju Controller.",
 		Attributes: map[string]schema.Attribute{
 			"agent_version": schema.StringAttribute{
-				Description: "Specifies a controller version to bootstrap. If not specified, the latest stable agent version will be used. Updating this value only supports in-place upgrades to higher patch versions within the same major.minor series.",
-				Optional:    true,
-				Computed:    true,
+				Description: "Specifies a controller version to bootstrap. If not specified, the latest stable agent version will be used." +
+					" Updating this value only supports in-place upgrades to higher patch versions within the same major.minor series." +
+					" The provider does not wait for the upgrade to complete, so we recommend waiting for the upgrade to finish before applying further changes.",
+				Optional: true,
+				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIf(
 						controllerAgentVersionRequiresReplaceIf,
@@ -1100,25 +1101,17 @@ func (r *controllerResource) Update(ctx context.Context, req resource.UpdateRequ
 			return
 		}
 
-		if _, err := wait.WaitFor(
-			wait.WaitForCfg[*juju.ControllerConnectionInformation, version.Number]{
-				Context: ctx,
-				GetData: controllerVersionShim(ctx, command),
-				Input:   connInfo,
-				DataAssertions: []wait.Assert[version.Number]{
-					func(data version.Number) error {
-						if data != upgradedVersion {
-							return juju.NewRetryReadError("waiting for controller version to change")
-						}
-						return nil
-					},
-				},
-				Logf: r.trace,
-			},
-		); err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Failed waiting for new controller version, got error: %s", err))
-			return
-		}
+		// Waiting for the upgrade to complete is not currently possible
+		// as the controller starts returning an "upgrade in progress" error
+		// at some point after the upgrade process has started, which prevents
+		// us from accurately polling for the controller version.
+
+		resp.Diagnostics.AddWarning(
+			"Controller Upgrade Warning",
+			fmt.Sprintf("The controller %q is being upgraded to version %s. "+
+				"Please wait for the upgrade to complete before applying further changes to avoid 'upgrade-in-progress' errors.",
+				state.Name.ValueString(), upgradedVersion.String()),
+		)
 
 		plan.AgentVersion = types.StringValue(upgradedVersion.String())
 	}
@@ -1211,13 +1204,6 @@ func (r *controllerResource) Delete(ctx context.Context, req resource.DeleteRequ
 			)
 		}
 		return
-	}
-}
-
-// controllerVersionShim is a helper function to adapt the ControllerVersion method to the signature required by wait.WaitFor.
-func controllerVersionShim(ctx context.Context, command JujuCommand) func(connInfo *juju.ControllerConnectionInformation) (version.Number, error) {
-	return func(connInfo *juju.ControllerConnectionInformation) (version.Number, error) {
-		return command.ControllerVersion(ctx, connInfo)
 	}
 }
 

@@ -91,7 +91,7 @@ resource "juju_controller" "this" {
 
 ### Optional
 
-- `agent_version` (String) Specifies a controller version to bootstrap. If not specified, the latest stable agent version will be used. Updating this value only supports in-place upgrades to higher patch versions within the same major.minor series.
+- `agent_version` (String) Specifies a controller version to bootstrap. If not specified, the latest stable agent version will be used. Updating this value only supports in-place upgrades to higher patch versions within the same major.minor series. The provider does not wait for the upgrade to complete, so we recommend waiting for the upgrade to finish before applying further changes.
 - `bootstrap_base` (String) The base for the bootstrap machine.
 - `bootstrap_config` (Map of String) Configuration options that apply during the bootstrap process.
 - `bootstrap_constraints` (Map of String) Constraints for the bootstrap machine.

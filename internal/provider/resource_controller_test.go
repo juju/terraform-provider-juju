@@ -540,6 +540,10 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "agent_version", updatedAgentVersion),
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
 					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
+					func(s *terraform.State) error {
+						time.Sleep(30 * time.Second) // Sleep to wait for the upgrade to complete.
+						return nil
+					},
 				),
 			},
 			{
@@ -615,7 +619,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				return nil
 			}
 
-			// Retry for up to 60s to allow the controller to finish shutting down.
+			// Retry for up to 30s to allow the controller to finish shutting down.
 			_, err = wait.WaitFor(wait.WaitForCfg[*terraform.State, struct{}]{
 				Context: t.Context(),
 				GetData: func(state *terraform.State) (struct{}, error) {
@@ -632,7 +636,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				Input:          s,
 				NonFatalErrors: []error{juju.RetryReadError},
 				RetryConf: &wait.RetryConf{
-					MaxDuration: 60 * time.Second,
+					MaxDuration: 30 * time.Second,
 					Delay:       time.Second,
 					MaxDelay:    time.Second,
 				},
