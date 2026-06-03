@@ -5,7 +5,6 @@ package juju
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 
@@ -136,7 +135,33 @@ func (s *SSHKeysSuite) TestDeleteSSHKeyAggregatesErrorsForBothHashes() {
 		Payload:   payload,
 	})
 	s.Require().Error(err)
-	s.Equal(fmt.Sprintf("[%s %s]", "md5 failed", "sha256 failed"), err.Error())
+	s.Equal("md5 failed; sha256 failed", err.Error())
+}
+
+func (s *SSHKeysSuite) TestDeleteSSHKeyReturnsNilWhenOneHashSucceedsOnJIMMJuju3BackingController() {
+	ctlr := s.setupMocks(s.T())
+	defer ctlr.Finish()
+
+	payload := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID3gjJTJtYZU55HTUr+hu0JF9p152yiC9czJi9nKojuW jimmy@somewhere"
+	s.mockSharedClient.EXPECT().IsJAAS(gomock.Any(), false).Return(true)
+
+	expectedMD5, _, err := jujussh.KeyFingerprint(payload)
+	s.Require().NoError(err)
+	publicKey, _, _, _, err := gossh.ParseAuthorizedKey([]byte(payload))
+	s.Require().NoError(err)
+	expectedSHA256 := gossh.FingerprintSHA256(publicKey)
+
+	s.mockSSHKeyManagerClient.EXPECT().DeleteKeys(gomock.Any(), "admin", expectedMD5, expectedSHA256).Return([]params.ErrorResult{{
+		Error: &params.Error{Message: "md5 failed"},
+	}, {}}, nil)
+
+	client := s.getSSHKeysClient()
+	err = client.DeleteSSHKey(context.Background(), &DeleteSSHKeyInput{
+		Username:  "admin",
+		ModelUUID: *s.testModelName,
+		Payload:   payload,
+	})
+	s.Require().NoError(err)
 }
 
 func TestSSHKeysSuite(t *testing.T) {
