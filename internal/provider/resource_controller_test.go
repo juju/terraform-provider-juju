@@ -536,6 +536,12 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			{
 				// Verify changing controller agent version works
 				Config: testAccResourceControllerWithJujuBinary(controllerName, updatedAgentVersion, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
+				PreConfig: func() {
+					// If microk8s, sleep for 30s to avoid an error "modeloperator" deployment not found.
+					if testingCloud == MicroK8sTesting {
+						time.Sleep(15 * time.Second)
+					}
+				},
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "agent_version", updatedAgentVersion),
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
