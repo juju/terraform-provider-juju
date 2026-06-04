@@ -386,8 +386,8 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 		initialAgentVersion = "3.6.21"
 		updatedAgentVersion = "3.6.23"
 	case 4:
-		initialAgentVersion = "4.0.5"
-		updatedAgentVersion = "4.0.11"
+		initialAgentVersion = "4.0.11"
+		updatedAgentVersion = "4.0.11" // Set to a newer version once available.
 	default:
 		t.Errorf("unsupported Juju agent version %q for this test", agentVersion)
 	}
@@ -537,6 +537,15 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			{
 				// Verify changing controller agent version works
 				Config: testAccResourceControllerWithJujuBinary(controllerName, updatedAgentVersion, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
+				SkipFunc: func() (bool, error) {
+					if jujuMajor == 4 {
+						// Skip this test until we've landed a fix in Juju 4 that
+						// adds the UpgradeModel facade back to the controller.
+						// Avoids the error 'facade "ModelUpgrader" not supported for controller API connection'.
+						return true, nil
+					}
+					return false, nil
+				},
 				PreConfig: func() {
 					// If microk8s, sleep for 30s to avoid an error "modeloperator" deployment not found.
 					if testingCloud == MicroK8sTesting {
