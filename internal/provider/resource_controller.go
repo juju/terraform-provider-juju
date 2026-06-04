@@ -25,9 +25,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
+	"github.com/juju/juju/core/semversion"
 	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
-	"github.com/juju/version/v2"
 )
 
 // JujuCommand defines the interface for interacting with Juju controllers.
@@ -35,9 +35,9 @@ type JujuCommand interface {
 	// Bootstrap creates a new controller and returns connection information.
 	Bootstrap(ctx context.Context, model juju.BootstrapArguments) (*juju.ControllerConnectionInformation, error)
 	// ControllerVersion retrieves the agent version of the controller.
-	ControllerVersion(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (version.Number, error)
+	ControllerVersion(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (semversion.Number, error)
 	// UpgradeController upgrades an existing controller to the requested target version.
-	UpgradeController(ctx context.Context, connInfo *juju.ControllerConnectionInformation, targetVersion version.Number) (version.Number, error)
+	UpgradeController(ctx context.Context, connInfo *juju.ControllerConnectionInformation, targetVersion semversion.Number) (semversion.Number, error)
 	// UpdateConfig updates controller and controller-model configuration.
 	UpdateConfig(ctx context.Context, connInfo *juju.ControllerConnectionInformation,
 		controllerConfig, controllerModelConfig map[string]string,
@@ -204,7 +204,7 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				},
 				Validators: []validator.String{
 					ValidatorMatchString(func(s string) bool {
-						_, err := version.Parse(s)
+						_, err := semversion.Parse(s)
 						return err == nil
 					}, "invalid version format"),
 				},
@@ -1083,7 +1083,7 @@ func (r *controllerResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 
 	if targetAgentVersion != "" && targetAgentVersion != currentAgentVersion {
-		validatedTargetVersion, err := version.Parse(targetAgentVersion)
+		validatedTargetVersion, err := semversion.Parse(targetAgentVersion)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Controller Version Update Error",
@@ -1228,12 +1228,12 @@ func controllerAgentVersionRequiresReplaceIf(_ context.Context, req planmodifier
 // or if the patch version has been upgraded, between the current and target controller agent versions.
 // If the target version is invalid, an error is returned.
 func controllerAgentVersionSeriesChanged(currentVersion, targetVersion string) (bool, error) {
-	current, err := version.Parse(currentVersion)
+	current, err := semversion.Parse(currentVersion)
 	if err != nil {
 		return false, fmt.Errorf("invalid current controller version %q: %w", currentVersion, err)
 	}
 
-	target, err := version.Parse(targetVersion)
+	target, err := semversion.Parse(targetVersion)
 	if err != nil {
 		return false, fmt.Errorf("invalid requested controller version %q: %w", targetVersion, err)
 	}

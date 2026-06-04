@@ -31,11 +31,11 @@ import (
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/api/connector"
 	controllerapi "github.com/juju/juju/api/controller/controller"
+	"github.com/juju/juju/core/semversion"
 	"github.com/juju/names/v6"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 	"github.com/juju/terraform-provider-juju/internal/wait"
-	"github.com/juju/version/v2"
 )
 
 func TestAcc_ResourceController(t *testing.T) {
@@ -133,8 +133,8 @@ func TestAcc_ResourceController(t *testing.T) {
 			Username:  "admin",
 			Password:  "password",
 		},
-	).DoAndReturn(func(ctx context.Context, cci *juju.ControllerConnectionInformation) (version.Number, error) {
-		return version.MustParse(currentAgentVersion), nil
+	).DoAndReturn(func(ctx context.Context, cci *juju.ControllerConnectionInformation) (semversion.Number, error) {
+		return semversion.MustParse(currentAgentVersion), nil
 	}).AnyTimes()
 
 	mockJujuCommand.EXPECT().UpgradeController(
@@ -145,8 +145,8 @@ func TestAcc_ResourceController(t *testing.T) {
 			Username:  "admin",
 			Password:  "password",
 		},
-		version.MustParse(targetAgentVersion),
-	).DoAndReturn(func(_ context.Context, _ *juju.ControllerConnectionInformation, targetVersion version.Number) (version.Number, error) {
+		semversion.MustParse(targetAgentVersion),
+	).DoAndReturn(func(_ context.Context, _ *juju.ControllerConnectionInformation, targetVersion semversion.Number) (semversion.Number, error) {
 		currentAgentVersion = targetVersion.String()
 		return targetVersion, nil
 	})
@@ -380,7 +380,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 		t.Error("environment variable JUJU_AGENT_VERSION must be set for this test")
 		return
 	}
-	jujuMajor := version.MustParse(agentVersion).Major
+	jujuMajor := semversion.MustParse(agentVersion).Major
 	switch jujuMajor {
 	case 2:
 		initialAgentVersion = "2.9.58"
@@ -1071,7 +1071,7 @@ func getStringListFromTerraformState(attrs map[string]string, attrName string) (
 	return out, nil
 }
 
-func getAgentVersionFromState(s *terraform.State) (*version.Number, error) {
+func getAgentVersionFromState(s *terraform.State) (*semversion.Number, error) {
 	resourceState, ok := s.RootModule().Resources["juju_controller.controller"]
 	if !ok {
 		return nil, fmt.Errorf("resource juju_controller.controller not found in state")
@@ -1082,7 +1082,7 @@ func getAgentVersionFromState(s *terraform.State) (*version.Number, error) {
 		return nil, fmt.Errorf("ca_cert attribute not found in resource state")
 	}
 
-	parsedVersion, err := version.Parse(agentVersion)
+	parsedVersion, err := semversion.Parse(agentVersion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse agent_version %q: %w", agentVersion, err)
 	}

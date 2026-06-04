@@ -13,8 +13,8 @@ import (
 	context "context"
 	reflect "reflect"
 
+	semversion "github.com/juju/juju/core/semversion"
 	juju "github.com/juju/terraform-provider-juju/internal/juju"
-	version "github.com/juju/version/v2"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -122,10 +122,10 @@ func (c *MockJujuCommandConfigCall) DoAndReturn(f func(context.Context, *juju.Co
 }
 
 // ControllerVersion mocks base method.
-func (m *MockJujuCommand) ControllerVersion(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (version.Number, error) {
+func (m *MockJujuCommand) ControllerVersion(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (semversion.Number, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ControllerVersion", ctx, connInfo)
-	ret0, _ := ret[0].(version.Number)
+	ret0, _ := ret[0].(semversion.Number)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -143,19 +143,19 @@ type MockJujuCommandControllerVersionCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockJujuCommandControllerVersionCall) Return(arg0 version.Number, arg1 error) *MockJujuCommandControllerVersionCall {
+func (c *MockJujuCommandControllerVersionCall) Return(arg0 semversion.Number, arg1 error) *MockJujuCommandControllerVersionCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockJujuCommandControllerVersionCall) Do(f func(context.Context, *juju.ControllerConnectionInformation) (version.Number, error)) *MockJujuCommandControllerVersionCall {
+func (c *MockJujuCommandControllerVersionCall) Do(f func(context.Context, *juju.ControllerConnectionInformation) (semversion.Number, error)) *MockJujuCommandControllerVersionCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockJujuCommandControllerVersionCall) DoAndReturn(f func(context.Context, *juju.ControllerConnectionInformation) (version.Number, error)) *MockJujuCommandControllerVersionCall {
+func (c *MockJujuCommandControllerVersionCall) DoAndReturn(f func(context.Context, *juju.ControllerConnectionInformation) (semversion.Number, error)) *MockJujuCommandControllerVersionCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -237,10 +237,10 @@ func (c *MockJujuCommandUpdateConfigCall) DoAndReturn(f func(context.Context, *j
 }
 
 // UpgradeController mocks base method.
-func (m *MockJujuCommand) UpgradeController(ctx context.Context, connInfo *juju.ControllerConnectionInformation, targetVersion version.Number) (version.Number, error) {
+func (m *MockJujuCommand) UpgradeController(ctx context.Context, connInfo *juju.ControllerConnectionInformation, targetVersion semversion.Number) (semversion.Number, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpgradeController", ctx, connInfo, targetVersion)
-	ret0, _ := ret[0].(version.Number)
+	ret0, _ := ret[0].(semversion.Number)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -258,19 +258,19 @@ type MockJujuCommandUpgradeControllerCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockJujuCommandUpgradeControllerCall) Return(arg0 version.Number, arg1 error) *MockJujuCommandUpgradeControllerCall {
+func (c *MockJujuCommandUpgradeControllerCall) Return(arg0 semversion.Number, arg1 error) *MockJujuCommandUpgradeControllerCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockJujuCommandUpgradeControllerCall) Do(f func(context.Context, *juju.ControllerConnectionInformation, version.Number) (version.Number, error)) *MockJujuCommandUpgradeControllerCall {
+func (c *MockJujuCommandUpgradeControllerCall) Do(f func(context.Context, *juju.ControllerConnectionInformation, semversion.Number) (semversion.Number, error)) *MockJujuCommandUpgradeControllerCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockJujuCommandUpgradeControllerCall) DoAndReturn(f func(context.Context, *juju.ControllerConnectionInformation, version.Number) (version.Number, error)) *MockJujuCommandUpgradeControllerCall {
+func (c *MockJujuCommandUpgradeControllerCall) DoAndReturn(f func(context.Context, *juju.ControllerConnectionInformation, semversion.Number) (semversion.Number, error)) *MockJujuCommandUpgradeControllerCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
