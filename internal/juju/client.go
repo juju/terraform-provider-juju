@@ -152,7 +152,8 @@ type sharedClient struct {
 	checkJAASOnce sync.Once
 	isJAAS        bool
 
-	offeringControllerConfigs map[string]ControllerConfiguration
+	offeringControllerConfigs   map[string]ControllerConfiguration
+	offeringControllerConfigsMu sync.RWMutex
 }
 
 // NewClient returns a client which can talk to the juju controller
@@ -275,7 +276,10 @@ func (sc *sharedClient) WaitForResource() bool {
 // GetOfferingControllerConn returns a connection to a controller
 // specified in the offering_controllers configuration.
 func (sc *sharedClient) GetOfferingControllerConn(ctx context.Context, name string) (api.Connection, error) {
+	sc.offeringControllerConfigsMu.RLock()
 	controllerConfig, ok := sc.offeringControllerConfigs[name]
+	sc.offeringControllerConfigsMu.RUnlock()
+
 	if !ok {
 		return nil, errors.NotFoundf("offering controller configuration for %q", name)
 	}
@@ -292,7 +296,10 @@ func (sc *sharedClient) GetOfferingControllerConn(ctx context.Context, name stri
 // AddOfferingController adds an offering controller configuration
 // to the sharedClient.
 func (sc *sharedClient) AddOfferingController(ctx context.Context, name string, conf ControllerConfiguration) error {
+	sc.offeringControllerConfigsMu.Lock()
 	sc.offeringControllerConfigs[name] = conf
+	sc.offeringControllerConfigsMu.Unlock()
+
 	// Test the connection
 	conn, err := sc.GetOfferingControllerConn(ctx, name)
 	if err != nil {
@@ -305,6 +312,8 @@ func (sc *sharedClient) AddOfferingController(ctx context.Context, name string, 
 // IsOfferingController returns true if the given controller name is of one of the
 // added offering controllers.
 func (sc *sharedClient) IsOfferingController(name string) bool {
+	sc.offeringControllerConfigsMu.RLock()
+	defer sc.offeringControllerConfigsMu.RUnlock()
 	_, ok := sc.offeringControllerConfigs[name]
 	return ok
 }

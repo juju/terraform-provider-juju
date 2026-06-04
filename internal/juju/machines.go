@@ -198,7 +198,6 @@ func (c *machinesClient) createMachine(ctx context.Context, conn api.Connection,
 		if err != nil {
 			return "", err
 		}
-		fmt.Println(userDisks)
 		machineParams.Disks = []storage.Directive{userDisks}
 	} else {
 		machineParams.Disks = nil
