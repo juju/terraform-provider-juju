@@ -36,6 +36,11 @@ func TestAcc_ResourceSSHKey(t *testing.T) {
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_ssh_key.this", "model_uuid"),
 					testCheckSSHKeyPayload("juju_ssh_key.this", sshKey1)),
 			},
+			{
+				ResourceName:      "juju_ssh_key.this",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
 			// we update the key
 			{
 				Config: testAccResourceSSHKey(modelName, sshKey2),
