@@ -157,6 +157,15 @@ func (c *spacesClient) DeleteSpace(ctx context.Context, input *DeleteSpaceInput)
 	defer func() { _ = conn.Close() }()
 
 	spaceClient := c.getSpacesAPIClient(conn)
+
+	// Due to a Juju bug in 3.6, deleting a space with subnets leaves the subnet "undiscoverable"
+	// and isn't moving them back to the alpha space. As such we manually move all subnets into
+	// alpha before deleting the space.
+	// See issue here https://github.com/juju/juju/issues/22567.
+	if err := moveAllSubnetsToAlpha(ctx, spaceClient, input.Name, c.getSubnetsAPIClient(conn)); err != nil {
+		return err
+	}
+
 	_, err = spaceClient.RemoveSpace(ctx, input.Name, false, false)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -195,7 +204,12 @@ func (c *spacesClient) MoveSubnetToSpace(ctx context.Context, input *MoveSubnetT
 	subnetTags := []names.SubnetTag{names.NewSubnetTag(subnetID)}
 
 	spaceClient := c.getSpacesAPIClient(conn)
-	_, err = spaceClient.MoveSubnets(ctx, names.NewSpaceTag(input.SpaceName), subnetTags, false)
+	_, err = spaceClient.MoveSubnets(
+		ctx,
+		names.NewSpaceTag(input.SpaceName),
+		subnetTags,
+		false,
+	)
 	if err != nil {
 		return errors.Annotate(err, "moving subnets")
 	}
@@ -219,4 +233,57 @@ func findSubnetIDByCIDR(subnetResults []params.SubnetsResult, cidr string) (stri
 		return "", NewSubnetNotFoundError(cidr)
 	}
 	return subnetID, nil
+}
+
+// moveAllSubnetsToAlpha moves all subnets to the default alpha space.
+func moveAllSubnetsToAlpha(ctx context.Context, spaceClient SpacesAPIClient, spaceName string, subnetsClient SubnetsAPIClient) error {
+	spaces, err := spaceClient.ListSpaces(ctx)
+	if err != nil {
+		return errors.Annotate(err, "listing spaces to move subnets before deleting space")
+	}
+	var spaceToDelete params.Space
+	for _, space := range spaces {
+		if space.Name == spaceName {
+			spaceToDelete = space
+			break
+		}
+	}
+
+	subnetsWithinSpaceLen := len(spaceToDelete.Subnets)
+
+	// Nothing for us to move.
+	if subnetsWithinSpaceLen == 0 {
+		return nil
+	}
+
+	subnetCidrs := make([]string, subnetsWithinSpaceLen)
+	for i, subnet := range spaceToDelete.Subnets {
+		subnetCidrs[i] = subnet.CIDR
+	}
+
+	snResults, err := subnetsClient.SubnetsByCIDR(ctx, subnetCidrs)
+	if err != nil {
+		return errors.Annotate(err, "looking up subnet IDs by CIDR")
+	}
+
+	subnetIDs := make([]string, len(snResults[0].Subnets))
+	for i, subnet := range snResults[0].Subnets {
+		subnetIDs[i] = subnet.ID
+	}
+
+	subnetTags := make([]names.SubnetTag, len(subnetIDs))
+	for i, id := range subnetIDs {
+		subnetTags[i] = names.NewSubnetTag(id)
+	}
+
+	_, err = spaceClient.MoveSubnets(
+		ctx,
+		names.NewSpaceTag("alpha"),
+		subnetTags,
+		false,
+	)
+	if err != nil {
+		return errors.Annotate(err, "moving subnets to alpha before deleting space")
+	}
+	return nil
 }
