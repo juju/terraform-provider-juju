@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -127,48 +128,7 @@ func (r *subnetResource) Configure(ctx context.Context, req resource.ConfigureRe
 
 // ImportState implements [resource.ResourceWithImportState].
 func (r *subnetResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	idStr := ""
-	if req.ID != "" {
-		idStr = req.ID
-	} else {
-		var identityData subnetResourceIdentityModel
-		resp.Diagnostics.Append(req.Identity.Get(ctx, &identityData)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		idStr = identityData.ID.ValueString()
-	}
-
-	if r.client == nil {
-		addClientNotConfiguredError(&resp.Diagnostics, "subnet", "import")
-		return
-	}
-
-	modelUUID, cidr, err := parseSubnetResourceID(idStr)
-	if err != nil {
-		resp.Diagnostics.AddError("Unexpected Import Identifier", err.Error())
-		return
-	}
-
-	subnet, err := r.client.Subnets.ReadSubnet(ctx, &juju.ReadSubnetInput{
-		ModelUUID: modelUUID,
-		CIDR:      cidr,
-	})
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to import subnet resource, got error: %s", err))
-		return
-	}
-
-	state := subnetResourceModel{
-		ModelUUID: types.StringValue(modelUUID),
-		CIDR:      types.StringValue(cidr),
-		SpaceName: types.StringValue(subnet.SpaceName),
-		ID:        types.StringValue(newSubnetResourceID(modelUUID, cidr)),
-	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
-
-	identity := subnetResourceIdentityModel{ID: state.ID}
-	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
+	resource.ImportStatePassthroughWithIdentity(ctx, path.Root("id"), path.Root("id"), req, resp)
 }
 
 // Create implements [resource.Resource].
@@ -258,9 +218,28 @@ func (r *subnetResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
+	modelUUID := state.ModelUUID.ValueString()
+	cidr := state.CIDR.ValueString()
+	id := state.ID.ValueString()
+
+	if id != "" {
+		parsedModelUUID, parsedCIDR, err := parseSubnetResourceID(id)
+		if err != nil {
+			resp.Diagnostics.AddError("Malformed ID", err.Error())
+			return
+		}
+		modelUUID = parsedModelUUID
+		cidr = parsedCIDR
+	}
+
+	if modelUUID == "" || cidr == "" {
+		resp.Diagnostics.AddError("Malformed State", "missing subnet model_uuid or cidr in state")
+		return
+	}
+
 	subnet, err := r.client.Subnets.ReadSubnet(ctx, &juju.ReadSubnetInput{
-		ModelUUID: state.ModelUUID.ValueString(),
-		CIDR:      state.CIDR.ValueString(),
+		ModelUUID: modelUUID,
+		CIDR:      cidr,
 	})
 	if err != nil {
 		if errors.Is(err, errors.NotFound) {
@@ -271,8 +250,10 @@ func (r *subnetResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
+	state.ModelUUID = types.StringValue(modelUUID)
+	state.CIDR = types.StringValue(cidr)
 	state.SpaceName = types.StringValue(subnet.SpaceName)
-	state.ID = types.StringValue(newSubnetResourceID(state.ModelUUID.ValueString(), state.CIDR.ValueString()))
+	state.ID = types.StringValue(newSubnetResourceID(modelUUID, cidr))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 
 	identity := subnetResourceIdentityModel{ID: state.ID}
