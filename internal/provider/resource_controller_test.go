@@ -382,12 +382,12 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 	}
 	jujuMajor := semversion.MustParse(agentVersion).Major
 	switch jujuMajor {
-	case 2:
-		initialAgentVersion = "2.9.58"
-		updatedAgentVersion = "2.9.59"
 	case 3:
 		initialAgentVersion = "3.6.21"
 		updatedAgentVersion = "3.6.23"
+	case 4:
+		initialAgentVersion = "4.0.5"
+		updatedAgentVersion = "4.0.11"
 	default:
 		t.Errorf("unsupported Juju agent version %q for this test", agentVersion)
 	}
@@ -542,6 +542,11 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 					if testingCloud == MicroK8sTesting {
 						time.Sleep(15 * time.Second)
 					}
+				},
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("juju_controller.controller", plancheck.ResourceActionUpdate),
+					},
 				},
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "agent_version", updatedAgentVersion),
