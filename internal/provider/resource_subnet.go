@@ -43,7 +43,7 @@ type subnetResource struct {
 type subnetResourceModel struct {
 	ModelUUID types.String `tfsdk:"model_uuid"`
 	CIDR      types.String `tfsdk:"cidr"`
-	Space     types.String `tfsdk:"space"`
+	SpaceName types.String `tfsdk:"space_name"`
 
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
@@ -80,7 +80,7 @@ func (r *subnetResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"space": schema.StringAttribute{
+			"space_name": schema.StringAttribute{
 				Description: "The target space for this subnet.",
 				Required:    true,
 				Validators: []validator.String{
@@ -162,7 +162,7 @@ func (r *subnetResource) ImportState(ctx context.Context, req resource.ImportSta
 	state := subnetResourceModel{
 		ModelUUID: types.StringValue(modelUUID),
 		CIDR:      types.StringValue(cidr),
-		Space:     types.StringValue(subnet.SpaceName),
+		SpaceName: types.StringValue(subnet.SpaceName),
 		ID:        types.StringValue(newSubnetResourceID(modelUUID, cidr)),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -207,7 +207,7 @@ func (r *subnetResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	if err := r.client.Spaces.MoveSubnetToSpace(ctx, &juju.MoveSubnetToSpaceInput{
 		ModelUUID: plan.ModelUUID.ValueString(),
-		SpaceName: plan.Space.ValueString(),
+		SpaceName: plan.SpaceName.ValueString(),
 		CIDR:      plan.CIDR.ValueString(),
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create subnet resource, got error: %s", err))
@@ -225,8 +225,8 @@ func (r *subnetResource) Create(ctx context.Context, req resource.CreateRequest,
 		},
 		DataAssertions: []wait.Assert[*juju.SubnetInfo]{
 			func(data *juju.SubnetInfo) error {
-				if data.SpaceName != plan.Space.ValueString() {
-					return juju.NewRetryReadError("waiting for subnet to be assigned to the requested space")
+				if data.SpaceName != plan.SpaceName.ValueString() {
+					return juju.NewRetryReadErrorf("waiting for subnet to be assigned to space %s", data.SpaceName)
 				}
 				return nil
 			},
@@ -234,7 +234,7 @@ func (r *subnetResource) Create(ctx context.Context, req resource.CreateRequest,
 		NonFatalErrors: []error{errors.NotFound},
 		Logf:           r.trace,
 	}); err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for subnet, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for subnet to move to space %s failed, got error: %s", plan.SpaceName.ValueString(), err))
 		return
 	}
 
@@ -271,7 +271,7 @@ func (r *subnetResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	state.Space = types.StringValue(subnet.SpaceName)
+	state.SpaceName = types.StringValue(subnet.SpaceName)
 	state.ID = types.StringValue(newSubnetResourceID(state.ModelUUID.ValueString(), state.CIDR.ValueString()))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 
@@ -294,7 +294,7 @@ func (r *subnetResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	if err := r.client.Spaces.MoveSubnetToSpace(ctx, &juju.MoveSubnetToSpaceInput{
 		ModelUUID: plan.ModelUUID.ValueString(),
-		SpaceName: plan.Space.ValueString(),
+		SpaceName: plan.SpaceName.ValueString(),
 		CIDR:      plan.CIDR.ValueString(),
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update subnet resource, got error: %s", err))
@@ -312,8 +312,8 @@ func (r *subnetResource) Update(ctx context.Context, req resource.UpdateRequest,
 		},
 		DataAssertions: []wait.Assert[*juju.SubnetInfo]{
 			func(data *juju.SubnetInfo) error {
-				if data.SpaceName != plan.Space.ValueString() {
-					return juju.NewRetryReadError("waiting for subnet to be assigned to the requested space")
+				if data.SpaceName != plan.SpaceName.ValueString() {
+					return juju.NewRetryReadErrorf("waiting for subnet to be assigned to space %s", plan.SpaceName.ValueString())
 				}
 				return nil
 			},
@@ -321,7 +321,7 @@ func (r *subnetResource) Update(ctx context.Context, req resource.UpdateRequest,
 		NonFatalErrors: []error{errors.NotFound},
 		Logf:           r.trace,
 	}); err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for subnet update, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for subnet to move to space %s failed, got error: %s", plan.SpaceName.ValueString(), err))
 		return
 	}
 
@@ -345,7 +345,19 @@ func (r *subnetResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	if state.Space.ValueString() == alphaSpaceName {
+	subnet, err := r.client.Subnets.ReadSubnet(ctx, &juju.ReadSubnetInput{
+		ModelUUID: state.ModelUUID.ValueString(),
+		CIDR:      state.CIDR.ValueString(),
+	})
+	if err != nil {
+		if errors.Is(err, errors.NotFound) {
+			return
+		}
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read subnet before delete, got error: %s", err))
+		return
+	}
+
+	if subnet.SpaceName == alphaSpaceName {
 		return
 	}
 

@@ -25,7 +25,7 @@ resource "juju_space" "development" {
 resource "juju_subnet" "development" {
   model_uuid = juju_model.development.uuid
   cidr       = "10.0.0.0/24"
-  space      = juju_space.development.name
+  space_name = juju_space.development.name
 }
 ```
 
@@ -36,7 +36,7 @@ resource "juju_subnet" "development" {
 
 - `cidr` (String) The subnet CIDR. Changing this value forces replacement.
 - `model_uuid` (String) The UUID of the model where the subnet exists.
-- `space` (String) The target space for this subnet.
+- `space_name` (String) The target space for this subnet.
 
 ### Read-Only
 

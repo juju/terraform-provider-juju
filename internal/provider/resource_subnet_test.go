@@ -44,7 +44,7 @@ func TestAcc_ResourceSubnet_CreateImportUpdateAndDelete(t *testing.T) {
 	}
 
 	steps := []resource.TestStep{
-		// These first step create the model and extract the CIDR from alpha
+		// The first step creates the model and extracts the CIDR from the alpha
 		// space so that we have a valid CIDR to use in the subsequent subnet
 		// resource creation step.
 		{
@@ -92,7 +92,7 @@ func TestAcc_ResourceSubnet_CreateImportUpdateAndDelete(t *testing.T) {
 					}
 					return nil
 				}),
-				resource.TestCheckResourceAttr(resourceFullName, "space", spaceA),
+				resource.TestCheckResourceAttr(resourceFullName, "space_name", spaceA),
 				testAccCheckSubnetInSpace(resourceFullName, spaceA),
 			),
 		},
@@ -130,30 +130,24 @@ func TestAcc_ResourceSubnet_CreateImportUpdateAndDelete(t *testing.T) {
 			Config:          testAccResourceSubnet(modelName, spaceB),
 			ConfigVariables: subnetVars,
 			Check: resource.ComposeTestCheckFunc(
-				resource.TestCheckResourceAttr(resourceFullName, "space", spaceB),
+				resource.TestCheckResourceAttr(resourceFullName, "space_name", spaceB),
 				testAccCheckSubnetInSpace(resourceFullName, spaceB),
 			),
 		},
 		// Verify it goes back into alpha when subnet resource is removed.
-		// This is a little concoluted because we need to extract the CIDR from our variable map
+		// This is a little convoluted because we need to extract the CIDR from our variable map
 		// again, and check it is back in alpha manually via a ReadSubnet.
 		{
 			Config: testAccResourceSubnetModelAndSpaceOnly(modelName, spaceB),
-			Check: func(s *terraform.State) error {
-				rs, ok := s.RootModule().Resources["juju_model.this"]
-				if !ok {
-					return fmt.Errorf("resource %q not found in state", "juju_model.this")
-				}
-				modelUUID := rs.Primary.Attributes["uuid"]
-				if modelUUID == "" {
-					return fmt.Errorf("uuid is empty in state")
-				}
-				cidr, err := extractCIDRFromConfigVariablesMap(subnetVars)
-				if err != nil {
-					return err
-				}
-				return testAccCheckSubnetInSpaceByModelUUID(modelUUID, cidr, alphaSpaceName)
-			},
+			Check: resource.ComposeTestCheckFunc(
+				resource.TestCheckResourceAttrWith("juju_model.this", "uuid", func(modelUUID string) error {
+					cidr, err := extractCIDRFromConfigVariablesMap(subnetVars)
+					if err != nil {
+						return err
+					}
+					return testAccCheckSubnetInSpaceByModelUUID(modelUUID, cidr, alphaSpaceName)
+				}),
+			),
 		},
 	}
 
@@ -260,7 +254,7 @@ resource "juju_space" "this" {
 resource "juju_subnet" "this" {
   model_uuid = juju_model.this.uuid
 	cidr       = var.cidr
-  space      = juju_space.this.name
+	space_name = juju_space.this.name
 }
 `, modelName, spaceName)
 }
@@ -288,14 +282,14 @@ resource "juju_space" "second" {
 resource "juju_subnet" "first" {
 	model_uuid = juju_model.this.uuid
 	cidr       = var.cidr
-	space      = juju_space.first.name
+	space_name = juju_space.first.name
 }
 
 resource "juju_subnet" "second" {
 	depends_on = [juju_subnet.first]
 	model_uuid = juju_model.this.uuid
 	cidr       = var.cidr
-	space      = juju_space.second.name
+	space_name = juju_space.second.name
 }
 `, modelName, firstSpaceName, secondSpaceName)
 }

@@ -159,7 +159,7 @@ func (c *spacesClient) DeleteSpace(ctx context.Context, input *DeleteSpaceInput)
 	spaceClient := c.getSpacesAPIClient(conn)
 
 	// Due to a Juju bug in 3.6, deleting a space with subnets leaves the subnet "undiscoverable"
-	// and isn't moving them back to alpha. As such we manually move all subnets into
+	// and isn't moving them back to the alpha space. As such we manually move all subnets into
 	// alpha before deleting the space.
 	// See issue here https://github.com/juju/juju/issues/22567.
 	if err := moveAllSubnetsToAlpha(ctx, spaceClient, input.Name, c.getSubnetsAPIClient(conn)); err != nil {
@@ -235,7 +235,7 @@ func findSubnetIDByCIDR(subnetResults []params.SubnetsResult, cidr string) (stri
 	return subnetID, nil
 }
 
-// moveAllSubnetsToAlpha moves all subnets in the space to back to alpha.
+// moveAllSubnetsToAlpha moves all subnets to the default alpha space.
 func moveAllSubnetsToAlpha(ctx context.Context, spaceClient SpacesAPIClient, spaceName string, subnetsClient SubnetsAPIClient) error {
 	spaces, err := spaceClient.ListSpaces(ctx)
 	if err != nil {
