@@ -29,7 +29,6 @@ require (
 	github.com/juju/proxy v1.0.0
 	github.com/juju/retry v1.0.1
 	github.com/juju/utils v0.0.0-20200604140309-9d78121a29e0
-	github.com/juju/utils/v3 v3.2.3
 	github.com/juju/utils/v4 v4.0.5
 	github.com/juju/version/v2 v2.0.1
 	github.com/rs/zerolog v1.33.0
@@ -119,7 +118,6 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/juju/ansiterm v1.0.0 // indirect
-	github.com/juju/cmd/v3 v3.2.2 // indirect
 	github.com/juju/description/v11 v11.0.0-20260205224702-ea6d3105b20c // indirect
 	github.com/juju/gnuflag v1.0.0 // indirect
 	github.com/juju/go4 v0.0.0-20160222163258-40d72ab9641a // indirect
@@ -137,6 +135,7 @@ require (
 	github.com/juju/persistent-cookiejar v1.0.0 // indirect
 	github.com/juju/schema v1.2.0 // indirect
 	github.com/juju/usso v1.0.1 // indirect
+	github.com/juju/utils/v3 v3.2.3 // indirect
 	github.com/juju/webbrowser v1.0.0 // indirect
 	github.com/juju/worker/v4 v4.3.0 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
