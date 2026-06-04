@@ -174,8 +174,8 @@ func TestAcc_ResourceSubnet_CreateRejectedWhenNotAlpha(t *testing.T) {
 	spaceA := "tf-space-a"
 	spaceB := "tf-space-b"
 	subnetVars := config.Variables{}
-	var steps []resource.TestStep
-	steps = []resource.TestStep{
+
+	steps := []resource.TestStep{
 		{
 			Config: testAccResourceSubnetModelAndSpacesOnly(modelName, spaceA, spaceB),
 			Check: func(s *terraform.State) error {
