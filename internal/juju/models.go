@@ -123,31 +123,29 @@ func newModelsClient(sc SharedClient, isJAAS bool) *modelsClient {
 
 // GetModel retrieves a model by UUID.
 func (c *modelsClient) GetModel(ctx context.Context, modelUUID string) (*params.ModelInfo, error) {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
+	var modelInfo *params.ModelInfo
+	err := withConnection(ctx, c.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := modelmanager.NewClient(conn)
 
-	client := modelmanager.NewClient(conn)
+		modelTag := names.NewModelTag(modelUUID)
 
-	modelTag := names.NewModelTag(modelUUID)
+		results, err := client.ModelInfo(ctx, []names.ModelTag{
+			modelTag,
+		})
+		if err != nil {
+			return err
+		}
+		if results[0].Error != nil {
+			return results[0].Error
+		}
 
-	results, err := client.ModelInfo(ctx, []names.ModelTag{
-		modelTag,
+		modelInfo = results[0].Result
+		c.AddModel(modelInfo.Name, modelInfo.Qualifier, modelUUID, model.ModelType(modelInfo.Type))
+
+		c.Tracef(fmt.Sprintf("Retrieved model info: %s, %+v", modelUUID, modelInfo))
+		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	if results[0].Error != nil {
-		return nil, results[0].Error
-	}
-
-	modelInfo := results[0].Result
-	c.AddModel(modelInfo.Name, modelInfo.Qualifier, modelUUID, model.ModelType(modelInfo.Type))
-
-	c.Tracef(fmt.Sprintf("Retrieved model info: %s, %+v", modelUUID, modelInfo))
-	return modelInfo, nil
+	return modelInfo, err
 }
 
 // CreateModel creates a model.
@@ -159,47 +157,49 @@ func (c *modelsClient) CreateModel(ctx context.Context, input CreateModelInput) 
 		return resp, fmt.Errorf("%q is not a valid name: model names may only contain lowercase letters, digits and hyphens", modelName)
 	}
 
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return resp, err
-	}
-	defer func() { _ = conn.Close() }()
+	err := withConnection(ctx, c.SharedClient, nil, func(conn jujuapi.Connection) error {
+		currentUser := getCurrentJujuUser(conn)
 
-	currentUser := getCurrentJujuUser(conn)
+		cloudName := input.CloudName
+		cloudRegion := input.CloudRegion
 
-	cloudName := input.CloudName
-	cloudRegion := input.CloudRegion
+		cloudCredTag := &names.CloudCredentialTag{}
+		if input.Credential != "" {
+			var err error
+			cloudCredTag, err = GetCloudCredentialTag(cloudName, currentUser, input.Credential)
+			if err != nil {
+				return err
+			}
+		}
 
-	cloudCredTag := &names.CloudCredentialTag{}
-	if input.Credential != "" {
-		cloudCredTag, err = GetCloudCredentialTag(cloudName, currentUser, input.Credential)
+		// Casting to map[string]interface{} because of client.CreateModel
+		configValues := make(map[string]interface{})
+
+		for key, configVal := range input.Config {
+			configValues[key] = configVal
+		}
+
+		targetController := input.TargetController
+
+		var err error
+		resp, err = c.createModel(ctx, conn, modelName, currentUser, cloudName, cloudRegion, *cloudCredTag, configValues, targetController)
 		if err != nil {
-			return resp, err
+			// When we create multiple models concurrently, it can happen that Juju returns an error
+			// that the transaction was aborted. We return a specific error here,
+			// to make sure we can retry.
+			if strings.Contains(err.Error(), "transaction aborted") {
+				return TransactionError
+			}
+			return err
 		}
-	}
 
-	// Casting to map[string]interface{} because of client.CreateModel
-	configValues := make(map[string]interface{})
-
-	for key, configVal := range input.Config {
-		configValues[key] = configVal
-	}
-
-	targetController := input.TargetController
-
-	resp, err = c.createModel(ctx, conn, modelName, currentUser, cloudName, cloudRegion, *cloudCredTag, configValues, targetController)
+		// Add a model object on the client internal to the provider
+		c.AddModel(modelName, currentUser, resp.UUID, model.ModelType(resp.Type))
+		return nil
+	})
 	if err != nil {
-		// When we create multiple models concurrently, it can happen that Juju returns an error
-		// that the transaction was aborted. We return a specific error here,
-		// to make sure we can retry.
-		if strings.Contains(err.Error(), "transaction aborted") {
-			return resp, TransactionError
-		}
 		return resp, err
 	}
-
-	// Add a model object on the client internal to the provider
-	c.AddModel(modelName, currentUser, resp.UUID, model.ModelType(resp.Type))
 
 	// set constraints when required
 	if input.Constraints.String() == "" {
@@ -208,14 +208,10 @@ func (c *modelsClient) CreateModel(ctx context.Context, input CreateModelInput) 
 
 	// we have to set constraints ...
 	// establish a new connection with the created model through the modelconfig api to set constraints
-	connModel, err := c.GetConnection(ctx, &resp.UUID)
-	if err != nil {
-		return resp, err
-	}
-	defer func() { _ = connModel.Close() }()
-
-	modelClient := modelconfig.NewClient(connModel)
-	err = modelClient.SetModelConstraints(ctx, input.Constraints)
+	err = withConnection(ctx, c.SharedClient, &resp.UUID, func(connModel jujuapi.Connection) error {
+		modelClient := modelconfig.NewClient(connModel)
+		return modelClient.SetModelConstraints(ctx, input.Constraints)
+	})
 	if err != nil {
 		return resp, err
 	}
@@ -306,225 +302,209 @@ func createJujuModel(ctx context.Context, conn jujuapi.Connection,
 
 // ListModels retrieves the list of model UUIDs.
 func (c *modelsClient) ListModels(ctx context.Context) ([]string, error) {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	client := modelmanager.NewClient(conn)
-	models, err := client.ListModels(ctx, c.GetUser())
-	if err != nil {
-		return nil, err
-	}
-
-	ids := make([]string, 0, len(models))
-	for _, model := range models {
-		if model.Name == "controller" {
-			continue
+	var ids []string
+	err := withConnection(ctx, c.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := modelmanager.NewClient(conn)
+		models, err := client.ListModels(ctx, c.GetUser())
+		if err != nil {
+			return err
 		}
-		ids = append(ids, model.UUID)
-	}
 
-	return ids, nil
+		ids = make([]string, 0, len(models))
+		for _, model := range models {
+			if model.Name == "controller" {
+				continue
+			}
+			ids = append(ids, model.UUID)
+		}
+
+		return nil
+	})
+	return ids, err
 }
 
 // ReadModel retrieves model details and configuration by UUID.
 func (c *modelsClient) ReadModel(ctx context.Context, modelUUID string) (*ReadModelResponse, error) {
-	modelmanagerConn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = modelmanagerConn.Close() }()
-
-	modelconfigConn, err := c.GetConnection(ctx, &modelUUID)
-	if err != nil {
-		if params.IsCodeNotFound(err) {
-			return nil, errors.WithType(err, ModelNotFoundError)
+	var out *ReadModelResponse
+	err := withConnection(ctx, c.SharedClient, nil, func(modelmanagerConn jujuapi.Connection) error {
+		modelconfigConn, err := c.GetConnection(ctx, &modelUUID)
+		if err != nil {
+			if params.IsCodeNotFound(err) {
+				return errors.WithType(err, ModelNotFoundError)
+			}
+			return err
 		}
-		return nil, err
-	}
-	defer func() { _ = modelconfigConn.Close() }()
+		defer func() { _ = modelconfigConn.Close() }()
 
-	modelmanagerClient := modelmanager.NewClient(modelmanagerConn)
-	modelconfigClient := modelconfig.NewClient(modelconfigConn)
+		modelmanagerClient := modelmanager.NewClient(modelmanagerConn)
+		modelconfigClient := modelconfig.NewClient(modelconfigConn)
 
-	modelUUIDTag, modelOk := modelconfigConn.ModelTag()
-	if !modelOk {
-		return nil, errors.Errorf("Not connected to model %q", modelUUID)
-	}
-	models, err := modelmanagerClient.ModelInfo(ctx, []names.ModelTag{modelUUIDTag})
-	if err != nil {
-		return nil, err
-	}
+		modelUUIDTag, modelOk := modelconfigConn.ModelTag()
+		if !modelOk {
+			return errors.Errorf("Not connected to model %q", modelUUID)
+		}
+		models, err := modelmanagerClient.ModelInfo(ctx, []names.ModelTag{modelUUIDTag})
+		if err != nil {
+			return err
+		}
 
-	if len(models) > 1 {
-		return nil, fmt.Errorf("more than one model returned for UUID: %s", modelUUIDTag.Id())
-	}
-	if len(models) < 1 {
-		return nil, ModelNotFoundError
-	}
+		if len(models) > 1 {
+			return fmt.Errorf("more than one model returned for UUID: %s", modelUUIDTag.Id())
+		}
+		if len(models) < 1 {
+			return ModelNotFoundError
+		}
 
-	// Check if the model has an error first
-	if models[0].Error != nil {
-		return nil, models[0].Error
-	}
-	modelInfo := *models[0].Result
+		// Check if the model has an error first
+		if models[0].Error != nil {
+			return models[0].Error
+		}
+		modelInfo := *models[0].Result
 
-	modelConfig, err := modelconfigClient.ModelGet(ctx)
-	if err != nil {
-		return nil, err
-	}
+		modelConfig, err := modelconfigClient.ModelGet(ctx)
+		if err != nil {
+			return err
+		}
 
-	modelConstraints, err := modelconfigClient.GetModelConstraints(ctx)
-	if err != nil {
-		return nil, err
-	}
+		modelConstraints, err := modelconfigClient.GetModelConstraints(ctx)
+		if err != nil {
+			return err
+		}
 
-	return &ReadModelResponse{
-		ModelInfo:        modelInfo,
-		ModelConfig:      modelConfig,
-		ModelConstraints: modelConstraints,
-	}, nil
+		out = &ReadModelResponse{
+			ModelInfo:        modelInfo,
+			ModelConfig:      modelConfig,
+			ModelConstraints: modelConstraints,
+		}
+		return nil
+	})
+	return out, err
 }
 
 // ReadModelStatus retrieves the status of a model by its name.
 // It returns a ReadModelStatusResponse containing the model's status.
 // If the model is not found, it returns an error.
 func (c *modelsClient) ReadModelStatus(ctx context.Context, modelUUID string) (*ReadModelStatusResponse, error) {
-	modelmanagerConn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = modelmanagerConn.Close() }()
-
-	modelmanagerClient := modelmanager.NewClient(modelmanagerConn)
-	modelStatus, err := modelmanagerClient.ModelStatus(ctx, names.NewModelTag(modelUUID))
-	if err != nil {
-		return nil, err
-	}
-	if len(modelStatus) < 1 {
-		return nil, errors.WithType(errors.New("no models found"), ModelNotFoundError)
-	}
-	if len(modelStatus) > 1 {
-		return nil, fmt.Errorf("more than one model returned for UUID: %s", modelUUID)
-	}
-	if modelStatus[0].Error != nil {
-		if params.IsCodeNotFound(modelStatus[0].Error) {
-			return nil, errors.WithType(modelStatus[0].Error, ModelNotFoundError)
+	var out *ReadModelStatusResponse
+	err := withConnection(ctx, c.SharedClient, nil, func(modelmanagerConn jujuapi.Connection) error {
+		modelmanagerClient := modelmanager.NewClient(modelmanagerConn)
+		modelStatus, err := modelmanagerClient.ModelStatus(ctx, names.NewModelTag(modelUUID))
+		if err != nil {
+			return err
 		}
-		return nil, modelStatus[0].Error
-	}
+		if len(modelStatus) < 1 {
+			return errors.WithType(errors.New("no models found"), ModelNotFoundError)
+		}
+		if len(modelStatus) > 1 {
+			return fmt.Errorf("more than one model returned for UUID: %s", modelUUID)
+		}
+		if modelStatus[0].Error != nil {
+			if params.IsCodeNotFound(modelStatus[0].Error) {
+				return errors.WithType(modelStatus[0].Error, ModelNotFoundError)
+			}
+			return modelStatus[0].Error
+		}
 
-	return &ReadModelStatusResponse{
-		ModelStatus: modelStatus[0],
-	}, nil
+		out = &ReadModelStatusResponse{
+			ModelStatus: modelStatus[0],
+		}
+		return nil
+	})
+	return out, err
 }
 
 // UpdateModel updates model configuration, constraints, or credentials.
 func (c *modelsClient) UpdateModel(ctx context.Context, input UpdateModelInput) error {
-	conn, err := c.GetConnection(ctx, &input.UUID)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, &input.UUID, func(conn jujuapi.Connection) error {
+		client := modelconfig.NewClient(conn)
 
-	client := modelconfig.NewClient(conn)
+		configMap := make(map[string]interface{})
+		for key, value := range input.Config {
+			configMap[key] = value
+		}
+		if input.Config != nil {
+			err := client.ModelSet(ctx, configMap)
+			if err != nil {
+				return err
+			}
+		}
 
-	configMap := make(map[string]interface{})
-	for key, value := range input.Config {
-		configMap[key] = value
-	}
-	if input.Config != nil {
-		err = client.ModelSet(ctx, configMap)
-		if err != nil {
-			return err
+		if input.Unset != nil {
+			err := client.ModelUnset(ctx, input.Unset...)
+			if err != nil {
+				return err
+			}
 		}
-	}
 
-	if input.Unset != nil {
-		err = client.ModelUnset(ctx, input.Unset...)
-		if err != nil {
-			return err
+		if input.Constraints != nil {
+			err := client.SetModelConstraints(ctx, *input.Constraints)
+			if err != nil {
+				return err
+			}
 		}
-	}
 
-	if input.Constraints != nil {
-		err = client.SetModelConstraints(ctx, *input.Constraints)
-		if err != nil {
-			return err
+		if input.Credential != "" {
+			cloudName := input.CloudName
+			currentUser := getCurrentJujuUser(conn)
+			cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, input.Credential)
+			if err != nil {
+				return err
+			}
+			// open new connection to get facade versions correctly
+			if err := withConnection(ctx, c.SharedClient, nil, func(connModelManager jujuapi.Connection) error {
+				modelUUIDTag, modelOk := connModelManager.ModelTag()
+				if !modelOk {
+					return errors.Errorf("Not connected to model %q", input.Name)
+				}
+				clientModelManager := modelmanager.NewClient(connModelManager)
+				if err := clientModelManager.ChangeModelCredential(ctx, modelUUIDTag, *cloudCredTag); err != nil {
+					return err
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
 		}
-	}
 
-	if input.Credential != "" {
-		cloudName := input.CloudName
-		currentUser := getCurrentJujuUser(conn)
-		cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, input.Credential)
-		if err != nil {
-			return err
-		}
-		// open new connection to get facade versions correctly
-		connModelManager, err := c.GetConnection(ctx, nil)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = connModelManager.Close() }()
-		modelUUIDTag, modelOk := connModelManager.ModelTag()
-		if !modelOk {
-			return errors.Errorf("Not connected to model %q", input.Name)
-		}
-		clientModelManager := modelmanager.NewClient(connModelManager)
-		if err := clientModelManager.ChangeModelCredential(ctx, modelUUIDTag, *cloudCredTag); err != nil {
-			return err
-		}
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // DestroyModel removes the model identified by the input UUID.
 func (c *modelsClient) DestroyModel(ctx context.Context, input DestroyModelInput) error {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := modelmanager.NewClient(conn)
 
-	client := modelmanager.NewClient(conn)
+		maxWait := 10 * time.Minute
+		timeout := 30 * time.Minute
 
-	maxWait := 10 * time.Minute
-	timeout := 30 * time.Minute
+		tag := names.NewModelTag(input.UUID)
 
-	tag := names.NewModelTag(input.UUID)
+		destroyStorage := true
+		forceDestroy := false
 
-	destroyStorage := true
-	forceDestroy := false
+		err := client.DestroyModel(ctx, tag, &destroyStorage, &forceDestroy, &maxWait, &timeout)
+		if err != nil {
+			return err
+		}
 
-	err = client.DestroyModel(ctx, tag, &destroyStorage, &forceDestroy, &maxWait, &timeout)
-	if err != nil {
-		return err
-	}
-
-	c.RemoveModel(input.UUID)
-	return nil
+		c.RemoveModel(input.UUID)
+		return nil
+	})
 }
 
 // GrantModel grants access to a model for a user.
 func (c *modelsClient) GrantModel(ctx context.Context, input GrantModelInput) error {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := modelmanager.NewClient(conn)
 
-	client := modelmanager.NewClient(conn)
+		err := client.GrantModel(ctx, input.User, input.Access, input.ModelUUID)
+		if err != nil {
+			return err
+		}
 
-	err = client.GrantModel(ctx, input.User, input.Access, input.ModelUUID)
-	if err != nil {
-		return err
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // UpdateAccessModel updates model access by granting or revoking users.
@@ -532,29 +512,25 @@ func (c *modelsClient) GrantModel(ctx context.Context, input GrantModelInput) er
 // If a user has had `write`, then removing that access would decrease their
 // access to `read` and the user will remain part of the model access.
 func (c *modelsClient) UpdateAccessModel(ctx context.Context, input UpdateAccessModelInput) error {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := modelmanager.NewClient(conn)
 
-	client := modelmanager.NewClient(conn)
-
-	for _, user := range input.Revoke {
-		err := client.RevokeModel(ctx, user, "read", input.ModelUUID)
-		if err != nil {
-			return err
+		for _, user := range input.Revoke {
+			err := client.RevokeModel(ctx, user, "read", input.ModelUUID)
+			if err != nil {
+				return err
+			}
 		}
-	}
 
-	for _, user := range input.Grant {
-		err := client.GrantModel(ctx, user, input.OldAccess, input.ModelUUID)
-		if err != nil {
-			return err
+		for _, user := range input.Grant {
+			err := client.GrantModel(ctx, user, input.OldAccess, input.ModelUUID)
+			if err != nil {
+				return err
+			}
 		}
-	}
 
-	return nil
+		return nil
+	})
 }
 
 // DestroyAccessModel removes model access for specified users.
@@ -562,38 +538,30 @@ func (c *modelsClient) UpdateAccessModel(ctx context.Context, input UpdateAccess
 // If a user has had `write`, then removing that access would decrease their
 // access to `read` and the user will remain part of the model access.
 func (c *modelsClient) DestroyAccessModel(ctx context.Context, input DestroyAccessModelInput) error {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := modelmanager.NewClient(conn)
 
-	client := modelmanager.NewClient(conn)
-
-	for _, user := range input.Revoke {
-		err := client.RevokeModel(ctx, user, "read", input.ModelUUID)
-		if err != nil {
-			return err
+		for _, user := range input.Revoke {
+			err := client.RevokeModel(ctx, user, "read", input.ModelUUID)
+			if err != nil {
+				return err
+			}
 		}
-	}
 
-	return nil
+		return nil
+	})
 }
 
 // SetModelDefaults sets the default model configuration for a cloud and region.
 func (c *modelsClient) SetModelDefaults(ctx context.Context, cloud string, region string, config map[string]interface{}) error {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := modelmanager.NewClient(conn)
 
-	client := modelmanager.NewClient(conn)
+		err := client.SetModelDefaults(ctx, cloud, region, config)
+		if err != nil {
+			return err
+		}
 
-	err = client.SetModelDefaults(ctx, cloud, region, config)
-	if err != nil {
-		return err
-	}
-
-	return nil
+		return nil
+	})
 }

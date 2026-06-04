@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/client/usermanager"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v6"
@@ -66,108 +67,98 @@ func newUsersClient(sc SharedClient) *usersClient {
 
 // CreateUser creates a new user.
 func (c *usersClient) CreateUser(ctx context.Context, input CreateUserInput) (*CreateUserResponse, error) {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
+	var out *CreateUserResponse
+	err := withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		client := usermanager.NewClient(conn)
 
-	client := usermanager.NewClient(conn)
+		userTag, userSecret, err := client.AddUser(ctx, input.Name, input.DisplayName, input.Password)
+		if err != nil {
+			return err
+		}
 
-	userTag, userSecret, err := client.AddUser(ctx, input.Name, input.DisplayName, input.Password)
-	if err != nil {
-		return nil, err
-	}
-
-	return &CreateUserResponse{UserTag: userTag, Secret: userSecret}, nil
+		out = &CreateUserResponse{UserTag: userTag, Secret: userSecret}
+		return nil
+	})
+	return out, err
 }
 
 // ReadUser retrieves details for the named user.
 func (c *usersClient) ReadUser(ctx context.Context, name string) (*ReadUserResponse, error) {
-	usermanagerConn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = usermanagerConn.Close() }()
+	var out *ReadUserResponse
+	err := withConnection(ctx, c.SharedClient, nil, func(usermanagerConn api.Connection) error {
+		usermanagerClient := usermanager.NewClient(usermanagerConn)
 
-	usermanagerClient := usermanager.NewClient(usermanagerConn)
+		users, err := usermanagerClient.UserInfo(ctx, []string{name}, usermanager.IncludeDisabled(false)) //don't list disabled users
+		if err != nil {
+			return err
+		}
 
-	users, err := usermanagerClient.UserInfo(ctx, []string{name}, usermanager.IncludeDisabled(false)) //don't list disabled users
-	if err != nil {
-		return nil, err
-	}
+		if len(users) > 1 {
+			return fmt.Errorf("more than one user returned for user name: %s", name)
+		}
+		if len(users) < 1 {
+			return fmt.Errorf("no user returned for user name: %s", name)
+		}
 
-	if len(users) > 1 {
-		return nil, fmt.Errorf("more than one user returned for user name: %s", name)
-	}
-	if len(users) < 1 {
-		return nil, fmt.Errorf("no user returned for user name: %s", name)
-	}
+		userInfo := users[0]
 
-	userInfo := users[0]
-
-	return &ReadUserResponse{
-		UserInfo: userInfo,
-	}, nil
+		out = &ReadUserResponse{
+			UserInfo: userInfo,
+		}
+		return nil
+	})
+	return out, err
 }
 
 // ModelUserInfo lists users and access for the specified model.
 func (c *usersClient) ModelUserInfo(ctx context.Context, modelUUID string) (*ReadModelUserResponse, error) {
-	usermanagerConn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = usermanagerConn.Close() }()
-	usermanagerClient := usermanager.NewClient(usermanagerConn)
+	var out *ReadModelUserResponse
+	err := withConnection(ctx, c.SharedClient, nil, func(usermanagerConn api.Connection) error {
+		usermanagerClient := usermanager.NewClient(usermanagerConn)
 
-	users, err := usermanagerClient.ModelUserInfo(ctx, modelUUID)
-	if err != nil {
-		return nil, err
-	}
+		users, err := usermanagerClient.ModelUserInfo(ctx, modelUUID)
+		if err != nil {
+			return err
+		}
 
-	if len(users) < 1 {
-		return nil, fmt.Errorf("no users returned for model (%s)", modelUUID)
-	}
+		if len(users) < 1 {
+			return fmt.Errorf("no users returned for model (%s)", modelUUID)
+		}
 
-	return &ReadModelUserResponse{
-		ModelUserInfo: users,
-	}, nil
+		out = &ReadModelUserResponse{
+			ModelUserInfo: users,
+		}
+		return nil
+	})
+	return out, err
 }
 
 // UpdateUser updates user fields such as password.
 func (c *usersClient) UpdateUser(ctx context.Context, input UpdateUserInput) error {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		client := usermanager.NewClient(conn)
 
-	client := usermanager.NewClient(conn)
-
-	if input.Password != "" {
-		err = client.SetPassword(ctx, input.Name, input.Password)
-		if err != nil {
-			return err
+		if input.Password != "" {
+			err := client.SetPassword(ctx, input.Name, input.Password)
+			if err != nil {
+				return err
+			}
 		}
-	}
 
-	return nil
+		return nil
+	})
 }
 
 // DestroyUser removes a user.
 func (c *usersClient) DestroyUser(ctx context.Context, input DestroyUserInput) error {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		client := usermanager.NewClient(conn)
 
-	client := usermanager.NewClient(conn)
+		err := client.RemoveUser(ctx, input.Name)
+		if err != nil {
+			return err
+		}
 
-	err = client.RemoveUser(ctx, input.Name)
-	if err != nil {
-		return err
-	}
-
-	return nil
+		return nil
+	})
 }

@@ -80,16 +80,13 @@ func (jc *jaasClient) AddRelations(ctx context.Context, tuples []JaasTuple) erro
 	if len(tuples) == 0 {
 		return errors.New("empty slice of tuples")
 	}
-	conn, err := jc.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-	cl := jc.getJaasApiClient(conn)
-	req := params.AddRelationRequest{
-		Tuples: toAPITuples(tuples),
-	}
-	return cl.AddRelation(&req)
+	return withConnection(ctx, jc.SharedClient, nil, func(conn jujuapi.Connection) error {
+		cl := jc.getJaasApiClient(conn)
+		req := params.AddRelationRequest{
+			Tuples: toAPITuples(tuples),
+		}
+		return cl.AddRelation(&req)
+	})
 }
 
 // DeleteRelations attempts to delete the provided slice of relationship tuples.
@@ -98,16 +95,13 @@ func (jc *jaasClient) DeleteRelations(ctx context.Context, tuples []JaasTuple) e
 	if len(tuples) == 0 {
 		return errors.New("empty slice of tuples")
 	}
-	conn, err := jc.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-	cl := jc.getJaasApiClient(conn)
-	req := params.RemoveRelationRequest{
-		Tuples: toAPITuples(tuples),
-	}
-	return cl.RemoveRelation(&req)
+	return withConnection(ctx, jc.SharedClient, nil, func(conn jujuapi.Connection) error {
+		cl := jc.getJaasApiClient(conn)
+		req := params.RemoveRelationRequest{
+			Tuples: toAPITuples(tuples),
+		}
+		return cl.RemoveRelation(&req)
+	})
 }
 
 // ReadRelations attempts to read relations that match the criteria defined by `tuple`.
@@ -117,54 +111,54 @@ func (jc *jaasClient) ReadRelations(ctx context.Context, tuple *JaasTuple) ([]Ja
 		return nil, errors.New("read relation tuple is nil")
 	}
 
-	conn, err := jc.GetConnection(ctx, nil)
+	var relations []JaasTuple
+	err := withConnection(ctx, jc.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := jc.getJaasApiClient(conn)
+		relations = make([]JaasTuple, 0)
+		req := &params.ListRelationshipTuplesRequest{Tuple: toAPITuple(*tuple)}
+		for {
+			resp, err := client.ListRelationshipTuples(req)
+			if err != nil {
+				jc.Errorf(err, "call to ListRelationshipTuples failed")
+				return err
+			}
+			if len(resp.Errors) > 0 {
+				jc.Errorf(err, "call to ListRelationshipTuples contained error(s)")
+				return errors.New(resp.Errors[0])
+			}
+			relations = append(relations, toJaasTuples(resp.Tuples)...)
+			if resp.ContinuationToken == "" {
+				return nil
+			}
+			req.ContinuationToken = resp.ContinuationToken
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+		}
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = conn.Close() }()
-
-	client := jc.getJaasApiClient(conn)
-	relations := make([]JaasTuple, 0)
-	req := &params.ListRelationshipTuplesRequest{Tuple: toAPITuple(*tuple)}
-	for {
-		resp, err := client.ListRelationshipTuples(req)
-		if err != nil {
-			jc.Errorf(err, "call to ListRelationshipTuples failed")
-			return nil, err
-		}
-		if len(resp.Errors) > 0 {
-			jc.Errorf(err, "call to ListRelationshipTuples contained error(s)")
-			return nil, errors.New(resp.Errors[0])
-		}
-		relations = append(relations, toJaasTuples(resp.Tuples)...)
-		if resp.ContinuationToken == "" {
-			return relations, nil
-		}
-		req.ContinuationToken = resp.ContinuationToken
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-	}
+	return relations, nil
 }
 
 // AddGroup attempts to create a new group with the provided name.
 func (jc *jaasClient) AddGroup(ctx context.Context, name string) (string, error) {
-	conn, err := jc.GetConnection(ctx, nil)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = conn.Close() }()
+	var uuid string
+	err := withConnection(ctx, jc.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := jc.getJaasApiClient(conn)
+		req := params.AddGroupRequest{Name: name}
 
-	client := jc.getJaasApiClient(conn)
-	req := params.AddGroupRequest{Name: name}
-
-	resp, err := client.AddGroup(&req)
-	if err != nil {
-		return "", err
-	}
-	return resp.UUID, nil
+		resp, err := client.AddGroup(&req)
+		if err != nil {
+			return err
+		}
+		uuid = resp.UUID
+		return nil
+	})
+	return uuid, err
 }
 
 // ReadGroupByUUID attempts to read a group that matches the provided UUID.
@@ -178,44 +172,38 @@ func (jc *jaasClient) ReadGroupByName(ctx context.Context, name string) (*JaasGr
 }
 
 func (jc *jaasClient) readGroup(ctx context.Context, req *params.GetGroupRequest) (*JaasGroup, error) {
-	conn, err := jc.GetConnection(ctx, nil)
+	var group *JaasGroup
+	err := withConnection(ctx, jc.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := jc.getJaasApiClient(conn)
+		resp, err := client.GetGroup(req)
+		if err != nil {
+			return err
+		}
+		group = &JaasGroup{Name: resp.Name, UUID: resp.UUID}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = conn.Close() }()
-
-	client := jc.getJaasApiClient(conn)
-	resp, err := client.GetGroup(req)
-	if err != nil {
-		return nil, err
-	}
-	return &JaasGroup{Name: resp.Name, UUID: resp.UUID}, nil
+	return group, nil
 }
 
 // RenameGroup attempts to rename a group that matches the provided name.
 func (jc *jaasClient) RenameGroup(ctx context.Context, name, newName string) error {
-	conn, err := jc.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-
-	client := jc.getJaasApiClient(conn)
-	req := params.RenameGroupRequest{Name: name, NewName: newName}
-	return client.RenameGroup(&req)
+	return withConnection(ctx, jc.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := jc.getJaasApiClient(conn)
+		req := params.RenameGroupRequest{Name: name, NewName: newName}
+		return client.RenameGroup(&req)
+	})
 }
 
 // RemoveGroup attempts to remove a group that matches the provided name.
 func (jc *jaasClient) RemoveGroup(ctx context.Context, name string) error {
-	conn, err := jc.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-
-	client := jc.getJaasApiClient(conn)
-	req := params.RemoveGroupRequest{Name: name}
-	return client.RemoveGroup(&req)
+	return withConnection(ctx, jc.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := jc.getJaasApiClient(conn)
+		req := params.RemoveGroupRequest{Name: name}
+		return client.RemoveGroup(&req)
+	})
 }
 
 // JaasRole represents a JAAS role used for permissions management.
@@ -226,20 +214,19 @@ type JaasRole struct {
 
 // AddRole attempts to create a new role with the provided name.
 func (jc *jaasClient) AddRole(ctx context.Context, name string) (string, error) {
-	conn, err := jc.GetConnection(ctx, nil)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = conn.Close() }()
+	var uuid string
+	err := withConnection(ctx, jc.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := jc.getJaasApiClient(conn)
+		req := params.AddRoleRequest{Name: name}
 
-	client := jc.getJaasApiClient(conn)
-	req := params.AddRoleRequest{Name: name}
-
-	resp, err := client.AddRole(&req)
-	if err != nil {
-		return "", err
-	}
-	return resp.UUID, nil
+		resp, err := client.AddRole(&req)
+		if err != nil {
+			return err
+		}
+		uuid = resp.UUID
+		return nil
+	})
+	return uuid, err
 }
 
 // ReadRoleByUUID attempts to read a role that matches the provided UUID.
@@ -253,78 +240,75 @@ func (jc *jaasClient) ReadRoleByName(ctx context.Context, name string) (*JaasRol
 }
 
 func (jc *jaasClient) readRole(ctx context.Context, req *params.GetRoleRequest) (*JaasRole, error) {
-	conn, err := jc.GetConnection(ctx, nil)
+	var role *JaasRole
+	err := withConnection(ctx, jc.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := jc.getJaasApiClient(conn)
+		resp, err := client.GetRole(req)
+		if err != nil {
+			return err
+		}
+		role = &JaasRole{Name: resp.Name, UUID: resp.UUID}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = conn.Close() }()
-
-	client := jc.getJaasApiClient(conn)
-	resp, err := client.GetRole(req)
-	if err != nil {
-		return nil, err
-	}
-	return &JaasRole{Name: resp.Name, UUID: resp.UUID}, nil
+	return role, nil
 }
 
 // RenameRole attempts to rename a role that matches the provided name.
 func (jc *jaasClient) RenameRole(ctx context.Context, name, newName string) error {
-	conn, err := jc.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-
-	client := jc.getJaasApiClient(conn)
-	req := params.RenameRoleRequest{Name: name, NewName: newName}
-	return client.RenameRole(&req)
+	return withConnection(ctx, jc.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := jc.getJaasApiClient(conn)
+		req := params.RenameRoleRequest{Name: name, NewName: newName}
+		return client.RenameRole(&req)
+	})
 }
 
 // RemoveRole attempts to remove a role that matches the provided name.
 func (jc *jaasClient) RemoveRole(ctx context.Context, name string) error {
-	conn, err := jc.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-
-	client := jc.getJaasApiClient(conn)
-	req := params.RemoveRoleRequest{Name: name}
-	return client.RemoveRole(&req)
+	return withConnection(ctx, jc.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := jc.getJaasApiClient(conn)
+		req := params.RemoveRoleRequest{Name: name}
+		return client.RemoveRole(&req)
+	})
 }
 
 // ListControllers returns a list of controllers accessible to the client.
 func (jc *jaasClient) ListControllers(ctx context.Context) ([]params.ControllerInfo, error) {
-	conn, err := jc.GetConnection(ctx, nil)
+	var controllers []params.ControllerInfo
+	err := withConnection(ctx, jc.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := jc.getJaasApiClient(conn)
+		var err error
+		controllers, err = client.ListControllers()
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = conn.Close() }()
-
-	client := jc.getJaasApiClient(conn)
-	return client.ListControllers()
+	return controllers, nil
 }
 
 // AddController registers a controller with JIMM.
 func (jc *jaasClient) AddController(ctx context.Context, req *params.AddControllerRequest) (params.ControllerInfo, error) {
-	conn, err := jc.GetConnection(ctx, nil)
-	if err != nil {
-		return params.ControllerInfo{}, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	client := jc.getJaasApiClient(conn)
-	return client.AddController(req)
+	var info params.ControllerInfo
+	err := withConnection(ctx, jc.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := jc.getJaasApiClient(conn)
+		var err error
+		info, err = client.AddController(req)
+		return err
+	})
+	return info, err
 }
 
 // RemoveController removes a controller registration from JIMM.
 func (jc *jaasClient) RemoveController(ctx context.Context, req *params.RemoveControllerRequest) (params.ControllerInfo, error) {
-	conn, err := jc.GetConnection(ctx, nil)
-	if err != nil {
-		return params.ControllerInfo{}, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	client := jc.getJaasApiClient(conn)
-	return client.RemoveController(req)
+	var info params.ControllerInfo
+	err := withConnection(ctx, jc.SharedClient, nil, func(conn jujuapi.Connection) error {
+		client := jc.getJaasApiClient(conn)
+		var err error
+		info, err = client.RemoveController(req)
+		return err
+	})
+	return info, err
 }

@@ -229,277 +229,255 @@ func newCloudsClient(sc SharedClient) *cloudsClient {
 // CreateKubernetesCloud creates a new Kubernetes cloud with juju cloud facade.
 // The credential name for this cloud is returned.
 func (c *cloudsClient) CreateKubernetesCloud(ctx context.Context, input *CreateKubernetesCloudInput) (string, error) {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = conn.Close() }()
+	var credentialName string
+	err := withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		k8sConf, err := createKubernetesConfig(ctx, []byte(input.KubernetesConfig), input.CreateServiceAccount)
+		if err != nil {
+			return errors.Annotate(err, "parsing kubernetes configuration data")
+		}
 
-	k8sConf, err := createKubernetesConfig(ctx, []byte(input.KubernetesConfig), input.CreateServiceAccount)
-	if err != nil {
-		return "", errors.Annotate(err, "parsing kubernetes configuration data")
-	}
+		var hostCloudRegion string
+		if input.ParentCloudName != "" || input.ParentCloudRegion != "" {
+			hostCloudRegion = input.ParentCloudName + "/" + input.ParentCloudRegion
+		} else {
+			hostCloudRegion = k8s.K8sCloudOther
+		}
+		newCloud, err := k8scloud.CloudFromKubeConfigContext(
+			k8sConf.CurrentContext,
+			k8sConf,
+			k8scloud.CloudParamaters{
+				Name:            input.Name,
+				HostCloudRegion: hostCloudRegion,
+			},
+		)
+		if err != nil {
+			return errors.Trace(err)
+		}
 
-	var hostCloudRegion string
-	if input.ParentCloudName != "" || input.ParentCloudRegion != "" {
-		hostCloudRegion = input.ParentCloudName + "/" + input.ParentCloudRegion
-	} else {
-		hostCloudRegion = k8s.K8sCloudOther
-	}
-	newCloud, err := k8scloud.CloudFromKubeConfigContext(
-		k8sConf.CurrentContext,
-		k8sConf,
-		k8scloud.CloudParamaters{
-			Name:            input.Name,
-			HostCloudRegion: hostCloudRegion,
-		},
-	)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
+		// For the details of storage class skippage, see [provider.StorageClassNameMarkdownDescription].
+		if input.StorageClassName != "" {
+			newCloud.Config = make(map[string]interface{})
+			newCloud.Config[operatorStorageKey] = input.StorageClassName
+			newCloud.Config[workloadStorageKey] = input.StorageClassName
+		}
 
-	// For the details of storage class skippage, see [provider.StorageClassNameMarkdownDescription].
-	if input.StorageClassName != "" {
-		newCloud.Config = make(map[string]interface{})
-		newCloud.Config[operatorStorageKey] = input.StorageClassName
-		newCloud.Config[workloadStorageKey] = input.StorageClassName
-	}
+		cloudClient := c.getCloudAPIClient(conn)
+		err = cloudClient.AddCloud(ctx, newCloud, false)
+		if err != nil {
+			return errors.Annotate(err, "adding kubernetes cloud")
+		}
 
-	cloudClient := c.getCloudAPIClient(conn)
-	err = cloudClient.AddCloud(ctx, newCloud, false)
-	if err != nil {
-		return "", errors.Annotate(err, "adding kubernetes cloud")
-	}
+		credentialName = input.Name
+		cloudName := input.Name
 
-	credentialName := input.Name
-	cloudName := input.Name
+		currentUser := getCurrentJujuUser(conn)
 
-	currentUser := getCurrentJujuUser(conn)
+		cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
+		if err != nil {
+			return errors.Annotate(err, "getting cloud credential tag")
+		}
 
-	cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
-	if err != nil {
-		return "", errors.Annotate(err, "getting cloud credential tag")
-	}
+		newCredential, err := k8scloud.CredentialFromKubeConfigContext(k8sConf.CurrentContext, k8sConf)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		err = cloudClient.AddCredential(ctx, cloudCredTag.String(), newCredential)
+		if err != nil {
+			return errors.Annotate(err, "adding kubernetes cloud credential")
+		}
 
-	newCredential, err := k8scloud.CredentialFromKubeConfigContext(k8sConf.CurrentContext, k8sConf)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	err = cloudClient.AddCredential(ctx, cloudCredTag.String(), newCredential)
-	if err != nil {
-		return "", errors.Annotate(err, "adding kubernetes cloud credential")
-	}
-
-	return credentialName, nil
+		return nil
+	})
+	return credentialName, err
 }
 
 // ReadKubernetesCloud reads a Kubernetes cloud with juju cloud facade.
 func (c *cloudsClient) ReadKubernetesCloud(ctx context.Context, input ReadKubernetesCloudInput) (*ReadKubernetesCloudOutput, error) {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
+	var out *ReadKubernetesCloudOutput
+	err := withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		cloudClient := c.getCloudAPIClient(conn)
 
-	cloudClient := c.getCloudAPIClient(conn)
+		cld, err := cloudClient.Cloud(ctx, names.NewCloudTag(input.Name))
+		if err != nil {
+			return errors.Annotate(err, "getting clouds")
+		}
 
-	cld, err := cloudClient.Cloud(ctx, names.NewCloudTag(input.Name))
-	if err != nil {
-		return nil, errors.Annotate(err, "getting clouds")
-	}
+		userName := getCurrentJujuUser(conn)
 
-	userName := getCurrentJujuUser(conn)
+		cloudCredentialTags, err := cloudClient.UserCredentials(ctx, names.NewUserTag(userName), names.NewCloudTag(input.Name))
+		if err != nil {
+			return errors.Annotate(err, "getting user credentials")
+		}
+		if len(cloudCredentialTags) == 0 {
+			return errors.NotFoundf("cloud credentials for user %q", userName)
+		}
 
-	cloudCredentialTags, err := cloudClient.UserCredentials(ctx, names.NewUserTag(userName), names.NewCloudTag(input.Name))
-	if err != nil {
-		return nil, errors.Annotate(err, "getting user credentials")
-	}
-	if len(cloudCredentialTags) == 0 {
-		return nil, errors.NotFoundf("cloud credentials for user %q", userName)
-	}
+		credentialName := cloudCredentialTags[0].Name()
 
-	credentialName := cloudCredentialTags[0].Name()
-
-	parentCloudName, parentCloudRegion := getParentCloudNameAndRegion(cld.HostCloudRegion)
-	return &ReadKubernetesCloudOutput{
-		Name:              input.Name,
-		CredentialName:    credentialName,
-		ParentCloudName:   parentCloudName,
-		ParentCloudRegion: parentCloudRegion,
-	}, nil
+		parentCloudName, parentCloudRegion := getParentCloudNameAndRegion(cld.HostCloudRegion)
+		out = &ReadKubernetesCloudOutput{
+			Name:              input.Name,
+			CredentialName:    credentialName,
+			ParentCloudName:   parentCloudName,
+			ParentCloudRegion: parentCloudRegion,
+		}
+		return nil
+	})
+	return out, err
 }
 
 // UpdateKubernetesCloud updates a Kubernetes cloud with juju cloud facade.
 func (c *cloudsClient) UpdateKubernetesCloud(ctx context.Context, input UpdateKubernetesCloudInput) error {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		cloudClient := c.getCloudAPIClient(conn)
+		k8sConf, err := createKubernetesConfig(ctx, []byte(input.KubernetesConfig), input.CreateServiceAccount)
+		if err != nil {
+			return errors.Annotate(err, "parsing kubernetes configuration data")
+		}
 
-	cloudClient := c.getCloudAPIClient(conn)
-	k8sConf, err := createKubernetesConfig(ctx, []byte(input.KubernetesConfig), input.CreateServiceAccount)
-	if err != nil {
-		return errors.Annotate(err, "parsing kubernetes configuration data")
-	}
+		var hostCloudRegion string
+		if input.ParentCloudName != "" || input.ParentCloudRegion != "" {
+			hostCloudRegion = input.ParentCloudName + "/" + input.ParentCloudRegion
+		} else {
+			hostCloudRegion = k8s.K8sCloudOther
+		}
 
-	var hostCloudRegion string
-	if input.ParentCloudName != "" || input.ParentCloudRegion != "" {
-		hostCloudRegion = input.ParentCloudName + "/" + input.ParentCloudRegion
-	} else {
-		hostCloudRegion = k8s.K8sCloudOther
-	}
+		newCloud, err := k8scloud.CloudFromKubeConfigContext(
+			k8sConf.CurrentContext,
+			k8sConf,
+			k8scloud.CloudParamaters{
+				Name:            input.Name,
+				HostCloudRegion: hostCloudRegion,
+			},
+		)
+		if err != nil {
+			return errors.Trace(err)
+		}
 
-	newCloud, err := k8scloud.CloudFromKubeConfigContext(
-		k8sConf.CurrentContext,
-		k8sConf,
-		k8scloud.CloudParamaters{
-			Name:            input.Name,
-			HostCloudRegion: hostCloudRegion,
-		},
-	)
-	if err != nil {
-		return errors.Trace(err)
-	}
+		err = cloudClient.UpdateCloud(ctx, newCloud)
+		if err != nil {
+			return errors.Annotate(err, "updating kubernetes cloud")
+		}
 
-	err = cloudClient.UpdateCloud(ctx, newCloud)
-	if err != nil {
-		return errors.Annotate(err, "updating kubernetes cloud")
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // AddCloud adds a cloud definition to the controller.
 func (c *cloudsClient) AddCloud(ctx context.Context, input AddCloudInput) error {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		cloudClient := c.getCloudAPIClient(conn)
 
-	cloudClient := c.getCloudAPIClient(conn)
+		// All clouds must have at least one default region - lp#1819409.
+		if len(input.Regions) == 0 {
+			input.Regions = []jujucloud.Region{{Name: jujucloud.DefaultCloudRegion}}
+		}
 
-	// All clouds must have at least one default region - lp#1819409.
-	if len(input.Regions) == 0 {
-		input.Regions = []jujucloud.Region{{Name: jujucloud.DefaultCloudRegion}}
-	}
+		cloud := jujucloud.Cloud{
+			Name:              input.Name,
+			Type:              input.Type,
+			Description:       input.Description,
+			AuthTypes:         input.AuthTypes,
+			Endpoint:          input.Endpoint,
+			IdentityEndpoint:  input.IdentityEndpoint,
+			StorageEndpoint:   input.StorageEndpoint,
+			Regions:           input.Regions,
+			CACertificates:    encodeB64Certs(input.CACertificates),
+			SkipTLSVerify:     false,
+			IsControllerCloud: false,
+		}
 
-	cloud := jujucloud.Cloud{
-		Name:              input.Name,
-		Type:              input.Type,
-		Description:       input.Description,
-		AuthTypes:         input.AuthTypes,
-		Endpoint:          input.Endpoint,
-		IdentityEndpoint:  input.IdentityEndpoint,
-		StorageEndpoint:   input.StorageEndpoint,
-		Regions:           input.Regions,
-		CACertificates:    encodeB64Certs(input.CACertificates),
-		SkipTLSVerify:     false,
-		IsControllerCloud: false,
-	}
-
-	return cloudClient.AddCloud(ctx, cloud, input.Force)
+		return cloudClient.AddCloud(ctx, cloud, input.Force)
+	})
 }
 
 // UpdateCloud updates a cloud definition on the controller.
 func (c *cloudsClient) UpdateCloud(ctx context.Context, input UpdateCloudInput) error {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		cloudClient := c.getCloudAPIClient(conn)
 
-	cloudClient := c.getCloudAPIClient(conn)
+		cloud := jujucloud.Cloud{
+			Name:              input.Name,
+			Type:              input.Type,
+			Description:       input.Description,
+			AuthTypes:         input.AuthTypes,
+			Endpoint:          input.Endpoint,
+			IdentityEndpoint:  input.IdentityEndpoint,
+			StorageEndpoint:   input.StorageEndpoint,
+			Regions:           input.Regions,
+			CACertificates:    encodeB64Certs(input.CACertificates),
+			SkipTLSVerify:     false,
+			IsControllerCloud: false,
+		}
 
-	cloud := jujucloud.Cloud{
-		Name:              input.Name,
-		Type:              input.Type,
-		Description:       input.Description,
-		AuthTypes:         input.AuthTypes,
-		Endpoint:          input.Endpoint,
-		IdentityEndpoint:  input.IdentityEndpoint,
-		StorageEndpoint:   input.StorageEndpoint,
-		Regions:           input.Regions,
-		CACertificates:    encodeB64Certs(input.CACertificates),
-		SkipTLSVerify:     false,
-		IsControllerCloud: false,
-	}
-
-	return cloudClient.UpdateCloud(ctx, cloud)
+		return cloudClient.UpdateCloud(ctx, cloud)
+	})
 }
 
 // RemoveCloud removes a cloud.
 func (c *cloudsClient) RemoveCloud(ctx context.Context, input RemoveCloudInput) error {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		cloudClient := c.getCloudAPIClient(conn)
 
-	cloudClient := c.getCloudAPIClient(conn)
-
-	return cloudClient.RemoveCloud(ctx, input.Name)
+		return cloudClient.RemoveCloud(ctx, input.Name)
+	})
 }
 
 // ReadCloud reads a cloud.
 func (c *cloudsClient) ReadCloud(ctx context.Context, input ReadCloudInput) (*ReadCloudOutput, error) {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
+	var out *ReadCloudOutput
+	err := withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		cloudClient := c.getCloudAPIClient(conn)
 
-	cloudClient := c.getCloudAPIClient(conn)
+		jjCloud, err := cloudClient.Cloud(ctx, names.NewCloudTag(input.Name))
+		if errors.Is(err, errors.NotFound) {
+			return CloudNotFoundError
+		}
 
-	jjCloud, err := cloudClient.Cloud(ctx, names.NewCloudTag(input.Name))
-	if errors.Is(err, errors.NotFound) {
-		return nil, CloudNotFoundError
-	}
+		if err != nil {
+			return errors.Annotate(err, "getting cloud")
+		}
 
-	if err != nil {
-		return nil, errors.Annotate(err, "getting cloud")
-	}
+		decodedCACertificates, decodedCACertificatesErr := decodeB64Certs(jjCloud.CACertificates)
+		if decodedCACertificatesErr != nil {
+			return errors.Annotate(decodedCACertificatesErr, "decoding cloud CA certificates")
+		}
 
-	decodedCACertificates, decodedCACertificatesErr := decodeB64Certs(jjCloud.CACertificates)
-	if decodedCACertificatesErr != nil {
-		return nil, errors.Annotate(decodedCACertificatesErr, "decoding cloud CA certificates")
-	}
-
-	return &ReadCloudOutput{
-		Name:             jjCloud.Name,
-		Type:             jjCloud.Type,
-		Description:      jjCloud.Description,
-		AuthTypes:        jjCloud.AuthTypes,
-		Endpoint:         jjCloud.Endpoint,
-		IdentityEndpoint: jjCloud.IdentityEndpoint,
-		StorageEndpoint:  jjCloud.StorageEndpoint,
-		Regions:          jjCloud.Regions,
-		CACertificates:   decodedCACertificates,
-	}, nil
+		out = &ReadCloudOutput{
+			Name:             jjCloud.Name,
+			Type:             jjCloud.Type,
+			Description:      jjCloud.Description,
+			AuthTypes:        jjCloud.AuthTypes,
+			Endpoint:         jjCloud.Endpoint,
+			IdentityEndpoint: jjCloud.IdentityEndpoint,
+			StorageEndpoint:  jjCloud.StorageEndpoint,
+			Regions:          jjCloud.Regions,
+			CACertificates:   decodedCACertificates,
+		}
+		return nil
+	})
+	return out, err
 }
 
 // ListClouds returns the names of all clouds available on the controller.
 func (c *cloudsClient) ListClouds(ctx context.Context) ([]string, error) {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
+	var clouds []string
+	err := withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		cloudClient := c.getCloudAPIClient(conn)
 
-	cloudClient := c.getCloudAPIClient(conn)
+		jjClouds, err := cloudClient.Clouds(ctx)
+		if err != nil {
+			return errors.Annotate(err, "getting clouds")
+		}
 
-	jjClouds, err := cloudClient.Clouds(ctx)
-	if err != nil {
-		return nil, errors.Annotate(err, "getting clouds")
-	}
+		clouds = make([]string, 0, len(jjClouds))
+		for cloudTag := range jjClouds {
+			clouds = append(clouds, cloudTag.Id())
+		}
 
-	clouds := make([]string, 0, len(jjClouds))
-	for cloudTag := range jjClouds {
-		clouds = append(clouds, cloudTag.Id())
-	}
-
-	return clouds, nil
+		return nil
+	})
+	return clouds, err
 }
 
 // createKubernetesConfig creates a Kubernetes configuration from the provided config data.

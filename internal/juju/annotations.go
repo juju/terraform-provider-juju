@@ -49,63 +49,58 @@ func newAnnotationsClient(sc SharedClient) *annotationsClient {
 // SetAnnotations set the annotations for the entity specified.
 // To unset a specific annotation a empty string "" needs to be set.
 func (c *annotationsClient) SetAnnotations(ctx context.Context, input *SetAnnotationsInput) error {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		annotationsAPIClient := c.getAnnotationsAPIClient(conn)
 
-	annotationsAPIClient := c.getAnnotationsAPIClient(conn)
-
-	args := map[string]map[string]string{
-		input.EntityTag.String(): input.Annotations,
-	}
-
-	results, err := annotationsAPIClient.Set(ctx, args)
-	if err != nil {
-		return err
-	}
-	// if there are no errors the results slice is empty.
-	if len(results) > 0 {
-		if len(results) != 1 {
-			return errors.Errorf("should receive just a single error for %q", input.EntityTag)
+		args := map[string]map[string]string{
+			input.EntityTag.String(): input.Annotations,
 		}
-		if err := results[0].Error; err != nil {
+
+		results, err := annotationsAPIClient.Set(ctx, args)
+		if err != nil {
 			return err
 		}
-	}
+		// if there are no errors the results slice is empty.
+		if len(results) > 0 {
+			if len(results) != 1 {
+				return errors.Errorf("should receive just a single error for %q", input.EntityTag)
+			}
+			if err := results[0].Error; err != nil {
+				return err
+			}
+		}
 
-	return nil
+		return nil
+	})
 }
 
 // GetAnnotations gets the annotation for an entity.
 func (c *annotationsClient) GetAnnotations(ctx context.Context, input *GetAnnotationsInput) (*GetAnnotationsOutput, error) {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
+	var output *GetAnnotationsOutput
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		annotationsAPIClient := c.getAnnotationsAPIClient(conn)
 
-	annotationsAPIClient := c.getAnnotationsAPIClient(conn)
+		results, err := annotationsAPIClient.Get(ctx, []string{input.EntityTag.String()})
+		if err != nil {
+			return err
+		}
+		if len(results) == 0 {
+			return errors.NotFoundf("annotations for entity %q", input.EntityTag)
+		}
 
-	results, err := annotationsAPIClient.Get(ctx, []string{input.EntityTag.String()})
-	if err != nil {
-		return nil, err
-	}
-	if len(results) == 0 {
-		return nil, errors.NotFoundf("annotations for entity %q", input.EntityTag)
-	}
+		if len(results) > 1 {
+			return errors.Errorf("should receive just a single result for %q", input.EntityTag)
+		}
 
-	if len(results) > 1 {
-		return nil, errors.Errorf("should receive just a single result for %q", input.EntityTag)
-	}
-
-	result := results[0]
-	if err := result.Error.Error; err != nil {
-		return nil, err
-	}
-	return &GetAnnotationsOutput{
-		EntityTag:   input.EntityTag,
-		Annotations: result.Annotations,
-	}, nil
+		result := results[0]
+		if err := result.Error.Error; err != nil {
+			return err
+		}
+		output = &GetAnnotationsOutput{
+			EntityTag:   input.EntityTag,
+			Annotations: result.Annotations,
+		}
+		return nil
+	})
+	return output, err
 }

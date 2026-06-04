@@ -132,19 +132,18 @@ func getTargetStatusFunc(machineID string) targetStatusFunc {
 
 // CreateMachine provisions a new machine in the specified model.
 func (c *machinesClient) CreateMachine(ctx context.Context, input *CreateMachineInput) (*CreateMachineResponse, error) {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	machineID, err := c.createMachine(ctx, conn, input)
-	if err != nil {
-		return nil, err
-	}
-	return &CreateMachineResponse{
-		ID: machineID,
-	}, nil
+	var out *CreateMachineResponse
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		machineID, err := c.createMachine(ctx, conn, input)
+		if err != nil {
+			return err
+		}
+		out = &CreateMachineResponse{
+			ID: machineID,
+		}
+		return nil
+	})
+	return out, err
 }
 
 func (c *machinesClient) createMachine(ctx context.Context, conn api.Connection, input *CreateMachineInput) (string, error) {
@@ -322,91 +321,84 @@ func manualProvision(ctx context.Context, client manual.ProvisioningClientAPI,
 
 // ReadMachine retrieves a machine by ID from the specified model.
 func (c *machinesClient) ReadMachine(ctx context.Context, input *ReadMachineInput) (*ReadMachineResponse, error) {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
+	var out *ReadMachineResponse
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
 
-	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
-
-	status, err := clientAPIClient.Status(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	machineIDParts := strings.Split(input.ID, "/")
-	machineStatus, exists := status.Machines[machineIDParts[0]]
-	if !exists {
-		return nil, NewMachineNotFoundError(input.ID)
-	}
-	c.Tracef("ReadMachine:Machine status result", map[string]interface{}{"machineStatus": machineStatus})
-	if len(machineIDParts) > 1 {
-		// check for containers
-		machineStatus, exists = machineStatus.Containers[input.ID]
-		if !exists {
-			return nil, NewMachineNotFoundError(input.ID)
+		status, err := clientAPIClient.Status(ctx, nil)
+		if err != nil {
+			return err
 		}
-	}
+		machineIDParts := strings.Split(input.ID, "/")
+		machineStatus, exists := status.Machines[machineIDParts[0]]
+		if !exists {
+			return NewMachineNotFoundError(input.ID)
+		}
+		c.Tracef("ReadMachine:Machine status result", map[string]interface{}{"machineStatus": machineStatus})
+		if len(machineIDParts) > 1 {
+			// check for containers
+			machineStatus, exists = machineStatus.Containers[input.ID]
+			if !exists {
+				return NewMachineNotFoundError(input.ID)
+			}
+		}
 
-	machineStatusString, err := getTargetStatusFunc(input.ID)(status)
-	if err != nil {
-		return nil, err
-	}
+		machineStatusString, err := getTargetStatusFunc(input.ID)(status)
+		if err != nil {
+			return err
+		}
 
-	base, err := baseFromParams(&machineStatus.Base)
-	if err != nil {
-		return nil, err
-	}
+		base, err := baseFromParams(&machineStatus.Base)
+		if err != nil {
+			return err
+		}
 
-	return &ReadMachineResponse{
-		ID:          machineStatus.Id,
-		Hostname:    machineStatus.Hostname,
-		Constraints: machineStatus.Constraints,
-		Base:        base,
-		Status:      machineStatusString,
-	}, nil
+		out = &ReadMachineResponse{
+			ID:          machineStatus.Id,
+			Hostname:    machineStatus.Hostname,
+			Constraints: machineStatus.Constraints,
+			Base:        base,
+			Status:      machineStatusString,
+		}
+		return nil
+	})
+	return out, err
 }
 
 // DestroyMachine removes a machine from the specified model.
 func (c *machinesClient) DestroyMachine(ctx context.Context, input *DestroyMachineInput) error {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		machineAPIClient := apimachinemanager.NewClient(conn)
 
-	machineAPIClient := apimachinemanager.NewClient(conn)
+		_, err := machineAPIClient.DestroyMachinesWithParams(ctx, false, false, false, (*time.Duration)(nil), input.ID)
+		if err != nil {
+			return err
+		}
 
-	_, err = machineAPIClient.DestroyMachinesWithParams(ctx, false, false, false, (*time.Duration)(nil), input.ID)
-	if err != nil {
-		return err
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // ListMachines returns the list of machine IDs in the given model.
 func (c *machinesClient) ListMachines(ctx context.Context, modelUUID string) ([]string, error) {
-	conn, err := c.GetConnection(ctx, &modelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
+	var machineIDs []string
+	err := withConnection(ctx, c.SharedClient, &modelUUID, func(conn api.Connection) error {
+		clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
 
-	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
-
-	status, err := clientAPIClient.Status(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	machineIDs := make([]string, 0, len(status.Machines))
-	for machineID := range status.Machines {
-		machineIDs = append(machineIDs, machineID)
-		for containerID := range status.Machines[machineID].Containers {
-			machineIDs = append(machineIDs, containerID)
+		status, err := clientAPIClient.Status(ctx, nil)
+		if err != nil {
+			return err
 		}
-	}
 
-	return machineIDs, nil
+		machineIDs = make([]string, 0, len(status.Machines))
+		for machineID := range status.Machines {
+			machineIDs = append(machineIDs, machineID)
+			for containerID := range status.Machines[machineID].Containers {
+				machineIDs = append(machineIDs, containerID)
+			}
+		}
+
+		return nil
+	})
+	return machineIDs, err
 }

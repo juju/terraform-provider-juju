@@ -68,57 +68,54 @@ func newSubnetsClient(sc SharedClient) *subnetsClient {
 
 // ListSubnets fetches all model subnets matching optional space/zone filters.
 func (c *subnetsClient) ListSubnets(ctx context.Context, input *ListSubnetsInput) ([]SubnetInfo, error) {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
+	var result []SubnetInfo
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		var spaceTag *names.SpaceTag
+		if input.SpaceName != "" {
+			tag := names.NewSpaceTag(input.SpaceName)
+			spaceTag = &tag
+		}
 
-	var spaceTag *names.SpaceTag
-	if input.SpaceName != "" {
-		tag := names.NewSpaceTag(input.SpaceName)
-		spaceTag = &tag
-	}
+		subnetsClient := c.getSubnetsAPIClient(conn)
+		subnets, err := subnetsClient.ListSubnets(ctx, spaceTag, input.Zone)
+		if err != nil {
+			return errors.Annotate(err, "listing subnets")
+		}
 
-	subnetsClient := c.getSubnetsAPIClient(conn)
-	subnets, err := subnetsClient.ListSubnets(ctx, spaceTag, input.Zone)
-	if err != nil {
-		return nil, errors.Annotate(err, "listing subnets")
-	}
+		result = make([]SubnetInfo, len(subnets))
+		for i, subnet := range subnets {
+			result[i] = subnetFromParamsSubnet(subnet)
+		}
 
-	result := make([]SubnetInfo, len(subnets))
-	for i, subnet := range subnets {
-		result[i] = subnetFromParamsSubnet(subnet)
-	}
-
-	return result, nil
+		return nil
+	})
+	return result, err
 }
 
 // ReadSubnet fetches a single subnet by CIDR.
 func (c *subnetsClient) ReadSubnet(ctx context.Context, input *ReadSubnetInput) (*SubnetInfo, error) {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	subnetsClient := c.getSubnetsAPIClient(conn)
-	results, err := subnetsClient.SubnetsByCIDR(ctx, []string{input.CIDR})
-	if err != nil {
-		return nil, errors.Annotate(err, "reading subnet")
-	}
-	if len(results) == 0 {
-		return nil, NewSubnetNotFoundError(input.CIDR)
-	}
-
-	for _, subnet := range results[0].Subnets {
-		if subnet.CIDR != input.CIDR {
-			continue
+	var output *SubnetInfo
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		subnetsClient := c.getSubnetsAPIClient(conn)
+		results, err := subnetsClient.SubnetsByCIDR(ctx, []string{input.CIDR})
+		if err != nil {
+			return errors.Annotate(err, "reading subnet")
 		}
-		info := subnetFromParamsSubnetV2(subnet)
-		return &info, nil
-	}
-	return nil, NewSubnetNotFoundError(input.CIDR)
+		if len(results) == 0 {
+			return NewSubnetNotFoundError(input.CIDR)
+		}
+
+		for _, subnet := range results[0].Subnets {
+			if subnet.CIDR != input.CIDR {
+				continue
+			}
+			info := subnetFromParamsSubnetV2(subnet)
+			output = &info
+			return nil
+		}
+		return NewSubnetNotFoundError(input.CIDR)
+	})
+	return output, err
 }
 
 func subnetFromParamsSubnet(subnet params.Subnet) SubnetInfo {

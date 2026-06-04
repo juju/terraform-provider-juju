@@ -362,45 +362,44 @@ type DestroyApplicationInput struct {
 
 // CreateApplication creates an application in the specified model.
 func (c applicationsClient) CreateApplication(ctx context.Context, input *CreateApplicationInput) (*CreateApplicationResponse, error) {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	transformedInput, err := input.validateAndTransform(ctx, conn)
-	if err != nil {
-		return nil, err
-	}
-
-	applicationAPIClient := apiapplication.NewClient(conn)
-	resourceAPIClient, err := apiresources.NewClient(conn)
-	if err != nil {
-		return nil, err
-	}
-	if applicationAPIClient.BestAPIVersion() >= 19 {
-		err := c.deployFromRepository(ctx, applicationAPIClient, resourceAPIClient, transformedInput)
+	var out *CreateApplicationResponse
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		transformedInput, err := input.validateAndTransform(ctx, conn)
 		if err != nil {
-			return nil, err
+			return err
 		}
-	} else {
-		return nil, jujuerrors.New("not supported: juju version does not support DeployFromRepository API")
-	}
 
-	// If we have managed to deploy something, now we have
-	// to check if we have to expose something
-	err = c.processExpose(ctx, applicationAPIClient, transformedInput.applicationName, transformedInput.expose)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", newApplicationPartiallyCreatedError(transformedInput.applicationName), err)
-	}
-	modelType, err := c.ModelType(ctx, input.ModelUUID)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", newApplicationPartiallyCreatedError(transformedInput.applicationName), err)
-	}
-	return &CreateApplicationResponse{
-		AppName:   transformedInput.applicationName,
-		ModelType: modelType.String(),
-	}, nil
+		applicationAPIClient := apiapplication.NewClient(conn)
+		resourceAPIClient, err := apiresources.NewClient(conn)
+		if err != nil {
+			return err
+		}
+		if applicationAPIClient.BestAPIVersion() >= 19 {
+			err := c.deployFromRepository(ctx, applicationAPIClient, resourceAPIClient, transformedInput)
+			if err != nil {
+				return err
+			}
+		} else {
+			return jujuerrors.New("not supported: juju version does not support DeployFromRepository API")
+		}
+
+		// If we have managed to deploy something, now we have
+		// to check if we have to expose something
+		err = c.processExpose(ctx, applicationAPIClient, transformedInput.applicationName, transformedInput.expose)
+		if err != nil {
+			return fmt.Errorf("%w: %w", newApplicationPartiallyCreatedError(transformedInput.applicationName), err)
+		}
+		modelType, err := c.ModelType(ctx, input.ModelUUID)
+		if err != nil {
+			return fmt.Errorf("%w: %w", newApplicationPartiallyCreatedError(transformedInput.applicationName), err)
+		}
+		out = &CreateApplicationResponse{
+			AppName:   transformedInput.applicationName,
+			ModelType: modelType.String(),
+		}
+		return nil
+	})
+	return out, err
 }
 
 func (c applicationsClient) deployFromRepository(ctx context.Context, applicationAPIClient ApplicationAPIClient, resourceAPIClient ResourceAPIClient, transformedInput transformedCreateApplicationInput) error {
@@ -711,233 +710,231 @@ func getStorageLabel(storageTag string) string {
 
 // ReadApplication retrieves application details from the specified model.
 func (c applicationsClient) ReadApplication(ctx context.Context, input *ReadApplicationInput) (*ReadApplicationResponse, error) {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
+	var response *ReadApplicationResponse
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		applicationAPIClient := c.getApplicationAPIClient(conn)
+		modelconfigAPIClient := c.getModelConfigAPIClient(conn)
 
-	applicationAPIClient := c.getApplicationAPIClient(conn)
-	modelconfigAPIClient := c.getModelConfigAPIClient(conn)
-
-	apps, err := applicationAPIClient.ApplicationsInfo(ctx, []names.ApplicationTag{names.NewApplicationTag(input.AppName)})
-	if err != nil {
-		return nil, jujuerrors.Annotate(err, "when querying the applications info")
-	}
-	if len(apps) > 1 {
-		return nil, fmt.Errorf("more than one result for application: %s", input.AppName)
-	}
-	if len(apps) < 1 {
-		return nil, NewApplicationNotFoundError(input.AppName)
-	}
-	if apps[0].Error != nil {
-		// Return applicationNotFoundError to trigger retry.
-		c.Debugf("Actual error from ApplicationsInfo", map[string]interface{}{"err": apps[0].Error})
-		return nil, NewApplicationNotFoundError(input.AppName)
-	}
-
-	appInfo := apps[0].Result
-
-	var appStatus params.ApplicationStatus
-	var storageDirectives map[string]jujustorage.Directive
-	v, err := c.GetControllerVersion(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if v.Major == 4 {
-		// With Juju 4 we have to manually filter storage/volumes/filesystems of an application.
-		appStatus, storageDirectives, err = c.getApplicationStatusAndStorageDirectives4(ctx, conn, input.AppName)
+		apps, err := applicationAPIClient.ApplicationsInfo(ctx, []names.ApplicationTag{names.NewApplicationTag(input.AppName)})
 		if err != nil {
-			return nil, err
+			return jujuerrors.Annotate(err, "when querying the applications info")
 		}
-	} else {
-		appStatus, storageDirectives, err = c.getApplicationStatusAndStorageDirectives(ctx, conn, input.AppName)
+		if len(apps) > 1 {
+			return fmt.Errorf("more than one result for application: %s", input.AppName)
+		}
+		if len(apps) < 1 {
+			return NewApplicationNotFoundError(input.AppName)
+		}
+		if apps[0].Error != nil {
+			// Return applicationNotFoundError to trigger retry.
+			c.Debugf("Actual error from ApplicationsInfo", map[string]interface{}{"err": apps[0].Error})
+			return NewApplicationNotFoundError(input.AppName)
+		}
+
+		appInfo := apps[0].Result
+
+		var appStatus params.ApplicationStatus
+		var storageDirectives map[string]jujustorage.Directive
+		v, err := c.GetControllerVersion(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
-	}
-
-	allocatedMachines := set.NewStrings()
-	for _, v := range appStatus.Units {
-		if v.Machine != "" {
-			allocatedMachines.Add(v.Machine)
-		}
-	}
-	machines := allocatedMachines.SortedValues()
-
-	var placement string
-	if !allocatedMachines.IsEmpty() {
-		placement = strings.Join(allocatedMachines.SortedValues(), ",")
-	}
-
-	unitCount := len(appStatus.Units)
-	// if we have a CAAS we use scale instead of units length
-	modelType, err := c.ModelType(ctx, input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	if modelType == model.CAAS {
-		unitCount = appStatus.Scale
-	}
-
-	// NOTE: we are assuming that this charm comes from CharmHub
-	charmURL, err := charm.ParseURL(appStatus.Charm)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse charm: %v", err)
-	}
-
-	returnedConf, err := applicationAPIClient.Get(ctx, input.AppName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get app configuration %v", err)
-	}
-
-	conf := make(map[string]ConfigEntry, 0)
-	if returnedConf.ApplicationConfig != nil {
-		for k, v := range returnedConf.ApplicationConfig {
-			// skip the trust value. We have an independent field for that
-			if k == "trust" {
-				continue
+		if v.Major == 4 {
+			// With Juju 4 we have to manually filter storage/volumes/filesystems of an application.
+			appStatus, storageDirectives, err = c.getApplicationStatusAndStorageDirectives4(ctx, conn, input.AppName)
+			if err != nil {
+				return err
 			}
-			// The API returns the configuration entries as interfaces
-			aux := v.(map[string]interface{})
-			// set if we find the value key and this is not a default
-			// value.
-			if value, found := aux["value"]; found {
-				conf[k] = ConfigEntry{
-					Value:     value,
-					IsDefault: aux["source"] == "default",
-				}
-			}
-		}
-		// repeat the same steps for charm config values
-		for k, v := range returnedConf.CharmConfig {
-			aux := v.(map[string]interface{})
-			if value, found := aux["value"]; found {
-				conf[k] = ConfigEntry{
-					Value:     value,
-					IsDefault: aux["source"] == "default",
-				}
-			}
-		}
-	}
-
-	// trust field which has to be included into the configuration
-	trustValue := false
-	if returnedConf.ApplicationConfig != nil {
-		aux, found := returnedConf.ApplicationConfig["trust"]
-		if found {
-			m := aux.(map[string]any)
-			target, found := m["value"]
-			if found {
-				trustValue = target.(bool)
-			}
-		}
-	}
-
-	// the expose field requires additional logic because
-	// the API returns populated cidrs by default. Additionally,
-	// we populate the unexpose field in the response structure
-	// to indicate endpoints that has to be removed by comparing
-	var exposed map[string]interface{} = nil
-	if appStatus.Exposed {
-		// rebuild
-		exposed = make(map[string]interface{}, 0)
-		endpoints := []string{}
-		spaces := ""
-		cidrs := ""
-		for epName, value := range appStatus.ExposedEndpoints {
-			if epName != "" {
-				endpoints = append(endpoints, epName)
-			}
-			if len(spaces) == 0 {
-				spaces = strings.Join(value.ExposeToSpaces, ",")
-			}
-			if len(cidrs) == 0 {
-				// by default the API sets
-				// cidrs: "0.0.0.0/0,::/0"
-				// ignore them
-				aux := removeDefaultCidrs(value.ExposeToCIDRs)
-				cidrs = strings.Join(aux, ",")
-			}
-		}
-		if len(endpoints) > 0 {
-			slices.Sort(endpoints)
-			exposed["endpoints"] = strings.Join(endpoints, ",")
 		} else {
-			exposed["endpoints"] = ""
-		}
-		exposed["spaces"] = spaces
-		exposed["cidrs"] = cidrs
-	}
-	// ParseChannel to send back a base without the risk.
-	// Having the risk will cause issues with the provider
-	// saving a different value than the user did.
-	baseChannel, err := corebase.ParseChannel(appInfo.Base.Channel)
-	if err != nil {
-		return nil, jujuerrors.Annotate(err, "failed parse channel for base")
-	}
-
-	defaultSpace, err := getModelDefaultSpace(ctx, modelconfigAPIClient)
-	if err != nil {
-		return nil, err
-	}
-	appDefaultSpace := appStatus.EndpointBindings[""]
-	if appDefaultSpace == "" {
-		appDefaultSpace = defaultSpace
-	}
-
-	endpointBindings := make(map[string]string)
-	if appDefaultSpace != defaultSpace {
-		endpointBindings[""] = appDefaultSpace
-	}
-	for endpoint, space := range appStatus.EndpointBindings {
-		if endpoint != "" && space != appDefaultSpace {
-			endpointBindings[endpoint] = space
-		}
-	}
-
-	resourcesAPIClient, err := c.getResourceAPIClient(conn)
-	if err != nil {
-		return nil, err
-	}
-	resources, err := resourcesAPIClient.ListResources(ctx, []string{input.AppName})
-	if err != nil {
-		return nil, jujuerrors.Annotate(err, "failed to list application resources")
-	}
-	usedResources := make(map[string]string)
-	for _, iResources := range resources {
-		for _, resource := range iResources.Resources {
-			// Per juju convention, -1, indicates that an integer value has not been set.
-			// Uploaded resources currently have no revision number.
-			// So when the revision number is -1, we can use the value in state.
-			if resource.Origin == charmresources.OriginUpload {
-				usedResources[resource.Name] = "-1"
-			} else {
-				usedResources[resource.Name] = strconv.Itoa(resource.Revision)
+			appStatus, storageDirectives, err = c.getApplicationStatusAndStorageDirectives(ctx, conn, input.AppName)
+			if err != nil {
+				return err
 			}
 		}
-	}
 
-	response := &ReadApplicationResponse{
-		Name:             charmURL.Name,
-		Channel:          appInfo.Channel,
-		Revision:         charmURL.Revision,
-		Base:             fmt.Sprintf("%s@%s", appInfo.Base.Name, baseChannel.Track),
-		ModelType:        modelType.String(),
-		Units:            unitCount,
-		Trust:            trustValue,
-		Expose:           exposed,
-		Config:           conf,
-		Constraints:      appInfo.Constraints,
-		Principal:        appInfo.Principal,
-		Placement:        placement,
-		Machines:         machines,
-		EndpointBindings: endpointBindings,
-		Storage:          storageDirectives,
-		Resources:        usedResources,
-	}
+		allocatedMachines := set.NewStrings()
+		for _, v := range appStatus.Units {
+			if v.Machine != "" {
+				allocatedMachines.Add(v.Machine)
+			}
+		}
+		machines := allocatedMachines.SortedValues()
 
-	return response, nil
+		var placement string
+		if !allocatedMachines.IsEmpty() {
+			placement = strings.Join(allocatedMachines.SortedValues(), ",")
+		}
+
+		unitCount := len(appStatus.Units)
+		// if we have a CAAS we use scale instead of units length
+		modelType, err := c.ModelType(ctx, input.ModelUUID)
+		if err != nil {
+			return err
+		}
+		if modelType == model.CAAS {
+			unitCount = appStatus.Scale
+		}
+
+		// NOTE: we are assuming that this charm comes from CharmHub
+		charmURL, err := charm.ParseURL(appStatus.Charm)
+		if err != nil {
+			return fmt.Errorf("failed to parse charm: %v", err)
+		}
+
+		returnedConf, err := applicationAPIClient.Get(ctx, input.AppName)
+		if err != nil {
+			return fmt.Errorf("failed to get app configuration %v", err)
+		}
+
+		conf := make(map[string]ConfigEntry, 0)
+		if returnedConf.ApplicationConfig != nil {
+			for k, v := range returnedConf.ApplicationConfig {
+				// skip the trust value. We have an independent field for that
+				if k == "trust" {
+					continue
+				}
+				// The API returns the configuration entries as interfaces
+				aux := v.(map[string]interface{})
+				// set if we find the value key and this is not a default
+				// value.
+				if value, found := aux["value"]; found {
+					conf[k] = ConfigEntry{
+						Value:     value,
+						IsDefault: aux["source"] == "default",
+					}
+				}
+			}
+			// repeat the same steps for charm config values
+			for k, v := range returnedConf.CharmConfig {
+				aux := v.(map[string]interface{})
+				if value, found := aux["value"]; found {
+					conf[k] = ConfigEntry{
+						Value:     value,
+						IsDefault: aux["source"] == "default",
+					}
+				}
+			}
+		}
+
+		// trust field which has to be included into the configuration
+		trustValue := false
+		if returnedConf.ApplicationConfig != nil {
+			aux, found := returnedConf.ApplicationConfig["trust"]
+			if found {
+				m := aux.(map[string]any)
+				target, found := m["value"]
+				if found {
+					trustValue = target.(bool)
+				}
+			}
+		}
+
+		// the expose field requires additional logic because
+		// the API returns populated cidrs by default. Additionally,
+		// we populate the unexpose field in the response structure
+		// to indicate endpoints that has to be removed by comparing
+		var exposed map[string]interface{} = nil
+		if appStatus.Exposed {
+			// rebuild
+			exposed = make(map[string]interface{}, 0)
+			endpoints := []string{}
+			spaces := ""
+			cidrs := ""
+			for epName, value := range appStatus.ExposedEndpoints {
+				if epName != "" {
+					endpoints = append(endpoints, epName)
+				}
+				if len(spaces) == 0 {
+					spaces = strings.Join(value.ExposeToSpaces, ",")
+				}
+				if len(cidrs) == 0 {
+					// by default the API sets
+					// cidrs: "0.0.0.0/0,::/0"
+					// ignore them
+					aux := removeDefaultCidrs(value.ExposeToCIDRs)
+					cidrs = strings.Join(aux, ",")
+				}
+			}
+			if len(endpoints) > 0 {
+				slices.Sort(endpoints)
+				exposed["endpoints"] = strings.Join(endpoints, ",")
+			} else {
+				exposed["endpoints"] = ""
+			}
+			exposed["spaces"] = spaces
+			exposed["cidrs"] = cidrs
+		}
+		// ParseChannel to send back a base without the risk.
+		// Having the risk will cause issues with the provider
+		// saving a different value than the user did.
+		baseChannel, err := corebase.ParseChannel(appInfo.Base.Channel)
+		if err != nil {
+			return jujuerrors.Annotate(err, "failed parse channel for base")
+		}
+
+		defaultSpace, err := getModelDefaultSpace(ctx, modelconfigAPIClient)
+		if err != nil {
+			return err
+		}
+		appDefaultSpace := appStatus.EndpointBindings[""]
+		if appDefaultSpace == "" {
+			appDefaultSpace = defaultSpace
+		}
+
+		endpointBindings := make(map[string]string)
+		if appDefaultSpace != defaultSpace {
+			endpointBindings[""] = appDefaultSpace
+		}
+		for endpoint, space := range appStatus.EndpointBindings {
+			if endpoint != "" && space != appDefaultSpace {
+				endpointBindings[endpoint] = space
+			}
+		}
+
+		resourcesAPIClient, err := c.getResourceAPIClient(conn)
+		if err != nil {
+			return err
+		}
+		resources, err := resourcesAPIClient.ListResources(ctx, []string{input.AppName})
+		if err != nil {
+			return jujuerrors.Annotate(err, "failed to list application resources")
+		}
+		usedResources := make(map[string]string)
+		for _, iResources := range resources {
+			for _, resource := range iResources.Resources {
+				// Per juju convention, -1, indicates that an integer value has not been set.
+				// Uploaded resources currently have no revision number.
+				// So when the revision number is -1, we can use the value in state.
+				if resource.Origin == charmresources.OriginUpload {
+					usedResources[resource.Name] = "-1"
+				} else {
+					usedResources[resource.Name] = strconv.Itoa(resource.Revision)
+				}
+			}
+		}
+
+		response = &ReadApplicationResponse{
+			Name:             charmURL.Name,
+			Channel:          appInfo.Channel,
+			Revision:         charmURL.Revision,
+			Base:             fmt.Sprintf("%s@%s", appInfo.Base.Name, baseChannel.Track),
+			ModelType:        modelType.String(),
+			Units:            unitCount,
+			Trust:            trustValue,
+			Expose:           exposed,
+			Config:           conf,
+			Constraints:      appInfo.Constraints,
+			Principal:        appInfo.Principal,
+			Placement:        placement,
+			Machines:         machines,
+			EndpointBindings: endpointBindings,
+			Storage:          storageDirectives,
+			Resources:        usedResources,
+		}
+
+		return nil
+	})
+	return response, err
 }
 
 func (c applicationsClient) getApplicationStatusAndStorageDirectives4(ctx context.Context, conn api.Connection, appName string) (params.ApplicationStatus, map[string]jujustorage.Directive, error) {
@@ -1009,184 +1006,180 @@ func removeDefaultCidrs(cidrs []string) []string {
 
 // UpdateApplication updates application settings, units, and resources.
 func (c applicationsClient) UpdateApplication(ctx context.Context, input *UpdateApplicationInput) error {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		applicationAPIClient := c.getApplicationAPIClient(conn)
+		charmsAPIClient := apicharms.NewClient(conn)
+		clientAPIClient := c.getClientAPIClient(conn)
+		modelconfigAPIClient := c.getModelConfigAPIClient(conn)
 
-	applicationAPIClient := c.getApplicationAPIClient(conn)
-	charmsAPIClient := apicharms.NewClient(conn)
-	clientAPIClient := c.getClientAPIClient(conn)
-	modelconfigAPIClient := c.getModelConfigAPIClient(conn)
-
-	resourcesAPIClient, err := c.getResourceAPIClient(conn)
-	if err != nil {
-		return err
-	}
-
-	status, err := clientAPIClient.Status(ctx, nil)
-	if err != nil {
-		return err
-	}
-	var appStatus params.ApplicationStatus
-	var exists bool
-	if appStatus, exists = status.Applications[input.AppName]; !exists {
-		return fmt.Errorf("no status returned for application: %s", input.AppName)
-	}
-
-	// process configuration
-	var auxConfig map[string]string
-	if input.Config != nil {
-		auxConfig = make(map[string]string)
-		for k, v := range input.Config {
-			auxConfig[k] = ConfigEntryToString(v)
-		}
-	}
-
-	// trust goes inside the config
-	if input.Trust != nil {
-		if auxConfig == nil {
-			auxConfig = make(map[string]string)
-		}
-		auxConfig["trust"] = fmt.Sprintf("%v", *input.Trust)
-	}
-
-	err = c.UpdateCharmAndResources(ctx, input, applicationAPIClient, charmsAPIClient, resourcesAPIClient)
-	if err != nil {
-		c.Errorf(err, "updating charm and resources")
-		return err
-	}
-
-	if auxConfig != nil {
-		err := applicationAPIClient.SetConfig(ctx, input.AppName, "", auxConfig)
+		resourcesAPIClient, err := c.getResourceAPIClient(conn)
 		if err != nil {
-			c.Errorf(err, "setting configuration params")
 			return err
 		}
-	}
 
-	if len(input.UnsetConfig) > 0 {
-		// unset config keys one by one, so we can swallow the `unknown option` error,
-		// which means the key was set in the state but is no longer valid (e.g. removed in a new charm revision).
-		// We don't want to fail the whole update.
-		for _, key := range input.UnsetConfig {
-			if err := applicationAPIClient.UnsetApplicationConfig(ctx, input.AppName, []string{key}); err != nil {
-				if strings.Contains(err.Error(), "unknown option") {
-					continue
-				}
+		status, err := clientAPIClient.Status(ctx, nil)
+		if err != nil {
+			return err
+		}
+		var appStatus params.ApplicationStatus
+		var exists bool
+		if appStatus, exists = status.Applications[input.AppName]; !exists {
+			return fmt.Errorf("no status returned for application: %s", input.AppName)
+		}
+
+		// process configuration
+		var auxConfig map[string]string
+		if input.Config != nil {
+			auxConfig = make(map[string]string)
+			for k, v := range input.Config {
+				auxConfig[k] = ConfigEntryToString(v)
+			}
+		}
+
+		// trust goes inside the config
+		if input.Trust != nil {
+			if auxConfig == nil {
+				auxConfig = make(map[string]string)
+			}
+			auxConfig["trust"] = fmt.Sprintf("%v", *input.Trust)
+		}
+
+		err = c.UpdateCharmAndResources(ctx, input, applicationAPIClient, charmsAPIClient, resourcesAPIClient)
+		if err != nil {
+			c.Errorf(err, "updating charm and resources")
+			return err
+		}
+
+		if auxConfig != nil {
+			err := applicationAPIClient.SetConfig(ctx, input.AppName, "", auxConfig)
+			if err != nil {
+				c.Errorf(err, "setting configuration params")
 				return err
 			}
 		}
-	}
 
-	if len(input.EndpointBindings) > 0 {
-		modelDefaultSpace, err := getModelDefaultSpace(ctx, modelconfigAPIClient)
-		if err != nil {
-			return err
+		if len(input.UnsetConfig) > 0 {
+			// unset config keys one by one, so we can swallow the `unknown option` error,
+			// which means the key was set in the state but is no longer valid (e.g. removed in a new charm revision).
+			// We don't want to fail the whole update.
+			for _, key := range input.UnsetConfig {
+				if err := applicationAPIClient.UnsetApplicationConfig(ctx, input.AppName, []string{key}); err != nil {
+					if strings.Contains(err.Error(), "unknown option") {
+						continue
+					}
+					return err
+				}
+			}
 		}
-		endpointBindingsParams, err := computeUpdatedBindings(modelDefaultSpace, appStatus.EndpointBindings, input.EndpointBindings, input.AppName)
-		if err != nil {
-			return err
-		}
-		err = applicationAPIClient.MergeBindings(ctx, endpointBindingsParams)
-		if err != nil {
-			c.Errorf(err, "setting endpoint bindings")
-			return err
-		}
-	}
 
-	// unexpose corresponding endpoints
-	if len(input.Unexpose) != 0 {
-		c.Tracef("Unexposing endpoints", map[string]interface{}{"endpoints": input.Unexpose})
-		if err := applicationAPIClient.Unexpose(ctx, input.AppName, input.Unexpose); err != nil {
-			c.Errorf(err, "when trying to unexpose")
-			return err
-		}
-	}
-	// expose endpoints if required
-	if input.Expose != nil {
-		c.Tracef("Expose endpoints", map[string]interface{}{"endpoints": input.Unexpose})
-		err := c.processExpose(ctx, applicationAPIClient, input.AppName, input.Expose)
-		if err != nil {
-			c.Errorf(err, "when trying to expose")
-			return err
-		}
-	}
-
-	if input.Constraints != nil {
-		err := applicationAPIClient.SetConstraints(ctx, input.AppName, *input.Constraints)
-		if err != nil {
-			c.Errorf(err, "setting application constraints")
-			return err
-		}
-	}
-
-	// TODO: Refactor this to a separate function
-	modelType, err := c.ModelType(ctx, input.ModelUUID)
-	if err != nil {
-		return err
-	}
-	if input.Units != nil {
-		if modelType == model.CAAS {
-			_, err := applicationAPIClient.ScaleApplication(ctx, apiapplication.ScaleApplicationParams{
-				ApplicationName: input.AppName,
-				Scale:           *input.Units,
-				Force:           false,
-			})
+		if len(input.EndpointBindings) > 0 {
+			modelDefaultSpace, err := getModelDefaultSpace(ctx, modelconfigAPIClient)
 			if err != nil {
 				return err
 			}
-		} else {
-			unitDiff := *input.Units - len(appStatus.Units)
+			endpointBindingsParams, err := computeUpdatedBindings(modelDefaultSpace, appStatus.EndpointBindings, input.EndpointBindings, input.AppName)
+			if err != nil {
+				return err
+			}
+			err = applicationAPIClient.MergeBindings(ctx, endpointBindingsParams)
+			if err != nil {
+				c.Errorf(err, "setting endpoint bindings")
+				return err
+			}
+		}
 
-			if unitDiff > 0 {
-				_, err := applicationAPIClient.AddUnits(
-					ctx,
-					apiapplication.AddUnitsParams{
-						ApplicationName: input.AppName,
-						NumUnits:        unitDiff,
-					})
+		// unexpose corresponding endpoints
+		if len(input.Unexpose) != 0 {
+			c.Tracef("Unexposing endpoints", map[string]interface{}{"endpoints": input.Unexpose})
+			if err := applicationAPIClient.Unexpose(ctx, input.AppName, input.Unexpose); err != nil {
+				c.Errorf(err, "when trying to unexpose")
+				return err
+			}
+		}
+		// expose endpoints if required
+		if input.Expose != nil {
+			c.Tracef("Expose endpoints", map[string]interface{}{"endpoints": input.Unexpose})
+			err := c.processExpose(ctx, applicationAPIClient, input.AppName, input.Expose)
+			if err != nil {
+				c.Errorf(err, "when trying to expose")
+				return err
+			}
+		}
+
+		if input.Constraints != nil {
+			err := applicationAPIClient.SetConstraints(ctx, input.AppName, *input.Constraints)
+			if err != nil {
+				c.Errorf(err, "setting application constraints")
+				return err
+			}
+		}
+
+		// TODO: Refactor this to a separate function
+		modelType, err := c.ModelType(ctx, input.ModelUUID)
+		if err != nil {
+			return err
+		}
+		if input.Units != nil {
+			if modelType == model.CAAS {
+				_, err := applicationAPIClient.ScaleApplication(ctx, apiapplication.ScaleApplicationParams{
+					ApplicationName: input.AppName,
+					Scale:           *input.Units,
+					Force:           false,
+				})
 				if err != nil {
 					return err
 				}
+			} else {
+				unitDiff := *input.Units - len(appStatus.Units)
+
+				if unitDiff > 0 {
+					_, err := applicationAPIClient.AddUnits(
+						ctx,
+						apiapplication.AddUnitsParams{
+							ApplicationName: input.AppName,
+							NumUnits:        unitDiff,
+						})
+					if err != nil {
+						return err
+					}
+				}
+
+				if unitDiff < 0 {
+					var unitNames []string
+					for unitName := range appStatus.Units {
+						unitNames = append(unitNames, unitName)
+					}
+
+					unitAbs := int(math.Abs(float64(unitDiff)))
+					var unitsToDestroy []string
+					for i := 0; i < unitAbs; i++ {
+						unitsToDestroy = append(unitsToDestroy, unitNames[i])
+					}
+					_, err := applicationAPIClient.DestroyUnits(
+						ctx,
+						apiapplication.DestroyUnitsParams{
+							Units:          unitsToDestroy,
+							DestroyStorage: true,
+						})
+					if err != nil {
+						return err
+					}
+				}
 			}
+		}
 
-			if unitDiff < 0 {
-				var unitNames []string
-				for unitName := range appStatus.Units {
-					unitNames = append(unitNames, unitName)
-				}
-
-				unitAbs := int(math.Abs(float64(unitDiff)))
-				var unitsToDestroy []string
-				for i := 0; i < unitAbs; i++ {
-					unitsToDestroy = append(unitsToDestroy, unitNames[i])
-				}
-				_, err := applicationAPIClient.DestroyUnits(
-					ctx,
-					apiapplication.DestroyUnitsParams{
-						Units:          unitsToDestroy,
-						DestroyStorage: true,
-					})
-				if err != nil {
-					return err
-				}
+		// for IAAS model we process additions/removals of units
+		if modelType == model.IAAS {
+			if err = c.addUnits(ctx, input, applicationAPIClient); err != nil {
+				return err
+			}
+			if err = c.removeUnits(ctx, input, applicationAPIClient, appStatus); err != nil {
+				return err
 			}
 		}
-	}
 
-	// for IAAS model we process additions/removals of units
-	if modelType == model.IAAS {
-		if err = c.addUnits(ctx, input, applicationAPIClient); err != nil {
-			return err
-		}
-		if err = c.removeUnits(ctx, input, applicationAPIClient, appStatus); err != nil {
-			return err
-		}
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func (c applicationsClient) addUnits(ctx context.Context, input *UpdateApplicationInput, client ApplicationAPIClient) error {
@@ -1250,37 +1243,33 @@ type RemoveUnitsFromMachineInput struct {
 // This should be called before destroying a machine to ensure Juju can
 // cleanly remove it (Juju rejects machine destruction while units remain).
 func (c applicationsClient) RemoveUnitsFromMachine(ctx context.Context, input *RemoveUnitsFromMachineInput) error {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		clientAPIClient := c.getClientAPIClient(conn)
+		status, err := clientAPIClient.Status(ctx, nil)
+		if err != nil {
+			return err
+		}
 
-	clientAPIClient := c.getClientAPIClient(conn)
-	status, err := clientAPIClient.Status(ctx, nil)
-	if err != nil {
-		return err
-	}
-
-	var unitsToDestroy []string
-	for _, appStatus := range status.Applications {
-		for unitName, unitStatus := range appStatus.Units {
-			if unitStatus.Machine == input.MachineID {
-				unitsToDestroy = append(unitsToDestroy, unitName)
+		var unitsToDestroy []string
+		for _, appStatus := range status.Applications {
+			for unitName, unitStatus := range appStatus.Units {
+				if unitStatus.Machine == input.MachineID {
+					unitsToDestroy = append(unitsToDestroy, unitName)
+				}
 			}
 		}
-	}
 
-	if len(unitsToDestroy) == 0 {
-		return nil
-	}
+		if len(unitsToDestroy) == 0 {
+			return nil
+		}
 
-	applicationAPIClient := c.getApplicationAPIClient(conn)
-	_, err = applicationAPIClient.DestroyUnits(ctx, apiapplication.DestroyUnitsParams{
-		Units:          unitsToDestroy,
-		DestroyStorage: true,
+		applicationAPIClient := c.getApplicationAPIClient(conn)
+		_, err = applicationAPIClient.DestroyUnits(ctx, apiapplication.DestroyUnitsParams{
+			Units:          unitsToDestroy,
+			DestroyStorage: true,
+		})
+		return err
 	})
-	return err
 }
 
 // UpdateCharmAndResources is a helper function to update the charm and resources
@@ -1355,28 +1344,24 @@ func (c applicationsClient) UpdateCharmAndResources(
 
 // DestroyApplication removes an application from the specified model.
 func (c applicationsClient) DestroyApplication(ctx context.Context, input *DestroyApplicationInput) error {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		applicationAPIClient := apiapplication.NewClient(conn)
 
-	applicationAPIClient := apiapplication.NewClient(conn)
+		var destroyParams = apiapplication.DestroyApplicationsParams{
+			Applications: []string{
+				input.ApplicationName,
+			},
+			DestroyStorage: true,
+		}
 
-	var destroyParams = apiapplication.DestroyApplicationsParams{
-		Applications: []string{
-			input.ApplicationName,
-		},
-		DestroyStorage: true,
-	}
+		_, err := applicationAPIClient.DestroyApplications(ctx, destroyParams)
 
-	_, err = applicationAPIClient.DestroyApplications(ctx, destroyParams)
+		if err != nil {
+			return err
+		}
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // computeCharmID populates the corresponding CharmID struct

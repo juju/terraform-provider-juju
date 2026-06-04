@@ -142,169 +142,184 @@ func newOffersClient(sc SharedClient) *offersClient {
 // CreateOffer creates offer managed by the offer resource.
 func (c *offersClient) CreateOffer(ctx context.Context, input *CreateOfferInput) (*CreateOfferResponse, []error) {
 	var errs []error
+	var resp *CreateOfferResponse
 
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return nil, append(errs, err)
-	}
-	defer func() { _ = conn.Close() }()
+	err := withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		client := applicationoffers.NewClient(conn)
 
-	client := applicationoffers.NewClient(conn)
-
-	offerName := input.Name
-	if offerName == "" {
-		offerName = input.ApplicationName
-	}
-
-	// connect to the corresponding model
-	modelConn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return nil, append(errs, err)
-	}
-	defer func() { _ = modelConn.Close() }()
-	applicationClient := apiapplication.NewClient(modelConn)
-
-	// wait for the app to be available
-	ctx, cancel := context.WithTimeout(ctx, OfferAppAvailableTimeout)
-	defer cancel()
-
-	err = WaitForAppsAvailable(ctx, applicationClient, []string{input.ApplicationName}, OfferApiTickWait)
-	if err != nil {
-		return nil, append(errs, errors.New("the application was not available to be offered"))
-	}
-
-	result, err := client.Offer(ctx, input.ModelUUID, input.ApplicationName, input.Endpoints, input.OfferOwner, offerName, "")
-	if err != nil {
-		return nil, append(errs, err)
-	}
-
-	for _, v := range result {
-		var result = params.ErrorResult{}
-		if v == result {
-			continue
-		} else {
-			errs = append(errs, v.Error)
+		offerName := input.Name
+		if offerName == "" {
+			offerName = input.ApplicationName
 		}
+
+		// connect to the corresponding model
+		return withConnection(ctx, c.SharedClient, &input.ModelUUID, func(modelConn api.Connection) error {
+			applicationClient := apiapplication.NewClient(modelConn)
+
+			// wait for the app to be available
+			ctx, cancel := context.WithTimeout(ctx, OfferAppAvailableTimeout)
+			defer cancel()
+
+			err := WaitForAppsAvailable(ctx, applicationClient, []string{input.ApplicationName}, OfferApiTickWait)
+			if err != nil {
+				errs = append(errs, errors.New("the application was not available to be offered"))
+				return err
+			}
+
+			result, err := client.Offer(ctx, input.ModelUUID, input.ApplicationName, input.Endpoints, input.OfferOwner, offerName, "")
+			if err != nil {
+				errs = append(errs, err)
+				return err
+			}
+
+			for _, v := range result {
+				var result = params.ErrorResult{}
+				if v == result {
+					continue
+				} else {
+					errs = append(errs, v.Error)
+				}
+			}
+			if len(errs) != 0 {
+				return errs[0]
+			}
+
+			modelOwner, modelName, err := c.ModelOwnerAndName(ctx, input.ModelUUID)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("unable to get model name for model UUID %q: %w", input.ModelUUID, err))
+				return err
+			}
+
+			c.JujuLogger().sc.Debugf(fmt.Sprintf("listing offers to find the created offer %q in model %q owned by %q", offerName, modelName, modelOwner))
+
+			filter := crossmodel.ApplicationOfferFilter{
+				OfferName:      offerName,
+				ModelName:      modelName,
+				ModelQualifier: model.Qualifier(modelOwner),
+			}
+
+			offer, err := findCreatedOffer(ctx, client, filter, input.Endpoints, offerName)
+			if err != nil {
+				errs = append(errs, err)
+				return err
+			}
+
+			resp = &CreateOfferResponse{
+				Name:     offerName,
+				OfferURL: offer.OfferURL,
+			}
+			return nil
+		})
+	})
+
+	// If either connection could not be established the error is not
+	// captured in errs, so make sure it is surfaced to the caller.
+	if err != nil && len(errs) == 0 {
+		errs = append(errs, err)
 	}
 	if len(errs) != 0 {
 		return nil, errs
 	}
-
-	modelOwner, modelName, err := c.ModelOwnerAndName(ctx, input.ModelUUID)
-	if err != nil {
-		return nil, append(errs, fmt.Errorf("unable to get model name for model UUID %q: %w", input.ModelUUID, err))
-	}
-
-	c.JujuLogger().sc.Debugf(fmt.Sprintf("listing offers to find the created offer %q in model %q owned by %q", offerName, modelName, modelOwner))
-
-	filter := crossmodel.ApplicationOfferFilter{
-		OfferName:      offerName,
-		ModelName:      modelName,
-		ModelQualifier: model.Qualifier(modelOwner),
-	}
-
-	offer, err := findCreatedOffer(ctx, client, filter, input.Endpoints, offerName)
-	if err != nil {
-		return nil, append(errs, err)
-	}
-
-	resp := CreateOfferResponse{
-		Name:     offerName,
-		OfferURL: offer.OfferURL,
-	}
-	return &resp, nil
+	return resp, nil
 }
 
 // ReadOffer reads offer managed by the offer resource.
 func (c *offersClient) ReadOffer(ctx context.Context, input *ReadOfferInput) (*ReadOfferResponse, error) {
-	var conn api.Connection
+	var out *ReadOfferResponse
+	// readOffer performs the actual read against the given connection. It is
+	// shared between the offering-controller connection (which cannot be routed
+	// through withConnection) and the local connection.
+	readOffer := func(conn api.Connection) error {
+		client := applicationoffers.NewClient(conn)
+		result, err := client.ApplicationOffer(ctx, input.OfferURL)
+		if err != nil {
+			return err
+		}
+
+		resultURL, err := crossmodel.ParseOfferURL(result.OfferURL)
+		if err != nil {
+			return fmt.Errorf("unable to parse offer URL %q: %w", result.OfferURL, err)
+		}
+		resultURL.Source = "" // Ensure the source is empty for consistency
+
+		// If the ID used to query the resource does not match the one in the result, it can result
+		// in an unexpected value when saved to a resource, so fail early for easier diagnostics.
+		if resultURL.String() != input.OfferURL {
+			return fmt.Errorf("offer URL %q does not match the expected URL %q", result.OfferURL, input.OfferURL)
+		}
+
+		var response ReadOfferResponse
+		response.Name = result.OfferName
+		response.ApplicationName = result.ApplicationName
+		response.OfferURL = resultURL.String()
+		for _, endpoint := range result.Endpoints {
+			response.Endpoints = append(response.Endpoints, endpoint.Name)
+		}
+		response.Users = result.Users
+
+		if input.GetModelUUID {
+			response.ModelUUID, err = c.ModelUUID(ctx, resultURL.ModelName, resultURL.ModelQualifier)
+			if err != nil {
+				return fmt.Errorf("unable to get model UUID for model %q: %w", resultURL.ModelName, err)
+			}
+		}
+
+		out = &response
+		return nil
+	}
+
 	var err error
 	if input.OfferingController != "" {
-		conn, err = c.GetOfferingControllerConn(ctx, input.OfferingController)
-	} else {
-		conn, err = c.GetConnection(ctx, nil)
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-	client := applicationoffers.NewClient(conn)
-	result, err := client.ApplicationOffer(ctx, input.OfferURL)
-	if err != nil {
-		return nil, err
-	}
-
-	resultURL, err := crossmodel.ParseOfferURL(result.OfferURL)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse offer URL %q: %w", result.OfferURL, err)
-	}
-	resultURL.Source = "" // Ensure the source is empty for consistency
-
-	// If the ID used to query the resource does not match the one in the result, it can result
-	// in an unexpected value when saved to a resource, so fail early for easier diagnostics.
-	if resultURL.String() != input.OfferURL {
-		return nil, fmt.Errorf("offer URL %q does not match the expected URL %q", result.OfferURL, input.OfferURL)
-	}
-
-	var response ReadOfferResponse
-	response.Name = result.OfferName
-	response.ApplicationName = result.ApplicationName
-	response.OfferURL = resultURL.String()
-	for _, endpoint := range result.Endpoints {
-		response.Endpoints = append(response.Endpoints, endpoint.Name)
-	}
-	response.Users = result.Users
-
-	if input.GetModelUUID {
-		response.ModelUUID, err = c.ModelUUID(ctx, resultURL.ModelName, resultURL.ModelQualifier)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get model UUID for model %q: %w", resultURL.ModelName, err)
+		// The offering controller connection cannot be routed through
+		// withConnection, so it is handled manually here.
+		conn, connErr := c.GetOfferingControllerConn(ctx, input.OfferingController)
+		if connErr != nil {
+			return nil, connErr
 		}
+		defer func() { _ = conn.Close() }()
+		err = readOffer(conn)
+	} else {
+		err = withConnection(ctx, c.SharedClient, nil, readOffer)
 	}
-
-	return &response, nil
+	return out, err
 }
 
 // DestroyOffer destroys offer managed by the offer resource.
 func (c *offersClient) DestroyOffer(ctx context.Context, input *DestroyOfferInput) error {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		client := applicationoffers.NewClient(conn)
+		offer, err := client.ApplicationOffer(ctx, input.OfferURL)
+		if err != nil {
+			return err
+		}
 
-	client := applicationoffers.NewClient(conn)
-	offer, err := client.ApplicationOffer(ctx, input.OfferURL)
-	if err != nil {
-		return err
-	}
-
-	forceDestroy := false
-	//This code loops until it detects 0 connections in the offer or 3 minutes elapses
-	if len(offer.Connections) > 0 {
-		end := time.Now().Add(5 * time.Minute)
-		c.Tracef(fmt.Sprintf("offer %q has %d connections, waiting for them to be removed before destroying", offer.OfferURL, len(offer.Connections)))
-		for ok := true; ok; ok = len(offer.Connections) > 0 {
-			//if we have been failing to destroy offer for 5 minutes then force destroy
-			//TODO: investigate cleaner solution (acceptance tests fail even if timeout set to 20m)
-			if time.Now().After(end) {
-				forceDestroy = true
-				break
-			}
-			time.Sleep(10 * time.Second)
-			offer, err = client.ApplicationOffer(ctx, input.OfferURL)
-			if err != nil {
-				return err
+		forceDestroy := false
+		//This code loops until it detects 0 connections in the offer or 3 minutes elapses
+		if len(offer.Connections) > 0 {
+			end := time.Now().Add(5 * time.Minute)
+			c.Tracef(fmt.Sprintf("offer %q has %d connections, waiting for them to be removed before destroying", offer.OfferURL, len(offer.Connections)))
+			for ok := true; ok; ok = len(offer.Connections) > 0 {
+				//if we have been failing to destroy offer for 5 minutes then force destroy
+				//TODO: investigate cleaner solution (acceptance tests fail even if timeout set to 20m)
+				if time.Now().After(end) {
+					forceDestroy = true
+					break
+				}
+				time.Sleep(10 * time.Second)
+				offer, err = client.ApplicationOffer(ctx, input.OfferURL)
+				if err != nil {
+					return err
+				}
 			}
 		}
-	}
 
-	err = client.DestroyOffers(ctx, forceDestroy, input.OfferURL)
-	if err != nil {
-		return err
-	}
+		err = client.DestroyOffers(ctx, forceDestroy, input.OfferURL)
+		if err != nil {
+			return err
+		}
 
-	return nil
+		return nil
+	})
 }
 
 // matchByEndpoints is returning offers that match exactly the endpoints' names provided.
@@ -390,84 +405,89 @@ func (c *offersClient) ConsumeRemoteOffer(ctx context.Context, input *ConsumeRem
 	if err != nil {
 		return nil, err
 	}
-	modelConn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = modelConn.Close() }()
-	var conn api.Connection
-	if input.OfferingController != "" {
-		conn, err = c.GetOfferingControllerConn(ctx, input.OfferingController)
-	} else {
-		conn, err = c.GetConnection(ctx, nil)
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
 
-	offeringControllerClient := applicationoffers.NewClient(conn)
-	consumingClient := apiapplication.NewClient(modelConn)
+	var out *ConsumeRemoteOfferResponse
+	err = withConnection(ctx, c.SharedClient, &input.ModelUUID, func(modelConn api.Connection) error {
+		// consume performs the consume against the offering controller
+		// connection (conn) and the model connection (modelConn).
+		consume := func(conn api.Connection) error {
+			offeringControllerClient := applicationoffers.NewClient(conn)
+			consumingClient := apiapplication.NewClient(modelConn)
 
-	if url.HasEndpoint() {
-		return nil, fmt.Errorf("saas offer %q shouldn't include endpoint", input.OfferURL)
-	}
-	consumeDetails, err := offeringControllerClient.GetConsumeDetails(ctx, url.AsLocal().String())
-	if err != nil {
-		return nil, err
-	}
-
-	offerURL, err := crossmodel.ParseOfferURL(consumeDetails.Offer.OfferURL)
-	if err != nil {
-		return nil, err
-	}
-	if input.OfferingController != "" {
-		offerURL.Source = input.OfferingController
-	}
-	consumeDetails.Offer.OfferURL = offerURL.String()
-
-	consumeArgs := crossmodel.ConsumeApplicationArgs{
-		Offer:            *consumeDetails.Offer,
-		ApplicationAlias: input.RemoteAppAlias,
-		Macaroon:         consumeDetails.Macaroon,
-	}
-	if consumeDetails.ControllerInfo != nil {
-		controllerTag, err := names.ParseControllerTag(consumeDetails.ControllerInfo.ControllerTag)
-		if err != nil {
-			return nil, err
-		}
-		consumeArgs.ControllerInfo = &crossmodel.ControllerInfo{
-			ControllerUUID: controllerTag.Id(),
-			Alias:          consumeDetails.ControllerInfo.Alias,
-			Addrs:          consumeDetails.ControllerInfo.Addrs,
-			CACert:         consumeDetails.ControllerInfo.CACert,
-		}
-	}
-
-	localName, err := consumingClient.Consume(ctx, consumeArgs)
-	if err != nil {
-		// Check if SAAS is already created. If so return offer response instead of error
-		// TODO: Understand why jujuerrors.AlreadyExists is not working and use
-		// the same for below condition
-		if strings.Contains(err.Error(), "saas application already exists") {
-			/* The logic to populate localName is picked from on how the juju controller
-			   derives localName in Consume request.
-			   https://github.com/juju/juju/blob/3e561add5940a510f785c83076b2bcc6994db103/api/client/application/client.go#L803
-			*/
-			localName = consumeArgs.Offer.OfferName
-			if consumeArgs.ApplicationAlias != "" {
-				localName = consumeArgs.ApplicationAlias
+			if url.HasEndpoint() {
+				return fmt.Errorf("saas offer %q shouldn't include endpoint", input.OfferURL)
 			}
-		} else {
-			return nil, err
+			consumeDetails, err := offeringControllerClient.GetConsumeDetails(ctx, url.AsLocal().String())
+			if err != nil {
+				return err
+			}
+
+			offerURL, err := crossmodel.ParseOfferURL(consumeDetails.Offer.OfferURL)
+			if err != nil {
+				return err
+			}
+			if input.OfferingController != "" {
+				offerURL.Source = input.OfferingController
+			}
+			consumeDetails.Offer.OfferURL = offerURL.String()
+
+			consumeArgs := crossmodel.ConsumeApplicationArgs{
+				Offer:            *consumeDetails.Offer,
+				ApplicationAlias: input.RemoteAppAlias,
+				Macaroon:         consumeDetails.Macaroon,
+			}
+			if consumeDetails.ControllerInfo != nil {
+				controllerTag, err := names.ParseControllerTag(consumeDetails.ControllerInfo.ControllerTag)
+				if err != nil {
+					return err
+				}
+				consumeArgs.ControllerInfo = &crossmodel.ControllerInfo{
+					ControllerUUID: controllerTag.Id(),
+					Alias:          consumeDetails.ControllerInfo.Alias,
+					Addrs:          consumeDetails.ControllerInfo.Addrs,
+					CACert:         consumeDetails.ControllerInfo.CACert,
+				}
+			}
+
+			localName, err := consumingClient.Consume(ctx, consumeArgs)
+			if err != nil {
+				// Check if SAAS is already created. If so return offer response instead of error
+				// TODO: Understand why jujuerrors.AlreadyExists is not working and use
+				// the same for below condition
+				if strings.Contains(err.Error(), "saas application already exists") {
+					/* The logic to populate localName is picked from on how the juju controller
+					   derives localName in Consume request.
+					   https://github.com/juju/juju/blob/3e561add5940a510f785c83076b2bcc6994db103/api/client/application/client.go#L803
+					*/
+					localName = consumeArgs.Offer.OfferName
+					if consumeArgs.ApplicationAlias != "" {
+						localName = consumeArgs.ApplicationAlias
+					}
+				} else {
+					return err
+				}
+			}
+
+			out = &ConsumeRemoteOfferResponse{
+				SAASName: localName,
+			}
+
+			return nil
 		}
-	}
 
-	response := ConsumeRemoteOfferResponse{
-		SAASName: localName,
-	}
-
-	return &response, nil
+		if input.OfferingController != "" {
+			// The offering controller connection cannot be routed through
+			// withConnection, so it is handled manually here.
+			conn, connErr := c.GetOfferingControllerConn(ctx, input.OfferingController)
+			if connErr != nil {
+				return connErr
+			}
+			defer func() { _ = conn.Close() }()
+			return consume(conn)
+		}
+		return withConnection(ctx, c.SharedClient, nil, consume)
+	})
+	return out, err
 }
 
 // ReadRemoteApp allows for reading details of a consumed offer
@@ -477,211 +497,195 @@ func (c *offersClient) ConsumeRemoteOffer(ctx context.Context, input *ConsumeRem
 // these objects under "application-endpoints", the API calls them RemoteApplications
 // and `juju status` shows them under the "SAAS" heading.
 func (c *offersClient) ReadRemoteApp(ctx context.Context, input *ReadRemoteAppInput) (*ReadRemoteAppResponse, error) {
-	modelConn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = modelConn.Close() }()
+	var out *ReadRemoteAppResponse
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(modelConn api.Connection) error {
+		clientAPIClient := apiclient.NewClient(modelConn, c.JujuLogger())
 
-	clientAPIClient := apiclient.NewClient(modelConn, c.JujuLogger())
-
-	status, err := clientAPIClient.Status(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("unable to fetch model status: %w", err)
-	}
-
-	remoteApplications := status.RemoteApplicationOfferers
-
-	if len(remoteApplications) == 0 {
-		return nil, errors.WithType(errors.New("remote app not found"), RemoteAppNotFoundError)
-	}
-
-	for appName := range remoteApplications {
-		if appName == input.RemoteAppName {
-			return &ReadRemoteAppResponse{}, nil
+		status, err := clientAPIClient.Status(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("unable to fetch model status: %w", err)
 		}
-	}
 
-	return nil, errors.WithType(errors.New("remote app not found"), RemoteAppNotFoundError)
+		remoteApplications := status.RemoteApplicationOfferers
+
+		if len(remoteApplications) == 0 {
+			return errors.WithType(errors.New("remote app not found"), RemoteAppNotFoundError)
+		}
+
+		for appName := range remoteApplications {
+			if appName == input.RemoteAppName {
+				out = &ReadRemoteAppResponse{}
+				return nil
+			}
+		}
+
+		return errors.WithType(errors.New("remote app not found"), RemoteAppNotFoundError)
+	})
+	return out, err
 }
 
 // RemoveRemoteApp allows the integration resource to destroy the offers managed by the offer resource.
 func (c *offersClient) RemoveRemoteApp(ctx context.Context, input *RemoveRemoteAppInput) error {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		client := apiapplication.NewClient(conn)
+		clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
 
-	client := apiapplication.NewClient(conn)
-	clientAPIClient := apiclient.NewClient(conn, c.JujuLogger())
-
-	status, err := clientAPIClient.Status(ctx, nil)
-	if err != nil {
-		return err
-	}
-
-	remoteApplications := status.RemoteApplicationOfferers
-
-	if len(remoteApplications) == 0 {
-		return fmt.Errorf("no offers found in model")
-	}
-
-	var offerName string
-	for appName := range remoteApplications {
-		if appName == input.RemoteAppName {
-			offerName = appName
-			break
+		status, err := clientAPIClient.Status(ctx, nil)
+		if err != nil {
+			return err
 		}
-	}
 
-	if offerName == "" {
-		return fmt.Errorf("remote-app %q not found in model", input.RemoteAppName)
-	}
+		remoteApplications := status.RemoteApplicationOfferers
 
-	// This is a bulk call but we only want to remove one remote app
-	// so we expect only a single error to be returned if it fails.
-	returnErrors, err := client.DestroyConsumedApplication(ctx, apiapplication.DestroyConsumedApplicationParams{
-		SaasNames: []string{
-			offerName,
-		},
+		if len(remoteApplications) == 0 {
+			return fmt.Errorf("no offers found in model")
+		}
+
+		var offerName string
+		for appName := range remoteApplications {
+			if appName == input.RemoteAppName {
+				offerName = appName
+				break
+			}
+		}
+
+		if offerName == "" {
+			return fmt.Errorf("remote-app %q not found in model", input.RemoteAppName)
+		}
+
+		// This is a bulk call but we only want to remove one remote app
+		// so we expect only a single error to be returned if it fails.
+		returnErrors, err := client.DestroyConsumedApplication(ctx, apiapplication.DestroyConsumedApplicationParams{
+			SaasNames: []string{
+				offerName,
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		var errors []error
+		for _, v := range returnErrors {
+			if v.Error != nil {
+				errors = append(errors, v.Error)
+			}
+		}
+		return stderr.Join(errors...)
 	})
-	if err != nil {
-		return err
-	}
-
-	var errors []error
-	for _, v := range returnErrors {
-		if v.Error != nil {
-			errors = append(errors, v.Error)
-		}
-	}
-	return stderr.Join(errors...)
 }
 
 // GrantOffer adds access to an offer managed by the access offer resource.
 // No action or error is returned if the access was already granted to the user.
 func (c *offersClient) GrantOffer(ctx context.Context, input *GrantRevokeOfferInput) error {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		client := applicationoffers.NewClient(conn)
 
-	client := applicationoffers.NewClient(conn)
-
-	for _, user := range input.Users {
-		err = client.GrantOffer(ctx, user, input.Access, input.OfferURL)
-		if err != nil {
-			return err
+		for _, user := range input.Users {
+			err := client.GrantOffer(ctx, user, input.Access, input.OfferURL)
+			if err != nil {
+				return err
+			}
 		}
-	}
 
-	return nil
+		return nil
+	})
 }
 
 // RevokeOffer revokes access to an offer managed by the access offer resource.
 // No action or error if the access was already revoked for the user.
 // Note: revoking `ReadAccess` will remove all access levels for the offer
 func (c *offersClient) RevokeOffer(ctx context.Context, input *GrantRevokeOfferInput) error {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		client := applicationoffers.NewClient(conn)
 
-	client := applicationoffers.NewClient(conn)
-
-	for _, user := range input.Users {
-		err = client.RevokeOffer(ctx, user, input.Access, input.OfferURL)
-		if err != nil {
-			// ignore if user was already revoked
-			if strings.Contains(err.Error(), "not found") {
-				continue
+		for _, user := range input.Users {
+			err := client.RevokeOffer(ctx, user, input.Access, input.OfferURL)
+			if err != nil {
+				// ignore if user was already revoked
+				if strings.Contains(err.Error(), "not found") {
+					continue
+				}
+				return err
 			}
-			return err
 		}
-	}
 
-	return nil
+		return nil
+	})
 }
 
 // ListOffers lists offers, optionally filtered by model UUID or offer URL.
 func (c offersClient) ListOffers(ctx context.Context, input *ListOffersInput) ([]ListOffersOutput, error) {
-	conn, err := c.GetConnection(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	client := applicationoffers.NewClient(conn)
-
-	filter := crossmodel.ApplicationOfferFilter{}
-
-	// If ModelUUID is set, filter by model
-	if input.ModelUUID != "" {
-		modelOwner, modelName, err := c.ModelOwnerAndName(ctx, input.ModelUUID)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get model name for model UUID %q: %w", input.ModelUUID, err)
-		}
-		filter.ModelName = modelName
-		filter.ModelQualifier = model.Qualifier(modelOwner)
-	}
-
-	// If OfferURL is set, parse it and use it to refine the filter
-	if input.OfferURL != "" {
-		parsedURL, err := crossmodel.ParseOfferURL(input.OfferURL)
-		if err != nil {
-			return nil, fmt.Errorf("unable to parse offer URL %q: %w", input.OfferURL, err)
-		}
-		filter.OfferName = parsedURL.Name
-		// If ModelUUID was not set, use the model from the URL
-		if input.ModelUUID == "" && parsedURL.ModelName != "" {
-			filter.ModelName = parsedURL.ModelName
-			filter.ModelQualifier = model.Qualifier(parsedURL.ModelQualifier)
-		}
-	}
-
-	offers, err := client.FindApplicationOffers(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
 	var results []ListOffersOutput
-	for _, offer := range offers {
-		// Parse and normalize the offer URL
-		resultURL, err := crossmodel.ParseOfferURL(offer.OfferURL)
+	err := withConnection(ctx, c.SharedClient, nil, func(conn api.Connection) error {
+		client := applicationoffers.NewClient(conn)
+
+		filter := crossmodel.ApplicationOfferFilter{}
+
+		// If ModelUUID is set, filter by model
+		if input.ModelUUID != "" {
+			modelOwner, modelName, err := c.ModelOwnerAndName(ctx, input.ModelUUID)
+			if err != nil {
+				return fmt.Errorf("unable to get model name for model UUID %q: %w", input.ModelUUID, err)
+			}
+			filter.ModelName = modelName
+			filter.ModelQualifier = model.Qualifier(modelOwner)
+		}
+
+		// If OfferURL is set, parse it and use it to refine the filter
+		if input.OfferURL != "" {
+			parsedURL, err := crossmodel.ParseOfferURL(input.OfferURL)
+			if err != nil {
+				return fmt.Errorf("unable to parse offer URL %q: %w", input.OfferURL, err)
+			}
+			filter.OfferName = parsedURL.Name
+			// If ModelUUID was not set, use the model from the URL
+			if input.ModelUUID == "" && parsedURL.ModelName != "" {
+				filter.ModelName = parsedURL.ModelName
+				filter.ModelQualifier = model.Qualifier(parsedURL.ModelQualifier)
+			}
+		}
+
+		offers, err := client.FindApplicationOffers(ctx, filter)
 		if err != nil {
-			return nil, fmt.Errorf("unable to parse offer URL %q: %w", offer.OfferURL, err)
-		}
-		resultURL.Source = "" // Ensure the source is empty for consistency
-
-		// Extract endpoint names
-		var endpoints []string
-		for _, endpoint := range offer.Endpoints {
-			endpoints = append(endpoints, endpoint.Name)
+			return err
 		}
 
-		modelUUID, err := c.ModelUUID(ctx, resultURL.ModelName, resultURL.ModelQualifier)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get model UUID for model %q: %w", resultURL.ModelName, err)
+		for _, offer := range offers {
+			// Parse and normalize the offer URL
+			resultURL, err := crossmodel.ParseOfferURL(offer.OfferURL)
+			if err != nil {
+				return fmt.Errorf("unable to parse offer URL %q: %w", offer.OfferURL, err)
+			}
+			resultURL.Source = "" // Ensure the source is empty for consistency
+
+			// Extract endpoint names
+			var endpoints []string
+			for _, endpoint := range offer.Endpoints {
+				endpoints = append(endpoints, endpoint.Name)
+			}
+
+			modelUUID, err := c.ModelUUID(ctx, resultURL.ModelName, resultURL.ModelQualifier)
+			if err != nil {
+				return fmt.Errorf("unable to get model UUID for model %q: %w", resultURL.ModelName, err)
+			}
+
+			output := ListOffersOutput{
+				Name:            offer.OfferName,
+				ApplicationName: offer.ApplicationName,
+				Endpoints:       endpoints,
+				OfferURL:        resultURL.String(),
+				ModelUUID:       modelUUID,
+			}
+
+			// If OfferURL filter is set, only include exact matches
+			if input.OfferURL != "" && output.OfferURL != input.OfferURL {
+				continue
+			}
+
+			results = append(results, output)
 		}
 
-		output := ListOffersOutput{
-			Name:            offer.OfferName,
-			ApplicationName: offer.ApplicationName,
-			Endpoints:       endpoints,
-			OfferURL:        resultURL.String(),
-			ModelUUID:       modelUUID,
-		}
-
-		// If OfferURL filter is set, only include exact matches
-		if input.OfferURL != "" && output.OfferURL != input.OfferURL {
-			continue
-		}
-
-		results = append(results, output)
-	}
-
-	return results, nil
+		return nil
+	})
+	return results, err
 }

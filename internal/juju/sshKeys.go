@@ -86,147 +86,138 @@ func newSSHKeysClient(sc SharedClient) *sshKeysClient {
 func (c *sshKeysClient) CreateSSHKey(ctx context.Context, input *CreateSSHKeyInput) error {
 	c.KeyLock.Lock()
 	defer c.KeyLock.Unlock()
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		client := c.getKeyManagerClient(conn)
 
-	client := c.getKeyManagerClient(conn)
-
-	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
-	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
-	params, err := client.AddKeys(ctx, input.Username, input.Payload)
-	if err != nil {
-		return err
-	}
-	if len(params) != 0 {
-		messages := make([]string, 0)
-		for _, e := range params {
-			if e.Error != nil {
-				messages = append(messages, e.Error.Message)
+		// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
+		// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
+		params, err := client.AddKeys(ctx, input.Username, input.Payload)
+		if err != nil {
+			return err
+		}
+		if len(params) != 0 {
+			messages := make([]string, 0)
+			for _, e := range params {
+				if e.Error != nil {
+					messages = append(messages, e.Error.Message)
+				}
 			}
+			if len(messages) == 0 {
+				return nil
+			}
+			err = fmt.Errorf("%s", messages)
+			return err
 		}
-		if len(messages) == 0 {
-			return nil
-		}
-		err = fmt.Errorf("%s", messages)
-		return err
-	}
 
-	return nil
+		return nil
+	})
 }
 
 // ReadSSHKey retrieves an SSH key by identifier.
 func (c *sshKeysClient) ReadSSHKey(ctx context.Context, input *ReadSSHKeyInput) (*ReadSSHKeyOutput, error) {
 	c.KeyLock.RLock()
 	defer c.KeyLock.RUnlock()
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
+	var output *ReadSSHKeyOutput
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		client := keymanager.NewClient(conn)
 
-	client := keymanager.NewClient(conn)
+		// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
+		// the logged-in user for completeness. In Juju 4 ssh keys are associated with users.
+		returnedKeys, err := client.ListKeys(ctx, jujussh.FullKeys, input.Username)
+		if err != nil {
+			return err
+		}
 
-	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
-	// the logged-in user for completeness. In Juju 4 ssh keys are associated with users.
-	returnedKeys, err := client.ListKeys(ctx, jujussh.FullKeys, input.Username)
-	if err != nil {
-		return nil, err
-	}
+		inputKey, _, err := jujussh.KeyFingerprint(input.Payload)
+		if err != nil {
+			return fmt.Errorf("error getting fingerprint for input ssh key: %w", err)
+		}
 
-	inputKey, _, err := jujussh.KeyFingerprint(input.Payload)
-	if err != nil {
-		return nil, fmt.Errorf("error getting fingerprint for input ssh key: %w", err)
-	}
-
-	for _, res := range returnedKeys {
-		for _, k := range res.Result {
-			fingerprint, _, err := jujussh.KeyFingerprint(k)
-			if err != nil {
-				return nil, fmt.Errorf("error getting fingerprint for ssh key: %w", err)
-			}
-			if inputKey == fingerprint {
-				return &ReadSSHKeyOutput{
-					Payload: k,
-				}, nil
+		for _, res := range returnedKeys {
+			for _, k := range res.Result {
+				fingerprint, _, err := jujussh.KeyFingerprint(k)
+				if err != nil {
+					return fmt.Errorf("error getting fingerprint for ssh key: %w", err)
+				}
+				if inputKey == fingerprint {
+					output = &ReadSSHKeyOutput{
+						Payload: k,
+					}
+					return nil
+				}
 			}
 		}
-	}
 
-	return nil, NewSSHKeyNotFoundError(input.Payload)
+		return NewSSHKeyNotFoundError(input.Payload)
+	})
+	return output, err
 }
 
 // DeleteSSHKey removes an SSH key from the specified model.
 func (c *sshKeysClient) DeleteSSHKey(ctx context.Context, input *DeleteSSHKeyInput) error {
 	c.KeyLock.Lock()
 	defer c.KeyLock.Unlock()
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		client := c.getKeyManagerClient(conn)
+		isJIMMController := c.IsJAAS(ctx, false)
 
-	client := c.getKeyManagerClient(conn)
-	isJIMMController := c.IsJAAS(ctx, false)
-
-	controllerVersion := semversion.Number{}
-	if !isJIMMController {
-		controllerVersion, err = c.GetControllerVersion(ctx)
-		if err != nil {
-			return err
-		}
-	}
-
-	deleteKeyIdentifiers, err := sshKeyDeleteIdentifiers(input.Payload, controllerVersion, isJIMMController)
-	if err != nil {
-		return fmt.Errorf("generating delete identifiers for ssh key: %w", err)
-	}
-
-	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
-	// the logged-in user for completeness. In Juju 4, keys are associated per user per model, but note, it isn't the user passed in
-	// via the user argument but rather the API authenticated user.
-	params, err := client.DeleteKeys(ctx, input.Username, deleteKeyIdentifiers...)
-	if len(params) != 0 {
-		messages := make([]string, 0, len(params))
-		// Return an error if all the results are errors.
-		for _, e := range params {
-			if e.Error == nil {
-				// if any delete was successful, we consider the process a success.
-				return nil
+		controllerVersion := semversion.Number{}
+		if !isJIMMController {
+			var err error
+			controllerVersion, err = c.GetControllerVersion(ctx)
+			if err != nil {
+				return err
 			}
-			messages = append(messages, e.Error.Message)
 		}
-		return fmt.Errorf("%s", strings.Join(messages, "; "))
-	}
-	return err
+
+		deleteKeyIdentifiers, err := sshKeyDeleteIdentifiers(input.Payload, controllerVersion, isJIMMController)
+		if err != nil {
+			return fmt.Errorf("generating delete identifiers for ssh key: %w", err)
+		}
+
+		// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
+		// the logged-in user for completeness. In Juju 4, keys are associated per user per model, but note, it isn't the user passed in
+		// via the user argument but rather the API authenticated user.
+		params, err := client.DeleteKeys(ctx, input.Username, deleteKeyIdentifiers...)
+		if len(params) != 0 {
+			messages := make([]string, 0, len(params))
+			// Return an error if all the results are errors.
+			for _, e := range params {
+				if e.Error == nil {
+					// if any delete was successful, we consider the process a success.
+					return nil
+				}
+				messages = append(messages, e.Error.Message)
+			}
+			return fmt.Errorf("%s", strings.Join(messages, "; "))
+		}
+		return err
+	})
 }
 
 // ListKeys returns the authorised ssh keys for the specified users.
 func (c *sshKeysClient) ListKeys(ctx context.Context, input ListSSHKeysInput) ([]string, error) {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
+	var keys []string
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		client := c.getKeyManagerClient(conn)
 
-	client := c.getKeyManagerClient(conn)
+		// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
+		// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
+		results, err := client.ListKeys(ctx, jujussh.FullKeys, input.Username)
+		if err != nil {
+			return err
+		}
 
-	// NOTE: In Juju 3.6 ssh keys are not associated with user - they are global per model. We pass in
-	// the logged-in user for completeness. In Juju 4 ssh keys will be associated with users.
-	results, err := client.ListKeys(ctx, jujussh.FullKeys, input.Username)
-	if err != nil {
-		return nil, err
-	}
+		// Incase this looks strange, the Juju CLI does the same and takes [0].
+		result := results[0]
+		if result.Error != nil {
+			return result.Error
+		}
 
-	// Incase this looks strange, the Juju CLI does the same and takes [0].
-	result := results[0]
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	return result.Result, nil
+		keys = result.Result
+		return nil
+	})
+	return keys, err
 }
 
 // sshKeyDeleteIdentifiers generates a list of identifiers to attempt to delete the SSH key with, based on the

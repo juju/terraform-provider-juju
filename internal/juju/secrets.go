@@ -149,250 +149,239 @@ func newSecretsClient(sc SharedClient) *secretsClient {
 
 // CreateSecret creates a new secret.
 func (c *secretsClient) CreateSecret(ctx context.Context, input *CreateSecretInput) (CreateSecretOutput, error) {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return CreateSecretOutput{}, err
-	}
-	defer func() { _ = conn.Close() }()
+	var out CreateSecretOutput
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		secretAPIClient := c.getSecretAPIClient(conn)
 
-	secretAPIClient := c.getSecretAPIClient(conn)
+		// Encode the secret values as base64
+		encodedValue := make(map[string]string, len(input.Value))
+		for k, v := range input.Value {
+			encodedValue[k] = base64.StdEncoding.EncodeToString([]byte(v))
+		}
 
-	// Encode the secret values as base64
-	encodedValue := make(map[string]string, len(input.Value))
-	for k, v := range input.Value {
-		encodedValue[k] = base64.StdEncoding.EncodeToString([]byte(v))
-	}
-
-	secretId, err := secretAPIClient.CreateSecret(ctx, input.Name, input.Info, encodedValue)
-	if err != nil {
-		return CreateSecretOutput{}, typedError(err)
-	}
-	secretURI, err := coresecrets.ParseURI(secretId)
-	if err != nil {
-		return CreateSecretOutput{}, typedError(err)
-	}
-	return CreateSecretOutput{
-		SecretId:  secretURI.ID,
-		SecretURI: secretURI.String(),
-	}, nil
+		secretId, err := secretAPIClient.CreateSecret(ctx, input.Name, input.Info, encodedValue)
+		if err != nil {
+			return typedError(err)
+		}
+		secretURI, err := coresecrets.ParseURI(secretId)
+		if err != nil {
+			return typedError(err)
+		}
+		out = CreateSecretOutput{
+			SecretId:  secretURI.ID,
+			SecretURI: secretURI.String(),
+		}
+		return nil
+	})
+	return out, err
 }
 
 // ReadSecret reads a secret.
 func (c *secretsClient) ReadSecret(ctx context.Context, input *ReadSecretInput) (ReadSecretOutput, error) {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return ReadSecretOutput{}, err
-	}
-	defer func() { _ = conn.Close() }()
+	var out ReadSecretOutput
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		secretAPIClient := c.getSecretAPIClient(conn)
 
-	secretAPIClient := c.getSecretAPIClient(conn)
-
-	var secretURI *coresecrets.URI
-	if input.SecretId != "" {
-		secretURI, err = coresecrets.ParseURI(input.SecretId)
-		if err != nil {
-			return ReadSecretOutput{}, err
+		var secretURI *coresecrets.URI
+		if input.SecretId != "" {
+			var err error
+			secretURI, err = coresecrets.ParseURI(input.SecretId)
+			if err != nil {
+				return err
+			}
+		} else {
+			secretURI = nil
 		}
-	} else {
-		secretURI = nil
-	}
-	secretFilter := coresecrets.Filter{
-		URI:      secretURI,
-		Label:    input.Name,
-		Revision: input.Revision,
-	}
+		secretFilter := coresecrets.Filter{
+			URI:      secretURI,
+			Label:    input.Name,
+			Revision: input.Revision,
+		}
 
-	results, err := secretAPIClient.ListSecrets(ctx, true, secretFilter)
-	if err != nil {
-		return ReadSecretOutput{}, typedError(err)
-	}
-	if len(results) < 1 {
-		return ReadSecretOutput{}, &secretNotFoundError{secretId: input.SecretId}
-	}
-	if results[0].Error != "" {
-		return ReadSecretOutput{}, errors.New(results[0].Error)
-	}
+		results, err := secretAPIClient.ListSecrets(ctx, true, secretFilter)
+		if err != nil {
+			return typedError(err)
+		}
+		if len(results) < 1 {
+			return &secretNotFoundError{secretId: input.SecretId}
+		}
+		if results[0].Error != "" {
+			return errors.New(results[0].Error)
+		}
 
-	// Decode the secret values from base64
-	decodedValue, err := results[0].Value.Values()
-	if err != nil {
-		return ReadSecretOutput{}, err
-	}
+		// Decode the secret values from base64
+		decodedValue, err := results[0].Value.Values()
+		if err != nil {
+			return err
+		}
 
-	// Get applications from Access info
-	applications := getApplicationsFromAccessInfo(results[0].Access)
+		// Get applications from Access info
+		applications := getApplicationsFromAccessInfo(results[0].Access)
 
-	return ReadSecretOutput{
-		SecretId:     results[0].Metadata.URI.ID,
-		SecretURI:    results[0].Metadata.URI.String(),
-		Name:         results[0].Metadata.Label,
-		Value:        decodedValue,
-		Applications: applications,
-		Info:         results[0].Metadata.Description,
-	}, nil
+		out = ReadSecretOutput{
+			SecretId:     results[0].Metadata.URI.ID,
+			SecretURI:    results[0].Metadata.URI.String(),
+			Name:         results[0].Metadata.Label,
+			Value:        decodedValue,
+			Applications: applications,
+			Info:         results[0].Metadata.Description,
+		}
+		return nil
+	})
+	return out, err
 }
 
 // ListSecrets lists secrets in a model.
 func (c *secretsClient) ListSecrets(ctx context.Context, input *ListSecretsInput) ([]ListSecretsOutput, error) {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
+	var output []ListSecretsOutput
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		secretAPIClient := c.getSecretAPIClient(conn)
+
+		secretFilter := coresecrets.Filter{
+			Label: input.Name,
+		}
+
+		results, err := secretAPIClient.ListSecrets(ctx, true, secretFilter)
+		if err != nil {
+			return typedError(err)
+		}
+
+		output = make([]ListSecretsOutput, 0, len(results))
+		for _, result := range results {
+			if result.Error != "" {
+				return errors.New(result.Error)
+			}
+
+			decodedValue, err := result.Value.Values()
+			if err != nil {
+				return err
+			}
+
+			applications := getApplicationsFromAccessInfo(result.Access)
+
+			output = append(output, ListSecretsOutput{
+				SecretId:     result.Metadata.URI.ID,
+				SecretURI:    result.Metadata.URI.String(),
+				Name:         result.Metadata.Label,
+				Value:        decodedValue,
+				Applications: applications,
+				Info:         result.Metadata.Description,
+			})
+		}
+
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = conn.Close() }()
-
-	secretAPIClient := c.getSecretAPIClient(conn)
-
-	secretFilter := coresecrets.Filter{
-		Label: input.Name,
-	}
-
-	results, err := secretAPIClient.ListSecrets(ctx, true, secretFilter)
-	if err != nil {
-		return nil, typedError(err)
-	}
-
-	output := make([]ListSecretsOutput, 0, len(results))
-	for _, result := range results {
-		if result.Error != "" {
-			return nil, errors.New(result.Error)
-		}
-
-		decodedValue, err := result.Value.Values()
-		if err != nil {
-			return nil, err
-		}
-
-		applications := getApplicationsFromAccessInfo(result.Access)
-
-		output = append(output, ListSecretsOutput{
-			SecretId:     result.Metadata.URI.ID,
-			SecretURI:    result.Metadata.URI.String(),
-			Name:         result.Metadata.Label,
-			Value:        decodedValue,
-			Applications: applications,
-			Info:         result.Metadata.Description,
-		})
-	}
-
 	return output, nil
 }
 
 // UpdateSecret updates a secret.
 func (c *secretsClient) UpdateSecret(ctx context.Context, input *UpdateSecretInput) error {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		secretAPIClient := c.getSecretAPIClient(conn)
 
-	secretAPIClient := c.getSecretAPIClient(conn)
-
-	// Specify by ID or Name
-	if input.SecretId == "" && input.Name == nil {
-		return errors.New("must specify either secret ID or name")
-	}
-
-	// Define default values
-	var info string
-	if input.Info != nil {
-		info = *input.Info
-	} else {
-		info = ""
-	}
-	var value map[string]string
-	if input.Value != nil {
-		// Encode the secret values as base64
-		encodedValue := make(map[string]string, len(*input.Value))
-		for k, v := range *input.Value {
-			encodedValue[k] = base64.StdEncoding.EncodeToString([]byte(v))
+		// Specify by ID or Name
+		if input.SecretId == "" && input.Name == nil {
+			return errors.New("must specify either secret ID or name")
 		}
 
-		value = encodedValue
-	} else {
-		value = map[string]string{}
-	}
-
-	if input.SecretId != "" {
-		// Specify by ID
-		secretURI, err := coresecrets.ParseURI(input.SecretId)
-		if err != nil {
-			return err
+		// Define default values
+		var info string
+		if input.Info != nil {
+			info = *input.Info
+		} else {
+			info = ""
 		}
-		if input.Name == nil {
-			// Update secret without changing the name
-			err = secretAPIClient.UpdateSecret(ctx, secretURI, "", input.AutoPrune, "", info, value)
+		var value map[string]string
+		if input.Value != nil {
+			// Encode the secret values as base64
+			encodedValue := make(map[string]string, len(*input.Value))
+			for k, v := range *input.Value {
+				encodedValue[k] = base64.StdEncoding.EncodeToString([]byte(v))
+			}
+
+			value = encodedValue
+		} else {
+			value = map[string]string{}
+		}
+
+		if input.SecretId != "" {
+			// Specify by ID
+			secretURI, err := coresecrets.ParseURI(input.SecretId)
 			if err != nil {
-				return typedError(err)
+				return err
+			}
+			if input.Name == nil {
+				// Update secret without changing the name
+				err = secretAPIClient.UpdateSecret(ctx, secretURI, "", input.AutoPrune, "", info, value)
+				if err != nil {
+					return typedError(err)
+				}
+			} else {
+				// Update secret with a new name
+				err = secretAPIClient.UpdateSecret(ctx, secretURI, "", input.AutoPrune, *input.Name, info, value)
+				if err != nil {
+					return typedError(err)
+				}
 			}
 		} else {
-			// Update secret with a new name
-			err = secretAPIClient.UpdateSecret(ctx, secretURI, "", input.AutoPrune, *input.Name, info, value)
-			if err != nil {
-				return typedError(err)
-			}
+			return errors.New("updating secrets by name is not supported")
 		}
-	} else {
-		return errors.New("updating secrets by name is not supported")
-	}
 
-	return nil
+		return nil
+	})
 }
 
 // DeleteSecret deletes a secret.
 func (c *secretsClient) DeleteSecret(ctx context.Context, input *DeleteSecretInput) error {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return err
-	}
+	return withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		secretAPIClient := c.getSecretAPIClient(conn)
+		secretURI, err := coresecrets.ParseURI(input.SecretId)
+		if err != nil {
+			return err
+		}
+		// TODO: think about removing concrete revision.
+		err = secretAPIClient.RemoveSecret(ctx, secretURI, "", nil)
+		if !errors.Is(err, jujuerrors.NotFound) {
+			return typedError(err)
+		}
 
-	secretAPIClient := c.getSecretAPIClient(conn)
-	secretURI, err := coresecrets.ParseURI(input.SecretId)
-	if err != nil {
-		return err
-	}
-	// TODO: think about removing concrete revision.
-	err = secretAPIClient.RemoveSecret(ctx, secretURI, "", nil)
-	if !errors.Is(err, jujuerrors.NotFound) {
-		return typedError(err)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // UpdateAccessSecret updates access to a secret.
 func (c *secretsClient) UpdateAccessSecret(ctx context.Context, input *GrantRevokeAccessSecretInput, op AccessSecretAction) error {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		secretAPIClient := c.getSecretAPIClient(conn)
 
-	secretAPIClient := c.getSecretAPIClient(conn)
+		secretURI, err := coresecrets.ParseURI(input.SecretId)
+		if err != nil {
+			return err
+		}
 
-	secretURI, err := coresecrets.ParseURI(input.SecretId)
-	if err != nil {
-		return err
-	}
+		var results []error
+		switch op {
+		case GrantAccess:
+			results, err = secretAPIClient.GrantSecret(ctx, secretURI, "", input.Applications)
+		case RevokeAccess:
+			results, err = secretAPIClient.RevokeSecret(ctx, secretURI, "", input.Applications)
+		default:
+			return errors.New("invalid op")
+		}
 
-	var results []error
-	switch op {
-	case GrantAccess:
-		results, err = secretAPIClient.GrantSecret(ctx, secretURI, "", input.Applications)
-	case RevokeAccess:
-		results, err = secretAPIClient.RevokeSecret(ctx, secretURI, "", input.Applications)
-	default:
-		return errors.New("invalid op")
-	}
+		if err != nil {
+			return typedError(err)
+		}
 
-	if err != nil {
-		return typedError(err)
-	}
+		if len(results) > 0 && results[0] != nil {
+			return errors.Join(results...)
+		}
 
-	if len(results) > 0 && results[0] != nil {
-		return errors.Join(results...)
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // getApplicationsFromAccessInfo returns a list of applications from the access info.

@@ -206,16 +206,16 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 
 // GetControllerVersion returns the version of the controller that the client is connected to.
 func (sc *sharedClient) GetControllerVersion(ctx context.Context) (semversion.Number, error) {
-	conn, err := sc.GetConnection(ctx, nil)
-	if err != nil {
-		return semversion.Number{}, err
-	}
-	defer func() { _ = conn.Close() }()
-	v, ok := conn.ServerVersion()
-	if !ok {
-		return semversion.Number{}, errors.New("failed to get controller version")
-	}
-	return v, nil
+	var version semversion.Number
+	err := withConnection(ctx, sc, nil, func(conn api.Connection) error {
+		v, ok := conn.ServerVersion()
+		if !ok {
+			return errors.New("failed to get controller version")
+		}
+		version = v
+		return nil
+	})
+	return version, err
 }
 
 // SetProxy sets the default HTTP transport to use the proxy configuration detected by the juju proxyutils package.
@@ -242,17 +242,15 @@ func SetProxy() error {
 func (sc *sharedClient) IsJAAS(ctx context.Context, defaultVal bool) bool {
 	sc.checkJAASOnce.Do(func() {
 		sc.isJAAS = defaultVal
-		conn, err := sc.GetConnection(ctx, nil)
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-		jc := jaasApi.NewClient(JaasConnShim{conn})
-		_, err = jc.ListControllers()
-		if err == nil {
-			sc.isJAAS = true
-			return
-		}
+		// A failure to connect leaves isJAAS at defaultVal; the error is
+		// intentionally ignored as callers must not fail on this check.
+		_ = withConnection(ctx, sc, nil, func(conn api.Connection) error {
+			jc := jaasApi.NewClient(JaasConnShim{conn})
+			if _, err := jc.ListControllers(); err == nil {
+				sc.isJAAS = true
+			}
+			return nil
+		})
 	})
 	return sc.isJAAS
 }
@@ -345,6 +343,26 @@ func (sc *sharedClient) GetConnection(ctx context.Context, modelUUID *string) (a
 	return conn, nil
 }
 
+// withConnection opens a connection to the controller (optionally scoped to the
+// given model), passes it to f, and guarantees the connection is closed once f
+// returns. Unlike the open-coded `defer conn.Close()` pattern it replaces, any
+// error returned by closing the connection is logged rather than discarded.
+//
+// Functions that need to return a value should declare it in the enclosing
+// scope and assign it from within f, returning only the error from f.
+func withConnection(ctx context.Context, sc SharedClient, modelUUID *string, f func(conn api.Connection) error) error {
+	conn, err := sc.GetConnection(ctx, modelUUID)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := conn.Close(); cerr != nil {
+			sc.Errorf(cerr, "failed to close connection")
+		}
+	}()
+	return f(conn)
+}
+
 func (sc *sharedClient) connect(ctx context.Context, conf connector.SimpleConfig) (api.Connection, error) {
 	dialOptions := func(do *api.DialOpts) {
 		//this is set as a const above, in case we need to use it elsewhere to manage connection timings
@@ -414,29 +432,25 @@ func (sc *sharedClient) ModelUUID(ctx context.Context, modelName, modelOwner str
 // models and puts the relevant data in the model info cache.
 // Callers are expected to hold the modelUUIDmu lock.
 func (sc *sharedClient) fillModelCache(ctx context.Context) error {
-	conn, err := sc.GetConnection(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, sc, nil, func(conn api.Connection) error {
+		client := modelmanager.NewClient(conn)
 
-	client := modelmanager.NewClient(conn)
-
-	// Calling ListModelSummaries because other Model endpoints require
-	// the UUID, here we're trying to get the model UUID for other calls.
-	modelSummaries, err := client.ListModelSummaries(ctx, conn.AuthTag().Id(), false)
-	if err != nil {
-		return err
-	}
-	for _, modelSummary := range modelSummaries {
-		modelWithUUID := jujuModel{
-			name:      modelSummary.Name,
-			modelType: modelSummary.Type,
-			owner:     modelSummary.Qualifier.String(),
+		// Calling ListModelSummaries because other Model endpoints require
+		// the UUID, here we're trying to get the model UUID for other calls.
+		modelSummaries, err := client.ListModelSummaries(ctx, conn.AuthTag().Id(), false)
+		if err != nil {
+			return err
 		}
-		sc.modelUUIDcache[modelSummary.UUID] = modelWithUUID
-	}
-	return nil
+		for _, modelSummary := range modelSummaries {
+			modelWithUUID := jujuModel{
+				name:      modelSummary.Name,
+				modelType: modelSummary.Type,
+				owner:     modelSummary.Qualifier.String(),
+			}
+			sc.modelUUIDcache[modelSummary.UUID] = modelWithUUID
+		}
+		return nil
+	})
 }
 
 // ModelType returns the model type for the provided modelUUID from

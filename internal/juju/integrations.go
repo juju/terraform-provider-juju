@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
 	"github.com/juju/juju/rpc/params"
 )
@@ -100,164 +101,159 @@ func newIntegrationsClient(sc SharedClient) *integrationsClient {
 
 // CreateIntegration creates a new integration.
 func (c *integrationsClient) CreateIntegration(ctx context.Context, input *IntegrationInput) (*CreateIntegrationResponse, error) {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
+	var out *CreateIntegrationResponse
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		client := apiapplication.NewClient(conn)
 
-	client := apiapplication.NewClient(conn)
+		// wait for the apps to be available
+		ctx, cancel := context.WithTimeout(ctx, IntegrationAppAvailableTimeout)
+		defer cancel()
 
-	// wait for the apps to be available
-	ctx, cancel := context.WithTimeout(ctx, IntegrationAppAvailableTimeout)
-	defer cancel()
+		err := WaitForAppsAvailable(ctx, client, input.Apps, IntegrationApiTickWait)
+		if err != nil {
+			return errors.Annotate(err, "the applications were not available to be integrated")
+		}
 
-	err = WaitForAppsAvailable(ctx, client, input.Apps, IntegrationApiTickWait)
-	if err != nil {
-		return nil, errors.Annotate(err, "the applications were not available to be integrated")
-	}
+		listViaCIDRs := splitCommaDelimitedList(input.ViaCIDRs)
+		response, err := client.AddRelation(
+			ctx,
+			input.Endpoints,
+			listViaCIDRs,
+		)
+		if err != nil {
+			return err
+		}
 
-	listViaCIDRs := splitCommaDelimitedList(input.ViaCIDRs)
-	response, err := client.AddRelation(
-		ctx,
-		input.Endpoints,
-		listViaCIDRs,
-	)
-	if err != nil {
-		return nil, err
-	}
+		// integration is created - fetch the status in order to validate
+		status, err := c.ModelStatus(ctx, input.ModelUUID, conn)
+		if err != nil {
+			return err
+		}
 
-	// integration is created - fetch the status in order to validate
-	status, err := c.ModelStatus(ctx, input.ModelUUID, conn)
-	if err != nil {
-		return nil, err
-	}
+		applications, err := parseApplications(status.RemoteApplicationOfferers, response.Endpoints)
+		if err != nil {
+			return err
+		}
+		c.Debugf("related apps", map[string]any{"apps": applications})
 
-	applications, err := parseApplications(status.RemoteApplicationOfferers, response.Endpoints)
-	if err != nil {
-		return nil, err
-	}
-	c.Debugf("related apps", map[string]any{"apps": applications})
-
-	return &CreateIntegrationResponse{
-		Applications: applications,
-	}, nil
+		out = &CreateIntegrationResponse{
+			Applications: applications,
+		}
+		return nil
+	})
+	return out, err
 }
 
 // ReadIntegration retrieves integration details for the given endpoints.
 func (c *integrationsClient) ReadIntegration(ctx context.Context, input *IntegrationInput) (*ReadIntegrationResponse, error) {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-	modelUUID, ok := conn.ModelTag()
-	if !ok {
-		return nil, errors.Errorf("Unable to get model uuid for %q", input.ModelUUID)
-	}
-	status, err := c.ModelStatus(ctx, input.ModelUUID, conn)
-	if err != nil {
-		return nil, err
-	}
-
-	integrations := status.Relations
-	var integration params.RelationStatus
-	if len(integrations) == 0 {
-		return nil, NewIntegrationNotFoundError(modelUUID.Id())
-	}
-
-	apps := make([][]string, 0, len(input.Endpoints))
-	for _, v := range input.Endpoints {
-		app := strings.Split(v, ":")
-		apps = append(apps, []string{
-			app[0],
-			app[1],
-		})
-	}
-
-	// the key is built assuming that the ID is "<provider>:<endpoint> <requirer>:<endpoint>"
-	// the integrations that come back from status have the key formatted as "<requirer>:<endpoint> <provider>:<endpoint>"
-	key := fmt.Sprintf("%v:%v %v:%v", apps[1][0], apps[1][1], apps[0][0], apps[0][1])
-
-	for _, v := range integrations {
-		if v.Key == key {
-			integration = v
-			break
+	var out *ReadIntegrationResponse
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		modelUUID, ok := conn.ModelTag()
+		if !ok {
+			return errors.Errorf("Unable to get model uuid for %q", input.ModelUUID)
 		}
-	}
+		status, err := c.ModelStatus(ctx, input.ModelUUID, conn)
+		if err != nil {
+			return err
+		}
 
-	if integration.Id == 0 && integration.Key == "" {
-		keyReversed := fmt.Sprintf("%v:%v %v:%v", apps[1][0], apps[1][1], apps[0][0], apps[0][1])
+		integrations := status.Relations
+		var integration params.RelationStatus
+		if len(integrations) == 0 {
+			return NewIntegrationNotFoundError(modelUUID.Id())
+		}
+
+		apps := make([][]string, 0, len(input.Endpoints))
+		for _, v := range input.Endpoints {
+			app := strings.Split(v, ":")
+			apps = append(apps, []string{
+				app[0],
+				app[1],
+			})
+		}
+
+		// the key is built assuming that the ID is "<provider>:<endpoint> <requirer>:<endpoint>"
+		// the integrations that come back from status have the key formatted as "<requirer>:<endpoint> <provider>:<endpoint>"
+		key := fmt.Sprintf("%v:%v %v:%v", apps[1][0], apps[1][1], apps[0][0], apps[0][1])
+
 		for _, v := range integrations {
-			if v.Key == keyReversed {
-				return nil, fmt.Errorf("check the endpoint order in your ID")
+			if v.Key == key {
+				integration = v
+				break
 			}
 		}
-	}
 
-	if integration.Id == 0 && integration.Key == "" {
-		return nil, NewIntegrationNotFoundError(modelUUID.Id())
-	}
+		if integration.Id == 0 && integration.Key == "" {
+			keyReversed := fmt.Sprintf("%v:%v %v:%v", apps[1][0], apps[1][1], apps[0][0], apps[0][1])
+			for _, v := range integrations {
+				if v.Key == keyReversed {
+					return fmt.Errorf("check the endpoint order in your ID")
+				}
+			}
+		}
 
-	applications, err := parseApplications(status.RemoteApplicationOfferers, integration.Endpoints)
-	if err != nil {
-		return nil, err
-	}
+		if integration.Id == 0 && integration.Key == "" {
+			return NewIntegrationNotFoundError(modelUUID.Id())
+		}
 
-	return &ReadIntegrationResponse{
-		Applications: applications,
-	}, nil
+		applications, err := parseApplications(status.RemoteApplicationOfferers, integration.Endpoints)
+		if err != nil {
+			return err
+		}
+
+		out = &ReadIntegrationResponse{
+			Applications: applications,
+		}
+		return nil
+	})
+	return out, err
 }
 
 func (c *integrationsClient) DestroyIntegration(ctx context.Context, input *IntegrationInput) error {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
+	return withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		client := apiapplication.NewClient(conn)
 
-	client := apiapplication.NewClient(conn)
+		err := client.DestroyRelation(
+			ctx,
+			nil,
+			nil,
+			input.Endpoints...,
+		)
+		if err != nil {
+			return err
+		}
 
-	err = client.DestroyRelation(
-		ctx,
-		nil,
-		nil,
-		input.Endpoints...,
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // ListIntegrations lists the integrations in a model
 func (c integrationsClient) ListIntegrations(ctx context.Context, input *ListIntegrationsInput) ([]ListIntegrationsOutput, error) {
-	conn, err := c.GetConnection(ctx, &input.ModelUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	status, err := c.ModelStatus(ctx, input.ModelUUID, conn)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(status.Relations) == 0 {
-		return []ListIntegrationsOutput{}, nil
-	}
-
-	results := make([]ListIntegrationsOutput, 0, len(status.Relations))
-	for _, relation := range status.Relations {
-		applications, err := parseApplications(status.RemoteApplicationOfferers, relation.Endpoints)
+	var out []ListIntegrationsOutput
+	err := withConnection(ctx, c.SharedClient, &input.ModelUUID, func(conn api.Connection) error {
+		status, err := c.ModelStatus(ctx, input.ModelUUID, conn)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		results = append(results, ListIntegrationsOutput{Applications: applications})
-	}
 
-	return results, nil
+		if len(status.Relations) == 0 {
+			out = []ListIntegrationsOutput{}
+			return nil
+		}
+
+		results := make([]ListIntegrationsOutput, 0, len(status.Relations))
+		for _, relation := range status.Relations {
+			applications, err := parseApplications(status.RemoteApplicationOfferers, relation.Endpoints)
+			if err != nil {
+				return err
+			}
+			results = append(results, ListIntegrationsOutput{Applications: applications})
+		}
+
+		out = results
+		return nil
+	})
+	return out, err
 }
 
 // This function takes remote applications and endpoint status and combines them into a more usable format to return to the provider
