@@ -162,7 +162,7 @@ func (c *spacesClient) DeleteSpace(ctx context.Context, input *DeleteSpaceInput)
 	// and isn't moving them back to alpha. As such we manually move all subnets into
 	// alpha before deleting the space.
 	// See issue here https://github.com/juju/juju/issues/22567.
-	if err := moveAllSubnetsToAlpha(ctx, spaceClient, input.Name, c, conn); err != nil {
+	if err := moveAllSubnetsToAlpha(ctx, spaceClient, input.Name, c.getSubnetsAPIClient(conn)); err != nil {
 		return err
 	}
 
@@ -236,7 +236,7 @@ func findSubnetIDByCIDR(subnetResults []params.SubnetsResult, cidr string) (stri
 }
 
 // moveAllSubnetsToAlpha moves all subnets in the space to back to alpha.
-func moveAllSubnetsToAlpha(ctx context.Context, spaceClient SpacesAPIClient, spaceName string, c *spacesClient, conn api.Connection) error {
+func moveAllSubnetsToAlpha(ctx context.Context, spaceClient SpacesAPIClient, spaceName string, subnetsClient SubnetsAPIClient) error {
 	spaces, err := spaceClient.ListSpaces(ctx)
 	if err != nil {
 		return errors.Annotate(err, "listing spaces to move subnets before deleting space")
@@ -260,8 +260,6 @@ func moveAllSubnetsToAlpha(ctx context.Context, spaceClient SpacesAPIClient, spa
 	for i, subnet := range spaceToDelete.Subnets {
 		subnetCidrs[i] = subnet.CIDR
 	}
-
-	subnetsClient := c.getSubnetsAPIClient(conn)
 
 	snResults, err := subnetsClient.SubnetsByCIDR(ctx, subnetCidrs)
 	if err != nil {
