@@ -12,6 +12,11 @@ import (
 )
 
 func TestAcc_DataSourceSpace(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	testAccPreCheck(t)
+
 	modelName := acctest.RandomWithPrefix("tf-datasource-space-test-model")
 	spaceName := acctest.RandomWithPrefix("tf-datasource-space")
 
