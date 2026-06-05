@@ -565,7 +565,13 @@ func getJujuProviderModel(ctx context.Context, planData jujuProviderModel, requi
 	}
 	if diags.HasError() {
 		tflog.Debug(ctx, "Current login values.",
-			map[string]interface{}{"jujuProviderModel": planData})
+			map[string]interface{}{
+				"controller_addresses_set": planData.ControllerAddrs.ValueString() != "",
+				"username_set":             planData.UserName.ValueString() != "",
+				"password_set":             planData.Password.ValueString() != "",
+				"client_id_set":            planData.ClientID.ValueString() != "",
+				"client_secret_set":        planData.ClientSecret.ValueString() != "",
+			})
 	}
 
 	return errMsgDataModel, diags
