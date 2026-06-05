@@ -39,10 +39,12 @@ type spaceDataSourceModel struct {
 	ID types.String `tfsdk:"id"`
 }
 
+// Metadata implements the [datasource.DataSource] interface.
 func (d *spaceDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_space"
 }
 
+// Schema implements the [datasource.DataSource] interface.
 func (d *spaceDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A data source representing a Juju space.",
@@ -69,6 +71,7 @@ func (d *spaceDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 	}
 }
 
+// Configure implements the [datasource.DataSourceWithConfigure] interface.
 func (d *spaceDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
@@ -84,6 +87,7 @@ func (d *spaceDataSource) Configure(ctx context.Context, req datasource.Configur
 	d.subCtx = tflog.NewSubsystem(ctx, LogDataSourceSpace)
 }
 
+// Read implements the [datasource.DataSource] interface.
 func (d *spaceDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	if d.client == nil {
 		addDSClientNotConfiguredError(&resp.Diagnostics, "space")
