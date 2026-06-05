@@ -128,3 +128,59 @@ func TestSpacesClientMoveSubnetToSpaceCIDRNotFound(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `subnet "10.0.0.0/24" not found`)
 }
+
+func TestSpacesClientDeleteSpaceMovesAllSubnetsToAlphaBeforeRemovingSpace(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockSharedClient := NewMockSharedClient(ctrl)
+	mockConnection := NewMockConnection(ctrl)
+	mockSpacesAPIClient := NewMockSpacesAPIClient(ctrl)
+	mockSubnetsAPIClient := NewMockSubnetsAPIClient(ctrl)
+
+	gomock.InOrder(
+		mockSharedClient.EXPECT().GetConnection(gomock.Any(), gomock.Any()).Return(mockConnection, nil),
+		mockSpacesAPIClient.EXPECT().ListSpaces(gomock.Any()).Return([]params.Space{{
+			Name: "space-a",
+			Subnets: []params.Subnet{{
+				CIDR: "10.0.0.0/24",
+			}, {
+				CIDR: "10.0.1.0/24",
+			}},
+		}}, nil),
+		mockSubnetsAPIClient.EXPECT().SubnetsByCIDR(gomock.Any(), []string{"10.0.0.0/24", "10.0.1.0/24"}).Return([]params.SubnetsResult{{
+			Subnets: []params.SubnetV2{{
+				ID: "42",
+				Subnet: params.Subnet{
+					CIDR: "10.0.0.0/24",
+				},
+			}, {
+				ID: "43",
+				Subnet: params.Subnet{
+					CIDR: "10.0.1.0/24",
+				},
+			}},
+		}}, nil),
+		mockSpacesAPIClient.EXPECT().MoveSubnets(
+			gomock.Any(),
+			names.NewSpaceTag("alpha"),
+			[]names.SubnetTag{names.NewSubnetTag("42"), names.NewSubnetTag("43")},
+			false,
+		).Return(params.MoveSubnetsResult{}, nil),
+		mockSpacesAPIClient.EXPECT().RemoveSpace(gomock.Any(), "space-a", false, false).Return(params.RemoveSpaceResult{}, nil),
+		mockConnection.EXPECT().Close().Return(nil),
+	)
+
+	client := &spacesClient{
+		SharedClient: mockSharedClient,
+		getSpacesAPIClient: func(api.Connection) SpacesAPIClient {
+			return mockSpacesAPIClient
+		},
+		getSubnetsAPIClient: func(api.Connection) SubnetsAPIClient {
+			return mockSubnetsAPIClient
+		},
+	}
+
+	err := client.DeleteSpace(t.Context(), &DeleteSpaceInput{ModelUUID: "model-uuid", Name: "space-a"})
+	require.NoError(t, err)
+}

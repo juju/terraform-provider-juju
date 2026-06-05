@@ -78,6 +78,13 @@ func NewRetryReadError(msg string) error {
 	return jujuerrors.WithType(jujuerrors.Errorf("retrying: %s", msg), RetryReadError)
 }
 
+// NewRetryReadErrorf returns a new retry error with a formatted message.
+// This is useful for scenarios where you may want to include information from
+// the "data" parameter in the error message.
+func NewRetryReadErrorf(format string, args ...interface{}) error {
+	return NewRetryReadError(fmt.Sprintf(format, args...))
+}
+
 // ApplicationPartiallyCreatedError indicates an application was created
 // but follow-up steps failed.
 type ApplicationPartiallyCreatedError struct {
