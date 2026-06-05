@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os/exec"
 	"strings"
 	"sync"
@@ -103,14 +102,12 @@ func populateControllerConfig() {
 		break
 	}
 
-	localProviderConfig = map[string]string{}
-	localProviderConfig["JUJU_AGENT_VERSION"] = controllerConfig.ProviderDetails.AgentVersion
-	localProviderConfig["JUJU_CONTROLLER_ADDRESSES"] = strings.Join(controllerConfig.ProviderDetails.ApiEndpoints, ",")
-	localProviderConfig["JUJU_CA_CERT"] = controllerConfig.ProviderDetails.CACert
-	localProviderConfig["JUJU_USERNAME"] = controllerConfig.Account.User
-	localProviderConfig["JUJU_PASSWORD"] = controllerConfig.Account.Password
-
-	tflog.Debug(context.TODO(), "local provider controllerConfig was set", map[string]interface{}{"localProviderConfig": fmt.Sprintf("%#v", localProviderConfig)})
+	tflog.Debug(context.TODO(), "local provider controllerConfig was set", map[string]interface{}{
+		"JUJU_AGENT_VERSION":        controllerConfig.ProviderDetails.AgentVersion,
+		"JUJU_CONTROLLER_ADDRESSES": strings.Join(controllerConfig.ProviderDetails.ApiEndpoints, ","),
+		"JUJU_USERNAME":             controllerConfig.Account.User,
+		"JUJU_CA_CERT":              controllerConfig.ProviderDetails.CACert,
+	})
 }
 
 // WaitForAppsAvailable blocks the execution flow and waits until all the
