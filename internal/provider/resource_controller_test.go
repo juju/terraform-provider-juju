@@ -25,20 +25,24 @@ import (
 	"github.com/stretchr/testify/require"
 	gomock "go.uber.org/mock/gomock"
 
+	jujuerrors "github.com/juju/errors"
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/client/modelmanager"
 	"github.com/juju/juju/api/connector"
 	controllerapi "github.com/juju/juju/api/controller/controller"
+	"github.com/juju/juju/core/semversion"
 	"github.com/juju/names/v6"
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
-	"github.com/juju/version/v2"
+	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 func TestAcc_ResourceController(t *testing.T) {
 	SkipJAAS(t)
 	controllerName := acctest.RandomWithPrefix("tf-test-controller")
+	currentAgentVersion := "3.6.12"
+	targetAgentVersion := "3.6.13"
 
 	mockCtrl := gomock.NewController(t)
 	mockJujuCommand := NewMockJujuCommand(mockCtrl)
@@ -90,7 +94,7 @@ func TestAcc_ResourceController(t *testing.T) {
 			},
 		},
 		Flags: juju.BootstrapFlags{
-			AgentVersion:  "3.6.12",
+			AgentVersion:  currentAgentVersion,
 			BootstrapBase: "test-base",
 		},
 	}).Return(&juju.ControllerConnectionInformation{
@@ -98,7 +102,7 @@ func TestAcc_ResourceController(t *testing.T) {
 		CACert:       "test controller CA cert",
 		Username:     "admin",
 		Password:     "password",
-		AgentVersion: "3.6.12",
+		AgentVersion: currentAgentVersion,
 	}, nil).AnyTimes()
 
 	mockJujuCommand.EXPECT().Config(
@@ -109,30 +113,60 @@ func TestAcc_ResourceController(t *testing.T) {
 			Username:  "admin",
 			Password:  "password",
 		},
-	).Return(map[string]any{
-		"agent-logfile-max-backups": "3",
-		"audit-log-capture-args":    "true",
-		"autocert-dns-name":         "test-external-name",
-	}, map[string]any{
-		"enable-os-refresh-update": "false",
-		"http-proxy":               "fake-proxy",
-	}, nil).AnyTimes()
+	).DoAndReturn(func(context.Context, *juju.ControllerConnectionInformation) (map[string]any, map[string]any, error) {
+		return map[string]any{
+				"agent-logfile-max-backups": "3",
+				"audit-log-capture-args":    "true",
+				"autocert-dns-name":         "test-external-name",
+			}, map[string]any{
+				"agent-version":            currentAgentVersion,
+				"enable-os-refresh-update": "false",
+				"http-proxy":               "fake-proxy",
+			}, nil
+	}).AnyTimes()
+
+	mockJujuCommand.EXPECT().ControllerVersion(
+		gomock.Any(),
+		&juju.ControllerConnectionInformation{
+			Addresses: []string{"127.0.0.1:17070"},
+			CACert:    "test controller CA cert",
+			Username:  "admin",
+			Password:  "password",
+		},
+	).DoAndReturn(func(ctx context.Context, cci *juju.ControllerConnectionInformation) (semversion.Number, error) {
+		return semversion.MustParse(currentAgentVersion), nil
+	}).AnyTimes()
+
+	mockJujuCommand.EXPECT().UpgradeController(
+		gomock.Any(),
+		&juju.ControllerConnectionInformation{
+			Addresses: []string{"127.0.0.1:17070"},
+			CACert:    "test controller CA cert",
+			Username:  "admin",
+			Password:  "password",
+		},
+		semversion.MustParse(targetAgentVersion),
+	).DoAndReturn(func(_ context.Context, _ *juju.ControllerConnectionInformation, targetVersion semversion.Number) (semversion.Number, error) {
+		currentAgentVersion = targetVersion.String()
+		return targetVersion, nil
+	})
+
+	mockJujuCommand.EXPECT().UpdateConfig(
+		gomock.Any(),
+		&juju.ControllerConnectionInformation{
+			Addresses: []string{"127.0.0.1:17070"},
+			CACert:    "test controller CA cert",
+			Username:  "admin",
+			Password:  "password",
+		},
+		map[string]string{},
+		map[string]string{},
+		[]string{},
+	).Return(nil)
 
 	mockJujuCommand.EXPECT().Destroy(
 		gomock.Any(),
-		juju.DestroyArguments{
-			Name:        controllerName,
-			JujuBinary:  "/snap/bin/juju",
-			CloudName:   testingCloud.CloudName(),
-			CloudRegion: "local",
-			ConnectionInfo: juju.ControllerConnectionInformation{
-				Addresses:    []string{"127.0.0.1:17070"},
-				CACert:       "test controller CA cert",
-				Username:     "admin",
-				Password:     "password",
-				AgentVersion: "3.6.12",
-			},
-		},
+		gomock.Any(),
 	).Return(nil).AnyTimes()
 
 	frameworkProviderFactoriesWithMockJujuCommand := map[string]func() (tfprotov6.ProviderServer, error){
@@ -147,23 +181,37 @@ func TestAcc_ResourceController(t *testing.T) {
 	resourceName := "juju_controller.controller"
 	resource.ParallelTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: frameworkProviderFactoriesWithMockJujuCommand,
-		Steps: []resource.TestStep{{
-			Config: testAccResourceController(controllerName, testingCloud.CloudName()),
-			Check: resource.ComposeTestCheckFunc(
-				resource.TestCheckResourceAttr(resourceName, "name", controllerName),
-			),
-		}},
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceController(controllerName, testingCloud.CloudName(), currentAgentVersion),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", controllerName),
+					resource.TestCheckResourceAttr(resourceName, "agent_version", currentAgentVersion),
+				),
+			},
+			{
+				Config: testAccResourceController(controllerName, testingCloud.CloudName(), targetAgentVersion),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "agent_version", targetAgentVersion),
+				),
+			},
+		},
 	})
 }
 
-func testAccResourceController(controllerName, cloudName string) string {
+func testAccResourceController(controllerName, cloudName, agentVersion string) string {
 	return fmt.Sprintf(`
 provider "juju" {
   controller_mode = true
 }
 
 resource "juju_controller" "controller" {
-  agent_version = "3.6.12"
+  agent_version = %q
   name          = %q
 
   juju_binary     = "/snap/bin/juju"
@@ -218,7 +266,68 @@ resource "juju_controller" "controller" {
 	}
   }
 }
-`, controllerName, cloudName)
+`, agentVersion, controllerName, cloudName)
+}
+
+func TestControllerAgentVersionSeriesChanged(t *testing.T) {
+	tests := []struct {
+		name            string
+		currentVersion  string
+		targetVersion   string
+		requiresReplace bool
+		errSubstring    string
+	}{
+		{
+			name:            "higher patch does not replace",
+			currentVersion:  "3.6.12",
+			targetVersion:   "3.6.13",
+			requiresReplace: false,
+		},
+		{
+			name:            "lower patch replaces",
+			currentVersion:  "3.6.12",
+			targetVersion:   "3.6.11",
+			requiresReplace: true,
+		},
+		{
+			name:            "minor upgrade replaces",
+			currentVersion:  "3.6.12",
+			targetVersion:   "3.7.0",
+			requiresReplace: true,
+		},
+		{
+			name:            "major upgrade replaces",
+			currentVersion:  "3.6.12",
+			targetVersion:   "4.0.0",
+			requiresReplace: true,
+		},
+		{
+			name:           "invalid current version",
+			currentVersion: "bad-version",
+			targetVersion:  "3.6.13",
+			errSubstring:   "invalid current controller version",
+		},
+		{
+			name:           "invalid target version",
+			currentVersion: "3.6.12",
+			targetVersion:  "bad-version",
+			errSubstring:   "invalid requested controller version",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := controllerAgentVersionSeriesChanged(tt.currentVersion, tt.targetVersion)
+			if tt.errSubstring != "" {
+				require.Error(t, err)
+				require.ErrorContains(t, err, tt.errSubstring)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.requiresReplace, got)
+		})
+	}
 }
 
 func TestBuildStringListFromMap(t *testing.T) {
@@ -265,6 +374,23 @@ func TestBuildStringListFromMap(t *testing.T) {
 func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 	controllerName := acctest.RandomWithPrefix("tf-test-controller")
 	resourceName := "juju_controller.controller"
+	var initialAgentVersion, updatedAgentVersion string
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Error("environment variable JUJU_AGENT_VERSION must be set for this test")
+		return
+	}
+	jujuMajor := semversion.MustParse(agentVersion).Major
+	switch jujuMajor {
+	case 3:
+		initialAgentVersion = "3.6.21"
+		updatedAgentVersion = "3.6.23"
+	case 4:
+		initialAgentVersion = "4.0.11"
+		updatedAgentVersion = "4.0.11" // Set to a newer version once available.
+	default:
+		t.Errorf("unsupported Juju agent version %q for this test", agentVersion)
+	}
 
 	// bootstrap config
 	baseBootstrapConfig := map[string]string{
@@ -311,9 +437,10 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 		Steps: append([]resource.TestStep{
 			{
 				// Create the controller
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, baseControllerConfig, baseControllerModelConfig),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, initialAgentVersion, baseBootstrapConfig, baseControllerConfig, baseControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", controllerName),
+					resource.TestCheckResourceAttr(resourceName, "agent_version", initialAgentVersion),
 					resource.TestCheckResourceAttr(resourceName, "bootstrap_config.admin-secret", "my-favorite-admin-password"),
 					resource.TestCheckResourceAttr(resourceName, "controller_config.agent-logfile-max-backups", "3"),
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.disable-telemetry", "true"),
@@ -323,7 +450,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify changing controller config works
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, updatedControllerConfig, baseControllerModelConfig),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, initialAgentVersion, baseBootstrapConfig, updatedControllerConfig, baseControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_config.agent-logfile-max-backups", "4"),
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
@@ -347,7 +474,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify unsetting a controller config value behaves as expected.
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, baseControllerModelConfig),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, initialAgentVersion, baseBootstrapConfig, unsetControllerConfig, baseControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
 					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
@@ -374,7 +501,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify changing controller model config works
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, updatedControllerModelConfig),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, initialAgentVersion, baseBootstrapConfig, unsetControllerConfig, updatedControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "2"),
 					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
@@ -384,7 +511,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify unsetting controller model config works
-				Config: testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
+				Config: testAccResourceControllerWithJujuBinary(controllerName, initialAgentVersion, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
 					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
@@ -408,7 +535,39 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				),
 			},
 			{
-				// enable-ha is skipped for k8s controllers, and juju 4.
+				// Verify changing controller agent version works
+				Config: testAccResourceControllerWithJujuBinary(controllerName, updatedAgentVersion, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
+				SkipFunc: func() (bool, error) {
+					if jujuMajor == 4 {
+						// Skip this test until we've landed a fix in Juju 4 that
+						// adds the UpgradeModel facade back to the controller.
+						// Avoids the error 'facade "ModelUpgrader" not supported for controller API connection'.
+						return true, nil
+					}
+					return false, nil
+				},
+				PreConfig: func() {
+					// If microk8s, sleep for 30s to avoid an error "modeloperator" deployment not found.
+					if testingCloud == MicroK8sTesting {
+						time.Sleep(15 * time.Second)
+					}
+				},
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("juju_controller.controller", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "agent_version", updatedAgentVersion),
+					resource.TestCheckResourceAttr(resourceName, "controller_model_config.%", "1"),
+					resource.TestCheckResourceAttr(resourceName, "controller_config.%", "0"),
+					func(s *terraform.State) error {
+						time.Sleep(30 * time.Second) // Sleep to wait for the upgrade to complete.
+						return nil
+					},
+				),
+			},
+			{
 				SkipFunc: func() (bool, error) {
 					if testingCloud != LXDCloudTesting {
 						return true, nil
@@ -421,7 +580,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 					}
 					return false, nil
 				},
-				Config: testAccResourceControllerWithEnableHA(controllerName, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
+				Config: testAccResourceControllerWithEnableHA(controllerName, updatedAgentVersion, baseBootstrapConfig, unsetControllerConfig, unsetControllerModelConfig),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", controllerName),
 					func(s *terraform.State) error {
@@ -471,10 +630,10 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 			},
 			{
 				// Verify that invalid controller config fails
-				Config:      testAccResourceControllerWithJujuBinary(controllerName, baseBootstrapConfig, invalidControllerConfig, unsetControllerModelConfig),
+				Config:      testAccResourceControllerWithJujuBinary(controllerName, updatedAgentVersion, baseBootstrapConfig, invalidControllerConfig, unsetControllerModelConfig),
 				ExpectError: regexp.MustCompile("failed to update controller config: unknown controller config"),
 			},
-		}, testJAASControllerResourceSteps(t, resourceName, controllerName, baseBootstrapConfig)...),
+		}, testJAASControllerResourceSteps(t, resourceName, controllerName, updatedAgentVersion, baseBootstrapConfig)...),
 		CheckDestroy: func(s *terraform.State) error {
 			if isJAAS() {
 				if err := testAccCheckJaasControllerRegistered(t, controllerName, false)(s); err != nil {
@@ -491,17 +650,35 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				return nil
 			}
 
-			// Attempt to connect and expect a timeout after 10s
-			// This doesn't definitely prove the controller is destroyed, but is a good heuristic.
-			_, err = newBootstrappedControllerClient(t.Context(), s, api.WithDialOpts(api.DialOpts{Timeout: 10 * time.Second}))
+			// Retry for up to 30s to allow the controller to finish shutting down.
+			_, err = wait.WaitFor(wait.WaitForCfg[*terraform.State, struct{}]{
+				Context: t.Context(),
+				GetData: func(ctx context.Context, state *terraform.State) (struct{}, error) {
+					conn, err := newBootstrappedControllerClient(ctx, state, api.WithDialOpts(api.DialOpts{Timeout: 5 * time.Second}))
+					if err != nil {
+						if ok, matchErr := regexp.MatchString("failed to connect to controller: .*", err.Error()); matchErr == nil && ok {
+							return struct{}{}, nil
+						}
+						return struct{}{}, fmt.Errorf("unexpected error when connecting to destroyed controller: %w", err)
+					}
+					defer conn.Close()
+					return struct{}{}, juju.NewRetryReadError("controller is still reachable")
+				},
+				Input:          s,
+				NonFatalErrors: []error{juju.RetryReadError},
+				RetryConf: &wait.RetryConf{
+					MaxDuration: 30 * time.Second,
+					Delay:       time.Second,
+					MaxDelay:    time.Second,
+				},
+			})
 			if err != nil {
-				if ok, err := regexp.MatchString("failed to connect to controller: .*", err.Error()); ok && err == nil {
-					return nil
+				if jujuerrors.Is(err, juju.RetryReadError) {
+					return fmt.Errorf("controller remained reachable for 10s after destroy: %w", err)
 				}
-				return fmt.Errorf("unexpected error when connecting to detroyed controller: %w", err)
-			} else {
-				return fmt.Errorf("unexpectedly managed to connect to controller")
+				return err
 			}
+			return nil
 		},
 	})
 }
@@ -663,7 +840,7 @@ resource "juju_controller" "controller" {
 	return ""
 }
 
-func testAccResourceControllerWithJujuBinary(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
+func testAccResourceControllerWithJujuBinary(controllerName, agentVersion string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
 	if isJAAS() {
 		// If JAAS, set the controller's login-token-refresh-url to JAAS.
 		addrs := os.Getenv(JujuControllerEnvKey)
@@ -706,6 +883,7 @@ locals {
 
 resource "juju_controller" "controller" {
   name          = %q
+  agent_version = %q
 
   juju_binary     = "/snap/juju/current/bin/juju"
 
@@ -742,7 +920,7 @@ resource "juju_controller" "controller" {
     }
   }  
 }
-`, controllerName, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL)
+`, controllerName, agentVersion, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL)
 	case MicroK8sTesting:
 		return fmt.Sprintf(`
 provider "juju" {
@@ -755,6 +933,7 @@ locals {
 
 resource "juju_controller" "controller" {
   name          = %q
+  agent_version = %q
 
   juju_binary     = "/snap/juju/current/bin/juju"
 
@@ -787,15 +966,15 @@ resource "juju_controller" "controller" {
 	}
   }
 }
-`, controllerName, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL)
+`, controllerName, agentVersion, bootstrapConfigHCL, controllerConfigHCL, modelConfigHCL)
 	}
 	return ""
 }
 
 // testAccResourceControllerWithEnableHA returns HCL that bootstraps a controller
 // and runs the juju_enable_ha action with 3 units.
-func testAccResourceControllerWithEnableHA(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
-	base := testAccResourceControllerWithJujuBinary(controllerName, bootstrapConfig, controllerConfig, modelConfig)
+func testAccResourceControllerWithEnableHA(controllerName, agentVersion string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
+	base := testAccResourceControllerWithJujuBinary(controllerName, agentVersion, bootstrapConfig, controllerConfig, modelConfig)
 	return base + `
 resource "terraform_data" "test" {
   lifecycle {
@@ -906,7 +1085,7 @@ func getStringListFromTerraformState(attrs map[string]string, attrName string) (
 	return out, nil
 }
 
-func getAgentVersionFromState(s *terraform.State) (*version.Number, error) {
+func getAgentVersionFromState(s *terraform.State) (*semversion.Number, error) {
 	resourceState, ok := s.RootModule().Resources["juju_controller.controller"]
 	if !ok {
 		return nil, fmt.Errorf("resource juju_controller.controller not found in state")
@@ -917,7 +1096,7 @@ func getAgentVersionFromState(s *terraform.State) (*version.Number, error) {
 		return nil, fmt.Errorf("ca_cert attribute not found in resource state")
 	}
 
-	parsedVersion, err := version.Parse(agentVersion)
+	parsedVersion, err := semversion.Parse(agentVersion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse agent_version %q: %w", agentVersion, err)
 	}
