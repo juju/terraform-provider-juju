@@ -161,7 +161,7 @@ jobs:
             required_providers {
               juju = {
                 source = \"juju/juju\"
-                version = \">= 0.9.1\"
+                version = \"~> 1.0\"
               }
             }
           }
