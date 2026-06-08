@@ -633,7 +633,7 @@ func destroyDstModel(_ *terraform.State, modelUUID string) error {
 	tag := names.NewModelTag(modelUUID)
 	destroyStorage := false
 	forceDestroy := true
-	maxWait := 5 * time.Second
+	maxWait := 1 * time.Second
 	timeout := 60 * time.Second
 
 	if err := client.DestroyModel(ctx, tag, &destroyStorage, &forceDestroy, &maxWait, &timeout); err != nil {
