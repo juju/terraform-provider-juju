@@ -13,7 +13,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
-	jujuparams "github.com/juju/juju/rpc/params"
+	"github.com/juju/juju/api/client/modelmanager"
+	"github.com/juju/names/v6"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
@@ -442,9 +443,10 @@ resource "juju_offer" "haproxy_two" {
 }
 
 // TestAcc_ResourceOffer_DeleteTimeout simulates a practitioner deleting an offer.
-// At first they don't realise there is an integration created outside Terraform.
-// After investigating whether it's appropriate, they allow force destroy and
-// try again.
+// Unbeknownst to them, someone else has created an integration consuming this offer
+// out of band with Terraform.
+// After investigating whether it's appropriate, the practitioner decies to allow
+// force destroy and try again.
 func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
@@ -453,20 +455,26 @@ func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
 	srcModelName := acctest.RandomWithPrefix("tf-test-offer-src-delete")
 	dstModelName := acctest.RandomWithPrefix("tf-test-offer-dst-delete")
 
+	var dstModelUUID string
+
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceOfferToDelete(srcModelName, dstModelName, internaltesting.TemplateData{
+				// Setup practitioner's plan
+				Config: testAccResourceOfferToDelete(srcModelName, internaltesting.TemplateData{
 					"AllowForceDestroy": false,
 					"IncludeOffer":      true,
 				}),
-				Check: testAccCreateIntegration,
+				// And rogue dst model with integration
+				Check: func(s *terraform.State) error {
+					return createDstModel(s, dstModelName, &dstModelUUID)
+				},
 			},
 			{
 				// Drop the offer. Destroy should time out with an active connection error
-				Config: testAccResourceOfferToDelete(srcModelName, dstModelName, internaltesting.TemplateData{
+				Config: testAccResourceOfferToDelete(srcModelName, internaltesting.TemplateData{
 					"AllowForceDestroy": false,
 					"IncludeOffer":      false,
 				}),
@@ -474,30 +482,31 @@ func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
 			},
 			{
 				// Restore the offer and store allow_force_destroy=true in state
-				Config: testAccResourceOfferToDelete(srcModelName, dstModelName, internaltesting.TemplateData{
+				Config: testAccResourceOfferToDelete(srcModelName, internaltesting.TemplateData{
 					"AllowForceDestroy": true,
 					"IncludeOffer":      true,
 				}),
 			},
 			{
 				// Drop the offer. Force destroy should happen on timeout.
-				// Clean up integration.
-				Config: testAccResourceOfferToDelete(srcModelName, dstModelName, internaltesting.TemplateData{
+				Config: testAccResourceOfferToDelete(srcModelName, internaltesting.TemplateData{
 					"AllowForceDestroy": true,
 					"IncludeOffer":      false,
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckOfferRemoved,
-					testAccRemoveIntegration,
+					// Clean up dst model.
+					func(s *terraform.State) error {
+						return destroyDstModel(s, dstModelUUID)
+					},
 				),
 			},
 		},
 	})
 }
 
-func testAccResourceOfferToDelete(srcModelName, dstModelName string, data internaltesting.TemplateData) string {
+func testAccResourceOfferToDelete(srcModelName string, data internaltesting.TemplateData) string {
 	data["SrcModelName"] = srcModelName
-	data["DstModelName"] = dstModelName
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceOfferToDelete",
 		`
@@ -517,19 +526,6 @@ resource "juju_application" "src" {
   }
 }
 
-resource "juju_model" "dst" {
-  name = "{{.DstModelName}}"
-}
-
-resource "juju_application" "dst" {
-  model_uuid = juju_model.dst.uuid
-  name       = "dst"
-  charm {
-    name = "juju-qa-dummy-sink"
-    base = "ubuntu@22.04"
-  }
-}
-
 {{ if .IncludeOffer }}
 resource "juju_offer" "this" {
   model_uuid          = juju_model.src.uuid
@@ -544,42 +540,6 @@ resource "juju_offer" "this" {
 `,
 		data,
 	)
-}
-
-func testAccCreateIntegration(s *terraform.State) error {
-	rs, ok := s.RootModule().Resources["juju_model.dst"]
-	if !ok {
-		return fmt.Errorf("not found: juju_model.dst")
-	}
-	modelUUID := rs.Primary.Attributes["uuid"]
-
-	offer, ok := s.RootModule().Resources["juju_offer.this"]
-	if !ok {
-		return fmt.Errorf("not found: juju_offer.this")
-	}
-	offerURL := offer.Primary.Attributes["url"]
-	if offerURL == "" {
-		return fmt.Errorf("missing juju_offer.this.url")
-	}
-
-	_, err := TestClient.Offers.ConsumeRemoteOffer(context.Background(), &juju.ConsumeRemoteOfferInput{
-		ModelUUID: modelUUID,
-		OfferURL:  offerURL,
-	})
-	if err != nil {
-		return fmt.Errorf("creating integration: %w", err)
-	}
-
-	_, err = TestClient.Integrations.CreateIntegration(context.Background(), &juju.IntegrationInput{
-		ModelUUID: modelUUID,
-		Apps:      []string{"dst"},
-		Endpoints: []string{"dst:source", "src"},
-	})
-	if err != nil {
-		return fmt.Errorf("creating integration: %w", err)
-	}
-
-	return nil
 }
 
 func testAccCheckOfferRemoved(s *terraform.State) error {
@@ -609,24 +569,75 @@ func testAccCheckOfferRemoved(s *terraform.State) error {
 	}
 }
 
-func testAccRemoveIntegration(s *terraform.State) error {
-	rs, ok := s.RootModule().Resources["juju_model.dst"]
-	if !ok {
-		return fmt.Errorf("not found: juju_model.dst")
-	}
-	modelUUID := rs.Primary.Attributes["uuid"]
+func createDstModel(s *terraform.State, dstModelName string, dstModelUUID *string) error {
+	ctx := context.Background()
 
-	err := TestClient.Integrations.DestroyIntegration(context.Background(), &juju.IntegrationInput{
-		ModelUUID: modelUUID,
+	modelResp, err := TestClient.Models.CreateModel(ctx, juju.CreateModelInput{
+		Name: dstModelName,
+	})
+	if err != nil {
+		return fmt.Errorf("creating dst model: %w", err)
+	}
+	*dstModelUUID = modelResp.UUID
+
+	_, err = TestClient.Applications.CreateApplication(ctx, &juju.CreateApplicationInput{
+		ApplicationName: "dst",
+		ModelUUID:       *dstModelUUID,
+		CharmName:       "juju-qa-dummy-sink",
+		CharmChannel:    "stable",
+		CharmRevision:   juju.UnspecifiedRevision,
+		CharmBase:       "ubuntu@22.04",
+	})
+	if err != nil {
+		return fmt.Errorf("creating dst application: %w", err)
+	}
+
+	offer, ok := s.RootModule().Resources["juju_offer.this"]
+	if !ok {
+		return fmt.Errorf("not found: juju_offer.this")
+	}
+	offerURL := offer.Primary.Attributes["url"]
+	if offerURL == "" {
+		return fmt.Errorf("missing juju_offer.this.url")
+	}
+
+	_, err = TestClient.Offers.ConsumeRemoteOffer(ctx, &juju.ConsumeRemoteOfferInput{
+		ModelUUID: *dstModelUUID,
+		OfferURL:  offerURL,
+	})
+	if err != nil {
+		return fmt.Errorf("consuming remote offer: %w", err)
+	}
+
+	_, err = TestClient.Integrations.CreateIntegration(ctx, &juju.IntegrationInput{
+		ModelUUID: *dstModelUUID,
+		Apps:      []string{"dst"},
 		Endpoints: []string{"dst:source", "src"},
 	})
 	if err != nil {
-		// We sometimes lose this race
-		if jujuparams.IsCodeNotFound(err) {
-			return nil
-		}
-		return fmt.Errorf("destroying integration: %w", err)
+		return fmt.Errorf("creating integration: %w", err)
 	}
 
+	return nil
+}
+
+func destroyDstModel(_ *terraform.State, modelUUID string) error {
+	ctx := context.Background()
+	conn, err := TestClient.Models.GetConnection(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("getting connection: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := modelmanager.NewClient(conn)
+	tag := names.NewModelTag(modelUUID)
+	destroyStorage := false
+	forceDestroy := true
+	maxWait := 5 * time.Second
+	timeout := 60 * time.Second
+
+	if err := client.DestroyModel(ctx, tag, &destroyStorage, &forceDestroy, &maxWait, &timeout); err != nil {
+		return fmt.Errorf("force destroying model %s: %w", modelUUID, err)
+	}
 	return nil
 }
