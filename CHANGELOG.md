@@ -1,3 +1,56 @@
+# 1.5.4
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.21 release.
+
+ENHANCEMENTS
+
+* Allow controller patch upgrades by @kian99 in [#1240](https://github.com/juju/terraform-provider-juju/pull/1240).
+
+DOCUMENTATION
+
+* Update charm refresh documentation by @kian99 in [#1225](https://github.com/juju/terraform-provider-juju/pull/1225).
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v1.5.3...v1.5.4
+
+# 1.5.3
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.21 release.
+
+BUG FIXES
+
+* Fix unit count bug when machines count is unknown by @SimoneDutto in [#1223](https://github.com/juju/terraform-provider-juju/pull/1223).
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v1.5.2...v1.5.3
+
+# 1.5.2
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.21 release.
+
+ENHANCEMENTS
+
+* Add machine attribute to `juju_application` data source by @SimoneDutto in [#1209](https://github.com/juju/terraform-provider-juju/pull/1209).
+
+BUG FIXES
+
+* Fix charm update handling when changing channel by @kian99 in [#1222](https://github.com/juju/terraform-provider-juju/pull/1222).
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v1.5.1...v1.5.2
+
 # 1.5.1
 
 NOTES:
