@@ -19,14 +19,15 @@ import (
 	"github.com/juju/juju/api/client/cloud"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/client/modelmanager"
+	"github.com/juju/juju/api/client/modelupgrader"
 	"github.com/juju/juju/api/connector"
 	controllerapi "github.com/juju/juju/api/controller/controller"
 	"github.com/juju/juju/api/jujuclient"
 	jujucloud "github.com/juju/juju/cloud"
+	"github.com/juju/juju/core/semversion"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/juju/osenv"
 	"github.com/juju/names/v6"
-	"github.com/juju/version/v2"
 	"gopkg.in/yaml.v2"
 )
 
@@ -269,7 +270,7 @@ func (d *DefaultJujuCommand) Bootstrap(ctx context.Context, args BootstrapArgume
 		return nil, fmt.Errorf("credential name cannot be empty")
 	}
 	if args.Flags.AgentVersion != "" {
-		if _, err := version.Parse(args.Flags.AgentVersion); err != nil {
+		if _, err := semversion.Parse(args.Flags.AgentVersion); err != nil {
 			return nil, fmt.Errorf("invalid agent version %q: %w", args.Flags.AgentVersion, err)
 		}
 	}
@@ -390,6 +391,95 @@ func (d *DefaultJujuCommand) UpdateConfig(
 	}
 
 	return nil
+}
+
+// ControllerVersion retrieves the controller's agent version.
+func (d *DefaultJujuCommand) ControllerVersion(
+	ctx context.Context,
+	connInfo *ControllerConnectionInformation,
+) (semversion.Number, error) {
+	connr, err := connector.NewSimple(connector.SimpleConfig{
+		ControllerAddresses: connInfo.Addresses,
+		CACert:              connInfo.CACert,
+		Username:            connInfo.Username,
+		Password:            connInfo.Password,
+	})
+	if err != nil {
+		return semversion.Number{}, err
+	}
+
+	conn, err := connr.Connect(ctx)
+	if err != nil {
+		return semversion.Number{}, err
+	}
+
+	modelCfgClient := modelconfig.NewClient(conn)
+	defer modelCfgClient.Close()
+
+	modelAttrs, err := modelCfgClient.ModelGet(ctx)
+	if err != nil {
+		return semversion.Number{}, err
+	}
+
+	cfg, err := config.New(config.NoDefaults, modelAttrs)
+	if err != nil {
+		return semversion.Number{}, err
+	}
+
+	agentVersion, ok := cfg.AgentVersion()
+	if !ok {
+		return semversion.Number{}, fmt.Errorf("agent version not found in controller model config")
+	}
+
+	return agentVersion, nil
+}
+
+// UpgradeController upgrades a controller in place to a higher patch version.
+func (d *DefaultJujuCommand) UpgradeController(
+	ctx context.Context,
+	connInfo *ControllerConnectionInformation,
+	targetVersion semversion.Number,
+) (semversion.Number, error) {
+	connr, err := connector.NewSimple(connector.SimpleConfig{
+		ControllerAddresses: connInfo.Addresses,
+		CACert:              connInfo.CACert,
+		Username:            connInfo.Username,
+		Password:            connInfo.Password,
+	})
+	if err != nil {
+		return semversion.Number{}, err
+	}
+
+	conn, err := connr.Connect(ctx)
+	if err != nil {
+		return semversion.Number{}, err
+	}
+	defer conn.Close()
+
+	modelCfgClient := modelconfig.NewClient(conn)
+	defer modelCfgClient.Close()
+
+	modelAttrs, err := modelCfgClient.ModelGet(ctx)
+	if err != nil {
+		return semversion.Number{}, err
+	}
+
+	cfg, err := config.New(config.NoDefaults, modelAttrs)
+	if err != nil {
+		return semversion.Number{}, err
+	}
+
+	controllerModelUUID := cfg.UUID()
+
+	modelUpgraderClient := modelupgrader.NewClient(conn)
+	defer modelUpgraderClient.Close()
+
+	chosenVersion, err := modelUpgraderClient.UpgradeModel(ctx, controllerModelUUID, targetVersion, "", false, false)
+	if err != nil {
+		return semversion.Number{}, fmt.Errorf("failed to upgrade controller: %w", err)
+	}
+
+	return chosenVersion, nil
 }
 
 // Config retrieves controller configuration and controller-model configuration settings.
@@ -744,11 +834,11 @@ func setupControllerConnectionInfo(_ context.Context, runner CommandRunner, args
 
 // checkVersionsMatch checks that the Juju CLI version matches agent version
 func checkVersionsMatch(cliVersion, agentVersion string) error {
-	cliBinary, err := version.ParseBinary(cliVersion)
+	cliBinary, err := semversion.ParseBinary(cliVersion)
 	if err != nil {
 		return fmt.Errorf("failed to parse Juju CLI version %q: %w", cliVersion, err)
 	}
-	agentNumber, err := version.Parse(agentVersion)
+	agentNumber, err := semversion.Parse(agentVersion)
 	if err != nil {
 		return fmt.Errorf("failed to parse agent version %q: %w", agentVersion, err)
 	}

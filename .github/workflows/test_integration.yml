@@ -156,6 +156,23 @@ jobs:
           TEST_CLOUD: ${{ matrix.action-operator.cloud }}
         run: go test -parallel 4 -timeout 90m -v -cover ./internal/provider/
         timeout-minutes: 90
+      - name: Dump Juju bootstrap logs on failure
+        if: failure()
+        run: |
+          log_files=(/tmp/juju-bootstrap-log-*.txt)
+          if [ ${#log_files[@]} -eq 0 ]; then
+            echo "No Juju bootstrap logs found in /tmp."
+            exit 0
+          fi
+
+          echo "Found ${#log_files[@]} Juju bootstrap log file(s):"
+          printf ' - %s\n' "${log_files[@]}"
+
+          for log_file in "${log_files[@]}"; do
+            echo "::group::${log_file}"
+            cat "${log_file}"
+            echo "::endgroup::"
+          done
 
   # Run acceptance tests in a matrix with Terraform CLI versions
   add-machine-test:
