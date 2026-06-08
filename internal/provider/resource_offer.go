@@ -359,7 +359,6 @@ func (o *offerResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to force delete offer, got error: %s", err))
 			return
 		}
-		o.trace(fmt.Sprintf("deleted offer resource %q", offerURL))
 	}
 	o.trace(fmt.Sprintf("deleted offer resource %q", offerURL))
 }
