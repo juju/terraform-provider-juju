@@ -40,6 +40,31 @@ func TestAcc_ResourceSSHKey(t *testing.T) {
 				ResourceName:      "juju_ssh_key.this",
 				ImportState:       true,
 				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{"payload"},
+				ImportStateCheck: func(is []*terraform.InstanceState) error {
+					if len(is) != 1 {
+						return fmt.Errorf("expected 1 instance in import state, got %d", len(is))
+					}
+
+					payload, ok := is[0].Attributes["payload"]
+					if !ok {
+						return fmt.Errorf("did not find payload attribute in import state")
+					}
+
+					expectedClean, err := extractCleanSSHKey(sshKey1)
+					if err != nil {
+						return fmt.Errorf("clean expected ssh key: %w", err)
+					}
+					actualClean, err := extractCleanSSHKey(payload)
+					if err != nil {
+						return fmt.Errorf("clean imported ssh key: %w", err)
+					}
+					if expectedClean != actualClean {
+						return fmt.Errorf("imported payload mismatch: expected %q got %q", expectedClean, actualClean)
+					}
+
+					return nil
+				},
 			},
 			// we update the key
 			{
