@@ -27,7 +27,14 @@ data "juju_secret" "my_secret_data_source" {
 }
 ```
 
-> See more: [`juju_offer` (data source)](../reference/terraform-provider/data-sources/offer)
+The data source exposes two attributes for referencing the secret:
+
+- `secret_id` — the bare secret ID (e.g. `coj8mulh8b41e8nv6p90`).
+- `secret_uri` — the full URI form (e.g. `secret:coj8mulh8b41e8nv6p90`), which is what Juju requires when passing a secret as a charm configuration value.
+
+When setting a charm config option, it's more convenient to use `secret_uri`. This avoids having to prepend `"secret:"` to `secret_id`.
+
+> See more: [`juju_secret` (data source)](../reference/terraform-provider/data-sources/secret)
 
 
 ## Add a secret

@@ -31,7 +31,7 @@ resource "juju_application" "ubuntu" {
   }
 
   config = {
-    secret = data.juju_secret.my_secret_data_source.secret_id
+    secret = data.juju_secret.my_secret_data_source.secret_uri
   }
 }
 
@@ -55,3 +55,4 @@ resource "juju_access_secret" "my_secret_access" {
 ### Read-Only
 
 - `secret_id` (String) The ID of the secret.
+- `secret_uri` (String) The URI of the secret.
