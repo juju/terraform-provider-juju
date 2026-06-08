@@ -37,9 +37,9 @@ func TestAcc_ResourceSSHKey(t *testing.T) {
 					testCheckSSHKeyPayload("juju_ssh_key.this", sshKey1)),
 			},
 			{
-				ResourceName:      "juju_ssh_key.this",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            "juju_ssh_key.this",
+				ImportState:             true,
+				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"payload"},
 				ImportStateCheck: func(is []*terraform.InstanceState) error {
 					if len(is) != 1 {
