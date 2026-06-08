@@ -41,6 +41,8 @@ type secretDataSourceModel struct {
 	Name types.String `tfsdk:"name"`
 	// SecretId is the ID of the secret.
 	SecretId types.String `tfsdk:"secret_id"`
+	// SecretURI is the URI of the secret e.g. `secret:coj8mulh8b41e8nv6p90`.
+	SecretURI types.String `tfsdk:"secret_uri"`
 }
 
 // Metadata returns the full data source name as used in terraform plans.
@@ -65,7 +67,11 @@ func (d *secretDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 				Required:    true,
 			},
 			"secret_id": schema.StringAttribute{
-				Description: "The ID of the secret.",
+				Description: "The ID of the secret. E.g. coj8mulh8b41e8nv6p90",
+				Computed:    true,
+			},
+			"secret_uri": schema.StringAttribute{
+				Description: "The URI of the secret. E.g. secret:coj8mulh8b41e8nv6p90",
 				Computed:    true,
 			},
 		},
@@ -126,6 +132,7 @@ func (d *secretDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	d.trace(fmt.Sprintf("read secret data source %q", data.SecretId))
 
 	data.SecretId = types.StringValue(readSecretOutput.SecretId)
+	data.SecretURI = types.StringValue(readSecretOutput.SecretURI)
 
 	// Save state into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

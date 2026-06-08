@@ -39,7 +39,8 @@ func TestAcc_DataSourceSecret(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("data.juju_secret.secret_data_source", "model_uuid", "juju_model."+modelName, "uuid"),
 					resource.TestCheckResourceAttr("data.juju_secret.secret_data_source", "name", secretName),
-					resource.TestCheckResourceAttrPair("data.juju_secret.secret_data_source", "secretID", "juju_secret.secret_resource", "secretID"),
+					resource.TestCheckResourceAttrPair("data.juju_secret.secret_data_source", "secret_id", "juju_secret.secret_resource", "secret_id"),
+					resource.TestCheckResourceAttrPair("data.juju_secret.secret_data_source", "secret_uri", "juju_secret.secret_resource", "secret_uri"),
 				),
 			},
 		},

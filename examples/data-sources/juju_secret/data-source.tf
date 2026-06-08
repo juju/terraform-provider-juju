@@ -16,7 +16,7 @@ resource "juju_application" "ubuntu" {
   }
 
   config = {
-    secret = data.juju_secret.my_secret_data_source.secret_id
+    secret = data.juju_secret.my_secret_data_source.secret_uri
   }
 }
 
