@@ -42,20 +42,6 @@ var subnetObjectAttrTypes = map[string]attr.Type{
 	subnetAttrZones:             types.ListType{ElemType: types.StringType},
 }
 
-var subnetNestedSchemaAttributes = map[string]schema.Attribute{
-	subnetAttrCIDR:              schema.StringAttribute{Computed: true},
-	subnetAttrProviderID:        schema.StringAttribute{Computed: true},
-	subnetAttrProviderNetworkID: schema.StringAttribute{Computed: true},
-	subnetAttrProviderSpaceID:   schema.StringAttribute{Computed: true},
-	subnetAttrVLANTag:           schema.Int64Attribute{Computed: true},
-	subnetAttrLife:              schema.StringAttribute{Computed: true},
-	subnetAttrSpaceName:         schema.StringAttribute{Computed: true},
-	subnetAttrZones: schema.ListAttribute{
-		Computed:    true,
-		ElementType: types.StringType,
-	},
-}
-
 // NewSubnetsDataSource returns a subnets data source.
 func NewSubnetsDataSource() datasource.DataSource {
 	return &subnetsDataSource{}
@@ -105,7 +91,19 @@ func (d *subnetsDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 				Description: "Map of subnets keyed by CIDR.",
 				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
-					Attributes: subnetNestedSchemaAttributes,
+					Attributes: map[string]schema.Attribute{
+						subnetAttrCIDR:              schema.StringAttribute{Computed: true},
+						subnetAttrProviderID:        schema.StringAttribute{Computed: true},
+						subnetAttrProviderNetworkID: schema.StringAttribute{Computed: true},
+						subnetAttrProviderSpaceID:   schema.StringAttribute{Computed: true},
+						subnetAttrVLANTag:           schema.Int64Attribute{Computed: true},
+						subnetAttrLife:              schema.StringAttribute{Computed: true},
+						subnetAttrSpaceName:         schema.StringAttribute{Computed: true},
+						subnetAttrZones: schema.ListAttribute{
+							Computed:    true,
+							ElementType: types.StringType,
+						},
+					},
 				},
 			},
 			"id": schema.StringAttribute{
