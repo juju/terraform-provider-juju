@@ -30,6 +30,8 @@ const (
 	LogDataSourceSecret = "datasource-secret"
 	// LogDataSourceStoragePool is the logging subsystem for storage pool data sources.
 	LogDataSourceStoragePool = "datasource-storage-pool"
+	// LogDataSourceSpace is the logging subsystem for space data sources.
+	LogDataSourceSpace = "datasource-space"
 
 	// LogResourceApplication is the logging subsystem for application resources.
 	LogResourceApplication = "resource-application"
