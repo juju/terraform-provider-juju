@@ -20,6 +20,42 @@ import (
 
 var _ datasource.DataSourceWithConfigure = &subnetsDataSource{}
 
+const (
+	subnetAttrCIDR              = "cidr"
+	subnetAttrProviderID        = "provider_id"
+	subnetAttrProviderNetworkID = "provider_network_id"
+	subnetAttrProviderSpaceID   = "provider_space_id"
+	subnetAttrVLANTag           = "vlan_tag"
+	subnetAttrLife              = "life"
+	subnetAttrSpaceName         = "space_name"
+	subnetAttrZones             = "zones"
+)
+
+var subnetObjectAttrTypes = map[string]attr.Type{
+	subnetAttrCIDR:              types.StringType,
+	subnetAttrProviderID:        types.StringType,
+	subnetAttrProviderNetworkID: types.StringType,
+	subnetAttrProviderSpaceID:   types.StringType,
+	subnetAttrVLANTag:           types.Int64Type,
+	subnetAttrLife:              types.StringType,
+	subnetAttrSpaceName:         types.StringType,
+	subnetAttrZones:             types.ListType{ElemType: types.StringType},
+}
+
+var subnetNestedSchemaAttributes = map[string]schema.Attribute{
+	subnetAttrCIDR:              schema.StringAttribute{Computed: true},
+	subnetAttrProviderID:        schema.StringAttribute{Computed: true},
+	subnetAttrProviderNetworkID: schema.StringAttribute{Computed: true},
+	subnetAttrProviderSpaceID:   schema.StringAttribute{Computed: true},
+	subnetAttrVLANTag:           schema.Int64Attribute{Computed: true},
+	subnetAttrLife:              schema.StringAttribute{Computed: true},
+	subnetAttrSpaceName:         schema.StringAttribute{Computed: true},
+	subnetAttrZones: schema.ListAttribute{
+		Computed:    true,
+		ElementType: types.StringType,
+	},
+}
+
 // NewSubnetsDataSource returns a subnets data source.
 func NewSubnetsDataSource() datasource.DataSource {
 	return &subnetsDataSource{}
@@ -69,19 +105,7 @@ func (d *subnetsDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 				Description: "Map of subnets keyed by CIDR.",
 				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"cidr":                schema.StringAttribute{Computed: true},
-						"provider_id":         schema.StringAttribute{Computed: true},
-						"provider_network_id": schema.StringAttribute{Computed: true},
-						"provider_space_id":   schema.StringAttribute{Computed: true},
-						"vlan_tag":            schema.Int64Attribute{Computed: true},
-						"life":                schema.StringAttribute{Computed: true},
-						"space_name":          schema.StringAttribute{Computed: true},
-						"zones": schema.ListAttribute{
-							Computed:    true,
-							ElementType: types.StringType,
-						},
-					},
+					Attributes: subnetNestedSchemaAttributes,
 				},
 			},
 			"id": schema.StringAttribute{
@@ -136,16 +160,7 @@ func (d *subnetsDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		"count":      len(subnets),
 	})
 
-	subnetObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
-		"cidr":                types.StringType,
-		"provider_id":         types.StringType,
-		"provider_network_id": types.StringType,
-		"provider_space_id":   types.StringType,
-		"vlan_tag":            types.Int64Type,
-		"life":                types.StringType,
-		"space_name":          types.StringType,
-		"zones":               types.ListType{ElemType: types.StringType},
-	}}
+	subnetObjectType := types.ObjectType{AttrTypes: subnetObjectAttrTypes}
 
 	result := make(map[string]attr.Value, len(subnets))
 	for _, subnet := range subnets {
@@ -156,14 +171,14 @@ func (d *subnetsDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		}
 
 		obj, diags := types.ObjectValue(subnetObjectType.AttrTypes, map[string]attr.Value{
-			"cidr":                types.StringValue(subnet.CIDR),
-			"provider_id":         types.StringValue(subnet.ProviderID),
-			"provider_network_id": types.StringValue(subnet.ProviderNetworkID),
-			"provider_space_id":   types.StringValue(subnet.ProviderSpaceID),
-			"vlan_tag":            types.Int64Value(int64(subnet.VLANTag)),
-			"life":                types.StringValue(string(subnet.Life)),
-			"space_name":          types.StringValue(subnet.SpaceName),
-			"zones":               zones,
+			subnetAttrCIDR:              types.StringValue(subnet.CIDR),
+			subnetAttrProviderID:        types.StringValue(subnet.ProviderID),
+			subnetAttrProviderNetworkID: types.StringValue(subnet.ProviderNetworkID),
+			subnetAttrProviderSpaceID:   types.StringValue(subnet.ProviderSpaceID),
+			subnetAttrVLANTag:           types.Int64Value(int64(subnet.VLANTag)),
+			subnetAttrLife:              types.StringValue(string(subnet.Life)),
+			subnetAttrSpaceName:         types.StringValue(subnet.SpaceName),
+			subnetAttrZones:             zones,
 		})
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
