@@ -1,0 +1,64 @@
+name: Terragrunt LXD bootstrap test
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  terragrunt-lxd-bootstrap:
+    name: Terragrunt LXD bootstrap
+    runs-on: ubuntu-22.04
+    env:
+      ACTIONS_ALLOW_IPV6: false
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+
+      # Set up LXD and bootstrap a throw-away Juju controller so that
+      # the Juju client has LXD certificate credentials stored locally.
+      - name: Setup LXD and Juju
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: lxd
+          channel: "6"
+          juju-channel: "3/stable"
+          lxd-channel: "5.21/stable"
+
+      # Extract the LXD certificate credentials from the Juju client store
+      # into ~/lxd-credentials.yaml for use by the module.
+      - name: Create LXD credentials file
+        run: ./tools/create_lxd_config.sh
+
+      - name: Build and install provider
+        run: make install
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.*"
+          terraform_wrapper: false
+
+      - name: Install Terragrunt
+        run: |
+          curl -sSfL --proto '=https' --tlsv1.2 https://terragrunt.com/install | bash -s -- -v v1.0.5
+          echo "$HOME/.terragrunt/bin" >> $GITHUB_PATH
+
+      - name: Terragrunt apply
+        run: terragrunt apply --auto-approve
+        working-directory: terragrunt/examples/lxd-ci
+
+      - name: Terragrunt destroy
+        if: always()
+        run: terragrunt destroy --auto-approve
+        working-directory: terragrunt/examples/lxd-ci

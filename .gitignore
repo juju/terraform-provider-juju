@@ -11,6 +11,7 @@ modules-dev/
 *.backup
 ./*.tfstate
 .terraform*
+.terragrunt-cache/
 *.log
 *.bak
 *~
@@ -26,4 +27,3 @@ vendor/
 __debug_bin
 test.env
 /tmp
-modules/
