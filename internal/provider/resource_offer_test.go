@@ -449,6 +449,7 @@ resource "juju_offer" "haproxy_two" {
 // After investigating whether it's appropriate, the practitioner decies to allow
 // force destroy and try again.
 func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
+	SkipAgainstJuju4WithReason(t, "offer force-destroy behaviour differs in Juju 4.x")
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
