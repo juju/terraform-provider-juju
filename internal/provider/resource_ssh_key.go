@@ -206,20 +206,55 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	_, err := s.client.SSHKeys.ReadSSHKey(ctx, &juju.ReadSSHKeyInput{
-		Username:  s.client.Username(),
-		ModelUUID: state.ModelUUID.ValueString(),
-		Payload:   state.Payload.ValueString(),
-	})
+	modelUUID, fingerprint, err := modelUUIDAndFingerprintFromSSHKeyID(state.ID.ValueString())
 	if err != nil {
-		if errors.Is(err, juju.SSHKeyNotFoundError) {
-			resp.State.RemoveResource(ctx)
-			return
-		}
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read ssh key, got error: %s", err))
+		resp.Diagnostics.AddError("Malformed ID", err.Error())
 		return
 	}
-	s.trace(fmt.Sprintf("read ssh key resource %q", state.ID.ValueString()))
+
+	payload := strings.TrimSuffix(state.Payload.ValueString(), "\n")
+	var payloadToWrite string
+	if payload == "" {
+		keys, err := s.client.SSHKeys.ListKeys(ctx, juju.ListSSHKeysInput{
+			Username:  s.client.Username(),
+			ModelUUID: modelUUID,
+		})
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to list ssh keys, got error: %s", err))
+			return
+		}
+
+		payloadToWrite, err = sshKeyPayloadFromFingerprint(keys, fingerprint)
+		if err != nil {
+			if errors.Is(err, juju.SSHKeyNotFoundError) {
+				resp.State.RemoveResource(ctx)
+				return
+			}
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve imported ssh key from id %q, got error: %s", state.ID.ValueString(), err))
+			return
+		}
+	} else {
+		readResp, err := s.client.SSHKeys.ReadSSHKey(ctx, &juju.ReadSSHKeyInput{
+			Username:  s.client.Username(),
+			ModelUUID: modelUUID,
+			Payload:   payload,
+		})
+		if err != nil {
+			if errors.Is(err, juju.SSHKeyNotFoundError) {
+				resp.State.RemoveResource(ctx)
+				return
+			}
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read ssh key, got error: %s", err))
+			return
+		}
+		s.trace(fmt.Sprintf("read ssh key resource %q", state.ID.ValueString()))
+
+		payloadToWrite = readResp.Payload
+	}
+
+	state.ModelUUID = types.StringValue(modelUUID)
+	state.Payload = types.StringValue(strings.TrimSuffix(payloadToWrite, "\n"))
+	state.ID = types.StringValue(newSSHKeyID(modelUUID, fingerprint))
 
 	// Set the plan onto the Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -280,4 +315,26 @@ func (s *sshKeyResource) trace(msg string, additionalFields ...map[string]interf
 	// Output:
 	// {"@level":"trace","@message":"hello, world","@module":"provider.my-subsystem","foo":123}
 	tflog.SubsystemTrace(s.subCtx, LogResourceSSHKey, msg, additionalFields...)
+}
+
+func modelUUIDAndFingerprintFromSSHKeyID(id string) (string, string, error) {
+	parts := strings.SplitN(id, ":", 3)
+	if len(parts) != 3 || parts[0] != "sshkey" || parts[1] == "" || parts[2] == "" {
+		return "", "", fmt.Errorf("expected id in format sshkey:<model_uuid>:<key_fingerprint>, got: %q", id)
+	}
+	return parts[1], parts[2], nil
+}
+
+func sshKeyPayloadFromFingerprint(keys []string, targetFingerprint string) (string, error) {
+	for _, key := range keys {
+		normalized := strings.TrimSuffix(key, "\n")
+		fingerprint, _, err := ssh.KeyFingerprint(normalized)
+		if err != nil {
+			continue
+		}
+		if fingerprint == targetFingerprint {
+			return normalized, nil
+		}
+	}
+	return "", juju.NewSSHKeyNotFoundError(targetFingerprint)
 }
