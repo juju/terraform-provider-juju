@@ -17,6 +17,7 @@ import (
 func TestAccListSpaces_Query(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-space-list")
 	spaceName := "test-space"
+	spaceTobeIgnored := "space-to-be-ignored"
 
 	var expectedID string
 
@@ -25,7 +26,7 @@ func TestAccListSpaces_Query(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccListSpacesSetup(modelName, spaceName),
+				Config: testAccListSpacesSetup(modelName, spaceName, spaceTobeIgnored),
 				Check: func(s *terraform.State) error {
 					rs, ok := s.RootModule().Resources["juju_space.test"]
 					if !ok {
@@ -62,7 +63,7 @@ func TestAccListSpaces_Query(t *testing.T) {
 	})
 }
 
-func testAccListSpacesSetup(modelName, spaceName string) string {
+func testAccListSpacesSetup(modelName, spaceName, spaceTobeIgnored string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "test" {
   name = %q
@@ -72,7 +73,12 @@ resource "juju_space" "test" {
   model_uuid = juju_model.test.uuid
   name       = %q
 }
-`, modelName, spaceName)
+
+resource "juju_space" "ignored" {
+  model_uuid = juju_model.test.uuid
+  name       = %q
+}
+`, modelName, spaceName, spaceTobeIgnored)
 }
 
 func testAccListSpaces() string {
