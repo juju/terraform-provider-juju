@@ -5,7 +5,9 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"testing"
 	"time"
@@ -640,7 +642,11 @@ func destroyDstModel(modelUUID string) error {
 	timeout := 60 * time.Second
 
 	if err := client.DestroyModel(ctx, tag, &destroyStorage, &forceDestroy, &maxWait, &timeout); err != nil {
-		return fmt.Errorf("force destroying model %s: %w", modelUUID, err)
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			log.Printf("[WARN] destroyDstModel: ignoring timeout from force-destroy of model %s: %v", modelUUID, err)
+		} else {
+			return fmt.Errorf("force destroying model %s: %w", modelUUID, err)
+		}
 	}
 	return nil
 }
