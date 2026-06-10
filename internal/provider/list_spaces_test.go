@@ -15,6 +15,9 @@ import (
 )
 
 func TestAccListSpaces_Query(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
 	modelName := acctest.RandomWithPrefix("tf-test-space-list")
 	spaceName := "test-space"
 	spaceTobeIgnored := "space-to-be-ignored"
