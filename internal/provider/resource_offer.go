@@ -7,12 +7,15 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -20,9 +23,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-
 	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
+	"github.com/juju/terraform-provider-juju/internal/retry"
+	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -53,8 +57,10 @@ type offerResourceModel struct {
 
 type offerResourceModelV2 struct {
 	offerResourceModel
-	ModelUUID types.String `tfsdk:"model_uuid"`
-	Endpoints types.Set    `tfsdk:"endpoints"`
+	ModelUUID         types.String   `tfsdk:"model_uuid"`
+	Endpoints         types.Set      `tfsdk:"endpoints"`
+	AllowForceDestroy types.Bool     `tfsdk:"allow_force_destroy"`
+	Timeouts          timeouts.Value `tfsdk:"timeouts"`
 }
 
 type offerResourceIdentityModel struct {
@@ -77,8 +83,13 @@ func (o *offerResource) IdentitySchema(_ context.Context, _ resource.IdentitySch
 	}
 }
 
+const (
+	defaultOfferCreateTimeout = 1 * time.Minute
+	defaultOfferDeleteTimeout = 5 * time.Minute
+)
+
 // Schema implements resource.ResourceWithConfigure interface.
-func (o *offerResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (o *offerResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:     2,
 		Description: "A resource that represent a Juju Offer.",
@@ -135,6 +146,19 @@ func (o *offerResource) Schema(_ context.Context, req resource.SchemaRequest, re
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"allow_force_destroy": schema.BoolAttribute{
+				Description: "Allows the offer to be force-destroyed if it has active connections. " +
+					"Force destroy may not actually be used if not necessary.",
+				Optional: true,
+				Computed: true,
+				Default:  booldefault.StaticBool(false),
+			},
+		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{
+				Create: true,
+				Delete: true,
+			}),
 		},
 	}
 }
@@ -153,6 +177,15 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	createTimeout, diags := plan.Timeouts.Create(ctx, defaultOfferCreateTimeout)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, createTimeout)
+	defer cancel()
 
 	modelUUID := plan.ModelUUID.ValueString()
 
@@ -248,7 +281,15 @@ func (o *offerResource) Read(ctx context.Context, req resource.ReadRequest, resp
 }
 
 func (o *offerResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// Everything is always replaced, so Update should not be called.
+	var plan offerResourceModelV2
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Only allow_force_destroy and timeouts can change without triggering
+	// a replace, so just persist the new plan values to state.
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 // Delete is called when the provider must delete the resource. Config
@@ -266,22 +307,60 @@ func (o *offerResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		addClientNotConfiguredError(&resp.Diagnostics, "offer", "delete")
 		return
 	}
-	var plan offerResourceModelV2
+	var state offerResourceModelV2
 
 	// Get the Terraform state from the request into the plan
-	resp.Diagnostics.Append(req.State.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	err := o.client.Offers.DestroyOffer(ctx, &juju.DestroyOfferInput{
-		OfferURL: plan.URL.ValueString(),
-	})
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete offer, got error: %s", err))
+	deleteTimeout, diags := state.Timeouts.Delete(ctx, defaultOfferDeleteTimeout)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
-	o.trace(fmt.Sprintf("delete offer resource %q", plan.URL))
+
+	offerURL := state.URL.ValueString()
+
+	_, err := retry.RetryOnErrors(retry.RetryOnErrorsCfg[*juju.DestroyOfferInput, struct{}]{
+		Context: ctx,
+		Input:   &juju.DestroyOfferInput{OfferURL: offerURL},
+		Do: func(ctx context.Context, input *juju.DestroyOfferInput) (struct{}, error) {
+			return struct{}{}, o.client.Offers.DestroyOffer(ctx, input)
+		},
+		RetriableErrors: []error{juju.OfferHasConnectionsError},
+		RetryConf: &wait.RetryConf{
+			Delay:       time.Second,
+			MaxDelay:    juju.OfferApiTickWait,
+			MaxDuration: deleteTimeout,
+		},
+		Logf: o.trace,
+	})
+	if err != nil {
+		if !retry.IsDurationExceeded(err) {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete offer, got error: %s", retry.LastError(err)))
+			return
+		}
+
+		if !state.AllowForceDestroy.ValueBool() {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf(
+				"offer %q still has connection(s) after timeout; remove integrations consuming this offer first",
+				offerURL,
+			))
+			return
+		}
+
+		o.trace(fmt.Sprintf("offer %q still has active connections after timeout; force destroying", offerURL))
+		if err := o.client.Offers.DestroyOffer(ctx, &juju.DestroyOfferInput{
+			OfferURL: offerURL,
+			Force:    true,
+		}); err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to force delete offer, got error: %s", err))
+			return
+		}
+	}
+	o.trace(fmt.Sprintf("deleted offer resource %q", offerURL))
 }
 
 func (o *offerResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {

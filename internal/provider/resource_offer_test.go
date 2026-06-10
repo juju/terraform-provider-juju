@@ -4,11 +4,21 @@
 package provider
 
 import (
+	"context"
 	"fmt"
+	"log"
+	"regexp"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/juju/juju/api/client/modelmanager"
+	"github.com/juju/names/v6"
+
+	"github.com/juju/terraform-provider-juju/internal/juju"
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
 func TestAcc_ResourceOffer(t *testing.T) {
@@ -431,4 +441,208 @@ resource "juju_offer" "haproxy_two" {
 	endpoints        = ["sink"]
 }
 `, modelName)
+}
+
+// TestAcc_ResourceOffer_DeleteTimeout simulates a practitioner deleting an offer.
+// Unbeknownst to them, someone else has created an integration consuming this offer
+// out of band with Terraform.
+// After investigating whether it's appropriate, the practitioner decies to allow
+// force destroy and try again.
+func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
+	SkipAgainstJuju4WithReason(t, "offer force-destroy behaviour differs in Juju 4.x")
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	srcModelName := acctest.RandomWithPrefix("tf-test-offer-src-delete")
+	dstModelName := acctest.RandomWithPrefix("tf-test-offer-dst-delete")
+
+	var dstModelUUID string
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// Setup practitioner's src model with offer
+				Config: testAccResourceOfferToDelete(srcModelName, internaltesting.TemplateData{
+					"AllowForceDestroy": false,
+					"IncludeOffer":      true,
+				}),
+				// And rogue dst model with integration
+				Check: func(s *terraform.State) error {
+					offer, ok := s.RootModule().Resources["juju_offer.this"]
+					if !ok {
+						return fmt.Errorf("not found: juju_offer.this")
+					}
+					offerURL := offer.Primary.Attributes["url"]
+					if offerURL == "" {
+						return fmt.Errorf("missing juju_offer.this.url")
+					}
+
+					// Update closure capture and return any error
+					var err error
+					dstModelUUID, err = createDstModel(dstModelName, offerURL)
+					return err
+				},
+			},
+			{
+				// Drop the offer. Destroy should time out with an active connection error
+				Config: testAccResourceOfferToDelete(srcModelName, internaltesting.TemplateData{
+					"AllowForceDestroy": false,
+					"IncludeOffer":      false,
+				}),
+				ExpectError: regexp.MustCompile(`(?s)still\s+has\s+connection\(s\)\s+after\s+timeout`),
+			},
+			{
+				// Restore the offer and store allow_force_destroy=true in state
+				Config: testAccResourceOfferToDelete(srcModelName, internaltesting.TemplateData{
+					"AllowForceDestroy": true,
+					"IncludeOffer":      true,
+				}),
+			},
+			{
+				// Drop the offer. Force destroy should happen on timeout
+				Config: testAccResourceOfferToDelete(srcModelName, internaltesting.TemplateData{
+					"AllowForceDestroy": true,
+					"IncludeOffer":      false,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckOfferRemoved,
+					// Clean up dst model
+					func(s *terraform.State) error {
+						return destroyDstModel(dstModelUUID)
+					},
+				),
+			},
+		},
+	})
+}
+
+func testAccResourceOfferToDelete(srcModelName string, data internaltesting.TemplateData) string {
+	data["SrcModelName"] = srcModelName
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceOfferToDelete",
+		`
+resource "juju_model" "src" {
+  name = "{{.SrcModelName}}"
+}
+
+resource "juju_application" "src" {
+  model_uuid = juju_model.src.uuid
+  name       = "src"
+  charm {
+    name = "juju-qa-dummy-source"
+    base = "ubuntu@22.04"
+  }
+  config = {
+    token = "abc"
+  }
+}
+
+{{ if .IncludeOffer }}
+resource "juju_offer" "this" {
+  model_uuid          = juju_model.src.uuid
+  application_name    = juju_application.src.name
+  endpoints           = ["sink"]
+  allow_force_destroy = {{.AllowForceDestroy}}
+  timeouts {
+    delete = "10s"
+  }
+}
+{{ end }}
+`,
+		data,
+	)
+}
+
+func testAccCheckOfferRemoved(s *terraform.State) error {
+	// juju_offer.this has already been destroyed so it is absent from state.
+	// Derive the offer URL from the src model that is still present.
+	srcModel, ok := s.RootModule().Resources["juju_model.src"]
+	if !ok {
+		return fmt.Errorf("not found: juju_model.src")
+	}
+	offerURL := fmt.Sprintf("%s/%s.src", expectedResourceOwner(), srcModel.Primary.Attributes["name"])
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+
+	for {
+		_, err := TestClient.Offers.ReadOffer(ctx, &juju.ReadOfferInput{
+			OfferURL: offerURL,
+		})
+		if err != nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("offer %q still exists after force destroy and timeout", offerURL)
+		case <-time.After(1 * time.Second):
+		}
+	}
+}
+
+func createDstModel(dstModelName string, offerURL string) (string, error) {
+	ctx := context.Background()
+
+	modelResp, err := TestClient.Models.CreateModel(ctx, juju.CreateModelInput{
+		Name: dstModelName,
+	})
+	if err != nil {
+		return "", fmt.Errorf("creating dst model: %w", err)
+	}
+	dstModelUUID := modelResp.UUID
+
+	_, err = TestClient.Applications.CreateApplication(ctx, &juju.CreateApplicationInput{
+		ApplicationName: "dst",
+		ModelUUID:       dstModelUUID,
+		CharmName:       "juju-qa-dummy-sink",
+		CharmChannel:    "stable",
+		CharmRevision:   juju.UnspecifiedRevision,
+		CharmBase:       "ubuntu@22.04",
+	})
+	if err != nil {
+		return "", fmt.Errorf("creating dst application: %w", err)
+	}
+
+	_, err = TestClient.Offers.ConsumeRemoteOffer(ctx, &juju.ConsumeRemoteOfferInput{
+		ModelUUID: dstModelUUID,
+		OfferURL:  offerURL,
+	})
+	if err != nil {
+		return "", fmt.Errorf("consuming remote offer: %w", err)
+	}
+
+	_, err = TestClient.Integrations.CreateIntegration(ctx, &juju.IntegrationInput{
+		ModelUUID: dstModelUUID,
+		Apps:      []string{"dst"},
+		Endpoints: []string{"dst:source", "src"},
+	})
+	if err != nil {
+		return "", fmt.Errorf("creating integration: %w", err)
+	}
+
+	return dstModelUUID, nil
+}
+
+func destroyDstModel(modelUUID string) error {
+	ctx := context.Background()
+	conn, err := TestClient.Models.GetConnection(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("getting connection: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := modelmanager.NewClient(conn)
+	tag := names.NewModelTag(modelUUID)
+	destroyStorage := false
+	forceDestroy := true
+	maxWait := 1 * time.Second
+	timeout := 10 * time.Second
+
+	if err := client.DestroyModel(ctx, tag, &destroyStorage, &forceDestroy, &maxWait, &timeout); err != nil {
+		log.Printf("[WARN] destroyDstModel: ignoring failure from force-destroy of model %s: %v", modelUUID, err)
+	}
+	return nil
 }

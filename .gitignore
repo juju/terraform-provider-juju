@@ -23,7 +23,8 @@ modules-dev/
 .vscode
 .envrc
 vendor/
-__debug_bin
+__debug_bin*
 test.env
 /tmp
 modules/
+qa/

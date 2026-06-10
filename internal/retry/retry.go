@@ -6,6 +6,7 @@ package retry
 import (
 	"context"
 
+	jujuretry "github.com/juju/retry"
 	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
@@ -37,6 +38,22 @@ type RetryOnErrorsCfg[I any, D any] struct {
 	// RetryConf is a configuration for retrying the operation.
 	// If not provided, default values will be used.
 	RetryConf *RetryConf
+}
+
+// IsDurationExceeded returns true if the retry operation was stopped because
+// the maximum duration was exceeded.
+func IsDurationExceeded(err error) bool {
+	return jujuretry.IsDurationExceeded(err)
+}
+
+// LastError returns the underlying error from a retry operation, unwrapping
+// the retry library's envelope types (duration exceeded, attempts exceeded,
+// retry stopped).
+func LastError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return jujuretry.LastError(err)
 }
 
 // RetryOnErrors waits for a condition to be met, retrying every second, by default, until the condition is met or the context is cancelled.

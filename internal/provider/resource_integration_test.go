@@ -378,6 +378,10 @@ resource "juju_offer" "b" {
 	model_uuid       = juju_model.b.uuid
 	application_name = juju_application.b.name
 	endpoints        = ["sink"]
+	allow_force_destroy = true
+	timeouts {
+		delete = "10s"
+	}
 }
 
 resource "juju_integration" "a" {
@@ -505,6 +509,10 @@ resource "juju_offer" "a" {
         model_uuid       = juju_model.a.uuid
         application_name = juju_application.a.name
         endpoints        = ["source"]
+        allow_force_destroy = true
+        timeouts {
+                delete = "10s"
+        }
 }
 
 resource "juju_model" "b" {
@@ -603,12 +611,20 @@ resource "juju_offer" "appzero_endpoint" {
   model_uuid       = juju_model.offering.uuid
   application_name = juju_application.appzero.name
   endpoints        = ["sink"]
+  allow_force_destroy = true
+  timeouts {
+    delete = "10s"
+  }
 }
 
 resource "juju_offer" "appone_endpoint" {
   model_uuid       = juju_model.offering.uuid
   application_name = juju_application.appone.name
   endpoints        = ["sink"]
+  allow_force_destroy = true
+  timeouts {
+    delete = "10s"
+  }
 }
 
 resource "juju_model" "consuming" {
