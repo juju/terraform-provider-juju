@@ -4,34 +4,23 @@
 package testing
 
 import (
-	"strconv"
-	"strings"
+	version "github.com/juju/version/v2"
 )
 
-// CompareVersions compares two versions in the format "X.Y.Z" and returns:
+// CompareVersions compares two Juju versions and returns:
 // -1 if version1 is less than version2
 // 0 if version1 is equal to version2
 // 1 if version1 is greater than version2
 func CompareVersions(version1, version2 string) int {
-	v1Parts := strings.Split(version1, ".")
-	v2Parts := strings.Split(version2, ".")
-
-	for i := 0; i < 3; i++ {
-		v1, err := strconv.Atoi(v1Parts[i])
-		if err != nil {
-			panic(err)
-		}
-		v2, err := strconv.Atoi(v2Parts[i])
-		if err != nil {
-			panic(err)
-		}
-
-		if v1 < v2 {
-			return -1
-		} else if v1 > v2 {
-			return 1
-		}
+	v1, err := version.Parse(version1)
+	if err != nil {
+		panic(err)
 	}
 
-	return 0
+	v2, err := version.Parse(version2)
+	if err != nil {
+		panic(err)
+	}
+
+	return v1.Compare(v2)
 }
