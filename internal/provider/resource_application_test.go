@@ -802,29 +802,32 @@ func TestAcc_ResourceRevisionUpdatesMicrok8s(t *testing.T) {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-resource-revision-updates-microk8s")
+	appName := "coredns"
+	appResourceName := "juju_application." + appName
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "postgresql-k8s", 20, "", "postgresql-image", "152"),
+				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/stable", 191, "", "coredns-image", "59"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.postgresql-k8s", "resources.postgresql-image", "152"),
+					resource.TestCheckResourceAttr(appResourceName, "resources.coredns-image", "59"),
+					testCheckApplicationUnitsIdle(t.Context(), appResourceName),
 				),
 			},
 			{
-				// change resource revision to 151
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "postgresql-k8s", 20, "", "postgresql-image", "151"),
+				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/stable", 191, "", "coredns-image", "60"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.postgresql-k8s", "resources.postgresql-image", "151"),
+					resource.TestCheckResourceAttr(appResourceName, "resources.coredns-image", "60"),
+					testCheckApplicationUnitsIdle(t.Context(), appResourceName),
 				),
 			},
 			{
-				// change back to 152
-				Config: testAccResourceApplicationWithRevisionAndConfig(modelName, "postgresql-k8s", 20, "", "postgresql-image", "152"),
+				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/stable", 191, "", "coredns-image", "59"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.postgresql-k8s", "resources.postgresql-image", "152"),
+					resource.TestCheckResourceAttr(appResourceName, "resources.coredns-image", "59"),
+					testCheckApplicationUnitsIdle(t.Context(), appResourceName),
 				),
 			},
 		},
@@ -1917,6 +1920,10 @@ func testAccResourceApplicationScaleUp(modelName, appName, numberOfUnits string)
 }
 
 func testAccResourceApplicationWithRevisionAndConfig(modelName, appName string, revision int, configParamName string, resourceName string, resourceRevision string) string {
+	return testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/edge", revision, configParamName, resourceName, resourceRevision)
+}
+
+func testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, channel string, revision int, configParamName string, resourceName string, resourceRevision string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceApplicationWithRevisionAndConfig",
 		`
@@ -1931,7 +1938,7 @@ resource "juju_application" "{{.AppName}}" {
   charm {
     name     = "{{.AppName}}"
     revision = {{.Revision}}
-    channel  = "latest/edge"
+		channel  = "{{.Channel}}"
   }
 
   {{ if ne .ConfigParamName "" }}
@@ -1951,6 +1958,7 @@ resource "juju_application" "{{.AppName}}" {
 `, internaltesting.TemplateData{
 			"ModelName":             modelName,
 			"AppName":               appName,
+			"Channel":               channel,
 			"Revision":              revision,
 			"ConfigParamName":       configParamName,
 			"ResourceParamName":     resourceName,
@@ -2570,6 +2578,65 @@ func testCheckEndpointsAreSetToCorrectSpace(ctx context.Context, modelUUID, appN
 		}
 		return nil
 	}
+}
+
+func testCheckApplicationUnitsIdle(ctx context.Context, appResource string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[appResource]
+		if !ok {
+			return fmt.Errorf("not found: %s", appResource)
+		}
+
+		modelUUID, ok := rs.Primary.Attributes["model_uuid"]
+		if !ok {
+			return fmt.Errorf("model_uuid is not set for %s", appResource)
+		}
+		appName, ok := rs.Primary.Attributes["name"]
+		if !ok {
+			return fmt.Errorf("name is not set for %s", appResource)
+		}
+
+		conn, err := TestClient.Models.GetConnection(ctx, &modelUUID)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = conn.Close() }()
+
+		clientAPIClient := apiclient.NewClient(conn, TestClient.Applications.JujuLogger())
+
+		var (
+			appStatus params.ApplicationStatus
+			exists    bool
+		)
+		for i := 0; i < 50; i++ {
+			status, err := clientAPIClient.Status(ctx, &apiclient.StatusArgs{})
+			if err != nil {
+				return err
+			}
+			appStatus, exists = status.Applications[appName]
+			if exists && unitsAreIdle(appStatus.Units) {
+				return nil
+			}
+			time.Sleep(10 * time.Second)
+		}
+
+		if !exists {
+			return fmt.Errorf("no status returned for application: %s", appName)
+		}
+		return fmt.Errorf("application %s units are not idle, app status: %s", appName, appStatus.Status.Status)
+	}
+}
+
+func unitsAreIdle(units map[string]params.UnitStatus) bool {
+	if len(units) == 0 {
+		return false
+	}
+	for _, unitStatus := range units {
+		if unitStatus.AgentStatus.Status != "idle" {
+			return false
+		}
+	}
+	return true
 }
 
 func TestAcc_ResourceApplication_ParallelDeploy(t *testing.T) {
