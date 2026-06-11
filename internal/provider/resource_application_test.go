@@ -2612,7 +2612,7 @@ func testCheckApplicationUnitsIdle(ctx context.Context, appResource string) reso
 			appStatus params.ApplicationStatus
 			exists    bool
 		)
-		for i := 0; i < 600; i++ {
+		for {
 			status, err := clientAPIClient.Status(ctx, &apiclient.StatusArgs{})
 			if err != nil {
 				return err
@@ -2629,13 +2629,16 @@ func testCheckApplicationUnitsIdle(ctx context.Context, appResource string) reso
 					return nil
 				}
 			}
-			time.Sleep(1 * time.Second)
-		}
 
-		if !exists {
-			return fmt.Errorf("no status returned for application: %s", appName)
+			select {
+			case <-ctx.Done():
+				if !exists {
+					return fmt.Errorf("context cancelled before status returned for application %s: %w", appName, ctx.Err())
+				}
+				return fmt.Errorf("context cancelled waiting for application %s units to become idle, app status: %s: %w", appName, appStatus.Status.Status, ctx.Err())
+			case <-time.After(1 * time.Second):
+			}
 		}
-		return fmt.Errorf("application %s units are not idle, app status: %s", appName, appStatus.Status.Status)
 	}
 }
 
