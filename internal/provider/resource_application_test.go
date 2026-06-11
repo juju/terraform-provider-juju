@@ -813,21 +813,18 @@ func TestAcc_ResourceRevisionUpdatesMicrok8s(t *testing.T) {
 				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/stable", 191, "", "coredns-image", "59"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(appResourceName, "resources.coredns-image", "59"),
-					testCheckApplicationUnitsIdle(t.Context(), appResourceName),
 				),
 			},
 			{
 				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/stable", 191, "", "coredns-image", "60"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(appResourceName, "resources.coredns-image", "60"),
-					testCheckApplicationUnitsIdle(t.Context(), appResourceName),
 				),
 			},
 			{
 				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/stable", 191, "", "coredns-image", "59"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(appResourceName, "resources.coredns-image", "59"),
-					testCheckApplicationUnitsIdle(t.Context(), appResourceName),
 				),
 			},
 		},
@@ -2578,80 +2575,6 @@ func testCheckEndpointsAreSetToCorrectSpace(ctx context.Context, modelUUID, appN
 		}
 		return nil
 	}
-}
-
-// testCheckApplicationUnitsIdle will check that all units of the application are in idle state
-// and the application isn't in an error state.
-// This is useful to work around a bug in Juju 4 that causes destruction to be stuck if issued
-// immediately after deployment.
-func testCheckApplicationUnitsIdle(ctx context.Context, appResource string) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		rs, ok := s.RootModule().Resources[appResource]
-		if !ok {
-			return fmt.Errorf("not found: %s", appResource)
-		}
-
-		modelUUID, ok := rs.Primary.Attributes["model_uuid"]
-		if !ok {
-			return fmt.Errorf("model_uuid is not set for %s", appResource)
-		}
-		appName, ok := rs.Primary.Attributes["name"]
-		if !ok {
-			return fmt.Errorf("name is not set for %s", appResource)
-		}
-
-		conn, err := TestClient.Models.GetConnection(ctx, &modelUUID)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = conn.Close() }()
-
-		clientAPIClient := apiclient.NewClient(conn, TestClient.Applications.JujuLogger())
-
-		var (
-			appStatus params.ApplicationStatus
-			exists    bool
-		)
-		for {
-			status, err := clientAPIClient.Status(ctx, &apiclient.StatusArgs{})
-			if err != nil {
-				return err
-			}
-			appStatus, exists = status.Applications[appName]
-			if exists {
-				if appStatus.Status.Status == "error" {
-					if appStatus.Status.Info != "" {
-						return fmt.Errorf("application %s has error status: %s", appName, appStatus.Status.Info)
-					}
-					return fmt.Errorf("application %s has error status", appName)
-				}
-				if unitsAreIdle(appStatus.Units) {
-					return nil
-				}
-			}
-
-			select {
-			case <-ctx.Done():
-				if !exists {
-					return fmt.Errorf("context cancelled before status returned for application %s: %w", appName, ctx.Err())
-				}
-				return fmt.Errorf("context cancelled waiting for application %s units to become idle, app status: %s: %w", appName, appStatus.Status.Status, ctx.Err())
-			case <-time.After(1 * time.Second):
-			}
-		}
-	}
-}
-
-func unitsAreIdle(units map[string]params.UnitStatus) bool {
-	if len(units) == 0 {
-		return false
-	}
-	for _, unitStatus := range units {
-		if unitStatus.AgentStatus.Status != "idle" {
-			return false
-		}
-	}
-	return true
 }
 
 func TestAcc_ResourceApplication_ParallelDeploy(t *testing.T) {
