@@ -2580,6 +2580,10 @@ func testCheckEndpointsAreSetToCorrectSpace(ctx context.Context, modelUUID, appN
 	}
 }
 
+// testCheckApplicationUnitsIdle will check that all units of the application are in idle state
+// and the application isn't in an error state.
+// This is useful to work around a bug in Juju 4 that causes destruction to be stuck if issued
+// immediately after deployment.
 func testCheckApplicationUnitsIdle(ctx context.Context, appResource string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[appResource]
@@ -2608,16 +2612,24 @@ func testCheckApplicationUnitsIdle(ctx context.Context, appResource string) reso
 			appStatus params.ApplicationStatus
 			exists    bool
 		)
-		for i := 0; i < 50; i++ {
+		for i := 0; i < 600; i++ {
 			status, err := clientAPIClient.Status(ctx, &apiclient.StatusArgs{})
 			if err != nil {
 				return err
 			}
 			appStatus, exists = status.Applications[appName]
-			if exists && unitsAreIdle(appStatus.Units) {
-				return nil
+			if exists {
+				if appStatus.Status.Status == "error" {
+					if appStatus.Status.Info != "" {
+						return fmt.Errorf("application %s has error status: %s", appName, appStatus.Status.Info)
+					}
+					return fmt.Errorf("application %s has error status", appName)
+				}
+				if unitsAreIdle(appStatus.Units) {
+					return nil
+				}
 			}
-			time.Sleep(10 * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 
 		if !exists {
