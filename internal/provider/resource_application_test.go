@@ -883,7 +883,7 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
 			},
-			// In the next step we verify the plan has no changes. First waiting 30 seconds
+			// In the next step we verify the plan has no changes. Wait for idle
 			// to avoid a race condition in Juju where updating the resource revision too
 			// quickly means that the change doesn't take immediate effect.
 			{
@@ -892,9 +892,8 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
 				PreConfig: func() {
-					// But we only sleep for 3.6
-					if internaltesting.CompareVersions(agentVersion, "4.0.0") < 0 {
-						time.Sleep(30 * time.Second)
+					if err := testAccWaitForApplicationIdle(t.Context(), modelName, "test-app"); err != nil {
+						t.Fatal(err)
 					}
 				},
 			},
@@ -925,20 +924,50 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
-				// We need to wait 30 seconds to let the charm's agent to settle. Otherwise,
-				// after we try to destroy the application the agent can go into `lost` state,
-				// making the test waits on application destroy until the timeout is reached.
+				// We wait for idleness. Otherwise, after we try to destroy the application the
+				// agent can go into `lost` state, making the test waits on application destroy
+				// until the timeout is reached.
 				// This is not an issue because if we reach the timeout we don't error out,
 				// but it slows down the test suite.
 				PreConfig: func() {
-					// But we only sleep for 3.6
-					if internaltesting.CompareVersions(agentVersion, "4.0.0") < 0 {
-						time.Sleep(30 * time.Second)
+					if err := testAccWaitForApplicationIdle(t.Context(), modelName, "test-app"); err != nil {
+						t.Fatal(err)
 					}
 				},
 			},
 		},
 	})
+}
+
+func testAccWaitForApplicationIdle(ctx context.Context, modelName, appName string) error {
+	modelUUIDs, err := TestClient.Models.ListModels(ctx)
+	if err != nil {
+		return err
+	}
+
+	var modelUUID string
+	for _, candidateUUID := range modelUUIDs {
+		model, err := TestClient.Models.ReadModel(ctx, candidateUUID)
+		if err != nil {
+			return err
+		}
+		if model.ModelInfo.Name == modelName {
+			modelUUID = candidateUUID
+			break
+		}
+	}
+	if modelUUID == "" {
+		return fmt.Errorf("model %q not found", modelName)
+	}
+
+	conn, err := TestClient.Models.GetConnection(ctx, &modelUUID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	statusClient := apiclient.NewClient(conn, TestClient.Applications.JujuLogger())
+	return internaltesting.WaitForApplicationIdle(ctx, statusClient, appName)
 }
 
 func TestAcc_CustomResourceUpdatesMicrok8s(t *testing.T) {
