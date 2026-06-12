@@ -228,6 +228,10 @@ resource "juju_offer" "this" {
 	model_uuid       = juju_model.this.uuid
 	application_name = juju_application.this.name
 	endpoints        = ["grafana-dashboard", "metrics-endpoint"]
+	allow_force_destroy = true
+	timeouts {
+		delete = "10s"
+	}
 }
 
 resource "juju_model" "that" {
