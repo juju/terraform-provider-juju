@@ -150,6 +150,15 @@ jobs:
           echo "TEST_MANAGEMENT_BR=10.150.40.0/24" >> $GITHUB_ENV
           echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
           echo "JUJU_SKIP_FAILED_DELETION=true" >> $GITHUB_ENV
+      # Populate LXD image cache with the bases used by the test suite. Best effort
+      - name: "Pre-seed LXD image cache"
+        if: ${{ matrix.action-operator.cloud == 'lxd' }}
+        # language=bash
+        run: |
+          for release in 22.04 24.04; do
+            sudo lxc image copy "ubuntu:${release}" local: || \
+              echo "warning: failed to pre-seed ubuntu:${release} image"
+          done
       - run: go mod download
       - env:
           TF_ACC: "1"
