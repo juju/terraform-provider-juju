@@ -386,6 +386,7 @@ resource "juju_model" "{{.ModelName}}" {
 resource "juju_machine" "this_machine" {
 	name = "manually_provisioned_machine"
 	model_uuid = juju_model.{{.ModelName}}.uuid
+	constraints = "virt-type=virtual-machine"
 }
 
 resource "juju_machine" "this_machine_1" {
