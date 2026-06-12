@@ -453,7 +453,6 @@ resource "juju_offer" "haproxy_two" {
 // After investigating whether it's appropriate, the practitioner decies to allow
 // force destroy and try again.
 func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
-	SkipAgainstJuju4WithReason(t, "offer force-destroy behaviour differs in Juju 4.x")
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -474,7 +473,7 @@ func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
 					"IncludeOffer":      true,
 				}),
 				// And rogue dst model with integration
-				Check: func(s *terraform.State) error {
+				Check: func(s *terraform.State) (err error) {
 					offer, ok := s.RootModule().Resources["juju_offer.this"]
 					if !ok {
 						return fmt.Errorf("not found: juju_offer.this")
@@ -484,10 +483,8 @@ func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
 						return fmt.Errorf("missing juju_offer.this.url")
 					}
 
-					// Update closure capture and return any error
-					var err error
 					dstModelUUID, err = createDstModel(dstModelName, offerURL)
-					return err
+					return
 				},
 			},
 			{
