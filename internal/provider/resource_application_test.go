@@ -862,7 +862,10 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
 				PreConfig: func() {
-					time.Sleep(30 * time.Second)
+					// But we only sleep for 3.6
+					if internaltesting.CompareVersions(agentVersion, "4.0.0") < 0 {
+						time.Sleep(30 * time.Second)
+					}
 				},
 			},
 			{
@@ -898,7 +901,10 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 				// This is not an issue because if we reach the timeout we don't error out,
 				// but it slows down the test suite.
 				PreConfig: func() {
-					time.Sleep(30 * time.Second)
+					// But we only sleep for 3.6
+					if internaltesting.CompareVersions(agentVersion, "4.0.0") < 0 {
+						time.Sleep(30 * time.Second)
+					}
 				},
 			},
 		},
