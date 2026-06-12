@@ -850,14 +850,7 @@ func testAccCheckApplicationIdle(ctx context.Context, appResource string) resour
 			return fmt.Errorf("name is not set")
 		}
 
-		conn, err := TestClient.Models.GetConnection(ctx, &modelUUID)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = conn.Close() }()
-
-		statusClient := apiclient.NewClient(conn, TestClient.Applications.JujuLogger())
-		return internaltesting.WaitForApplicationIdle(ctx, statusClient, appName)
+		return internaltesting.WaitForApplicationIdle(ctx, TestClient.Models, modelUUID, appName)
 	}
 }
 
@@ -960,14 +953,7 @@ func testAccWaitForApplicationIdle(ctx context.Context, modelName, appName strin
 		return fmt.Errorf("model %q not found", modelName)
 	}
 
-	conn, err := TestClient.Models.GetConnection(ctx, &modelUUID)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-
-	statusClient := apiclient.NewClient(conn, TestClient.Applications.JujuLogger())
-	return internaltesting.WaitForApplicationIdle(ctx, statusClient, appName)
+	return internaltesting.WaitForApplicationIdle(ctx, TestClient.Models, modelUUID, appName)
 }
 
 func TestAcc_CustomResourceUpdatesMicrok8s(t *testing.T) {

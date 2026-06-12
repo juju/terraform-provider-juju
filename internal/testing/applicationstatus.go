@@ -15,10 +15,17 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
-// WaitForApplicationIdle waits until an application is present in status,
-// is not erroring, and all of its units are idle
-func WaitForApplicationIdle(ctx context.Context, statusClient internaljuju.ClientAPIClient, appName string) error {
-	_, err := wait.WaitFor(wait.WaitForCfg[struct{}, struct{}]{
+// WaitForApplicationIdle waits until an application in the given model is present
+// in status, is not erroring, and all of its units are idle.
+func WaitForApplicationIdle(ctx context.Context, sc internaljuju.SharedClient, modelUUID, appName string) error {
+	conn, err := sc.GetConnection(ctx, &modelUUID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	statusClient := apiclient.NewClient(conn, sc.JujuLogger())
+	_, err = wait.WaitFor(wait.WaitForCfg[struct{}, struct{}]{
 		Context: ctx,
 		GetData: func(ctx context.Context, _ struct{}) (struct{}, error) {
 			status, err := statusClient.Status(ctx, &apiclient.StatusArgs{})
