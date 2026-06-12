@@ -813,22 +813,52 @@ func TestAcc_ResourceRevisionUpdatesMicrok8s(t *testing.T) {
 				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/stable", 191, "", "coredns-image", "59"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(appResourceName, "resources.coredns-image", "59"),
+					testAccCheckApplicationIdle(t.Context(), appResourceName),
 				),
 			},
 			{
 				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/stable", 191, "", "coredns-image", "60"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(appResourceName, "resources.coredns-image", "60"),
+					testAccCheckApplicationIdle(t.Context(), appResourceName),
 				),
 			},
 			{
 				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/stable", 191, "", "coredns-image", "59"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(appResourceName, "resources.coredns-image", "59"),
+					testAccCheckApplicationIdle(t.Context(), appResourceName),
 				),
 			},
 		},
 	})
+}
+
+func testAccCheckApplicationIdle(ctx context.Context, appResource string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[appResource]
+		if !ok {
+			return fmt.Errorf("not found: %s", appResource)
+		}
+
+		modelUUID, ok := rs.Primary.Attributes["model_uuid"]
+		if !ok {
+			return fmt.Errorf("model_uuid is not set")
+		}
+		appName, ok := rs.Primary.Attributes["name"]
+		if !ok {
+			return fmt.Errorf("name is not set")
+		}
+
+		conn, err := TestClient.Models.GetConnection(ctx, &modelUUID)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = conn.Close() }()
+
+		statusClient := apiclient.NewClient(conn, TestClient.Applications.JujuLogger())
+		return internaltesting.WaitForApplicationIdle(ctx, statusClient, appName)
+	}
 }
 
 func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
