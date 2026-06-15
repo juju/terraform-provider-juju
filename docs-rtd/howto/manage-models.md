@@ -161,7 +161,7 @@ This means that, if you modify your plan in a way that causes recreation of the 
 
 Migrating models to a JAAS environment requires some updates to your Terraform plan when cross-model relations are involved, even if both models in the relation are migrated.
 
-When a model is migrated to JAAS, the model's name and offer URLs will change. The JAAS documention on [model management](https://documentation.ubuntu.com/jaas/latest/howto/manage-models/) provides more detail.
+When a model is migrated to JAAS, the model's name and offer URLs will change. The JAAS documentation on [model management](https://documentation.ubuntu.com/jaas/latest/howto/manage-models/) provides more detail.
 
 Our recommended way of resolving your Terraform state for this scenario is described below.
 
@@ -219,7 +219,7 @@ To resolve this error we suggest one of 2 options:
 
 The simplest solution is to recreate the relation. Replace the URL in the data source with the new offer URL and allow Terraform to recreate the relation. Note that issue https://github.com/juju/juju/issues/20630 highlights a bug that causes issues for integrations on migrated models.
 
-If the application cannot tolerate any downtime, we suggest modifying the plan to hardcode the offer URL into the integration resource and recreate the relation during a maintenance window.
+If the application cannot tolerate any downtime, we suggest modifying the plan to hard-code the offer URL into the integration resource and recreate the relation during a maintenance window.
 
 Example:
 
