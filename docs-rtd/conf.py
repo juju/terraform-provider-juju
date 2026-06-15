@@ -322,6 +322,10 @@ rediraffe_redirects = "redirects.txt"
 
 exclude_patterns = [
     "doc-cheat-sheet*",
+    "_build",
+    ".venv",
+    ".sphinx/venv",
+    ".sphinx/.doctrees",
 ]
 
 # Adds custom CSS files, located under 'html_static_path'
