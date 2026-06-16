@@ -552,6 +552,8 @@ resource "juju_application" "src" {
   config = {
     token = "abc"
   }
+  # no actual unit needed for dummy producer
+  units = 0
 }
 
 {{ if .IncludeOffer }}
@@ -615,6 +617,8 @@ func createDstModel(dstModelName string, offerURL string) (string, error) {
 		CharmChannel:    "stable",
 		CharmRevision:   juju.UnspecifiedRevision,
 		CharmBase:       "ubuntu@22.04",
+		// No actual units needed for dummy consumer, either
+		Units: 0,
 	})
 	if err != nil {
 		return "", fmt.Errorf("creating dst application: %w", err)
