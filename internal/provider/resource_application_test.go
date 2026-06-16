@@ -2672,7 +2672,8 @@ resource "juju_application" "{{.AppName1}}" {
     name = "{{.CharmName}}"
     channel = "{{.CharmChannel}}"
   }
-  units = 1
+  # No units needed: test only checks model_uuid attribute pair.
+  units = 0
 }
 
 resource "juju_application" "{{.AppName2}}" {
@@ -2682,7 +2683,8 @@ resource "juju_application" "{{.AppName2}}" {
     name = "{{.CharmName}}"
     channel = "{{.CharmChannel}}"
   }
-  units = 1
+  # No units needed: test only checks model_uuid attribute pair.
+  units = 0
 }
 `, internaltesting.TemplateData{
 		"ModelName":    modelName,
@@ -2837,7 +2839,8 @@ resource "juju_application" "this" {
   config = {
 	%s
   }
-  units = 1
+  # No units needed: test only checks config and trust attributes.
+  units = 0
 }
 		`, modelName, appName, trust, configStr)
 }
@@ -2855,7 +2858,8 @@ resource "juju_application" "this" {
 	name = "conserver"
   }
   trust = false
-  units = 1
+  # No units needed: test only checks config and trust attributes.
+  units = 0
 }
 		`, modelName, appName)
 }
@@ -2888,7 +2892,8 @@ resource "juju_application" "this" {
   charm {
 	name = "ubuntu-lite"
   }
-  units = 1
+  # No units needed: test only checks that the apply succeeds.
+  units = 0
   constraints = %q
 }
 		`, modelName, appName, constraints)

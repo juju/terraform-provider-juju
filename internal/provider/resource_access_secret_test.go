@@ -107,7 +107,8 @@ resource "juju_application" "jul" {
 	channel  = "latest/stable"
   }
 
-  units = 1
+  # No units needed: test only checks secret access grant by application name.
+  units = 0
 }
 
 resource "juju_application" "jul2" {
@@ -119,7 +120,8 @@ resource "juju_application" "jul2" {
 	channel  = "latest/stable"
   }
 
-  units = 1
+  # No units needed: test only checks secret access grant by application name.
+  units = 0
 }
 
 resource "juju_secret" "test_secret" {
