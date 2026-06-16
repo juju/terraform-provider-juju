@@ -5,12 +5,12 @@ package testing
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	apiclient "github.com/juju/juju/api/client/client"
 
 	internaljuju "github.com/juju/terraform-provider-juju/internal/juju"
+	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 // WaitForRelationsJoined polls the Juju API until all relations in the given
@@ -23,30 +23,34 @@ func WaitForRelationsJoined(ctx context.Context, sc internaljuju.SharedClient, m
 	defer func() { _ = conn.Close() }()
 
 	client := apiclient.NewClient(conn, sc.JujuLogger())
+	_, err = wait.WaitFor(wait.WaitForCfg[struct{}, struct{}]{
+		Context: ctx,
+		GetData: func(ctx context.Context, _ struct{}) (struct{}, error) {
+			status, err := client.Status(ctx, &apiclient.StatusArgs{})
+			if err != nil {
+				return struct{}{}, err
+			}
 
-	for {
-		status, err := client.Status(ctx, &apiclient.StatusArgs{})
-		if err != nil {
-			return err
-		}
-
-		if len(status.Relations) > 0 {
-			allJoined := true
+			if len(status.Relations) == 0 {
+				return struct{}{}, internaljuju.NewRetryReadErrorf("no relations found in model %s", modelUUID)
+			}
 			for _, rel := range status.Relations {
 				if rel.Status.Status != "joined" {
-					allJoined = false
-					break
+					return struct{}{}, internaljuju.NewRetryReadErrorf(
+						"relation %d not joined yet: %s",
+						rel.Id,
+						rel.Status.Status,
+					)
 				}
 			}
-			if allJoined {
-				return nil
-			}
-		}
-
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("timed out waiting for relations in model %s to be joined", modelUUID)
-		case <-time.After(5 * time.Second):
-		}
-	}
+			return struct{}{}, nil
+		},
+		Input:          struct{}{},
+		NonFatalErrors: []error{internaljuju.RetryReadError},
+		RetryConf: &wait.RetryConf{
+			Delay:    1 * time.Second,
+			MaxDelay: 5 * time.Second,
+		},
+	})
+	return err
 }
