@@ -43,7 +43,7 @@ func retryConfWithDefaults(rc *RetryConf) *RetryConf {
 		rc.Delay = time.Second
 	}
 	if rc.MaxDelay == 0 {
-		rc.MaxDelay = time.Minute
+		rc.MaxDelay = 5 * time.Second
 	}
 	if rc.Clock == nil {
 		rc.Clock = clock.WallClock
@@ -62,7 +62,7 @@ func retryConfWithDefaultsForError(rc *RetryConf) *RetryConf {
 		rc.Delay = time.Second
 	}
 	if rc.MaxDelay == 0 {
-		rc.MaxDelay = time.Minute
+		rc.MaxDelay = 5 * time.Second
 	}
 	if rc.Clock == nil {
 		rc.Clock = clock.WallClock

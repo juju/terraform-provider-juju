@@ -409,7 +409,6 @@ func waitForMachine(ctx context.Context, client *juju.Client, waitForHostname bo
 		RetryConf: &wait.RetryConf{
 			MaxDuration: timeout,
 			Delay:       juju.ReadModelDefaultInterval,
-			MaxDelay:    time.Minute,
 			Clock:       clock.WallClock,
 		},
 		Logf: logFn,
