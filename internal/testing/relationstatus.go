@@ -14,7 +14,7 @@ import (
 )
 
 // WaitForRelationsJoined polls the Juju API until all relations in the given
-// model have reached "joined" status, or the context times out.
+// model are active (status "joining" or "joined"), or the context times out.
 func WaitForRelationsJoined(ctx context.Context, sc internaljuju.SharedClient, modelUUID string) error {
 	conn, err := sc.GetConnection(ctx, &modelUUID)
 	if err != nil {
@@ -35,9 +35,12 @@ func WaitForRelationsJoined(ctx context.Context, sc internaljuju.SharedClient, m
 				return struct{}{}, internaljuju.NewRetryReadErrorf("no relations found in model %s", modelUUID)
 			}
 			for _, rel := range status.Relations {
-				if rel.Status.Status != "joined" {
+				switch rel.Status.Status {
+				case "joined", "joining":
+					// active: relation handshake is in progress or complete
+				default:
 					return struct{}{}, internaljuju.NewRetryReadErrorf(
-						"relation %d not joined yet: %s",
+						"relation %d not active yet: %s",
 						rel.Id,
 						rel.Status.Status,
 					)
