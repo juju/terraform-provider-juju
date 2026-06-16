@@ -201,6 +201,13 @@ func TestAcc_ResourceOfferMultipleEndpoints(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_offer.this", "endpoints.0", "grafana-dashboard"),
 					resource.TestCheckResourceAttr("juju_offer.this", "endpoints.1", "metrics-endpoint"),
 					resource.TestCheckResourceAttr("juju_offer.this", "endpoints.#", "2"),
+					func(s *terraform.State) error {
+						modelRes, ok := s.RootModule().Resources["juju_model.that"]
+						if !ok {
+							return fmt.Errorf("not found: juju_model.that")
+						}
+						return internaltesting.WaitForRelationsJoined(t.Context(), TestClient.Models, modelRes.Primary.Attributes["uuid"])
+					},
 				),
 			},
 		},
@@ -228,10 +235,6 @@ resource "juju_offer" "this" {
 	model_uuid       = juju_model.this.uuid
 	application_name = juju_application.this.name
 	endpoints        = ["grafana-dashboard", "metrics-endpoint"]
-	allow_force_destroy = true
-	timeouts {
-		delete = "10s"
-	}
 }
 
 resource "juju_model" "that" {
