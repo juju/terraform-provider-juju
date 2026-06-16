@@ -630,15 +630,23 @@ resource "juju_application" "appone" {
 }
 
 resource "juju_offer" "appzero_endpoint" {
-  model_uuid       = juju_model.offering.uuid
-  application_name = juju_application.appzero.name
-  endpoints        = ["sink"]
+  model_uuid          = juju_model.offering.uuid
+  application_name    = juju_application.appzero.name
+  endpoints           = ["sink"]
+  allow_force_destroy = true
+  timeouts {
+    delete = "10s"
+  }
 }
 
 resource "juju_offer" "appone_endpoint" {
-  model_uuid       = juju_model.offering.uuid
-  application_name = juju_application.appone.name
-  endpoints        = ["sink"]
+  model_uuid          = juju_model.offering.uuid
+  application_name    = juju_application.appone.name
+  endpoints           = ["sink"]
+  allow_force_destroy = true
+  timeouts {
+    delete = "10s"
+  }
 }
 
 resource "juju_model" "consuming" {
