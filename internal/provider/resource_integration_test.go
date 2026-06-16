@@ -15,6 +15,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
 
 func TestAcc_ResourceIntegration(t *testing.T) {
@@ -141,6 +143,13 @@ func TestAcc_ResourceIntegrationWithViaCIDRs(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_integration.a", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.a", "application.*", map[string]string{"name": "a", "endpoint": "source"}),
 					resource.TestCheckResourceAttr("juju_integration.a", "via", via),
+					func(s *terraform.State) error {
+						modelRes, ok := s.RootModule().Resources["juju_model.a"]
+						if !ok {
+							return fmt.Errorf("not found: juju_model.a")
+						}
+						return internaltesting.WaitForRelationsJoined(t.Context(), TestClient.Models, modelRes.Primary.Attributes["uuid"])
+					},
 				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue("juju_integration.a", tfjsonpath.New("id"), knownvalue.StringRegexp(idCheck)),
@@ -378,10 +387,6 @@ resource "juju_offer" "b" {
 	model_uuid       = juju_model.b.uuid
 	application_name = juju_application.b.name
 	endpoints        = ["sink"]
-	allow_force_destroy = true
-	timeouts {
-		delete = "10s"
-	}
 }
 
 resource "juju_integration" "a" {
@@ -428,6 +433,13 @@ func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
 					resource.TestCheckResourceAttrPair("juju_model.b", "uuid", "juju_integration.b2.0", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_integration.b2.0", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.b2.0", "application.*", map[string]string{"name": "b2", "endpoint": "sink"}),
+					func(s *terraform.State) error {
+						modelRes, ok := s.RootModule().Resources["juju_model.b"]
+						if !ok {
+							return fmt.Errorf("not found: juju_model.b")
+						}
+						return internaltesting.WaitForRelationsJoined(t.Context(), TestClient.Models, modelRes.Primary.Attributes["uuid"])
+					},
 				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue("juju_integration.b1[0]", tfjsonpath.New("id"), knownvalue.StringRegexp(id1Check)),
@@ -444,6 +456,13 @@ func TestAcc_ResourceIntegrationWithMultipleConsumers(t *testing.T) {
 					resource.TestCheckResourceAttrPair("juju_model.b", "uuid", "juju_integration.b1.0", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_integration.b1.0", "application.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("juju_integration.b1.0", "application.*", map[string]string{"name": "b1", "endpoint": "sink"}),
+					func(s *terraform.State) error {
+						modelRes, ok := s.RootModule().Resources["juju_model.b"]
+						if !ok {
+							return fmt.Errorf("not found: juju_model.b")
+						}
+						return internaltesting.WaitForRelationsJoined(t.Context(), TestClient.Models, modelRes.Primary.Attributes["uuid"])
+					},
 				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue("juju_integration.b1[0]", tfjsonpath.New("id"), knownvalue.StringRegexp(id1Check)),
@@ -478,6 +497,13 @@ func TestAcc_ResourceIntegrationWithMultipleIntegrationsSameEndpoint(t *testing.
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.consuming", "uuid", "juju_integration.this", "model_uuid"),
 					resource.TestCheckResourceAttrPair("juju_model.consuming", "uuid", "juju_integration.this2", "model_uuid"),
+					func(s *terraform.State) error {
+						modelRes, ok := s.RootModule().Resources["juju_model.consuming"]
+						if !ok {
+							return fmt.Errorf("not found: juju_model.consuming")
+						}
+						return internaltesting.WaitForRelationsJoined(t.Context(), TestClient.Models, modelRes.Primary.Attributes["uuid"])
+					},
 				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue("juju_integration.this", tfjsonpath.New("id"), knownvalue.StringRegexp(idOneCheck)),
@@ -509,10 +535,6 @@ resource "juju_offer" "a" {
         model_uuid       = juju_model.a.uuid
         application_name = juju_application.a.name
         endpoints        = ["source"]
-        allow_force_destroy = true
-        timeouts {
-                delete = "10s"
-        }
 }
 
 resource "juju_model" "b" {
@@ -611,20 +633,12 @@ resource "juju_offer" "appzero_endpoint" {
   model_uuid       = juju_model.offering.uuid
   application_name = juju_application.appzero.name
   endpoints        = ["sink"]
-  allow_force_destroy = true
-  timeouts {
-    delete = "10s"
-  }
 }
 
 resource "juju_offer" "appone_endpoint" {
   model_uuid       = juju_model.offering.uuid
   application_name = juju_application.appone.name
   endpoints        = ["sink"]
-  allow_force_destroy = true
-  timeouts {
-    delete = "10s"
-  }
 }
 
 resource "juju_model" "consuming" {
