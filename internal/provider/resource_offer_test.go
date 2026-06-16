@@ -648,7 +648,7 @@ func destroyDstModel(modelUUID string) error {
 	destroyStorage := false
 	forceDestroy := true
 	maxWait := 1 * time.Second
-	timeout := 10 * time.Second
+	timeout := 60 * time.Second
 
 	if err := client.DestroyModel(ctx, tag, &destroyStorage, &forceDestroy, &maxWait, &timeout); err != nil {
 		log.Printf("[WARN] destroyDstModel: ignoring failure from force-destroy of model %s: %v", modelUUID, err)
