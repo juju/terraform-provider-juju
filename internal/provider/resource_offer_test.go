@@ -476,7 +476,7 @@ func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
 					"IncludeOffer":      true,
 				}),
 				// And rogue dst model with integration
-				Check: func(s *terraform.State) (err error) {
+				Check: func(s *terraform.State) error {
 					offer, ok := s.RootModule().Resources["juju_offer.this"]
 					if !ok {
 						return fmt.Errorf("not found: juju_offer.this")
@@ -486,8 +486,13 @@ func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
 						return fmt.Errorf("missing juju_offer.this.url")
 					}
 
+					var err error
 					dstModelUUID, err = createDstModel(dstModelName, offerURL)
-					return
+					if err != nil {
+						return fmt.Errorf("creating dst model: %w", err)
+					}
+
+					return nil
 				},
 			},
 			{
