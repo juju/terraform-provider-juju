@@ -384,9 +384,13 @@ resource "juju_application" "b" {
 }
 
 resource "juju_offer" "b" {
-	model_uuid       = juju_model.b.uuid
-	application_name = juju_application.b.name
-	endpoints        = ["sink"]
+	model_uuid          = juju_model.b.uuid
+	application_name    = juju_application.b.name
+	endpoints           = ["sink"]
+	allow_force_destroy = true
+	timeouts {
+		delete = "10s"
+	}
 }
 
 resource "juju_integration" "a" {
@@ -532,9 +536,13 @@ resource "juju_application" "a" {
 }
 
 resource "juju_offer" "a" {
-        model_uuid       = juju_model.a.uuid
-        application_name = juju_application.a.name
-        endpoints        = ["source"]
+        model_uuid          = juju_model.a.uuid
+        application_name    = juju_application.a.name
+        endpoints           = ["source"]
+        allow_force_destroy = true
+        timeouts {
+                delete = "10s"
+        }
 }
 
 resource "juju_model" "b" {
