@@ -5,6 +5,7 @@ package testing
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	apiclient "github.com/juju/juju/api/client/client"
@@ -36,11 +37,20 @@ func WaitForRelationsJoined(ctx context.Context, sc internaljuju.SharedClient, m
 			}
 			for _, rel := range status.Relations {
 				switch rel.Status.Status {
-				case "joined", "joining":
-					// active: relation handshake is in progress or complete
+				case "joined":
+					// fully established
+				case "error", "broken":
+					// terminal failure — no point retrying
+					return struct{}{}, fmt.Errorf(
+						"relation %d in terminal state %q: %s",
+						rel.Id,
+						rel.Status.Status,
+						rel.Status.Info,
+					)
 				default:
+					// "joining" or any transient state — keep polling
 					return struct{}{}, internaljuju.NewRetryReadErrorf(
-						"relation %d not active yet: %s",
+						"relation %d not joined yet: %s",
 						rel.Id,
 						rel.Status.Status,
 					)
