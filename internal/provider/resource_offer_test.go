@@ -459,6 +459,7 @@ func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
+	SkipAgainstJuju4WithReason(t, "Offer can sometimes  removed without force even with active connections.")
 
 	srcModelName := acctest.RandomWithPrefix("tf-test-offer-src-delete")
 	dstModelName := acctest.RandomWithPrefix("tf-test-offer-dst-delete")
