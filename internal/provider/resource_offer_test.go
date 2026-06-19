@@ -457,14 +457,14 @@ resource "juju_offer" "haproxy_two" {
 // TestAcc_ResourceOffer_DeleteTimeout simulates a practitioner deleting an offer.
 // Unbeknownst to them, someone else has created an integration consuming this offer
 // out of band with Terraform.
-// After investigating whether it's appropriate, the practitioner decies to allow
+// After investigating whether it's appropriate, the practitioner decides to allow
 // force destroy and try again.
 func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
 	SkipJAAS(t)
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	SkipAgainstJuju4WithReason(t, "Offer can sometimes  removed without force even with active connections.")
+	SkipAgainstJuju4WithReason(t, "Offer can sometimes be removed without force even with active connections.")
 
 	srcModelName := acctest.RandomWithPrefix("tf-test-offer-src-delete")
 	dstModelName := acctest.RandomWithPrefix("tf-test-offer-dst-delete")
