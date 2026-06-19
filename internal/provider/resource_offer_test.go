@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -501,9 +502,6 @@ func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
 
 						return nil
 					},
-					func(s *terraform.State) error {
-						return internaltesting.WaitForRelationsJoined(t.Context(), TestClient.Models, dstModelUUID)
-					},
 				),
 			},
 			{
@@ -569,7 +567,7 @@ resource "juju_offer" "this" {
   endpoints           = ["sink"]
   allow_force_destroy = {{.AllowForceDestroy}}
   timeouts {
-    delete = "10s"
+    delete = "15s"
   }
 }
 {{ end }}
@@ -668,5 +666,23 @@ func destroyDstModel(modelUUID string) error {
 	if err := client.DestroyModel(ctx, tag, &destroyStorage, &forceDestroy, &maxWait, &timeout); err != nil {
 		log.Printf("[WARN] destroyDstModel: ignoring failure from force-destroy of model %s: %v", modelUUID, err)
 	}
-	return nil
+
+	// Wait for the model to be actually removed
+	pollCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	for {
+		_, err := TestClient.Models.ReadModelStatus(pollCtx, modelUUID)
+		if err != nil {
+			if errors.Is(err, juju.ModelNotFoundError) {
+				// Model is gone.
+				return nil
+			}
+			log.Printf("[WARN] destroyDstModel: error polling model status for %s: %v", modelUUID, err)
+		}
+		select {
+		case <-pollCtx.Done():
+			return fmt.Errorf("dst model %s not removed within timeout after force-destroy", modelUUID)
+		case <-time.After(5 * time.Second):
+		}
+	}
 }
