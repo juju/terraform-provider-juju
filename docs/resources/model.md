@@ -42,6 +42,7 @@ resource "juju_model" "this" {
 
 ### Optional
 
+- `agent_version` (String) The model's Juju agent version. This is computed from the controller and can be set on an existing model to request an upgrade.
 - `annotations` (Map of String) Annotations for the model
 - `cloud` (Block List) Juju Cloud where the model will operate. Changing this value will cause the model to be destroyed and recreated by terraform. (see [below for nested schema](#nestedblock--cloud))
 - `config` (Map of String) Override default model configuration

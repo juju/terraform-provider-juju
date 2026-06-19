@@ -9,11 +9,18 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/rpc/params"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var validUUID = regexp.MustCompile(`[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}`)
@@ -22,6 +29,7 @@ func TestAcc_ResourceModel(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	logLevelInfo := "INFO"
 	logLevelDebug := "DEBUG"
+	validVersion := regexp.MustCompile(`\d+\.\d+\.\d+`)
 
 	resourceName := "juju_model.model"
 	resource.ParallelTest(t, resource.TestCase{
@@ -34,6 +42,7 @@ func TestAcc_ResourceModel(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "name", modelName),
 					resource.TestCheckResourceAttr(resourceName, "config.logging-config", fmt.Sprintf("<root>=%s", logLevelInfo)),
 					resource.TestMatchResourceAttr(resourceName, "uuid", validUUID),
+					resource.TestMatchResourceAttr(resourceName, "agent_version", validVersion),
 				),
 			},
 			{
@@ -454,4 +463,54 @@ resource "juju_model" "testmodel" {
 	%q = %q
   }
 }`, modelName, annotationKey, annotationValue)
+}
+
+func TestAgentVersionCreateOnlyModifier(t *testing.T) {
+	tests := []struct {
+		name        string
+		stateRaw    tftypes.Value
+		configValue types.String
+		wantError   bool
+	}{
+		{
+			name:        "create with null config",
+			stateRaw:    tftypes.NewValue(tftypes.String, nil),
+			configValue: types.StringNull(),
+			wantError:   false,
+		},
+		{
+			name:        "create with configured value",
+			stateRaw:    tftypes.NewValue(tftypes.String, nil),
+			configValue: types.StringValue("4.0.0"),
+			wantError:   true,
+		},
+		{
+			name:        "update with configured value",
+			stateRaw:    tftypes.NewValue(tftypes.String, "existing"),
+			configValue: types.StringValue("4.0.0"),
+			wantError:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			modifier := AgentVersionCreateOnlyModifier()
+			request := planmodifier.StringRequest{
+				Path:        path.Root("agent_version"),
+				ConfigValue: tt.configValue,
+				State: tfsdk.State{
+					Raw: tt.stateRaw,
+				},
+			}
+			response := planmodifier.StringResponse{}
+
+			modifier.PlanModifyString(t.Context(), request, &response)
+
+			assert.Equal(t, tt.wantError, response.Diagnostics.HasError())
+			if tt.wantError {
+				require.Len(t, response.Diagnostics.Errors(), 1)
+				assert.Equal(t, "Invalid agent_version for model creation", response.Diagnostics.Errors()[0].Summary())
+			}
+		})
+	}
 }

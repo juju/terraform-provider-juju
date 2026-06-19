@@ -26,6 +26,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/clock"
 	"github.com/juju/juju/core/constraints"
+	"github.com/juju/juju/core/semversion"
+	envconfig "github.com/juju/juju/environs/config"
 	"github.com/juju/names/v5"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -60,6 +62,7 @@ type modelResourceModel struct {
 	Annotations      types.Map    `tfsdk:"annotations"`
 	Credential       types.String `tfsdk:"credential"`
 	Type             types.String `tfsdk:"type"`
+	AgentVersion     types.String `tfsdk:"agent_version"`
 	UUID             types.String `tfsdk:"uuid"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
@@ -141,6 +144,15 @@ func (r *modelResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Description: "Type of the model. Set by the Juju's API server",
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"agent_version": schema.StringAttribute{
+				Description: "The model's Juju agent version. This is computed from the controller and can be set on an existing model to request an upgrade.",
+				Optional:    true,
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					AgentVersionCreateOnlyModifier(),
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
@@ -338,6 +350,26 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 	plan.Credential = types.StringValue(response.CloudCredentialName)
 	plan.Type = types.StringValue(response.Type)
 	plan.UUID = types.StringValue(response.UUID)
+
+	// Avoid returning early below, since we already created
+	// the model and should save it to state.
+	modelResponse, err := r.client.Models.ReadModel(ctx, response.UUID)
+	if err != nil {
+		resp.Diagnostics.AddWarning(
+			"Unable to read model agent_version",
+			fmt.Sprintf("Model %q was created, but agent_version could not be read from model config: %s", modelName, err),
+		)
+		plan.AgentVersion = types.StringNull()
+	} else {
+		plan.AgentVersion, err = modelAgentVersionFromConfig(modelResponse.ModelConfig)
+		if err != nil {
+			resp.Diagnostics.AddWarning(
+				"Unable to read model agent_version",
+				fmt.Sprintf("Model %q was created, but agent_version could not be read from model config: %s", modelName, err),
+			)
+			plan.AgentVersion = types.StringNull()
+		}
+	}
 	plan.ID = types.StringValue(response.UUID)
 
 	r.trace(fmt.Sprintf("model resource created: %q", modelName))
@@ -424,6 +456,11 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		if resp.Diagnostics.HasError() {
 			return
 		}
+	}
+	state.AgentVersion, err = modelAgentVersionFromConfig(response.ModelConfig)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model agent_version, got error: %s", err))
+		return
 	}
 
 	annotations, err := r.client.Annotations.GetAnnotations(ctx, &juju.GetAnnotationsInput{
@@ -522,6 +559,20 @@ func (r *modelResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		}
 	}
 
+	var targetAgentVersion *semversion.Number
+	if !plan.AgentVersion.Equal(state.AgentVersion) {
+		parsedVersion, err := semversion.Parse(plan.AgentVersion.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("agent_version"),
+				"Invalid agent_version value",
+				fmt.Sprintf("Unable to parse model agent_version %q: %s", plan.AgentVersion.ValueString(), err),
+			)
+			return
+		}
+		targetAgentVersion = &parsedVersion
+	}
+
 	if modelUpdate {
 		var clouds []nestedCloud
 		resp.Diagnostics.Append(plan.Cloud.ElementsAs(ctx, &clouds, false)...)
@@ -549,6 +600,16 @@ func (r *modelResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		}
 
 		r.trace(fmt.Sprintf("Updated model resource: %q", plan.Name.ValueString()))
+	}
+
+	if targetAgentVersion != nil {
+		err = r.client.Models.UpgradeModel(ctx, plan.UUID.ValueString(), *targetAgentVersion)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to upgrade model to agent version %q, got error: %s", plan.AgentVersion.ValueString(), err))
+			return
+		}
+
+		r.trace(fmt.Sprintf("Upgraded model %q to agent version %q", plan.Name.ValueString(), plan.AgentVersion.ValueString()))
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -621,6 +682,20 @@ func handleModelNotFoundError(ctx context.Context, err error, st *tfsdk.State) d
 	var diags diag.Diagnostics
 	diags.AddError("Client Error", err.Error())
 	return diags
+}
+
+func modelAgentVersionFromConfig(config map[string]interface{}) (types.String, error) {
+	cfg, err := envconfig.New(envconfig.NoDefaults, config)
+	if err != nil {
+		return types.StringNull(), fmt.Errorf("unable to parse model config: %w", err)
+	}
+
+	agentVersion, ok := cfg.AgentVersion()
+	if !ok {
+		return types.StringNull(), nil
+	}
+
+	return types.StringValue(agentVersion.String()), nil
 }
 
 func (r *modelResource) trace(msg string, additionalFields ...map[string]interface{}) {

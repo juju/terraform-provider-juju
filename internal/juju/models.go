@@ -16,8 +16,10 @@ import (
 	"github.com/juju/juju/api/base"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/client/modelmanager"
+	"github.com/juju/juju/api/client/modelupgrader"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/model"
+	"github.com/juju/juju/core/semversion"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v6"
 )
@@ -480,6 +482,19 @@ func (c *modelsClient) UpdateModel(ctx context.Context, input UpdateModelInput) 
 	}
 
 	return nil
+}
+
+// UpgradeModel upgrades the model identified by modelUUID to targetVersion.
+func (c *modelsClient) UpgradeModel(ctx context.Context, modelUUID string, targetVersion semversion.Number) error {
+	conn, err := c.GetConnection(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := modelupgrader.NewClient(conn)
+	_, err = client.UpgradeModel(ctx, modelUUID, targetVersion, "", false, false)
+	return err
 }
 
 // DestroyModel removes the model identified by the input UUID.
