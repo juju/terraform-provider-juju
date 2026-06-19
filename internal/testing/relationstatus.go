@@ -15,7 +15,9 @@ import (
 )
 
 // WaitForRelationsJoined polls the Juju API until all relations in the given
-// model are active (status "joining" or "joined"), or the context times out.
+// model have fully joined, or the context times out. Relations in a terminal
+// error or broken state cause an immediate failure rather than waiting out the
+// full timeout.
 func WaitForRelationsJoined(ctx context.Context, sc internaljuju.SharedClient, modelUUID string) error {
 	conn, err := sc.GetConnection(ctx, &modelUUID)
 	if err != nil {
@@ -61,8 +63,9 @@ func WaitForRelationsJoined(ctx context.Context, sc internaljuju.SharedClient, m
 		Input:          struct{}{},
 		NonFatalErrors: []error{internaljuju.RetryReadError},
 		RetryConf: &wait.RetryConf{
-			Delay:    1 * time.Second,
-			MaxDelay: 5 * time.Second,
+			Delay:       1 * time.Second,
+			MaxDelay:    5 * time.Second,
+			MaxDuration: 10 * time.Minute,
 		},
 	})
 	return err
