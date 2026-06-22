@@ -58,6 +58,9 @@ func TestAcc_ResourceModel(t *testing.T) {
 }
 
 func TestAcc_ResourceModel_UnsetConfig(t *testing.T) {
+	if testingCloud == MicroK8sTesting {
+		t.Skip(t.Name() + " skipped on microk8s: tests model config metadata, LXD is sufficient")
+	}
 	ctx := t.Context()
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
@@ -98,6 +101,9 @@ resource "juju_model" "this" {
 }
 
 func TestAcc_ResourceModel_UnsetConfigUsingNull(t *testing.T) {
+	if testingCloud == MicroK8sTesting {
+		t.Skip(t.Name() + " skipped on microk8s: tests model config metadata, LXD is sufficient")
+	}
 	ctx := t.Context()
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
@@ -273,6 +279,9 @@ func TestAcc_ResourceModel_UpgradeProvider(t *testing.T) {
 }
 
 func TestAcc_ResourceModel_Annotations_Basic(t *testing.T) {
+	if testingCloud == MicroK8sTesting {
+		t.Skip(t.Name() + " skipped on microk8s: tests model annotations metadata, LXD is sufficient")
+	}
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -307,6 +316,9 @@ resource "juju_model" "testmodel" {
 }
 
 func TestAcc_ResourceModel_Annotations_DisjointedSet(t *testing.T) {
+	if testingCloud == MicroK8sTesting {
+		t.Skip(t.Name() + " skipped on microk8s: tests model annotations metadata, LXD is sufficient")
+	}
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },

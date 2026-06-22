@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -201,6 +202,13 @@ func TestAcc_ResourceOfferMultipleEndpoints(t *testing.T) {
 					resource.TestCheckResourceAttr("juju_offer.this", "endpoints.0", "grafana-dashboard"),
 					resource.TestCheckResourceAttr("juju_offer.this", "endpoints.1", "metrics-endpoint"),
 					resource.TestCheckResourceAttr("juju_offer.this", "endpoints.#", "2"),
+					func(s *terraform.State) error {
+						modelRes, ok := s.RootModule().Resources["juju_model.that"]
+						if !ok {
+							return fmt.Errorf("not found: juju_model.that")
+						}
+						return internaltesting.WaitForRelationsJoined(t.Context(), TestClient.Models, modelRes.Primary.Attributes["uuid"])
+					},
 				),
 			},
 		},
@@ -225,9 +233,13 @@ resource "juju_application" "this" {
 }
 
 resource "juju_offer" "this" {
-	model_uuid       = juju_model.this.uuid
-	application_name = juju_application.this.name
-	endpoints        = ["grafana-dashboard", "metrics-endpoint"]
+	model_uuid          = juju_model.this.uuid
+	application_name    = juju_application.this.name
+	endpoints           = ["grafana-dashboard", "metrics-endpoint"]
+	allow_force_destroy = true
+	timeouts {
+		delete = "10s"
+	}
 }
 
 resource "juju_model" "that" {
@@ -446,13 +458,14 @@ resource "juju_offer" "haproxy_two" {
 // TestAcc_ResourceOffer_DeleteTimeout simulates a practitioner deleting an offer.
 // Unbeknownst to them, someone else has created an integration consuming this offer
 // out of band with Terraform.
-// After investigating whether it's appropriate, the practitioner decies to allow
+// After investigating whether it's appropriate, the practitioner decides to allow
 // force destroy and try again.
 func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
-	SkipAgainstJuju4WithReason(t, "offer force-destroy behaviour differs in Juju 4.x")
+	SkipJAAS(t)
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
+	SkipAgainstJuju4WithReason(t, "Offer can sometimes be removed without force even with active connections.")
 
 	srcModelName := acctest.RandomWithPrefix("tf-test-offer-src-delete")
 	dstModelName := acctest.RandomWithPrefix("tf-test-offer-dst-delete")
@@ -470,21 +483,26 @@ func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
 					"IncludeOffer":      true,
 				}),
 				// And rogue dst model with integration
-				Check: func(s *terraform.State) error {
-					offer, ok := s.RootModule().Resources["juju_offer.this"]
-					if !ok {
-						return fmt.Errorf("not found: juju_offer.this")
-					}
-					offerURL := offer.Primary.Attributes["url"]
-					if offerURL == "" {
-						return fmt.Errorf("missing juju_offer.this.url")
-					}
+				Check: resource.ComposeTestCheckFunc(
+					func(s *terraform.State) error {
+						offer, ok := s.RootModule().Resources["juju_offer.this"]
+						if !ok {
+							return fmt.Errorf("not found: juju_offer.this")
+						}
+						offerURL := offer.Primary.Attributes["url"]
+						if offerURL == "" {
+							return fmt.Errorf("missing juju_offer.this.url")
+						}
 
-					// Update closure capture and return any error
-					var err error
-					dstModelUUID, err = createDstModel(dstModelName, offerURL)
-					return err
-				},
+						var err error
+						dstModelUUID, err = createDstModel(dstModelName, offerURL)
+						if err != nil {
+							return fmt.Errorf("creating dst model: %w", err)
+						}
+
+						return nil
+					},
+				),
 			},
 			{
 				// Drop the offer. Destroy should time out with an active connection error
@@ -538,6 +556,8 @@ resource "juju_application" "src" {
   config = {
     token = "abc"
   }
+  # no actual unit needed for dummy producer
+  units = 0
 }
 
 {{ if .IncludeOffer }}
@@ -547,7 +567,7 @@ resource "juju_offer" "this" {
   endpoints           = ["sink"]
   allow_force_destroy = {{.AllowForceDestroy}}
   timeouts {
-    delete = "10s"
+    delete = "15s"
   }
 }
 {{ end }}
@@ -601,6 +621,8 @@ func createDstModel(dstModelName string, offerURL string) (string, error) {
 		CharmChannel:    "stable",
 		CharmRevision:   juju.UnspecifiedRevision,
 		CharmBase:       "ubuntu@22.04",
+		// No actual units needed for dummy consumer, either
+		Units: 0,
 	})
 	if err != nil {
 		return "", fmt.Errorf("creating dst application: %w", err)
@@ -639,10 +661,28 @@ func destroyDstModel(modelUUID string) error {
 	destroyStorage := false
 	forceDestroy := true
 	maxWait := 1 * time.Second
-	timeout := 10 * time.Second
+	timeout := 60 * time.Second
 
 	if err := client.DestroyModel(ctx, tag, &destroyStorage, &forceDestroy, &maxWait, &timeout); err != nil {
 		log.Printf("[WARN] destroyDstModel: ignoring failure from force-destroy of model %s: %v", modelUUID, err)
 	}
-	return nil
+
+	// Wait for the model to be actually removed
+	pollCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	for {
+		_, err := TestClient.Models.ReadModelStatus(pollCtx, modelUUID)
+		if err != nil {
+			if errors.Is(err, juju.ModelNotFoundError) {
+				// Model is gone.
+				return nil
+			}
+			log.Printf("[WARN] destroyDstModel: error polling model status for %s: %v", modelUUID, err)
+		}
+		select {
+		case <-pollCtx.Done():
+			return fmt.Errorf("dst model %s not removed within timeout after force-destroy", modelUUID)
+		case <-time.After(5 * time.Second):
+		}
+	}
 }

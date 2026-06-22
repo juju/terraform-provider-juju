@@ -175,7 +175,8 @@ resource "juju_application" "test" {
 		hostname = "diglett"
 	}
 
-	units = 1
+	# No units needed: test only queries charm metadata and config attributes.
+	units = 0
 }
 `, modelName, appName)
 }
