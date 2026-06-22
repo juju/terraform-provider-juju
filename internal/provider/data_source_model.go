@@ -37,6 +37,7 @@ type modelDataSource struct {
 type modelDataSourceModel struct {
 	Name  types.String `tfsdk:"name"`
 	Owner types.String `tfsdk:"owner"`
+	Type  types.String `tfsdk:"type"`
 	UUID  types.String `tfsdk:"uuid"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
@@ -64,6 +65,10 @@ func (d *modelDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 			"owner": schema.StringAttribute{
 				Description: "The owner of the model.",
 				Optional:    true,
+				Computed:    true,
+			},
+			"type": schema.StringAttribute{
+				Description: "Type of the model. It can be CAAS or IAAS.",
 				Computed:    true,
 			},
 			"uuid": schema.StringAttribute{
@@ -173,6 +178,7 @@ func (d *modelDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	data.ID = types.StringValue(model.UUID)
 	data.Name = types.StringValue(model.Name)
 	data.Owner = types.StringValue(model.Qualifier)
+	data.Type = types.StringValue(model.Type)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 

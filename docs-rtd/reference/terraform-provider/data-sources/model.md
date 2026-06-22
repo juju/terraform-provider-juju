@@ -40,3 +40,4 @@ data "juju_model" "this" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
+- `type` (String) Type of the model. It can be CAAS or IAAS.
