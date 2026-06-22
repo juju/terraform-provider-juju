@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"testing"
 
@@ -21,6 +22,8 @@ import (
 	"github.com/juju/juju/rpc/params"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	internaljuju "github.com/juju/terraform-provider-juju/internal/juju"
 )
 
 var validUUID = regexp.MustCompile(`[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}`)
@@ -383,6 +386,55 @@ func TestAcc_ResourceModel_WaitForDelete(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceModel_UpgradeAgentVersion(t *testing.T) {
+	SkipAgainstJuju4(t)
+	testAccPreCheck(t)
+
+	targetAgentVersion := os.Getenv(TestJujuAgentVersion)
+	if targetAgentVersion == "" {
+		t.Skipf("%s is not set", TestJujuAgentVersion)
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+	resourceName := "juju_model.model"
+	ctx := t.Context()
+
+	modelResp, err := TestClient.Models.CreateModel(ctx, internaljuju.CreateModelInput{
+		Name:        modelName,
+		CloudName:   testingCloud.CloudName(),
+		CloudRegion: "localhost",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_ = TestClient.Models.DestroyModel(ctx, internaljuju.DestroyModelInput{UUID: modelResp.UUID})
+	})
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:             testAccResourceModel(modelName, testingCloud.CloudName(), "INFO"),
+				ImportState:        true,
+				ImportStateId:      modelResp.UUID,
+				ImportStatePersist: true,
+				ResourceName:       resourceName,
+			},
+			{
+				Config: testAccResourceModelWithAgentVersion(modelName, testingCloud.CloudName(), targetAgentVersion),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", modelName),
+					resource.TestMatchResourceAttr(resourceName, "uuid", validUUID),
+					resource.TestCheckResourceAttr(resourceName, "agent_version", targetAgentVersion),
+				),
+			},
+		},
+	})
+}
+
 func testAccCheckDevelopmentConfigIsUnset(ctx context.Context, resourceID string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[resourceID]
@@ -438,6 +490,20 @@ resource "juju_model" "model" {
     logging-config = "<root>=%s"
   }
 }`, modelName, cloudName, logLevel)
+}
+
+func testAccResourceModelWithAgentVersion(modelName string, cloudName string, agentVersion string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "model" {
+	name = %q
+
+	cloud {
+	 name   = %q
+	 region = "localhost"
+	}
+
+	agent_version = %q
+}`, modelName, cloudName, agentVersion)
 }
 
 func testAccConstraintsModel(modelName string, cloudName string, constraints string) string {
