@@ -42,6 +42,7 @@ func (j cloudInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnosti
 		ID:              cloudAccess.ID,
 		Users:           cloudAccess.Users,
 		Groups:          cloudAccess.Groups,
+		IdPGroups:       cloudAccess.IdPGroups,
 		Roles:           cloudAccess.Roles,
 		ServiceAccounts: cloudAccess.ServiceAccounts,
 		Access:          cloudAccess.Access,
@@ -61,6 +62,7 @@ func (j cloudInfo) Save(ctx context.Context, setter Setter, info objectsWithAcce
 		ID:              info.ID,
 		Users:           info.Users,
 		Groups:          info.Groups,
+		IdPGroups:       info.IdPGroups,
 		Roles:           info.Roles,
 		ServiceAccounts: info.ServiceAccounts,
 		Access:          info.Access,
@@ -91,6 +93,7 @@ type jaasAccessCloudResourceCloud struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
+	IdPGroups       types.Set    `tfsdk:"idp_groups"`
 	Roles           types.Set    `tfsdk:"roles"`
 	Access          types.String `tfsdk:"access"`
 

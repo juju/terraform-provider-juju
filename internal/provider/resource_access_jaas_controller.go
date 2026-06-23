@@ -67,6 +67,7 @@ type jaasAccessControllerResourceController struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
+	IdPGroups       types.Set    `tfsdk:"idp_groups"`
 	Roles           types.Set    `tfsdk:"roles"`
 	Access          types.String `tfsdk:"access"`
 

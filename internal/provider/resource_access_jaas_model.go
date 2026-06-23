@@ -42,6 +42,7 @@ func (j modelInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnosti
 		ID:              modelAccess.ID,
 		Users:           modelAccess.Users,
 		Groups:          modelAccess.Groups,
+		IdPGroups:       modelAccess.IdPGroups,
 		Roles:           modelAccess.Roles,
 		ServiceAccounts: modelAccess.ServiceAccounts,
 		Access:          modelAccess.Access,
@@ -56,6 +57,7 @@ func (j modelInfo) Save(ctx context.Context, setter Setter, info objectsWithAcce
 		ID:              info.ID,
 		Users:           info.Users,
 		Groups:          info.Groups,
+		IdPGroups:       info.IdPGroups,
 		Roles:           info.Roles,
 		ServiceAccounts: info.ServiceAccounts,
 		Access:          info.Access,
@@ -86,6 +88,7 @@ type jaasAccessModelResourceModel struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
+	IdPGroups       types.Set    `tfsdk:"idp_groups"`
 	Roles           types.Set    `tfsdk:"roles"`
 	Access          types.String `tfsdk:"access"`
 

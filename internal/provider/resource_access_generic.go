@@ -67,6 +67,7 @@ type objectsWithAccess struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
+	IdPGroups       types.Set    `tfsdk:"idp_groups"`
 	Roles           types.Set    `tfsdk:"roles"`
 	Access          types.String `tfsdk:"access"`
 
@@ -81,6 +82,7 @@ func (r *genericJAASAccessResource) ConfigValidators(ctx context.Context) []reso
 		resourcevalidator.AtLeastOneOf(
 			path.MatchRoot("users"),
 			path.MatchRoot("groups"),
+			path.MatchRoot("idp_groups"),
 			path.MatchRoot("roles"),
 			path.MatchRoot("service_accounts"),
 		),
@@ -251,20 +253,24 @@ func (resource *genericJAASAccessResource) Update(ctx context.Context, req resou
 func diffModels(plan, state objectsWithAccess, diag *diag.Diagnostics) (toAdd, toRemove objectsWithAccess) {
 	newUsers := diffStringSets(plan.Users, state.Users, diag)
 	newGroups := diffStringSets(plan.Groups, state.Groups, diag)
+	newIdPGroups := diffStringSets(plan.IdPGroups, state.IdPGroups, diag)
 	newRoles := diffStringSets(plan.Roles, state.Roles, diag)
 	newServiceAccounts := diffStringSets(plan.ServiceAccounts, state.ServiceAccounts, diag)
 	toAdd.Users = newUsers
 	toAdd.Groups = newGroups
+	toAdd.IdPGroups = newIdPGroups
 	toAdd.Roles = newRoles
 	toAdd.ServiceAccounts = newServiceAccounts
 	toAdd.Access = plan.Access
 
 	removedUsers := diffStringSets(state.Users, plan.Users, diag)
 	removedGroups := diffStringSets(state.Groups, plan.Groups, diag)
+	removedIdPGroups := diffStringSets(state.IdPGroups, plan.IdPGroups, diag)
 	removedRoles := diffStringSets(state.Roles, plan.Roles, diag)
 	removedServiceAccounts := diffStringSets(state.ServiceAccounts, plan.ServiceAccounts, diag)
 	toRemove.Users = removedUsers
 	toRemove.Groups = removedGroups
+	toRemove.IdPGroups = removedIdPGroups
 	toRemove.Roles = removedRoles
 	toRemove.ServiceAccounts = removedServiceAccounts
 	toRemove.Access = plan.Access
@@ -334,11 +340,13 @@ func modelToTuples(ctx context.Context, targetTag names.Tag, model objectsWithAc
 	var (
 		users           []string
 		groups          []string
+		idpGroups       []string
 		roles           []string
 		serviceAccounts []string
 	)
 	diag.Append(getSetIfKnown(ctx, model.Users, &users)...)
 	diag.Append(getSetIfKnown(ctx, model.Groups, &groups)...)
+	diag.Append(getSetIfKnown(ctx, model.IdPGroups, &idpGroups)...)
 	diag.Append(getSetIfKnown(ctx, model.Roles, &roles)...)
 	diag.Append(getSetIfKnown(ctx, model.ServiceAccounts, &serviceAccounts)...)
 	if diag.HasError() {
@@ -348,9 +356,10 @@ func modelToTuples(ctx context.Context, targetTag names.Tag, model objectsWithAc
 		Target:   targetTag.String(),
 		Relation: model.Access.ValueString(),
 	}
-	tuples := make([]juju.JaasTuple, 0, 4)
+	tuples := make([]juju.JaasTuple, 0, 5)
 	userNameToTagf := func(s string) string { return names.NewUserTag(s).String() }
 	groupIDToTagf := func(s string) string { return jimmnames.NewGroupTag(s).String() + "#member" }
+	idPGroupIDToTagf := func(s string) string { return jimmnames.NewIdPGroupTag(s).String() }
 	roleIDToTagf := func(s string) string { return jimmnames.NewRoleTag(s).String() + "#assignee" }
 	// Note that service accounts are treated as users but with an @serviceaccount domain.
 	// We add the @serviceaccount domain by calling `EnsureValidServiceAccountId` so that the user writing the plan doesn't have to.
@@ -361,6 +370,7 @@ func modelToTuples(ctx context.Context, targetTag names.Tag, model objectsWithAc
 	}
 	tuples = append(tuples, assignTupleObject(baseTuple, users, userNameToTagf)...)
 	tuples = append(tuples, assignTupleObject(baseTuple, groups, groupIDToTagf)...)
+	tuples = append(tuples, assignTupleObject(baseTuple, idpGroups, idPGroupIDToTagf)...)
 	tuples = append(tuples, assignTupleObject(baseTuple, roles, roleIDToTagf)...)
 	tuples = append(tuples, assignTupleObject(baseTuple, serviceAccounts, serviceAccIDToTagf)...)
 	return tuples
@@ -371,6 +381,7 @@ func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diag
 	var (
 		users           []string
 		groups          []string
+		idpGroups       []string
 		roles           []string
 		serviceAccounts []string
 	)
@@ -396,6 +407,8 @@ func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diag
 			}
 		case jimmnames.GroupTagKind:
 			groups = append(groups, strings.ReplaceAll(tag.Id(), "#member", ""))
+		case jimmnames.IdPGroupTagKind:
+			idpGroups = append(idpGroups, tag.Id())
 		case jimmnames.RoleTagKind:
 			roles = append(roles, strings.ReplaceAll(tag.Id(), "#assignee", ""))
 		}
@@ -404,6 +417,8 @@ func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diag
 	diag.Append(errDiag...)
 	groupSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, groups)
 	diag.Append(errDiag...)
+	idPGroupSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, idpGroups)
+	diag.Append(errDiag...)
 	roleSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, roles)
 	diag.Append(errDiag...)
 	serviceAccountSet, errDiag := basetypes.NewSetValueFrom(ctx, types.StringType, serviceAccounts)
@@ -411,6 +426,7 @@ func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diag
 	var model objectsWithAccess
 	model.Users = userSet
 	model.Groups = groupSet
+	model.IdPGroups = idPGroupSet
 	model.Roles = roleSet
 	model.ServiceAccounts = serviceAccountSet
 	return model

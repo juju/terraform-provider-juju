@@ -45,6 +45,7 @@ func (j roleInfo) Info(ctx context.Context, getter Getter, diag *diag.Diagnostic
 		ID:              roleAccess.ID,
 		Users:           roleAccess.Users,
 		Groups:          roleAccess.Groups,
+		IdPGroups:       roleAccess.IdPGroups,
 		ServiceAccounts: roleAccess.ServiceAccounts,
 		Access:          roleAccess.Access,
 	}
@@ -63,6 +64,7 @@ func (j roleInfo) Save(ctx context.Context, setter Setter, info objectsWithAcces
 		ID:              info.ID,
 		Users:           info.Users,
 		Groups:          info.Groups,
+		IdPGroups:       info.IdPGroups,
 		ServiceAccounts: info.ServiceAccounts,
 		Access:          info.Access,
 	}
@@ -92,6 +94,7 @@ type jaasAccessModelResourceRole struct {
 	Users           types.Set    `tfsdk:"users"`
 	ServiceAccounts types.Set    `tfsdk:"service_accounts"`
 	Groups          types.Set    `tfsdk:"groups"`
+	IdPGroups       types.Set    `tfsdk:"idp_groups"`
 	Access          types.String `tfsdk:"access"`
 
 	// ID required for imports
@@ -110,6 +113,7 @@ func (r *jaasAccessRoleResource) ConfigValidators(ctx context.Context) []resourc
 		resourcevalidator.AtLeastOneOf(
 			path.MatchRoot("users"),
 			path.MatchRoot("groups"),
+			path.MatchRoot("idp_groups"),
 			path.MatchRoot("service_accounts"),
 		),
 	}

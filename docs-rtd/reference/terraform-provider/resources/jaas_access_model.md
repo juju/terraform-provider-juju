@@ -18,6 +18,7 @@ resource "juju_jaas_access_model" "development" {
   access           = "administrator"
   users            = ["foo@domain.com"]
   groups           = [juju_jaas_group.development.uuid]
+  idp_groups       = ["engineering"]
   service_accounts = ["Client-ID-1", "Client-ID-2"]
 }
 ```
@@ -33,6 +34,7 @@ resource "juju_jaas_access_model" "development" {
 ### Optional
 
 - `groups` (Set of String) List of groups to grant access. A valid group ID is the group's UUID.
+- `idp_groups` (Set of String) List of identity provider groups to grant access. IdP groups have no provider-side format restriction.
 - `roles` (Set of String) List of roles UUIDs to grant access.
 - `service_accounts` (Set of String) List of service accounts to grant access. A valid service account is the service account's name.
 - `users` (Set of String) List of users to grant access. A valid user is the user's name or email.
