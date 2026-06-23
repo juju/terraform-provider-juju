@@ -42,10 +42,10 @@ jobs:
       fail-fast: false
       matrix:
         jaas:
-          - jimm_version: v3.3.26
+          - jimm_version: v3.4.0
             juju_channel: 3/stable
             label: "jimm-3-juju-3"
-          - jimm_version: v3.4.0-alpha3
+          - jimm_version: v4.0.0-alpha
             juju_channel: 4.0/edge
             label: "jimm-4-juju-4"
     timeout-minutes: 90
