@@ -10,11 +10,17 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/juju/juju/core/model"
 )
 
 func TestAcc_DataSourceModel(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-datasource-model-test")
-
+	var modelType string
+	if testingCloud == LXDCloudTesting {
+		modelType = model.IAAS.String()
+	} else {
+		modelType = model.CAAS.String()
+	}
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
@@ -35,8 +41,10 @@ func TestAcc_DataSourceModel(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.test-model", "uuid", "data.juju_model.test-model", "uuid"),
 					resource.TestCheckResourceAttrSet("data.juju_model.test-model", "uuid"),
+					resource.TestCheckResourceAttrSet("data.juju_model.test-model", "type"),
 					resource.TestCheckResourceAttr("data.juju_model.test-model", "name", modelName),
 					resource.TestCheckResourceAttr("data.juju_model.test-model", "owner", expectedResourceOwner()),
+					resource.TestCheckResourceAttr("data.juju_model.test-model", "type", modelType),
 				),
 			},
 			// Test 4: Create a model and lookup by name and owner.
@@ -47,6 +55,7 @@ func TestAcc_DataSourceModel(t *testing.T) {
 					resource.TestCheckResourceAttrSet("data.juju_model.test-model", "uuid"),
 					resource.TestCheckResourceAttr("data.juju_model.test-model", "name", modelName),
 					resource.TestCheckResourceAttr("data.juju_model.test-model", "owner", expectedResourceOwner()),
+					resource.TestCheckResourceAttr("data.juju_model.test-model", "type", modelType),
 				),
 			},
 		},
