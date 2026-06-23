@@ -24,6 +24,9 @@ import (
 // can access a group. More extensive tests for
 // generic jaas access are available in
 // resource_access_jaas_model_test.go
+//
+// IdP groups are intentionally excluded because they cannot be
+// granted membership to a regular group.
 
 func TestAcc_ResourceJaasAccessGroup(t *testing.T) {
 	ctx := t.Context()
@@ -120,6 +123,24 @@ func TestAcc_ResourceJaasAccessGroup(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceJaasAccessGroupRejectsIdPGroups(t *testing.T) {
+	OnlyTestAgainstJAAS(t)
+
+	groupName := acctest.RandomWithPrefix("group1")
+	idpGroup := acctest.RandomWithPrefix("idp-group")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccResourceJaasAccessGroupWithIdPGroup(groupName, "member", idpGroup),
+				ExpectError: regexp.MustCompile(`(?s)Unsupported argument.*idp_groups`),
+			},
+		},
+	})
+}
+
 func testAccResourceJaasAccessGroup(groupName, access, groupWithAccess, svcAcc string, users []string) string {
 	usersStr := "[]"
 	if len(users) > 0 {
@@ -149,5 +170,25 @@ resource "juju_jaas_access_group" "test" {
 			"Users":           usersStr,
 			"GroupWithAccess": groupWithAccess,
 			"SvcAcc":          svcAcc,
+		})
+}
+
+func testAccResourceJaasAccessGroupWithIdPGroup(groupName, access, idpGroup string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceJaasAccessGroupWithIdPGroup",
+		`
+resource "juju_jaas_group" "test" {
+  name = "{{ .Group }}"
+}
+
+resource "juju_jaas_access_group" "test" {
+  group_id      = juju_jaas_group.test.uuid
+  access        = "{{.Access}}"
+  idp_groups    = ["{{.IdPGroup}}"]
+}
+`, internaltesting.TemplateData{
+			"Group":    groupName,
+			"Access":   access,
+			"IdPGroup": idpGroup,
 		})
 }

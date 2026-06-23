@@ -18,7 +18,8 @@ import (
 )
 
 // This file has bare minimum tests for offer access
-// verifying that users, service accounts and groups
+// verifying that users, service accounts, groups, roles
+// and IdP groups
 // can access an offer. More extensive tests for
 // generic jaas access are available in
 // resource_access_jaas_model_test.go
@@ -37,6 +38,7 @@ func TestAcc_ResourceJaasAccessOffer(t *testing.T) {
 	user := "foo@domain.com"
 	group := acctest.RandomWithPrefix("myGroup")
 	role := acctest.RandomWithPrefix("role1")
+	idpGroup := acctest.RandomWithPrefix("idp-group")
 	svcAcc := "test"
 	svcAccWithDomain := svcAcc + "@serviceaccount"
 
@@ -48,10 +50,11 @@ func TestAcc_ResourceJaasAccessOffer(t *testing.T) {
 	offerRelationF := func(s string) string { return names.NewApplicationOfferTag(s).String() }
 	offerCheck := newCheckAttribute(offerAccessResourceName, "offer_url", offerRelationF)
 	userTag := names.NewUserTag(user).String()
+	idpGroupTag := jimmnames.NewIdPGroupTag(idpGroup).String() + "#member"
 	svcAccTag := names.NewUserTag(svcAccWithDomain).String()
 
 	// Test 0: Test an invalid access string.
-	// Test 1: Test adding a valid set user, group and service account.
+	// Test 1: Test adding a valid set of users, groups, roles, IdP groups and service accounts.
 	// Test 2: Test importing works.
 	// Destroy: Test access is removed.
 	resource.ParallelTest(t, resource.TestCase{
@@ -61,21 +64,23 @@ func TestAcc_ResourceJaasAccessOffer(t *testing.T) {
 			testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTag, offerCheck.tag, false),
 			testAccCheckJaasResourceAccess(ctx, accessSuccess, groupCheck.tag, offerCheck.tag, false),
 			testAccCheckJaasResourceAccess(ctx, accessSuccess, roleCheck.tag, offerCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &idpGroupTag, offerCheck.tag, false),
 			testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, offerCheck.tag, false),
 		),
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccResourceJaasAccessOffer(modelName, accessFail, user, group, svcAcc, role),
+				Config:      testAccResourceJaasAccessOffer(modelName, accessFail, user, group, svcAcc, role, idpGroup),
 				ExpectError: regexp.MustCompile(fmt.Sprintf("(?s)unknown.*relation %s", accessFail)),
 			},
 			{
-				Config: testAccResourceJaasAccessOffer(modelName, accessSuccess, user, group, svcAcc, role),
+				Config: testAccResourceJaasAccessOffer(modelName, accessSuccess, user, group, svcAcc, role, idpGroup),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(groupCheck),
 					testAccCheckAttributeNotEmpty(roleCheck),
 					testAccCheckAttributeNotEmpty(offerCheck),
 					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTag, offerCheck.tag, true),
 					testAccCheckJaasResourceAccess(ctx, accessSuccess, groupCheck.tag, offerCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &idpGroupTag, offerCheck.tag, true),
 					testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, offerCheck.tag, true),
 					testAccCheckJaasResourceAccess(ctx, accessSuccess, roleCheck.tag, offerCheck.tag, true),
 					resource.TestCheckResourceAttr(offerAccessResourceName, "access", accessSuccess),
@@ -86,6 +91,8 @@ func TestAcc_ResourceJaasAccessOffer(t *testing.T) {
 						return resource.TestCheckTypeSetElemAttr(offerAccessResourceName, "groups.*", *groupCheck.resourceID)(s)
 					},
 					resource.TestCheckResourceAttr(offerAccessResourceName, "groups.#", "1"),
+					resource.TestCheckTypeSetElemAttr(offerAccessResourceName, "idp_groups.*", idpGroup),
+					resource.TestCheckResourceAttr(offerAccessResourceName, "idp_groups.#", "1"),
 					resource.TestCheckTypeSetElemAttr(offerAccessResourceName, "service_accounts.*", svcAcc),
 					resource.TestCheckResourceAttr(offerAccessResourceName, "service_accounts.#", "1"),
 				),
@@ -99,7 +106,7 @@ func TestAcc_ResourceJaasAccessOffer(t *testing.T) {
 	})
 }
 
-func testAccResourceJaasAccessOffer(modelName, access, user, group, svcAcc, role string) string {
+func testAccResourceJaasAccessOffer(modelName, access, user, group, svcAcc, role, idpGroup string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceJaasAccessoffer",
 		`
@@ -137,6 +144,7 @@ resource "juju_jaas_access_offer" "test" {
   users               = ["{{.User}}"]
   groups              = [juju_jaas_group.test.uuid]
   roles              = [juju_jaas_role.test.uuid]
+  idp_groups          = ["{{.IdPGroup}}"]
   service_accounts    = ["{{.SvcAcc}}"]
 }
 `, internaltesting.TemplateData{
@@ -146,5 +154,6 @@ resource "juju_jaas_access_offer" "test" {
 			"Group":     group,
 			"SvcAcc":    svcAcc,
 			"Role":      role,
+			"IdPGroup":  idpGroup,
 		})
 }

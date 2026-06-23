@@ -17,7 +17,7 @@ import (
 )
 
 // This file has bare minimum tests for role access
-// verifying that users, service accounts and roles
+// verifying that users, service accounts and IdP groups
 // can access a role. More extensive tests for
 // generic jaas access are available in
 // resource_access_jaas_model_test.go
@@ -34,6 +34,7 @@ func TestAcc_ResourceJaasAccessRole(t *testing.T) {
 	accessFail := "bogus"
 	user := "foo@domain.com"
 	roleOneName := acctest.RandomWithPrefix("role1")
+	idpGroup := acctest.RandomWithPrefix("idp-group")
 	svcAcc := "test"
 	svcAccWithDomain := svcAcc + "@serviceaccount"
 
@@ -41,10 +42,11 @@ func TestAcc_ResourceJaasAccessRole(t *testing.T) {
 	RoleRelationF := func(s string) string { return jimmnames.NewRoleTag(s).String() }
 	roleOneCheck := newCheckAttribute(roleOneResourceName, "uuid", RoleRelationF)
 	UserTag := names.NewUserTag(user).String()
+	idpGroupTag := jimmnames.NewIdPGroupTag(idpGroup).String() + "#member"
 	svcAccTag := names.NewUserTag(svcAccWithDomain).String()
 
 	// Step 0: Test an invalid access string.
-	// Step 1: Test adding a valid set user, role and service account.
+	// Step 1: Test adding a valid set of users, IdP groups and service accounts.
 	// Step 2: Test importing works.
 	// Destroy: Test access is removed.
 	resource.ParallelTest(t, resource.TestCase{
@@ -52,22 +54,26 @@ func TestAcc_ResourceJaasAccessRole(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
 			testAccCheckJaasResourceAccess(ctx, accessSuccess, &UserTag, roleOneCheck.tag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &idpGroupTag, roleOneCheck.tag, false),
 			testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, roleOneCheck.tag, false),
 		),
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccResourceJaasAccessRole(roleOneName, accessFail, user, svcAcc),
+				Config:      testAccResourceJaasAccessRole(roleOneName, accessFail, user, svcAcc, idpGroup),
 				ExpectError: regexp.MustCompile(fmt.Sprintf("(?s)unknown.*relation %s", accessFail)),
 			},
 			{
-				Config: testAccResourceJaasAccessRole(roleOneName, accessSuccess, user, svcAcc),
+				Config: testAccResourceJaasAccessRole(roleOneName, accessSuccess, user, svcAcc, idpGroup),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(roleOneCheck),
 					testAccCheckJaasResourceAccess(ctx, accessSuccess, &UserTag, roleOneCheck.tag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &idpGroupTag, roleOneCheck.tag, true),
 					testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, roleOneCheck.tag, true),
 					resource.TestCheckResourceAttr(RoleAccessResourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(RoleAccessResourceName, "users.*", user),
 					resource.TestCheckResourceAttr(RoleAccessResourceName, "users.#", "1"),
+					resource.TestCheckTypeSetElemAttr(RoleAccessResourceName, "idp_groups.*", idpGroup),
+					resource.TestCheckResourceAttr(RoleAccessResourceName, "idp_groups.#", "1"),
 					resource.TestCheckTypeSetElemAttr(RoleAccessResourceName, "service_accounts.*", svcAcc),
 					resource.TestCheckResourceAttr(RoleAccessResourceName, "service_accounts.#", "1"),
 				),
@@ -81,7 +87,7 @@ func TestAcc_ResourceJaasAccessRole(t *testing.T) {
 	})
 }
 
-func testAccResourceJaasAccessRole(roleName, access, user, svcAcc string) string {
+func testAccResourceJaasAccessRole(roleName, access, user, svcAcc, idpGroup string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceJaasAccessRole",
 		`
@@ -93,12 +99,14 @@ resource "juju_jaas_access_role" "test" {
   role_id            = juju_jaas_role.test.uuid
   access              = "{{.Access}}"
   users               = ["{{.User}}"]
+  idp_groups          = ["{{.IdPGroup}}"]
   service_accounts    = ["{{.SvcAcc}}"]
 }
 `, internaltesting.TemplateData{
-			"Role":   roleName,
-			"Access": access,
-			"User":   user,
-			"SvcAcc": svcAcc,
+			"Role":     roleName,
+			"Access":   access,
+			"User":     user,
+			"SvcAcc":   svcAcc,
+			"IdPGroup": idpGroup,
 		})
 }

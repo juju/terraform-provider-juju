@@ -20,7 +20,8 @@ import (
 )
 
 // This file has bare minimum tests for controller access
-// verifying that users, service accounts and groups
+// verifying that users, service accounts, groups, roles
+// and IdP groups
 // can access a controller. More extensive tests for
 // generic jaas access are available in
 // resource_access_jaas_model_test.go
@@ -38,6 +39,7 @@ func TestAcc_ResourceJaasAccessController(t *testing.T) {
 	user := "foo@domain.com"
 	group := acctest.RandomWithPrefix("myGroup")
 	role := acctest.RandomWithPrefix("role1")
+	idpGroup := acctest.RandomWithPrefix("idp-group")
 	svcAcc := "test"
 	svcAccWithDomain := svcAcc + "@serviceaccount"
 
@@ -49,11 +51,12 @@ func TestAcc_ResourceJaasAccessController(t *testing.T) {
 	}
 	roleCheck := newCheckAttribute(roleResourcename, "uuid", roleRelationF)
 	userTag := names.NewUserTag(user).String()
+	idpGroupTag := jimmnames.NewIdPGroupTag(idpGroup).String() + "#member"
 	svcAccTag := names.NewUserTag(svcAccWithDomain).String()
 	controllerTag := names.NewControllerTag("jimm").String()
 
 	// Test 0: Test an invalid access string.
-	// Test 1: Test adding a valid set user, group and service account.
+	// Test 1: Test adding a valid set of users, groups, roles, IdP groups and service accounts.
 	// Test 2: Test importing works.
 	// Destroy: Test access is removed.
 	resource.ParallelTest(t, resource.TestCase{
@@ -63,20 +66,22 @@ func TestAcc_ResourceJaasAccessController(t *testing.T) {
 			testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTag, &controllerTag, false),
 			testAccCheckJaasResourceAccess(ctx, accessSuccess, groupCheck.tag, &controllerTag, false),
 			testAccCheckJaasResourceAccess(ctx, accessSuccess, roleCheck.tag, &controllerTag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &idpGroupTag, &controllerTag, false),
 			testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, &controllerTag, false),
 		),
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccResourceJaasAccessController(accessFail, user, group, svcAcc, role),
+				Config:      testAccResourceJaasAccessController(accessFail, user, group, svcAcc, role, idpGroup),
 				ExpectError: regexp.MustCompile(fmt.Sprintf("(?s)unknown.*relation %s", accessFail)),
 			},
 			{
-				Config: testAccResourceJaasAccessController(accessSuccess, user, group, svcAcc, role),
+				Config: testAccResourceJaasAccessController(accessSuccess, user, group, svcAcc, role, idpGroup),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(groupCheck),
 					testAccCheckAttributeNotEmpty(roleCheck),
 					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTag, &controllerTag, true),
 					testAccCheckJaasResourceAccess(ctx, accessSuccess, groupCheck.tag, &controllerTag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &idpGroupTag, &controllerTag, true),
 					testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, &controllerTag, true),
 					testAccCheckJaasResourceAccess(ctx, accessSuccess, roleCheck.tag, &controllerTag, true),
 					resource.TestCheckResourceAttr(controllerAccessResourceName, "access", accessSuccess),
@@ -87,6 +92,8 @@ func TestAcc_ResourceJaasAccessController(t *testing.T) {
 						return resource.TestCheckTypeSetElemAttr(controllerAccessResourceName, "groups.*", *groupCheck.resourceID)(s)
 					},
 					resource.TestCheckResourceAttr(controllerAccessResourceName, "groups.#", "1"),
+					resource.TestCheckTypeSetElemAttr(controllerAccessResourceName, "idp_groups.*", idpGroup),
+					resource.TestCheckResourceAttr(controllerAccessResourceName, "idp_groups.#", "1"),
 					resource.TestCheckTypeSetElemAttr(controllerAccessResourceName, "service_accounts.*", svcAcc),
 					resource.TestCheckResourceAttr(controllerAccessResourceName, "service_accounts.#", "1"),
 				),
@@ -144,7 +151,7 @@ func TestAcc_ResourceJaasAccessControllerImportState(t *testing.T) {
 	})
 }
 
-func testAccResourceJaasAccessController(access, user, group, svcAcc, role string) string {
+func testAccResourceJaasAccessController(access, user, group, svcAcc, role, idpGroup string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceJaasAccessController",
 		`
@@ -161,14 +168,16 @@ resource "juju_jaas_access_controller" "test" {
   users               = ["{{.User}}"]
   groups              = [juju_jaas_group.test.uuid]
   roles               = [juju_jaas_role.test.uuid]
+  idp_groups          = ["{{.IdPGroup}}"]
   service_accounts    = ["{{.SvcAcc}}"]
 }
 `, internaltesting.TemplateData{
-			"Access": access,
-			"User":   user,
-			"Group":  group,
-			"Role":   role,
-			"SvcAcc": svcAcc,
+			"Access":   access,
+			"User":     user,
+			"Group":    group,
+			"Role":     role,
+			"SvcAcc":   svcAcc,
+			"IdPGroup": idpGroup,
 		})
 }
 

@@ -19,7 +19,8 @@ import (
 )
 
 // This file has bare minimum tests for cloud access
-// verifying that users, service accounts and groups
+// verifying that users, service accounts, groups, roles
+// and IdP groups
 // can access a cloud. More extensive tests for
 // generic jaas access are available in
 // resource_access_jaas_model_test.go
@@ -41,6 +42,7 @@ func TestAcc_ResourceJaasAccessCloud(t *testing.T) {
 	user := "foo@domain.com"
 	group := acctest.RandomWithPrefix("myGroup")
 	role := acctest.RandomWithPrefix("role1")
+	idpGroup := acctest.RandomWithPrefix("idp-group")
 	svcAcc := "test"
 	svcAccWithDomain := svcAcc + "@serviceaccount"
 
@@ -50,11 +52,12 @@ func TestAcc_ResourceJaasAccessCloud(t *testing.T) {
 	roleRelationF := func(s string) string { return jimmnames.NewRoleTag(s).String() + "#assignee" }
 	roleCheck := newCheckAttribute(roleResourcename, "uuid", roleRelationF)
 	userTag := names.NewUserTag(user).String()
+	idpGroupTag := jimmnames.NewIdPGroupTag(idpGroup).String() + "#member"
 	svcAccTag := names.NewUserTag(svcAccWithDomain).String()
 	cloudTag := names.NewCloudTag(cloudName).String()
 
 	// Test 0: Test an invalid access string.
-	// Test 1: Test adding a valid set user, group and service account.
+	// Test 1: Test adding a valid set of users, groups, roles, IdP groups and service accounts.
 	// Test 2: Test importing works.
 	// Destroy: Test access is removed.
 	resource.ParallelTest(t, resource.TestCase{
@@ -64,20 +67,22 @@ func TestAcc_ResourceJaasAccessCloud(t *testing.T) {
 			testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTag, &cloudTag, false),
 			testAccCheckJaasResourceAccess(ctx, accessSuccess, groupCheck.tag, &cloudTag, false),
 			testAccCheckJaasResourceAccess(ctx, accessSuccess, roleCheck.tag, &cloudTag, false),
+			testAccCheckJaasResourceAccess(ctx, accessSuccess, &idpGroupTag, &cloudTag, false),
 			testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, &cloudTag, false),
 		),
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccResourceJaasAccessCloud(cloudName, accessFail, user, group, svcAcc, role),
+				Config:      testAccResourceJaasAccessCloud(cloudName, accessFail, user, group, svcAcc, role, idpGroup),
 				ExpectError: regexp.MustCompile(fmt.Sprintf("(?s)unknown.*relation %s", accessFail)),
 			},
 			{
-				Config: testAccResourceJaasAccessCloud(cloudName, accessSuccess, user, group, svcAcc, role),
+				Config: testAccResourceJaasAccessCloud(cloudName, accessSuccess, user, group, svcAcc, role, idpGroup),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(groupCheck),
 					testAccCheckAttributeNotEmpty(roleCheck),
 					testAccCheckJaasResourceAccess(ctx, accessSuccess, &userTag, &cloudTag, true),
 					testAccCheckJaasResourceAccess(ctx, accessSuccess, groupCheck.tag, &cloudTag, true),
+					testAccCheckJaasResourceAccess(ctx, accessSuccess, &idpGroupTag, &cloudTag, true),
 					testAccCheckJaasResourceAccess(ctx, accessSuccess, &svcAccTag, &cloudTag, true),
 					testAccCheckJaasResourceAccess(ctx, accessSuccess, roleCheck.tag, &cloudTag, true),
 					resource.TestCheckResourceAttr(cloudAccessResourceName, "access", accessSuccess),
@@ -88,6 +93,8 @@ func TestAcc_ResourceJaasAccessCloud(t *testing.T) {
 						return resource.TestCheckTypeSetElemAttr(cloudAccessResourceName, "groups.*", *groupCheck.resourceID)(s)
 					},
 					resource.TestCheckResourceAttr(cloudAccessResourceName, "groups.#", "1"),
+					resource.TestCheckTypeSetElemAttr(cloudAccessResourceName, "idp_groups.*", idpGroup),
+					resource.TestCheckResourceAttr(cloudAccessResourceName, "idp_groups.#", "1"),
 					resource.TestCheckTypeSetElemAttr(cloudAccessResourceName, "service_accounts.*", svcAcc),
 					resource.TestCheckResourceAttr(cloudAccessResourceName, "service_accounts.#", "1"),
 				),
@@ -145,7 +152,7 @@ func TestAcc_ResourceJaasAccessCloudImportState(t *testing.T) {
 	})
 }
 
-func testAccResourceJaasAccessCloud(cloudName, access, user, group, svcAcc, role string) string {
+func testAccResourceJaasAccessCloud(cloudName, access, user, group, svcAcc, role, idpGroup string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceJaasAccessCloud",
 		`
@@ -163,15 +170,17 @@ resource "juju_jaas_access_cloud" "test" {
   users               = ["{{.User}}"]
   groups              = [juju_jaas_group.test.uuid]
   roles              = [juju_jaas_role.test.uuid]
+  idp_groups          = ["{{.IdPGroup}}"]
   service_accounts    = ["{{.SvcAcc}}"]
 }
 `, internaltesting.TemplateData{
-			"Cloud":  cloudName,
-			"Access": access,
-			"User":   user,
-			"Group":  group,
-			"Role":   role,
-			"SvcAcc": svcAcc,
+			"Cloud":    cloudName,
+			"Access":   access,
+			"User":     user,
+			"Group":    group,
+			"Role":     role,
+			"SvcAcc":   svcAcc,
+			"IdPGroup": idpGroup,
 		})
 }
 

@@ -178,6 +178,7 @@ func (resource *genericJAASAccessResource) Read(ctx context.Context, req resourc
 
 	state.Users = newModel.Users
 	state.Groups = newModel.Groups
+	state.IdPGroups = newModel.IdPGroups
 	state.Roles = newModel.Roles
 	state.ServiceAccounts = newModel.ServiceAccounts
 	state.Access = basetypes.NewStringValue(access)
@@ -359,7 +360,7 @@ func modelToTuples(ctx context.Context, targetTag names.Tag, model objectsWithAc
 	tuples := make([]juju.JaasTuple, 0, 5)
 	userNameToTagf := func(s string) string { return names.NewUserTag(s).String() }
 	groupIDToTagf := func(s string) string { return jimmnames.NewGroupTag(s).String() + "#member" }
-	idPGroupIDToTagf := func(s string) string { return jimmnames.NewIdPGroupTag(s).String() }
+	idPGroupIDToTagf := func(s string) string { return jimmnames.NewIdPGroupTag(s).String() + "#member" }
 	roleIDToTagf := func(s string) string { return jimmnames.NewRoleTag(s).String() + "#assignee" }
 	// Note that service accounts are treated as users but with an @serviceaccount domain.
 	// We add the @serviceaccount domain by calling `EnsureValidServiceAccountId` so that the user writing the plan doesn't have to.
@@ -408,7 +409,7 @@ func tuplesToModel(ctx context.Context, tuples []juju.JaasTuple, diag *diag.Diag
 		case jimmnames.GroupTagKind:
 			groups = append(groups, strings.ReplaceAll(tag.Id(), "#member", ""))
 		case jimmnames.IdPGroupTagKind:
-			idpGroups = append(idpGroups, tag.Id())
+			idpGroups = append(idpGroups, strings.ReplaceAll(tag.Id(), "#member", ""))
 		case jimmnames.RoleTagKind:
 			roles = append(roles, strings.ReplaceAll(tag.Id(), "#assignee", ""))
 		}
