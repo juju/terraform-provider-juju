@@ -17,14 +17,17 @@ func AgentVersionCreateOnlyModifier() planmodifier.String {
 
 type agentVersionCreateOnlyModifier struct{}
 
+// Description returns a description of the modifier.
 func (m agentVersionCreateOnlyModifier) Description(_ context.Context) string {
 	return "Prevents agent_version from being configured when creating a model"
 }
 
+// MarkdownDescription returns a markdown description of the modifier.
 func (m agentVersionCreateOnlyModifier) MarkdownDescription(_ context.Context) string {
 	return "Prevents `agent_version` from being configured when creating a model"
 }
 
+// PlanModifyString modifies the plan for a string attribute.
 func (m agentVersionCreateOnlyModifier) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
 	if !req.State.Raw.IsNull() {
 		return

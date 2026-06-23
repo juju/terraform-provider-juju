@@ -395,6 +395,11 @@ func TestAcc_ResourceModel_UpgradeAgentVersion(t *testing.T) {
 		t.Skipf("%s is not set", TestJujuAgentVersion)
 	}
 
+	initialAgentVersion := "3.6.23"
+	if targetAgentVersion == initialAgentVersion {
+		t.Fatalf("%s is set to the same value as the initial agent version (%s), please set it to a different version for testing", TestJujuAgentVersion, initialAgentVersion)
+	}
+
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	resourceName := "juju_model.model"
 	ctx := t.Context()
@@ -403,14 +408,15 @@ func TestAcc_ResourceModel_UpgradeAgentVersion(t *testing.T) {
 		Name:        modelName,
 		CloudName:   testingCloud.CloudName(),
 		CloudRegion: "localhost",
+		Config: map[string]string{
+			"agent-version": initialAgentVersion,
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	t.Cleanup(func() {
-		_ = TestClient.Models.DestroyModel(ctx, internaljuju.DestroyModelInput{UUID: modelResp.UUID})
-	})
+	// Skip cleanup since the provider framework will destroy the model.
+	// Destroying it here too will cause a delay failing to connect to the model.
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -422,6 +428,18 @@ func TestAcc_ResourceModel_UpgradeAgentVersion(t *testing.T) {
 				ImportStateId:      modelResp.UUID,
 				ImportStatePersist: true,
 				ResourceName:       resourceName,
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if len(states) != 1 {
+						return fmt.Errorf("expected 1 imported state, got %d", len(states))
+					}
+
+					got := states[0].Attributes["agent_version"]
+					if got != initialAgentVersion {
+						return fmt.Errorf("expected imported agent_version to be %q before upgrade, got %q", initialAgentVersion, got)
+					}
+
+					return nil
+				},
 			},
 			{
 				Config: testAccResourceModelWithAgentVersion(modelName, testingCloud.CloudName(), targetAgentVersion),
