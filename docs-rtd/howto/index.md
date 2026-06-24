@@ -34,6 +34,8 @@ manage-offers
 manage-units
 manage-secrets
 manage-machines
+manage-storage-pools
+manage-spaces
 ```
 
 ## Set up the Terraform Provider for Juju
@@ -71,3 +73,5 @@ Deploy, configure, integrate, scale, etc., charmed applications. This will autom
 - {ref}`manage-units`
 - {ref}`manage-secrets`
 - {ref}`manage-machines`
+- {ref}`manage-storage-pools`
+- {ref}`manage-spaces`
