@@ -81,8 +81,8 @@ github.com/bufbuild/protocompile v0.14.1 h1:iA73zAf/fyljNjQKwYzUHD6AD4R8KMasmwa/
 github.com/bufbuild/protocompile v0.14.1/go.mod h1:ppVdAIhbr2H8asPk6k4pY7t9zB1OU5DoEw9xY/FUi1c=
 github.com/canonical/go-dqlite/v3 v3.0.3 h1:JkdMD+f21yuPcS+r6gzO57lBkU5U76xmWyk8uT/eruI=
 github.com/canonical/go-dqlite/v3 v3.0.3/go.mod h1:6O+E6MiYesijRUOECyywp16iT+N4QOrvjDWWiMJ/xF0=
-github.com/canonical/jimm-go-sdk/v3 v3.3.12 h1:6/HvibmscAizHoeN28WeB+Gx0OQTlHqOWKXwuZA5arI=
-github.com/canonical/jimm-go-sdk/v3 v3.3.12/go.mod h1:xcJrWTpLHSw3Z16/1Zcvh31awlwIzjXdrYUYCVZhc5s=
+github.com/canonical/jimm-go-sdk/v3 v3.4.0 h1:Ej9MxSMxe1SR00jAsuRlke0vj6C6E0BIkI3wKZ/1Awc=
+github.com/canonical/jimm-go-sdk/v3 v3.4.0/go.mod h1:xcJrWTpLHSw3Z16/1Zcvh31awlwIzjXdrYUYCVZhc5s=
 github.com/canonical/lxd v0.0.0-20251125210512-b190d213bd11 h1:QOyXTFkf5zh/UezMurmpjobnOxefsrHxyYZpl8mfWbs=
 github.com/canonical/lxd v0.0.0-20251125210512-b190d213bd11/go.mod h1:vE1tA6TE1rvEzMcFKUfqh7BMhGH0vlkhYDy4YzeLHbM=
 github.com/canonical/sqlair v0.0.0-20260218132926-bd54c4999dea h1:m9TQ00PXBFNgp11bl7CFz7vnywKEcmWd+o325Ff7PfY=
