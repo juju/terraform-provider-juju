@@ -1,3 +1,33 @@
+# 2.1.0
+
+NOTES:
+
+* **This release requires Juju controller version 3 or higher. This version drops support for 2.9.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the tip of the Juju 4.0 branch.
+
+ENHANCEMENTS
+
+* Implement spaces client support by @ale8k in [#1241](https://github.com/juju/terraform-provider-juju/pull/1241).
+* Implement `juju_space` resource by @ale8k in [#1233](https://github.com/juju/terraform-provider-juju/pull/1233).
+* Implement `juju_subnet` resource by @ale8k in [#1234](https://github.com/juju/terraform-provider-juju/pull/1234).
+* Implement `juju_space` data source by @ale8k in [#1235](https://github.com/juju/terraform-provider-juju/pull/1235).
+* Add `secret_uri` to the `juju_secret` data source by @luci1900 in [#1259](https://github.com/juju/terraform-provider-juju/pull/1259).
+* Implement `juju_subnets` data source by @ale8k in [#1236](https://github.com/juju/terraform-provider-juju/pull/1236).
+* Add explicit force-destroy support for offers by @luci1900 in [#1230](https://github.com/juju/terraform-provider-juju/pull/1230).
+* Implement `juju_spaces` list resource support by @ale8k in [#1237](https://github.com/juju/terraform-provider-juju/pull/1237).
+* Add `type` to the `juju_model` data source by @SimoneDutto in [#1273](https://github.com/juju/terraform-provider-juju/pull/1273).
+
+CI & MAINTENANCE
+
+* Merge v1.5 to main by @kian99 in [#1228](https://github.com/juju/terraform-provider-juju/pull/1228).
+* Merge 2.0 branch updates by @ale8k in [#1245](https://github.com/juju/terraform-provider-juju/pull/1245).
+* Enable tf integration tests against JAAS v3 by @SimoneDutto in [#1248](https://github.com/juju/terraform-provider-juju/pull/1248).
+* Improve test worst-case running time by @luci1900 in [#1263](https://github.com/juju/terraform-provider-juju/pull/1263).
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v2.0.1...v2.1.0
+
 # 2.0.0
 
 NOTES:
