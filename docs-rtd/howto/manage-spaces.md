@@ -9,7 +9,7 @@ myst:
 
 > See also: {external+juju:ref}`Juju | Space <space>`, {external+juju:ref}`Juju | Subnet <subnet>`
 
-A Juju **space** is a logical grouping of subnets that can be referenced by name when configuring application endpoint bindings. A **subnet** represents a CIDR network in a cloud. In the Terraform Provider for Juju, the `juju_subnet` resource does not create a subnet — it acts as an **assignment tool** that assigns an existing subnet (identified by its CIDR) to a Juju space. Removing a `juju_subnet` resource moves the subnet back to the default `alpha` space rather than deleting the underlying network.
+A Juju **space** is a logical grouping of subnets that can be referenced by name when configuring application endpoint bindings. In the Terraform Provider for Juju, the `juju_subnet` resource does not create a subnet — it acts as an **assignment tool** that assigns an existing subnet (identified by its CIDR) to a Juju space. Removing a `juju_subnet` resource moves the subnet back to the default `alpha` space rather than deleting the underlying network.
 
 ## Reference an externally managed space
 

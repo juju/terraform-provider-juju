@@ -37,6 +37,8 @@ resource "juju_access_model" "this" {
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Access Models can be imported using the model name,
 # access and comma separated list of users
