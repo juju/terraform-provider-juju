@@ -101,5 +101,6 @@ jobs:
       - env:
           TF_ACC: "1"
           TEST_CLOUD: "lxd"
+          SIMONE_DUTTO_PRIVATE_REGISTRY_PAT: ${{ secrets.SIMONE_DUTTO_PRIVATE_REGISTRY_PAT }}
         run: go test -parallel 4 -timeout 90m -v -cover ./internal/provider/
         timeout-minutes: 90

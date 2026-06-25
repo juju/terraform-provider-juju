@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -1146,6 +1147,52 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 	})
 }
 
+func TestAcc_PrivateRegistryApplicationActive(t *testing.T) {
+	ctx := t.Context()
+
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with Microk8s")
+	}
+	const (
+		privateUser  = "simonedutto"
+		privateImage = "ghcr.io/simonedutto/coredns:1.11.1"
+	)
+	privatePass := os.Getenv("SIMONE_DUTTO_PRIVATE_REGISTRY_PAT")
+	if privatePass == "" {
+		t.Skip("SIMONE_DUTTO_PRIVATE_REGISTRY_PAT not set; skipping private registry reproduction test")
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-private-registry")
+	appName := "test-app"
+	appResourceFullName := "juju_application." + appName
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationFromPrivateRegistry(
+					modelName, appName, privateUser, privatePass, privateImage,
+				),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(appResourceFullName, "resources.coredns-image", privateImage),
+					// Verify the resource was actually uploaded with the private
+					// image metadata. Fingerprints are intentionally bogus; the
+					// correct values will be captured from the failing test
+					// output and filled in here.
+					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
+						fingerprintJuju3: "8ba83c0618d73a211cbf94dd3e8df4ef5904c3bfde62dfbde14c7f36e0127b5d340cc738e1887c8054e5caad0f4b635c",
+						fingerprintJuju4: "BOGUS_FINGERPRINT_JUJU4",
+						origin:           "upload",
+						revision:         "0",
+					}),
+					testAccCheckApplicationIdle(ctx, appResourceFullName),
+				),
+			},
+		},
+	})
+}
+
 type charmResourceChecks struct {
 	// fingerprintJuju3 is a SHA384 fingerprint of the resource as computed by Juju 3.
 	// Juju 3 and Juju 4 compute fingerprints differently for container image resources
@@ -2011,6 +2058,14 @@ resource "juju_application" "{{.AppName}}" {
 }
 
 func testAccResourceApplicationFromPrivateRegistry(modelName, appName, username, password string, resourceRevision string) string {
+	// Derive the registry key from the image url.
+	// Ex. "ghcr.io/canonical/test:tag"   -> "ghcr.io/canonical"
+	registryKey := ""
+	if resourceRevision != "" {
+		if idx := strings.LastIndex(resourceRevision, "/"); idx >= 0 {
+			registryKey = resourceRevision[:idx]
+		}
+	}
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceApplicationFromPrivateRegistry",
 		`
@@ -2030,7 +2085,7 @@ resource "juju_application" "{{.AppName}}" {
 
   {{ if .UsePrivateRegistry }}
   registry_credentials = {
-    "ghcr.io/canonical" = {
+    "{{.RegistryKey}}" = {
       username = "{{.Username}}"
       password = "{{.Password}}"
     }
@@ -2052,6 +2107,7 @@ resource "juju_application" "{{.AppName}}" {
 			"Username":              username,
 			"Password":              password,
 			"ResourceParamRevision": resourceRevision,
+			"RegistryKey":           registryKey,
 		})
 }
 
