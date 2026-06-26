@@ -42,11 +42,11 @@ jobs:
         uses: docker/setup-compose-action@v1
 
       - name: Setup JAAS
-        uses: canonical/jimm/.github/actions/test-server@feature/juju-4
+        uses: canonical/jimm/.github/actions/test-server@v3
         id: jaas
         with:
-          juju-channel: 4.0/edge
-          jimm-version: v3.4.0-alpha3
+          juju-channel: 4.0/stable
+          jimm-version: v4.0.0-alpha1
           ghcr-pat: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup the main controller
