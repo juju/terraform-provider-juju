@@ -45,6 +45,11 @@ func baseAccessSchema() genericSchema {
 				setvalidator.ValueStringsAre(ValidatorMatchString(jimmnames.IsValidGroupId, "group ID must be valid")),
 			},
 		},
+		"idp_groups": schema.SetAttribute{
+			Description: "List of identity provider groups to grant access. IdP groups have no provider-side format restriction.",
+			Optional:    true,
+			ElementType: types.StringType,
+		},
 		"service_accounts": schema.SetAttribute{
 			Description: "List of service accounts to grant access. A valid service account is the service account's name.",
 			Optional:    true,

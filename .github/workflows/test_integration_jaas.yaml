@@ -42,11 +42,11 @@ jobs:
       fail-fast: false
       matrix:
         jaas:
-          - jimm_version: v3.4.0
+          - jimm_version: v3.4.1
             juju_channel: 3/stable
             label: "jimm-3-juju-3"
-          - jimm_version: v4.0.0-alpha
-            juju_channel: 4.0/edge
+          - jimm_version: v4.0.0-alpha1
+            juju_channel: 4.0/stable
             label: "jimm-4-juju-4"
     timeout-minutes: 90
     steps:
@@ -69,7 +69,7 @@ jobs:
         uses: docker/setup-compose-action@v1
       # Starting JAAS will start the JIMM controller and dependencies and create a Juju controller on LXD and connect it to JIMM.
       - name: Setup JAAS
-        uses: canonical/jimm/.github/actions/test-server@feature/juju-4
+        uses: canonical/jimm/.github/actions/test-server@v3
         id: jaas
         with:
           juju-channel: ${{ matrix.jaas.juju_channel }}

@@ -118,6 +118,8 @@ func (r *jaasAccessGroupResource) ConfigValidators(ctx context.Context) []resour
 // Schema defines the schema for the JAAS group access resource.
 func (a *jaasAccessGroupResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attributes := baseAccessSchema()
+	// IdP groups cannot be granted membership to a regular group.
+	delete(attributes, "idp_groups")
 	attributes["group_id"] = schema.StringAttribute{
 		Description: "The ID of the group for access management. If this is changed the resource will be deleted and a new resource will be created.",
 		Required:    true,
