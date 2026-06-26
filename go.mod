@@ -1,12 +1,12 @@
 module github.com/juju/terraform-provider-juju
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/bflad/tfproviderlint v0.30.0
 	github.com/hashicorp/terraform-plugin-docs v0.25.0
-	// Juju v4.0.11
-	github.com/juju/juju v0.0.0-20260527145832-20cb167e0dba
+	// Tip of 4.0
+	github.com/juju/juju v0.0.0-20260626121058-7a497bb0d83a
 )
 
 require (
@@ -24,7 +24,7 @@ require (
 	github.com/juju/collections v1.0.4
 	github.com/juju/errors v1.0.0
 	github.com/juju/names/v5 v5.0.0
-	github.com/juju/names/v6 v6.0.0-20250512075813-b50ca77a4137
+	github.com/juju/names/v6 v6.0.0
 	github.com/juju/proxy v1.0.0
 	github.com/juju/retry v1.0.1
 	github.com/juju/utils v0.0.0-20200604140309-9d78121a29e0
@@ -33,7 +33,7 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
-	golang.org/x/crypto v0.52.0
+	golang.org/x/crypto v0.53.0
 	gopkg.in/httprequest.v1 v1.2.1
 	gopkg.in/macaroon.v2 v2.1.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -124,7 +124,7 @@ require (
 	github.com/juju/gojsonreference v0.0.0-20150204194633-f0d24ac5ee33 // indirect
 	github.com/juju/gojsonschema v1.0.0 // indirect
 	github.com/juju/idmclient/v2 v2.0.1 // indirect
-	github.com/juju/jsonschema v1.0.0 // indirect
+	github.com/juju/jsonschema v1.0.1 // indirect
 	github.com/juju/loggo v1.0.0 // indirect
 	github.com/juju/loggo/v2 v2.2.0 // indirect
 	github.com/juju/lumberjack/v2 v2.0.2 // indirect
@@ -187,15 +187,15 @@ require (
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6 // indirect
-	golang.org/x/mod v0.35.0 // indirect
-	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/mod v0.37.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/term v0.43.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
+	golang.org/x/sync v0.21.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/term v0.44.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	golang.org/x/tools v0.44.0 // indirect
+	golang.org/x/tools v0.45.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260401024825-9d38bb4040a9 // indirect
 	google.golang.org/grpc v1.80.0 // indirect
