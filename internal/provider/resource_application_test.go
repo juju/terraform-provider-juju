@@ -26,9 +26,13 @@ import (
 	apispaces "github.com/juju/juju/api/client/spaces"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v6"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 
 	internaljuju "github.com/juju/terraform-provider-juju/internal/juju"
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
+	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 func TestAcc_ResourceApplication(t *testing.T) {
@@ -854,6 +858,78 @@ func testAccCheckApplicationIdle(ctx context.Context, appResource string) resour
 	}
 }
 
+// testAccCheckImagePullSecretCreated verifies that Juju created a k8s
+// dockerconfigjson image pull secret in the model's namespace for the given
+// application. This confirms that the private registry credentials were
+// correctly marshaled and uploaded to the controller.
+//
+// The k8s namespace is the model name and the secret name is
+// "<app-name>-<container-name>-secret".
+func testAccCheckImagePullSecretCreated(ctx context.Context, appResource, modelName, containerName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[appResource]
+		if !ok {
+			return fmt.Errorf("not found: %s", appResource)
+		}
+
+		appName, ok := rs.Primary.Attributes["name"]
+		if !ok {
+			return fmt.Errorf("name is not set")
+		}
+
+		namespace := modelName
+		secretName := fmt.Sprintf("%s-%s-secret", appName, containerName)
+
+		// The microk8s config file is always present in the CI environment
+		// (see resource_controller_test.go and resource_kubernetes_cloud_test.go).
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to get home dir: %w", err)
+		}
+		kubeconfigPath := home + "/microk8s-config.yaml"
+
+		config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		if err != nil {
+			return fmt.Errorf("failed to build k8s config from %q: %w", kubeconfigPath, err)
+		}
+		clientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			return fmt.Errorf("failed to create k8s clientset: %w", err)
+		}
+
+		// Poll for the secret, since Juju creates it asynchronously after the
+		// resource upload is processed by the controller.
+		_, err = wait.WaitFor(wait.WaitForCfg[struct{}, struct{}]{
+			Context: ctx,
+			GetData: func(ctx context.Context, _ struct{}) (struct{}, error) {
+				secret, err := clientset.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
+				if err != nil {
+					return struct{}{}, internaljuju.NewRetryReadErrorf(
+						"image pull secret %q not found in namespace %q yet: %v",
+						secretName, namespace, err,
+					)
+				}
+				if secret.Type != "kubernetes.io/dockerconfigjson" {
+					return struct{}{}, fmt.Errorf("expected secret %q to be of type kubernetes.io/dockerconfigjson, got %s",
+						secretName, secret.Type)
+				}
+				if _, ok := secret.Data[".dockerconfigjson"]; !ok {
+					return struct{}{}, fmt.Errorf("secret %q does not contain .dockerconfigjson data", secretName)
+				}
+				return struct{}{}, nil
+			},
+			Input:          struct{}{},
+			NonFatalErrors: []error{internaljuju.RetryReadError},
+			RetryConf: &wait.RetryConf{
+				Delay:       1 * time.Second,
+				MaxDelay:    5 * time.Second,
+				MaxDuration: 1 * time.Minute,
+			},
+		})
+		return err
+	}
+}
+
 func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
@@ -1084,11 +1160,14 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 				Config: testAccResourceApplicationFromPrivateRegistry(modelName, appName, "user", "pass", "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
-						fingerprintJuju3: "5cf445e5cccb7c02f60491b1c379038d6b5be46ec86efc1e75d90452f557b8a3bb5f7f085e814986e4e2dc07812b4a56",
-						fingerprintJuju4: "fc15a3374f0051849b218544ad39e3c6b6446d7ac411a9843c0f0f7102587219c1716dd4a217fbba1519b182e89cfda9",
+						fingerprintJuju3: "1b94afe549b44328f2350ae24633b31265a01e466cf0469faa798acb9c637bea30c3c711f25937795eff34d2f920e074",
+						fingerprintJuju4: "2f4df0e226b8e3599dc0e7cae663046fb113e155e72f25325d02c9671f9eb9fd61ddb75c2958cef850745b94431d44b8",
 						origin:           "upload",
 						revision:         "0",
 					}),
+					// Verify that Juju created an image pull secret in the
+					// model's k8s namespace with the correct credentials.
+					testAccCheckImagePullSecretCreated(ctx, appResourceFullName, modelName, "coredns"),
 				),
 			},
 			{
@@ -1101,11 +1180,13 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 				},
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
-						fingerprintJuju3: "7307af1e23462be0a8101ce884ed1ba7b5743922cfab99d4ceeb08d65c96400938a344832cf033a110a1b2a0c3e8d0b9",
-						fingerprintJuju4: "fc15a3374f0051849b218544ad39e3c6b6446d7ac411a9843c0f0f7102587219c1716dd4a217fbba1519b182e89cfda9",
+						fingerprintJuju3: "953991156cf1e0a601f52b2b2b16c7042ad13bf765655c024f384385306404b7eb30bf72bdfcfda3c570b076b3aa96dc",
+						fingerprintJuju4: "33d64f169e84ad1ba0f8ebcb6f5e8c1a135b85a9115b3f5c9f664b013b8facb46dfe0493402d4865e4eebc2843fbca15",
 						origin:           "upload",
 						revision:         "0",
 					}),
+					// Verify the secret was updated with the new credentials.
+					testAccCheckImagePullSecretCreated(ctx, appResourceFullName, modelName, "coredns"),
 				),
 			},
 			{
@@ -1118,7 +1199,7 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 				},
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
-						fingerprintJuju3: "19ece2bcbac52dbbbf7ec48345ab9f7d9a963e43270cf984be42ee7141e636d4ed8e65e7ab35bc97edd138cb468c0659",
+						fingerprintJuju3: "591c30e2a2730c206d65771cfa2302c90a2c90b0860207d82f041d24b7c16409e35465d2be987c4bf562734b9e62f248",
 						fingerprintJuju4: "fc15a3374f0051849b218544ad39e3c6b6446d7ac411a9843c0f0f7102587219c1716dd4a217fbba1519b182e89cfda9",
 						origin:           "upload",
 						revision:         "0",
