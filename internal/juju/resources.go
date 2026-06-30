@@ -7,11 +7,11 @@ import (
 	"bytes"
 	"context"
 	"maps"
-	"time"
 
 	charmresources "github.com/juju/charm/v12/resource"
 	jujuerrors "github.com/juju/errors"
 	apiapplication "github.com/juju/juju/api/client/application"
+	"github.com/juju/juju/api/docker"
 	"gopkg.in/yaml.v3"
 )
 
@@ -43,53 +43,21 @@ func (cr CharmResources) Equal(other CharmResources) bool {
 	return maps.Equal(cr, other)
 }
 
-// The following types mirror github.com/juju/juju/internal/docker structs with
-// their exact YAML tags so the controller can deserialize them correctly.
-// As soon as we land the pr moving this type outside from internal we can remove this.
-
 // MarhsalYaml marshals the CharmResource into a YAML representation
-// suitable for uploading to Juju as a resource.
+// suitable for uploading to Juju as a resource. The core/resource
+// types have the correct YAML tags so the controller can deserialize
+// them correctly.
 func (cr CharmResource) MarhsalYaml() ([]byte, error) {
-	details := dockerImageDetailsYAML{
+	details := docker.DockerImageDetails{
 		RegistryPath: cr.OCIImageURL,
-		imageRepoDetailsYAML: imageRepoDetailsYAML{
-			basicAuthConfigYAML: basicAuthConfigYAML{
+		ImageRepoDetails: docker.ImageRepoDetails{
+			BasicAuthConfig: docker.BasicAuthConfig{
 				Username: cr.RegistryUser,
 				Password: cr.RegistryPassword,
 			},
 		},
 	}
 	return yaml.Marshal(details)
-}
-
-type dockerImageDetailsYAML struct {
-	RegistryPath         string `yaml:"registrypath"`
-	imageRepoDetailsYAML `yaml:",inline"`
-}
-
-type imageRepoDetailsYAML struct {
-	basicAuthConfigYAML `yaml:",inline"`
-	tokenAuthConfigYAML `yaml:",inline"`
-	Repository          string `yaml:"repository,omitempty"`
-	ServerAddress       string `yaml:"serveraddress,omitempty"`
-	Region              string `yaml:"region,omitempty"`
-}
-
-type basicAuthConfigYAML struct {
-	Auth     *tokenYAML `yaml:"auth,omitempty"`
-	Username string     `yaml:"username"`
-	Password string     `yaml:"password"`
-}
-
-type tokenAuthConfigYAML struct {
-	Email         string     `yaml:"email,omitempty"`
-	IdentityToken *tokenYAML `yaml:"identitytoken,omitempty"`
-	RegistryToken *tokenYAML `yaml:"registrytoken,omitempty"`
-}
-
-type tokenYAML struct {
-	Value     string
-	ExpiresAt *time.Time
 }
 
 // UploadExistingPendingResources uploads local resources. Used
