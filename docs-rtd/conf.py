@@ -307,12 +307,12 @@ extensions = [
 # Extension configs:
 # - sphinx.ext.intersphinx:
 intersphinx_mapping = {
-    'juju': ('https://documentation.ubuntu.com/juju/3.6', None),
+    'juju': ('https://canonical.com/juju/docs/juju-cli/latest', None),
     # 'tfjuju': ('https://documentation.ubuntu.com/terraform-provider-juju/latest/', None)
     'pyjuju': ('https://pythonlibjuju.readthedocs.io/en/latest/', None),
-    'jaas': ('https://documentation.ubuntu.com/jaas/latest/', None),
+    'jaas': ('https://canonical.com/juju/docs/jaas/v3', None),
     'charmcraft': ('https://documentation.ubuntu.com/charmcraft/stable/', None),
-    'ops': ('https://documentation.ubuntu.com/ops/latest/', None),
+    'ops': ('https://canonical.com/juju/docs/ops/latest', None),
 }
 # - sphinx_new_tab_link:
 new_tab_link_show_external_link_icon = True
