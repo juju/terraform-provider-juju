@@ -168,41 +168,7 @@ func TestAcc_ResourceSecret_Update(t *testing.T) {
 	})
 }
 
-func TestAcc_ResourceSecret_CreateWithWriteOnlyValue(t *testing.T) {
-	skipTestIfSecretsNotSupported(t)
-
-	modelName := acctest.RandomWithPrefix("tf-test-model")
-	secretName := "tf-test-secret"
-	secretInfo := "test-info"
-	secretValue := map[string]string{
-		"key1": "value1",
-		"key2": "value2",
-	}
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: frameworkProviderFactories,
-		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
-			tfversion.SkipBelow(version.Must(version.NewVersion("1.11.0"))),
-		},
-		Steps: []resource.TestStep{
-			{
-				Config: testAccResourceSecretWriteOnly(modelName, secretName, secretValue, 1, secretInfo),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrPair("juju_secret."+secretName, "model_uuid", "juju_model."+modelName, "uuid"),
-					resource.TestCheckResourceAttr("juju_secret."+secretName, "name", secretName),
-					resource.TestCheckResourceAttr("juju_secret."+secretName, "info", secretInfo),
-					resource.TestCheckResourceAttr("juju_secret."+secretName, "value_wo_version", "1"),
-					// The write-only value must never be stored in state.
-					resource.TestCheckNoResourceAttr("juju_secret."+secretName, "value_wo"),
-					resource.TestCheckNoResourceAttr("juju_secret."+secretName, "value.%"),
-				),
-			},
-		},
-	})
-}
-
-func TestAcc_ResourceSecret_UpdateWriteOnlyValue(t *testing.T) {
+func TestAcc_ResourceSecret_CreateUpdateWriteOnlyValue(t *testing.T) {
 	skipTestIfSecretsNotSupported(t)
 
 	modelName := acctest.RandomWithPrefix("tf-test-model")
@@ -226,10 +192,16 @@ func TestAcc_ResourceSecret_UpdateWriteOnlyValue(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
+				// Create the secret using a write-only value.
 				Config: testAccResourceSecretWriteOnly(modelName, secretName, secretValue, 1, secretInfo),
 				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrPair("juju_secret."+secretName, "model_uuid", "juju_model."+modelName, "uuid"),
+					resource.TestCheckResourceAttr("juju_secret."+secretName, "name", secretName),
+					resource.TestCheckResourceAttr("juju_secret."+secretName, "info", secretInfo),
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "value_wo_version", "1"),
+					// The write-only value must never be stored in state.
 					resource.TestCheckNoResourceAttr("juju_secret."+secretName, "value_wo"),
+					resource.TestCheckNoResourceAttr("juju_secret."+secretName, "value.%"),
 				),
 			},
 			{
@@ -238,6 +210,7 @@ func TestAcc_ResourceSecret_UpdateWriteOnlyValue(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "value_wo_version", "2"),
 					resource.TestCheckNoResourceAttr("juju_secret."+secretName, "value_wo"),
+					resource.TestCheckNoResourceAttr("juju_secret."+secretName, "value.%"),
 				),
 			},
 		},
