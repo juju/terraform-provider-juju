@@ -147,6 +147,11 @@ func (r *secretLister) List(ctx context.Context, req list.ListRequest, stream *l
 						ID:        resourceID,
 						Info:      types.StringValue(secret.Info),
 						Name:      types.StringValue(secret.Name),
+						// value_wo is write-only and never read back; keep it
+						// as a typed null map so framework type verification
+						// succeeds.
+						ValueWO:        types.MapNull(types.StringType),
+						ValueWOVersion: types.Int64Null(),
 					},
 				}
 
