@@ -318,6 +318,10 @@ func (s *secretResource) Create(ctx context.Context, req resource.CreateRequest,
 	plan.SecretId = types.StringValue(createSecretOutput.SecretId)
 	plan.SecretURI = types.StringValue(createSecretOutput.SecretURI)
 	plan.ID = types.StringValue(newSecretID(plan.ModelUUID.ValueString(), plan.SecretId.ValueString()))
+	// value_wo must never be persisted to state; replace with a typed null so
+	// the framework does not see an inconsistent sensitive value on subsequent
+	// plan/apply cycles.
+	plan.ValueWO = types.MapNull(types.StringType)
 	s.trace(fmt.Sprintf("saving secret resource %q", plan.SecretId.ValueString()),
 		map[string]interface{}{
 			"secretID": plan.SecretId.ValueString(),
@@ -438,6 +442,10 @@ func (s *secretResource) Update(ctx context.Context, req resource.UpdateRequest,
 	// value_wo_version triggers re-sending value_wo. Otherwise the plain value
 	// attribute is compared as before.
 	if !plan.ValueWOVersion.IsNull() {
+		// Switching to or already using value_wo: ensure value is nulled out in
+		// state so the framework sees a consistent null for the sensitive
+		// attribute (handles the value → value_wo transition).
+		state.Value = types.MapNull(types.StringType)
 		if !plan.ValueWOVersion.Equal(state.ValueWOVersion) {
 			noChange = false
 			state.ValueWOVersion = plan.ValueWOVersion
@@ -449,15 +457,23 @@ func (s *secretResource) Update(ctx context.Context, req resource.UpdateRequest,
 			}
 			updatedSecretInput.Value = &valueWO
 		}
-	} else if !plan.Value.Equal(state.Value) {
-		noChange = false
-		resp.Diagnostics.Append(plan.Value.ElementsAs(ctx, &state.Value, false)...)
-		if resp.Diagnostics.HasError() {
-			return
+	} else {
+		// Switching to or already using plain value: ensure value_wo_version is
+		// nulled out in state (handles the value_wo → value transition).
+		if !state.ValueWOVersion.IsNull() {
+			noChange = false
+			state.ValueWOVersion = types.Int64Null()
 		}
-		resp.Diagnostics.Append(plan.Value.ElementsAs(ctx, &updatedSecretInput.Value, false)...)
-		if resp.Diagnostics.HasError() {
-			return
+		if !plan.Value.Equal(state.Value) {
+			noChange = false
+			resp.Diagnostics.Append(plan.Value.ElementsAs(ctx, &state.Value, false)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			resp.Diagnostics.Append(plan.Value.ElementsAs(ctx, &updatedSecretInput.Value, false)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
 		}
 	}
 
