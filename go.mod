@@ -5,8 +5,8 @@ go 1.26.4
 require (
 	github.com/bflad/tfproviderlint v0.30.0
 	github.com/hashicorp/terraform-plugin-docs v0.25.0
-	// Tip of 4.0
-	github.com/juju/juju v0.0.0-20260626121058-7a497bb0d83a
+	// Juju v4.0-tip
+	github.com/juju/juju v0.0.0-20260630102250-06a1496d2eef
 )
 
 require (
@@ -38,6 +38,7 @@ require (
 	gopkg.in/macaroon.v2 v2.1.0
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
+	k8s.io/apimachinery v0.34.2
 	k8s.io/client-go v0.34.2
 )
 
@@ -210,7 +211,6 @@ require (
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
 	k8s.io/api v0.34.2 // indirect
 	k8s.io/apiextensions-apiserver v0.34.2 // indirect
-	k8s.io/apimachinery v0.34.2 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b // indirect
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4 // indirect
