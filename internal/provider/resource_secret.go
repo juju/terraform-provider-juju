@@ -318,10 +318,6 @@ func (s *secretResource) Create(ctx context.Context, req resource.CreateRequest,
 	plan.SecretId = types.StringValue(createSecretOutput.SecretId)
 	plan.SecretURI = types.StringValue(createSecretOutput.SecretURI)
 	plan.ID = types.StringValue(newSecretID(plan.ModelUUID.ValueString(), plan.SecretId.ValueString()))
-	// value_wo must never be persisted to state; replace with a typed null so
-	// the framework does not see an inconsistent sensitive value on subsequent
-	// plan/apply cycles.
-	plan.ValueWO = types.MapNull(types.StringType)
 	s.trace(fmt.Sprintf("saving secret resource %q", plan.SecretId.ValueString()),
 		map[string]interface{}{
 			"secretID": plan.SecretId.ValueString(),
