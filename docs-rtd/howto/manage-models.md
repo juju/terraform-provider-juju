@@ -167,7 +167,7 @@ This means that, if you modify your plan in a way that causes recreation of the 
 
 Migrating models to a JAAS environment requires some updates to your Terraform plan when cross-model relations are involved, even if both models in the relation are migrated.
 
-When a model is migrated to JAAS, the model's name and offer URLs will change. The JAAS documentation on [model management](https://canonical.com/juju/docs/jaas/v3/howto/manage-models/) provides more detail.
+When a model is migrated to JAAS, the model's name and offer URLs will change. The JAAS documentation on {external+jaas:ref}`manage-models` provides more detail.
 
 Our recommended way of resolving your Terraform state for this scenario is described below.
 
@@ -545,7 +545,7 @@ Importing it is harmless, but attempting to destroy it via Terraform will result
 juju_storage_pool.all_storage_pools_3: Destroying... [id=c1cecf1e-fe66-4589-8585-e579edd6f58b:loop]
 ╷
 │ Error: Client Error
-│ 
+│
 │ Unable to delete storage pool resource, got error: storage pool "loop" not found
 ╵
 ```
