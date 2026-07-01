@@ -25,7 +25,7 @@ require (
 	github.com/juju/collections v1.0.4
 	github.com/juju/errors v1.0.0
 	github.com/juju/names/v5 v5.0.0
-	github.com/juju/names/v6 v6.0.0-20250512075813-b50ca77a4137
+	github.com/juju/names/v6 v6.0.0
 	github.com/juju/proxy v1.0.0
 	github.com/juju/retry v1.0.1
 	github.com/juju/utils v0.0.0-20200604140309-9d78121a29e0
