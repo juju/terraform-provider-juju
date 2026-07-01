@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -26,9 +27,11 @@ import (
 	apispaces "github.com/juju/juju/api/client/spaces"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v5"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	internaljuju "github.com/juju/terraform-provider-juju/internal/juju"
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
+	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 func TestAcc_ResourceApplication(t *testing.T) {
@@ -1014,10 +1017,11 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-custom-resource-file")
 	appName := "test-app"
 	appResourceFullName := "juju_application." + appName
+	ctx := t.Context()
 	// - Remove the custom resource.
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
+		PreCheck:                 func() { testAccPreCheckWithK8s(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -1029,6 +1033,9 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 						origin:      "upload",
 						revision:    "0",
 					}),
+					// Verify that Juju created an image pull secret in the
+					// model's k8s namespace with the correct credentials.
+					testAccCheckImagePullSecretCreated(ctx, appResourceFullName, modelName, "coredns", "user", "pass"),
 				),
 			},
 			{
@@ -1045,6 +1052,8 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 						origin:      "upload",
 						revision:    "0",
 					}),
+					// Verify the secret was updated with the new credentials.
+					testAccCheckImagePullSecretCreated(ctx, appResourceFullName, modelName, "coredns", "user2", "pass2"),
 				),
 			},
 			{
@@ -1093,6 +1102,83 @@ type charmResourceChecks struct {
 	origin string
 	// revision is "0" when origin is "store", otherwise it's the revision number.
 	revision string
+}
+
+// testAccCheckImagePullSecretCreated verifies that Juju created a k8s
+// dockerconfigjson image pull secret in the model's namespace for the given
+// application. This confirms that the private registry credentials were
+// correctly marshaled and uploaded to the controller, and that the secret
+// content contains the expected username and password.
+//
+// The k8s namespace is the model name and the secret name is
+// "<app-name>-<container-name>-secret".
+func testAccCheckImagePullSecretCreated(ctx context.Context, appResource, modelName, containerName, expectedUsername, expectedPassword string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[appResource]
+		if !ok {
+			return fmt.Errorf("not found: %s", appResource)
+		}
+		appName, ok := rs.Primary.Attributes["name"]
+		if !ok {
+			return fmt.Errorf("name is not set")
+		}
+		namespace := modelName
+		secretName := fmt.Sprintf("%s-%s-secret", appName, containerName)
+
+		// Poll for the secret, since Juju creates it asynchronously after the
+		// resource upload is processed by the controller.
+		_, err := wait.WaitFor(wait.WaitForCfg[struct{}, struct{}]{
+			Context: ctx,
+			GetData: func(_ struct{}) (struct{}, error) {
+				secret, err := TestK8sClientset.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
+				if err != nil {
+					return struct{}{}, internaljuju.NewRetryReadError(
+						fmt.Sprintf("image pull secret %q not found in namespace %q yet: %v", secretName, namespace, err),
+					)
+				}
+				if secret.Type != "kubernetes.io/dockerconfigjson" {
+					return struct{}{}, fmt.Errorf("expected secret %q to be of type kubernetes.io/dockerconfigjson, got %s",
+						secretName, secret.Type)
+				}
+				dockerConfigJSON, ok := secret.Data[".dockerconfigjson"]
+				if !ok {
+					return struct{}{}, fmt.Errorf("secret %q does not contain .dockerconfigjson data", secretName)
+				}
+				// Verify the credentials are present in the secret content.
+				var dockerConfig struct {
+					Auths map[string]struct {
+						Username string `json:"Username"`
+						Password string `json:"Password"`
+					} `json:"auths"`
+				}
+				if err := json.Unmarshal(dockerConfigJSON, &dockerConfig); err != nil {
+					return struct{}{}, fmt.Errorf("failed to unmarshal .dockerconfigjson for secret %q: %w", secretName, err)
+				}
+				found := false
+				for _, auth := range dockerConfig.Auths {
+					if auth.Username == expectedUsername && auth.Password == expectedPassword {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return struct{}{}, internaljuju.NewRetryReadError(
+						fmt.Sprintf("expected username %q and password %q not found in secret %q dockerconfigjson",
+							expectedUsername, expectedPassword, secretName),
+					)
+				}
+				return struct{}{}, nil
+			},
+			Input:          struct{}{},
+			NonFatalErrors: []error{internaljuju.RetryReadError},
+			RetryConf: &wait.RetryConf{
+				Delay:       1 * time.Second,
+				MaxDelay:    5 * time.Second,
+				MaxDuration: 1 * time.Minute,
+			},
+		})
+		return err
+	}
 }
 
 func testAccCheckApplicationResource(appResource string, checks charmResourceChecks) resource.TestCheckFunc {
