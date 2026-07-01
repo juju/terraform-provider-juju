@@ -23,6 +23,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
@@ -63,6 +65,11 @@ var Provider provider.Provider
 // TestClient is needed for any resource to be able to use Juju client in
 // custom checkers for their tests (e.g. resource_model_test)
 var TestClient *juju.Client
+
+// TestK8sClientset is a kubernetes clientset for the test cluster. It is
+// only set when running against microk8s. Other tests can use it to inspect
+// k8s resources (e.g. image pull secrets) created by Juju.
+var TestK8sClientset *kubernetes.Clientset
 
 // setupAccTestsOnce ensures that any setup needed for acceptance tests
 // is only done once.
@@ -269,6 +276,32 @@ func TestProviderSetWarnOnDeletionErrors(t *testing.T) {
 func testAccPreCheck(t *testing.T) {
 	setupAccTestsOnce.Do(func() {
 		setupAcceptanceTests(t)
+	})
+}
+
+// setupAccK8sTestsOnce ensures the k8s clientset is only created once.
+var setupAccK8sTestsOnce sync.Once
+
+// testAccPreCheckWithK8s is like testAccPreCheck but also ensures a kubernetes
+// clientset is available for tests that need to inspect k8s resources (e.g.
+// image pull secrets created by Juju for private registry applications).
+// It requires having `~/microk8s-config.yaml` available with the kubeconfig.
+func testAccPreCheckWithK8s(t *testing.T) {
+	testAccPreCheck(t)
+	setupAccK8sTestsOnce.Do(func() {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			t.Fatalf("failed to get home dir: %v", err)
+		}
+		kubeconfigPath := home + "/microk8s-config.yaml"
+		restConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		if err != nil {
+			t.Fatalf("failed to build k8s config from %q: %v", kubeconfigPath, err)
+		}
+		TestK8sClientset, err = kubernetes.NewForConfig(restConfig)
+		if err != nil {
+			t.Fatalf("failed to create k8s clientset: %v", err)
+		}
 	})
 }
 
