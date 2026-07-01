@@ -456,10 +456,9 @@ func (s *secretResource) Update(ctx context.Context, req resource.UpdateRequest,
 	} else {
 		// Switching to or already using plain value: ensure value_wo_version is
 		// nulled out in state (handles the value_wo → value transition).
-		if !state.ValueWOVersion.IsNull() {
-			noChange = false
-			state.ValueWOVersion = types.Int64Null()
-		}
+		noChange = false
+		state.ValueWOVersion = types.Int64Null()
+
 		if !plan.Value.Equal(state.Value) {
 			noChange = false
 			resp.Diagnostics.Append(plan.Value.ElementsAs(ctx, &state.Value, false)...)
