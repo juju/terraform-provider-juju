@@ -8,12 +8,16 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
@@ -26,6 +30,7 @@ var _ resource.Resource = &secretResource{}
 var _ resource.ResourceWithConfigure = &secretResource{}
 var _ resource.ResourceWithImportState = &secretResource{}
 var _ resource.ResourceWithIdentity = &secretResource{}
+var _ resource.ResourceWithConfigValidators = &secretResource{}
 
 // NewSecretResource returns a secret resource.
 func NewSecretResource() resource.Resource {
@@ -45,6 +50,12 @@ type secretResourceModel struct {
 	// Value of the secret to be added or updated. This attribute is required for 'add' and 'update' actions.
 	// Template: [<key>[#base64]]=<value>[ ...]
 	Value types.Map `tfsdk:"value"`
+	// ValueWO is the write-only equivalent of Value. Its content is never
+	// persisted to Terraform state; it is read from the configuration only.
+	ValueWO types.Map `tfsdk:"value_wo"`
+	// ValueWOVersion triggers an update of the write-only ValueWO. Bump this
+	// whenever the underlying write-only value changes.
+	ValueWOVersion types.Int64 `tfsdk:"value_wo_version"`
 	// SecretId is the ID of the secret to be updated or removed. This attribute is required for 'update' and 'remove' actions.
 	SecretId types.String `tfsdk:"secret_id"`
 	// SecretURI is the URI of the secret e.g. `secret:coj8mulh8b41e8nv6p90` as a convenience for users.
@@ -129,6 +140,9 @@ func (s *secretResource) ImportState(ctx context.Context, req resource.ImportSta
 			SecretId:  types.StringValue(readSecretOutput.SecretId),
 			SecretURI: types.StringValue(readSecretOutput.SecretURI),
 			ID:        types.StringValue(newSecretID(modelUUID, readSecretOutput.SecretId)),
+			// value_wo is write-only and never read back; keep it a typed null
+			// map so framework type verification succeeds on import.
+			ValueWO: types.MapNull(types.StringType),
 		},
 	}
 
@@ -159,6 +173,22 @@ func (s *secretResource) Metadata(_ context.Context, req resource.MetadataReques
 	resp.TypeName = req.ProviderTypeName + "_secret"
 }
 
+// ConfigValidators implements [resource.ResourceWithConfigValidators]. It
+// enforces that exactly one of value or value_wo is supplied, and that
+// value_wo_version is set whenever value_wo is used.
+func (s *secretResource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		resourcevalidator.ExactlyOneOf(
+			path.MatchRoot("value"),
+			path.MatchRoot("value_wo"),
+		),
+		resourcevalidator.RequiredTogether(
+			path.MatchRoot("value_wo"),
+			path.MatchRoot("value_wo_version"),
+		),
+	}
+}
+
 // Schema implements resource.ResourceWithConfigure interface.
 func (s *secretResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
@@ -181,10 +211,26 @@ func (s *secretResource) Schema(_ context.Context, req resource.SchemaRequest, r
 				Optional:    true,
 			},
 			"value": schema.MapAttribute{
-				Description: "The value map of the secret. There can be more than one key-value pair.",
+				Description: "The value map of the secret. There can be more than one key-value pair." +
+					" Conflicts with value_wo; prefer value_wo for ephemeral/secret data that should" +
+					" not be stored in Terraform state.",
 				ElementType: types.StringType,
-				Required:    true,
+				Optional:    true,
 				Sensitive:   true,
+			},
+			"value_wo": schema.MapAttribute{
+				Description: "The write-only value map of the secret. Its content is never persisted to" +
+					" Terraform state. Requires value_wo_version to be set; bump value_wo_version to" +
+					" apply changes to this value. Requires Terraform >= 1.11.",
+				ElementType: types.StringType,
+				Optional:    true,
+				WriteOnly:   true,
+				Sensitive:   true,
+			},
+			"value_wo_version": schema.Int64Attribute{
+				Description: "The version of value_wo. Increment this value to trigger an update of the" +
+					" write-only secret value.",
+				Optional: true,
 			},
 			"secret_id": schema.StringAttribute{
 				Description: "The ID of the secret. E.g. coj8mulh8b41e8nv6p90",
@@ -250,8 +296,11 @@ func (s *secretResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	s.trace(fmt.Sprintf("creating secret resource %q", plan.Name.ValueString()))
 
-	secretValue := make(map[string]string)
-	resp.Diagnostics.Append(plan.Value.ElementsAs(ctx, &secretValue, false)...)
+	secretValue, diags := s.resolveSecretValue(ctx, plan, req.Config)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	createSecretOutput, err := s.client.Secrets.CreateSecret(ctx,
 		&juju.CreateSecretInput{
@@ -275,7 +324,6 @@ func (s *secretResource) Create(ctx context.Context, req resource.CreateRequest,
 			"name":     plan.Name.ValueString(),
 			"model":    plan.ModelUUID.ValueString(),
 			"info":     plan.Info.ValueString(),
-			"values":   plan.Value.String(),
 			"id":       plan.ID.ValueString(),
 		})
 	// Save plan into Terraform state
@@ -327,12 +375,16 @@ func (s *secretResource) Read(ctx context.Context, req resource.ReadRequest, res
 	state.SecretURI = types.StringValue(readSecretOutput.SecretURI)
 	state.ID = types.StringValue(newSecretID(state.ModelUUID.ValueString(), readSecretOutput.SecretId))
 
-	secretValue, errDiag := types.MapValueFrom(ctx, types.StringType, readSecretOutput.Value)
-	resp.Diagnostics.Append(errDiag...)
-	if resp.Diagnostics.HasError() {
-		return
+	// Only refresh value when the plain (non write-only) value attribute is in
+	// use. When value_wo is used, value is null in state and must stay null.
+	if !state.Value.IsNull() {
+		secretValue, errDiag := types.MapValueFrom(ctx, types.StringType, readSecretOutput.Value)
+		resp.Diagnostics.Append(errDiag...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		state.Value = secretValue
 	}
-	state.Value = secretValue
 
 	// Save state into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -381,16 +433,42 @@ func (s *secretResource) Update(ctx context.Context, req resource.UpdateRequest,
 		updatedSecretInput.Name = plan.Name.ValueStringPointer()
 	}
 
-	// Check if the secret value has changed
-	if !plan.Value.Equal(state.Value) {
-		noChange = false
-		resp.Diagnostics.Append(plan.Value.ElementsAs(ctx, &state.Value, false)...)
-		if resp.Diagnostics.HasError() {
-			return
+	// Check if the secret value has changed. The write-only value_wo cannot be
+	// compared directly (it is always null in state), so a change to
+	// value_wo_version triggers re-sending value_wo. Otherwise the plain value
+	// attribute is compared as before.
+	if !plan.ValueWOVersion.IsNull() {
+		// Switching to or already using value_wo: ensure value is nulled out in
+		// state so the framework sees a consistent null for the sensitive
+		// attribute (handles the value → value_wo transition).
+		state.Value = types.MapNull(types.StringType)
+		if !plan.ValueWOVersion.Equal(state.ValueWOVersion) {
+			noChange = false
+			state.ValueWOVersion = plan.ValueWOVersion
+
+			var valueWO map[string]string
+			resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("value_wo"), &valueWO)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			updatedSecretInput.Value = &valueWO
 		}
-		resp.Diagnostics.Append(plan.Value.ElementsAs(ctx, &updatedSecretInput.Value, false)...)
-		if resp.Diagnostics.HasError() {
-			return
+	} else {
+		// Switching to or already using plain value: ensure value_wo_version is
+		// nulled out in state (handles the value_wo → value transition).
+		noChange = false
+		state.ValueWOVersion = types.Int64Null()
+
+		if !plan.Value.Equal(state.Value) {
+			noChange = false
+			resp.Diagnostics.Append(plan.Value.ElementsAs(ctx, &state.Value, false)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			resp.Diagnostics.Append(plan.Value.ElementsAs(ctx, &updatedSecretInput.Value, false)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
 		}
 	}
 
@@ -452,6 +530,26 @@ func (s *secretResource) trace(msg string, additionalFields ...map[string]interf
 		return
 	}
 	tflog.SubsystemTrace(s.subCtx, LogResourceSecret, msg, additionalFields...)
+}
+
+// resolveSecretValue returns the secret value to send to Juju, reading from the
+// write-only value_wo attribute (via config) when value_wo_version is set, and
+// otherwise from the plain value attribute in the plan.
+func (s *secretResource) resolveSecretValue(
+	ctx context.Context,
+	plan secretResourceModelV1,
+	config tfsdk.Config,
+) (map[string]string, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	secretValue := make(map[string]string)
+
+	if !plan.ValueWOVersion.IsNull() {
+		diags.Append(config.GetAttribute(ctx, path.Root("value_wo"), &secretValue)...)
+		return secretValue, diags
+	}
+
+	diags.Append(plan.Value.ElementsAs(ctx, &secretValue, false)...)
+	return secretValue, diags
 }
 
 func newSecretID(modelUUID, secret string) string {
