@@ -605,6 +605,7 @@ func (p *jujuProvider) Resources(_ context.Context) []func() resource.Resource {
 		func() resource.Resource { return NewCloudResource() },
 		func() resource.Resource { return NewSpaceResource() },
 		func() resource.Resource { return NewSubnetResource() },
+		func() resource.Resource { return NewActionResource() },
 	}
 }
 
