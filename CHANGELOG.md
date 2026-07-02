@@ -1,3 +1,29 @@
+# 2.1.1
+
+NOTES:
+
+* **This release requires Juju controller version 3 or higher. This version drops support for 2.9.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the tip of the Juju 4.0 branch.
+
+ENHANCEMENTS
+
+BUG FIXES
+
+* Fix upload of private OCI image credentials by @SimoneDutto in [1280](https://github.com/juju/terraform-provider-juju/pull/1280)
+
+DOCUMENTATION
+
+* Add additional how-to guides by @ale8k in [#1278](https://github.com/juju/terraform-provider-juju/pull/1278)
+* Documentation migration by @tmihoc in [1287](https://github.com/juju/terraform-provider-juju/pull/1287)
+
+CI & MAINTENANCE
+
+* Update Juju dependency to the tip of Juju 4.0 by @kian99 in [#1281](https://github.com/juju/terraform-provider-juju/pull/1281)
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v2.1.0...v2.1.1
+
 # 2.1.0
 
 NOTES:
