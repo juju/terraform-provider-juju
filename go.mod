@@ -12,7 +12,7 @@ require (
 require (
 	github.com/canonical/jimm-go-sdk/v3 v3.4.0
 	github.com/dustin/go-humanize v1.0.1
-	github.com/hashicorp/go-version v1.8.0
+	github.com/hashicorp/go-version v1.9.0
 	github.com/hashicorp/terraform-json v0.27.2
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/hashicorp/terraform-plugin-framework-timeouts v0.6.0
