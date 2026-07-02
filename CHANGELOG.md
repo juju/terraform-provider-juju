@@ -1,3 +1,27 @@
+# 1.5.5
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.25 release.
+
+BUG FIXES
+
+* Stop logging credentials and secret values by @alesstimec in [#1264](https://github.com/juju/terraform-provider-juju/pull/1254)
+
+DOCUMENTATION
+
+* Documentation migration by @tmihoc in [#1265](https://github.com/juju/terraform-provider-juju/pull/1265) and [#1289](https://github.com/juju/terraform-provider-juju/pull/1289)
+
+CI & MAINTENANCE
+
+* Update Juju dependency to v3.6.25 by @kian99 in [#1283](https://github.com/juju/terraform-provider-juju/pull/1283)
+* Backport K8s check for private registry Juju secret by @SimoneDutto in [#1292](https://github.com/juju/terraform-provider-juju/pull/1292)
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v1.5.4...v1.5.5
+
 # 1.5.4
 
 NOTES:
