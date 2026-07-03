@@ -1,3 +1,16 @@
+# 1.5.6
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.25 release.
+
+BUG FIXES
+
+* Fix use of Juju CLI for provider provisioning in [#1298](https://github.com/juju/terraform-provider-juju/pull/1298)
+
+
 # 1.5.5
 
 NOTES:
