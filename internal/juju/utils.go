@@ -17,6 +17,8 @@ import (
 	"github.com/juju/names/v5"
 )
 
+var getLocalControllerConfigOnce = sync.OnceValues(loadLocalControllerConfig)
+
 // controllerConfig is a representation of the output
 // returned when running the CLI command
 // `juju show-controller --show-password`
@@ -45,68 +47,68 @@ type controllerConfig struct {
 	} `json:"account"`
 }
 
-// localProviderConfig is populated once and queried later
-// to avoid multiple juju CLI executions
-var localProviderConfig map[string]string
-
-// singleQuery will be used to limit the number of CLI queries to ONE
-var singleQuery sync.Once
-
 // GetLocalControllerConfig runs the locally installed juju command,
 // if available, to get the current controller configuration.
 func GetLocalControllerConfig() (map[string]string, bool) {
-	// populate the controller controllerConfig information only once
-	singleQuery.Do(populateControllerConfig)
-
-	return localProviderConfig, localProviderConfig == nil
+	return getLocalControllerConfigOnce()
 }
 
-// populateControllerConfig executes the local juju CLI command
-// to obtain the current controller configuration
-func populateControllerConfig() {
+// loadLocalControllerConfig executes the local juju CLI command
+// to obtain the current controller configuration.
+func loadLocalControllerConfig() (map[string]string, bool) {
 	// get the value from the juju provider
 	cmd := exec.Command("juju", "show-controller", "--show-password", "--format=json")
 
 	cmdData, err := cmd.Output()
 	if err != nil {
-		tflog.Error(context.TODO(), "error invoking juju CLI", map[string]interface{}{"error": err})
-		return
+		tflog.Error(context.TODO(), "error invoking juju CLI", map[string]any{"error": err})
+		return nil, true
 	}
 
+	ctrlConfig, err := parseLocalControllerConfig(cmdData)
+	if err != nil {
+		tflog.Error(context.TODO(), "error parsing Juju CLI output", map[string]any{"error": err})
+		return nil, true
+	}
+
+	// Avoid logging the password below, but return it in the map for use by the provider.
+	tflog.Debug(context.TODO(), "local provider controllerConfig was set", map[string]any{
+		"JUJU_AGENT_VERSION":        ctrlConfig.ProviderDetails.AgentVersion,
+		"JUJU_CONTROLLER_ADDRESSES": strings.Join(ctrlConfig.ProviderDetails.ApiEndpoints, ","),
+		"JUJU_USERNAME":             ctrlConfig.Account.User,
+		"JUJU_CA_CERT":              ctrlConfig.ProviderDetails.CACert,
+	})
+
+	return map[string]string{
+		"JUJU_AGENT_VERSION":        ctrlConfig.ProviderDetails.AgentVersion,
+		"JUJU_CONTROLLER_ADDRESSES": strings.Join(ctrlConfig.ProviderDetails.ApiEndpoints, ","),
+		"JUJU_USERNAME":             ctrlConfig.Account.User,
+		"JUJU_PASSWORD":             ctrlConfig.Account.Password,
+		"JUJU_CA_CERT":              ctrlConfig.ProviderDetails.CACert,
+	}, false
+}
+
+func parseLocalControllerConfig(cmdData []byte) (controllerConfig, error) {
 	// given that the CLI output is a map containing arbitrary keys
 	// (controllers) and fixed json structures, we have to do some
 	// workaround to populate the struct
-	var cliOutput interface{}
-	err = json.Unmarshal(cmdData, &cliOutput)
+	var cliOutput map[string]json.RawMessage
+	err := json.Unmarshal(cmdData, &cliOutput)
 	if err != nil {
-		tflog.Error(context.TODO(), "error unmarshalling Juju CLI output", map[string]interface{}{"error": err})
-		return
+		return controllerConfig{}, err
 	}
 
 	// convert to the map and extract the only entry
-	controllerConfig := controllerConfig{}
-	for _, v := range cliOutput.(map[string]interface{}) {
-		// now v is a map[string]interface{} type
-		marshalled, err := json.Marshal(v)
+	config := controllerConfig{}
+	for _, raw := range cliOutput {
+		err = json.Unmarshal(raw, &config)
 		if err != nil {
-			tflog.Error(context.TODO(), "error marshalling provider controllerConfig", map[string]interface{}{"error": err})
-			return
+			return controllerConfig{}, err
 		}
-		// now we have a controllerConfig type
-		err = json.Unmarshal(marshalled, &controllerConfig)
-		if err != nil {
-			tflog.Error(context.TODO(), "error unmarshalling provider configuration from Juju CLI", map[string]interface{}{"error": err})
-			return
-		}
-		break
+		return config, nil
 	}
 
-	tflog.Debug(context.TODO(), "local provider controllerConfig was set", map[string]interface{}{
-		"JUJU_AGENT_VERSION":        controllerConfig.ProviderDetails.AgentVersion,
-		"JUJU_CONTROLLER_ADDRESSES": strings.Join(controllerConfig.ProviderDetails.ApiEndpoints, ","),
-		"JUJU_USERNAME":             controllerConfig.Account.User,
-		"JUJU_CA_CERT":              controllerConfig.ProviderDetails.CACert,
-	})
+	return controllerConfig{}, errors.New("juju CLI returned no controllers")
 }
 
 // WaitForAppsAvailable blocks the execution flow and waits until all the
