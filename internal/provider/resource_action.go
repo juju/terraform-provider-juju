@@ -228,7 +228,7 @@ func (r *actionResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	// Wait for the action to complete and populate the output.
-	actionResult, err := waitActionResult(ctx, r, modelUUID, actionID, actionName)
+	actionResult, err := waitActionResult(ctx, r.client, r.actionLogf(), modelUUID, actionID)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for action %q to complete: %s", actionName, err))
 		return
@@ -261,7 +261,7 @@ func (r *actionResource) Read(ctx context.Context, req resource.ReadRequest, res
 	// this can happen when the wait fails after the action has been enqueued.
 	// Wait for the action to complete and populate the output.
 	if state.Output.IsNull() || state.Output.IsUnknown() {
-		actionResult, err := waitActionResult(ctx, r, state.ModelUUID.ValueString(), state.ActionID.ValueString(), state.ActionName.ValueString())
+		actionResult, err := waitActionResult(ctx, r.client, r.actionLogf(), state.ModelUUID.ValueString(), state.ActionID.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for action %q to complete: %s", state.ActionName.ValueString(), err))
 			return
@@ -287,6 +287,14 @@ func (r *actionResource) Update(ctx context.Context, req resource.UpdateRequest,
 // Delete is a no-op for the action resource. Actions cannot be deleted
 // from Juju, so we just remove the resource from the Terraform state.
 func (r *actionResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+}
+
+// actionLogf returns a logging function bound to the resource's action
+// logging subsystem, suitable for passing to waitActionResult.
+func (r *actionResource) actionLogf() func(msg string, additionalFields ...map[string]interface{}) {
+	return func(msg string, additionalFields ...map[string]interface{}) {
+		tflog.SubsystemDebug(r.subCtx, LogResourceAction, msg, additionalFields...)
+	}
 }
 
 // assertActionCompleted asserts that the action has completed successfully.
@@ -337,20 +345,22 @@ func waitEnqueueAction(ctx context.Context, r *actionResource, modelUUID, receiv
 }
 
 // waitActionResult waits for the action identified by actionID to complete
-// and returns its result.
-func waitActionResult(ctx context.Context, r *actionResource, modelUUID, actionID, actionName string) (action.ActionResult, error) {
+// and returns its result. It is shared by the action resource and the action
+// data source. The logf function is used for logging progress; it may be nil.
+func waitActionResult(ctx context.Context, client *juju.Client, logf func(msg string, additionalFields ...map[string]interface{}), modelUUID, actionID string) (action.ActionResult, error) {
+	if logf == nil {
+		logf = func(string, ...map[string]interface{}) {}
+	}
 	return wait.WaitFor(wait.WaitForCfg[juju.ActionResultArgs, action.ActionResult]{
 		Context: ctx,
 		Input: juju.ActionResultArgs{
 			ModelUUID: modelUUID,
 			ActionID:  actionID,
 		},
-		GetData:        r.client.Actions.ActionResult,
+		GetData:        client.Actions.ActionResult,
 		DataAssertions: []wait.Assert[action.ActionResult]{assertActionCompleted},
 		NonFatalErrors: []error{juju.RetryReadError},
-		Logf: func(msg string, additionalFields ...map[string]interface{}) {
-			tflog.SubsystemDebug(r.subCtx, LogResourceAction, msg, additionalFields...)
-		},
+		Logf:           logf,
 	})
 }
 
