@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/client/action"
@@ -42,6 +43,10 @@ type ActionClient interface {
 	EnqueueAction(ctx context.Context, args EnqueueActionArgs) (string, error)
 	// ActionResult reads the result of an action.
 	ActionResult(ctx context.Context, args ActionResultArgs) (action.ActionResult, error)
+	// ResolveLeaderUnit resolves the leader unit name for an application.
+	// It is used to expand a receiver of the form "<application>/leader"
+	// into a concrete unit name (e.g. "ubuntu/0").
+	ResolveLeaderUnit(ctx context.Context, args ResolveLeaderUnitArgs) (string, error)
 }
 
 // ResolveLeaderUnitArgs holds the arguments to resolve the leader unit of an
@@ -89,17 +94,13 @@ func (c *actionsClient) EnqueueAction(ctx context.Context, args EnqueueActionArg
 
 	actionsAPIClient := c.getActionsAPIClient(conn)
 
-	receiver := args.Receiver
-	// If the receiver is not already a unit tag, try to parse it as a
-	// unit name and convert it to a unit tag.
-	if !isUnitTag(receiver) {
-		unitTag, err := parseUnitTag(receiver)
-		if err != nil {
-			return "", fmt.Errorf("invalid receiver %q: %w", receiver, err)
-		}
-		receiver = unitTag.String()
+	// The receiver may be provided either as a unit name (e.g. "ubuntu/0")
+	// or as a unit tag string (e.g. "unit-ubuntu-0"). Try parsing it as a
+	// tag first; if that fails, treat it as a unit name and convert it.
+	receiver, err := parseUnitTag(args.Receiver)
+	if err != nil {
+		return "", fmt.Errorf("invalid receiver %q: %w", args.Receiver, err)
 	}
-
 	enqueuedActions, err := actionsAPIClient.EnqueueOperation(ctx, []action.Action{{
 		Receiver:   receiver,
 		Name:       args.Name,
@@ -111,7 +112,12 @@ func (c *actionsClient) EnqueueAction(ctx context.Context, args EnqueueActionArg
 	if len(enqueuedActions.Actions) != 1 {
 		return "", fmt.Errorf("expected exactly one enqueued action, got %d", len(enqueuedActions.Actions))
 	}
-	if enqueuedActions.Actions[0].Error != nil {
+	action := enqueuedActions.Actions[0]
+	if action.Error != nil {
+		errMsg := enqueuedActions.Actions[0].Error.Error()
+		if strings.Contains(errMsg, "no actions defined on charm") {
+			return "", NewNoActionsDefinedError(errMsg)
+		}
 		return "", enqueuedActions.Actions[0].Error
 	}
 	if enqueuedActions.Actions[0].Action == nil {
@@ -140,29 +146,33 @@ func (c *actionsClient) ActionResult(ctx context.Context, args ActionResultArgs)
 	return results[0], nil
 }
 
-// isUnitTag returns true if the string is a valid unit tag.
-func isUnitTag(s string) bool {
-	_, err := names.ParseUnitTag(s)
-	return err == nil
+// parseUnitTag parses a unit name (e.g. "ubuntu/0") or a unit tag string
+// (e.g. "unit-ubuntu-0") and returns the corresponding unit tag string.
+// names.ParseUnitTag only accepts tag strings, so we fall back to treating
+// the input as a unit name when tag parsing fails.
+func parseUnitTag(s string) (string, error) {
+	if tag, err := names.ParseUnitTag(s); err == nil {
+		return tag.String(), nil
+	}
+	if !names.IsValidUnit(s) {
+		return "", fmt.Errorf("%q is not a valid unit name", s)
+	}
+	return names.NewUnitTag(s).String(), nil
 }
 
-// parseUnitTag parses a unit name (e.g. "ubuntu/0") or a unit tag string
-// and returns the corresponding names.UnitTag.
-func parseUnitTag(s string) (names.UnitTag, error) {
-	// Try to parse as a tag first.
-	if tag, err := names.ParseUnitTag(s); err == nil {
-		return tag, nil
-	}
-	// Otherwise, try to parse as a unit name.
-	if !names.IsValidUnit(s) {
-		return names.UnitTag{}, fmt.Errorf("%q is not a valid unit name", s)
-	}
-	return names.NewUnitTag(s), nil
+// leaderUnitSuffix is the suffix used to target the leader unit of an
+// application (e.g. "ubuntu/leader").
+const leaderUnitSuffix = "/leader"
+
+// IsLeaderReceiver returns true if the receiver targets the leader unit of
+// an application, i.e. it is of the form "<application>/leader".
+func IsLeaderReceiver(receiver string) bool {
+	return strings.HasSuffix(receiver, leaderUnitSuffix)
 }
 
 // ResolveLeaderUnit returns the name of the leader unit for the given
-// application. It is used when no specific unit is provided to run an
-// action on.
+// application. It is used to expand a receiver of the form
+// "<application>/leader" into a concrete unit name (e.g. "ubuntu/0").
 func (c *actionsClient) ResolveLeaderUnit(ctx context.Context, args ResolveLeaderUnitArgs) (string, error) {
 	conn, err := c.GetConnection(ctx, &args.ModelUUID)
 	if err != nil {

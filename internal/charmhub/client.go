@@ -29,7 +29,7 @@ const (
 	defaultArch    = "amd64"
 )
 
-var refreshFields = []string{"bases", "metadata-yaml", "name", "resources", "revision"}
+var refreshFields = []string{"bases", "metadata-yaml", "actions-yaml", "name", "resources", "revision"}
 
 // CharmRefreshInput contains the parameters for a charm refresh request.
 type CharmRefreshInput struct {
@@ -49,6 +49,8 @@ type CharmRefreshResult struct {
 	Resources []transport.ResourceRevision
 	Provides  map[string]charm.Relation
 	Requires  map[string]charm.Relation
+	// Actions contains the names of the actions defined by the charm.
+	Actions []string
 }
 
 // Client is the CharmHub API client.
@@ -66,7 +68,16 @@ func New(baseURL string, hc *http.Client) *Client {
 	return &Client{baseURL: baseURL, httpClient: hc}
 }
 
-// Refresh posts a request to the CharmHub refresh endpoint and returns the results.
+// HasAction returns true if the charm defines an action with the given name.
+func (r *CharmRefreshResult) HasAction(name string) bool {
+	for _, a := range r.Actions {
+		if a == name {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *Client) Refresh(ctx context.Context, input CharmRefreshInput) (*CharmRefreshResult, error) {
 	arch := input.Architecture
 	if arch == "" {
@@ -155,6 +166,15 @@ func (c *Client) Refresh(ctx context.Context, input CharmRefreshInput) (*CharmRe
 		}
 		result.Provides = meta.Provides
 		result.Requires = meta.Requires
+	}
+	if r.Entity.ActionsYAML != "" {
+		actions, err := charm.ReadActionsYaml(r.Name, strings.NewReader(r.Entity.ActionsYAML))
+		if err != nil {
+			return nil, errors.Errorf("charmhub: parse actions.yaml for %q: %s", r.Name, err)
+		}
+		for name := range actions.ActionSpecs {
+			result.Actions = append(result.Actions, name)
+		}
 	}
 	return result, nil
 }

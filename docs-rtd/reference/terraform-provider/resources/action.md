@@ -34,14 +34,14 @@ locals {
 - `action_name` (String) The name of the action to run. Changing this value will cause the resource to be destroyed and recreated.
 - `application_name` (String) The name of the application to run the action on. Changing this value will cause the resource to be destroyed and recreated.
 - `model_uuid` (String) The UUID of the model where the action will be run. Changing this value will cause the resource to be destroyed and recreated.
+- `unit` (String) The unit name (e.g. "ubuntu/0" or "ubuntu/leader") to run the action on. Changing this value will cause the resource to be destroyed and recreated.
 
 ### Optional
 
 - `args` (Map of String) The arguments to pass to the action. Changing this value will cause the resource to be destroyed and recreated.
-- `unit` (String) The unit name (e.g. "ubuntu/0") to run the action on. If not provided, the leader unit of the application is targeted. Changing this value will cause the resource to be destroyed and recreated.
 
 ### Read-Only
 
 - `action_id` (String) The ID of the enqueued action.
 - `id` (String) The ID of this resource.
-- `output` (Map of String) The output of the action. It is a map of strings, as aligned with the way action results are set by charms.
+- `output` (String) The output of the action as a JSON string. Use jsondecode() to extract values from it.

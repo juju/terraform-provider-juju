@@ -47,6 +47,8 @@ import (
 	"github.com/juju/names/v6"
 	"github.com/juju/retry"
 	goyaml "gopkg.in/yaml.v2"
+
+	"github.com/juju/terraform-provider-juju/internal/charmhub"
 )
 
 // NewApplicationNotFoundError returns a new error indicating that the
@@ -83,6 +85,17 @@ func NewRetryReadError(msg string) error {
 // the "data" parameter in the error message.
 func NewRetryReadErrorf(format string, args ...interface{}) error {
 	return NewRetryReadError(fmt.Sprintf(format, args...))
+}
+
+// NoActionsDefinedError is an error that indicates that the charm does not
+// have any actions defined. This is a transient error that occurs when the
+// charm is not yet fully installed on the unit.
+var NoActionsDefinedError = jujuerrors.ConstError("no-actions-defined")
+
+// NewNoActionsDefinedError returns a new error indicating that the charm
+// does not have actions defined yet.
+func NewNoActionsDefinedError(msg string) error {
+	return jujuerrors.WithType(jujuerrors.Errorf("%s", msg), NoActionsDefinedError)
 }
 
 // ApplicationPartiallyCreatedError indicates an application was created
@@ -938,6 +951,64 @@ func (c applicationsClient) ReadApplication(ctx context.Context, input *ReadAppl
 	}
 
 	return response, nil
+}
+
+// ActionExists checks if the given action is defined on the charm deployed
+// for the specified application. It fetches the charm name, revision, and
+// CharmHub URL from the model, then queries CharmHub to verify the action
+// exists.
+func (c applicationsClient) ActionExists(ctx context.Context, modelUUID, appName, actionName string) (bool, error) {
+	conn, err := c.GetConnection(ctx, &modelUUID)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	// Get charm name and channel from application status.
+	clientAPIClient := c.getClientAPIClient(conn)
+	status, err := clientAPIClient.Status(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	appStatus, ok := status.Applications[appName]
+	if !ok {
+		return false, NewApplicationNotFoundError(appName)
+	}
+
+	// Get the CharmHub URL from model config.
+	modelconfigAPIClient := c.getModelConfigAPIClient(conn)
+	attrs, err := modelconfigAPIClient.ModelGet(ctx)
+	if err != nil {
+		return false, jujuerrors.Annotate(err, "failed to get model config")
+	}
+	modelConfig, err := config.New(config.UseDefaults, attrs)
+	if err != nil {
+		return false, jujuerrors.Annotate(err, "failed to cast model config")
+	}
+	charmhubURL, _ := modelConfig.CharmHubURL()
+	if charmhubURL == "" {
+		charmhubURL = charmhub.ProductionURL
+	}
+
+	// Parse the charm URL to extract the charm name (without revision).
+	// appStatus.Charm is a fully qualified URL like "ch:amd64/juju-qa-dummy-source-6".
+	charmURL, err := charm.ParseURL(appStatus.Charm)
+	if err != nil {
+		return false, jujuerrors.Annotatef(err, "parsing charm URL %q", appStatus.Charm)
+	}
+
+	// Query CharmHub for the exact revision deployed to check if the
+	// action is defined on the charm.
+	rev := appStatus.CharmRev
+	chClient := charmhub.New(charmhubURL, nil)
+	result, err := chClient.Refresh(ctx, charmhub.CharmRefreshInput{
+		Name:     charmURL.Name,
+		Revision: &rev,
+	})
+	if err != nil {
+		return false, err
+	}
+	return result.HasAction(actionName), nil
 }
 
 func (c applicationsClient) getApplicationStatusAndStorageDirectives4(ctx context.Context, conn api.Connection, appName string) (params.ApplicationStatus, map[string]jujustorage.Directive, error) {

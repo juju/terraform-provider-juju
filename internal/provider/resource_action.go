@@ -5,12 +5,13 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -45,17 +46,17 @@ type actionResourceModel struct {
 	ApplicationName types.String `tfsdk:"application_name"`
 	// ActionName is the name of the action to run.
 	ActionName types.String `tfsdk:"action_name"`
-	// Unit is the unit name (e.g. "ubuntu/0") to run the action on. If not
-	// provided, the leader unit of the application is targeted.
+	// Unit is the unit name (e.g. "ubuntu/0" or "ubuntu/leader") to run
+	// the action on.
 	Unit types.String `tfsdk:"unit"`
 	// Args are the arguments to pass to the action.
 	Args types.Map `tfsdk:"args"`
 	// ActionID is the ID of the enqueued action. It is computed after the
 	// action has been enqueued.
 	ActionID types.String `tfsdk:"action_id"`
-	// Output is the output of the action. It is a map of strings, as
-	// aligned with the way action results are set by charms.
-	Output types.Map `tfsdk:"output"`
+	// Output is the output of the action as a JSON string. The consumer
+	// can use jsondecode() to extract values from it.
+	Output types.String `tfsdk:"output"`
 	// ID required by the testing framework.
 	ID types.String `tfsdk:"id"`
 }
@@ -93,18 +94,19 @@ func (r *actionResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				},
 			},
 			"unit": schema.StringAttribute{
-				Description: "The unit name (e.g. \"ubuntu/0\") to run the action on. If not provided, the leader unit of the application is targeted. Changing this value will cause the resource to be destroyed and recreated.",
-				Optional:    true,
-				Computed:    true,
+				Description: "The unit name (e.g. \"ubuntu/0\" or \"ubuntu/leader\") to run the action on. Changing this value will cause the resource to be destroyed and recreated.",
+				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
-					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"args": schema.MapAttribute{
 				Description: "The arguments to pass to the action. Changing this value will cause the resource to be destroyed and recreated.",
 				Optional:    true,
 				ElementType: types.StringType,
+				PlanModifiers: []planmodifier.Map{
+					mapplanmodifier.RequiresReplace(),
+				},
 			},
 			"action_id": schema.StringAttribute{
 				Description: "The ID of the enqueued action.",
@@ -113,9 +115,8 @@ func (r *actionResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"output": schema.MapAttribute{
-				ElementType: types.StringType,
-				Description: "The output of the action. It is a map of strings, as aligned with the way action results are set by charms.",
+			"output": schema.StringAttribute{
+				Description: "The output of the action as a JSON string. Use jsondecode() to extract values from it.",
 				Computed:    true,
 			},
 			"id": schema.StringAttribute{
@@ -160,10 +161,13 @@ func (r *actionResource) Create(ctx context.Context, req resource.CreateRequest,
 	modelUUID := plan.ModelUUID.ValueString()
 	appName := plan.ApplicationName.ValueString()
 	actionName := plan.ActionName.ValueString()
-
-	// Resolve the receiver unit. If no unit is provided, target the leader.
 	receiver := plan.Unit.ValueString()
-	if receiver == "" {
+
+	// If the receiver targets the leader unit (e.g. "ubuntu/leader"),
+	// resolve it to a concrete unit name before enqueuing the action.
+	// The resolved name is only used for the API call; the state keeps
+	// the user's original value (e.g. "ubuntu/leader").
+	if juju.IsLeaderReceiver(receiver) {
 		var err error
 		receiver, err = r.client.Actions.ResolveLeaderUnit(ctx, juju.ResolveLeaderUnitArgs{
 			ModelUUID:       modelUUID,
@@ -173,7 +177,6 @@ func (r *actionResource) Create(ctx context.Context, req resource.CreateRequest,
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to resolve leader unit for application %q: %s", appName, err))
 			return
 		}
-		plan.Unit = types.StringValue(receiver)
 	}
 
 	// Build the action parameters from the args map.
@@ -189,12 +192,25 @@ func (r *actionResource) Create(ctx context.Context, req resource.CreateRequest,
 		}
 	}
 
-	actionID, err := r.client.Actions.EnqueueAction(ctx, juju.EnqueueActionArgs{
-		ModelUUID:  modelUUID,
-		Receiver:   receiver,
-		Name:       actionName,
-		Parameters: actionParams,
-	})
+	// Verify that the action exists on the charm by querying CharmHub.
+	// This is done once, before retrying the enqueue, to avoid retrying
+	// forever when the action genuinely doesn't exist.
+	actionExists, err := r.client.Applications.ActionExists(ctx, modelUUID, appName, actionName)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to verify action %q on CharmHub: %s", actionName, err))
+		return
+	}
+	if !actionExists {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Action %q is not defined on the charm deployed for application %q", actionName, appName))
+		return
+	}
+
+	// Enqueue the action. The unit's charm may not be fully installed
+	// yet, which would cause the enqueue to fail with "no actions
+	// defined on charm". We retry until the charm is installed. Since
+	// we already verified the action exists on CharmHub, we know the
+	// error is transient.
+	actionID, err := waitEnqueueAction(ctx, r, modelUUID, receiver, actionName, actionParams)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to enqueue action %q: %s", actionName, err))
 		return
@@ -218,9 +234,10 @@ func (r *actionResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	// Set the output map.
-	plan.Output = actionResultToOutputMap(ctx, actionResult, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
+	// Set the output.
+	plan.Output, err = actionResultToOutput(actionResult)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to convert action output: %s", err))
 		return
 	}
 
@@ -249,8 +266,9 @@ func (r *actionResource) Read(ctx context.Context, req resource.ReadRequest, res
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for action %q to complete: %s", state.ActionName.ValueString(), err))
 			return
 		}
-		state.Output = actionResultToOutputMap(ctx, actionResult, &resp.Diagnostics)
-		if resp.Diagnostics.HasError() {
+		state.Output, err = actionResultToOutput(actionResult)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to convert action output: %s", err))
 			return
 		}
 	}
@@ -262,6 +280,8 @@ func (r *actionResource) Read(ctx context.Context, req resource.ReadRequest, res
 // RequiresReplace, so any change causes the resource to be destroyed and
 // recreated rather than updated.
 func (r *actionResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	// This should never happen, let's return an error in case it does.
+	resp.Diagnostics.AddError("Provider Error", "Update called on action resource, but all attributes are RequiresReplace. This should never happen.")
 }
 
 // Delete is a no-op for the action resource. Actions cannot be deleted
@@ -286,6 +306,36 @@ func assertActionCompleted(resultFromAPI action.ActionResult) error {
 	}
 }
 
+// waitEnqueueAction retries enqueuing an action until it succeeds. The unit's
+// charm may not be fully installed yet, which would cause the enqueue to fail
+// with a NoActionsDefinedError. Only that specific error is retried; all
+// other enqueue errors are fatal.
+func waitEnqueueAction(ctx context.Context, r *actionResource, modelUUID, receiver, actionName string, params map[string]interface{}) (string, error) {
+	var actionID string
+	_, err := wait.WaitFor(wait.WaitForCfg[juju.EnqueueActionArgs, string]{
+		Context: ctx,
+		Input: juju.EnqueueActionArgs{
+			ModelUUID:  modelUUID,
+			Receiver:   receiver,
+			Name:       actionName,
+			Parameters: params,
+		},
+		GetData: func(ctx context.Context, args juju.EnqueueActionArgs) (string, error) {
+			id, err := r.client.Actions.EnqueueAction(ctx, args)
+			if err != nil {
+				return "", err
+			}
+			actionID = id
+			return id, nil
+		},
+		NonFatalErrors: []error{juju.NoActionsDefinedError},
+		Logf: func(msg string, additionalFields ...map[string]interface{}) {
+			tflog.SubsystemDebug(r.subCtx, LogResourceAction, msg, additionalFields...)
+		},
+	})
+	return actionID, err
+}
+
 // waitActionResult waits for the action identified by actionID to complete
 // and returns its result.
 func waitActionResult(ctx context.Context, r *actionResource, modelUUID, actionID, actionName string) (action.ActionResult, error) {
@@ -304,16 +354,18 @@ func waitActionResult(ctx context.Context, r *actionResource, modelUUID, actionI
 	})
 }
 
-// actionResultToOutputMap converts an action result's output into a map of
-// strings suitable for storing in Terraform state.
-func actionResultToOutputMap(ctx context.Context, actionResult action.ActionResult, diags *diag.Diagnostics) types.Map {
-	outputMap := make(map[string]types.String, len(actionResult.Output))
-	for k, v := range actionResult.Output {
-		outputMap[k] = types.StringValue(fmt.Sprint(v))
+// actionResultToOutput converts an action result's output into a JSON
+// string suitable for storing in Terraform state. The consumer can use
+// jsondecode() to extract values from it.
+func actionResultToOutput(actionResult action.ActionResult) (types.String, error) {
+	if len(actionResult.Output) == 0 {
+		return types.StringNull(), nil
 	}
-	result, d := types.MapValueFrom(ctx, types.StringType, outputMap)
-	diags.Append(d...)
-	return result
+	b, err := json.Marshal(actionResult.Output)
+	if err != nil {
+		return types.StringNull(), fmt.Errorf("unable to marshal action output: %w", err)
+	}
+	return types.StringValue(string(b)), nil
 }
 
 // newActionResourceID builds the resource ID from its components.
