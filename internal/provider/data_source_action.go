@@ -40,9 +40,9 @@ type actionDataSourceModel struct {
 	ModelUUID types.String `tfsdk:"model_uuid"`
 	// ActionID is the ID of the action whose result is fetched.
 	ActionID types.String `tfsdk:"action_id"`
-	// Output is the output of the action. It is a map of strings, as
-	// aligned with the way action results are set by charms.
-	Output types.Map `tfsdk:"output"`
+	// Output is the output of the action as a JSON string. The consumer
+	// can use jsondecode() to extract values from it.
+	Output types.String `tfsdk:"output"`
 	// ID required by the testing framework.
 	ID types.String `tfsdk:"id"`
 }
@@ -69,9 +69,8 @@ func (d *actionDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 				Description: "The ID of the action whose result is fetched.",
 				Required:    true,
 			},
-			"output": schema.MapAttribute{
-				ElementType: types.StringType,
-				Description: "The output of the action. It is a map of strings, as aligned with the way action results are set by charms.",
+			"output": schema.StringAttribute{
+				Description: "The output of the action as a JSON string. Use jsondecode() to extract values from it.",
 				Computed:    true,
 			},
 			// ID required by the testing framework.
@@ -130,8 +129,9 @@ func (d *actionDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return
 	}
 
-	data.Output = actionResultToOutputMap(ctx, actionResult, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
+	data.Output, err = actionResultToOutput(actionResult)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to convert action output: %s", err))
 		return
 	}
 

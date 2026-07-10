@@ -46,9 +46,9 @@ func TestAcc_DataSourceAction(t *testing.T) {
 					resource.TestCheckResourceAttrPair("data.juju_action.this", "model_uuid", "juju_action.this", "model_uuid"),
 					resource.TestCheckResourceAttrPair("data.juju_action.this", "action_id", "juju_action.this", "action_id"),
 					// The output is fetched and non-empty.
-					resource.TestCheckResourceAttrSet("data.juju_action.this", "output.%"),
+					resource.TestCheckResourceAttrSet("data.juju_action.this", "output"),
 					// The data source's output matches the resource's.
-					resource.TestCheckResourceAttrPair("data.juju_action.this", "output.%", "juju_action.this", "output.%"),
+					resource.TestCheckResourceAttrPair("data.juju_action.this", "output", "juju_action.this", "output"),
 					resource.TestCheckResourceAttrSet("data.juju_action.this", "id"),
 				),
 			},
