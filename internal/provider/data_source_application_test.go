@@ -50,6 +50,8 @@ func TestAcc_DataSourceApplicationLXD_Machines_Edge(t *testing.T) {
 					resource.TestCheckResourceAttrPair("juju_model.model", "uuid", "data.juju_application.this", "model_uuid"),
 					resource.TestCheckResourceAttr("data.juju_application.this", "name", applicationName),
 					resource.TestCheckResourceAttr("data.juju_application.this", "machines.#", "1"),
+					resource.TestCheckResourceAttr("data.juju_application.this", "unit_numbers.#", "1"),
+					resource.TestCheckResourceAttr("data.juju_application.this", "unit_numbers.0", "0"),
 				),
 			},
 		},

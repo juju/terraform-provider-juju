@@ -152,6 +152,7 @@ Notes:
 - `id` (String) The ID of this resource.
 - `model_type` (String) The type of the model where the application is deployed. It is a computed field and is needed to determine if the application should be replaced or updated in case of base updates.
 - `storage` (Attributes Set) Storage used by the application. (see [below for nested schema](#nestedatt--storage))
+- `unit_numbers` (Set of String) The numbers of the units deployed for this application. Ex. [0,1,2]
 
 <a id="nestedblock--charm"></a>
 ### Nested Schema for `charm`
