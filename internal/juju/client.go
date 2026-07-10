@@ -83,6 +83,7 @@ type Client struct {
 	Storage      storageClient
 	Spaces       spacesClient
 	Subnets      subnetsClient
+	Actions      actionsClient
 
 	isJAAS   func() bool
 	username string
@@ -199,6 +200,7 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 		Storage:      *newStorageClient(sc),
 		Spaces:       *newSpacesClient(sc),
 		Subnets:      *newSubnetsClient(sc),
+		Actions:      *newActionsClient(sc),
 		isJAAS:       func() bool { return sc.IsJAAS(ctx, defaultJAASCheck) },
 		username:     user,
 	}, nil

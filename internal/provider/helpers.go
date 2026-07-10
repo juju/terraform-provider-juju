@@ -69,6 +69,8 @@ const (
 	LogResourceSpace = "resource-space"
 	// LogResourceSubnet is the logging subsystem for subnet resources.
 	LogResourceSubnet = "resource-subnet"
+	// LogResourceAction is the logging subsystem for action resources.
+	LogResourceAction = "resource-action"
 
 	// LogDataSourceJAASGroup is the logging subsystem for JAAS group data sources.
 	LogDataSourceJAASGroup = "datasource-jaas-group"
