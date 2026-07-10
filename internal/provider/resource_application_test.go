@@ -215,6 +215,8 @@ func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
 				resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
 				resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 				resource.TestCheckResourceAttr("juju_application.this", "units", "1"),
+				resource.TestCheckResourceAttr("juju_application.this", "unit_numbers.#", "1"),
+				resource.TestCheckResourceAttr("juju_application.this", "unit_numbers.0", "0"),
 			),
 		}, {
 			Config: testAccResourceApplicationScaleUp(modelName, appName, "2"),
@@ -225,8 +227,11 @@ func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
 				resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
 				resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 				resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
+				resource.TestCheckResourceAttr("juju_application.this", "unit_numbers.#", "2"),
 			),
 		}, {
+			// Scale back down to 1. The remaining unit may not be /0
+			// because Juju may have destroyed unit 0 and kept unit 1.
 			Config: testAccResourceApplicationScaleUp(modelName, appName, "1"),
 			Check: resource.ComposeTestCheckFunc(
 				resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
@@ -235,6 +240,16 @@ func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
 				resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
 				resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 				resource.TestCheckResourceAttr("juju_application.this", "units", "1"),
+				resource.TestCheckResourceAttr("juju_application.this", "unit_numbers.#", "1"),
+			),
+		}, {
+			// Scale back up to 2. The new unit gets /2 because /0
+			// and /1 are already taken (numbers aren't reused).
+			Config: testAccResourceApplicationScaleUp(modelName, appName, "2"),
+			Check: resource.ComposeTestCheckFunc(
+				resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
+				resource.TestCheckResourceAttr("juju_application.this", "unit_numbers.#", "2"),
+				resource.TestCheckResourceAttr("juju_application.this", "unit_numbers.1", "2"),
 			),
 		}},
 	})

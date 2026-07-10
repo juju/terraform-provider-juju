@@ -332,6 +332,7 @@ type ReadApplicationResponse struct {
 	ModelType        string
 	Series           string
 	Units            int
+	UnitNumbers      []string
 	Trust            bool
 	Config           map[string]ConfigEntry
 	Constraints      constraints.Value
@@ -784,6 +785,16 @@ func (c applicationsClient) ReadApplication(ctx context.Context, input *ReadAppl
 	}
 
 	unitCount := len(appStatus.Units)
+	unitNumbers := make([]string, 0, unitCount)
+	for unitName := range appStatus.Units {
+		// Extract the unit number from the unit name (e.g. "test-app/0" -> "0").
+		num, err := names.UnitNumber(unitName)
+		if err != nil {
+			return nil, jujuerrors.Annotatef(err, "parsing unit name %q", unitName)
+		}
+		unitNumbers = append(unitNumbers, strconv.Itoa(num))
+	}
+	slices.Sort(unitNumbers)
 	// if we have a CAAS we use scale instead of units length
 	modelType, err := c.ModelType(ctx, input.ModelUUID)
 	if err != nil {
@@ -938,6 +949,7 @@ func (c applicationsClient) ReadApplication(ctx context.Context, input *ReadAppl
 		Base:             fmt.Sprintf("%s@%s", appInfo.Base.Name, baseChannel.Track),
 		ModelType:        modelType.String(),
 		Units:            unitCount,
+		UnitNumbers:      unitNumbers,
 		Trust:            trustValue,
 		Expose:           exposed,
 		Config:           conf,
@@ -1224,15 +1236,15 @@ func (c applicationsClient) UpdateApplication(ctx context.Context, input *Update
 			}
 
 			if unitDiff < 0 {
-				var unitNames []string
+				var unitNumbers []string
 				for unitName := range appStatus.Units {
-					unitNames = append(unitNames, unitName)
+					unitNumbers = append(unitNumbers, unitName)
 				}
 
 				unitAbs := int(math.Abs(float64(unitDiff)))
 				var unitsToDestroy []string
 				for i := 0; i < unitAbs; i++ {
-					unitsToDestroy = append(unitsToDestroy, unitNames[i])
+					unitsToDestroy = append(unitsToDestroy, unitNumbers[i])
 				}
 				_, err := applicationAPIClient.DestroyUnits(
 					ctx,

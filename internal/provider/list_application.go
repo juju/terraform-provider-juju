@@ -336,5 +336,17 @@ func (r *applicationLister) getApplicationResource(
 		}
 	}
 
+	// Set unit numbers
+	if len(res.UnitNumbers) > 0 {
+		unitNumbers, dErr := types.SetValueFrom(ctx, types.StringType, res.UnitNumbers)
+		if dErr.HasError() {
+			diags.Append(dErr...)
+			return applicationResourceModelV1{}, diags
+		}
+		appModel.UnitNumbers = unitNumbers
+	} else {
+		appModel.UnitNumbers = types.SetNull(types.StringType)
+	}
+
 	return appModel, nil
 }

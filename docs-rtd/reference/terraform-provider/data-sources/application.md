@@ -30,3 +30,4 @@ data "juju_application" "this" {
 ### Read-Only
 
 - `machines` (Set of String) The machines on which the application's units are placed.
+- `unit_numbers` (Set of String) The numbers of the units deployed for this application. Ex. [0,1,2]

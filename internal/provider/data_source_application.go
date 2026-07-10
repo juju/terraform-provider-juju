@@ -37,6 +37,7 @@ type applicationDataSourceModel struct {
 	ApplicationName types.String `tfsdk:"name"`
 	ModelUUID       types.String `tfsdk:"model_uuid"`
 	Machines        types.Set    `tfsdk:"machines"`
+	UnitNumbers     types.Set    `tfsdk:"unit_numbers"`
 }
 
 // Metadata returns the full data source name as used in terraform plans.
@@ -63,6 +64,11 @@ func (d *applicationDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			MachinesKey: schema.SetAttribute{
 				ElementType: types.StringType,
 				Description: "The machines on which the application's units are placed.",
+				Computed:    true,
+			},
+			"unit_numbers": schema.SetAttribute{
+				ElementType: types.StringType,
+				Description: "The numbers of the units deployed for this application. Ex. [0,1,2]",
 				Computed:    true,
 			},
 		},
@@ -139,6 +145,17 @@ func (d *applicationDataSource) Read(ctx context.Context, req datasource.ReadReq
 		}
 	} else {
 		data.Machines = types.SetValueMust(types.StringType, []attr.Value{})
+	}
+
+	if len(response.UnitNumbers) > 0 {
+		var dErr diag.Diagnostics
+		data.UnitNumbers, dErr = types.SetValueFrom(ctx, types.StringType, response.UnitNumbers)
+		if dErr.HasError() {
+			resp.Diagnostics.Append(dErr...)
+			return
+		}
+	} else {
+		data.UnitNumbers = types.SetValueMust(types.StringType, []attr.Value{})
 	}
 
 	d.trace("Found", applicationDataSourceModelForLogging(ctx, &data))

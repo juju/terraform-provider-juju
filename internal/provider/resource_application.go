@@ -123,6 +123,7 @@ type applicationResourceModel struct {
 	Storage           types.Set              `tfsdk:"storage"`
 	Trust             types.Bool             `tfsdk:"trust"`
 	UnitCount         types.Int64            `tfsdk:"units"`
+	UnitNumbers       types.Set              `tfsdk:"unit_numbers"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -234,6 +235,11 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 					UnitCountModifier(),
 					int64planmodifier.UseStateForUnknown(),
 				},
+			},
+			"unit_numbers": schema.SetAttribute{
+				Description: "The numbers of the units deployed for this application. Ex. [0,1,2]",
+				Computed:    true,
+				ElementType: types.StringType,
 			},
 			ConfigKey: schema.MapAttribute{
 				Description: "Application specific configuration. Must evaluate to a string, integer or boolean.",
@@ -704,6 +710,14 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		plan.UnitCount = types.Int64Value(1)
 	}
 
+	if len(readResp.UnitNumbers) > 0 {
+		unitNumbers, d := types.SetValueFrom(ctx, types.StringType, readResp.UnitNumbers)
+		resp.Diagnostics.Append(d...)
+		plan.UnitNumbers = unitNumbers
+	} else {
+		plan.UnitNumbers = types.SetNull(types.StringType)
+	}
+
 	var dErr diag.Diagnostics
 	plan.Machines, dErr = types.SetValueFrom(ctx, types.StringType, readResp.Machines)
 	if dErr.HasError() {
@@ -886,6 +900,14 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		state.UnitCount = types.Int64Value(int64(response.Units))
 	} else {
 		state.UnitCount = types.Int64Value(1)
+	}
+
+	if len(response.UnitNumbers) > 0 {
+		unitNumbers, d := types.SetValueFrom(ctx, types.StringType, response.UnitNumbers)
+		resp.Diagnostics.Append(d...)
+		state.UnitNumbers = unitNumbers
+	} else {
+		state.UnitNumbers = types.SetNull(types.StringType)
 	}
 
 	state.ModelType = types.StringValue(modelType.String())
@@ -1326,6 +1348,15 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 
 	plan.ModelType = state.ModelType
 	plan.ID = types.StringValue(newAppID(plan.ModelUUID.ValueString(), plan.ApplicationName.ValueString()))
+
+	if len(readResp.UnitNumbers) > 0 {
+		unitNumbers, d := types.SetValueFrom(ctx, types.StringType, readResp.UnitNumbers)
+		resp.Diagnostics.Append(d...)
+		plan.UnitNumbers = unitNumbers
+	} else {
+		plan.UnitNumbers = types.SetNull(types.StringType)
+	}
+
 	r.trace("Updated", applicationResourceModelForLogging(ctx, &plan))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
