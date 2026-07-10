@@ -83,7 +83,6 @@ resource "juju_action" "this" {
   model_uuid       = juju_model.this.uuid
   application_name = juju_application.this.name
   action_name      = "{{.ActionName}}"
-  unit             = "${juju_application.this.name}/leader"
 }
 
 data "juju_action" "this" {
