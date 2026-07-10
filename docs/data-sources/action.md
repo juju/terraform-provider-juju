@@ -36,4 +36,4 @@ locals {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-- `output` (Map of String) The output of the action. It is a map of strings, as aligned with the way action results are set by charms.
+- `output` (String) The output of the action as a JSON string. Use jsondecode() to extract values from it.
