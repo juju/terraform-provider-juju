@@ -382,12 +382,12 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 	}
 	jujuMajor := version.MustParse(agentVersion).Major
 	switch jujuMajor {
-	case 2:
-		initialAgentVersion = "2.9.58"
-		updatedAgentVersion = "2.9.59"
 	case 3:
 		initialAgentVersion = "3.6.21"
 		updatedAgentVersion = "3.6.23"
+	case 4:
+		initialAgentVersion = "4.0.11"
+		updatedAgentVersion = "4.0.12"
 	default:
 		t.Errorf("unsupported Juju agent version %q for this test", agentVersion)
 	}
