@@ -16,6 +16,12 @@ import (
 // action via the juju_action resource, then references that action's ID from
 // the data source and verifies its result is fetched.
 func TestAcc_DataSourceAction(t *testing.T) {
+	// Actions are only tested on LXD. There is nothing cloud-specific
+	// about actions, so running them on other clouds adds no value.
+	if testingCloud != LXDCloudTesting {
+		t.Skipf("skipping action test on %s cloud", testingCloud)
+	}
+
 	modelName := acctest.RandomWithPrefix("tf-test-action-ds")
 
 	// Pick the charm and action depending on the cloud.
@@ -25,12 +31,6 @@ func TestAcc_DataSourceAction(t *testing.T) {
 	// juju-qa-test's latest/stable does not support ubuntu@22.04, so let
 	// juju resolve the base automatically.
 	base := ""
-	if testingCloud == MicroK8sTesting {
-		charmName = "traefik-k8s"
-		actionName = "show-proxied-endpoints"
-		trust = true
-		base = ""
-	}
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
