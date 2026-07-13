@@ -690,10 +690,23 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	r.trace(fmt.Sprintf("create application resource %q", createResp.AppName))
-	readResp, err := r.client.Applications.ReadApplicationWithRetryOnNotFound(ctx, &juju.ReadApplicationInput{
-		ModelUUID: modelUUID,
-		AppName:   createResp.AppName,
-	})
+	readResp, err := wait.WaitFor(
+		wait.WaitForCfg[*juju.ReadApplicationInput, *juju.ReadApplicationResponse]{
+			Context: ctx,
+			GetData: r.client.Applications.ReadApplication,
+			Input: &juju.ReadApplicationInput{
+				ModelUUID: modelUUID,
+				AppName:   createResp.AppName,
+			},
+			DataAssertions: []wait.Assert[*juju.ReadApplicationResponse]{
+				assertStorageReady(),
+				assertMachinesReady(),
+				assertEqualsUnitCount(unitCount),
+			},
+			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError, juju.ApplicationNotFoundError, juju.StorageNotFoundError},
+			Logf:           r.trace,
+		},
+	)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read application, got error: %s", err))
 		return
@@ -1638,6 +1651,43 @@ func applicationResourceModelForLogging(_ context.Context, app *applicationResou
 	return value
 }
 
+// assertStorageReady waits until all storage entries have a non-empty pool
+// and a non-zero size. Storage is not listed immediately after application
+// creation, so we need to retry until it is ready.
+func assertStorageReady() func(outputFromAPI *juju.ReadApplicationResponse) error {
+	return func(outputFromAPI *juju.ReadApplicationResponse) error {
+		for label, storage := range outputFromAPI.Storage {
+			if storage.Pool == "" || storage.Size == 0 {
+				return juju.NewRetryReadError(
+					fmt.Sprintf("storage label %q missing detail", label),
+				)
+			}
+		}
+		return nil
+	}
+}
+
+// assertMachinesReady waits until IAAS principal applications have their
+// machines allocated. Subordinates and CAAS applications are skipped.
+func assertMachinesReady() func(outputFromAPI *juju.ReadApplicationResponse) error {
+	return func(outputFromAPI *juju.ReadApplicationResponse) error {
+		// Only block for IAAS principal applications that have units.
+		if outputFromAPI.ModelType != "iaas" || !outputFromAPI.Principal || outputFromAPI.Units == 0 {
+			return nil
+		}
+		if outputFromAPI.Placement == "" {
+			return juju.NewRetryReadError("no machines found in output")
+		}
+		machines := strings.Split(outputFromAPI.Placement, ",")
+		if len(machines) != outputFromAPI.Units {
+			return juju.NewRetryReadError(
+				fmt.Sprintf("expected %d machines, got %d", outputFromAPI.Units, len(machines)),
+			)
+		}
+		return nil
+	}
+}
+
 func assertEqualsMachines(machinesToCompare []string) func(outputFromAPI *juju.ReadApplicationResponse) error {
 	return func(outputFromAPI *juju.ReadApplicationResponse) error {
 		machineFromAPI := outputFromAPI.Machines
@@ -1656,10 +1706,22 @@ func assertEqualsMachines(machinesToCompare []string) func(outputFromAPI *juju.R
 	}
 }
 
+// assertEqualsUnitCount waits until the application has exactly desiredUnits
+// units. Units is always len(appStatus.Units) — the actual provisioned units
+// for both IAAS and CAAS — so this waits for real units to appear or
+// terminate before state is written. Subordinate applications are skipped
+// because they report 0 units (their units are hosted by the principal).
 func assertEqualsUnitCount(desiredUnits int) func(outputFromAPI *juju.ReadApplicationResponse) error {
 	return func(outputFromAPI *juju.ReadApplicationResponse) error {
+		// Subordinates report 0 units; don't block on them.
+		if !outputFromAPI.Principal {
+			return nil
+		}
+
 		if outputFromAPI.Units != desiredUnits {
-			return juju.NewRetryReadError("plan units differ from application units")
+			return juju.NewRetryReadError(
+				fmt.Sprintf("plan units differ from application units: expected %d, got %d", desiredUnits, outputFromAPI.Units),
+			)
 		}
 
 		if desiredUnits == 0 && len(outputFromAPI.Machines) > 0 {

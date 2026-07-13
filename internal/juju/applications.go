@@ -19,9 +19,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/juju/clock"
 	"github.com/juju/collections/set"
 	jujuerrors "github.com/juju/errors"
 	"github.com/juju/juju/api"
@@ -45,7 +43,6 @@ import (
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v6"
-	"github.com/juju/retry"
 	goyaml "gopkg.in/yaml.v2"
 
 	"github.com/juju/terraform-provider-juju/internal/charmhub"
@@ -529,87 +526,6 @@ func splitCommaDelimitedList(list string) []string {
 	return items
 }
 
-// ReadApplicationWithRetryOnNotFound calls ReadApplication until
-// successful, or the count is exceeded when the error is of type
-// not found. Delay indicates how long to wait between attempts.
-func (c applicationsClient) ReadApplicationWithRetryOnNotFound(ctx context.Context, input *ReadApplicationInput) (*ReadApplicationResponse, error) {
-	var output *ReadApplicationResponse
-	modelType, err := c.ModelType(ctx, input.ModelUUID)
-	if err != nil {
-		return nil, jujuerrors.Annotatef(err, "getting model type")
-	}
-	retryErr := retry.Call(retry.CallArgs{
-		Func: func() error {
-			var err error
-			output, err = c.ReadApplication(ctx, input)
-			if jujuerrors.As(err, &ApplicationNotFoundError) || jujuerrors.As(err, &StorageNotFoundError) {
-				return err
-			} else if err != nil {
-				return err
-			}
-
-			// NOTE: Applications can always have storage. However, they
-			// will not be listed right after the application is created. So
-			// we need to wait for the storage to be ready. And we need to
-			// check if all storage constraints have pool equal "" and size equal 0
-			// to drop the error.
-			for label, storage := range output.Storage {
-				if storage.Pool == "" || storage.Size == 0 {
-					return NewRetryReadError(
-						fmt.Sprintf("storage label %q missing detail", label),
-					)
-				}
-			}
-
-			// NOTE: An IAAS subordinate should also have machines. However, they
-			// will not be listed until after the relation has been created.
-			// Those happen with the integration resource which will not be
-			// run by terraform before the application resource finishes. Thus
-			// do not block here for subordinates.
-			if modelType != model.IAAS || !output.Principal || output.Units == 0 {
-				// No need to wait for machines in these cases.
-				return nil
-			}
-			if output.Placement == "" {
-				return NewRetryReadError("no machines found in output")
-			}
-			machines := strings.Split(output.Placement, ",")
-			if len(machines) != output.Units {
-				return NewRetryReadError(
-					fmt.Sprintf("expected %d machines, got %d", output.Units, len(machines)),
-				)
-			}
-
-			c.Tracef("Have machines - returning", map[string]interface{}{"output": *output})
-			return nil
-		},
-		IsFatalError: func(err error) bool {
-			if jujuerrors.Is(err, ApplicationNotFoundError) ||
-				jujuerrors.Is(err, StorageNotFoundError) ||
-				jujuerrors.Is(err, RetryReadError) ||
-				strings.Contains(err.Error(), "connection refused") {
-				return false
-			}
-			return true
-		},
-		NotifyFunc: func(err error, attempt int) {
-			if attempt%4 == 0 {
-				message := fmt.Sprintf("waiting for application %q", input.AppName)
-				if attempt != 4 {
-					message = "still " + message
-				}
-				c.Debugf(message, map[string]interface{}{"err": err})
-			}
-		},
-		BackoffFunc: retry.DoubleDelay,
-		Attempts:    30,
-		Delay:       time.Second,
-		Clock:       clock.WallClock,
-		Stop:        ctx.Done(),
-	})
-	return output, retryErr
-}
-
 func (c *applicationsClient) applicationStorageDirectives(status params.FullStatus, appStatus params.ApplicationStatus) map[string]jujustorage.Directive {
 	// first we collect all application units
 	appUnits := make(map[string]bool)
@@ -795,13 +711,9 @@ func (c applicationsClient) ReadApplication(ctx context.Context, input *ReadAppl
 		unitNumbers = append(unitNumbers, strconv.Itoa(num))
 	}
 	slices.Sort(unitNumbers)
-	// if we have a CAAS we use scale instead of units length
 	modelType, err := c.ModelType(ctx, input.ModelUUID)
 	if err != nil {
 		return nil, err
-	}
-	if modelType == model.CAAS {
-		unitCount = appStatus.Scale
 	}
 
 	// NOTE: we are assuming that this charm comes from CharmHub
