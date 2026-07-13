@@ -24,6 +24,7 @@ import (
 	controllerapi "github.com/juju/juju/api/controller/controller"
 	"github.com/juju/juju/api/jujuclient"
 	jujucloud "github.com/juju/juju/cloud"
+	"github.com/juju/juju/core/semversion"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/juju/osenv"
 	"github.com/juju/names/v6"
@@ -408,7 +409,7 @@ func (d *DefaultJujuCommand) ControllerVersion(
 		return version.Number{}, err
 	}
 
-	conn, err := connr.Connect()
+	conn, err := connr.Connect(ctx)
 	if err != nil {
 		return version.Number{}, err
 	}
@@ -416,7 +417,7 @@ func (d *DefaultJujuCommand) ControllerVersion(
 	modelCfgClient := modelconfig.NewClient(conn)
 	defer modelCfgClient.Close()
 
-	modelAttrs, err := modelCfgClient.ModelGet()
+	modelAttrs, err := modelCfgClient.ModelGet(ctx)
 	if err != nil {
 		return version.Number{}, err
 	}
@@ -431,7 +432,7 @@ func (d *DefaultJujuCommand) ControllerVersion(
 		return version.Number{}, fmt.Errorf("agent version not found in controller model config")
 	}
 
-	return agentVersion, nil
+	return version.Parse(agentVersion.String())
 }
 
 // UpgradeController upgrades a controller in place to a higher patch version.
@@ -450,7 +451,7 @@ func (d *DefaultJujuCommand) UpgradeController(
 		return version.Number{}, err
 	}
 
-	conn, err := connr.Connect()
+	conn, err := connr.Connect(ctx)
 	if err != nil {
 		return version.Number{}, err
 	}
@@ -459,7 +460,7 @@ func (d *DefaultJujuCommand) UpgradeController(
 	modelCfgClient := modelconfig.NewClient(conn)
 	defer modelCfgClient.Close()
 
-	modelAttrs, err := modelCfgClient.ModelGet()
+	modelAttrs, err := modelCfgClient.ModelGet(ctx)
 	if err != nil {
 		return version.Number{}, err
 	}
@@ -474,12 +475,17 @@ func (d *DefaultJujuCommand) UpgradeController(
 	modelUpgraderClient := modelupgrader.NewClient(conn)
 	defer modelUpgraderClient.Close()
 
-	chosenVersion, err := modelUpgraderClient.UpgradeModel(controllerModelUUID, targetVersion, "", false, false)
+	targetSemVersion, err := semversion.Parse(targetVersion.String())
+	if err != nil {
+		return version.Number{}, fmt.Errorf("failed to parse target version %q: %w", targetVersion.String(), err)
+	}
+
+	chosenVersion, err := modelUpgraderClient.UpgradeModel(ctx, controllerModelUUID, targetSemVersion, "", false, false)
 	if err != nil {
 		return version.Number{}, fmt.Errorf("failed to upgrade controller: %w", err)
 	}
 
-	return chosenVersion, nil
+	return version.Parse(chosenVersion.String())
 }
 
 // Config retrieves controller configuration and controller-model configuration settings.
