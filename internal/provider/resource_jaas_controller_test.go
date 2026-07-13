@@ -14,7 +14,7 @@ import (
 // and used in the tests where we bootstrap a controller to
 // avoid bootstrapping twice in multiple tests.
 
-func testJAASControllerResourceSteps(t *testing.T, resourceName, controllerName string, bootstrapConfig map[string]string) []resource.TestStep {
+func testJAASControllerResourceSteps(t *testing.T, resourceName, controllerName, agentVersion string, bootstrapConfig map[string]string) []resource.TestStep {
 	return []resource.TestStep{{
 		SkipFunc: func() (bool, error) {
 			// Skip if not JAAS
@@ -25,6 +25,7 @@ func testJAASControllerResourceSteps(t *testing.T, resourceName, controllerName 
 		},
 		Config: testAccResourceControllerAndJAASRegistration(
 			controllerName,
+			agentVersion,
 			bootstrapConfig,
 			nil,
 			nil,
@@ -47,6 +48,7 @@ func testJAASControllerResourceSteps(t *testing.T, resourceName, controllerName 
 			},
 			Config: testAccResourceControllerAndJAASRegistration(
 				controllerName,
+				agentVersion,
 				bootstrapConfig,
 				nil,
 				nil,
@@ -58,8 +60,8 @@ func testJAASControllerResourceSteps(t *testing.T, resourceName, controllerName 
 	}
 }
 
-func testAccResourceControllerAndJAASRegistration(controllerName string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
-	base := testAccResourceControllerWithJujuBinary(controllerName, bootstrapConfig, controllerConfig, modelConfig)
+func testAccResourceControllerAndJAASRegistration(controllerName, agentVersion string, bootstrapConfig, controllerConfig, modelConfig map[string]string) string {
+	base := testAccResourceControllerWithJujuBinary(controllerName, agentVersion, bootstrapConfig, controllerConfig, modelConfig)
 	return base + `
 resource "juju_jaas_controller" "jaas" {
   name = juju_controller.controller.name
