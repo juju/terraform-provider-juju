@@ -203,6 +203,11 @@ func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application-scale-up")
 	appName := "test-app"
 
+	charmName := "ubuntu-lite"
+	if testingCloud != LXDCloudTesting {
+		charmName = "coredns"
+	}
+
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
@@ -212,7 +217,7 @@ func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
 				resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 				resource.TestCheckResourceAttr("juju_application.this", "name", appName),
 				resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
-				resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
+				resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", charmName),
 				resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 				resource.TestCheckResourceAttr("juju_application.this", "units", "1"),
 				resource.TestCheckResourceAttr("juju_application.this", "unit_numbers.#", "1"),
@@ -224,7 +229,7 @@ func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
 				resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 				resource.TestCheckResourceAttr("juju_application.this", "name", appName),
 				resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
-				resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
+				resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", charmName),
 				resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 				resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
 				resource.TestCheckResourceAttr("juju_application.this", "unit_numbers.#", "2"),
@@ -237,22 +242,35 @@ func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
 				resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 				resource.TestCheckResourceAttr("juju_application.this", "name", appName),
 				resource.TestCheckResourceAttr("juju_application.this", "charm.#", "1"),
-				resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", "ubuntu-lite"),
+				resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", charmName),
 				resource.TestCheckResourceAttr("juju_application.this", "trust", "true"),
 				resource.TestCheckResourceAttr("juju_application.this", "units", "1"),
 				resource.TestCheckResourceAttr("juju_application.this", "unit_numbers.#", "1"),
 			),
 		}, {
-			// Scale back up to 2. The new unit gets /2 because /0
-			// and /1 are already taken (numbers aren't reused).
+			// Scale back up to 2. On IAAS, unit numbers are never reused, so
+			// the new unit gets /2 (after /0 and /1 were taken). On CAAS,
+			// unit numbers are not auto-incremented the same way, so the
+			// new unit gets /1.
 			Config: testAccResourceApplicationScaleUp(modelName, appName, "2"),
 			Check: resource.ComposeTestCheckFunc(
 				resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
 				resource.TestCheckResourceAttr("juju_application.this", "unit_numbers.#", "2"),
-				resource.TestCheckResourceAttr("juju_application.this", "unit_numbers.1", "2"),
+				resource.TestCheckResourceAttr("juju_application.this", "unit_numbers.1", expectedSecondUnitNumber()),
 			),
 		}},
 	})
+}
+
+// expectedSecondUnitNumber returns the unit number expected for the second
+// unit after a scale-down-then-up cycle. On IAAS, Juju never reuses unit
+// numbers, so after /0 and /1 were taken the new unit gets /2. On CAAS,
+// unit numbers are not auto-incremented the same way, so the new unit gets /1.
+func expectedSecondUnitNumber() string {
+	if testingCloud != LXDCloudTesting {
+		return "1"
+	}
+	return "2"
 }
 
 func TestAcc_ResourceApplication_Updates(t *testing.T) {
@@ -2044,7 +2062,7 @@ func testAccResourceApplicationScaleUp(modelName, appName, numberOfUnits string)
 		}
 		`, modelName, appName, numberOfUnits)
 	} else {
-		// if we have a K8s deployment we need the machine hostname
+		// For K8s (CAAS) we need a charm that supports scaling on Kubernetes.
 		return fmt.Sprintf(`
 		resource "juju_model" "this" {
 		  name = %q
@@ -2054,16 +2072,12 @@ func testAccResourceApplicationScaleUp(modelName, appName, numberOfUnits string)
 		  model_uuid = juju_model.this.uuid
 		  name = %q
 		  charm {
-			name = "ubuntu-lite"
+			name = "coredns"
 		  }
 		  trust = true
-		  expose{}
 		  units = %q
-		  config = {
-			%s
-		  }
 		}
-		`, modelName, appName, numberOfUnits, jujuExternalHostname())
+		`, modelName, appName, numberOfUnits)
 	}
 }
 
