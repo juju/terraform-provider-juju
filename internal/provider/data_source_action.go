@@ -121,7 +121,7 @@ func (d *actionDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	d.trace(fmt.Sprintf("reading juju action %q data source", actionID))
 
 	// Wait for the action to complete and populate the output.
-	actionResult, err := waitActionResult(ctx, d.client, func(msg string, additionalFields ...map[string]interface{}) {
+	actionResult, err := waitForActionResult(ctx, d.client, func(msg string, additionalFields ...map[string]any) {
 		tflog.SubsystemDebug(d.subCtx, LogDataSourceAction, msg, additionalFields...)
 	}, modelUUID, actionID)
 	if err != nil {
