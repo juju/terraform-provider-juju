@@ -107,10 +107,6 @@ func (c *actionsClient) EnqueueAction(ctx context.Context, args EnqueueActionArg
 		Parameters: args.Parameters,
 	}})
 	if err != nil {
-		// juju 4 returns the error in the enqueued action.
-		if strings.Contains(err.Error(), "no actions defined for charm") {
-			return "", NewNoActionsDefinedError(err.Error())
-		}
 		return "", err
 	}
 	if len(enqueuedActions.Actions) != 1 {
