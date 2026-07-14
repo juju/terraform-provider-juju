@@ -634,6 +634,7 @@ func (p *jujuProvider) DataSources(_ context.Context) []func() datasource.DataSo
 		func() datasource.DataSource { return NewSpaceDataSource() },
 		func() datasource.DataSource { return NewSubnetsDataSource() },
 		func() datasource.DataSource { return NewStoragePoolDataSource() },
+		func() datasource.DataSource { return NewActionDataSource() },
 	}
 }
 

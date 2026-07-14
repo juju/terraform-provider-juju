@@ -34,6 +34,8 @@ const (
 	LogDataSourceSpace = "datasource-space"
 	// LogDataSourceSubnets is the logging subsystem for subnets data sources.
 	LogDataSourceSubnets = "datasource-subnets"
+	// LogDataSourceAction is the logging subsystem for action data sources.
+	LogDataSourceAction = "datasource-action"
 
 	// LogResourceApplication is the logging subsystem for application resources.
 	LogResourceApplication = "resource-application"
