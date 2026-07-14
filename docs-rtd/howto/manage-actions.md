@@ -13,13 +13,13 @@ Many charms rely on Juju actions to complete their setup or to expose operationa
 
 ```{note}
 
-The action is run and its result awaited during the resource's creation. The action's output is set as a computed field that can be used by other resources after the resource has been created.
+The action is run and its result awaited during the creation of the resource. The action's output is set as a computed field that can be used by other resources after the resource has been created.
 ```
 
 
 ## Run an action
 
-To run an action, in your Terraform plan create a resource of the `juju_action` type, specifying the model, the application to run the action on, the name of the action, and the unit to target. For example:
+To run an action, in your Terraform plan create a resource of the `juju_action` type, specifying the model, the application to run the action on, the name of the action, and the unit to target, in specific (e.g. `traefik/0`) or leader (e.g. `traefik/leader`) notation. For example:
 
 ```terraform
 resource "juju_action" "show_proxied_endpoints" {
@@ -30,11 +30,9 @@ resource "juju_action" "show_proxied_endpoints" {
 }
 ```
 
-The `unit` attribute targets a specific unit by name (e.g. `traefik/0`) or the leader unit (e.g. `traefik/leader`).
-
 > See more: [`juju_action` (resource)](../reference/terraform-provider/resources/action)
 
-## Pass arguments to an action
+### Run an action with arguments
 
 Some actions accept arguments. To pass them, in the `juju_action` resource definition add an `args` map with the `key=value` pairs the action expects. For example:
 
@@ -51,7 +49,7 @@ resource "juju_action" "backup" {
 }
 ```
 
-## Use an action's output
+### Run an action and use its output
 
 The action's result is exposed as the `output` computed attribute, a JSON string. Use `jsondecode()` to extract values from it and feed them into other resources or locals. For example:
 
@@ -68,17 +66,21 @@ locals {
 }
 ```
 
-The `output` attribute is always a JSON string, so the first `jsondecode()` turns it into a Terraform map you can index into. Some charms, however, return a value that is *itself* a JSON string — for example, the traefik charm sets the `proxied-endpoints` key to a JSON-encoded string rather than a nested object. In that case a second `jsondecode()` is needed to parse the charm's value into a map. Most charms return plain maps, so a single `jsondecode()` is enough; check your charm's action documentation to find out which shape it returns.
+The `output` attribute is always a JSON string, so the first `jsondecode()` turns it into a Terraform map you can index into. Some charms, however, return a value that is *itself* a JSON string — for example, the traefik charm sets the `proxied-endpoints` key to a JSON-encoded string rather than a nested object, in which case a second `jsondecode()` is needed. Check your charm's action documentation to find out which shape it returns.
 
-## Re-run an action
+### Re-run an action
 
-A `juju_action` resource only runs when it is created. Once the action has completed and its result is stored in the Terraform state, subsequent `terraform apply` runs that don't change the resource are a no-op — the action is **not** re-executed. This is by design: Juju actions are one-shot operations, and the resource represents the result of a single execution.
+A `juju_action` resource only runs when it is created. Once the action has completed and its result is stored in the Terraform state, subsequent `terraform apply` runs are a no-op — the action is **not** re-executed. This is by design: Juju actions are one-shot operations, and the resource represents the result of a single execution.
 
-To force the action to run again, you must replace the resource. Because every attribute of `juju_action` uses `RequiresReplace`, any change to the config causes Terraform to destroy and recreate the resource — that is, re-run the action.
+To force the action to run again, you must replace the resource. Because every attribute of `juju_action` uses `RequiresReplace`, any change to the config causes Terraform to destroy and recreate the resource — that is, re-run the action. For example, you can change the resource's name (and any references to it) or, without editing the plan, target the resource for replacement on a single apply:
 
-## Run an action on every apply
+```bash
+terraform apply -replace="juju_action.show_proxied_endpoints"
+```
 
-To run the action on every apply, use a `terraform_data` resource whose input is `timestamp()` and drive the action's replacement from it via the `replace_triggered_by` lifecycle directive:
+### Run an action on every apply
+
+Due to actions being one-shot operations, if you wish to run the action again on every re-apply, we suggest driving the action's replacement from a `terraform_data` resource whose input is `timestamp()` via the `replace_triggered_by` lifecycle directive:
 
 ```terraform
 resource "terraform_data" "replacement" {
@@ -150,8 +152,6 @@ resource "juju_action" "migrate" {
   depends_on = [juju_integration.db]
 }
 ```
-
-
 
 ## Remove an action
 
