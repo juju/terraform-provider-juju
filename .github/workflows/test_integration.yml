@@ -127,6 +127,14 @@ jobs:
       - name: "Create lxd config for bootstrap tests"
         if : ${{ matrix.action-operator.cloud == 'lxd' }}
         run: ./tools/create_lxd_config.sh
+      - name: "Start vault for secret backend tests"
+        if: ${{ matrix.action-operator.cloud == 'lxd' }}
+        run: |
+          docker run -d --name vault-test -p 8200:8200 -e 'VAULT_DEV_ROOT_TOKEN_ID=myroot' hashicorp/vault:latest
+          # The Juju controller runs inside LXD containers and reaches the host
+          # via the LXD bridge gateway. Use that IP so the controller can ping vault.
+          LXD_BRIDGE_IP=$(ip -4 addr show lxdbr0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+          echo "TEST_VAULT_ADDR=http://$LXD_BRIDGE_IP:8200" >> $GITHUB_ENV
       - name: "Create microk8s config"
         # language=bash
         run: |
@@ -154,6 +162,7 @@ jobs:
       - env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.action-operator.cloud }}
+          TEST_VAULT_ADDR: ${{ env.TEST_VAULT_ADDR }}
         run: go test -parallel 4 -timeout 90m -v -cover ./internal/provider/
         timeout-minutes: 90
       - name: Dump Juju bootstrap logs on failure

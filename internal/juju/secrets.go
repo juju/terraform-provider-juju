@@ -99,6 +99,7 @@ type ListSecretsOutput struct {
 	Value        map[string]string
 	Applications []string
 	Info         string
+	BackendName  string
 }
 
 // UpdateSecretInput contains the parameters for updating a secret.
@@ -264,6 +265,12 @@ func (c *secretsClient) ListSecrets(ctx context.Context, input *ListSecretsInput
 
 		applications := getApplicationsFromAccessInfo(result.Access)
 
+		// Get the backend name from the latest revision, if available.
+		var backendName string
+		if len(result.Revisions) > 0 && result.Revisions[len(result.Revisions)-1].BackendName != nil {
+			backendName = *result.Revisions[len(result.Revisions)-1].BackendName
+		}
+
 		output = append(output, ListSecretsOutput{
 			SecretId:     result.Metadata.URI.ID,
 			SecretURI:    result.Metadata.URI.String(),
@@ -271,6 +278,7 @@ func (c *secretsClient) ListSecrets(ctx context.Context, input *ListSecretsInput
 			Value:        decodedValue,
 			Applications: applications,
 			Info:         result.Metadata.Description,
+			BackendName:  backendName,
 		})
 	}
 

@@ -63,6 +63,8 @@ const (
 	LogResourceAccessSecret = "resource-access-secret"
 	// LogResourceStoragePool is the logging subsystem for storage pool resources.
 	LogResourceStoragePool = "resource-storage-pool"
+	// LogResourceSecretBackend is the logging subsystem for secret backend resources.
+	LogResourceSecretBackend = "resource-secret-backend"
 	// LogResourceController is the logging subsystem for controller resources.
 	LogResourceController = "resource-controller"
 	// LogResourceCloud is the logging subsystem for cloud resources.
