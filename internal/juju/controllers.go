@@ -19,10 +19,12 @@ import (
 	"github.com/juju/juju/api/client/cloud"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/client/modelmanager"
+	"github.com/juju/juju/api/client/modelupgrader"
 	"github.com/juju/juju/api/connector"
 	controllerapi "github.com/juju/juju/api/controller/controller"
 	"github.com/juju/juju/api/jujuclient"
 	jujucloud "github.com/juju/juju/cloud"
+	"github.com/juju/juju/core/semversion"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/juju/osenv"
 	"github.com/juju/names/v6"
@@ -390,6 +392,100 @@ func (d *DefaultJujuCommand) UpdateConfig(
 	}
 
 	return nil
+}
+
+// ControllerVersion retrieves the controller's agent version.
+func (d *DefaultJujuCommand) ControllerVersion(
+	ctx context.Context,
+	connInfo *ControllerConnectionInformation,
+) (version.Number, error) {
+	connr, err := connector.NewSimple(connector.SimpleConfig{
+		ControllerAddresses: connInfo.Addresses,
+		CACert:              connInfo.CACert,
+		Username:            connInfo.Username,
+		Password:            connInfo.Password,
+	})
+	if err != nil {
+		return version.Number{}, err
+	}
+
+	conn, err := connr.Connect(ctx)
+	if err != nil {
+		return version.Number{}, err
+	}
+
+	modelCfgClient := modelconfig.NewClient(conn)
+	defer modelCfgClient.Close()
+
+	modelAttrs, err := modelCfgClient.ModelGet(ctx)
+	if err != nil {
+		return version.Number{}, err
+	}
+
+	cfg, err := config.New(config.NoDefaults, modelAttrs)
+	if err != nil {
+		return version.Number{}, err
+	}
+
+	agentVersion, ok := cfg.AgentVersion()
+	if !ok {
+		return version.Number{}, fmt.Errorf("agent version not found in controller model config")
+	}
+
+	return version.Parse(agentVersion.String())
+}
+
+// UpgradeController upgrades a controller in place to a higher patch version.
+func (d *DefaultJujuCommand) UpgradeController(
+	ctx context.Context,
+	connInfo *ControllerConnectionInformation,
+	targetVersion version.Number,
+) (version.Number, error) {
+	connr, err := connector.NewSimple(connector.SimpleConfig{
+		ControllerAddresses: connInfo.Addresses,
+		CACert:              connInfo.CACert,
+		Username:            connInfo.Username,
+		Password:            connInfo.Password,
+	})
+	if err != nil {
+		return version.Number{}, err
+	}
+
+	conn, err := connr.Connect(ctx)
+	if err != nil {
+		return version.Number{}, err
+	}
+	defer conn.Close()
+
+	modelCfgClient := modelconfig.NewClient(conn)
+	defer modelCfgClient.Close()
+
+	modelAttrs, err := modelCfgClient.ModelGet(ctx)
+	if err != nil {
+		return version.Number{}, err
+	}
+
+	cfg, err := config.New(config.NoDefaults, modelAttrs)
+	if err != nil {
+		return version.Number{}, err
+	}
+
+	controllerModelUUID := cfg.UUID()
+
+	modelUpgraderClient := modelupgrader.NewClient(conn)
+	defer modelUpgraderClient.Close()
+
+	targetSemVersion, err := semversion.Parse(targetVersion.String())
+	if err != nil {
+		return version.Number{}, fmt.Errorf("failed to parse target version %q: %w", targetVersion.String(), err)
+	}
+
+	chosenVersion, err := modelUpgraderClient.UpgradeModel(ctx, controllerModelUUID, targetSemVersion, "", false, false)
+	if err != nil {
+		return version.Number{}, fmt.Errorf("failed to upgrade controller: %w", err)
+	}
+
+	return version.Parse(chosenVersion.String())
 }
 
 // Config retrieves controller configuration and controller-model configuration settings.

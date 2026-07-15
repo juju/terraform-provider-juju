@@ -1,12 +1,12 @@
 module github.com/juju/terraform-provider-juju
 
-go 1.26.4
+go 1.26.5
 
 require (
 	github.com/bflad/tfproviderlint v0.30.0
 	github.com/hashicorp/terraform-plugin-docs v0.25.0
-	// Juju v4.0-tip
-	github.com/juju/juju v0.0.0-20260630102250-06a1496d2eef
+	// Juju v4.0.12
+	github.com/juju/juju v0.0.0-20260713142945-570e41eadd7e
 )
 
 require (
@@ -128,6 +128,7 @@ require (
 	github.com/juju/jsonschema v1.0.1 // indirect
 	github.com/juju/loggo v1.0.0 // indirect
 	github.com/juju/loggo/v2 v2.2.0 // indirect
+	github.com/juju/loggo/v3 v3.0.0-20260430073220-8e1a5fe19b98 // indirect
 	github.com/juju/lumberjack/v2 v2.0.2 // indirect
 	github.com/juju/mgo/v3 v3.0.9 // indirect
 	github.com/juju/mutex/v2 v2.0.0 // indirect
@@ -139,6 +140,7 @@ require (
 	github.com/juju/webbrowser v1.0.0 // indirect
 	github.com/juju/worker/v5 v5.0.0 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
+	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lestrrat/go-jspointer v0.0.0-20160229021354-f4881e611bdb // indirect
