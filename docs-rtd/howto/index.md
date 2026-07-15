@@ -34,6 +34,8 @@ manage-offers
 manage-units
 manage-secrets
 manage-machines
+manage-storage-pools
+manage-spaces
 manage-actions
 ```
 
@@ -72,4 +74,6 @@ Deploy, configure, integrate, scale, etc., charmed applications. This will autom
 - {ref}`manage-units`
 - {ref}`manage-secrets`
 - {ref}`manage-machines`
+- {ref}`manage-storage-pools`
+- {ref}`manage-spaces`
 - {ref}`manage-actions`

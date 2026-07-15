@@ -11,7 +11,7 @@ import (
 	charmresources "github.com/juju/charm/v12/resource"
 	jujuerrors "github.com/juju/errors"
 	apiapplication "github.com/juju/juju/api/client/application"
-	"github.com/juju/juju/core/resource"
+	"github.com/juju/juju/api/docker"
 	"gopkg.in/yaml.v3"
 )
 
@@ -44,18 +44,20 @@ func (cr CharmResources) Equal(other CharmResources) bool {
 }
 
 // MarhsalYaml marshals the CharmResource into a YAML representation
-// suitable for uploading to Juju as a resource.
+// suitable for uploading to Juju as a resource. The core/resource
+// types have the correct YAML tags so the controller can deserialize
+// them correctly.
 func (cr CharmResource) MarhsalYaml() ([]byte, error) {
-	registryDetails := resource.DockerImageDetails{
+	details := docker.DockerImageDetails{
 		RegistryPath: cr.OCIImageURL,
-		ImageRepoDetails: resource.ImageRepoDetails{
-			BasicAuthConfig: resource.BasicAuthConfig{
+		ImageRepoDetails: docker.ImageRepoDetails{
+			BasicAuthConfig: docker.BasicAuthConfig{
 				Username: cr.RegistryUser,
 				Password: cr.RegistryPassword,
 			},
 		},
 	}
-	return yaml.Marshal(registryDetails)
+	return yaml.Marshal(details)
 }
 
 // UploadExistingPendingResources uploads local resources. Used
