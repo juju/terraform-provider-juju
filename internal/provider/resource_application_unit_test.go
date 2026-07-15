@@ -23,7 +23,8 @@ func TestAssertEqualsUnitCount(t *testing.T) {
 			name:  "units match",
 			units: 1,
 			response: &juju.ReadApplicationResponse{
-				Units: 1,
+				Principal: true,
+				Units:     1,
 			},
 			expectError: false,
 		},
@@ -31,7 +32,8 @@ func TestAssertEqualsUnitCount(t *testing.T) {
 			name:  "units mismatch",
 			units: 1,
 			response: &juju.ReadApplicationResponse{
-				Units: 0,
+				Principal: true,
+				Units:     0,
 			},
 			expectError: true,
 		},
@@ -39,8 +41,9 @@ func TestAssertEqualsUnitCount(t *testing.T) {
 			name:  "zero units and no machines",
 			units: 0,
 			response: &juju.ReadApplicationResponse{
-				Units:    0,
-				Machines: []string{},
+				Principal: true,
+				Units:     0,
+				Machines:  []string{},
 			},
 			expectError: false,
 		},
@@ -48,8 +51,9 @@ func TestAssertEqualsUnitCount(t *testing.T) {
 			name:  "zero units but machines still present",
 			units: 0,
 			response: &juju.ReadApplicationResponse{
-				Units:    0,
-				Machines: []string{"0"},
+				Principal: true,
+				Units:     0,
+				Machines:  []string{"0"},
 			},
 			expectError: true,
 		},

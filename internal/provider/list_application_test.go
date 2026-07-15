@@ -111,6 +111,10 @@ func TestAccListApplications_QueryAll(t *testing.T) {
 								Path:       tfjsonpath.New("charm").AtSliceIndex(0).AtMapKey("revision"),
 								KnownValue: knownvalue.NumberExact(big.NewFloat(24)),
 							},
+							{
+								Path:       tfjsonpath.New("unit_numbers"),
+								KnownValue: knownvalue.Null(),
+							},
 						},
 					),
 				},
@@ -146,6 +150,10 @@ func TestAccListApplications_QueryAll(t *testing.T) {
 									}
 									return knownvalue.StringExact(expectedModelUUID).CheckValue(actual)
 								}),
+							},
+							{
+								Path:       tfjsonpath.New("unit_numbers"),
+								KnownValue: knownvalue.Null(),
 							},
 						},
 					),
