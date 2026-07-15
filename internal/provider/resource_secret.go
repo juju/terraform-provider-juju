@@ -415,8 +415,6 @@ func (s *secretResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	s.trace(fmt.Sprintf("updating secret resource %q", state.SecretId))
-	s.trace(fmt.Sprintf("Update - current state: %v", state))
-	s.trace(fmt.Sprintf("Update - proposed plan: %v", plan))
 
 	var err error
 	noChange := true

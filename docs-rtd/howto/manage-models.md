@@ -22,6 +22,58 @@ data "juju_model" "mymodel" {
 
 > See more: [`juju_model` (data source)](../reference/terraform-provider/data-sources/model)
 
+(access-the-controller-model)=
+## Access the controller model
+
+The controller model is a special model created automatically when a controller is bootstrapped. It hosts the `controller` application that runs the Juju API server and other controller-level workloads. It does not appear in the output of `juju models` (only `juju show-model controller` lists it), so it must be referenced explicitly.
+
+To access the controller model, in your Terraform plan add a data source  of the `juju_model` type with the controller model details, identifying the model in one of two ways:
+
+- **By name and owner**: use a `juju_model` data source with `name = "controller"` and `owner = "admin"`. This is the simplest approach, as the data source resolves the UUID for you.
+- **By UUID**: if you already know the controller model UUID (for example, from running `juju show-model controller` on the CLI), you can pass it directly to a `juju_model` data source using the `uuid` argument. This is useful when the name-based lookup is not available.
+
+In both cases, the UUID returned by the data source is then passed to the `model_uuid` argument of any resource you want to place in the controller model.
+
+For example, to access the controller model and deploy to it the `juju-dashboard` charm and then  integrate it with the `controller` application:
+
+```terraform
+data "juju_model" "controller" {
+  name  = "controller"
+  owner = "admin"
+}
+
+resource "juju_application" "juju-dashboard" {
+  name = "juju-dashboard"
+
+  charm {
+    name    = "juju-dashboard"
+    channel = "latest/stable"
+    base    = "ubuntu@22.04"
+  }
+
+  units = 1
+
+  model_uuid = data.juju_model.controller.uuid
+}
+
+resource "juju_integration" "juju-dashboard" {
+  model_uuid = data.juju_model.controller.uuid
+
+  application {
+    name = juju_application.juju-dashboard.name
+  }
+
+  application {
+    name = "controller"
+  }
+}
+```
+
+```{note} Note that JAAS does not expose the controller model for controllers that it manages.
+```
+
+> See more: [`juju_model` (data source)](../reference/terraform-provider/data-sources/model), [`juju_application` (resource)](../reference/terraform-provider/resources/application), [`juju_integration` (resource)](../reference/terraform-provider/resources/integration)
+
 ## Add a model
 
 To add a model to the controller specified in the `juju` provider definition, in your Terraform plan create a resource of the `juju_model` type, specifying, at the very least, a name. For example:

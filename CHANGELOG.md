@@ -1,3 +1,29 @@
+# 2.1.1
+
+NOTES:
+
+* **This release requires Juju controller version 3 or higher. This version drops support for 2.9.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the tip of the Juju 4.0 branch.
+
+ENHANCEMENTS
+
+BUG FIXES
+
+* Fix upload of private OCI image credentials by @SimoneDutto in [1280](https://github.com/juju/terraform-provider-juju/pull/1280)
+
+DOCUMENTATION
+
+* Add additional how-to guides by @ale8k in [#1278](https://github.com/juju/terraform-provider-juju/pull/1278)
+* Documentation migration by @tmihoc in [1287](https://github.com/juju/terraform-provider-juju/pull/1287)
+
+CI & MAINTENANCE
+
+* Update Juju dependency to the tip of Juju 4.0 by @kian99 in [#1281](https://github.com/juju/terraform-provider-juju/pull/1281)
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v2.1.0...v2.1.1
+
 # 2.1.0
 
 NOTES:
@@ -81,6 +107,83 @@ CI & MAINTENANCE
 
 
 **Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v1.5.1...v2.0.0
+
+# 1.5.5
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.25 release.
+
+BUG FIXES
+
+* Stop logging credentials and secret values by @alesstimec in [#1264](https://github.com/juju/terraform-provider-juju/pull/1254)
+
+DOCUMENTATION
+
+* Documentation migration by @tmihoc in [#1265](https://github.com/juju/terraform-provider-juju/pull/1265) and [#1289](https://github.com/juju/terraform-provider-juju/pull/1289)
+
+CI & MAINTENANCE
+
+* Update Juju dependency to v3.6.25 by @kian99 in [#1283](https://github.com/juju/terraform-provider-juju/pull/1283)
+* Backport K8s check for private registry Juju secret by @SimoneDutto in [#1292](https://github.com/juju/terraform-provider-juju/pull/1292)
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v1.5.4...v1.5.5
+
+# 1.5.4
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.21 release.
+
+ENHANCEMENTS
+
+* Allow controller patch upgrades by @kian99 in [#1240](https://github.com/juju/terraform-provider-juju/pull/1240).
+
+DOCUMENTATION
+
+* Update charm refresh documentation by @kian99 in [#1225](https://github.com/juju/terraform-provider-juju/pull/1225).
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v1.5.3...v1.5.4
+
+# 1.5.3
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.21 release.
+
+BUG FIXES
+
+* Fix unit count bug when machines count is unknown by @SimoneDutto in [#1223](https://github.com/juju/terraform-provider-juju/pull/1223).
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v1.5.2...v1.5.3
+
+# 1.5.2
+
+NOTES:
+
+* **This release requires Juju controller version 2.9.49 or higher.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 3.6.21 release.
+
+ENHANCEMENTS
+
+* Add machine attribute to `juju_application` data source by @SimoneDutto in [#1209](https://github.com/juju/terraform-provider-juju/pull/1209).
+
+BUG FIXES
+
+* Fix charm update handling when changing channel by @kian99 in [#1222](https://github.com/juju/terraform-provider-juju/pull/1222).
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v1.5.1...v1.5.2
 
 # 1.5.1
 

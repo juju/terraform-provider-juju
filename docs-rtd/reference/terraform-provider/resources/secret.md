@@ -57,10 +57,12 @@ resource "juju_secret" "my-wo-secret" {
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `info` (String) The description of the secret.
 - `name` (String) The name of the secret.
 - `value` (Map of String, Sensitive) The value map of the secret. There can be more than one key-value pair. Conflicts with value_wo; prefer value_wo for ephemeral/secret data that should not be stored in Terraform state.
-- `value_wo` (Map of String, Sensitive) The write-only value map of the secret. Its content is never persisted to Terraform state. Requires value_wo_version to be set; bump value_wo_version to apply changes to this value. Requires Terraform >= 1.11.
+- `value_wo` (Map of String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The write-only value map of the secret. Its content is never persisted to Terraform state. Requires value_wo_version to be set; bump value_wo_version to apply changes to this value. Requires Terraform >= 1.11.
 - `value_wo_version` (Number) The version of value_wo. Increment this value to trigger an update of the write-only secret value.
 
 ### Read-Only
@@ -72,6 +74,8 @@ resource "juju_secret" "my-wo-secret" {
 ## Import
 
 Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
 # Secrets can be imported by using the model and secret names.

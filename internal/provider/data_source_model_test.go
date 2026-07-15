@@ -129,3 +129,30 @@ locals {
 }
   `, modelName)
 }
+
+func TestAcc_DataSourceModelControllerModel(t *testing.T) {
+	SkipJAAS(t)
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccFrameworkDataSourceModelController(),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("data.juju_model.controller", "name", "controller"),
+					resource.TestCheckResourceAttr("data.juju_model.controller", "owner", "admin"),
+					resource.TestCheckResourceAttrSet("data.juju_model.controller", "uuid"),
+				),
+			},
+		},
+	})
+}
+
+func testAccFrameworkDataSourceModelController() string {
+	return `
+data "juju_model" "controller" {
+  name  = "controller"
+  owner = "admin"
+}
+`
+}
