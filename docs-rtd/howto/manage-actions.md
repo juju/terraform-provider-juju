@@ -68,6 +68,37 @@ locals {
 
 The `output` attribute is always a JSON string, so the first `jsondecode()` turns it into a Terraform map you can index into. Some charms, however, return a value that is *itself* a JSON string — for example, the traefik charm sets the `proxied-endpoints` key to a JSON-encoded string rather than a nested object, in which case a second `jsondecode()` is needed. Check your charm's action documentation to find out which shape it returns.
 
+### Run an action on every unit
+
+By default a `juju_action` targets a single unit. To run the same action on every unit of an application, use `for_each` over the application's `unit_numbers` set — a computed attribute that lists the numbers of the deployed units (e.g. `["0", "1", "2"]`):
+
+```terraform
+resource "juju_application" "myapp" {
+  model_uuid = juju_model.development.uuid
+  name       = "myapp"
+  charm {
+    name    = "mycharm"
+    channel = "latest/stable"
+  }
+  units = 3
+}
+
+resource "juju_action" "do_something" {
+  for_each = juju_application.myapp.unit_numbers
+
+  model_uuid       = juju_model.development.uuid
+  application_name = juju_application.myapp.name
+  action_name      = "do-something"
+  unit             = "${juju_application.myapp.name}/${each.value}"
+}
+```
+
+Each element of `unit_numbers` is a string (e.g. `"0"`, `"1"`), so the `unit` argument is built by joining the application name and the unit number with a `/`. Terraform creates one `juju_action` resource per unit — `juju_action.do_something["0"]`, `juju_action.do_something["1"]`, and so on — and runs the action on each.
+
+```{note}
+`unit_numbers` is only populated once the application has been created and its units are available. Because `juju_action.do_something` references `juju_application.myapp.unit_numbers`, Terraform waits for the application to be created before enqueuing the actions.
+```
+
 ### Re-run an action
 
 A `juju_action` resource only runs when it is created. Once the action has completed and its result is stored in the Terraform state, subsequent `terraform apply` runs are a no-op — the action is **not** re-executed. This is by design: Juju actions are one-shot operations, and the resource represents the result of a single execution.
@@ -111,6 +142,31 @@ Because `timestamp()` evaluates to a new value on every apply, `terraform_data.r
 
 Only use this pattern when the action is genuinely idempotent or when re-running it is safe. Re-running an action that mutates state (e.g. a backup that overwrites the previous one) may have side effects.
 ```
+
+### Manually trigger an action
+
+The [Run an action on every apply](#run-an-action-on-every-apply) pattern re-runs the action unconditionally on each apply. If you want finer control — to re-run the action only when you explicitly decide to — drive the replacement from a `terraform_data` resource whose `input` you bump manually:
+
+```terraform
+resource "terraform_data" "trigger" {
+  input = 1 # bump this value to re-run the action
+}
+
+resource "juju_action" "do_something" {
+  model_uuid       = juju_model.development.uuid
+  application_name = juju_application.myapp.name
+  action_name      = "do-something"
+  unit             = "myapp/leader"
+
+  lifecycle {
+    replace_triggered_by = [
+      terraform_data.trigger
+    ]
+  }
+}
+```
+
+As long as `input` stays the same, `terraform apply` is a no-op for the action. When you want to re-run the action, change the value (e.g. from `1` to `2`) and apply. Terraform detects that `terraform_data.trigger` has changed, which triggers a replacement of `juju_action.do_something` — re-running the action. This gives you an explicit trigger without editing the action's own configuration.
 
 ## Order an action relative to other resources
 
