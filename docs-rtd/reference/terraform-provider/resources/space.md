@@ -39,6 +39,8 @@ resource "juju_space" "development" {
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Spaces can be imported using the format: model_uuid:space_name
 $ terraform import juju_space.development a3c2c72a-75f6-43b9-9b2d-d85d5449cb2f:development
