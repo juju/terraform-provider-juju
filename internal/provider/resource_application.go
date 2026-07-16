@@ -13,6 +13,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -29,12 +30,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
-	"github.com/juju/juju/core/constraints"
-	jujustorage "github.com/juju/juju/core/storage"
 	"github.com/juju/names/v5"
-
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/wait"
+
+	"github.com/juju/juju/core/constraints"
+	jujustorage "github.com/juju/juju/core/storage"
 )
 
 const (
@@ -88,6 +89,7 @@ var _ resource.Resource = &applicationResource{}
 var _ resource.ResourceWithConfigure = &applicationResource{}
 var _ resource.ResourceWithImportState = &applicationResource{}
 var _ resource.ResourceWithIdentity = &applicationResource{}
+var _ resource.ResourceWithValidateConfig = &applicationResource{}
 
 // NewApplicationResource returns a new instance of the application resource responsible
 // for managing Juju applications, including their configuration, charm, constraints, and
@@ -368,13 +370,12 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 		},
 		Blocks: map[string]schema.Block{
 			CharmKey: schema.ListNestedBlock{
-				Description: "The charm installed from Charmhub.",
+				Description: "The charm installed from Charmhub, or from a local charm archive file.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
-							Required: true,
-							Description: "The name of the charm to be deployed.  Changing this value will cause" +
-								" the application to be destroyed and recreated by terraform.",
+							Required:    true,
+							Description: "The name of the charm to be deployed. When deploying a local charm via `local_path`, this must match the charm name in the archive's metadata. Changing this value will cause the application to be destroyed and recreated by terraform.",
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.RequiresReplaceIfConfigured(),
 							},
@@ -397,6 +398,31 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							PlanModifiers: []planmodifier.Int64{
 								int64planmodifier.UseStateForUnknown(),
 								InvalidateRevisionIfChannelChanges(),
+							},
+						},
+						"local_path": schema.StringAttribute{
+							Description: "The path to a local .charm archive to deploy, instead of using Charmhub. `name` must match the charm name in the archive's metadata. Mutually exclusive with `channel` and `revision`.",
+							Optional:    true,
+							Validators: []validator.String{
+								stringvalidator.ConflictsWith(
+									path.MatchRelative().AtParent().AtName("channel"),
+									path.MatchRelative().AtParent().AtName("revision"),
+								),
+							},
+						},
+						"local_path_hash": schema.StringAttribute{
+							Description: "The content hash of the local charm referenced by `local_path`. This is computed by the provider to detect when the local charm file has changed.",
+							Computed:    true,
+							PlanModifiers: []planmodifier.String{
+								LocalCharmHashModifier(),
+								stringplanmodifier.RequiresReplaceIf(LocalCharmRequiresReplace, "", ""),
+							},
+						},
+						"origin_hash": schema.StringAttribute{
+							Description: "The controller-reported charm hash, used to detect out-of-band changes to a local charm (E.g. `juju refresh`). Only populated on controllers that report a hash (Juju 3.6.26+ or Juju 4+), otherwise this drift detection is disabled.",
+							Computed:    true,
+							PlanModifiers: []planmodifier.String{
+								OriginHashModifier(),
 							},
 						},
 						BaseKey: schema.StringAttribute{
@@ -453,10 +479,72 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 // nestedCharm represents the single element of the charm ListNestedBlock
 // of the in the application resource schema
 type nestedCharm struct {
-	Name     types.String `tfsdk:"name"`
-	Channel  types.String `tfsdk:"channel"`
-	Revision types.Int64  `tfsdk:"revision"`
-	Base     types.String `tfsdk:"base"`
+	Name          types.String `tfsdk:"name"`
+	Channel       types.String `tfsdk:"channel"`
+	Revision      types.Int64  `tfsdk:"revision"`
+	LocalPath     types.String `tfsdk:"local_path"`
+	LocalPathHash types.String `tfsdk:"local_path_hash"`
+	OriginHash    types.String `tfsdk:"origin_hash"`
+	Base          types.String `tfsdk:"base"`
+}
+
+// ValidateConfig checks that when `local_path` is set, the `name` in config
+// matches the charm name in the archive's metadata.
+func (r *applicationResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data applicationResourceModelV1
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// The charm block is unknown until other values are resolved; skip
+	// validation and let it run again once known.
+	if data.Charm.IsNull() || data.Charm.IsUnknown() {
+		return
+	}
+
+	var charms []nestedCharm
+	resp.Diagnostics.Append(data.Charm.ElementsAs(ctx, &charms, false)...)
+	if resp.Diagnostics.HasError() || len(charms) == 0 {
+		return
+	}
+	planCharm := charms[0]
+
+	localPath := planCharm.LocalPath.ValueString()
+	if localPath == "" {
+		return
+	}
+
+	info, err := juju.ReadLocalCharmInfo(localPath)
+	if err != nil {
+		resp.Diagnostics.AddAttributeError(
+			path.Root(CharmKey).AtListIndex(0).AtName("local_path"),
+			"Invalid Local Charm",
+			err.Error(),
+		)
+		return
+	}
+
+	if planCharm.Name.ValueString() != info.Name {
+		resp.Diagnostics.AddAttributeError(
+			path.Root(CharmKey).AtListIndex(0).AtName("name"),
+			"Charm Name Mismatch",
+			fmt.Sprintf(
+				"The configured name %q does not match the charm name %q in the archive's metadata.",
+				planCharm.Name.ValueString(), info.Name,
+			),
+		)
+	}
+
+	if configuredBase := planCharm.Base.ValueString(); configuredBase != "" {
+		if unsupported := juju.CheckLocalCharmBase(info, configuredBase); unsupported != nil {
+			resp.Diagnostics.AddAttributeError(
+				path.Root(CharmKey).AtListIndex(0).AtName("base"),
+				"Unsupported Base",
+				unsupported.Error(),
+			)
+		}
+	}
 }
 
 // nestedExpose represents the single element of expose ListNestedBlock
@@ -545,13 +633,21 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 	planCharm := charms[0]
 	charmName := planCharm.Name.ValueString()
-	channel := "stable"
-	if !planCharm.Channel.IsUnknown() {
-		channel = planCharm.Channel.ValueString()
-	}
+	localPath := planCharm.LocalPath.ValueString()
+
+	// A local charm is deployed from a file and has no Charmhub channel or
+	// revision. For Charmhub charms, default the channel to stable and the
+	// revision to -1 (latest).
+	channel := ""
 	revision := -1
-	if !planCharm.Revision.IsUnknown() {
-		revision = int(planCharm.Revision.ValueInt64())
+	if localPath == "" {
+		channel = "stable"
+		if !planCharm.Channel.IsUnknown() {
+			channel = planCharm.Channel.ValueString()
+		}
+		if !planCharm.Revision.IsUnknown() {
+			revision = int(planCharm.Revision.ValueInt64())
+		}
 	}
 
 	config, diags := newStringMap(ctx, plan.Config)
@@ -659,6 +755,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 			CharmName:          charmName,
 			CharmChannel:       channel,
 			CharmRevision:      revision,
+			CharmLocalPath:     localPath,
 			CharmBase:          planCharm.Base.ValueString(),
 			Units:              unitCount,
 			Config:             config,
@@ -743,6 +840,9 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	planCharm.Revision = types.Int64Value(int64(readResp.Revision))
 	planCharm.Base = types.StringValue(readResp.Base)
 	planCharm.Channel = types.StringValue(readResp.Channel)
+	// Record the controller-reported hash for local charm drift detection.
+	// On controllers that don't return it, drift detection is disabled with a warning.
+	planCharm.OriginHash = types.StringValue(readResp.OriginHash)
 	charmType := req.Config.Schema.GetBlocks()[CharmKey].(schema.ListNestedBlock).NestedObject.Type()
 
 	plan.Charm, dErr = types.ListValueFrom(ctx, charmType, []nestedCharm{planCharm})
@@ -941,6 +1041,50 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		Revision: types.Int64Value(int64(response.Revision)),
 		Base:     types.StringValue(response.Base),
 	}
+	// Record the controller-reported charm hash used to detect out-of-band
+	// charm changes. Local charm deploys require a populated hash (enforced
+	// at deploy time), so it is always present for local charms here.
+	dataCharm.OriginHash = types.StringValue(response.OriginHash)
+	// The controller has no knowledge of the local charm file, so preserve
+	// the local_path and its content hash from the prior state when the
+	// application was deployed from a local charm.
+	if !state.Charm.IsNull() && !state.Charm.IsUnknown() {
+		var priorCharms []nestedCharm
+		dErr = state.Charm.ElementsAs(ctx, &priorCharms, false)
+		if dErr.HasError() {
+			resp.Diagnostics.Append(dErr...)
+			return
+		}
+		if len(priorCharms) == 1 {
+			priorCharm := priorCharms[0]
+			dataCharm.LocalPath = priorCharm.LocalPath
+			dataCharm.LocalPathHash = priorCharm.LocalPathHash
+
+			// Detect out-of-band drift for local charms: if the controller's
+			// origin_hash changed since the last apply, then semantically the
+			// local charm no longer matches what is deployed. We then null
+			// local_path_hash so the plan-time modifier recomputes causes
+			// re-upload. origin_hash is compared only against its own prior
+			// value. Local charm deploys guarantee a populated hash (enforced
+			// at deploy time).
+			isLocalCharm := !priorCharm.LocalPath.IsNull() &&
+				priorCharm.LocalPath.ValueString() != ""
+			priorOriginKnown := !priorCharm.OriginHash.IsNull() &&
+				priorCharm.OriginHash.ValueString() != ""
+			if isLocalCharm && priorOriginKnown &&
+				response.OriginHash != priorCharm.OriginHash.ValueString() {
+				r.trace("local charm drift detected", map[string]interface{}{
+					"app":               appName,
+					"prior_origin_hash": priorCharm.OriginHash.ValueString(),
+					"origin_hash":       response.OriginHash,
+				})
+				// Nulling local_path_hash cascades to the sibling computed
+				// attributes (revision, origin_hash), which are marked unknown at
+				// plan time so the re-uploaded values read back cleanly.
+				dataCharm.LocalPathHash = types.StringNull()
+			}
+		}
+	}
 	charmType := req.State.Schema.GetBlocks()[CharmKey].(schema.ListNestedBlock).NestedObject.Type()
 	state.Charm, dErr = types.ListValueFrom(ctx, charmType, []nestedCharm{dataCharm})
 	if dErr.HasError() {
@@ -1121,15 +1265,23 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 			return
 		}
 		planCharm := planCharms[0]
-		updateApplicationInput.Channel = planCharm.Channel.ValueString()
-		updateApplicationInput.Base = planCharm.Base.ValueString()
 
-		// If the revision was left empty in the plan, leave it empty here
-		// to ensure we use the latest from the channel, otherwise keep it pinned.
-		if planCharm.Revision.IsUnknown() || planCharm.Revision.IsNull() {
-			updateApplicationInput.Revision = nil
+		if !planCharm.LocalPath.IsNull() && planCharm.LocalPath.ValueString() != "" {
+			// A local charm changed content (the hash differs) but its
+			// name is unchanged. Refresh the charm in place from the new file.
+			updateApplicationInput.CharmLocalPath = planCharm.LocalPath.ValueString()
+			updateApplicationInput.Base = planCharm.Base.ValueString()
 		} else {
-			updateApplicationInput.Revision = intPtr(planCharm.Revision)
+			updateApplicationInput.Channel = planCharm.Channel.ValueString()
+			updateApplicationInput.Base = planCharm.Base.ValueString()
+
+			// If the revision was left empty in the plan, leave it empty here
+			// to ensure we use the latest from the channel, otherwise keep it pinned.
+			if planCharm.Revision.IsUnknown() || planCharm.Revision.IsNull() {
+				updateApplicationInput.Revision = nil
+			} else {
+				updateApplicationInput.Revision = intPtr(planCharm.Revision)
+			}
 		}
 	}
 
@@ -1303,11 +1455,26 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	charmType := req.Config.Schema.GetBlocks()[CharmKey].(schema.ListNestedBlock).NestedObject.Type()
+
+	// Preserve local_path and local_path_hash from the plan: the controller
+	// has no knowledge of the local file so they must come from the config.
+	var updatedLocalPath, updatedLocalPathHash types.String
+	var planCharmSlice []nestedCharm
+	if resp.Diagnostics.Append(plan.Charm.ElementsAs(ctx, &planCharmSlice, false)...); !resp.Diagnostics.HasError() && len(planCharmSlice) == 1 {
+		updatedLocalPath = planCharmSlice[0].LocalPath
+		updatedLocalPathHash = planCharmSlice[0].LocalPathHash
+	}
+
 	updatedCharm, charmDiags := types.ListValueFrom(ctx, charmType, []nestedCharm{{
-		Name:     types.StringValue(readResp.Name),
-		Channel:  types.StringValue(readResp.Channel),
-		Revision: types.Int64Value(int64(readResp.Revision)),
-		Base:     types.StringValue(readResp.Base),
+		Name:          types.StringValue(readResp.Name),
+		LocalPath:     updatedLocalPath,
+		LocalPathHash: updatedLocalPathHash,
+		// Record the controller-reported charm hash after the update so a
+		// later read can detect subsequent out-of-band drift. Empty on Juju 3.
+		OriginHash: types.StringValue(readResp.OriginHash),
+		Channel:    types.StringValue(readResp.Channel),
+		Revision:   types.Int64Value(int64(readResp.Revision)),
+		Base:       types.StringValue(readResp.Base),
 	}})
 	if charmDiags.HasError() {
 		resp.Diagnostics.Append(charmDiags...)

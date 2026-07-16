@@ -4,10 +4,12 @@
 package provider
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -21,10 +23,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/api/client/resources"
 	apispaces "github.com/juju/juju/api/client/spaces"
+	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v6"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -3300,4 +3304,378 @@ func testAccResourceApplicationUnknownMachines(modelName string) string {
 		  }
 		}
 		`, modelName)
+}
+
+// TestAcc_ResourceApplication_LocalCharm_Deploy covers the full lifecycle of a
+// locally-deployed charm:
+//  1. Initial deploy: local_path_hash (full SHA-256) is populated in state.
+//  2. Idempotency: a second apply with the same file produces no plan diff.
+//  3. In-place refresh: rebuilding the archive with different content (same
+//     charm name) triggers an Update — not a Replace — and updates the hash.
+//  4. Import round-trip: local_path and local_path_hash are excluded (the
+//     controller does not record them).
+func TestAcc_ResourceApplication_LocalCharm_Deploy(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-local-charm")
+	appName := "local-test"
+	charmName := "local-test-charm"
+
+	dir := t.TempDir()
+	archiveV1 := buildLocalCharm(t, filepath.Join(dir, "v1"), charmName, "version-1-content")
+	archiveV2 := buildLocalCharm(t, filepath.Join(dir, "v2"), charmName, "version-2-content")
+
+	var hashAfterV1 string
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// Step 1: deploy from local charm archive.
+				Config: testAccResourceApplicationLocalCharm(modelName, appName, charmName, archiveV1),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", charmName),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.local_path", archiveV1),
+					// local_path_hash is the full SHA-256 (64 hex chars).
+					resource.TestCheckResourceAttrWith(
+						"juju_application.this", "charm.0.local_path_hash",
+						func(value string) error {
+							if len(value) != 64 {
+								return fmt.Errorf("expected 64-char SHA-256, got %d chars: %q", len(value), value)
+							}
+							hashAfterV1 = value
+							return nil
+						},
+					),
+				),
+			},
+			{
+				// Step 2: re-apply with the same config — no changes expected.
+				Config: testAccResourceApplicationLocalCharm(modelName, appName, charmName, archiveV1),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			{
+				// Step 3: point local_path at the v2 archive.  Same charm name,
+				// different content → in-place refresh (Update, not Replace).
+				Config: testAccResourceApplicationLocalCharm(modelName, appName, charmName, archiveV2),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+						plancheck.ExpectResourceAction(
+							"juju_application.this",
+							plancheck.ResourceActionUpdate,
+						),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.local_path", archiveV2),
+					// Hash must have changed from step 1.
+					resource.TestCheckResourceAttrWith(
+						"juju_application.this", "charm.0.local_path_hash",
+						func(value string) error {
+							if len(value) != 64 {
+								return fmt.Errorf("expected 64-char SHA-256, got %d chars", len(value))
+							}
+							if value == hashAfterV1 {
+								return fmt.Errorf("local_path_hash unchanged after rebuilding charm")
+							}
+							return nil
+						},
+					),
+				),
+			},
+			{
+				// Step 4: import round-trip. local_path and local_path_hash are
+				// not recoverable from the controller so they are excluded from
+				// import verification.
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ResourceName:            "juju_application.this",
+				ImportStateVerifyIgnore: []string{"charm.0.local_path", "charm.0.local_path_hash"},
+			},
+		},
+	})
+}
+
+// TestAcc_ResourceApplication_LocalCharm_Drift verifies out-of-band charm
+// drift detection for local charms: deploy v1, refresh to v2 directly via the
+// Juju client, and confirm the next apply re-uploads v1
+func TestAcc_ResourceApplication_LocalCharm_Drift(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	// Origin hash is not populated on older versions
+	skipTestIfJujuAgentVersionBelow(t, internaljuju.LocalCharmOriginHashFirstAgentVersion)
+
+	modelName := acctest.RandomWithPrefix("tf-test-local-charm-drift")
+	appName := "local-drift"
+	charmName := "local-drift-charm"
+
+	dir := t.TempDir()
+	archiveV1 := buildLocalCharm(t, filepath.Join(dir, "v1"), charmName, "drift-version-1")
+	archiveV2 := buildLocalCharm(t, filepath.Join(dir, "v2"), charmName, "drift-version-2")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// Deploy v1 with Terraform, then deploy v2 out of band.
+				Config:             testAccResourceApplicationLocalCharm(modelName, appName, charmName, archiveV1),
+				ExpectNonEmptyPlan: true,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.local_path", archiveV1),
+					resource.TestCheckResourceAttrSet("juju_application.this", "charm.0.origin_hash"),
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources["juju_model.this"]
+						if !ok {
+							return fmt.Errorf("not found: juju_model.this")
+						}
+						modelUUID := rs.Primary.Attributes["uuid"]
+						// Add model to TestClient's model cache
+						TestClient.Applications.AddModel(
+							rs.Primary.Attributes["name"],
+							"",
+							modelUUID,
+							model.ModelType(rs.Primary.Attributes["type"]),
+						)
+						input := internaljuju.UpdateApplicationInput{
+							ModelUUID:      modelUUID,
+							AppName:        appName,
+							CharmLocalPath: archiveV2,
+							Base:           "ubuntu@22.04",
+						}
+						if err := TestClient.Applications.UpdateApplication(t.Context(), &input); err != nil {
+							return fmt.Errorf("out-of-band charm refresh failed: %w", err)
+						}
+						return nil
+					},
+				),
+			},
+			{
+				// Re-apply unchanged config. Drift is detected and v1 re-uploaded.
+				Config: testAccResourceApplicationLocalCharm(modelName, appName, charmName, archiveV1),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+						plancheck.ExpectResourceAction(
+							"juju_application.this",
+							plancheck.ResourceActionUpdate,
+						),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.local_path", archiveV1),
+					resource.TestCheckResourceAttrSet("juju_application.this", "charm.0.origin_hash"),
+				),
+			},
+			{
+				// A further apply is a no-op, confirming the drift was fixed.
+				Config: testAccResourceApplicationLocalCharm(modelName, appName, charmName, archiveV1),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestAcc_ResourceApplication_LocalCharm_DriftUnsupported verifies that
+// deploying a local charm against a controller that does not report a charm
+// origin hash still succeeds, but leaves origin_hash empty (drift detection
+// disabled). A warning is logged in that case; the deploy is not failed.
+func TestAcc_ResourceApplication_LocalCharm_DriftUnsupported(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	// Only controllers this old don't populate the hash.
+	skipTestIfJujuAgentVersionAtLeast(t, internaljuju.LocalCharmOriginHashFirstAgentVersion)
+
+	modelName := acctest.RandomWithPrefix("tf-test-local-charm-drift-unsupported")
+	appName := "local-drift-unsupported"
+	charmName := "local-drift-unsupported-charm"
+
+	dir := t.TempDir()
+	archive := buildLocalCharm(t, dir, charmName, "v1")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// The deploy succeeds despite the missing hash; origin_hash is
+				// empty, so out-of-band drift detection is disabled.
+				Config: testAccResourceApplicationLocalCharm(modelName, appName, charmName, archive),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.local_path", archive),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.origin_hash", ""),
+				),
+			},
+		},
+	})
+}
+
+// TestAcc_ResourceApplication_LocalCharm_NameMismatch verifies that
+// ValidateConfig rejects a charm block where the declared name does not match
+// the charm name in the archive's metadata.yaml.
+func TestAcc_ResourceApplication_LocalCharm_NameMismatch(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-local-charm-mismatch")
+	dir := t.TempDir()
+	// Archive metadata says "actual-charm-name", HCL declares "wrong-name".
+	archivePath := buildLocalCharm(t, dir, "actual-charm-name", "v1")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccResourceApplicationLocalCharm(modelName, "app", "wrong-name", archivePath),
+				ExpectError: regexp.MustCompile(`Charm Name Mismatch`),
+			},
+		},
+	})
+}
+
+// TestAcc_ResourceApplication_LocalCharm_ConflictWithChannel verifies that the
+// schema attribute validator rejects combining local_path with channel.
+func TestAcc_ResourceApplication_LocalCharm_ConflictWithChannel(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-local-charm-conflict")
+	dir := t.TempDir()
+	archivePath := buildLocalCharm(t, dir, "test-charm", "v1")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "juju_model" "this" { name = %q }
+resource "juju_application" "this" {
+  model_uuid = juju_model.this.uuid
+  name       = "app"
+  charm {
+    name       = "test-charm"
+    local_path = %q
+    channel    = "stable"
+    base       = "ubuntu@22.04"
+  }
+}`, modelName, archivePath),
+				ExpectError: regexp.MustCompile(`Invalid Attribute Combination`),
+			},
+		},
+	})
+}
+
+// TestAcc_ResourceApplication_LocalCharm_BaseMismatch verifies that
+// ValidateConfig rejects a base that is not listed in the archive's
+// manifest.yaml. The test charm declares ubuntu@22.04; requesting
+// ubuntu@24.04 should produce an "Unsupported Base" error.
+func TestAcc_ResourceApplication_LocalCharm_BaseMismatch(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-local-charm-base")
+	dir := t.TempDir()
+	// buildLocalCharm produces an archive whose manifest declares ubuntu@22.04.
+	archivePath := buildLocalCharm(t, dir, "test-charm", "v1")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "juju_model" "this" { name = %q }
+resource "juju_application" "this" {
+  model_uuid = juju_model.this.uuid
+  name       = "app"
+  charm {
+    name       = "test-charm"
+    local_path = %q
+    base       = "ubuntu@24.04"
+  }
+}`, modelName, archivePath),
+				ExpectError: regexp.MustCompile(`Unsupported Base`),
+			},
+		},
+	})
+}
+
+// buildLocalCharm creates a minimal valid .charm archive at <dir>/<name>.charm.
+// The archive contains metadata.yaml, manifest.yaml, a dispatch file, and a
+// variable-content file so that different calls produce archives with different
+// SHA-256 hashes. It returns the path to the created archive.
+func buildLocalCharm(t *testing.T, dir, charmName, content string) string {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir %q: %v", dir, err)
+	}
+
+	archivePath := filepath.Join(dir, charmName+".charm")
+	f, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatalf("creating charm archive: %v", err)
+	}
+	defer f.Close()
+
+	w := zip.NewWriter(f)
+	files := map[string]string{
+		// metadata.yaml: v2 format with a bases stanza so Juju knows which
+		// operating systems the charm supports.
+		"metadata.yaml": fmt.Sprintf(
+			"name: %s\nsummary: test charm\ndescription: acceptance test charm\nbases:\n  - name: ubuntu\n    channel: \"22.04\"\n",
+			charmName,
+		),
+		// manifest.yaml: must list the supported bases so the controller
+		// accepts the charm. An empty list causes "charm does not define any
+		// bases".
+		"manifest.yaml": "bases:\n  - name: ubuntu\n    channel: \"22.04\"\n    architectures:\n      - amd64\n",
+		// dispatch satisfies AddLocalCharm's hasHooksOrDispatch requirement.
+		"dispatch": "#!/bin/sh\n",
+		// content is the only thing that varies between builds.
+		"content": content,
+	}
+	for name, body := range files {
+		fw, err := w.Create(name)
+		if err != nil {
+			t.Fatalf("adding %q to charm archive: %v", name, err)
+		}
+		if _, err = fw.Write([]byte(body)); err != nil {
+			t.Fatalf("writing %q: %v", name, err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("closing charm archive: %v", err)
+	}
+	return archivePath
+}
+
+func testAccResourceApplicationLocalCharm(modelName, appName, charmName, archivePath string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+}
+
+resource "juju_application" "this" {
+  model_uuid = juju_model.this.uuid
+  name       = %q
+
+  charm {
+    name       = %q
+    local_path = %q
+    base       = "ubuntu@22.04"
+  }
+}
+`, modelName, appName, charmName, archivePath)
 }

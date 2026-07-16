@@ -1,0 +1,435 @@
+// Copyright 2025 Canonical Ltd.
+// Licensed under the Apache License, Version 2.0, see LICENCE file for details.
+
+package juju
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+	"strings"
+
+	jujuerrors "github.com/juju/errors"
+	"github.com/juju/juju/api"
+	apiapplication "github.com/juju/juju/api/client/application"
+	apiresources "github.com/juju/juju/api/client/resources"
+	apicommoncharm "github.com/juju/juju/api/common/charm"
+	"github.com/juju/juju/cmd/juju/application/utils"
+	corebase "github.com/juju/juju/core/base"
+	"github.com/juju/juju/core/constraints"
+	"github.com/juju/juju/core/semversion"
+	"github.com/juju/juju/domain/deployment/charm"
+	charmresources "github.com/juju/juju/domain/deployment/charm/resource"
+	"github.com/juju/juju/environs/config"
+	goyaml "gopkg.in/yaml.v2"
+)
+
+const LocalCharmOriginHashFirstAgentVersion = "3.6.26"
+
+// LocalCharmInfo describes a local charm archive on disk, used by the provider
+// to detect changes to a locally-deployed charm without contacting the
+// controller.
+type LocalCharmInfo struct {
+	// Name is the charm name taken from the archive's metadata.
+	Name string
+	// Hash is the SHA-256 of the charm archive file contents. It changes
+	// whenever the charm file is rebuilt with different content.
+	Hash string
+	// SupportedBases is the list of bases declared in the archive's
+	// manifest.yaml, formatted as "os@channel" (e.g. "ubuntu@22.04").
+	// An empty slice means the manifest declares no bases.
+	SupportedBases []corebase.Base
+}
+
+// ReadLocalCharmInfo reads the local charm archive at the given path and
+// returns its metadata name, content hash, and supported bases. It is used at
+// plan time to decide whether a locally-deployed charm needs to be refreshed
+// or replaced, and to validate the configured base against the archive.
+func ReadLocalCharmInfo(path string) (LocalCharmInfo, error) {
+	charmArchive, err := charm.ReadCharmArchive(path)
+	if err != nil {
+		return LocalCharmInfo{}, jujuerrors.Annotatef(err, "cannot read local charm at %q", path)
+	}
+
+	hash, err := hashFile(path)
+	if err != nil {
+		return LocalCharmInfo{}, err
+	}
+
+	var supportedBases []corebase.Base
+	if manifest := charmArchive.Manifest(); manifest != nil && len(manifest.Bases) > 0 {
+		supportedBases, err = corebase.ParseManifestBases(manifest.Bases)
+		if err != nil {
+			return LocalCharmInfo{}, jujuerrors.Annotatef(err, "cannot parse manifest bases for local charm at %q", path)
+		}
+	}
+
+	return LocalCharmInfo{
+		Name:           charmArchive.Meta().Name,
+		Hash:           hash,
+		SupportedBases: supportedBases,
+	}, nil
+}
+
+// CheckLocalCharmBase returns an error if the given base string is not
+// compatible with any of the bases declared in the charm archive's
+// manifest.yaml. It returns nil when the archive declares no bases (manifest
+// absent or empty) or when the configured base is compatible with at least one
+// declared base. Compatibility is checked by OS and channel track only,
+// ignoring risk/branch, so "ubuntu@22.04" matches "ubuntu@22.04/stable".
+func CheckLocalCharmBase(info LocalCharmInfo, base string) error {
+	if len(info.SupportedBases) == 0 {
+		return nil
+	}
+	configured, err := corebase.ParseBaseFromString(base)
+	if err != nil {
+		return jujuerrors.Annotatef(err, "invalid base %q", base)
+	}
+	for _, supported := range info.SupportedBases {
+		if supported.IsCompatible(configured) {
+			return nil
+		}
+	}
+	supported := make([]string, len(info.SupportedBases))
+	for i, b := range info.SupportedBases {
+		supported[i] = b.String()
+	}
+	return fmt.Errorf(
+		"base %q is not supported by the local charm; the archive declares: %s",
+		base, strings.Join(supported, ", "),
+	)
+}
+
+// hashFile returns the hex-encoded SHA-256 of the file at the given path.
+func hashFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", jujuerrors.Annotatef(err, "cannot open local charm at %q", path)
+	}
+	defer func() { _ = f.Close() }()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, f); err != nil {
+		return "", jujuerrors.Annotatef(err, "cannot hash local charm at %q", path)
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+// deployFromPath uploads a local charm archive to the controller and then
+// deploys it. This mirrors the behaviour of `juju deploy ./path/to/charm`.
+// The charm must be a packed .charm archive; deploying from an unpacked
+// directory is not supported by the controller.
+func (c applicationsClient) deployFromPath(
+	ctx context.Context,
+	conn api.Connection,
+	applicationAPIClient ApplicationAPIClient,
+	resourceAPIClient ResourceAPIClient,
+	transformedInput transformedCreateApplicationInput,
+) error {
+	// The charm archive was read during validateAndTransform. Only packed
+	// .charm archives are supported; directories are rejected by
+	// AddLocalCharm.
+	charmArchive := transformedInput.charmArchive
+
+	// Upload the charm archive and build the deploy origin.
+	resultURL, origin, err := c.uploadLocalCharm(
+		ctx, conn, charmArchive, transformedInput.charmBase, transformedInput.constraints)
+	if err != nil {
+		return err
+	}
+
+	// Upload any resources the plan supplied and collect their pending IDs.
+	resourceIDs, err := c.uploadLocalCharmResources(
+		ctx, transformedInput.applicationName, resultURL, origin,
+		charmArchive, transformedInput.resources, resourceAPIClient)
+	if err != nil {
+		return fmt.Errorf("%w: %w", newApplicationPartiallyCreatedError(transformedInput.applicationName), err)
+	}
+
+	settingsForYaml := map[interface{}]interface{}{transformedInput.applicationName: transformedInput.config}
+	configYaml, err := goyaml.Marshal(settingsForYaml)
+	if err != nil {
+		return jujuerrors.Trace(err)
+	}
+
+	c.Tracef("Deploying local charm", map[string]interface{}{"url": resultURL.String()})
+	err = applicationAPIClient.Deploy(ctx, apiapplication.DeployArgs{
+		CharmID: apiapplication.CharmID{
+			URL:    resultURL.String(),
+			Origin: origin,
+		},
+		CharmOrigin:      origin,
+		ApplicationName:  transformedInput.applicationName,
+		NumUnits:         transformedInput.units,
+		ConfigYAML:       string(configYaml),
+		Cons:             transformedInput.constraints,
+		Placement:        transformedInput.placement,
+		Storage:          transformedInput.storage,
+		EndpointBindings: transformedInput.endpointBindings,
+		Resources:        resourceIDs,
+	})
+	if err != nil {
+		return jujuerrors.Annotatef(err, "cannot deploy local charm %q", resultURL.Name)
+	}
+
+	// Trust is not a Deploy argument; it is applied via the application
+	// config after deployment, mirroring the DeployFromRepository path.
+	if transformedInput.trust {
+		err = c.setTrust(ctx, applicationAPIClient, transformedInput.applicationName, true)
+		if err != nil {
+			return fmt.Errorf("%w: %w", newApplicationPartiallyCreatedError(transformedInput.applicationName), err)
+		}
+	}
+
+	// Drift detection needs a controller-reported origin hash.
+	// If it's missing, warn and continue without drift detection.
+	appName := transformedInput.applicationName
+	if _, origin, err := applicationAPIClient.GetCharmURLOrigin(ctx, appName); err != nil {
+		c.Warnf("could not check local charm drift detection support",
+			map[string]interface{}{"app": appName, "err": err.Error()})
+	} else if origin.Hash == "" {
+		c.Warnf("out-of-band drift detection is disabled; upgrade to Juju "+
+			LocalCharmOriginHashFirstAgentVersion+"+ or Juju 4+ to enable it",
+			map[string]interface{}{"app": appName})
+	}
+
+	return nil
+}
+
+// uploadLocalCharm reads the base from the model when necessary, uploads the
+// given charm archive to the controller, and returns the resulting local
+// charm URL (with the server-assigned revision) and a matching local origin.
+func (c applicationsClient) uploadLocalCharm(
+	ctx context.Context,
+	conn api.Connection,
+	charmArchive *charm.CharmArchive,
+	charmBase corebase.Base,
+	cons constraints.Value,
+) (*charm.URL, apicommoncharm.Origin, error) {
+	// Determine the base to deploy with. Prefer the user-supplied base,
+	// otherwise fall back to the model's default base.
+	base := charmBase
+	if base.Empty() {
+		var err error
+		base, err = c.defaultModelBase(ctx, conn)
+		if err != nil {
+			return nil, apicommoncharm.Origin{}, err
+		}
+	}
+
+	// Build the local charm URL from the charm metadata and revision.
+	curl := &charm.URL{
+		Schema:   charm.Local.String(),
+		Name:     charmArchive.Meta().Name,
+		Revision: charmArchive.Revision(),
+	}
+
+	// The agent version is required so the controller can validate that
+	// the charm is compatible with the deployed agents.
+	agentVersion, err := c.modelAgentVersion(ctx, conn)
+	if err != nil {
+		return nil, apicommoncharm.Origin{}, err
+	}
+
+	localCharmClient, err := c.getLocalCharmClient(conn)
+	if err != nil {
+		return nil, apicommoncharm.Origin{}, jujuerrors.Trace(err)
+	}
+
+	c.Tracef("Uploading local charm", map[string]interface{}{"name": curl.Name})
+	resultURL, err := localCharmClient.AddLocalCharm(curl, charmArchive, false, agentVersion)
+	if err != nil {
+		return nil, apicommoncharm.Origin{}, jujuerrors.Annotatef(err, "cannot upload local charm %q", curl.Name)
+	}
+
+	// Build the origin. Local charms have no channel; the architecture is
+	// taken from the constraints (defaulting to the controller's
+	// architecture) and the base is set above.
+	platform := utils.MakePlatform(cons, base, constraints.Value{})
+	origin, err := utils.MakeOrigin(charm.Local, resultURL.Revision, charm.Channel{}, platform)
+	if err != nil {
+		return nil, apicommoncharm.Origin{}, jujuerrors.Trace(err)
+	}
+	origin.Base = base
+
+	return resultURL, origin, nil
+}
+
+// computeLocalCharmID uploads a new local charm archive and returns the
+// CharmID needed to refresh an existing application to it via SetCharm. It is
+// the local-charm analogue of computeCharmID.
+func (c applicationsClient) computeLocalCharmID(
+	ctx context.Context,
+	conn api.Connection,
+	input *UpdateApplicationInput,
+) (apiapplication.CharmID, error) {
+	charmArchive, err := charm.ReadCharmArchive(input.CharmLocalPath)
+	if err != nil {
+		return apiapplication.CharmID{}, jujuerrors.Annotatef(err, "cannot read local charm at %q", input.CharmLocalPath)
+	}
+
+	var base corebase.Base
+	if input.Base != "" {
+		base, err = corebase.ParseBaseFromString(input.Base)
+		if err != nil {
+			return apiapplication.CharmID{}, err
+		}
+	}
+
+	resultURL, origin, err := c.uploadLocalCharm(ctx, conn, charmArchive, base, constraints.Value{})
+	if err != nil {
+		return apiapplication.CharmID{}, err
+	}
+
+	return apiapplication.CharmID{
+		URL:    resultURL.String(),
+		Origin: origin,
+	}, nil
+}
+
+// defaultModelBase returns the model's configured default base, used when the
+// plan does not specify a base for a local charm deployment.
+func (c applicationsClient) defaultModelBase(ctx context.Context, conn api.Connection) (corebase.Base, error) {
+	modelConfigAPIClient := c.getModelConfigAPIClient(conn)
+	attrs, err := modelConfigAPIClient.ModelGet(ctx)
+	if err != nil {
+		return corebase.Base{}, jujuerrors.Annotate(err, "cannot get model config")
+	}
+	modelConfig, err := config.New(config.UseDefaults, attrs)
+	if err != nil {
+		return corebase.Base{}, jujuerrors.Trace(err)
+	}
+	defaultBase, ok := modelConfig.DefaultBase()
+	if !ok || defaultBase == "" {
+		return corebase.Base{}, jujuerrors.New(
+			"no base specified and the model has no default base; " +
+				"set the charm's base attribute")
+	}
+	return corebase.ParseBaseFromString(defaultBase)
+}
+
+// modelAgentVersion returns the agent version configured for the model, which
+// is required when uploading a local charm.
+func (c applicationsClient) modelAgentVersion(ctx context.Context, conn api.Connection) (semversion.Number, error) {
+	modelConfigAPIClient := c.getModelConfigAPIClient(conn)
+	attrs, err := modelConfigAPIClient.ModelGet(ctx)
+	if err != nil {
+		return semversion.Number{}, jujuerrors.Annotate(err, "cannot get model config")
+	}
+	modelConfig, err := config.New(config.UseDefaults, attrs)
+	if err != nil {
+		return semversion.Number{}, jujuerrors.Trace(err)
+	}
+	agentVersion, ok := modelConfig.AgentVersion()
+	if !ok {
+		return semversion.Number{}, jujuerrors.New("cannot determine model agent version")
+	}
+	return agentVersion, nil
+}
+
+// setTrust applies the trust setting to an application by setting the reserved
+// "trust" application config key.
+func (c applicationsClient) setTrust(ctx context.Context, applicationAPIClient ApplicationAPIClient, appName string, trust bool) error {
+	return applicationAPIClient.SetConfig(ctx, appName, "", map[string]string{
+		"trust": strconv.FormatBool(trust),
+	})
+}
+
+// uploadLocalCharmResources reconciles the resources declared in the local
+// charm's metadata with the resources supplied in the plan, registering
+// pending resources with the controller. It returns a map of resource name to
+// pending resource ID suitable for the Deploy call.
+//
+// Resources supplied as a revision number are fetched from Charmhub (store
+// origin); resources supplied as an OCI image URL are uploaded. Resources not
+// supplied in the plan are left to the controller to resolve from the store.
+func (c applicationsClient) uploadLocalCharmResources(
+	ctx context.Context,
+	appName string,
+	curl *charm.URL,
+	origin apicommoncharm.Origin,
+	charmArchive *charm.CharmArchive,
+	planResources map[string]CharmResource,
+	resourceAPIClient ResourceAPIClient,
+) (map[string]string, error) {
+	metaResources := charmArchive.Meta().Resources
+	if len(metaResources) == 0 {
+		return nil, nil
+	}
+
+	chID := apiresources.CharmID{
+		URL:    curl.String(),
+		Origin: origin,
+	}
+
+	pendingIDs := make(map[string]string)
+
+	// Store resources are added in a single batch call.
+	var storeResources []charmresources.Resource
+	var storeResourceNames []string
+
+	for name, meta := range metaResources {
+		planResource, supplied := planResources[name]
+		switch {
+		case supplied && planResource.OCIImageURL != "":
+			// An OCI image resource must be uploaded to the controller.
+			details, err := planResource.MarhsalYaml()
+			if err != nil {
+				return nil, jujuerrors.Trace(err)
+			}
+			id, err := resourceAPIClient.UploadPendingResource(ctx, apiresources.UploadPendingResourceArgs{
+				ApplicationID: appName,
+				CharmID:       chID,
+				Resource: charmresources.Resource{
+					Meta:   meta,
+					Origin: charmresources.OriginUpload,
+				},
+				Filename: name,
+				Reader:   bytes.NewReader(details),
+			})
+			if err != nil {
+				return nil, jujuerrors.Annotatef(err, "uploading resource %q", name)
+			}
+			pendingIDs[name] = id
+		default:
+			// Either a revision number was supplied or nothing was
+			// supplied; in both cases the resource is fetched from the
+			// store. A revision of -1 lets the controller choose.
+			revision := -1
+			if supplied && planResource.RevisionNumber != "" {
+				rev, err := strconv.Atoi(planResource.RevisionNumber)
+				if err != nil {
+					return nil, jujuerrors.Annotatef(err, "invalid revision for resource %q", name)
+				}
+				revision = rev
+			}
+			storeResources = append(storeResources, charmresources.Resource{
+				Meta:     meta,
+				Origin:   charmresources.OriginStore,
+				Revision: revision,
+			})
+			storeResourceNames = append(storeResourceNames, name)
+		}
+	}
+
+	if len(storeResources) > 0 {
+		ids, err := resourceAPIClient.AddPendingResources(ctx, apiresources.AddPendingResourcesArgs{
+			ApplicationID: appName,
+			CharmID:       chID,
+			Resources:     storeResources,
+		})
+		if err != nil {
+			return nil, jujuerrors.Annotate(err, "adding pending resources")
+		}
+		for i, name := range storeResourceNames {
+			pendingIDs[name] = ids[i]
+		}
+	}
+
+	return pendingIDs, nil
+}

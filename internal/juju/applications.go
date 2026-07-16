@@ -118,6 +118,7 @@ type applicationsClient struct {
 	getModelConfigAPIClient func(api.Connection) ModelConfigAPIClient
 	getResourceAPIClient    func(connection api.Connection) (ResourceAPIClient, error)
 	getCharmClient          func(api.Connection) *charmsClient
+	getLocalCharmClient     func(base.APICallCloser) (LocalCharmClient, error)
 }
 
 func newApplicationClient(sc SharedClient) *applicationsClient {
@@ -137,6 +138,9 @@ func newApplicationClient(sc SharedClient) *applicationsClient {
 		},
 		getCharmClient: func(conn api.Connection) *charmsClient {
 			return newCharmsClient(conn)
+		},
+		getLocalCharmClient: func(closer base.APICallCloser) (LocalCharmClient, error) {
+			return apicharms.NewLocalCharmClient(closer)
 		},
 	}
 }
@@ -181,13 +185,15 @@ func ConfigEntryToString(input interface{}) string {
 
 // CreateApplicationInput contains the parameters for creating an application.
 type CreateApplicationInput struct {
-	ApplicationName    string
-	ModelUUID          string
-	CharmName          string
-	CharmChannel       string
-	CharmBase          string
-	CharmSeries        string
-	CharmRevision      int
+	ApplicationName string
+	ModelUUID       string
+	CharmName       string
+	CharmChannel    string
+	CharmBase       string
+	CharmSeries     string
+	CharmRevision   int
+	// CharmLocalPath is the path to a local .charm file
+	CharmLocalPath     string
 	Units              int
 	Trust              bool
 	Expose             map[string]interface{}
@@ -207,6 +213,7 @@ type CreateApplicationInput struct {
 func (input CreateApplicationInput) validateAndTransform(ctx context.Context, conn api.Connection) (parsed transformedCreateApplicationInput, err error) {
 	parsed.charmChannel = input.CharmChannel
 	parsed.charmName = input.CharmName
+	parsed.charmLocalPath = input.CharmLocalPath
 	parsed.charmRevision = input.CharmRevision
 	parsed.constraints = input.Constraints
 	parsed.config = input.Config
@@ -215,6 +222,15 @@ func (input CreateApplicationInput) validateAndTransform(ctx context.Context, co
 	parsed.units = input.Units
 	parsed.resources = input.Resources
 	parsed.storage = input.StorageConstraints
+
+	// For a local charm, read the archive up-front so deployFromPath can
+	// use it without re-reading the file.
+	if input.CharmLocalPath != "" {
+		parsed.charmArchive, err = charm.ReadCharmArchive(input.CharmLocalPath)
+		if err != nil {
+			return parsed, jujuerrors.Annotatef(err, "cannot read local charm at %q", input.CharmLocalPath)
+		}
+	}
 
 	appName := input.ApplicationName
 	if appName == "" {
@@ -295,6 +311,8 @@ type transformedCreateApplicationInput struct {
 	applicationName  string
 	charmName        string
 	charmChannel     string
+	charmLocalPath   string
+	charmArchive     *charm.CharmArchive
 	charmBase        corebase.Base
 	charmRevision    int
 	config           map[string]string
@@ -340,6 +358,12 @@ type ReadApplicationResponse struct {
 	EndpointBindings map[string]string
 	Storage          map[string]jujustorage.Directive
 	Resources        map[string]string
+	// OriginHash is the charm hash reported by the controller.
+	// It is used to detect out-of-band charm changes (drift)
+	// for locally-deployed charms.
+	// It is never compared against the local file hash, but only
+	// against its own prior value.
+	OriginHash string
 }
 
 // UpdateApplicationInput contains the parameters for updating an application.
@@ -353,10 +377,12 @@ type UpdateApplicationInput struct {
 	Trust     *bool
 	Expose    map[string]interface{}
 	// Unexpose indicates what endpoints to unexpose
-	Unexpose          []string
-	Config            map[string]string
-	UnsetConfig       []string
-	Base              string
+	Unexpose    []string
+	Config      map[string]string
+	UnsetConfig []string
+	Base        string
+	// CharmLocalPath is the path to a local .charm file
+	CharmLocalPath    string
 	Constraints       *constraints.Value
 	EndpointBindings  map[string]string
 	StorageDirectives map[string]jujustorage.Directive
@@ -389,7 +415,14 @@ func (c applicationsClient) CreateApplication(ctx context.Context, input *Create
 	if err != nil {
 		return nil, err
 	}
-	if applicationAPIClient.BestAPIVersion() >= 19 {
+	if transformedInput.charmLocalPath != "" {
+		// Upload and deploy the charm from the local file
+		// rather than fetching it from Charmhub.
+		err := c.deployFromPath(ctx, conn, applicationAPIClient, resourceAPIClient, transformedInput)
+		if err != nil {
+			return nil, err
+		}
+	} else if applicationAPIClient.BestAPIVersion() >= 19 {
 		err := c.deployFromRepository(ctx, applicationAPIClient, resourceAPIClient, transformedInput)
 		if err != nil {
 			return nil, err
@@ -722,6 +755,16 @@ func (c applicationsClient) ReadApplication(ctx context.Context, input *ReadAppl
 		return nil, fmt.Errorf("failed to parse charm: %v", err)
 	}
 
+	// origin_hash is used to detect out-of-band updates to the charm
+	var originHash string
+	if charm.Local.Matches(charmURL.Schema) {
+		if _, origin, oErr := applicationAPIClient.GetCharmURLOrigin(ctx, input.AppName); oErr != nil {
+			c.Debugf("failed to get charm origin for drift detection", map[string]interface{}{"app": input.AppName, "err": oErr})
+		} else {
+			originHash = origin.Hash
+		}
+	}
+
 	returnedConf, err := applicationAPIClient.Get(ctx, input.AppName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get app configuration %v", err)
@@ -872,6 +915,7 @@ func (c applicationsClient) ReadApplication(ctx context.Context, input *ReadAppl
 		EndpointBindings: endpointBindings,
 		Storage:          storageDirectives,
 		Resources:        usedResources,
+		OriginHash:       originHash,
 	}
 
 	return response, nil
@@ -1047,7 +1091,7 @@ func (c applicationsClient) UpdateApplication(ctx context.Context, input *Update
 		auxConfig["trust"] = fmt.Sprintf("%v", *input.Trust)
 	}
 
-	err = c.UpdateCharmAndResources(ctx, input, applicationAPIClient, charmsAPIClient, resourcesAPIClient)
+	err = c.UpdateCharmAndResources(ctx, conn, input, applicationAPIClient, charmsAPIClient, resourcesAPIClient)
 	if err != nil {
 		c.Errorf(err, "updating charm and resources")
 		return err
@@ -1283,27 +1327,35 @@ func (c applicationsClient) RemoveUnitsFromMachine(ctx context.Context, input *R
 // update the resources if required.
 func (c applicationsClient) UpdateCharmAndResources(
 	ctx context.Context,
+	conn api.Connection,
 	input *UpdateApplicationInput,
 	applicationAPIClient ApplicationAPIClient,
 	charmsAPIClient *apicharms.Client,
 	resourcesAPIClient ResourceAPIClient,
 ) error {
-	// If the input has no revision, channel, or base, and has resources, we can skip
-	// the charm and resources update.
-	if input.Revision == nil && input.Channel == "" && input.Base == "" && len(input.Resources) == 0 {
+	// If the input has no revision, channel, local charm or base
+	// and has resources, we can skip the charm and resources update.
+	if input.Revision == nil && input.Channel == "" && input.CharmLocalPath == "" && input.Base == "" && len(input.Resources) == 0 {
 		return nil
 	}
 	var err error
 	var updateCharm bool
 	var charmID apiapplication.CharmID
-	// Use the revision and channel info to create the
-	// corresponding SetCharm info.
-	//
-	// Note: the operations with revisions should be done
-	// before the operations with config. Because the config params
-	// can be changed from one revision to another. So "Revision-Config"
-	// ordering will help to prevent issues with the configuration parsing.
-	if input.Revision != nil || input.Channel != "" || input.Base != "" {
+
+	if input.CharmLocalPath != "" {
+		charmID, err = c.computeLocalCharmID(ctx, conn, input)
+		if err != nil {
+			return err
+		}
+		updateCharm = true
+	} else if input.Revision != nil || input.Channel != "" || input.Base != "" {
+		// Use the revision and channel info to create the
+		// corresponding SetCharm info.
+		//
+		// Note: the operations with revisions should be done
+		// before the operations with config. Because the config params
+		// can be changed from one revision to another. So "Revision-Config"
+		// ordering will help to prevent issues with the configuration parsing.
 		charmID, err = c.computeCharmID(ctx, input, applicationAPIClient, charmsAPIClient)
 		if err != nil {
 			return err
@@ -1345,6 +1397,7 @@ func (c applicationsClient) UpdateCharmAndResources(
 			return err
 		}
 	}
+
 	return nil
 }
 

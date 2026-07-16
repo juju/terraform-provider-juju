@@ -70,6 +70,23 @@ resource "juju_application" "testapp" {
   }
 }
 
+# An application deployed from a local charm archive
+# The charm must be a packed .charm file (not an unpacked directory).
+# The name must match the charm name in the archive's metadata.yaml.
+# local_path_hash is computed automatically and changes whenever the
+# archive content changes, triggering a charm refresh.
+resource "juju_application" "local" {
+  name = "my-local-charm"
+
+  model_uuid = juju_model.development.uuid
+
+  charm {
+    name       = "my-local-charm"
+    local_path = "/path/to/my-local-charm.charm"
+    base       = "ubuntu@22.04"
+  }
+}
+
 # K8s application with an OCI image resource from a private registry
 resource "juju_application" "this" {
   name = "test-app"

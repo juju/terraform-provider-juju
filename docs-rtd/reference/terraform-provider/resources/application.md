@@ -84,6 +84,23 @@ resource "juju_application" "testapp" {
   }
 }
 
+# An application deployed from a local charm archive
+# The charm must be a packed .charm file (not an unpacked directory).
+# The name must match the charm name in the archive's metadata.yaml.
+# local_path_hash is computed automatically and changes whenever the
+# archive content changes, triggering a charm refresh.
+resource "juju_application" "local" {
+  name = "my-local-charm"
+
+  model_uuid = juju_model.development.uuid
+
+  charm {
+    name       = "my-local-charm"
+    local_path = "/path/to/my-local-charm.charm"
+    base       = "ubuntu@22.04"
+  }
+}
+
 # K8s application with an OCI image resource from a private registry
 resource "juju_application" "this" {
   name = "test-app"
@@ -120,7 +137,7 @@ resource "juju_application" "this" {
 
 ### Optional
 
-- `charm` (Block List) The charm installed from Charmhub. (see [below for nested schema](#nestedblock--charm))
+- `charm` (Block List) The charm installed from Charmhub, or from a local charm archive file. (see [below for nested schema](#nestedblock--charm))
 - `config` (Map of String) Application specific configuration. Must evaluate to a string, integer or boolean.
 - `constraints` (String) Constraints imposed on this application. Changing this value will cause the application to be destroyed and recreated by terraform. Multiple constraints can be provided as a space-separated list.
 - `endpoint_bindings` (Attributes Set) Configure endpoint bindings (see [below for nested schema](#nestedatt--endpoint_bindings))
@@ -159,13 +176,19 @@ Notes:
 
 Required:
 
-- `name` (String) The name of the charm to be deployed.  Changing this value will cause the application to be destroyed and recreated by terraform.
+- `name` (String) The name of the charm to be deployed. When deploying a local charm via `local_path`, this must match the charm name in the archive's metadata. Changing this value will cause the application to be destroyed and recreated by terraform.
 
 Optional:
 
 - `base` (String) The operating system on which to deploy. E.g. ubuntu@22.04. Changing this value for machine charms will trigger a replace by terraform.
 - `channel` (String) The channel to use when deploying a charm. Specified as \<track>/\<risk>/\<branch>.
+- `local_path` (String) The path to a local .charm archive to deploy, instead of using Charmhub. `name` must match the charm name in the archive's metadata. Mutually exclusive with `channel` and `revision`.
 - `revision` (Number) The revision of the charm to deploy. During the update phase, the charm revision should be update before config update, to avoid issues with config parameters parsing.
+
+Read-Only:
+
+- `local_path_hash` (String) The content hash of the local charm referenced by `local_path`. This is computed by the provider to detect when the local charm file has changed.
+- `origin_hash` (String) The controller-reported charm hash, used to detect out-of-band changes to a local charm (E.g. `juju refresh`). Only populated on controllers that report a hash (Juju 3.6.26+ or Juju 4+), otherwise this drift detection is disabled.
 
 
 <a id="nestedatt--endpoint_bindings"></a>
