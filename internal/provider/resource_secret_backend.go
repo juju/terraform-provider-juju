@@ -98,7 +98,7 @@ func (r *secretBackendResource) Schema(ctx context.Context, req resource.SchemaR
 	resp.Schema = schema.Schema{
 		Description: `A resource that represents a Juju secret backend.
 
-Secret backends store secret content. To learn more about secret backends, please visit: https://documentation.ubuntu.com/juju/3.6/reference/secret-backends/
+Secret backends store secret content. To learn more about secret backends, please visit: https://canonical.com/juju/docs/juju-cli/3.6/howto/manage-secret-backends/
 		`,
 		Attributes: map[string]schema.Attribute{
 			// ID required by the testing framework
@@ -127,12 +127,12 @@ Secret backends store secret content. To learn more about secret backends, pleas
 			},
 			"token_rotate_interval": schema.StringAttribute{
 				Description: "The interval at which the backend's access credential/token should be rotated. " +
-					"Must be a duration string parseable by Go's time.ParseDuration (e.g., '10m', '1h', '24h').",
+					"Must be a duration string parsable by Go's time.ParseDuration (e.g., '10m', '1h', '24h').",
 				Optional: true,
 			},
 			"config_wo": schema.MapAttribute{
 				Description: "The write-only backend configuration. Its content is never persisted to" +
-					" Terraform state. Requires config_wo_version to be set; bump config_wo_version to" +
+					" Terraform state, because it can contains sensitive data. Requires config_wo_version to be set; bump config_wo_version to" +
 					" apply changes to this value.",
 				ElementType: types.StringType,
 				Required:    true,
@@ -248,9 +248,6 @@ func (r *secretBackendResource) Create(ctx context.Context, req resource.CreateR
 	})
 
 	plan.ID = generateSecretBackendResourceID(plan)
-	// config_wo is write-only and never read back; keep it a typed null
-	// so it does not appear in state.
-	plan.ConfigWO = types.MapNull(types.StringType)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 
@@ -360,9 +357,6 @@ func (r *secretBackendResource) Update(ctx context.Context, req resource.UpdateR
 	})
 
 	plan.ID = generateSecretBackendResourceID(plan)
-	// config_wo is write-only and never read back; keep it a typed null
-	// so it does not appear in state.
-	plan.ConfigWO = types.MapNull(types.StringType)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 

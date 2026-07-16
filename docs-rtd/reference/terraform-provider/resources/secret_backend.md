@@ -4,14 +4,14 @@ page_title: "juju_secret_backend Resource - terraform-provider-juju"
 subcategory: ""
 description: |-
   A resource that represents a Juju secret backend.
-  Secret backends store secret content. To learn more about secret backends, please visit: https://documentation.ubuntu.com/juju/3.6/reference/secret-backends/
+  Secret backends store secret content. To learn more about secret backends, please visit: https://canonical.com/juju/docs/juju-cli/3.6/howto/manage-secret-backends/
 ---
 
 # juju_secret_backend (Resource)
 
 A resource that represents a Juju secret backend.
 
-Secret backends store secret content. To learn more about secret backends, please visit: https://documentation.ubuntu.com/juju/3.6/reference/secret-backends/
+Secret backends store secret content. To learn more about secret backends, please visit: https://canonical.com/juju/docs/juju-cli/3.6/howto/manage-secret-backends/
 
 ## Example Usage
 
@@ -19,10 +19,11 @@ Secret backends store secret content. To learn more about secret backends, pleas
 resource "juju_secret_backend" "myvault" {
   name         = "myvault"
   backend_type = "vault"
-  config = {
+  config_wo = {
     endpoint = "https://vault.example.com:8200"
     token    = "s.exampletoken"
   }
+  config_wo_version  = 1
   token_rotate_interval = "24h"
 }
 ```
@@ -35,13 +36,13 @@ resource "juju_secret_backend" "myvault" {
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
 - `backend_type` (String) The type of the secret backend (e.g., 'vault', 'kubernetes').
-- `config_wo` (Map of String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The write-only backend configuration. Its content is never persisted to Terraform state. Requires config_wo_version to be set; bump config_wo_version to apply changes to this value.
+- `config_wo` (Map of String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The write-only backend configuration. Its content is never persisted to Terraform state, because it can contains sensitive data. Requires config_wo_version to be set; bump config_wo_version to apply changes to this value.
 - `config_wo_version` (Number) The version of config_wo. Increment this value to trigger an update of the write-only backend configuration.
 - `name` (String) The name of the secret backend.
 
 ### Optional
 
-- `token_rotate_interval` (String) The interval at which the backend's access credential/token should be rotated. Must be a duration string parseable by Go's time.ParseDuration (e.g., '10m', '1h', '24h').
+- `token_rotate_interval` (String) The interval at which the backend's access credential/token should be rotated. Must be a duration string parsable by Go's time.ParseDuration (e.g., '10m', '1h', '24h').
 
 ### Read-Only
 

@@ -130,7 +130,7 @@ jobs:
       - name: "Start vault for secret backend tests"
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
         run: |
-          docker run -d --name vault-test -p 8200:8200 -e 'VAULT_DEV_ROOT_TOKEN_ID=myroot' hashicorp/vault:latest
+          docker run -d --name vault-test -p 8200:8200 -e 'VAULT_DEV_ROOT_TOKEN_ID=myroot' hashicorp/vault:1.13.3
           # The Juju controller runs inside LXD containers and reaches the host
           # via the LXD bridge gateway. Use that IP so the controller can ping vault.
           LXD_BRIDGE_IP=$(ip -4 addr show lxdbr0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
