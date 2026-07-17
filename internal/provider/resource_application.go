@@ -1063,11 +1063,13 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 
 			// Detect out-of-band drift for local charms: if the controller's
 			// origin_hash changed since the last apply, then semantically the
-			// local charm no longer matches what is deployed. We then null
-			// local_path_hash so the plan-time modifier recomputes causes
-			// re-upload. origin_hash is compared only against its own prior
-			// value. Local charm deploys guarantee a populated hash (enforced
-			// at deploy time).
+			// local charm no longer matches what is deployed.
+			// We then null local_path_hash so the plan-time modifier causes
+			// re-upload.
+			// origin_hash is compared only against its own prior value.
+			// The priorOriginKnown guard below skips this check when
+			// the hash is empty (Juju controllers on 3.6.25 or older),
+			// disabling drift detection there.
 			isLocalCharm := !priorCharm.LocalPath.IsNull() &&
 				priorCharm.LocalPath.ValueString() != ""
 			priorOriginKnown := !priorCharm.OriginHash.IsNull() &&
