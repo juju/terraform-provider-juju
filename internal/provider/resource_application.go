@@ -1042,8 +1042,9 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		Base:     types.StringValue(response.Base),
 	}
 	// Record the controller-reported charm hash used to detect out-of-band
-	// charm changes. Local charm deploys require a populated hash (enforced
-	// at deploy time), so it is always present for local charms here.
+	// charm changes.
+	// This is empty on older controllers (Juju 3.6.25 or older),
+	// in which case drift detection is disabled.
 	dataCharm.OriginHash = types.StringValue(response.OriginHash)
 	// The controller has no knowledge of the local charm file, so preserve
 	// the local_path and its content hash from the prior state when the
@@ -1470,7 +1471,8 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		LocalPath:     updatedLocalPath,
 		LocalPathHash: updatedLocalPathHash,
 		// Record the controller-reported charm hash after the update so a
-		// later read can detect subsequent out-of-band drift. Empty on Juju 3.
+		// later read can detect subsequent out-of-band drift.
+		// Empty on Juju 3.6.25 or older.
 		OriginHash: types.StringValue(readResp.OriginHash),
 		Channel:    types.StringValue(readResp.Channel),
 		Revision:   types.Int64Value(int64(readResp.Revision)),
