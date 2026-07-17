@@ -3310,8 +3310,8 @@ func testAccResourceApplicationUnknownMachines(modelName string) string {
 // locally-deployed charm:
 //  1. Initial deploy: local_path_hash (full SHA-256) is populated in state.
 //  2. Idempotency: a second apply with the same file produces no plan diff.
-//  3. In-place refresh: rebuilding the archive with different content (same
-//     charm name) triggers an Update — not a Replace — and updates the hash.
+//  3. In-place refresh: rebuilding the archive with different content and path
+//     (same charm name) triggers an update, not a replace.
 //  4. Import round-trip: local_path and local_path_hash are excluded (the
 //     controller does not record them).
 func TestAcc_ResourceApplication_LocalCharm_Deploy(t *testing.T) {
