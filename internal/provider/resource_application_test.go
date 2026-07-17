@@ -3423,6 +3423,8 @@ func TestAcc_ResourceApplication_LocalCharm_Drift(t *testing.T) {
 	archiveV1 := buildLocalCharm(t, filepath.Join(dir, "v1"), charmName, "drift-version-1")
 	archiveV2 := buildLocalCharm(t, filepath.Join(dir, "v2"), charmName, "drift-version-2")
 
+	var driftedOriginHash string
+
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
@@ -3456,6 +3458,19 @@ func TestAcc_ResourceApplication_LocalCharm_Drift(t *testing.T) {
 						if err := TestClient.Applications.UpdateApplication(t.Context(), &input); err != nil {
 							return fmt.Errorf("out-of-band charm refresh failed: %w", err)
 						}
+
+						// Get the drifter origin hash for later check.
+						readResp, err := TestClient.Applications.ReadApplication(t.Context(), &internaljuju.ReadApplicationInput{
+							ModelUUID: modelUUID,
+							AppName:   appName,
+						})
+						if err != nil {
+							return fmt.Errorf("reading drifted application: %w", err)
+						}
+						driftedOriginHash = readResp.OriginHash
+						if driftedOriginHash == "" {
+							return fmt.Errorf("expected drifted origin hash to be set after out-of-band refresh")
+						}
 						return nil
 					},
 				),
@@ -3475,6 +3490,17 @@ func TestAcc_ResourceApplication_LocalCharm_Drift(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.local_path", archiveV1),
 					resource.TestCheckResourceAttrSet("juju_application.this", "charm.0.origin_hash"),
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources["juju_application.this"]
+						if !ok {
+							return fmt.Errorf("not found: juju_application.this")
+						}
+						got := rs.Primary.Attributes["charm.0.origin_hash"]
+						if got == driftedOriginHash {
+							return fmt.Errorf("expected reconciled origin_hash %q to differ from drifted v2 origin_hash", got)
+						}
+						return nil
+					},
 				),
 			},
 			{
