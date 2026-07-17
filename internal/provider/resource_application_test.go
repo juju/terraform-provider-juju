@@ -3442,7 +3442,7 @@ func TestAcc_ResourceApplication_LocalCharm_Drift(t *testing.T) {
 							return fmt.Errorf("not found: juju_model.this")
 						}
 						modelUUID := rs.Primary.Attributes["uuid"]
-						// Add model to TestClient's model cache
+						// Add model to TestClient's model cache since it wasn't made with it.
 						TestClient.Applications.AddModel(
 							rs.Primary.Attributes["name"],
 							"",
