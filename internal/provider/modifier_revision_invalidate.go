@@ -11,11 +11,7 @@ import (
 )
 
 // InvalidateRevisionIfChannelChanges returns a plan modifier that sets the
-// revision to Unknown if the channel changes. When the channel changes the
-// controller assigns a new revision on the resulting charm refresh, so the
-// prior revision must not be locked via UseStateForUnknown, otherwise the
-// planned revision would differ from the value read back after apply
-// ("inconsistent result after apply").
+// revision to Unknown if the channel has changed.
 func InvalidateRevisionIfChannelChanges() planmodifier.Int64 {
 	return &invalidateRevisionModifier{}
 }
@@ -59,8 +55,8 @@ func (m *invalidateRevisionModifier) PlanModifyInt64(ctx context.Context, req pl
 }
 
 // InvalidateRevisionIfLocalCharmChanges returns a plan modifier that sets the
-// revision to Unknown if the local charm content (local_path_hash) changes. A
-// local charm refresh produces a new controller-assigned revision, so the
+// revision to Unknown if the local charm content (local_path_hash) changes.
+// A local charm refresh produces a new controller-assigned revision, so the
 // prior revision must not be locked via UseStateForUnknown, otherwise the
 // planned revision would differ from the value read back after apply
 // ("inconsistent result after apply").
