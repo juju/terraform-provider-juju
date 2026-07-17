@@ -402,7 +402,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							},
 						},
 						"local_path": schema.StringAttribute{
-							Description: "The path to a local .charm archive to deploy, instead of using Charmhub. `name` must match the charm name in the archive's metadata. Mutually exclusive with `channel` and `revision`.",
+							Description: "The path to a local .charm archive to deploy, instead of using Charmhub. Relative paths are resolved against the Terraform working directory. `name` must match the charm name in the archive's metadata. Mutually exclusive with `channel` and `revision`.",
 							Optional:    true,
 							Validators: []validator.String{
 								stringvalidator.ConflictsWith(

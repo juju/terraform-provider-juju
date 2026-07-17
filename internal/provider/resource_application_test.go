@@ -3405,6 +3405,64 @@ func TestAcc_ResourceApplication_LocalCharm_Deploy(t *testing.T) {
 	})
 }
 
+// TestAcc_ResourceApplication_LocalCharm_RelativePath verifies that a
+// local_path expressed relative to the Terraform working directory (rather
+// than an absolute path) is resolved and deployed correctly, matching how the
+// juju CLI resolves a local charm path against its shell working directory.
+func TestAcc_ResourceApplication_LocalCharm_RelativePath(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-local-charm-relpath")
+	appName := "local-relpath"
+	charmName := "local-relpath-charm"
+
+	dir := t.TempDir()
+	archive := buildLocalCharm(t, dir, charmName, "relative-path-content")
+
+	// Express the archive path relative to the process working directory (the
+	// directory the provider resolves relative local_path values against).
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	relArchive, err := filepath.Rel(wd, archive)
+	if err != nil {
+		t.Fatalf("computing relative path: %v", err)
+	}
+	// Guard the premise of the test: the path must actually be relative.
+	if filepath.IsAbs(relArchive) {
+		t.Fatalf("expected a relative path, got %q", relArchive)
+	}
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationLocalCharm(modelName, appName, charmName, relArchive),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "name", appName),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", charmName),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.local_path", relArchive),
+					// local_path_hash is the full SHA-256 (64 hex chars),
+					// proving the relative path was resolved and read.
+					resource.TestCheckResourceAttrWith(
+						"juju_application.this", "charm.0.local_path_hash",
+						func(value string) error {
+							if len(value) != 64 {
+								return fmt.Errorf("expected 64-char SHA-256, got %d chars: %q", len(value), value)
+							}
+							return nil
+						},
+					),
+				),
+			},
+		},
+	})
+}
+
 // TestAcc_ResourceApplication_LocalCharm_Drift verifies out-of-band charm
 // drift detection for local charms: deploy v1, refresh to v2 directly via the
 // Juju client, and confirm the next apply re-uploads v1

@@ -75,6 +75,9 @@ resource "juju_application" "testapp" {
 # The name must match the charm name in the archive's metadata.yaml.
 # local_path_hash is computed automatically and changes whenever the
 # archive content changes, triggering a charm refresh.
+# Relative paths are resolved against the Terraform working directory (where
+# `terraform` is run), like the `juju` CLI resolves against its shell cwd.
+# Use ${path.module}/... to make the path relative to this module instead.
 resource "juju_application" "local" {
   name = "my-local-charm"
 
@@ -82,7 +85,7 @@ resource "juju_application" "local" {
 
   charm {
     name       = "my-local-charm"
-    local_path = "/path/to/my-local-charm.charm"
+    local_path = "${path.module}/my-local-charm.charm"
     base       = "ubuntu@22.04"
   }
 }
