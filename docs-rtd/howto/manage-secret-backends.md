@@ -58,28 +58,10 @@ resource "juju_model" "development" {
 ```
 
 ```{important}
-Changing the secret backend for a model does **not** migrate existing secrets to the new backend. Existing secrets remain stored in the backend they were originally created in. Only secrets created after the change will use the new backend.
+Changing the secret backend for a model triggers an **asynchronous migration** of existing secrets to the new backend. This applies in both directions — from one external backend (e.g. Vault) to another, and from the default `internal` backend to an external backend.
+
+Because the migration is asynchronous, the `juju_model` update returns before the secrets have finished moving. A `juju_secret` inspected immediately after the change may therefore still report the *old* backend.
 ```
-
-## Migrate secrets to a new backend
-
-If you want existing secrets to move to the new backend, you must force their replacement. Use the `replace_triggered_by` lifecycle directive to recreate secrets when the backend changes:
-
-```terraform
-resource "juju_secret" "my-secret" {
-  model_uuid = juju_model.development.uuid
-  name       = "my_secret"
-  value = {
-    key = "value"
-  }
-
-  lifecycle {
-    replace_triggered_by = [juju_secret_backend.myvault.name]
-  }
-}
-```
-
-When the secret backend name changes, Terraform will destroy and recreate the secret, causing it to be stored in the new backend.
 
 ## Update a secret backend
 
