@@ -11,11 +11,11 @@ import (
 )
 
 // InvalidateRevisionIfChannelChanges returns a plan modifier that sets the
-// revision to Unknown if the channel changes or the local charm content
-// (local_path_hash) changes. In either case the controller assigns a new
-// revision on the resulting charm refresh, so the prior revision must not be
-// locked via UseStateForUnknown, otherwise the planned revision would differ
-// from the value read back after apply ("inconsistent result after apply").
+// revision to Unknown if the channel changes. When the channel changes the
+// controller assigns a new revision on the resulting charm refresh, so the
+// prior revision must not be locked via UseStateForUnknown, otherwise the
+// planned revision would differ from the value read back after apply
+// ("inconsistent result after apply").
 func InvalidateRevisionIfChannelChanges() planmodifier.Int64 {
 	return &invalidateRevisionModifier{}
 }
@@ -23,7 +23,7 @@ func InvalidateRevisionIfChannelChanges() planmodifier.Int64 {
 type invalidateRevisionModifier struct{}
 
 func (m *invalidateRevisionModifier) Description(_ context.Context) string {
-	return "If the channel or local charm content changes, the revision must be recalculated unless pinned."
+	return "If the channel changes, the revision must be recalculated unless pinned."
 }
 
 func (m *invalidateRevisionModifier) MarkdownDescription(ctx context.Context) string {
@@ -55,12 +55,38 @@ func (m *invalidateRevisionModifier) PlanModifyInt64(ctx context.Context, req pl
 	// If the channel is changing, mark the revision as Unknown (Known After Apply)
 	if !planChannel.Equal(stateChannel) {
 		resp.PlanValue = types.Int64Unknown()
+	}
+}
+
+// InvalidateRevisionIfLocalCharmChanges returns a plan modifier that sets the
+// revision to Unknown if the local charm content (local_path_hash) changes. A
+// local charm refresh produces a new controller-assigned revision, so the
+// prior revision must not be locked via UseStateForUnknown, otherwise the
+// planned revision would differ from the value read back after apply
+// ("inconsistent result after apply").
+func InvalidateRevisionIfLocalCharmChanges() planmodifier.Int64 {
+	return &invalidateRevisionForLocalCharmModifier{}
+}
+
+type invalidateRevisionForLocalCharmModifier struct{}
+
+func (m *invalidateRevisionForLocalCharmModifier) Description(_ context.Context) string {
+	return "If the local charm content changes, the revision must be recalculated unless pinned."
+}
+
+func (m *invalidateRevisionForLocalCharmModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (m *invalidateRevisionForLocalCharmModifier) PlanModifyInt64(ctx context.Context, req planmodifier.Int64Request, resp *planmodifier.Int64Response) {
+	// If the user provided an explicit revision in the config, don't override it.
+	if !req.ConfigValue.IsNull() && !req.ConfigValue.IsUnknown() {
 		return
 	}
 
-	// A local charm refresh also produces a new controller-assigned revision.
-	// Detect it by recomputing the local charm hash from local_path and comparing
-	// against the hash in state.
+	// A local charm refresh produces a new controller-assigned revision.
+	// Detect it by recomputing the local charm hash from local_path and
+	// comparing against the hash in state.
 	if localCharmContentChanges(ctx, req.Path, req.Plan, req.State, &resp.Diagnostics) {
 		resp.PlanValue = types.Int64Unknown()
 	}

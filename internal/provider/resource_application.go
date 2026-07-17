@@ -398,6 +398,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							PlanModifiers: []planmodifier.Int64{
 								int64planmodifier.UseStateForUnknown(),
 								InvalidateRevisionIfChannelChanges(),
+								InvalidateRevisionIfLocalCharmChanges(),
 							},
 						},
 						"local_path": schema.StringAttribute{
