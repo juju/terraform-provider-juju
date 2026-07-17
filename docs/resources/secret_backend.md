@@ -23,7 +23,7 @@ resource "juju_secret_backend" "myvault" {
     endpoint = "https://vault.example.com:8200"
     token    = "s.exampletoken"
   }
-  config_wo_version  = 1
+  config_wo_version     = 1
   token_rotate_interval = "24h"
 }
 ```

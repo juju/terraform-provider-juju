@@ -58,6 +58,7 @@ type modelResourceModel struct {
 	Cloud            types.List   `tfsdk:"cloud"`
 	TargetController types.String `tfsdk:"target_controller"`
 	Config           types.Map    `tfsdk:"config"`
+	SecretBackend    types.String `tfsdk:"secret_backend"`
 	Constraints      types.String `tfsdk:"constraints"`
 	Annotations      types.Map    `tfsdk:"annotations"`
 	Credential       types.String `tfsdk:"credential"`
@@ -110,12 +111,21 @@ func (r *modelResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"config": schema.MapAttribute{
-				Description: "Override default model configuration",
+				Description: "Override default model configuration. You may also set the" +
+					" 'secret-backend' key here for backward compatibility with Juju 3," +
+					" but the recommended approach is to use the secret_backend attribute.",
 				Optional:    true,
 				ElementType: types.StringType,
 				PlanModifiers: []planmodifier.Map{
 					mapplanmodifier.UseStateForUnknown(),
 				},
+			},
+			"secret_backend": schema.StringAttribute{
+				Description: "The name of the secret backend to use for this model. On Juju 4+," +
+					" this uses the dedicated model-secret-backend API. On Juju 3, it falls" +
+					" back to setting the 'secret-backend' model config key. Use this instead" +
+					" of setting 'secret-backend' in the config block.",
+				Optional: true,
 			},
 			"annotations": schema.MapAttribute{
 				Description: "Annotations for the model",
@@ -351,6 +361,14 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 	plan.Type = types.StringValue(response.Type)
 	plan.UUID = types.StringValue(response.UUID)
 
+	// Set the secret backend if specified.
+	if !plan.SecretBackend.IsNull() && !plan.SecretBackend.IsUnknown() {
+		if err := r.client.Models.SetModelSecretBackend(ctx, response.UUID, plan.SecretBackend.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to set secret backend for model %q, got error: %s", modelName, err))
+			return
+		}
+	}
+
 	// Avoid returning early below, since we already created
 	// the model and should save it to state.
 	modelResponse, err := r.client.Models.ReadModel(ctx, response.UUID)
@@ -446,6 +464,15 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	// Config
 	if len(response.ModelConfig) > 0 {
+		// If the secret_backend attribute is in use (non-null in state),
+		// strip the "secret-backend" key from the model config to avoid drift.
+		// The secret_backend attribute handles it via the dedicated API.
+		// If the user is managing it via the config block instead, leave it
+		// alone so it round-trips through config.
+		if !state.SecretBackend.IsNull() {
+			delete(response.ModelConfig, "secret-backend")
+		}
+
 		config, diags := newConfigFromModelConfigAPI(ctx, response.ModelConfig, state.Config)
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
@@ -457,6 +484,23 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 			return
 		}
 	}
+
+	// Secret backend — only read it if the attribute is in use (non-null in
+	// state). This avoids overwriting a null value when the user manages the
+	// secret backend via the config block instead.
+	if !state.SecretBackend.IsNull() {
+		secretBackend, err := r.client.Models.GetModelSecretBackend(ctx, modelUUID)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model secret backend, got error: %s", err))
+			return
+		}
+		if secretBackend != "" {
+			state.SecretBackend = types.StringValue(secretBackend)
+		} else {
+			state.SecretBackend = types.StringNull()
+		}
+	}
+
 	state.AgentVersion, err = modelAgentVersionFromConfig(response.ModelConfig)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model agent_version, got error: %s", err))
@@ -600,6 +644,20 @@ func (r *modelResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		}
 
 		r.trace(fmt.Sprintf("Updated model resource: %q", plan.Name.ValueString()))
+	}
+
+	// Set the secret backend after any config updates, so that unsetting
+	// secret-backend from config doesn't override the dedicated API call.
+	if !plan.SecretBackend.Equal(state.SecretBackend) {
+		backendName := plan.SecretBackend.ValueString()
+		if backendName == "" {
+			backendName = "auto"
+		}
+		if err := r.client.Models.SetModelSecretBackend(ctx, plan.UUID.ValueString(), backendName); err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to set secret backend for model, got error: %s", err))
+			return
+		}
+		r.trace(fmt.Sprintf("Updated secret backend for model %q: %q", plan.Name.ValueString(), backendName))
 	}
 
 	if targetAgentVersion != nil {

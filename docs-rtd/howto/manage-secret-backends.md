@@ -33,7 +33,20 @@ The `config_wo` attribute is write-only — its content is never stored in Terra
 
 ## Set the secret backend for a model
 
-Secret backends are per model. To set which backend a model uses, set the `secret-backend` key in the model's config:
+Secret backends are per model. The recommended way to set which backend a model uses is the `secret_backend` attribute on the model resource:
+
+```terraform
+resource "juju_model" "development" {
+  name           = "development"
+  secret_backend = juju_secret_backend.myvault.name
+}
+```
+
+```{note}
+On Juju 4+, this uses the dedicated `model-secret-backend` API. On Juju 3, it falls back to setting the `secret-backend` model config key. When using this attribute, the `secret-backend` key is stripped from the model's `config` attribute to avoid state drift.
+```
+
+For backward compatibility, you can also set the `secret-backend` key directly in the model's `config` block. This works on Juju 3 but is not recommended on Juju 4, where the `secret_backend` attribute should be used instead:
 
 ```terraform
 resource "juju_model" "development" {
