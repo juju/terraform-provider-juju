@@ -4,7 +4,6 @@
 package juju
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -14,19 +13,18 @@ import (
 	"strconv"
 	"strings"
 
+	goyaml "gopkg.in/yaml.v2"
+
 	jujuerrors "github.com/juju/errors"
 	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
-	apiresources "github.com/juju/juju/api/client/resources"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
 	"github.com/juju/juju/cmd/juju/application/utils"
 	corebase "github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/semversion"
 	"github.com/juju/juju/domain/deployment/charm"
-	charmresources "github.com/juju/juju/domain/deployment/charm/resource"
 	"github.com/juju/juju/environs/config"
-	goyaml "gopkg.in/yaml.v2"
 )
 
 const LocalCharmOriginHashFirstAgentVersion = "3.6.26"
@@ -143,10 +141,18 @@ func (c applicationsClient) deployFromPath(
 		return err
 	}
 
-	// Upload any resources the plan supplied and collect their pending IDs.
-	resourceIDs, err := c.uploadLocalCharmResources(
-		ctx, transformedInput.applicationName, resultURL, origin,
-		charmArchive, transformedInput.resources, resourceAPIClient)
+	// Register any resources declared in the charm metadata as pending
+	// resources and collect their IDs for the Deploy call. This is shared
+	// with the store-charm path; passing every metadata resource lets
+	// resources absent from the plan default to the store origin, matching
+	// `juju deploy ./path/to/charm`.
+	charmID := apiapplication.CharmID{
+		URL:    resultURL.String(),
+		Origin: origin,
+	}
+	resourceIDs, err := addPendingResources(
+		ctx, transformedInput.applicationName, charmArchive.Meta().Resources,
+		transformedInput.resources, charmID, resourceAPIClient)
 	if err != nil {
 		return fmt.Errorf("%w: %w", newApplicationPartiallyCreatedError(transformedInput.applicationName), err)
 	}
@@ -338,98 +344,4 @@ func (c applicationsClient) setTrust(ctx context.Context, applicationAPIClient A
 	return applicationAPIClient.SetConfig(ctx, appName, "", map[string]string{
 		"trust": strconv.FormatBool(trust),
 	})
-}
-
-// uploadLocalCharmResources reconciles the resources declared in the local
-// charm's metadata with the resources supplied in the plan, registering
-// pending resources with the controller. It returns a map of resource name to
-// pending resource ID suitable for the Deploy call.
-//
-// Resources supplied as a revision number are fetched from Charmhub (store
-// origin); resources supplied as an OCI image URL are uploaded. Resources not
-// supplied in the plan are left to the controller to resolve from the store.
-func (c applicationsClient) uploadLocalCharmResources(
-	ctx context.Context,
-	appName string,
-	curl *charm.URL,
-	origin apicommoncharm.Origin,
-	charmArchive *charm.CharmArchive,
-	planResources map[string]CharmResource,
-	resourceAPIClient ResourceAPIClient,
-) (map[string]string, error) {
-	metaResources := charmArchive.Meta().Resources
-	if len(metaResources) == 0 {
-		return nil, nil
-	}
-
-	chID := apiresources.CharmID{
-		URL:    curl.String(),
-		Origin: origin,
-	}
-
-	pendingIDs := make(map[string]string)
-
-	// Store resources are added in a single batch call.
-	var storeResources []charmresources.Resource
-	var storeResourceNames []string
-
-	for name, meta := range metaResources {
-		planResource, supplied := planResources[name]
-		switch {
-		case supplied && planResource.OCIImageURL != "":
-			// An OCI image resource must be uploaded to the controller.
-			details, err := planResource.MarhsalYaml()
-			if err != nil {
-				return nil, jujuerrors.Trace(err)
-			}
-			id, err := resourceAPIClient.UploadPendingResource(ctx, apiresources.UploadPendingResourceArgs{
-				ApplicationID: appName,
-				CharmID:       chID,
-				Resource: charmresources.Resource{
-					Meta:   meta,
-					Origin: charmresources.OriginUpload,
-				},
-				Filename: name,
-				Reader:   bytes.NewReader(details),
-			})
-			if err != nil {
-				return nil, jujuerrors.Annotatef(err, "uploading resource %q", name)
-			}
-			pendingIDs[name] = id
-		default:
-			// Either a revision number was supplied or nothing was
-			// supplied; in both cases the resource is fetched from the
-			// store. A revision of -1 lets the controller choose.
-			revision := -1
-			if supplied && planResource.RevisionNumber != "" {
-				rev, err := strconv.Atoi(planResource.RevisionNumber)
-				if err != nil {
-					return nil, jujuerrors.Annotatef(err, "invalid revision for resource %q", name)
-				}
-				revision = rev
-			}
-			storeResources = append(storeResources, charmresources.Resource{
-				Meta:     meta,
-				Origin:   charmresources.OriginStore,
-				Revision: revision,
-			})
-			storeResourceNames = append(storeResourceNames, name)
-		}
-	}
-
-	if len(storeResources) > 0 {
-		ids, err := resourceAPIClient.AddPendingResources(ctx, apiresources.AddPendingResourcesArgs{
-			ApplicationID: appName,
-			CharmID:       chID,
-			Resources:     storeResources,
-		})
-		if err != nil {
-			return nil, jujuerrors.Annotate(err, "adding pending resources")
-		}
-		for i, name := range storeResourceNames {
-			pendingIDs[name] = ids[i]
-		}
-	}
-
-	return pendingIDs, nil
 }
