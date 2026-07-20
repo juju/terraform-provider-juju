@@ -343,8 +343,7 @@ func (c applicationsClient) selectLocalCharmBase(
 }
 
 // optionalModelDefaultBase returns the model's configured default base, or an
-// empty Base when none is set. Unlike the old defaultModelBase it does not
-// error on absence, so callers can fall through to the next candidate.
+// empty Base when none is set
 func (c applicationsClient) optionalModelDefaultBase(ctx context.Context, conn api.Connection) (corebase.Base, error) {
 	modelConfigAPIClient := c.getModelConfigAPIClient(conn)
 	attrs, err := modelConfigAPIClient.ModelGet(ctx)
