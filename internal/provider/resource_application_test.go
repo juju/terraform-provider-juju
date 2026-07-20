@@ -3315,10 +3315,6 @@ func testAccResourceApplicationUnknownMachines(modelName string) string {
 //  4. Import round-trip: local_path and local_path_hash are excluded (the
 //     controller does not record them).
 func TestAcc_ResourceApplication_LocalCharm_Deploy(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-
 	modelName := acctest.RandomWithPrefix("tf-test-local-charm")
 	appName := "local-test"
 	charmName := "local-test-charm"
@@ -3517,7 +3513,7 @@ func TestAcc_ResourceApplication_LocalCharm_Drift(t *testing.T) {
 							return fmt.Errorf("out-of-band charm refresh failed: %w", err)
 						}
 
-						// Get the drifter origin hash for later check.
+						// Get the drifted origin hash for later check.
 						readResp, err := TestClient.Applications.ReadApplication(t.Context(), &internaljuju.ReadApplicationInput{
 							ModelUUID: modelUUID,
 							AppName:   appName,
