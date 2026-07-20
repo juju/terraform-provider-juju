@@ -1499,7 +1499,13 @@ func (c applicationsClient) computeCharmID(
 	}
 
 	// Ensure that the new charm supports the architecture used by the deployed application.
-	if oldOrigin.Architecture != resolvedOrigin.Architecture {
+	// A local charm's stored origin may have an empty architecture (local
+	// origins are not required to record one), in which case adopt the
+	// resolved architecture. A charmhub origin must always carry an
+	// architecture, otherwise AddCharm fails server-side origin validation.
+	if oldOrigin.Architecture == "" {
+		oldOrigin.Architecture = resolvedOrigin.Architecture
+	} else if oldOrigin.Architecture != resolvedOrigin.Architecture {
 		msg := fmt.Sprintf("the new charm does not support the current architecture %q", oldOrigin.Architecture)
 		return apiapplication.CharmID{}, jujuerrors.New(msg)
 	}
