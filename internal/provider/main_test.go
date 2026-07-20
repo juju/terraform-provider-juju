@@ -22,6 +22,7 @@ const TestMachineIPEnvKey string = "TEST_ADD_MACHINE_IP"
 const TestSSHPublicKeyFileEnvKey string = "TEST_SSH_PUB_KEY_PATH"
 const TestSSHPrivateKeyFileEnvKey string = "TEST_SSH_PRIV_KEY_PATH"
 const TestJujuAgentVersion = "JUJU_AGENT_VERSION"
+const TestVaultAddrEnvKey string = "TEST_VAULT_ADDR"
 
 // CloudTesting is a value indicating the current cloud
 // available for testing
@@ -112,5 +113,17 @@ func skipTestIfJujuAgentVersionBelow(t *testing.T, version string) {
 		t.Errorf("%s is not set", TestJujuAgentVersion)
 	} else if internaltesting.CompareVersions(agentVersion, version) < 0 {
 		t.Skipf("%s is not set or is below %s", TestJujuAgentVersion, version)
+	}
+}
+
+// skipTestIfJujuAgentVersionAtLeast skips the test for Juju versions at or
+// above the given version. Useful for legacy behavior that has been removed or
+// deprecated in newer versions.
+func skipTestIfJujuAgentVersionAtLeast(t *testing.T, version string) {
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, version) >= 0 {
+		t.Skipf("%s is at or above %s", TestJujuAgentVersion, version)
 	}
 }

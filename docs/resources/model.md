@@ -45,9 +45,10 @@ resource "juju_model" "this" {
 - `agent_version` (String) The model's Juju agent version. This is computed from the controller and can be set on an existing model to request an upgrade.
 - `annotations` (Map of String) Annotations for the model
 - `cloud` (Block List) Juju Cloud where the model will operate. Changing this value will cause the model to be destroyed and recreated by terraform. (see [below for nested schema](#nestedblock--cloud))
-- `config` (Map of String) Override default model configuration
+- `config` (Map of String) Override default model configuration. You may also set the 'secret-backend' key here for backward compatibility with Juju 3, but the recommended approach is to use the secret_backend attribute.
 - `constraints` (String) Constraints imposed to this model
 - `credential` (String) Credential used to add the model
+- `secret_backend` (String) The name of the secret backend to use for this model. On Juju 4+, this uses the dedicated model-secret-backend API. On Juju 3, it falls back to setting the 'secret-backend' model config key. Use this instead of setting 'secret-backend' in the config block.
 - `target_controller` (String) Only useful with JAAS - the backing controller where the model will be created. If not set, a random controller the user has access to supporting the desired cloud will be used.
 
 ### Read-Only

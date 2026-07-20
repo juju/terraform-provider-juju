@@ -68,22 +68,23 @@ type ControllerConfiguration struct {
 
 // Client holds the various juju api clients used to interact with the juju controller.
 type Client struct {
-	Applications applicationsClient
-	Machines     *machinesClient
-	Clouds       cloudsClient
-	Credentials  credentialsClient
-	Integrations integrationsClient
-	Models       modelsClient
-	Offers       offersClient
-	SSHKeys      sshKeysClient
-	Users        usersClient
-	Secrets      secretsClient
-	Jaas         jaasClient
-	Annotations  annotationsClient
-	Storage      storageClient
-	Spaces       spacesClient
-	Subnets      subnetsClient
-	Actions      actionsClient
+	Applications   applicationsClient
+	Machines       *machinesClient
+	Clouds         cloudsClient
+	Credentials    credentialsClient
+	Integrations   integrationsClient
+	Models         modelsClient
+	Offers         offersClient
+	SSHKeys        sshKeysClient
+	Users          usersClient
+	Secrets        secretsClient
+	Jaas           jaasClient
+	Annotations    annotationsClient
+	Storage        storageClient
+	Spaces         spacesClient
+	Subnets        subnetsClient
+	Actions        actionsClient
+	SecretBackends secretBackendsClient
 
 	isJAAS   func() bool
 	username string
@@ -185,24 +186,25 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 	isJAAS := sc.IsJAAS(ctx, defaultJAASCheck)
 
 	return &Client{
-		Applications: *newApplicationClient(sc),
-		Clouds:       *newCloudsClient(sc),
-		Credentials:  *newCredentialsClient(sc),
-		Integrations: *newIntegrationsClient(sc),
-		Machines:     newMachinesClient(sc),
-		Models:       *newModelsClient(sc, isJAAS),
-		Offers:       *newOffersClient(sc),
-		SSHKeys:      *newSSHKeysClient(sc),
-		Users:        *newUsersClient(sc),
-		Secrets:      *newSecretsClient(sc),
-		Jaas:         *newJaasClient(sc),
-		Annotations:  *newAnnotationsClient(sc),
-		Storage:      *newStorageClient(sc),
-		Spaces:       *newSpacesClient(sc),
-		Subnets:      *newSubnetsClient(sc),
-		Actions:      *newActionsClient(sc),
-		isJAAS:       func() bool { return sc.IsJAAS(ctx, defaultJAASCheck) },
-		username:     user,
+		Applications:   *newApplicationClient(sc),
+		Clouds:         *newCloudsClient(sc),
+		Credentials:    *newCredentialsClient(sc),
+		Integrations:   *newIntegrationsClient(sc),
+		Machines:       newMachinesClient(sc),
+		Models:         *newModelsClient(sc, isJAAS),
+		Offers:         *newOffersClient(sc),
+		SSHKeys:        *newSSHKeysClient(sc),
+		Users:          *newUsersClient(sc),
+		Secrets:        *newSecretsClient(sc),
+		Jaas:           *newJaasClient(sc),
+		Annotations:    *newAnnotationsClient(sc),
+		Storage:        *newStorageClient(sc),
+		Spaces:         *newSpacesClient(sc),
+		Subnets:        *newSubnetsClient(sc),
+		Actions:        *newActionsClient(sc),
+		SecretBackends: *newSecretBackendsClient(sc),
+		isJAAS:         func() bool { return sc.IsJAAS(ctx, defaultJAASCheck) },
+		username:       user,
 	}, nil
 }
 

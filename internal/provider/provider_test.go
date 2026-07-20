@@ -225,7 +225,7 @@ func TestProviderConfigureAddresses(t *testing.T) {
 	defer os.Unsetenv("JUJU_CONNECTION_TIMEOUT")
 	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
 	// This IP is from a test network that should never be routed. https://www.rfc-editor.org/rfc/rfc5737#section-3
-	t.Setenv(JujuControllerEnvKey, "192.0.2.100:17070")
+	t.Setenv(JujuControllerEnvKey, "127.0.0.1:1")
 	confResp := configureProvider(t, jujuProvider)
 	// This is a live test, expect that the client connection will fail.
 	assert.Equal(t, confResp.Diagnostics.HasError(), true)

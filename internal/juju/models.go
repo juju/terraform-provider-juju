@@ -484,6 +484,61 @@ func (c *modelsClient) UpdateModel(ctx context.Context, input UpdateModelInput) 
 	return nil
 }
 
+// SetModelSecretBackend sets the secret backend for the model identified by
+// modelUUID. On Juju 4+, this uses the dedicated SetModelSecretBackend API.
+// On older versions, it falls back to setting the "secret-backend" model
+// config key.
+func (c *modelsClient) SetModelSecretBackend(ctx context.Context, modelUUID, backendName string) error {
+	conn, err := c.GetConnection(ctx, &modelUUID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := modelconfig.NewClient(conn)
+
+	// BestAPIVersion >= 4 supports SetModelSecretBackend.
+	if client.BestAPIVersion() >= 4 {
+		return client.SetModelSecretBackend(ctx, backendName)
+	}
+
+	// Fallback for Juju 3: set the "secret-backend" model config key.
+	return client.ModelSet(ctx, map[string]interface{}{
+		"secret-backend": backendName,
+	})
+}
+
+// GetModelSecretBackend returns the secret backend name for the model
+// identified by modelUUID. On Juju 4+, this uses the dedicated
+// GetModelSecretBackend API. On older versions, it reads the
+// "secret-backend" model config key.
+func (c *modelsClient) GetModelSecretBackend(ctx context.Context, modelUUID string) (string, error) {
+	conn, err := c.GetConnection(ctx, &modelUUID)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = conn.Close() }()
+
+	client := modelconfig.NewClient(conn)
+
+	// BestAPIVersion >= 4 supports GetModelSecretBackend.
+	if client.BestAPIVersion() >= 4 {
+		return client.GetModelSecretBackend(ctx)
+	}
+
+	// Fallback for Juju 3: read the "secret-backend" model config key.
+	modelConfig, err := client.ModelGet(ctx)
+	if err != nil {
+		return "", err
+	}
+	if v, ok := modelConfig["secret-backend"]; ok {
+		if s, ok := v.(string); ok {
+			return s, nil
+		}
+	}
+	return "", nil
+}
+
 // UpgradeModel upgrades the model identified by modelUUID to targetVersion.
 func (c *modelsClient) UpgradeModel(ctx context.Context, modelUUID string, targetVersion semversion.Number) error {
 	conn, err := c.GetConnection(ctx, nil)
