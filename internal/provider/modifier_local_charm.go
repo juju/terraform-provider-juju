@@ -94,24 +94,21 @@ func (m *originHashModifier) PlanModifyString(ctx context.Context, req planmodif
 	// (and therefore its controller-reported hash) will change too, so the
 	// value must be unknown to accept the post-apply hash.
 	//
-	// The channel and base come from config and can be compared directly.
-	// The local charm content is detected by recomputing the file hash from
-	// local_path, because sibling plan modifiers do not observe each other's
-	// planned values within the same apply.
+	// The base comes from config and can be compared directly. The local charm
+	// content is detected by recomputing the file hash from local_path, because
+	// sibling plan modifiers do not observe each other's planned values within
+	// the same apply.
 	parent := req.Path.ParentPath()
 	charmChanging := false
-	for _, name := range []string{"channel", "base"} {
-		attrPath := parent.AtName(name)
-		var planVal, stateVal attr.Value
-		resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, attrPath, &planVal)...)
-		resp.Diagnostics.Append(req.State.GetAttribute(ctx, attrPath, &stateVal)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		if planVal.IsUnknown() || !planVal.Equal(stateVal) {
-			charmChanging = true
-			break
-		}
+	baseAttr := parent.AtName("base")
+	var planBase, stateBase attr.Value
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, baseAttr, &planBase)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, baseAttr, &stateBase)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if planBase.IsUnknown() || !planBase.Equal(stateBase) {
+		charmChanging = true
 	}
 	if !charmChanging &&
 		localCharmContentChanges(ctx, req.Path, req.Plan, req.State, &resp.Diagnostics) {
