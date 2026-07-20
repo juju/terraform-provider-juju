@@ -1,3 +1,43 @@
+# 2.2.0
+
+NOTES:
+
+* **This release requires Juju controller version 3 or higher. This version drops support for 2.9.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 4.0.12 release.
+
+ENHANCEMENTS
+
+* Allow controller patch upgrades by @kian99 in [#1240](https://github.com/juju/terraform-provider-juju/pull/1240)
+* Add model upgrade support by @kian99 in [#1272](https://github.com/juju/terraform-provider-juju/pull/1272)
+* Add IdP groups access by @kian99 in [#1275](https://github.com/juju/terraform-provider-juju/pull/1275)
+* Add `wo` field to secret resource for value by @ale8k in [#1284](https://github.com/juju/terraform-provider-juju/pull/1284)
+* Implement `juju_action` resource by @SimoneDutto in [#1297](https://github.com/juju/terraform-provider-juju/pull/1297)
+* Implement `juju_action` data source by @luci1900 in [#1302](https://github.com/juju/terraform-provider-juju/pull/1302)
+* Expose unit numbers for an application by @SimoneDutto in [#1305](https://github.com/juju/terraform-provider-juju/pull/1305)
+* Add `secret_backend` by @SimoneDutto in [#1312](https://github.com/juju/terraform-provider-juju/pull/1312)
+
+BUG FIXES
+
+* Stop logging credentials and secret values by @alesstimec in [#1254](https://github.com/juju/terraform-provider-juju/pull/1254)
+* Fix CLI output parsing by @kian99 in [#1298](https://github.com/juju/terraform-provider-juju/pull/1298)
+
+DOCUMENTATION
+
+* Documentation migration by @tmihoc in [#1265](https://github.com/juju/terraform-provider-juju/pull/1265)
+* Documentation migration by @tmihoc in [#1286](https://github.com/juju/terraform-provider-juju/pull/1286)
+* Update intersphinx URLs to canonical.com by @tmihoc in [#1289](https://github.com/juju/terraform-provider-juju/pull/1289)
+* Document how to use the controller model in juju deployment by @SimoneDutto in [#1301](https://github.com/juju/terraform-provider-juju/pull/1301)
+* Add actions documentation by @SimoneDutto in [#1309](https://github.com/juju/terraform-provider-juju/pull/1309)
+
+CI & MAINTENANCE
+
+* Backport K8s check for private registry Juju secret by @SimoneDutto in [#1292](https://github.com/juju/terraform-provider-juju/pull/1292)
+* Merge v2.1 to main by @kian99 in [#1311](https://github.com/juju/terraform-provider-juju/pull/1311)
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v2.1.1...v2.2.0
+
 # 2.1.1
 
 NOTES:
