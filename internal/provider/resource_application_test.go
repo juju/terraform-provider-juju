@@ -3739,6 +3739,71 @@ resource "juju_application" "this" {
 	})
 }
 
+// TestAcc_ResourceApplication_LocalCharm_SwitchWithCharmhub verifies that an
+// application can switch from the Charmhub `juju-qa-test` charm to a local
+// synthetic charm with the same name, and then back to Charmhub again.
+//
+// This exercises the local<->Charmhub transition path, including computed
+// charm fields such as origin_hash.
+func TestAcc_ResourceApplication_LocalCharm_SwitchWithCharmhub(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-local-charm-switch")
+	appName := "app"
+	charmName := "juju-qa-test"
+	dir := t.TempDir()
+	archivePath := buildLocalCharm(t, dir, charmName, "local-version-1", "22.04")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationCharmhubCharm(modelName, appName, charmName),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", charmName),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationLocalCharm(modelName, appName, charmName, archivePath),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+						plancheck.ExpectResourceAction(
+							"juju_application.this",
+							plancheck.ResourceActionUpdate,
+						),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", charmName),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.local_path", archivePath),
+				),
+			},
+			{
+				Config: testAccResourceApplicationCharmhubCharm(modelName, appName, charmName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+						plancheck.ExpectResourceAction(
+							"juju_application.this",
+							plancheck.ResourceActionUpdate,
+						),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", charmName),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
+					resource.TestCheckNoResourceAttr("juju_application.this", "charm.0.local_path"),
+				),
+			},
+		},
+	})
+}
+
 // buildLocalCharm creates a minimal .charm archive at
 // <dir>/<name>.charm that declares the given Ubuntu channels (e.g. "22.04",
 // "24.04") in both metadata.yaml and manifest.yaml. The variable-content file
@@ -3805,6 +3870,7 @@ resource "juju_model" "this" {
 resource "juju_application" "this" {
   model_uuid = juju_model.this.uuid
   name       = %q
+  units      = 0
 
   charm {
     name       = %q
@@ -3813,4 +3879,24 @@ resource "juju_application" "this" {
   }
 }
 `, modelName, appName, charmName, archivePath)
+}
+
+func testAccResourceApplicationCharmhubCharm(modelName, appName, charmName string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+}
+
+resource "juju_application" "this" {
+	model_uuid = juju_model.this.uuid
+	name       = %q
+	units      = 0
+
+	charm {
+		name    = %q
+		channel = "latest/stable"
+		base    = "ubuntu@22.04"
+	}
+}
+`, modelName, appName, charmName)
 }

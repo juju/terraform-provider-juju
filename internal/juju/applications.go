@@ -371,6 +371,7 @@ type UpdateApplicationInput struct {
 	ModelUUID string
 	ModelInfo *params.ModelInfo
 	AppName   string
+	CharmName string
 	Units     *int
 	Revision  *int
 	Channel   string
@@ -1442,8 +1443,23 @@ func (c applicationsClient) computeCharmID(
 	// You can only refresh on the revision OR the channel at once.
 	newURL := oldURL
 	newOrigin := oldOrigin
+	if oldURL.Schema == charm.Local.String() {
+		newURL = &charm.URL{
+			Schema:   charm.CharmHub.String(),
+			Name:     input.CharmName,
+			Revision: -1,
+		}
+		newOrigin.Source = apicommoncharm.OriginCharmHub
+		newOrigin.ID = ""
+		newOrigin.Hash = ""
+		newOrigin.Revision = nil
+		oldOrigin.Source = apicommoncharm.OriginCharmHub
+		oldOrigin.ID = ""
+		oldOrigin.Hash = ""
+		oldOrigin.Revision = nil
+	}
 	if input.Revision != nil {
-		newURL = oldURL.WithRevision(*input.Revision)
+		newURL = newURL.WithRevision(*input.Revision)
 		newOrigin.Revision = input.Revision
 		// If the charm has an ID and Hash, it's been deployed before.
 		// Remove to trick juju into finding the new revision the user

@@ -386,6 +386,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Computed:    true,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
+								InvalidateChannelIfSwitchingToLocalCharm(),
 							},
 							Validators: []validator.String{
 								StringIsChannelValidator{},
@@ -1273,9 +1274,11 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		if !planCharm.LocalPath.IsNull() && planCharm.LocalPath.ValueString() != "" {
 			// A local charm changed content (the hash differs) but its
 			// name is unchanged. Refresh the charm in place from the new file.
+			updateApplicationInput.CharmName = planCharm.Name.ValueString()
 			updateApplicationInput.CharmLocalPath = planCharm.LocalPath.ValueString()
 			updateApplicationInput.Base = planCharm.Base.ValueString()
 		} else {
+			updateApplicationInput.CharmName = planCharm.Name.ValueString()
 			updateApplicationInput.Channel = planCharm.Channel.ValueString()
 			updateApplicationInput.Base = planCharm.Base.ValueString()
 

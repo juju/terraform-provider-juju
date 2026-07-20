@@ -63,6 +63,41 @@ func (m *localCharmHashModifier) PlanModifyString(ctx context.Context, req planm
 	resp.PlanValue = types.StringValue(info.Hash)
 }
 
+// InvalidateChannelIfSwitchingToLocalCharm returns a plan modifier that sets
+// the computed channel to Unknown when an application switches from a
+// Charmhub charm to a local charm. Local charms have no channel, so keeping
+// the prior Charmhub channel from state would cause an inconsistent result
+// after apply when Read returns the empty string.
+func InvalidateChannelIfSwitchingToLocalCharm() planmodifier.String {
+	return &invalidateChannelIfSwitchingToLocalCharmModifier{}
+}
+
+type invalidateChannelIfSwitchingToLocalCharmModifier struct{}
+
+func (m *invalidateChannelIfSwitchingToLocalCharmModifier) Description(_ context.Context) string {
+	return "If switching from a Charmhub charm to a local charm, the channel becomes unknown because local charms have no channel."
+}
+
+func (m *invalidateChannelIfSwitchingToLocalCharmModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (m *invalidateChannelIfSwitchingToLocalCharmModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	// If the user explicitly configured channel, preserve it.
+	if !req.ConfigValue.IsNull() && !req.ConfigValue.IsUnknown() {
+		return
+	}
+
+	planLocal, stateLocal := localCharmPresence(ctx, req.Path, req.Plan, req.State, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if planLocal && !stateLocal {
+		resp.PlanValue = types.StringUnknown()
+	}
+}
+
 // OriginHashModifier returns a plan modifier for the computed `origin_hash`.
 // The controller-reported hash changes with the deployed charm, so plain
 // UseStateForUnknown would trip "inconsistent result after apply".
@@ -109,6 +144,15 @@ func (m *originHashModifier) PlanModifyString(ctx context.Context, req planmodif
 	}
 	if planBase.IsUnknown() || !planBase.Equal(stateBase) {
 		charmChanging = true
+	}
+	if !charmChanging {
+		planLocal, stateLocal := localCharmPresence(ctx, req.Path, req.Plan, req.State, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if planLocal != stateLocal {
+			charmChanging = true
+		}
 	}
 	if !charmChanging &&
 		localCharmContentChanges(ctx, req.Path, req.Plan, req.State, &resp.Diagnostics) {
@@ -173,6 +217,29 @@ func localCharmContentChanges(
 		return true
 	}
 	return info.Hash != stateHash.ValueString()
+}
+
+// localCharmPresence reports whether the plan and state currently refer to a
+// local charm, based on whether the sibling local_path attribute is set.
+func localCharmPresence(
+	ctx context.Context,
+	attrPath path.Path,
+	plan tfsdk.Plan,
+	state tfsdk.State,
+	diags *diag.Diagnostics,
+) (planLocal bool, stateLocal bool) {
+	parent := attrPath.ParentPath()
+
+	var planLocalPath, stateLocalPath types.String
+	diags.Append(plan.GetAttribute(ctx, parent.AtName("local_path"), &planLocalPath)...)
+	diags.Append(state.GetAttribute(ctx, parent.AtName("local_path"), &stateLocalPath)...)
+	if diags.HasError() {
+		return false, false
+	}
+
+	planLocal = !planLocalPath.IsNull() && !planLocalPath.IsUnknown() && planLocalPath.ValueString() != ""
+	stateLocal = !stateLocalPath.IsNull() && !stateLocalPath.IsUnknown() && stateLocalPath.ValueString() != ""
+	return planLocal, stateLocal
 }
 
 // LocalCharmRequiresReplace returns a RequiresReplaceIf function for the
