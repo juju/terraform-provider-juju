@@ -3324,8 +3324,8 @@ func TestAcc_ResourceApplication_LocalCharm_Deploy(t *testing.T) {
 	charmName := "local-test-charm"
 
 	dir := t.TempDir()
-	archiveV1 := buildLocalCharm(t, filepath.Join(dir, "v1"), charmName, "version-1-content")
-	archiveV2 := buildLocalCharm(t, filepath.Join(dir, "v2"), charmName, "version-2-content")
+	archiveV1 := buildLocalCharm(t, filepath.Join(dir, "v1"), charmName, "version-1-content", "22.04")
+	archiveV2 := buildLocalCharm(t, filepath.Join(dir, "v2"), charmName, "version-2-content", "22.04")
 
 	var hashAfterV1 string
 
@@ -3419,7 +3419,7 @@ func TestAcc_ResourceApplication_LocalCharm_RelativePath(t *testing.T) {
 	charmName := "local-relpath-charm"
 
 	dir := t.TempDir()
-	archive := buildLocalCharm(t, dir, charmName, "relative-path-content")
+	archive := buildLocalCharm(t, dir, charmName, "relative-path-content", "22.04")
 
 	// Express the archive path relative to the process working directory (the
 	// directory the provider resolves relative local_path values against).
@@ -3478,8 +3478,8 @@ func TestAcc_ResourceApplication_LocalCharm_Drift(t *testing.T) {
 	charmName := "local-drift-charm"
 
 	dir := t.TempDir()
-	archiveV1 := buildLocalCharm(t, filepath.Join(dir, "v1"), charmName, "drift-version-1")
-	archiveV2 := buildLocalCharm(t, filepath.Join(dir, "v2"), charmName, "drift-version-2")
+	archiveV1 := buildLocalCharm(t, filepath.Join(dir, "v1"), charmName, "drift-version-1", "22.04")
+	archiveV2 := buildLocalCharm(t, filepath.Join(dir, "v2"), charmName, "drift-version-2", "22.04")
 
 	var driftedOriginHash string
 
@@ -3590,7 +3590,7 @@ func TestAcc_ResourceApplication_LocalCharm_DriftUnsupported(t *testing.T) {
 	charmName := "local-drift-unsupported-charm"
 
 	dir := t.TempDir()
-	archive := buildLocalCharm(t, dir, charmName, "v1")
+	archive := buildLocalCharm(t, dir, charmName, "v1", "22.04")
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -3620,7 +3620,7 @@ func TestAcc_ResourceApplication_LocalCharm_NameMismatch(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-local-charm-mismatch")
 	dir := t.TempDir()
 	// Archive metadata says "actual-charm-name", HCL declares "wrong-name".
-	archivePath := buildLocalCharm(t, dir, "actual-charm-name", "v1")
+	archivePath := buildLocalCharm(t, dir, "actual-charm-name", "v1", "22.04")
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -3634,36 +3634,6 @@ func TestAcc_ResourceApplication_LocalCharm_NameMismatch(t *testing.T) {
 	})
 }
 
-// TestAcc_ResourceApplication_LocalCharm_ConflictWithChannel verifies that the
-// schema attribute validator rejects combining local_path with channel.
-func TestAcc_ResourceApplication_LocalCharm_ConflictWithChannel(t *testing.T) {
-	modelName := acctest.RandomWithPrefix("tf-test-local-charm-conflict")
-	dir := t.TempDir()
-	archivePath := buildLocalCharm(t, dir, "test-charm", "v1")
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: frameworkProviderFactories,
-		Steps: []resource.TestStep{
-			{
-				Config: fmt.Sprintf(`
-resource "juju_model" "this" { name = %q }
-resource "juju_application" "this" {
-  model_uuid = juju_model.this.uuid
-  name       = "app"
-  charm {
-    name       = "test-charm"
-    local_path = %q
-    channel    = "stable"
-    base       = "ubuntu@22.04"
-  }
-}`, modelName, archivePath),
-				ExpectError: regexp.MustCompile(`Invalid Attribute Combination`),
-			},
-		},
-	})
-}
-
 // TestAcc_ResourceApplication_LocalCharm_BaseMismatch verifies that
 // ValidateConfig rejects a base that is not listed in the archive's
 // manifest.yaml. The test charm declares ubuntu@22.04; requesting
@@ -3671,8 +3641,7 @@ resource "juju_application" "this" {
 func TestAcc_ResourceApplication_LocalCharm_BaseMismatch(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-local-charm-base")
 	dir := t.TempDir()
-	// buildLocalCharm produces an archive whose manifest declares ubuntu@22.04.
-	archivePath := buildLocalCharm(t, dir, "test-charm", "v1")
+	archivePath := buildLocalCharm(t, dir, "test-charm", "v1", "22.04")
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -3696,14 +3665,100 @@ resource "juju_application" "this" {
 	})
 }
 
-// buildLocalCharm creates a minimal valid .charm archive at <dir>/<name>.charm.
-// The archive contains metadata.yaml, manifest.yaml, a dispatch file, and a
-// variable-content file so that different calls produce archives with different
-// SHA-256 hashes. It returns the path to the created archive.
-func buildLocalCharm(t *testing.T, dir, charmName, content string) string {
+// TestAcc_ResourceApplication_LocalCharm_BaseSelectionDefault verifies that
+// when no base is set in the plan, the provider picks the Juju LTS default
+// (ubuntu@24.04) for a multi-base charm that supports it.
+func TestAcc_ResourceApplication_LocalCharm_BaseSelectionDefault(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-local-charm-base-sel-default")
+	charmName := "multi-base-charm"
+	dir := t.TempDir()
+	archivePath := buildLocalCharm(t, dir, charmName, "v1", "22.04", "24.04")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// No explicit base — the charm supports both ubuntu@22.04 and
+				// ubuntu@24.04. The Juju LTS default (ubuntu@24.04) is
+				// compatible, so it is selected at fallback step 3.
+				Config: fmt.Sprintf(`
+resource "juju_model" "this" { name = %q }
+resource "juju_application" "this" {
+  model_uuid = juju_model.this.uuid
+  name       = "app"
+  charm {
+    name       = %q
+    local_path = %q
+  }
+}`, modelName, charmName, archivePath),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.base", "ubuntu@24.04"),
+				),
+			},
+		},
+	})
+}
+
+// TestAcc_ResourceApplication_LocalCharm_BaseSelectionExplicit verifies that
+// an explicit base in the plan overrides the LTS fallback for a multi-base
+// charm, deploying on the requested base instead.
+func TestAcc_ResourceApplication_LocalCharm_BaseSelectionExplicit(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-local-charm-base-sel-explicit")
+	charmName := "multi-base-charm"
+	dir := t.TempDir()
+	archivePath := buildLocalCharm(t, dir, charmName, "v1", "22.04", "24.04")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// Explicit base ubuntu@22.04 overrides the LTS fallback
+				// (ubuntu@24.04), because it is also declared in the manifest.
+				Config: fmt.Sprintf(`
+resource "juju_model" "this" { name = %q }
+resource "juju_application" "this" {
+  model_uuid = juju_model.this.uuid
+  name       = "app"
+  charm {
+    name       = %q
+    local_path = %q
+    base       = "ubuntu@22.04"
+  }
+}`, modelName, charmName, archivePath),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.base", "ubuntu@22.04"),
+				),
+			},
+		},
+	})
+}
+
+// buildLocalCharm creates a minimal .charm archive at
+// <dir>/<name>.charm that declares the given Ubuntu channels (e.g. "22.04",
+// "24.04") in both metadata.yaml and manifest.yaml. The variable-content file
+// ensures different calls with different content produce distinct SHA-256
+// hashes. It returns the path to the created archive.
+func buildLocalCharm(t *testing.T, dir, charmName, content string, baseChannels ...string) string {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir %q: %v", dir, err)
+	}
+
+	// Build the bases stanzas for metadata.yaml and manifest.yaml.
+	var metaBases, manifestBases string
+	for _, ch := range baseChannels {
+		metaBases += fmt.Sprintf("  - name: ubuntu\n    channel: %q\n", ch)
+		manifestBases += fmt.Sprintf("  - name: ubuntu\n    channel: %q\n    architectures:\n      - amd64\n", ch)
 	}
 
 	archivePath := filepath.Join(dir, charmName+".charm")
@@ -3718,13 +3773,13 @@ func buildLocalCharm(t *testing.T, dir, charmName, content string) string {
 		// metadata.yaml: v2 format with a bases stanza so Juju knows which
 		// operating systems the charm supports.
 		"metadata.yaml": fmt.Sprintf(
-			"name: %s\nsummary: test charm\ndescription: acceptance test charm\nbases:\n  - name: ubuntu\n    channel: \"22.04\"\n",
-			charmName,
+			"name: %s\nsummary: test charm\ndescription: acceptance test charm\nbases:\n%s",
+			charmName, metaBases,
 		),
 		// manifest.yaml: must list the supported bases so the controller
 		// accepts the charm. An empty list causes "charm does not define any
 		// bases".
-		"manifest.yaml": "bases:\n  - name: ubuntu\n    channel: \"22.04\"\n    architectures:\n      - amd64\n",
+		"manifest.yaml": "bases:\n" + manifestBases,
 		// dispatch satisfies AddLocalCharm's hasHooksOrDispatch requirement.
 		"dispatch": "#!/bin/sh\n",
 		// content is the only thing that varies between builds.

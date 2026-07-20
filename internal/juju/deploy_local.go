@@ -21,8 +21,10 @@ import (
 	apicommoncharm "github.com/juju/juju/api/common/charm"
 	"github.com/juju/juju/cmd/juju/application/utils"
 	corebase "github.com/juju/juju/core/base"
+	corecharm "github.com/juju/juju/core/charm"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/semversion"
+	coreversion "github.com/juju/juju/core/version"
 	"github.com/juju/juju/domain/deployment/charm"
 	"github.com/juju/juju/environs/config"
 )
@@ -217,15 +219,13 @@ func (c applicationsClient) uploadLocalCharm(
 	charmBase corebase.Base,
 	cons constraints.Value,
 ) (*charm.URL, apicommoncharm.Origin, error) {
-	// Determine the base to deploy with. Prefer the user-supplied base,
-	// otherwise fall back to the model's default base.
-	base := charmBase
-	if base.Empty() {
-		var err error
-		base, err = c.defaultModelBase(ctx, conn)
-		if err != nil {
-			return nil, apicommoncharm.Origin{}, err
-		}
+	supportedBases, err := corecharm.ComputedBases(charmArchive)
+	if err != nil {
+		return nil, apicommoncharm.Origin{}, jujuerrors.Annotate(err, "cannot compute supported bases for local charm")
+	}
+	base, err := c.selectLocalCharmBase(ctx, conn, charmBase, supportedBases)
+	if err != nil {
+		return nil, apicommoncharm.Origin{}, err
 	}
 
 	// Build the local charm URL from the charm metadata and revision.
@@ -298,9 +298,54 @@ func (c applicationsClient) computeLocalCharmID(
 	}, nil
 }
 
-// defaultModelBase returns the model's configured default base, used when the
-// plan does not specify a base for a local charm deployment.
-func (c applicationsClient) defaultModelBase(ctx context.Context, conn api.Connection) (corebase.Base, error) {
+// selectLocalCharmBase selects the base to use when deploying a local charm,
+// mirroring the CLI's corecharm.BaseSelector fallback chain:
+//  1. User-supplied base (validated against supported bases).
+//  2. Model default-base (if explicitly configured and compatible).
+//  3. Juju's default supported LTS base (if compatible).
+//  4. First base declared in the charm's manifest.
+//
+// If the charm declares no bases (old-style charm) and no base was supplied,
+// an error is returned.
+func (c applicationsClient) selectLocalCharmBase(
+	ctx context.Context,
+	conn api.Connection,
+	requested corebase.Base,
+	supportedBases []corebase.Base,
+) (corebase.Base, error) {
+	// Step 1: user-supplied base.
+	if !requested.Empty() {
+		return corecharm.BaseForCharm(requested, supportedBases)
+	}
+
+	// Step 2: model default-base (only when explicitly configured).
+	modelDefault, err := c.optionalModelDefaultBase(ctx, conn)
+	if err != nil {
+		return corebase.Base{}, err
+	}
+	if !modelDefault.Empty() {
+		base, err := corecharm.BaseForCharm(modelDefault, supportedBases)
+		if err == nil {
+			return base, nil
+		}
+		// Model default is set but incompatible; fall through.
+	}
+
+	// Step 3: Juju's default supported LTS base.
+	lts := coreversion.DefaultSupportedLTSBase()
+	base, err := corecharm.BaseForCharm(lts, supportedBases)
+	if err == nil {
+		return base, nil
+	}
+
+	// Step 4: first base in the charm's manifest (or error if none declared).
+	return corecharm.BaseForCharm(corebase.Base{}, supportedBases)
+}
+
+// optionalModelDefaultBase returns the model's configured default base, or an
+// empty Base when none is set. Unlike the old defaultModelBase it does not
+// error on absence, so callers can fall through to the next candidate.
+func (c applicationsClient) optionalModelDefaultBase(ctx context.Context, conn api.Connection) (corebase.Base, error) {
 	modelConfigAPIClient := c.getModelConfigAPIClient(conn)
 	attrs, err := modelConfigAPIClient.ModelGet(ctx)
 	if err != nil {
@@ -312,9 +357,7 @@ func (c applicationsClient) defaultModelBase(ctx context.Context, conn api.Conne
 	}
 	defaultBase, ok := modelConfig.DefaultBase()
 	if !ok || defaultBase == "" {
-		return corebase.Base{}, jujuerrors.New(
-			"no base specified and the model has no default base; " +
-				"set the charm's base attribute")
+		return corebase.Base{}, nil
 	}
 	return corebase.ParseBaseFromString(defaultBase)
 }
