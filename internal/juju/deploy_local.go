@@ -13,8 +13,6 @@ import (
 	"strconv"
 	"strings"
 
-	goyaml "gopkg.in/yaml.v2"
-
 	jujuerrors "github.com/juju/errors"
 	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
@@ -23,10 +21,10 @@ import (
 	corebase "github.com/juju/juju/core/base"
 	corecharm "github.com/juju/juju/core/charm"
 	"github.com/juju/juju/core/constraints"
-	"github.com/juju/juju/core/semversion"
 	coreversion "github.com/juju/juju/core/version"
 	"github.com/juju/juju/domain/deployment/charm"
 	"github.com/juju/juju/environs/config"
+	goyaml "gopkg.in/yaml.v2"
 )
 
 const LocalCharmOriginHashFirstAgentVersion = "3.6.26"
@@ -167,10 +165,7 @@ func (c applicationsClient) deployFromPath(
 
 	c.Tracef("Deploying local charm", map[string]interface{}{"url": resultURL.String()})
 	err = applicationAPIClient.Deploy(ctx, apiapplication.DeployArgs{
-		CharmID: apiapplication.CharmID{
-			URL:    resultURL.String(),
-			Origin: origin,
-		},
+		CharmID:          charmID,
 		CharmOrigin:      origin,
 		ApplicationName:  transformedInput.applicationName,
 		NumUnits:         transformedInput.units,
@@ -201,9 +196,12 @@ func (c applicationsClient) deployFromPath(
 		c.Warnf("could not check local charm drift detection support",
 			map[string]interface{}{"app": appName, "err": err.Error()})
 	} else if origin.Hash == "" {
-		c.Warnf("out-of-band drift detection is disabled; upgrade to Juju "+
-			LocalCharmOriginHashFirstAgentVersion+"+ or Juju 4+ to enable it",
-			map[string]interface{}{"app": appName})
+		c.Warnf("out-of-band drift detection is disabled; upgrade to the "+
+			"minimum required Juju version (or Juju 4+) to enable it",
+			map[string]interface{}{
+				"app":         appName,
+				"min_version": LocalCharmOriginHashFirstAgentVersion,
+			})
 	}
 
 	return nil
@@ -223,7 +221,15 @@ func (c applicationsClient) uploadLocalCharm(
 	if err != nil {
 		return nil, apicommoncharm.Origin{}, jujuerrors.Annotate(err, "cannot compute supported bases for local charm")
 	}
-	base, err := c.selectLocalCharmBase(ctx, conn, charmBase, supportedBases)
+
+	// Fetch the model config once and derive both the base fallback and the
+	// agent version from it, avoiding a second ModelGet round-trip.
+	modelConfig, err := c.modelConfig(ctx, conn)
+	if err != nil {
+		return nil, apicommoncharm.Origin{}, err
+	}
+
+	base, err := selectLocalCharmBase(modelConfig, charmBase, supportedBases)
 	if err != nil {
 		return nil, apicommoncharm.Origin{}, err
 	}
@@ -237,9 +243,9 @@ func (c applicationsClient) uploadLocalCharm(
 
 	// The agent version is required so the controller can validate that
 	// the charm is compatible with the deployed agents.
-	agentVersion, err := c.modelAgentVersion(ctx, conn)
-	if err != nil {
-		return nil, apicommoncharm.Origin{}, err
+	agentVersion, ok := modelConfig.AgentVersion()
+	if !ok {
+		return nil, apicommoncharm.Origin{}, jujuerrors.New("cannot determine model agent version")
 	}
 
 	localCharmClient, err := c.getLocalCharmClient(conn)
@@ -307,9 +313,8 @@ func (c applicationsClient) computeLocalCharmID(
 //
 // If the charm declares no bases (old-style charm) and no base was supplied,
 // an error is returned.
-func (c applicationsClient) selectLocalCharmBase(
-	ctx context.Context,
-	conn api.Connection,
+func selectLocalCharmBase(
+	modelConfig *config.Config,
 	requested corebase.Base,
 	supportedBases []corebase.Base,
 ) (corebase.Base, error) {
@@ -319,7 +324,7 @@ func (c applicationsClient) selectLocalCharmBase(
 	}
 
 	// Step 2: model default-base (only when explicitly configured).
-	modelDefault, err := c.optionalModelDefaultBase(ctx, conn)
+	modelDefault, err := optionalModelDefaultBase(modelConfig)
 	if err != nil {
 		return corebase.Base{}, err
 	}
@@ -343,17 +348,8 @@ func (c applicationsClient) selectLocalCharmBase(
 }
 
 // optionalModelDefaultBase returns the model's configured default base, or an
-// empty Base when none is set
-func (c applicationsClient) optionalModelDefaultBase(ctx context.Context, conn api.Connection) (corebase.Base, error) {
-	modelConfigAPIClient := c.getModelConfigAPIClient(conn)
-	attrs, err := modelConfigAPIClient.ModelGet(ctx)
-	if err != nil {
-		return corebase.Base{}, jujuerrors.Annotate(err, "cannot get model config")
-	}
-	modelConfig, err := config.New(config.UseDefaults, attrs)
-	if err != nil {
-		return corebase.Base{}, jujuerrors.Trace(err)
-	}
+// empty Base when none is set.
+func optionalModelDefaultBase(modelConfig *config.Config) (corebase.Base, error) {
 	defaultBase, ok := modelConfig.DefaultBase()
 	if !ok || defaultBase == "" {
 		return corebase.Base{}, nil
@@ -361,23 +357,20 @@ func (c applicationsClient) optionalModelDefaultBase(ctx context.Context, conn a
 	return corebase.ParseBaseFromString(defaultBase)
 }
 
-// modelAgentVersion returns the agent version configured for the model, which
-// is required when uploading a local charm.
-func (c applicationsClient) modelAgentVersion(ctx context.Context, conn api.Connection) (semversion.Number, error) {
+// modelConfig fetches and parses the model configuration in a single API
+// round-trip, so callers can derive several settings (e.g. default base and
+// agent version) without repeated ModelGet calls.
+func (c applicationsClient) modelConfig(ctx context.Context, conn api.Connection) (*config.Config, error) {
 	modelConfigAPIClient := c.getModelConfigAPIClient(conn)
 	attrs, err := modelConfigAPIClient.ModelGet(ctx)
 	if err != nil {
-		return semversion.Number{}, jujuerrors.Annotate(err, "cannot get model config")
+		return nil, jujuerrors.Annotate(err, "cannot get model config")
 	}
 	modelConfig, err := config.New(config.UseDefaults, attrs)
 	if err != nil {
-		return semversion.Number{}, jujuerrors.Trace(err)
+		return nil, jujuerrors.Trace(err)
 	}
-	agentVersion, ok := modelConfig.AgentVersion()
-	if !ok {
-		return semversion.Number{}, jujuerrors.New("cannot determine model agent version")
-	}
-	return agentVersion, nil
+	return modelConfig, nil
 }
 
 // setTrust applies the trust setting to an application by setting the reserved
