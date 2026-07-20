@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/juju/juju/api/client/secretbackends"
@@ -45,18 +46,12 @@ type UpdateSecretBackendInput struct {
 	TokenRotateInterval *time.Duration
 	// Config is the backend specific configuration to update.
 	Config map[string]any
-	// Reset is a list of config keys to reset to their default values.
-	Reset []string
-	// Force skips the ping of the backend before updating.
-	Force bool
 }
 
 // RemoveSecretBackendInput is the input to RemoveSecretBackend.
 type RemoveSecretBackendInput struct {
 	// Name is the name of the secret backend to remove.
 	Name string
-	// Force deletes the backend even if it is in use.
-	Force bool
 }
 
 // GetSecretBackendInput is the input to GetSecretBackend.
@@ -122,8 +117,7 @@ func (c *secretBackendsClient) UpdateSecretBackend(ctx context.Context, input Up
 		NameChange:          input.NameChange,
 		TokenRotateInterval: input.TokenRotateInterval,
 		Config:              input.Config,
-		Reset:               input.Reset,
-	}, input.Force)
+	}, false)
 }
 
 // RemoveSecretBackend removes the named secret backend.
@@ -136,7 +130,7 @@ func (c *secretBackendsClient) RemoveSecretBackend(ctx context.Context, input Re
 
 	client := secretbackends.NewClient(conn)
 
-	return client.RemoveSecretBackend(ctx, input.Name, input.Force)
+	return client.RemoveSecretBackend(ctx, input.Name, false)
 }
 
 // GetSecretBackend gets a secret backend by name.
@@ -158,6 +152,17 @@ func (c *secretBackendsClient) GetSecretBackend(ctx context.Context, input GetSe
 	}
 	if len(backends) > 1 {
 		return GetSecretBackendResponse{}, fmt.Errorf("expected 1 secret backend, got %d", len(backends))
+	}
+
+	// ListSecretBackends populates a per-item Error field on each result. A
+	// controller reporting an item-level error would otherwise be read as a
+	// successful, zero-valued backend, so surface it here. A not-found error
+	// is normalized to ErrSecretBackendNotFound so callers can handle it.
+	if backendErr := backends[0].Error; backendErr != nil {
+		if errors.Is(backendErr, ErrSecretBackendNotFound) || strings.Contains(strings.ToLower(backendErr.Error()), "not found") {
+			return GetSecretBackendResponse{}, ErrSecretBackendNotFound
+		}
+		return GetSecretBackendResponse{}, backendErr
 	}
 
 	return GetSecretBackendResponse{Backend: backends[0]}, nil

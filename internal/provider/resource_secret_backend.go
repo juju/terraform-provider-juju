@@ -5,10 +5,10 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -29,7 +29,6 @@ var _ resource.Resource = &secretBackendResource{}
 var _ resource.ResourceWithConfigure = &secretBackendResource{}
 var _ resource.ResourceWithImportState = &secretBackendResource{}
 var _ resource.ResourceWithIdentity = &secretBackendResource{}
-var _ resource.ResourceWithConfigValidators = &secretBackendResource{}
 
 // NewSecretBackendResource returns a new instance of the secret backend resource.
 func NewSecretBackendResource() resource.Resource {
@@ -82,17 +81,6 @@ func (r *secretBackendResource) Metadata(ctx context.Context, req resource.Metad
 	resp.TypeName = req.ProviderTypeName + "_secret_backend"
 }
 
-// ConfigValidators implements [resource.ResourceWithConfigValidators]. It
-// enforces that config_wo and config_wo_version are both set.
-func (r *secretBackendResource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
-	return []resource.ConfigValidator{
-		resourcevalidator.RequiredTogether(
-			path.MatchRoot("config_wo"),
-			path.MatchRoot("config_wo_version"),
-		),
-	}
-}
-
 // Schema implements resource.Resource.
 func (r *secretBackendResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
@@ -132,7 +120,7 @@ Secret backends store secret content. To learn more about secret backends, pleas
 			},
 			"config_wo": schema.MapAttribute{
 				Description: "The write-only backend configuration. Its content is never persisted to" +
-					" Terraform state, because it can contains sensitive data. Requires config_wo_version to be set; bump config_wo_version to" +
+					" Terraform state, because it can contain sensitive data. Requires config_wo_version to be set; bump config_wo_version to" +
 					" apply changes to this value.",
 				ElementType: types.StringType,
 				Required:    true,
@@ -276,6 +264,15 @@ func (r *secretBackendResource) Read(ctx context.Context, req resource.ReadReque
 		},
 	)
 	if err != nil {
+		// If the backend was removed out of band, remove it from state so
+		// Terraform plans a re-create instead of failing until manual state
+		// surgery. This mirrors the handleModelNotFoundError pattern used
+		// elsewhere in the provider.
+		if errors.Is(err, juju.ErrSecretBackendNotFound) {
+			r.trace(fmt.Sprintf("secret backend %q not found, removing from state", state.Name.ValueString()))
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read secret backend resource, got error: %s", err))
 		return
 	}
@@ -316,10 +313,18 @@ func (r *secretBackendResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
-	configAny, err := r.resolveConfig(ctx, plan, req.Config)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get secret backend config as map, got error: %s", err))
-		return
+	// Only send the write-only config to Juju when config_wo_version actually
+	// changed. This avoids silently re-applying whatever is currently in
+	// config_wo on unrelated updates (e.g. a rename), matching the documented
+	// contract that config changes require bumping config_wo_version.
+	var configAny map[string]any
+	if !plan.ConfigWOVersion.Equal(state.ConfigWOVersion) {
+		var err error
+		configAny, err = r.resolveConfig(ctx, plan, req.Config)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to get secret backend config as map, got error: %s", err))
+			return
+		}
 	}
 
 	var tokenRotateInterval *time.Duration
@@ -392,11 +397,11 @@ func (r *secretBackendResource) Delete(ctx context.Context, req resource.DeleteR
 	})
 }
 
-func (s *secretBackendResource) trace(msg string, additionalFields ...map[string]interface{}) {
-	if s.subCtx == nil {
+func (r *secretBackendResource) trace(msg string, additionalFields ...map[string]interface{}) {
+	if r.subCtx == nil {
 		return
 	}
-	tflog.SubsystemTrace(s.subCtx, LogResourceSecretBackend, msg, additionalFields...)
+	tflog.SubsystemTrace(r.subCtx, LogResourceSecretBackend, msg, additionalFields...)
 }
 
 // resolveConfig returns the backend config to send to Juju, reading from the

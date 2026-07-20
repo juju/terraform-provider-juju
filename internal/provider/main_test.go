@@ -115,3 +115,15 @@ func skipTestIfJujuAgentVersionBelow(t *testing.T, version string) {
 		t.Skipf("%s is not set or is below %s", TestJujuAgentVersion, version)
 	}
 }
+
+// skipTestIfJujuAgentVersionAtLeast skips the test for Juju versions at or
+// above the given version. Useful for legacy behavior that has been removed or
+// deprecated in newer versions.
+func skipTestIfJujuAgentVersionAtLeast(t *testing.T, version string) {
+	agentVersion := os.Getenv(TestJujuAgentVersion)
+	if agentVersion == "" {
+		t.Errorf("%s is not set", TestJujuAgentVersion)
+	} else if internaltesting.CompareVersions(agentVersion, version) >= 0 {
+		t.Skipf("%s is at or above %s", TestJujuAgentVersion, version)
+	}
+}

@@ -39,6 +39,7 @@ var _ resource.Resource = &modelResource{}
 var _ resource.ResourceWithConfigure = &modelResource{}
 var _ resource.ResourceWithImportState = &modelResource{}
 var _ resource.ResourceWithIdentity = &modelResource{}
+var _ resource.ResourceWithValidateConfig = &modelResource{}
 
 // NewModelResource returns a model resource.
 func NewModelResource() resource.Resource {
@@ -222,6 +223,38 @@ func (r *modelResource) ConfigValidators(ctx context.Context) []resource.ConfigV
 	}
 }
 
+// ValidateConfig rejects configurations that set the secret backend both via
+// the dedicated secret_backend attribute and via the "secret-backend" key in
+// the config block. Setting both is ambiguous.
+func (r *modelResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data modelResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if data.SecretBackend.IsNull() || data.SecretBackend.IsUnknown() {
+		return
+	}
+	if data.Config.IsNull() || data.Config.IsUnknown() {
+		return
+	}
+
+	config := make(map[string]string)
+	resp.Diagnostics.Append(data.Config.ElementsAs(ctx, &config, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if _, ok := config["secret-backend"]; ok {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("secret_backend"),
+			"Conflicting secret backend configuration",
+			"The secret backend must not be set both via the secret_backend attribute and the "+
+				"\"secret-backend\" key in the config block. Use the secret_backend attribute instead.",
+		)
+	}
+}
+
 func (r *modelResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
@@ -362,10 +395,16 @@ func (r *modelResource) Create(ctx context.Context, req resource.CreateRequest, 
 	plan.UUID = types.StringValue(response.UUID)
 
 	// Set the secret backend if specified.
+	//
+	// Do not return early on failure: the model has already been created on
+	// the controller, so we must fall through and save it to state.
 	if !plan.SecretBackend.IsNull() && !plan.SecretBackend.IsUnknown() {
 		if err := r.client.Models.SetModelSecretBackend(ctx, response.UUID, plan.SecretBackend.ValueString()); err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to set secret backend for model %q, got error: %s", modelName, err))
-			return
+			resp.Diagnostics.AddWarning(
+				"Unable to set secret backend",
+				fmt.Sprintf("Model %q was created, but its secret backend could not be set: %s. It will be reconciled on the next apply.", modelName, err),
+			)
+			plan.SecretBackend = types.StringNull()
 		}
 	}
 
@@ -462,14 +501,20 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		state.Constraints = types.StringValue(response.ModelConstraints.String())
 	}
 
+	// The secret_backend attribute is considered "in use" when it is set in
+	// state. We don't read it on import because the model secret backend
+	// defaults to "auto", so populating it after import would produce a
+	// spurious diff against a config that leaves the attribute unset.
+	readSecretBackend := !state.SecretBackend.IsNull()
+
 	// Config
 	if len(response.ModelConfig) > 0 {
-		// If the secret_backend attribute is in use (non-null in state),
-		// strip the "secret-backend" key from the model config to avoid drift.
+		// If the secret_backend attribute is in use, strip the
+		// "secret-backend" key from the model config to avoid drift.
 		// The secret_backend attribute handles it via the dedicated API.
 		// If the user is managing it via the config block instead, leave it
 		// alone so it round-trips through config.
-		if !state.SecretBackend.IsNull() {
+		if readSecretBackend {
 			delete(response.ModelConfig, "secret-backend")
 		}
 
@@ -487,8 +532,9 @@ func (r *modelResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	// Secret backend — only read it if the attribute is in use (non-null in
 	// state). This avoids overwriting a null value when the user manages the
-	// secret backend via the config block instead.
-	if !state.SecretBackend.IsNull() {
+	// secret backend via the config block instead, and avoids populating the
+	// default "auto" backend on import.
+	if readSecretBackend {
 		secretBackend, err := r.client.Models.GetModelSecretBackend(ctx, modelUUID)
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read model secret backend, got error: %s", err))

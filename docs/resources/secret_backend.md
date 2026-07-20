@@ -36,7 +36,7 @@ resource "juju_secret_backend" "myvault" {
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
 - `backend_type` (String) The type of the secret backend (e.g., 'vault', 'kubernetes').
-- `config_wo` (Map of String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The write-only backend configuration. Its content is never persisted to Terraform state, because it can contains sensitive data. Requires config_wo_version to be set; bump config_wo_version to apply changes to this value.
+- `config_wo` (Map of String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The write-only backend configuration. Its content is never persisted to Terraform state, because it can contain sensitive data. Requires config_wo_version to be set; bump config_wo_version to apply changes to this value.
 - `config_wo_version` (Number) The version of config_wo. Increment this value to trigger an update of the write-only backend configuration.
 - `name` (String) The name of the secret backend.
 

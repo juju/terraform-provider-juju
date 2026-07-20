@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -106,7 +107,11 @@ func TestAcc_ResourceSecretBackend(t *testing.T) {
 
 func TestAcc_ResourceSecretBackend_MigrateFromLegacyConfig(t *testing.T) {
 	SkipJAAS(t)
-	skipTestIfJujuAgentVersionBelow(t, "3.0.0")
+	// The legacy "secret-backend" model config key only exists on Juju 3.x;
+	// it is deprecated/removed on Juju 4+, where the dedicated
+	// model-secret-backend API is used instead.
+	skipTestIfJujuAgentVersionBelow(t, "3.3.0")
+	skipTestIfJujuAgentVersionAtLeast(t, "4.0.0")
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -161,6 +166,43 @@ func TestAcc_ResourceSecretBackend_MigrateFromLegacyConfig(t *testing.T) {
 				),
 			},
 		},
+	})
+}
+
+// TestAcc_ResourceSecretBackend_ConflictingConfig verifies that setting the
+// secret backend both via the secret_backend attribute and the "secret-backend"
+// key in the model config block is rejected by the resource validator.
+func TestAcc_ResourceSecretBackend_ConflictingConfig(t *testing.T) {
+	SkipJAAS(t)
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	modelName := acctest.RandomWithPrefix("test-model")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccModelBlockConflictingSecretBackend(modelName),
+				ExpectError: regexp.MustCompile("Conflicting secret backend configuration"),
+			},
+		},
+	})
+}
+
+func testAccModelBlockConflictingSecretBackend(modelName string) string {
+	return internaltesting.GetStringFromTemplateWithData("testAccModelBlockConflictingSecretBackend", `
+resource "juju_model" "{{.ModelName}}" {
+  name           = "{{.ModelName}}"
+  secret_backend = "internal"
+  config = {
+    secret-backend = "internal"
+  }
+}
+`, internaltesting.TemplateData{
+		"ModelName": modelName,
 	})
 }
 
