@@ -32,6 +32,7 @@ import (
 	apispaces "github.com/juju/juju/api/client/spaces"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
 	"github.com/juju/juju/cmd/juju/application/utils"
+	"github.com/juju/juju/core/arch"
 	corebase "github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
@@ -1457,6 +1458,14 @@ func (c applicationsClient) computeCharmID(
 		oldOrigin.ID = ""
 		oldOrigin.Hash = ""
 		oldOrigin.Revision = nil
+
+		// A local charm's stored origin is not required to record an
+		// architecture, so it may be empty
+		// Fall back to the default  architecture.
+		if newOrigin.Architecture == "" {
+			newOrigin.Architecture = arch.DefaultArchitecture
+			oldOrigin.Architecture = arch.DefaultArchitecture
+		}
 	}
 	if input.Revision != nil {
 		newURL = newURL.WithRevision(*input.Revision)
@@ -1499,13 +1508,7 @@ func (c applicationsClient) computeCharmID(
 	}
 
 	// Ensure that the new charm supports the architecture used by the deployed application.
-	// A local charm's stored origin may have an empty architecture (local
-	// origins are not required to record one), in which case adopt the
-	// resolved architecture. A charmhub origin must always carry an
-	// architecture, otherwise AddCharm fails server-side origin validation.
-	if oldOrigin.Architecture == "" {
-		oldOrigin.Architecture = resolvedOrigin.Architecture
-	} else if oldOrigin.Architecture != resolvedOrigin.Architecture {
+	if oldOrigin.Architecture != resolvedOrigin.Architecture {
 		msg := fmt.Sprintf("the new charm does not support the current architecture %q", oldOrigin.Architecture)
 		return apiapplication.CharmID{}, jujuerrors.New(msg)
 	}
