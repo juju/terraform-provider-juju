@@ -1071,12 +1071,16 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 			// origin_hash is compared only against its own prior value.
 			// The priorOriginKnown guard below skips this check when
 			// the hash is empty (Juju controllers on 3.6.25 or older),
-			// disabling drift detection there.
+			// disabling drift detection there. Likewise, an empty
+			// current hash means "unknown" (e.g. a transient
+			// GetCharmURLOrigin failure) and must not be read as
+			// drift, or the charm would be spuriously re-uploaded.
 			isLocalCharm := !priorCharm.LocalPath.IsNull() &&
 				priorCharm.LocalPath.ValueString() != ""
 			priorOriginKnown := !priorCharm.OriginHash.IsNull() &&
 				priorCharm.OriginHash.ValueString() != ""
-			if isLocalCharm && priorOriginKnown &&
+			currentOriginKnown := response.OriginHash != ""
+			if isLocalCharm && priorOriginKnown && currentOriginKnown &&
 				response.OriginHash != priorCharm.OriginHash.ValueString() {
 				r.trace("local charm drift detected", map[string]interface{}{
 					"app":               appName,
