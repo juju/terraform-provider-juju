@@ -1281,7 +1281,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		planCharm := planCharms[0]
 
 		updateApplicationInput.Base = planCharm.Base.ValueString()
-		// Always set charm name to more easily switch from charmhub to local
+		// Always set charm name to more easily switch between local and charmhub
 		updateApplicationInput.CharmName = planCharm.Name.ValueString()
 
 		if !planCharm.LocalPath.IsNull() && planCharm.LocalPath.ValueString() != "" {
