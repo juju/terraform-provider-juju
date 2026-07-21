@@ -3405,10 +3405,6 @@ func TestAcc_ResourceApplication_LocalCharm_Deploy(t *testing.T) {
 // than an absolute path) is resolved and deployed correctly, matching how the
 // juju CLI resolves a local charm path against its shell working directory.
 func TestAcc_ResourceApplication_LocalCharm_RelativePath(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-
 	modelName := acctest.RandomWithPrefix("tf-test-local-charm-relpath")
 	appName := "local-relpath"
 	charmName := "local-relpath-charm"
