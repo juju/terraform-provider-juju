@@ -389,7 +389,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							// The plan value is invalidated in that case.
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
-								InvalidateChannelIfSwitchingToLocalCharm(), //remove
+								InvalidateChannelIfSwitchingToLocalCharm(),
 							},
 							Validators: []validator.String{
 								StringIsChannelValidator{},
@@ -405,7 +405,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							PlanModifiers: []planmodifier.Int64{
 								int64planmodifier.UseStateForUnknown(),
 								InvalidateRevisionIfChannelChanges(),
-								InvalidateRevisionIfLocalCharmChanges(), // remove
+								InvalidateRevisionIfLocalCharmChanges(),
 							},
 						},
 						"local_path": schema.StringAttribute{
@@ -1280,20 +1280,16 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 		planCharm := planCharms[0]
 
+		updateApplicationInput.Base = planCharm.Base.ValueString()
+		// Always set charm name to more easily switch from charmhub to local
+		updateApplicationInput.CharmName = planCharm.Name.ValueString()
+
 		if !planCharm.LocalPath.IsNull() && planCharm.LocalPath.ValueString() != "" {
 			// A local charm changed content (the hash differs) but its
 			// name is unchanged. Refresh the charm in place from the new file.
-			updateApplicationInput.CharmName = planCharm.Name.ValueString()
 			updateApplicationInput.CharmLocalPath = planCharm.LocalPath.ValueString()
-			updateApplicationInput.Base = planCharm.Base.ValueString()
 		} else {
-			// CharmName is now always set for local charm support.
-			// Switching from a local charm back to Charmhub
-			// needs the refresh to target the Charmhub charm by name,
-			// because the old URL in state has the "local" schema.
-			updateApplicationInput.CharmName = planCharm.Name.ValueString()
 			updateApplicationInput.Channel = planCharm.Channel.ValueString()
-			updateApplicationInput.Base = planCharm.Base.ValueString()
 
 			// If the revision was left empty in the plan, leave it empty here
 			// to ensure we use the latest from the channel, otherwise keep it pinned.
