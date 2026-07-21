@@ -30,12 +30,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
-	"github.com/juju/names/v5"
-	"github.com/juju/terraform-provider-juju/internal/juju"
-	"github.com/juju/terraform-provider-juju/internal/wait"
-
 	"github.com/juju/juju/core/constraints"
 	jujustorage "github.com/juju/juju/core/storage"
+	"github.com/juju/names/v5"
+
+	"github.com/juju/terraform-provider-juju/internal/juju"
+	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 const (
@@ -389,7 +389,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							// The plan value is invalidated in that case.
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
-								InvalidateChannelIfSwitchingToLocalCharm(),
+								InvalidateChannelIfSwitchingToLocalCharm(), //remove
 							},
 							Validators: []validator.String{
 								StringIsChannelValidator{},
@@ -405,7 +405,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							PlanModifiers: []planmodifier.Int64{
 								int64planmodifier.UseStateForUnknown(),
 								InvalidateRevisionIfChannelChanges(),
-								InvalidateRevisionIfLocalCharmChanges(),
+								InvalidateRevisionIfLocalCharmChanges(), // remove
 							},
 						},
 						"local_path": schema.StringAttribute{
@@ -422,10 +422,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Description: "The content hash of the local charm referenced by `local_path`. This is computed by the provider to detect when the local charm file has changed.",
 							Computed:    true,
 							PlanModifiers: []planmodifier.String{
-								// Computes the hash value.
 								LocalCharmHashModifier(),
-								// Decides whether the diff forces a replacement or refresh
-								stringplanmodifier.RequiresReplaceIf(LocalCharmRequiresReplace, "", ""),
 							},
 						},
 						"origin_hash": schema.StringAttribute{

@@ -10,19 +10,23 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-// LocalCharmHashModifier returns a plan modifier that computes the content
-// hash of the local charm archive referenced by the sibling `local_path`
-// attribute. When `local_path` is not set (a Charmhub charm), the hash is set
-// to null. When the file content changes, the hash changes, producing a plan
-// diff that drives an in-place charm refresh (or a replacement if the charm
-// name has changed, see LocalCharmRequiresReplace).
+// LocalCharmHashModifier returns a plan modifier for the local_path_hash
+// attribute that computes the content hash of the local charm archive
+// referenced by the sibling `local_path` attribute and decides whether a
+// hash diff requires replacing the application.
+//
+// When `local_path` is not set (a Charmhub charm), the hash is set to null.
+// When the file content changes, the hash changes, producing a plan diff that
+// drives an in-place charm refresh. A replacement (destroy + recreate) is
+// forced only when the charm's metadata name in the new local file differs
+// from the name recorded in state; an identical name means the existing
+// application can be refreshed in place.
 func LocalCharmHashModifier() planmodifier.String {
 	return &localCharmHashModifier{}
 }
@@ -30,7 +34,7 @@ func LocalCharmHashModifier() planmodifier.String {
 type localCharmHashModifier struct{}
 
 func (m *localCharmHashModifier) Description(_ context.Context) string {
-	return "Computes the content hash of the local charm archive referenced by local_path."
+	return "Computes the content hash of the local charm archive referenced by local_path and forces a replacement if the charm name changed."
 }
 
 func (m *localCharmHashModifier) MarkdownDescription(ctx context.Context) string {
@@ -61,6 +65,27 @@ func (m *localCharmHashModifier) PlanModifyString(ctx context.Context, req planm
 	}
 
 	resp.PlanValue = types.StringValue(info.Hash)
+
+	// Replacement only applies to updates, and only when the file content
+	// actually changed.
+	if !req.State.Raw.IsKnown() || req.State.Raw.IsNull() || resp.PlanValue.Equal(req.StateValue) {
+		return
+	}
+
+	// The content changed. Compare the new charm's metadata name against the
+	// name currently recorded in state.
+	namePath := req.Path.ParentPath().AtName("name")
+	var stateName types.String
+	diags = req.State.GetAttribute(ctx, namePath, &stateName)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// A different charm name means a fundamentally different charm; the
+	// application must be replaced. An identical name means we can refresh
+	// the existing application in place.
+	resp.RequiresReplace = !stateName.IsNull() && stateName.ValueString() != info.Name
 }
 
 // InvalidateChannelIfSwitchingToLocalCharm returns a plan modifier that sets
@@ -240,56 +265,4 @@ func localCharmPresence(
 	planLocal = !planLocalPath.IsNull() && !planLocalPath.IsUnknown() && planLocalPath.ValueString() != ""
 	stateLocal = !stateLocalPath.IsNull() && !stateLocalPath.IsUnknown() && stateLocalPath.ValueString() != ""
 	return planLocal, stateLocal
-}
-
-// LocalCharmRequiresReplace returns a RequiresReplaceIf function for the
-// local_path_hash attribute. It forces a replacement (destroy + recreate) only
-// when the charm's metadata name in the new local file differs from the name
-// recorded in state. When only the content changes but the charm name is the
-// same, no replacement is required and the change is applied in place via a
-// charm refresh during Update.
-func LocalCharmRequiresReplace(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
-	// Nothing in state yet (create) or no local charm planned: never
-	// replace based on the hash.
-	if !req.State.Raw.IsKnown() || req.State.Raw.IsNull() {
-		return
-	}
-
-	localPathPath := req.Path.ParentPath().AtName("local_path")
-	var localPath types.String
-	diags := req.Plan.GetAttribute(ctx, localPathPath, &localPath)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	if localPath.IsNull() || localPath.IsUnknown() || localPath.ValueString() == "" {
-		return
-	}
-
-	// If the hash has not changed, the file content is identical: nothing
-	// to do, and certainly no replacement.
-	if req.PlanValue.Equal(req.StateValue) {
-		return
-	}
-
-	// The content changed. Parse the new charm to compare its metadata name
-	// against the name currently recorded in state.
-	namePath := req.Path.ParentPath().AtName("name")
-	var stateName types.String
-	diags = req.State.GetAttribute(ctx, namePath, &stateName)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	info, err := juju.ReadLocalCharmInfo(localPath.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Local Charm Error", err.Error())
-		return
-	}
-
-	// A different charm name means a fundamentally different charm; the
-	// application must be replaced. An identical name means we can refresh
-	// the existing application in place.
-	resp.RequiresReplace = !stateName.IsNull() && stateName.ValueString() != info.Name
 }
