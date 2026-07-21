@@ -384,6 +384,9 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Description: "The channel to use when deploying a charm. Specified as \\<track>/\\<risk>/\\<branch>.",
 							Optional:    true,
 							Computed:    true,
+							// Avoid a stale Charmhub channel from state when
+							// switching to a local charm.
+							// The plan value is invalidated in that case.
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
 								InvalidateChannelIfSwitchingToLocalCharm(),
@@ -396,6 +399,9 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Description: "The revision of the charm to deploy. During the update phase, the charm revision should be update before config update, to avoid issues with config parameters parsing.",
 							Optional:    true,
 							Computed:    true,
+							// A channel change or a local charm refresh
+							// produces a new controller-assigned revision, so
+							// the state value must be invalidated.
 							PlanModifiers: []planmodifier.Int64{
 								int64planmodifier.UseStateForUnknown(),
 								InvalidateRevisionIfChannelChanges(),
@@ -416,7 +422,9 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Description: "The content hash of the local charm referenced by `local_path`. This is computed by the provider to detect when the local charm file has changed.",
 							Computed:    true,
 							PlanModifiers: []planmodifier.String{
+								// Computes the hash value.
 								LocalCharmHashModifier(),
+								// Decides whether the diff forces a replacement or refresh
 								stringplanmodifier.RequiresReplaceIf(LocalCharmRequiresReplace, "", ""),
 							},
 						},
@@ -1282,6 +1290,10 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 			updateApplicationInput.CharmLocalPath = planCharm.LocalPath.ValueString()
 			updateApplicationInput.Base = planCharm.Base.ValueString()
 		} else {
+			// CharmName is now always set for local charm support.
+			// Switching from a local charm back to Charmhub
+			// needs the refresh to target the Charmhub charm by name,
+			// because the old URL in state has the "local" schema.
 			updateApplicationInput.CharmName = planCharm.Name.ValueString()
 			updateApplicationInput.Channel = planCharm.Channel.ValueString()
 			updateApplicationInput.Base = planCharm.Base.ValueString()
