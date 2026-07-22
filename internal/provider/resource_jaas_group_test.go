@@ -18,6 +18,7 @@ import (
 
 func TestAcc_ResourceJaasGroup(t *testing.T) {
 	OnlyTestAgainstJAAS(t)
+	SkipJaasGroupTests(t)
 	groupName := acctest.RandomWithPrefix("tf-jaas-group")
 	newGroupName := acctest.RandomWithPrefix("tf-jaas-group-new")
 	resourceName := "juju_jaas_group.test"

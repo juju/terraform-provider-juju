@@ -14,6 +14,7 @@ import (
 
 func TestAcc_DataSourceJAASGroup(t *testing.T) {
 	OnlyTestAgainstJAAS(t)
+	SkipJaasGroupTests(t)
 	groupName := acctest.RandomWithPrefix("tf-jaas-group")
 
 	resource.ParallelTest(t, resource.TestCase{
