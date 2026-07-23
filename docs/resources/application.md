@@ -84,6 +84,26 @@ resource "juju_application" "testapp" {
   }
 }
 
+# An application deployed from a local charm archive
+# The charm must be a packed .charm file (not an unpacked directory).
+# The name must match the charm name in the archive's metadata.yaml.
+# path_hash is computed automatically and changes whenever the
+# archive content changes, triggering a charm refresh.
+# Relative paths are resolved against the Terraform working directory (where
+# `terraform` is run), like the `juju` CLI resolves against its shell cwd.
+# Use ${path.module}/... to make the path relative to this module instead.
+resource "juju_application" "local" {
+  name = "my-local-charm"
+
+  model_uuid = juju_model.development.uuid
+
+  local_charm {
+    name = "my-local-charm"
+    path = "${path.module}/my-local-charm.charm"
+    base = "ubuntu@22.04"
+  }
+}
+
 # K8s application with an OCI image resource from a private registry
 resource "juju_application" "this" {
   name = "test-app"
@@ -120,11 +140,12 @@ resource "juju_application" "this" {
 
 ### Optional
 
-- `charm` (Block List) The charm installed from Charmhub. (see [below for nested schema](#nestedblock--charm))
+- `charm` (Block List) The charm installed from Charmhub. Mutually exclusive with `local_charm`. (see [below for nested schema](#nestedblock--charm))
 - `config` (Map of String) Application specific configuration. Must evaluate to a string, integer or boolean.
 - `constraints` (String) Constraints imposed on this application. Changing this value will cause the application to be destroyed and recreated by terraform. Multiple constraints can be provided as a space-separated list.
 - `endpoint_bindings` (Attributes Set) Configure endpoint bindings (see [below for nested schema](#nestedatt--endpoint_bindings))
 - `expose` (Block List) Makes an application publicly available over the network (see [below for nested schema](#nestedblock--expose))
+- `local_charm` (Block List) A local .charm archive to deploy, instead of using Charmhub. Mutually exclusive with `charm`. (see [below for nested schema](#nestedblock--local_charm))
 - `machines` (Set of String) Specify the target machines for the application's units. The number of machines in the set indicates the unit count for the application. Removing a machine from the set will remove the application's unit residing on it. `machines` is mutually exclusive with `units`.
 - `name` (String) A custom name for the application deployment. If empty, uses the charm's name.Changing this value will cause the application to be destroyed and recreated by terraform.
 - `registry_credentials` (Attributes Map) OCI image registry credentials for OCI images specified in the charm resources. The map key is the registry URL.
@@ -159,7 +180,7 @@ Notes:
 
 Required:
 
-- `name` (String) The name of the charm to be deployed.  Changing this value will cause the application to be destroyed and recreated by terraform.
+- `name` (String) The name of the charm to be deployed. Changing this value will cause the application to be destroyed and recreated by terraform.
 
 Optional:
 
@@ -188,6 +209,24 @@ Optional:
 - `cidrs` (String) A comma-delimited list of CIDRs that should be able to access the application ports once exposed.
 - `endpoints` (String) Expose only the ports that charms have opened for this comma-delimited list of endpoints
 - `spaces` (String) A comma-delimited list of spaces that should be able to access the application ports once exposed.
+
+
+<a id="nestedblock--local_charm"></a>
+### Nested Schema for `local_charm`
+
+Required:
+
+- `name` (String) The name of the charm to be deployed. Must match the charm name in the archive's metadata. Changing this value will cause the application to be destroyed and recreated by terraform.
+- `path` (String) The path to a local .charm archive to deploy. Relative paths are resolved against the Terraform working directory. `name` must match the charm name in the archive's metadata.
+
+Optional:
+
+- `base` (String) The operating system on which to deploy. E.g. ubuntu@22.04. Changing this value for machine charms will trigger a replace by terraform.
+
+Read-Only:
+
+- `origin_hash` (String) The controller-reported charm hash, used to detect out-of-band changes to a local charm (E.g. `juju refresh`). Only populated on controllers that report a hash (Juju 3.6.26+ or Juju 4+), otherwise this drift detection is disabled.
+- `path_hash` (String) The content hash of the local charm referenced by `path`. This is computed by the provider to detect when the local charm file has changed.
 
 
 <a id="nestedatt--registry_credentials"></a>
@@ -225,6 +264,25 @@ Import is supported using the following syntax:
 ```shell
 # Applications can be imported using the format: `model_uuid:application_name`, for example:
 $ terraform import juju_application.wordpress abe22490-a845-4a4d-ba52-7ec80a60aff5:wordpress
+```
+
+
+### Importing an application deployed from a local charm
+
+The controller does not record the local archive file, so on import only
+`local_charm.name`, `base`, and `origin_hash` are populated. You must set
+`local_charm.path` in your configuration (an in-place update) before the next
+`terraform plan`/`apply`.
+
+```hcl
+resource "juju_application" "my_local_charm" {
+  model_uuid = juju_model.development.uuid
+  local_charm {
+    name = "my-local-charm"
+    path = "${path.module}/my-local-charm.charm" # the archive originally deployed
+    base = "ubuntu@22.04"
+  }
+}
 ```
 
 

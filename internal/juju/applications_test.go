@@ -36,6 +36,7 @@ type ApplicationSuite struct {
 	mockApplicationClient *MockApplicationAPIClient
 	mockClient            *MockClientAPIClient
 	mockResourceAPIClient *MockResourceAPIClient
+	mockLocalCharmClient  *MockLocalCharmClient
 	mockConnection        *MockConnection
 	mockModelConfigClient *MockModelConfigAPIClient
 	mockSharedClient      *MockSharedClient
@@ -59,6 +60,8 @@ func (s *ApplicationSuite) setupMocks(t *testing.T) *gomock.Controller {
 			results := make([]resource.ApplicationResources, len(applications))
 			return results, nil
 		}).AnyTimes()
+
+	s.mockLocalCharmClient = NewMockLocalCharmClient(ctlr)
 
 	s.mockModelConfigClient = NewMockModelConfigAPIClient(ctlr)
 	minConfig := map[string]interface{}{
@@ -106,6 +109,9 @@ func (s *ApplicationSuite) getApplicationsClient() applicationsClient {
 		},
 		getResourceAPIClient: func(_ api.Connection) (ResourceAPIClient, error) {
 			return s.mockResourceAPIClient, nil
+		},
+		getLocalCharmClient: func(_ base.APICallCloser) (LocalCharmClient, error) {
+			return s.mockLocalCharmClient, nil
 		},
 	}
 }

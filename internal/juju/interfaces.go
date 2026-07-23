@@ -116,6 +116,12 @@ type ModelConfigAPIClient interface {
 	ModelGet(ctx context.Context) (map[string]interface{}, error)
 }
 
+// LocalCharmClient defines the subset of local charm API methods used by the
+// provider to upload local charms to the controller.
+type LocalCharmClient interface {
+	AddLocalCharm(curl *charm.URL, ch charm.Charm, force bool, agentVersion semversion.Number) (*charm.URL, error)
+}
+
 // ResourceAPIClient defines the subset of resource API methods used by the provider.
 type ResourceAPIClient interface {
 	AddPendingResources(ctx context.Context, args apiresources.AddPendingResourcesArgs) ([]string, error)

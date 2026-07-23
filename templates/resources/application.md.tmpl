@@ -35,6 +35,25 @@ Import is supported using the following syntax:
 {{- end }}
 
 
+### Importing an application deployed from a local charm
+
+The controller does not record the local archive file, so on import only
+`local_charm.name`, `base`, and `origin_hash` are populated. You must set
+`local_charm.path` in your configuration (an in-place update) before the next
+`terraform plan`/`apply`.
+
+```hcl
+resource "juju_application" "my_local_charm" {
+  model_uuid = juju_model.development.uuid
+  local_charm {
+    name = "my-local-charm"
+    path = "${path.module}/my-local-charm.charm" # the archive originally deployed
+    base = "ubuntu@22.04"
+  }
+}
+```
+
+
 ## Note on Subordinate Applications and Units
 For subordinate applications (such as those that attach to a principal charm). Starting with version 0.19.0, remove the units field from your subordinate application.
 
