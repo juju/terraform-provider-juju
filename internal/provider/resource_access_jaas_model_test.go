@@ -102,7 +102,11 @@ func TestAcc_ResourceJaasAccessModelAllTypes(t *testing.T) {
 	user := "foo@domain.com"
 	svcAcc := "test"
 	svcAccWithDomain := svcAcc + "@serviceaccount"
-	group := acctest.RandomWithPrefix("myGroup")
+	// An empty group name elides all group resources and checks.
+	group := ""
+	if jaasGroupsEnabled() {
+		group = acctest.RandomWithPrefix("myGroup")
+	}
 	role := acctest.RandomWithPrefix("role1")
 
 	// Objects for checking access
@@ -122,7 +126,9 @@ func TestAcc_ResourceJaasAccessModelAllTypes(t *testing.T) {
 			testAccCheckJaasResourceAccess(access, &userTag, modelCheck.tag, false),
 			testAccCheckJaasResourceAccess(access, &svcAccTag, modelCheck.tag, false),
 			testAccCheckJaasResourceAccess(access, roleCheck.tag, modelCheck.tag, false),
-			testAccCheckJaasResourceAccess(access, groupCheck.tag, modelCheck.tag, false),
+			checksIf(jaasGroupsEnabled(),
+				testAccCheckJaasResourceAccess(access, groupCheck.tag, modelCheck.tag, false),
+			),
 		),
 		Steps: []resource.TestStep{
 			{
@@ -130,19 +136,21 @@ func TestAcc_ResourceJaasAccessModelAllTypes(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAttributeNotEmpty(modelCheck),
 					testAccCheckAttributeNotEmpty(roleCheck),
-					testAccCheckAttributeNotEmpty(groupCheck),
 					testAccCheckJaasResourceAccess(access, &userTag, modelCheck.tag, true),
 					testAccCheckJaasResourceAccess(access, &svcAccTag, modelCheck.tag, true),
-					testAccCheckJaasResourceAccess(access, groupCheck.tag, modelCheck.tag, true),
 					testAccCheckJaasResourceAccess(access, roleCheck.tag, modelCheck.tag, true),
 					resource.TestCheckResourceAttr(modelResourceName, "access", access),
 					resource.TestCheckTypeSetElemAttr(modelResourceName, "users.*", user),
 					resource.TestCheckResourceAttr(modelResourceName, "users.#", "1"),
-					// Wrap this check so that the pointer has deferred evaluation.
-					func(s *terraform.State) error {
-						return resource.TestCheckTypeSetElemAttr(modelResourceName, "groups.*", *groupCheck.resourceID)(s)
-					},
-					resource.TestCheckResourceAttr(modelResourceName, "groups.#", "1"),
+					checksIf(jaasGroupsEnabled(),
+						testAccCheckAttributeNotEmpty(groupCheck),
+						testAccCheckJaasResourceAccess(access, groupCheck.tag, modelCheck.tag, true),
+						// Wrap this check so that the pointer has deferred evaluation.
+						func(s *terraform.State) error {
+							return resource.TestCheckTypeSetElemAttr(modelResourceName, "groups.*", *groupCheck.resourceID)(s)
+						},
+						resource.TestCheckResourceAttr(modelResourceName, "groups.#", "1"),
+					),
 					resource.TestCheckTypeSetElemAttr(modelResourceName, "service_accounts.*", svcAcc),
 					resource.TestCheckResourceAttr(modelResourceName, "service_accounts.#", "1"),
 				),
@@ -409,16 +417,20 @@ resource "juju_jaas_role" "test" {
 resource "juju_model" "test-model" {
   name = "{{.ModelName}}"
 }
+{{- if .Group }}
 
 resource "juju_jaas_group" "test" {
   name = "{{ .Group }}"
 }
+{{- end }}
 
 resource "juju_jaas_access_model" "test" {
   model_uuid          = juju_model.test-model.uuid
   access              = "{{.Access}}"
   users               = ["{{.User}}"]
+{{- if .Group }}
   groups              = [juju_jaas_group.test.uuid]
+{{- end }}
   roles              = [juju_jaas_role.test.uuid]
   service_accounts    = ["{{.SvcAcc}}"]
 }

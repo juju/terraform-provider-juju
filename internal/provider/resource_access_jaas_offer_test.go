@@ -25,6 +25,7 @@ import (
 
 func TestAcc_ResourceJaasAccessOffer(t *testing.T) {
 	OnlyTestAgainstJAAS(t)
+
 	// Resource names
 	modelName := acctest.RandomWithPrefix("tf-test-offer")
 	offerAccessResourceName := "juju_jaas_access_offer.test"
@@ -33,7 +34,11 @@ func TestAcc_ResourceJaasAccessOffer(t *testing.T) {
 	accessSuccess := "consumer"
 	accessFail := "bogus"
 	user := "foo@domain.com"
-	group := acctest.RandomWithPrefix("myGroup")
+	// An empty group name elides all group resources and checks.
+	group := ""
+	if jaasGroupsEnabled() {
+		group = acctest.RandomWithPrefix("myGroup")
+	}
 	role := acctest.RandomWithPrefix("role1")
 	svcAcc := "test"
 	svcAccWithDomain := svcAcc + "@serviceaccount"
@@ -57,7 +62,9 @@ func TestAcc_ResourceJaasAccessOffer(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeAggregateTestCheckFunc(
 			testAccCheckJaasResourceAccess(accessSuccess, &userTag, offerCheck.tag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, offerCheck.tag, false),
+			checksIf(jaasGroupsEnabled(),
+				testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, offerCheck.tag, false),
+			),
 			testAccCheckJaasResourceAccess(accessSuccess, roleCheck.tag, offerCheck.tag, false),
 			testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, offerCheck.tag, false),
 		),
@@ -69,21 +76,23 @@ func TestAcc_ResourceJaasAccessOffer(t *testing.T) {
 			{
 				Config: testAccResourceJaasAccessOffer(modelName, accessSuccess, user, group, svcAcc, role),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckAttributeNotEmpty(groupCheck),
 					testAccCheckAttributeNotEmpty(roleCheck),
 					testAccCheckAttributeNotEmpty(offerCheck),
 					testAccCheckJaasResourceAccess(accessSuccess, &userTag, offerCheck.tag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, offerCheck.tag, true),
 					testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, offerCheck.tag, true),
 					testAccCheckJaasResourceAccess(accessSuccess, roleCheck.tag, offerCheck.tag, true),
 					resource.TestCheckResourceAttr(offerAccessResourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(offerAccessResourceName, "users.*", user),
 					resource.TestCheckResourceAttr(offerAccessResourceName, "users.#", "1"),
-					// Wrap this check so that the pointer has deferred evaluation.
-					func(s *terraform.State) error {
-						return resource.TestCheckTypeSetElemAttr(offerAccessResourceName, "groups.*", *groupCheck.resourceID)(s)
-					},
-					resource.TestCheckResourceAttr(offerAccessResourceName, "groups.#", "1"),
+					checksIf(jaasGroupsEnabled(),
+						testAccCheckAttributeNotEmpty(groupCheck),
+						testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, offerCheck.tag, true),
+						// Wrap this check so that the pointer has deferred evaluation.
+						func(s *terraform.State) error {
+							return resource.TestCheckTypeSetElemAttr(offerAccessResourceName, "groups.*", *groupCheck.resourceID)(s)
+						},
+						resource.TestCheckResourceAttr(offerAccessResourceName, "groups.#", "1"),
+					),
 					resource.TestCheckTypeSetElemAttr(offerAccessResourceName, "service_accounts.*", svcAcc),
 					resource.TestCheckResourceAttr(offerAccessResourceName, "service_accounts.#", "1"),
 				),
@@ -124,16 +133,20 @@ resource "juju_offer" "offerone" {
 resource "juju_jaas_role" "test" {
   name = "{{ .Role }}"
 }
+{{- if .Group }}
 
 resource "juju_jaas_group" "test" {
   name = "{{ .Group }}"
 }
+{{- end }}
 
 resource "juju_jaas_access_offer" "test" {
   offer_url           = juju_offer.offerone.url
   access              = "{{.Access}}"
   users               = ["{{.User}}"]
+{{- if .Group }}
   groups              = [juju_jaas_group.test.uuid]
+{{- end }}
   roles              = [juju_jaas_role.test.uuid]
   service_accounts    = ["{{.SvcAcc}}"]
 }

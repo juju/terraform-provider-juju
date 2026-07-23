@@ -21,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/kubernetes"
@@ -116,6 +117,30 @@ func OnlyCrossController(t *testing.T) {
 func isJAAS() bool {
 	_, ok := os.LookupEnv(isJaasEnvKey)
 	return ok
+}
+
+// SkipJaasGroupTests should be called at the top of JAAS group
+// tests to allow skipping them via SKIP_JAAS_GROUP_TEST.
+func SkipJaasGroupTests(t *testing.T) {
+	if _, ok := os.LookupEnv("SKIP_JAAS_GROUP_TEST"); ok {
+		t.Skip("Skipping JAAS group test, SKIP_JAAS_GROUP_TEST is set")
+	}
+}
+
+// jaasGroupsEnabled reports whether JAAS group support should be
+// exercised; set SKIP_JAAS_GROUP_TEST to disable group coverage.
+func jaasGroupsEnabled() bool {
+	_, ok := os.LookupEnv("SKIP_JAAS_GROUP_TEST")
+	return !ok
+}
+
+// checksIf runs the given checks only when cond is true, allowing
+// tests to drop assertions for features disabled in the environment.
+func checksIf(cond bool, checks ...resource.TestCheckFunc) resource.TestCheckFunc {
+	if !cond {
+		return func(*terraform.State) error { return nil }
+	}
+	return resource.ComposeTestCheckFunc(checks...)
 }
 
 // OnlyTestAgainstJAAS should be called at the top of any tests that are not
