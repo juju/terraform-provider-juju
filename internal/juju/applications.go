@@ -762,7 +762,7 @@ func (c applicationsClient) ReadApplication(ctx context.Context, input *ReadAppl
 		return nil, fmt.Errorf("failed to parse charm: %v", err)
 	}
 
-	// origin_hash is used to detect out-of-band updates to the charm
+	// origin_hash is used to detect out-of-band updates to the charm.
 	isLocal := charm.Local.Matches(charmURL.Schema)
 	var originHash string
 	if isLocal {
