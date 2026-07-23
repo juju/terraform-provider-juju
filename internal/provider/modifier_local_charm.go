@@ -6,7 +6,6 @@ package provider
 import (
 	"context"
 
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -16,17 +15,11 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
-// LocalCharmHashModifier returns a plan modifier for the local_path_hash
-// attribute that computes the content hash of the local charm archive
-// referenced by the sibling `local_path` attribute and decides whether a
-// hash diff requires replacing the application.
-//
-// When `local_path` is not set (a Charmhub charm), the hash is set to null.
-// When the file content changes, the hash changes, producing a plan diff that
-// drives an in-place charm refresh. A replacement (destroy + recreate) is
-// forced only when the charm's metadata name in the new local file differs
-// from the name recorded in state; an identical name means the existing
-// application can be refreshed in place.
+// LocalCharmHashModifier returns a plan modifier for the local_charm
+// path_hash attribute. It computes the content hash of the archive
+// referenced by the sibling path attribute and forces a replacement when the
+// charm name in the new archive differs from the deployed one. A content-only
+// change produces a diff that drives an in-place refresh.
 func LocalCharmHashModifier() planmodifier.String {
 	return &localCharmHashModifier{}
 }
@@ -34,7 +27,7 @@ func LocalCharmHashModifier() planmodifier.String {
 type localCharmHashModifier struct{}
 
 func (m *localCharmHashModifier) Description(_ context.Context) string {
-	return "Computes the content hash of the local charm archive referenced by local_path and forces a replacement if the charm name changed."
+	return "Computes the content hash of the local charm archive referenced by path and forces a replacement if the charm name changed."
 }
 
 func (m *localCharmHashModifier) MarkdownDescription(ctx context.Context) string {
@@ -42,17 +35,16 @@ func (m *localCharmHashModifier) MarkdownDescription(ctx context.Context) string
 }
 
 func (m *localCharmHashModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
-	// The hash lives in the same charm block element as local_path.
-	localPathPath := req.Path.ParentPath().AtName("local_path")
+	// The hash lives in the same local_charm block element as path.
+	pathPath := req.Path.ParentPath().AtName("path")
 
 	var localPath types.String
-	diags := req.Plan.GetAttribute(ctx, localPathPath, &localPath)
+	diags := req.Plan.GetAttribute(ctx, pathPath, &localPath)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// No local charm: this is a Charmhub charm, so there is no hash.
 	if localPath.IsNull() || localPath.IsUnknown() || localPath.ValueString() == "" {
 		resp.PlanValue = types.StringNull()
 		return
@@ -82,50 +74,12 @@ func (m *localCharmHashModifier) PlanModifyString(ctx context.Context, req planm
 		return
 	}
 
-	// A different charm name means a fundamentally different charm; the
-	// application must be replaced. An identical name means we can refresh
-	// the existing application in place.
 	resp.RequiresReplace = !stateName.IsNull() && stateName.ValueString() != info.Name
 }
 
-// InvalidateChannelIfSwitchingToLocalCharm returns a plan modifier that sets
-// the computed channel to Unknown when an application switches from a
-// Charmhub charm to a local charm. Local charms have no channel, so keeping
-// the prior Charmhub channel from state would cause an inconsistent result
-// after apply when Read returns the empty string.
-func InvalidateChannelIfSwitchingToLocalCharm() planmodifier.String {
-	return &invalidateChannelIfSwitchingToLocalCharmModifier{}
-}
-
-type invalidateChannelIfSwitchingToLocalCharmModifier struct{}
-
-func (m *invalidateChannelIfSwitchingToLocalCharmModifier) Description(_ context.Context) string {
-	return "If switching from a Charmhub charm to a local charm, the channel becomes unknown because local charms have no channel."
-}
-
-func (m *invalidateChannelIfSwitchingToLocalCharmModifier) MarkdownDescription(ctx context.Context) string {
-	return m.Description(ctx)
-}
-
-func (m *invalidateChannelIfSwitchingToLocalCharmModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
-	// If the user explicitly configured channel, preserve it.
-	if !req.ConfigValue.IsNull() && !req.ConfigValue.IsUnknown() {
-		return
-	}
-
-	planLocal, stateLocal := localCharmPresence(ctx, req.Path, req.Plan, req.State, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	if planLocal && !stateLocal {
-		resp.PlanValue = types.StringUnknown()
-	}
-}
-
-// OriginHashModifier returns a plan modifier for the computed `origin_hash`.
-// The controller-reported hash changes with the deployed charm, so plain
-// UseStateForUnknown would trip "inconsistent result after apply".
+// OriginHashModifier returns a plan modifier for the local_charm origin_hash
+// attribute. The controller-reported hash changes with the deployed charm, so
+// plain UseStateForUnknown would trip "inconsistent result after apply".
 // Instead it keeps the prior value while the charm is unchanged and becomes
 // unknown when a charm-defining attribute changes or on create.
 func OriginHashModifier() planmodifier.String {
@@ -153,15 +107,11 @@ func (m *originHashModifier) PlanModifyString(ctx context.Context, req planmodif
 	// If a charm-defining attribute is planned to change, the deployed charm
 	// (and therefore its controller-reported hash) will change too, so the
 	// value must be unknown to accept the post-apply hash.
-	//
-	// The base comes from config and can be compared directly. The local charm
-	// content is detected by recomputing the file hash from local_path, because
-	// sibling plan modifiers do not observe each other's planned values within
-	// the same apply.
 	parent := req.Path.ParentPath()
 	charmChanging := false
+
 	baseAttr := parent.AtName("base")
-	var planBase, stateBase attr.Value
+	var planBase, stateBase types.String
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, baseAttr, &planBase)...)
 	resp.Diagnostics.Append(req.State.GetAttribute(ctx, baseAttr, &stateBase)...)
 	if resp.Diagnostics.HasError() {
@@ -170,15 +120,10 @@ func (m *originHashModifier) PlanModifyString(ctx context.Context, req planmodif
 	if planBase.IsUnknown() || !planBase.Equal(stateBase) {
 		charmChanging = true
 	}
-	if !charmChanging {
-		planLocal, stateLocal := localCharmPresence(ctx, req.Path, req.Plan, req.State, &resp.Diagnostics)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		if planLocal != stateLocal {
-			charmChanging = true
-		}
-	}
+
+	// The local charm content is detected by recomputing the file hash from
+	// path, because sibling plan modifiers do not observe each other's
+	// planned values within the same apply.
 	if !charmChanging &&
 		localCharmContentChanges(ctx, req.Path, req.Plan, req.State, &resp.Diagnostics) {
 		charmChanging = true
@@ -192,18 +137,16 @@ func (m *originHashModifier) PlanModifyString(ctx context.Context, req planmodif
 		return
 	}
 
-	// The charm is unchanged: preserve the prior origin hash so drift that
-	// was reconciled stays stable and no perpetual diff is produced.
+	// The charm is unchanged: preserve the prior origin hash so no perpetual
+	// diff is produced.
 	resp.PlanValue = req.StateValue
 }
 
 // localCharmContentChanges reports whether the local charm archive referenced
-// by the sibling local_path attribute has different content than what is
-// recorded in state. It recomputes the archive hash from local_path and
-// compares it against the local_path_hash stored in state. It returns false
-// when there is no local charm (a Charmhub charm) or when the content is
-// unchanged. attrPath is the path of any attribute within the same charm
-// block element; the function derives the sibling paths from its parent.
+// by the sibling path attribute has different content than what is recorded
+// in state. It recomputes the archive hash and compares it against the
+// path_hash stored in state. attrPath is the path of any attribute within the
+// same local_charm block element.
 func localCharmContentChanges(
 	ctx context.Context,
 	attrPath path.Path,
@@ -214,17 +157,16 @@ func localCharmContentChanges(
 	parent := attrPath.ParentPath()
 
 	var localPath types.String
-	diags.Append(plan.GetAttribute(ctx, parent.AtName("local_path"), &localPath)...)
+	diags.Append(plan.GetAttribute(ctx, parent.AtName("path"), &localPath)...)
 	if diags.HasError() {
 		return false
 	}
-	// Not a local charm: no local content to compare.
 	if localPath.IsNull() || localPath.IsUnknown() || localPath.ValueString() == "" {
 		return false
 	}
 
 	var stateHash types.String
-	diags.Append(state.GetAttribute(ctx, parent.AtName("local_path_hash"), &stateHash)...)
+	diags.Append(state.GetAttribute(ctx, parent.AtName("path_hash"), &stateHash)...)
 	if diags.HasError() {
 		return false
 	}
@@ -235,34 +177,11 @@ func localCharmContentChanges(
 		return false
 	}
 
-	// A null or empty state hash (for example after drift invalidated it, or
-	// on first read) counts as a content change so the dependent computed
-	// values are recalculated.
+	// A null or empty state hash (for example after drift invalidated it)
+	// counts as a content change so dependent computed values are
+	// recalculated.
 	if stateHash.IsNull() || stateHash.ValueString() == "" {
 		return true
 	}
 	return info.Hash != stateHash.ValueString()
-}
-
-// localCharmPresence reports whether the plan and state currently refer to a
-// local charm, based on whether the sibling local_path attribute is set.
-func localCharmPresence(
-	ctx context.Context,
-	attrPath path.Path,
-	plan tfsdk.Plan,
-	state tfsdk.State,
-	diags *diag.Diagnostics,
-) (planLocal bool, stateLocal bool) {
-	parent := attrPath.ParentPath()
-
-	var planLocalPath, stateLocalPath types.String
-	diags.Append(plan.GetAttribute(ctx, parent.AtName("local_path"), &planLocalPath)...)
-	diags.Append(state.GetAttribute(ctx, parent.AtName("local_path"), &stateLocalPath)...)
-	if diags.HasError() {
-		return false, false
-	}
-
-	planLocal = !planLocalPath.IsNull() && !planLocalPath.IsUnknown() && planLocalPath.ValueString() != ""
-	stateLocal = !stateLocalPath.IsNull() && !stateLocalPath.IsUnknown() && stateLocalPath.ValueString() != ""
-	return planLocal, stateLocal
 }

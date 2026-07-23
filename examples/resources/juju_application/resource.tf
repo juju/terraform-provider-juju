@@ -73,7 +73,7 @@ resource "juju_application" "testapp" {
 # An application deployed from a local charm archive
 # The charm must be a packed .charm file (not an unpacked directory).
 # The name must match the charm name in the archive's metadata.yaml.
-# local_path_hash is computed automatically and changes whenever the
+# path_hash is computed automatically and changes whenever the
 # archive content changes, triggering a charm refresh.
 # Relative paths are resolved against the Terraform working directory (where
 # `terraform` is run), like the `juju` CLI resolves against its shell cwd.
@@ -83,10 +83,10 @@ resource "juju_application" "local" {
 
   model_uuid = juju_model.development.uuid
 
-  charm {
-    name       = "my-local-charm"
-    local_path = "${path.module}/my-local-charm.charm"
-    base       = "ubuntu@22.04"
+  local_charm {
+    name = "my-local-charm"
+    path = "${path.module}/my-local-charm.charm"
+    base = "ubuntu@22.04"
   }
 }
 
