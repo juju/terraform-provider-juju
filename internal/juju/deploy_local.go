@@ -14,6 +14,8 @@ import (
 	"strings"
 
 	jujuerrors "github.com/juju/errors"
+	goyaml "gopkg.in/yaml.v2"
+
 	"github.com/juju/juju/api"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
@@ -24,7 +26,6 @@ import (
 	coreversion "github.com/juju/juju/core/version"
 	"github.com/juju/juju/domain/deployment/charm"
 	"github.com/juju/juju/environs/config"
-	goyaml "gopkg.in/yaml.v2"
 )
 
 const LocalCharmOriginHashFirstAgentVersion = "3.6.26"
@@ -119,9 +120,9 @@ func hashFile(path string) (string, error) {
 }
 
 // deployFromPath uploads a local charm archive to the controller and then
-// deploys it. This mirrors the behaviour of `juju deploy ./path/to/charm`.
-// The charm must be a packed .charm archive; deploying from an unpacked
-// directory is not supported by the controller.
+// deploys it.
+// This mirrors the behaviour of `juju deploy ./path/to/charm`.
+// The charm must be a packed .charm archive.
 func (c applicationsClient) deployFromPath(
 	ctx context.Context,
 	conn api.Connection,
@@ -129,9 +130,7 @@ func (c applicationsClient) deployFromPath(
 	resourceAPIClient ResourceAPIClient,
 	transformedInput transformedCreateApplicationInput,
 ) error {
-	// The charm archive was read during validateAndTransform. Only packed
-	// .charm archives are supported; directories are rejected by
-	// AddLocalCharm.
+	// The charm archive was read during validateAndTransform.
 	charmArchive := transformedInput.charmArchive
 
 	// Upload the charm archive and build the deploy origin.
@@ -142,10 +141,10 @@ func (c applicationsClient) deployFromPath(
 	}
 
 	// Register any resources declared in the charm metadata as pending
-	// resources and collect their IDs for the Deploy call. This is shared
-	// with the store-charm path; passing every metadata resource lets
-	// resources absent from the plan default to the store origin, matching
-	// `juju deploy ./path/to/charm`.
+	// resources and collect their IDs for the Deploy call.
+	// This is shared with the store-charm path.
+	// Passing every metadata resource lets resources absent from the plan
+	// default to the store origin, matching `juju deploy ./path/to/charm`.
 	charmID := apiapplication.CharmID{
 		URL:    resultURL.String(),
 		Origin: origin,
@@ -180,8 +179,9 @@ func (c applicationsClient) deployFromPath(
 		return jujuerrors.Annotatef(err, "cannot deploy local charm %q", resultURL.Name)
 	}
 
-	// Trust is not a Deploy argument; it is applied via the application
-	// config after deployment, mirroring the DeployFromRepository path.
+	// Trust is not a Deploy argument.
+	// It is applied via the application config after deployment,
+	// mirroring the DeployFromRepository path.
 	if transformedInput.trust {
 		err = c.setTrust(ctx, applicationAPIClient, transformedInput.applicationName, true)
 		if err != nil {
@@ -219,8 +219,7 @@ func (c applicationsClient) uploadLocalCharm(
 		return nil, apicommoncharm.Origin{}, jujuerrors.Annotate(err, "cannot compute supported bases for local charm")
 	}
 
-	// Fetch the model config once and derive both the base fallback and the
-	// agent version from it, avoiding a second ModelGet round-trip.
+	// Avoid a second ModelGet round-trip.
 	modelConfig, err := c.modelConfig(ctx, conn)
 	if err != nil {
 		return nil, apicommoncharm.Origin{}, err
@@ -238,8 +237,8 @@ func (c applicationsClient) uploadLocalCharm(
 		Revision: charmArchive.Revision(),
 	}
 
-	// The agent version is required so the controller can validate that
-	// the charm is compatible with the deployed agents.
+	// The controller uses the agent version to validate the charm
+	// against the deployed agents.
 	agentVersion, ok := modelConfig.AgentVersion()
 	if !ok {
 		return nil, apicommoncharm.Origin{}, jujuerrors.New("cannot determine model agent version")
@@ -256,9 +255,8 @@ func (c applicationsClient) uploadLocalCharm(
 		return nil, apicommoncharm.Origin{}, jujuerrors.Annotatef(err, "cannot upload local charm %q", curl.Name)
 	}
 
-	// Build the origin. Local charms have no channel; the architecture is
-	// taken from the constraints (defaulting to the controller's
-	// architecture) and the base is set above.
+	// The architecture comes from the constraints, defaulting to the
+	// controller's architecture.
 	platform := utils.MakePlatform(cons, base, constraints.Value{})
 	origin, err := utils.MakeOrigin(charm.Local, resultURL.Revision, charm.Channel{}, platform)
 	if err != nil {
@@ -270,8 +268,8 @@ func (c applicationsClient) uploadLocalCharm(
 }
 
 // computeLocalCharmID uploads a new local charm archive and returns the
-// CharmID needed to refresh an existing application to it via SetCharm. It is
-// the local-charm analogue of computeCharmID.
+// CharmID needed to refresh an existing application to it via SetCharm.
+// It's the local-charm analogue of computeCharmID.
 func (c applicationsClient) computeLocalCharmID(
 	ctx context.Context,
 	conn api.Connection,

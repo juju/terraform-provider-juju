@@ -1130,12 +1130,10 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		}
 	}
 
-	// State requiring transformation. Populate the charm block that matches
-	// the deployed charm. When the controller reports a local (uploaded)
-	// charm, or the prior state held a local_charm block, populate
-	// local_charm; otherwise populate charm. Using the controller-reported
-	// source (response.IsLocal) lets import populate the correct block even
-	// with no prior state to anchor the choice. The other block stays null.
+	// Populate local_charm when the controller reports a local charm or prior
+	// state held one, otherwise populate charm.
+	// response.IsLocal lets import pick the right block with no prior state.
+	// The other block stays null.
 	charmType := req.State.Schema.GetBlocks()[CharmKey].(schema.ListNestedBlock).NestedObject.Type()
 	localCharmType := req.State.Schema.GetBlocks()[LocalCharmKey].(schema.ListNestedBlock).NestedObject.Type()
 
@@ -1159,18 +1157,14 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 			}
 			if len(priorLocals) == 1 {
 				prior := priorLocals[0]
-				// The controller has no knowledge of the local charm file,
-				// so preserve the path and its content hash from the prior
-				// state.
+				// The controller does not know the local file.
+				// Preserve path and path_hash from prior state.
 				dataLocal.Path = prior.Path
 				dataLocal.PathHash = prior.PathHash
 
-				// Detect out-of-band drift: if the controller's origin_hash
-				// changed since the last apply, the deployed charm no longer
-				// matches the local file. Null path_hash so the plan-time
-				// modifier re-uploads. Empty hashes mean unknown (old
-				// controller or a transient failure) and must not count as
-				// drift.
+				// A changed origin_hash means the deployed charm drifted from the
+				// local file. Null path_hash so the plan-time modifier re-uploads.
+				// Empty hashes mean unknown, not drift.
 				priorOriginKnown := !prior.OriginHash.IsNull() &&
 					prior.OriginHash.ValueString() != ""
 				currentOriginKnown := response.OriginHash != ""

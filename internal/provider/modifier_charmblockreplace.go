@@ -15,23 +15,19 @@ import (
 
 // charmBlockRequiresReplace returns a plan modifier for the `charm` and
 // `local_charm` blocks that decides application replacement by comparing the
-// effective charm (across both blocks) between state and plan.
+// effective charm across both blocks between state and plan.
 //
-// It is attached to both blocks as a list-level modifier rather than to the
-// individual `name`/`base` attributes. A list modifier is invoked when its
-// block is added (null -> value) or removed (value -> null), so it reliably
-// observes a switch between the `charm` and `local_charm` blocks. Per-attribute
-// modifiers on the removed block may not run at all, which makes the switch
-// decision fragile.
+// It is a list-level modifier on both blocks rather than a per-attribute one.
+// A list modifier runs when its block is added or removed, so it reliably
+// observes a switch between the two blocks. A per-attribute modifier on the
+// removed block may not run at all.
 //
-// The replacement rules are:
-//   - The effective charm name changed -> replace (a rename is not an in-place
-//     operation).
-//   - The effective base changed on an IAAS model -> replace (CAAS supports an
-//     in-place base change, IAAS does not).
+// Replacement rules:
+//   - The charm name changed (a rename is not in-place).
+//   - The base changed on an IAAS model (CAAS updates in place, IAAS does not).
 //
-// Switching charm source (Charmhub <-> local) with the same name and base is an
-// in-place Update, handled by the Update method, so it must not replace.
+// Switching charm source with the same name and base is an in-place Update, so
+// it must not replace.
 func charmBlockRequiresReplace() planmodifier.List {
 	return charmBlockReplaceModifier{}
 }
@@ -77,8 +73,8 @@ func (m charmBlockReplaceModifier) PlanModifyList(ctx context.Context, req planm
 		return
 	}
 
-	// A base change forces replacement only on IAAS models. If the base is
-	// unknown/absent on either side, or unchanged, no replacement is needed.
+	// A base change forces replacement only on IAAS models.
+	// Skip when the base is unknown, absent, or unchanged.
 	stateBase := stateEff.Base
 	planBase := planEff.Base
 	if stateBase.IsNull() || stateBase.IsUnknown() ||
