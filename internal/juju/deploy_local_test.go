@@ -16,13 +16,6 @@ import (
 	testcharm "github.com/juju/terraform-provider-juju/internal/testcharm"
 )
 
-// buildLocalCharm delegates to testcharm.BuildLocalCharm so test bodies
-// in this file read naturally.
-func buildLocalCharm(t *testing.T, dir, charmName, content string, baseChannels ...string) string {
-	t.Helper()
-	return testcharm.BuildLocalCharm(t, dir, charmName, content, baseChannels...)
-}
-
 // minModelConfig returns a minimal model config attribute map suitable for
 // config.New.  callers may add or override keys before passing to
 // MockModelConfigAPIClient.
@@ -47,20 +40,20 @@ func minModelConfig(t *testing.T, extra map[string]interface{}) map[string]inter
 
 func TestReadLocalCharmInfo_ReturnsNameHashAndBases(t *testing.T) {
 	dir := t.TempDir()
-	path := buildLocalCharm(t, dir, "my-charm", "v1-content", "22.04", "24.04")
+	path := testcharm.ZipFixture(t, "test-charm-v1", dir)
 
 	info, err := ReadLocalCharmInfo(path)
 	require.NoError(t, err)
 
-	require.Equal(t, "my-charm", info.Name)
+	require.Equal(t, "test-charm", info.Name)
 	require.Len(t, info.Hash, 64, "hash should be a 64-char hex SHA-256")
 	require.Len(t, info.SupportedBases, 2)
 }
 
 func TestReadLocalCharmInfo_HashChangesWithContent(t *testing.T) {
 	dir := t.TempDir()
-	p1 := buildLocalCharm(t, filepath.Join(dir, "v1"), "charm", "content-a", "22.04")
-	p2 := buildLocalCharm(t, filepath.Join(dir, "v2"), "charm", "content-b", "22.04")
+	p1 := testcharm.ZipFixture(t, "test-charm-v1", filepath.Join(dir, "v1"))
+	p2 := testcharm.ZipFixture(t, "test-charm-v2", filepath.Join(dir, "v2"))
 
 	i1, err := ReadLocalCharmInfo(p1)
 	require.NoError(t, err)
@@ -79,7 +72,7 @@ func TestReadLocalCharmInfo_MissingFile(t *testing.T) {
 
 func TestCheckLocalCharmBase_Compatible(t *testing.T) {
 	dir := t.TempDir()
-	path := buildLocalCharm(t, dir, "c", "v1", "22.04")
+	path := testcharm.ZipFixture(t, "test-charm-v1", dir)
 	info, err := ReadLocalCharmInfo(path)
 	require.NoError(t, err)
 
@@ -88,7 +81,7 @@ func TestCheckLocalCharmBase_Compatible(t *testing.T) {
 
 func TestCheckLocalCharmBase_Incompatible(t *testing.T) {
 	dir := t.TempDir()
-	path := buildLocalCharm(t, dir, "c", "v1", "22.04")
+	path := testcharm.ZipFixture(t, "juju-qa-test", dir)
 	info, err := ReadLocalCharmInfo(path)
 	require.NoError(t, err)
 
@@ -114,7 +107,7 @@ func TestCheckLocalCharmBase_NoManifestBases_AlwaysOK(t *testing.T) {
 
 func TestCheckLocalCharmBase_MultiBase_CompatibleMatch(t *testing.T) {
 	dir := t.TempDir()
-	path := buildLocalCharm(t, dir, "c", "v1", "22.04", "24.04")
+	path := testcharm.ZipFixture(t, "test-charm-v1", dir)
 	info, err := ReadLocalCharmInfo(path)
 	require.NoError(t, err)
 

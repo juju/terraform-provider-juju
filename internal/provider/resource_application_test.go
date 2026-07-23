@@ -22,19 +22,19 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
-	"github.com/juju/names/v6"
-	internaljuju "github.com/juju/terraform-provider-juju/internal/juju"
-	testcharm "github.com/juju/terraform-provider-juju/internal/testcharm"
-	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
-	"github.com/juju/terraform-provider-juju/internal/wait"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/api/client/resources"
 	apispaces "github.com/juju/juju/api/client/spaces"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/rpc/params"
+	"github.com/juju/names/v6"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	internaljuju "github.com/juju/terraform-provider-juju/internal/juju"
+	testcharm "github.com/juju/terraform-provider-juju/internal/testcharm"
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
+	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 func TestAcc_ResourceApplication(t *testing.T) {
@@ -3318,11 +3318,11 @@ func testAccResourceApplicationUnknownMachines(modelName string) string {
 func TestAcc_ResourceApplication_LocalCharm_Deploy(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-local-charm")
 	appName := "local-test"
-	charmName := "local-test-charm"
+	charmName := "test-charm"
 
 	dir := t.TempDir()
-	archiveV1 := buildLocalCharm(t, filepath.Join(dir, "v1"), charmName, "version-1-content", "22.04")
-	archiveV2 := buildLocalCharm(t, filepath.Join(dir, "v2"), charmName, "version-2-content", "22.04")
+	archiveV1 := testcharm.ZipFixture(t, "test-charm-v1", filepath.Join(dir, "v1"))
+	archiveV2 := testcharm.ZipFixture(t, "test-charm-v2", filepath.Join(dir, "v2"))
 
 	var hashAfterV1 string
 
@@ -3414,10 +3414,10 @@ func TestAcc_ResourceApplication_LocalCharm_Deploy(t *testing.T) {
 func TestAcc_ResourceApplication_LocalCharm_RelativePath(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-local-charm-relpath")
 	appName := "local-relpath"
-	charmName := "local-relpath-charm"
+	charmName := "test-charm"
 
 	dir := t.TempDir()
-	archive := buildLocalCharm(t, dir, charmName, "relative-path-content", "22.04")
+	archive := testcharm.ZipFixture(t, "test-charm-v1", dir)
 
 	// Express the archive path relative to the process working directory (the
 	// directory the provider resolves relative paths against).
@@ -3473,11 +3473,11 @@ func TestAcc_ResourceApplication_LocalCharm_Drift(t *testing.T) {
 
 	modelName := acctest.RandomWithPrefix("tf-test-local-charm-drift")
 	appName := "local-drift"
-	charmName := "local-drift-charm"
+	charmName := "test-charm"
 
 	dir := t.TempDir()
-	archiveV1 := buildLocalCharm(t, filepath.Join(dir, "v1"), charmName, "drift-version-1", "22.04")
-	archiveV2 := buildLocalCharm(t, filepath.Join(dir, "v2"), charmName, "drift-version-2", "22.04")
+	archiveV1 := testcharm.ZipFixture(t, "test-charm-v1", filepath.Join(dir, "v1"))
+	archiveV2 := testcharm.ZipFixture(t, "test-charm-v2", filepath.Join(dir, "v2"))
 
 	var driftedOriginHash string
 
@@ -3585,10 +3585,10 @@ func TestAcc_ResourceApplication_LocalCharm_DriftUnsupported(t *testing.T) {
 
 	modelName := acctest.RandomWithPrefix("tf-test-local-charm-drift-unsupported")
 	appName := "local-drift-unsupported"
-	charmName := "local-drift-unsupported-charm"
+	charmName := "test-charm"
 
 	dir := t.TempDir()
-	archive := buildLocalCharm(t, dir, charmName, "v1", "22.04")
+	archive := testcharm.ZipFixture(t, "test-charm-v1", dir)
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -3617,8 +3617,8 @@ func TestAcc_ResourceApplication_LocalCharm_NameMismatch(t *testing.T) {
 
 	modelName := acctest.RandomWithPrefix("tf-test-local-charm-mismatch")
 	dir := t.TempDir()
-	// Archive metadata says "actual-charm-name", HCL declares "wrong-name".
-	archivePath := buildLocalCharm(t, dir, "actual-charm-name", "v1", "22.04")
+	// Archive metadata says "test-charm", HCL declares "wrong-name".
+	archivePath := testcharm.ZipFixture(t, "test-charm-v1", dir)
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -3634,12 +3634,12 @@ func TestAcc_ResourceApplication_LocalCharm_NameMismatch(t *testing.T) {
 
 // TestAcc_ResourceApplication_LocalCharm_BaseMismatch verifies that
 // ValidateConfig rejects a base that is not listed in the archive's
-// manifest.yaml. The test charm declares ubuntu@22.04; requesting
-// ubuntu@24.04 should produce an "Unsupported Base" error.
+// manifest.yaml. The juju-qa-test fixture declares only ubuntu@22.04;
+// requesting ubuntu@24.04 should produce an "Unsupported Base" error.
 func TestAcc_ResourceApplication_LocalCharm_BaseMismatch(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-local-charm-base")
 	dir := t.TempDir()
-	archivePath := buildLocalCharm(t, dir, "test-charm", "v1", "22.04")
+	archivePath := testcharm.ZipFixture(t, "juju-qa-test", dir)
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -3652,7 +3652,7 @@ resource "juju_application" "this" {
   model_uuid = juju_model.this.uuid
   name       = "app"
   local_charm {
-    name = "test-charm"
+    name = "juju-qa-test"
     path = %q
     base = "ubuntu@24.04"
   }
@@ -3672,9 +3672,9 @@ func TestAcc_ResourceApplication_LocalCharm_BaseSelectionDefault(t *testing.T) {
 	}
 
 	modelName := acctest.RandomWithPrefix("tf-test-local-charm-base-sel-default")
-	charmName := "multi-base-charm"
+	charmName := "test-charm"
 	dir := t.TempDir()
-	archivePath := buildLocalCharm(t, dir, charmName, "v1", "22.04", "24.04")
+	archivePath := testcharm.ZipFixture(t, "test-charm-v1", dir)
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -3711,9 +3711,9 @@ func TestAcc_ResourceApplication_LocalCharm_BaseSelectionExplicit(t *testing.T) 
 	}
 
 	modelName := acctest.RandomWithPrefix("tf-test-local-charm-base-sel-explicit")
-	charmName := "multi-base-charm"
+	charmName := "test-charm"
 	dir := t.TempDir()
-	archivePath := buildLocalCharm(t, dir, charmName, "v1", "22.04", "24.04")
+	archivePath := testcharm.ZipFixture(t, "test-charm-v1", dir)
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -3756,7 +3756,7 @@ func TestAcc_ResourceApplication_LocalCharm_SwitchWithCharmhub(t *testing.T) {
 	appName := "app"
 	charmName := "juju-qa-test"
 	dir := t.TempDir()
-	archivePath := buildLocalCharm(t, dir, charmName, "local-version-1", "22.04")
+	archivePath := testcharm.ZipFixture(t, "juju-qa-test", dir)
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -3815,7 +3815,7 @@ func TestAcc_ResourceApplication_CharmAndLocalCharmConflict(t *testing.T) {
 
 	modelName := acctest.RandomWithPrefix("tf-test-charm-conflict")
 	dir := t.TempDir()
-	archivePath := buildLocalCharm(t, dir, "juju-qa-test", "v1", "22.04")
+	archivePath := testcharm.ZipFixture(t, "juju-qa-test", dir)
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -3839,12 +3839,6 @@ resource "juju_application" "this" {
 			},
 		},
 	})
-}
-
-// buildLocalCharm delegates to testcharm.BuildLocalCharm.
-func buildLocalCharm(t *testing.T, dir, charmName, content string, baseChannels ...string) string {
-	t.Helper()
-	return testcharm.BuildLocalCharm(t, dir, charmName, content, baseChannels...)
 }
 
 func testAccResourceApplicationLocalCharm(modelName, appName, charmName, archivePath string) string {
