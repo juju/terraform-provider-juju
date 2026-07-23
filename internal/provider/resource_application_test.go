@@ -22,19 +22,19 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+	"github.com/juju/names/v6"
+	internaljuju "github.com/juju/terraform-provider-juju/internal/juju"
+	testcharm "github.com/juju/terraform-provider-juju/internal/testcharm"
+	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
+	"github.com/juju/terraform-provider-juju/internal/wait"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/api/client/resources"
 	apispaces "github.com/juju/juju/api/client/spaces"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/names/v6"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	internaljuju "github.com/juju/terraform-provider-juju/internal/juju"
-	testcharm "github.com/juju/terraform-provider-juju/internal/testcharm"
-	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
-	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
 func TestAcc_ResourceApplication(t *testing.T) {
@@ -3390,19 +3390,15 @@ func TestAcc_ResourceApplication_LocalCharm_Deploy(t *testing.T) {
 				),
 			},
 			{
-				// Step 4: import round-trip. After import there is no prior
-				// local_charm state to anchor to, so Read populates the charm
-				// block from what the controller reports. The local-only
-				// fields (path, path_hash, origin_hash) are not recoverable
-				// from the controller at all. Ignore both blocks.
+				// Step 4: import round-trip. Read detects the charm's local
+				// origin from the controller and populates the local_charm
+				// block, so name, base and origin_hash round-trip. Only the
+				// local-file fields (path, path_hash) are not recoverable
+				// from the controller, so they are ignored.
 				ImportState:       true,
 				ImportStateVerify: true,
 				ResourceName:      "juju_application.this",
 				ImportStateVerifyIgnore: []string{
-					"charm.#", "charm.0.%", "charm.0.base", "charm.0.channel",
-					"charm.0.name", "charm.0.revision",
-					"local_charm.#", "local_charm.0.%", "local_charm.0.base",
-					"local_charm.0.name", "local_charm.0.origin_hash",
 					"local_charm.0.path", "local_charm.0.path_hash",
 				},
 			},

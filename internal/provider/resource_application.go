@@ -1130,54 +1130,68 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 		}
 	}
 
-	// state requiring transformation. Populate whichever charm block was in
-	// the prior state; the other stays null.
-	if !state.LocalCharm.IsNull() && !state.LocalCharm.IsUnknown() {
-		var priorLocals []nestedLocalCharm
-		dErr = state.LocalCharm.ElementsAs(ctx, &priorLocals, false)
-		if dErr.HasError() {
-			resp.Diagnostics.Append(dErr...)
-			return
-		}
+	// State requiring transformation. Populate the charm block that matches
+	// the deployed charm. When the controller reports a local (uploaded)
+	// charm, or the prior state held a local_charm block, populate
+	// local_charm; otherwise populate charm. Using the controller-reported
+	// source (response.IsLocal) lets import populate the correct block even
+	// with no prior state to anchor the choice. The other block stays null.
+	charmType := req.State.Schema.GetBlocks()[CharmKey].(schema.ListNestedBlock).NestedObject.Type()
+	localCharmType := req.State.Schema.GetBlocks()[LocalCharmKey].(schema.ListNestedBlock).NestedObject.Type()
+
+	hadLocal := !state.LocalCharm.IsNull() && !state.LocalCharm.IsUnknown()
+	useLocal := response.IsLocal || hadLocal
+
+	if useLocal {
 		dataLocal := nestedLocalCharm{
 			Name:       types.StringValue(response.Name),
 			OriginHash: types.StringValue(response.OriginHash),
 			Base:       types.StringValue(response.Base),
+			Path:       types.StringNull(),
+			PathHash:   types.StringNull(),
 		}
-		if len(priorLocals) == 1 {
-			prior := priorLocals[0]
-			// The controller has no knowledge of the local charm file, so
-			// preserve the path and its content hash from the prior state.
-			dataLocal.Path = prior.Path
-			dataLocal.PathHash = prior.PathHash
+		if hadLocal {
+			var priorLocals []nestedLocalCharm
+			dErr = state.LocalCharm.ElementsAs(ctx, &priorLocals, false)
+			if dErr.HasError() {
+				resp.Diagnostics.Append(dErr...)
+				return
+			}
+			if len(priorLocals) == 1 {
+				prior := priorLocals[0]
+				// The controller has no knowledge of the local charm file,
+				// so preserve the path and its content hash from the prior
+				// state.
+				dataLocal.Path = prior.Path
+				dataLocal.PathHash = prior.PathHash
 
-			// Detect out-of-band drift: if the controller's origin_hash
-			// changed since the last apply, the deployed charm no longer
-			// matches the local file. Null path_hash so the plan-time
-			// modifier re-uploads. Empty hashes mean unknown (old
-			// controller or a transient failure) and must not count as
-			// drift.
-			priorOriginKnown := !prior.OriginHash.IsNull() &&
-				prior.OriginHash.ValueString() != ""
-			currentOriginKnown := response.OriginHash != ""
-			if priorOriginKnown && currentOriginKnown &&
-				response.OriginHash != prior.OriginHash.ValueString() {
-				r.trace("local charm drift detected", map[string]interface{}{
-					"app":               appName,
-					"prior_origin_hash": prior.OriginHash.ValueString(),
-					"origin_hash":       response.OriginHash,
-				})
-				dataLocal.PathHash = types.StringNull()
+				// Detect out-of-band drift: if the controller's origin_hash
+				// changed since the last apply, the deployed charm no longer
+				// matches the local file. Null path_hash so the plan-time
+				// modifier re-uploads. Empty hashes mean unknown (old
+				// controller or a transient failure) and must not count as
+				// drift.
+				priorOriginKnown := !prior.OriginHash.IsNull() &&
+					prior.OriginHash.ValueString() != ""
+				currentOriginKnown := response.OriginHash != ""
+				if priorOriginKnown && currentOriginKnown &&
+					response.OriginHash != prior.OriginHash.ValueString() {
+					r.trace("local charm drift detected", map[string]interface{}{
+						"app":               appName,
+						"prior_origin_hash": prior.OriginHash.ValueString(),
+						"origin_hash":       response.OriginHash,
+					})
+					dataLocal.PathHash = types.StringNull()
+				}
 			}
 		}
-		localCharmType := req.State.Schema.GetBlocks()[LocalCharmKey].(schema.ListNestedBlock).NestedObject.Type()
 		state.LocalCharm, dErr = types.ListValueFrom(ctx, localCharmType, []nestedLocalCharm{dataLocal})
 		if dErr.HasError() {
 			resp.Diagnostics.Append(dErr...)
 			return
 		}
+		state.Charm = types.ListNull(charmType)
 	} else {
-		charmType := req.State.Schema.GetBlocks()[CharmKey].(schema.ListNestedBlock).NestedObject.Type()
 		state.Charm, dErr = types.ListValueFrom(ctx, charmType, []nestedCharm{{
 			Name:     types.StringValue(response.Name),
 			Channel:  types.StringValue(response.Channel),
@@ -1188,6 +1202,7 @@ func (r *applicationResource) Read(ctx context.Context, req resource.ReadRequest
 			resp.Diagnostics.Append(dErr...)
 			return
 		}
+		state.LocalCharm = types.ListNull(localCharmType)
 	}
 
 	// Constraints do not apply to subordinate applications. If the application

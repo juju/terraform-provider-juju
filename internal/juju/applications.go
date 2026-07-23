@@ -22,6 +22,10 @@ import (
 
 	"github.com/juju/collections/set"
 	jujuerrors "github.com/juju/errors"
+	"github.com/juju/names/v6"
+	"github.com/juju/terraform-provider-juju/internal/charmhub"
+	goyaml "gopkg.in/yaml.v2"
+
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
 	apiapplication "github.com/juju/juju/api/client/application"
@@ -43,10 +47,6 @@ import (
 	charmresources "github.com/juju/juju/domain/deployment/charm/resource"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/names/v6"
-	goyaml "gopkg.in/yaml.v2"
-
-	"github.com/juju/terraform-provider-juju/internal/charmhub"
 )
 
 // NewApplicationNotFoundError returns a new error indicating that the
@@ -365,6 +365,11 @@ type ReadApplicationResponse struct {
 	// It is never compared against the local file hash, but only
 	// against its own prior value.
 	OriginHash string
+	// IsLocal reports whether the deployed charm was uploaded from a local
+	// archive (charm URL schema `local`) rather than resolved from Charmhub.
+	// It lets the provider populate the local_charm block on Read and import,
+	// where there is no prior state to anchor the choice of block.
+	IsLocal bool
 }
 
 // UpdateApplicationInput contains the parameters for updating an application.
@@ -758,8 +763,9 @@ func (c applicationsClient) ReadApplication(ctx context.Context, input *ReadAppl
 	}
 
 	// origin_hash is used to detect out-of-band updates to the charm
+	isLocal := charm.Local.Matches(charmURL.Schema)
 	var originHash string
-	if charm.Local.Matches(charmURL.Schema) {
+	if isLocal {
 		if _, origin, oErr := applicationAPIClient.GetCharmURLOrigin(ctx, input.AppName); oErr != nil {
 			c.Debugf("failed to get charm origin for drift detection", map[string]interface{}{"app": input.AppName, "err": oErr})
 		} else {
@@ -918,6 +924,7 @@ func (c applicationsClient) ReadApplication(ctx context.Context, input *ReadAppl
 		Storage:          storageDirectives,
 		Resources:        usedResources,
 		OriginHash:       originHash,
+		IsLocal:          isLocal,
 	}
 
 	return response, nil
