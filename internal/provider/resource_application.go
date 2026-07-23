@@ -29,12 +29,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/errors"
-	"github.com/juju/juju/core/constraints"
-	jujustorage "github.com/juju/juju/core/storage"
 	"github.com/juju/names/v5"
-
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/wait"
+
+	"github.com/juju/juju/core/constraints"
+	jujustorage "github.com/juju/juju/core/storage"
 )
 
 const (
@@ -378,9 +378,6 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 						"name": schema.StringAttribute{
 							Required:    true,
 							Description: "The name of the charm to be deployed. Changing this value will cause the application to be destroyed and recreated by terraform.",
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.RequiresReplaceIfConfigured(),
-							},
 						},
 						"channel": schema.StringAttribute{
 							Description: "The channel to use when deploying a charm. Specified as \\<track>/\\<risk>/\\<branch>.",
@@ -411,13 +408,15 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Computed:    true,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
-								stringplanmodifier.RequiresReplaceIf(baseApplicationRequiresReplaceIf, "", ""),
 							},
 							Validators: []validator.String{
 								stringIsBaseValidator{},
 							},
 						},
 					},
+				},
+				PlanModifiers: []planmodifier.List{
+					charmBlockRequiresReplace(),
 				},
 				Validators: []validator.List{
 					listvalidator.SizeAtMost(1),
@@ -431,9 +430,6 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 						"name": schema.StringAttribute{
 							Required:    true,
 							Description: "The name of the charm to be deployed. Must match the charm name in the archive's metadata. Changing this value will cause the application to be destroyed and recreated by terraform.",
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.RequiresReplaceIfConfigured(),
-							},
 						},
 						"path": schema.StringAttribute{
 							Description: "The path to a local .charm archive to deploy. Relative paths are resolved against the Terraform working directory. `name` must match the charm name in the archive's metadata.",
@@ -459,13 +455,15 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Computed:    true,
 							PlanModifiers: []planmodifier.String{
 								stringplanmodifier.UseStateForUnknown(),
-								stringplanmodifier.RequiresReplaceIf(baseApplicationRequiresReplaceIf, "", ""),
 							},
 							Validators: []validator.String{
 								stringIsBaseValidator{},
 							},
 						},
 					},
+				},
+				PlanModifiers: []planmodifier.List{
+					charmBlockRequiresReplace(),
 				},
 				Validators: []validator.List{
 					listvalidator.SizeAtMost(1),
