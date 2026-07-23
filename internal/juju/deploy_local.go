@@ -196,12 +196,9 @@ func (c applicationsClient) deployFromPath(
 		c.Warnf("could not check local charm drift detection support",
 			map[string]interface{}{"app": appName, "err": err.Error()})
 	} else if origin.Hash == "" {
-		c.Warnf("out-of-band drift detection is disabled; upgrade to the "+
-			"minimum required Juju version (or Juju 4+) to enable it",
-			map[string]interface{}{
-				"app":         appName,
-				"min_version": LocalCharmOriginHashFirstAgentVersion,
-			})
+		c.Warnf("out-of-bandf drift detection is disabled, upgrade to Juju "+
+			LocalCharmOriginHashFirstAgentVersion+"+ or Juju 4+) to enable it",
+			map[string]interface{}{"app": appName})
 	}
 
 	return nil

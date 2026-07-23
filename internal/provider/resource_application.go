@@ -443,7 +443,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							},
 						},
 						"origin_hash": schema.StringAttribute{
-							Description: "The controller-reported charm hash, used to detect out-of-band changes to a local charm (E.g. `juju refresh`). Only populated on controllers that report a hash (Juju 3.6.26+ or Juju 4+), otherwise this drift detection is disabled.",
+							Description: "The controller-reported charm hash, used to detect out-of-band changes to a local charm (E.g. `juju refresh`). Only populated on controllers that report a hash (Juju " + juju.LocalCharmOriginHashFirstAgentVersion + "+ or Juju 4+), otherwise this drift detection is disabled.",
 							Computed:    true,
 							PlanModifiers: []planmodifier.String{
 								OriginHashModifier(),
