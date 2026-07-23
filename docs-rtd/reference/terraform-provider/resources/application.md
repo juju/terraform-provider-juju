@@ -140,7 +140,7 @@ resource "juju_application" "this" {
 
 ### Optional
 
-- `charm` (Block List) The charm installed from Charmhub, or from a local charm archive file. (see [below for nested schema](#nestedblock--charm))
+- `charm` (Block List) The charm installed from Charmhub. Mutually exclusive with `local_charm`. (see [below for nested schema](#nestedblock--charm))
 - `config` (Map of String) Application specific configuration. Must evaluate to a string, integer or boolean.
 - `constraints` (String) Constraints imposed on this application. Changing this value will cause the application to be destroyed and recreated by terraform. Multiple constraints can be provided as a space-separated list.
 - `endpoint_bindings` (Attributes Set) Configure endpoint bindings (see [below for nested schema](#nestedatt--endpoint_bindings))

@@ -372,7 +372,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 		},
 		Blocks: map[string]schema.Block{
 			CharmKey: schema.ListNestedBlock{
-				Description: "The charm installed from Charmhub, or from a local charm archive file.",
+				Description: "The charm installed from Charmhub. Mutually exclusive with `local_charm`.",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
