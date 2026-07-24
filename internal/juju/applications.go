@@ -1461,6 +1461,8 @@ func (c applicationsClient) computeCharmID(
 		newOrigin.ID = ""
 		newOrigin.Hash = ""
 		newOrigin.Revision = nil
+		// oldOrigin is reused for AddCharm below, so its source must become
+		// OriginCharmHub to match the resolved charmhub URL.
 		oldOrigin.Source = apicommoncharm.OriginCharmHub
 		oldOrigin.ID = ""
 		oldOrigin.Hash = ""
