@@ -13,6 +13,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	corebase "github.com/juju/juju/core/base"
+	"github.com/juju/juju/domain/deployment/charm"
 )
 
 //go:embed testdata
@@ -31,18 +34,29 @@ var testdataFS embed.FS
 func ZipFixture(t *testing.T, fixture, dir string) string {
 	t.Helper()
 
+	archivePath, err := writeFixture(fixture, dir)
+	if err != nil {
+		t.Fatalf("packing test charm fixture %q: %v", fixture, err)
+	}
+	return archivePath
+}
+
+// writeFixture packs the fixture directory testdata/<fixture> into a .charm
+// archive at <dir>/<fixture>.charm and returns the archive path. It creates
+// dir if needed.
+func writeFixture(fixture, dir string) (string, error) {
 	root := filepath.Join("testdata", fixture)
 	if _, err := fs.Stat(testdataFS, root); err != nil {
-		t.Fatalf("unknown test charm fixture %q: %v", fixture, err)
+		return "", err
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatalf("mkdir %q: %v", dir, err)
+		return "", err
 	}
 
 	archivePath := filepath.Join(dir, fixture+".charm")
 	f, err := os.Create(archivePath)
 	if err != nil {
-		t.Fatalf("creating charm archive: %v", err)
+		return "", err
 	}
 	defer func() { _ = f.Close() }()
 
@@ -70,10 +84,35 @@ func ZipFixture(t *testing.T, fixture, dir string) string {
 		return err
 	})
 	if err != nil {
-		t.Fatalf("adding fixture %q files to charm archive: %v", fixture, err)
+		return "", err
 	}
 	if err := w.Close(); err != nil {
-		t.Fatalf("closing charm archive: %v", err)
+		return "", err
 	}
-	return archivePath
+	return archivePath, nil
+}
+
+// FixtureBases returns the bases declared in the fixture's manifest.yaml, in
+// declaration order. An empty slice means the fixture declares no bases.
+func FixtureBases(fixture string) ([]corebase.Base, error) {
+	dir, err := os.MkdirTemp("", "testcharm")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+
+	archivePath, err := writeFixture(fixture, dir)
+	if err != nil {
+		return nil, err
+	}
+
+	charmArchive, err := charm.ReadCharmArchive(archivePath)
+	if err != nil {
+		return nil, err
+	}
+	manifest := charmArchive.Manifest()
+	if manifest == nil || len(manifest.Bases) == 0 {
+		return nil, nil
+	}
+	return corebase.ParseManifestBases(manifest.Bases)
 }

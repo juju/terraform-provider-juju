@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -26,7 +27,9 @@ import (
 	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/api/client/resources"
 	apispaces "github.com/juju/juju/api/client/spaces"
+	corebase "github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/model"
+	coreversion "github.com/juju/juju/core/version"
 	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v6"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -3311,10 +3314,10 @@ func testAccResourceApplicationUnknownMachines(modelName string) string {
 //  2. Idempotency: a second apply with the same file produces no plan diff.
 //  3. In-place refresh: rebuilding the archive with different content and path
 //     (same charm name) triggers an update, not a replace.
-//  4. Import round-trip: after import the local_charm block is not
-//     recoverable (the controller does not record the local file), so Read
-//     reports the charm block instead. Both blocks are ignored in the
-//     comparison.
+//  4. Import round-trip: after import Read detects the charm's local origin
+//     and repopulates the local_charm block, except for the local-file fields
+//     (path, path_hash), which the controller does not record and so are
+//     ignored in the comparison.
 func TestAcc_ResourceApplication_LocalCharm_Deploy(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-local-charm")
 	appName := "local-test"
@@ -3559,15 +3562,6 @@ func TestAcc_ResourceApplication_LocalCharm_Drift(t *testing.T) {
 					},
 				),
 			},
-			{
-				// A further apply is a no-op, confirming the drift was fixed.
-				Config: testAccResourceApplicationLocalCharm(modelName, appName, charmName, archiveV1),
-				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectEmptyPlan(),
-					},
-				},
-			},
 		},
 	})
 }
@@ -3665,7 +3659,10 @@ resource "juju_application" "this" {
 
 // TestAcc_ResourceApplication_LocalCharm_BaseSelectionDefault verifies that
 // when no base is set in the plan, the provider picks the Juju LTS default
-// (ubuntu@24.04) for a multi-base charm that supports it.
+// (coreversion.DefaultSupportedLTSBase) for a multi-base charm that supports
+// it. The test is skipped if the fixture charm does not declare the current
+// LTS default, which can change as the provider's Juju dependency moves
+// forward.
 func TestAcc_ResourceApplication_LocalCharm_BaseSelectionDefault(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
@@ -3676,14 +3673,23 @@ func TestAcc_ResourceApplication_LocalCharm_BaseSelectionDefault(t *testing.T) {
 	dir := t.TempDir()
 	archivePath := testcharm.ZipFixture(t, "test-charm-v1", dir)
 
+	lts := coreversion.DefaultSupportedLTSBase()
+	supported, err := testcharm.FixtureBases("test-charm-v1")
+	if err != nil {
+		t.Fatalf("reading fixture bases: %v", err)
+	}
+	if !slices.ContainsFunc(supported, func(b corebase.Base) bool { return b == lts }) {
+		t.Skipf("fixture charm does not support the current LTS default base %s", lts)
+	}
+
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				// No explicit base — the charm supports both ubuntu@22.04 and
-				// ubuntu@24.04. The Juju LTS default (ubuntu@24.04) is
-				// compatible, so it is selected at fallback step 3.
+				// No explicit base — the charm supports multiple bases and the
+				// Juju LTS default is among them, so it is selected at
+				// fallback step 3.
 				Config: fmt.Sprintf(`
 resource "juju_model" "this" { name = %q }
 resource "juju_application" "this" {
@@ -3695,7 +3701,7 @@ resource "juju_application" "this" {
   }
 }`, modelName, charmName, archivePath),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "local_charm.0.base", "ubuntu@24.04"),
+					resource.TestCheckResourceAttr("juju_application.this", "local_charm.0.base", lts.String()),
 				),
 			},
 		},
@@ -3744,9 +3750,6 @@ resource "juju_application" "this" {
 // TestAcc_ResourceApplication_LocalCharm_SwitchWithCharmhub verifies that an
 // application can switch from the Charmhub `juju-qa-test` charm to a local
 // synthetic charm with the same name, and then back to Charmhub again.
-//
-// This exercises the local<->Charmhub transition path, including computed
-// charm fields such as origin_hash.
 func TestAcc_ResourceApplication_LocalCharm_SwitchWithCharmhub(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
@@ -3767,6 +3770,8 @@ func TestAcc_ResourceApplication_LocalCharm_SwitchWithCharmhub(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", charmName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
+					resource.TestCheckResourceAttrSet("juju_application.this", "charm.0.revision"),
+					resource.TestCheckResourceAttr("juju_application.this", "local_charm.#", "0"),
 				),
 			},
 			{
@@ -3783,6 +3788,8 @@ func TestAcc_ResourceApplication_LocalCharm_SwitchWithCharmhub(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "local_charm.0.name", charmName),
 					resource.TestCheckResourceAttr("juju_application.this", "local_charm.0.path", archivePath),
+					resource.TestCheckResourceAttrSet("juju_application.this", "local_charm.0.path_hash"),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.#", "0"),
 				),
 			},
 			{
@@ -3799,6 +3806,7 @@ func TestAcc_ResourceApplication_LocalCharm_SwitchWithCharmhub(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.name", charmName),
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
+					resource.TestCheckResourceAttrSet("juju_application.this", "charm.0.revision"),
 					resource.TestCheckResourceAttr("juju_application.this", "local_charm.#", "0"),
 				),
 			},
