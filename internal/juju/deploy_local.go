@@ -332,6 +332,8 @@ func selectLocalCharmBase(
 	}
 
 	// Step 3: Juju's default supported LTS base.
+	// Unlike with Charmhub charms, the base is determined by the provider,
+	// not the controller.
 	lts := coreversion.DefaultSupportedLTSBase()
 	base, err := corecharm.BaseForCharm(lts, supportedBases)
 	if err == nil {
