@@ -1379,8 +1379,6 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 
 		updateApplicationInput.Base = planCharm.Base.ValueString()
-		// Always set charm name so UpdateApplication has context for the refresh.
-		updateApplicationInput.CharmName = planCharm.Name
 
 		if planCharm.IsLocal {
 			// A local charm changed content (the hash differs) but its

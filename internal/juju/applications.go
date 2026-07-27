@@ -376,7 +376,6 @@ type UpdateApplicationInput struct {
 	ModelUUID string
 	ModelInfo *params.ModelInfo
 	AppName   string
-	CharmName string
 	Units     *int
 	Revision  *int
 	Channel   string
