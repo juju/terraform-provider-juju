@@ -32,6 +32,12 @@ For example, for a resource / data source of type `juju_model` with label `devel
 
 ```
 
+```{note}
+
+If an application referenced by a `juju_integration` is replaced (e.g., by changing its `charm.name`, `model_uuid`, or other `RequiresReplace` attribute), Terraform does not automatically detect that the integration depends on the application unless the application is referenced by attribute or an explicit `depends_on` is set.
+
+```
+
 
 ```terraform
 resource "juju_integration" "this" {
