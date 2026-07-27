@@ -578,7 +578,7 @@ func (r *applicationResource) ValidateConfig(ctx context.Context, req resource.V
 		return
 	}
 
-	// The block is unknown until other values are resolved; skip
+	// The block is unknown until other values are resolved, skip
 	// validation and let it run again once known.
 	if data.LocalCharm.IsNull() || data.LocalCharm.IsUnknown() {
 		return

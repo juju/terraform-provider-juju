@@ -94,7 +94,7 @@ func TestCheckLocalCharmBase_Incompatible(t *testing.T) {
 func TestCheckLocalCharmBase_NoManifestBases_AlwaysOK(t *testing.T) {
 	// When the charm declares no bases (old-style), any base is accepted.
 	// We use a hand-crafted LocalCharmInfo because the archive reader rejects
-	// a manifest.yaml with no bases list; the code path we exercise here is
+	// a manifest.yaml with no bases list. The code path we exercise here is
 	// CheckLocalCharmBase's early-return for len(SupportedBases)==0.
 	info := LocalCharmInfo{
 		Name:           "old-charm",
@@ -179,7 +179,7 @@ func TestSelectLocalCharmBase_Step2_ModelDefault(t *testing.T) {
 		"agent-version": "4.0.0",
 	})
 
-	// Charm only supports 22.04; LTS default (24.04) would be incompatible,
+	// Charm only supports 22.04. LTS default (24.04) would be incompatible,
 	// so step 2 wins here.
 	got, err := selectLocalCharmBase(cfg, corebase.Base{}, supportedBases(t, "ubuntu@22.04"))
 	require.NoError(t, err)
@@ -222,7 +222,7 @@ func TestSelectLocalCharmBase_Step3_LTSDefault(t *testing.T) {
 func TestSelectLocalCharmBase_Step4_FirstManifestBase(t *testing.T) {
 	cfg := newModelConfig(t, map[string]interface{}{"agent-version": "4.0.0"})
 
-	// Only ubuntu@20.04 is supported — neither the model default nor the LTS
+	// Only ubuntu@20.04 is supported, neither the model default nor the LTS
 	// default (ubuntu@24.04) matches, so we land at step 4.
 	got, err := selectLocalCharmBase(cfg, corebase.Base{}, supportedBases(t, "ubuntu@20.04"))
 	require.NoError(t, err)
@@ -238,7 +238,7 @@ func TestSelectLocalCharmBase_OldStyleCharm_LTSFallback(t *testing.T) {
 	cfg := newModelConfig(t, map[string]interface{}{"agent-version": "4.0.0"})
 
 	// corecharm.BaseForCharm(lts, nil): supportedBases is empty and the
-	// requested base (lts) is non-empty, so it returns (lts, nil) — the
+	// requested base (lts) is non-empty, so it returns (lts, nil), the
 	// old-style charm case. The selector therefore succeeds at step 3.
 	lts := coreversion.DefaultSupportedLTSBase()
 	got, err := selectLocalCharmBase(cfg, corebase.Base{}, nil)

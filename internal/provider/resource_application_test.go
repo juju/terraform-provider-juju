@@ -3354,7 +3354,7 @@ func TestAcc_ResourceApplication_LocalCharm_Deploy(t *testing.T) {
 				),
 			},
 			{
-				// Step 2: re-apply with the same config — no changes expected.
+				// Step 2: re-apply with the same config, no changes expected.
 				Config: testAccResourceApplicationLocalCharm(modelName, appName, charmName, archiveV1),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
@@ -3569,7 +3569,7 @@ func TestAcc_ResourceApplication_LocalCharm_Drift(t *testing.T) {
 // TestAcc_ResourceApplication_LocalCharm_DriftUnsupported verifies that
 // deploying a local charm against a controller that does not report a charm
 // origin hash still succeeds, but leaves origin_hash empty (drift detection
-// disabled). A warning is logged in that case; the deploy is not failed.
+// disabled). A warning is logged in that case, the deploy is not failed.
 func TestAcc_ResourceApplication_LocalCharm_DriftUnsupported(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
@@ -3589,7 +3589,7 @@ func TestAcc_ResourceApplication_LocalCharm_DriftUnsupported(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				// The deploy succeeds despite the missing hash; origin_hash is
+				// The deploy succeeds despite the missing hash. origin_hash is
 				// empty, so out-of-band drift detection is disabled.
 				Config: testAccResourceApplicationLocalCharm(modelName, appName, charmName, archive),
 				Check: resource.ComposeTestCheckFunc(
@@ -3628,7 +3628,7 @@ func TestAcc_ResourceApplication_LocalCharm_NameMismatch(t *testing.T) {
 
 // TestAcc_ResourceApplication_LocalCharm_BaseMismatch verifies that
 // ValidateConfig rejects a base that is not listed in the archive's
-// manifest.yaml. The juju-qa-test fixture declares only ubuntu@22.04;
+// manifest.yaml. The juju-qa-test fixture declares only ubuntu@22.04,
 // requesting ubuntu@24.04 should produce an "Unsupported Base" error.
 func TestAcc_ResourceApplication_LocalCharm_BaseMismatch(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-local-charm-base")
@@ -3687,7 +3687,7 @@ func TestAcc_ResourceApplication_LocalCharm_BaseSelectionDefault(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				// No explicit base — the charm supports multiple bases and the
+				// No explicit base, the charm supports multiple bases and the
 				// Juju LTS default is among them, so it is selected at
 				// fallback step 3.
 				Config: fmt.Sprintf(`

@@ -328,7 +328,7 @@ func selectLocalCharmBase(
 		if err == nil {
 			return base, nil
 		}
-		// Model default is set but incompatible; fall through.
+		// Model default is set but incompatible, fall through.
 	}
 
 	// Step 3: Juju's default supported LTS base.
