@@ -41,3 +41,8 @@ jobs:
           # GitHub sets the GITHUB_TOKEN secret automatically.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+          # Force GoReleaser to build the tag that triggered this workflow.
+          # Without this, when multiple tags point at the same commit (e.g.
+          # v2.2.0 and v2.2.0-rc1), GoReleaser's auto-detection can pick the
+          # wrong one.
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
