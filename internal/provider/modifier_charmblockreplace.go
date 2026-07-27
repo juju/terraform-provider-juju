@@ -14,8 +14,8 @@ import (
 )
 
 // charmBlockRequiresReplace returns a plan modifier for the `charm` and
-// `local_charm` blocks that decides application replacement by comparing the
-// effective charm across both blocks between state and plan.
+// `local_charm` blocks that decides application replacement from the block
+// shape and base only.
 //
 // It is a list-level modifier on both blocks rather than a per-attribute one.
 // A list modifier runs when its block is added or removed, so it reliably
@@ -23,11 +23,11 @@ import (
 // removed block may not run at all.
 //
 // Replacement rules:
-//   - The charm name changed (a rename is not in-place).
-//   - The base changed on an IAAS model (CAAS updates in place, IAAS does not).
+//   - Switching between `charm` and `local_charm` always replaces.
+//   - A base change on an IAAS model replaces.
 //
-// Switching charm source with the same name and base is an in-place Update, so
-// it must not replace.
+// Name changes are handled directly by `RequiresReplaceIfConfigured()` on the
+// nested `name` attributes in each block.
 func charmBlockRequiresReplace() planmodifier.List {
 	return charmBlockReplaceModifier{}
 }
@@ -35,9 +35,8 @@ func charmBlockRequiresReplace() planmodifier.List {
 type charmBlockReplaceModifier struct{}
 
 func (m charmBlockReplaceModifier) Description(_ context.Context) string {
-	return "Replaces the application when the effective charm name changes, " +
-		"or when the base changes on an IAAS model, but not when merely " +
-		"switching between the charm and local_charm blocks."
+	return "Replaces the application when switching between the charm and " +
+		"local_charm blocks, or when the base changes on an IAAS model."
 }
 
 func (m charmBlockReplaceModifier) MarkdownDescription(ctx context.Context) string {
@@ -59,17 +58,18 @@ func (m charmBlockReplaceModifier) PlanModifyList(ctx context.Context, req planm
 		return
 	}
 
+	stateSource := activeCharmSource(stateCharm, stateLocal)
+	planSource := activeCharmSource(planCharm, planLocal)
+	if stateSource != planSource {
+		resp.RequiresReplace = true
+		return
+	}
+
 	stateEff, diags := resolveCharm(ctx, stateCharm, stateLocal)
 	resp.Diagnostics.Append(diags...)
 	planEff, diags := resolveCharm(ctx, planCharm, planLocal)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// A rename always forces replacement.
-	if stateEff.Name != "" && planEff.Name != "" && stateEff.Name != planEff.Name {
-		resp.RequiresReplace = true
 		return
 	}
 
@@ -89,4 +89,14 @@ func (m charmBlockReplaceModifier) PlanModifyList(ctx context.Context, req planm
 		return
 	}
 	resp.RequiresReplace = modelType.ValueString() == model.IAAS.String()
+}
+
+func activeCharmSource(charm, localCharm types.List) string {
+	if !localCharm.IsNull() && !localCharm.IsUnknown() {
+		return LocalCharmKey
+	}
+	if !charm.IsNull() && !charm.IsUnknown() {
+		return CharmKey
+	}
+	return ""
 }

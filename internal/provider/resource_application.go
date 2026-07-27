@@ -433,6 +433,9 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 						"name": schema.StringAttribute{
 							Required:    true,
 							Description: "The name of the charm to be deployed. Must match the charm name in the archive's metadata. Changing this value will cause the application to be destroyed and recreated by terraform.",
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.RequiresReplaceIfConfigured(),
+							},
 						},
 						"path": schema.StringAttribute{
 							Description: "The path to a local .charm archive to deploy. Relative paths are resolved against the Terraform working directory. `name` must match the charm name in the archive's metadata.",
@@ -1376,7 +1379,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		}
 
 		updateApplicationInput.Base = planCharm.Base.ValueString()
-		// Always set charm name to more easily switch between local and charmhub
+		// Always set charm name so UpdateApplication has context for the refresh.
 		updateApplicationInput.CharmName = planCharm.Name
 
 		if planCharm.IsLocal {

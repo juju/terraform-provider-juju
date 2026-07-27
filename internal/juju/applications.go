@@ -32,7 +32,6 @@ import (
 	apispaces "github.com/juju/juju/api/client/spaces"
 	apicommoncharm "github.com/juju/juju/api/common/charm"
 	"github.com/juju/juju/cmd/juju/application/utils"
-	"github.com/juju/juju/core/arch"
 	corebase "github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/constraints"
 	"github.com/juju/juju/core/instance"
@@ -1449,33 +1448,12 @@ func (c applicationsClient) computeCharmID(
 		return apiapplication.CharmID{}, err
 	}
 	// You can only refresh on the revision OR the channel at once.
+	// Switching a deployed charm between local and Charmhub sources is not
+	// supported as an in-place refresh; that change forces a replacement at
+	// the provider level, so computeCharmID only ever refreshes a Charmhub
+	// charm here.
 	newURL := oldURL
 	newOrigin := oldOrigin
-	if oldURL.Schema == charm.Local.String() {
-		newURL = &charm.URL{
-			Schema:   charm.CharmHub.String(),
-			Name:     input.CharmName,
-			Revision: -1,
-		}
-		newOrigin.Source = apicommoncharm.OriginCharmHub
-		newOrigin.ID = ""
-		newOrigin.Hash = ""
-		newOrigin.Revision = nil
-		// oldOrigin is passed to AddCharm below as the origin recorded for
-		// the resolved Charmhub charm, so it must be a Charmhub origin too.
-		oldOrigin.Source = apicommoncharm.OriginCharmHub
-		oldOrigin.ID = ""
-		oldOrigin.Hash = ""
-		oldOrigin.Revision = nil
-
-		// A local charm's stored origin is not required to record an
-		// architecture, so it may be empty
-		// Fall back to the default  architecture.
-		if newOrigin.Architecture == "" {
-			newOrigin.Architecture = arch.DefaultArchitecture
-			oldOrigin.Architecture = arch.DefaultArchitecture
-		}
-	}
 	if input.Revision != nil {
 		newURL = newURL.WithRevision(*input.Revision)
 		newOrigin.Revision = input.Revision
