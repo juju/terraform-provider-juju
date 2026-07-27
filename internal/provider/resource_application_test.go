@@ -718,6 +718,43 @@ func TestAcc_CharmUpdatesWithRevision(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceApplication_CharmNameRequiresReplace(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-charm-name-replace")
+	appName := "app"
+	resourceName := "juju_application.this"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationCharmhubCharm(modelName, appName, "ubuntu-lite"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", appName),
+					resource.TestCheckResourceAttr(resourceName, "charm.0.name", "ubuntu-lite"),
+				),
+			},
+			{
+				Config: testAccResourceApplicationCharmhubCharm(modelName, appName, "juju-qa-test"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionReplace),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", appName),
+					resource.TestCheckResourceAttr(resourceName, "charm.0.name", "juju-qa-test"),
+				),
+			},
+		},
+	})
+}
+
 func TestAcc_CharmUpdateBase(t *testing.T) {
 	t.Skip(t.Name() + " Waiting on issue 21717 for LXD, and PR 22237 for K8s to be resolved")
 

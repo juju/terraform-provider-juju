@@ -378,6 +378,9 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 						"name": schema.StringAttribute{
 							Required:    true,
 							Description: "The name of the charm to be deployed. Changing this value will cause the application to be destroyed and recreated by terraform.",
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.RequiresReplaceIfConfigured(),
+							},
 						},
 						"channel": schema.StringAttribute{
 							Description: "The channel to use when deploying a charm. Specified as \\<track>/\\<risk>/\\<branch>.",
