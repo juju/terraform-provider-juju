@@ -43,6 +43,11 @@ The controller does not record the local archive file, so on import only
 `local_charm.path` in your configuration (an in-place update) before the next
 `terraform plan`/`apply`.
 
+Because `path_hash` is null in the imported state it counts as a content
+change. The first `terraform apply` after import always re-uploads the
+archive and bumps the charm revision, even if the file is identical to the
+one originally deployed.
+
 ```hcl
 resource "juju_application" "my_local_charm" {
   model_uuid = juju_model.development.uuid
