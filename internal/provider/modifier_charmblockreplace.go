@@ -59,6 +59,7 @@ func (m charmBlockReplaceModifier) PlanModifyList(ctx context.Context, req planm
 
 	stateSource := activeCharmSource(stateCharm, stateLocal)
 	planSource := activeCharmSource(planCharm, planLocal)
+	// Switching between `charm` and `local_charm` always replaces.
 	if stateSource != planSource {
 		resp.RequiresReplace = true
 		return
