@@ -88,6 +88,8 @@ func (m charmBlockReplaceModifier) PlanModifyList(ctx context.Context, req planm
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// A base change on an IAAS model forces replacement, for local charms too.
 	resp.RequiresReplace = modelType.ValueString() == model.IAAS.String()
 }
 
