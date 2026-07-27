@@ -256,6 +256,7 @@ If `charm.revision` is omitted, Terraform keeps the currently deployed revision 
 
 Changing `charm.base` updates Kubernetes applications in place, but changing it for machine charms requires replacement.
 
+Switching an existing application between the `charm` (Charmhub) and `local_charm` blocks is not an in-place update. Changing which block is set destroys and recreates the application, regardless of whether the charm name or base is unchanged.
 
 ## Import
 
