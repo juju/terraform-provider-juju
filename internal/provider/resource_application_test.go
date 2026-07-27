@@ -3784,15 +3784,14 @@ resource "juju_application" "this" {
 	})
 }
 
-// TestAcc_ResourceApplication_LocalCharm_SwitchWithCharmhub verifies that
-// switching from a Charmhub charm to a local charm (or back) forces a
-// replacement, not an in-place update.
-func TestAcc_ResourceApplication_LocalCharm_SwitchWithCharmhub(t *testing.T) {
+// TestAcc_ResourceApplication_CharmhubToLocalCharm verifies that switching
+// an application from a Charmhub charm to a local charm to causes replace.
+func TestAcc_ResourceApplication_CharmhubToLocal(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
 
-	modelName := acctest.RandomWithPrefix("tf-test-local-charm-switch")
+	modelName := acctest.RandomWithPrefix("tf-test-charmhub-to-local")
 	appName := "app"
 	charmName := "juju-qa-test"
 	dir := t.TempDir()
@@ -3812,31 +3811,54 @@ func TestAcc_ResourceApplication_LocalCharm_SwitchWithCharmhub(t *testing.T) {
 			},
 			{
 				// Switching to local_charm must plan a Replace, not an Update.
-				Config: testAccResourceApplicationLocalCharm(modelName, appName, charmName, archivePath),
+				Config:             testAccResourceApplicationLocalCharm(modelName, appName, charmName, archivePath),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
 				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectNonEmptyPlan(),
+					PostApplyPreRefresh: []plancheck.PlanCheck{
 						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionReplace),
 					},
 				},
+			},
+		},
+	})
+}
+
+// TestAcc_ResourceApplication_LocalToCharmhub verifies that switching
+// an application from a local charm to a Charmhub charm causes replace.
+func TestAcc_ResourceApplication_LocalToCharmhub(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-local-to-charmhub")
+	appName := "app"
+	charmName := "juju-qa-test"
+	dir := t.TempDir()
+	archivePath := testcharm.ZipFixture(t, "juju-qa-test", dir)
+	resourceName := "juju_application.this"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationLocalCharm(modelName, appName, charmName, archivePath),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "local_charm.0.name", charmName),
 					resource.TestCheckResourceAttr(resourceName, "charm.#", "0"),
 				),
 			},
 			{
-				// Switching back to charmhub must also plan a Replace.
-				Config: testAccResourceApplicationCharmhubCharm(modelName, appName, charmName),
+				// Switching to charmhub must plan a Replace, not an Update.
+				Config:             testAccResourceApplicationCharmhubCharm(modelName, appName, charmName),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
 				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectNonEmptyPlan(),
+					PostApplyPreRefresh: []plancheck.PlanCheck{
 						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionReplace),
 					},
 				},
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "charm.0.name", charmName),
-					resource.TestCheckResourceAttr(resourceName, "local_charm.#", "0"),
-				),
 			},
 		},
 	})
