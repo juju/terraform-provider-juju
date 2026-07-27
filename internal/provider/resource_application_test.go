@@ -3701,7 +3701,7 @@ resource "juju_application" "this" {
   }
 }`, modelName, charmName, archivePath),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.this", "local_charm.0.base", lts.String()),
+					resource.TestCheckResourceAttr("juju_application.this", "local_charm.0.base", lts.DisplayString()),
 				),
 			},
 		},
