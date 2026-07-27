@@ -190,12 +190,10 @@ func (c applicationsClient) deployFromPath(
 	}
 
 	// Drift detection needs a controller-reported origin hash.
-	// If it's missing, warn and continue without drift detection.
+	// Warn when the controller reports none so the user knows drift
+	// detection is disabled.
 	appName := transformedInput.applicationName
-	if _, origin, err := applicationAPIClient.GetCharmURLOrigin(ctx, appName); err != nil {
-		c.Warnf("could not check local charm drift detection support",
-			map[string]interface{}{"app": appName, "err": err.Error()})
-	} else if origin.Hash == "" {
+	if _, origin, err := applicationAPIClient.GetCharmURLOrigin(ctx, appName); err == nil && origin.Hash == "" {
 		c.Warnf("out-of-band drift detection is disabled, upgrade to Juju "+
 			LocalCharmOriginHashFirstAgentVersion+"+ or Juju 4+ to enable it",
 			map[string]interface{}{"app": appName})

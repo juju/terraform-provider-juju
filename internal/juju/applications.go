@@ -765,7 +765,7 @@ func (c applicationsClient) ReadApplication(ctx context.Context, input *ReadAppl
 	var originHash string
 	if isLocal {
 		if _, origin, oErr := applicationAPIClient.GetCharmURLOrigin(ctx, input.AppName); oErr != nil {
-			c.Debugf("failed to get charm origin for drift detection", map[string]interface{}{"app": input.AppName, "err": oErr})
+			return nil, fmt.Errorf("failed to get charm origin for drift detection: %v", oErr)
 		} else {
 			originHash = origin.Hash
 		}
