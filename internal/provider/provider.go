@@ -48,6 +48,8 @@ const (
 
 	// ControllerMode is the provider config key for controller mode.
 	ControllerMode = "controller_mode"
+	// LazyAPI is the provider config key for lazy API initialization.
+	LazyAPI = "lazy_api"
 	// JujuController is the provider config key for controller addresses.
 	JujuController = "controller_addresses"
 	// JujuUsername is the provider config key for username.
@@ -165,6 +167,7 @@ type offeringControllerModel struct {
 
 type jujuProviderModel struct {
 	ControllerMode  types.Bool   `tfsdk:"controller_mode"`
+	LazyAPI         types.Bool   `tfsdk:"lazy_api"`
 	ControllerAddrs types.String `tfsdk:"controller_addresses"`
 	UserName        types.String `tfsdk:"username"`
 	Password        types.String `tfsdk:"password"`
@@ -253,6 +256,13 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 			ControllerMode: schema.BoolAttribute{
 				Description: "If set to true, the provider will only allow managing `juju_controller` resources.",
 				Optional:    true,
+			},
+			LazyAPI: schema.BoolAttribute{
+				Description: "If set to true, the provider will not connect to the controller during planning. " +
+					"This allows for planning the creation of resources without a live controller. However, for following updates of resources, " +
+					"the provider will connect to the controller also during planning." +
+					"Note that the validators/checks (e.g. check some resources are only valid with JAAS) will not be run until apply time.",
+				Optional: true,
 			},
 			JujuController: schema.StringAttribute{
 				Description: fmt.Sprintf("This is the controller addresses to connect to, defaults to localhost:17070, multiple addresses can be provided in this format: <host>:<port>,<host>:<port>,.... This can also be set by the `%s` environment variable.", JujuControllerEnvKey),
@@ -399,7 +409,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 	controllerDetailsRequired := !data.ControllerMode.ValueBool()
-
+	lazyAPICheck := data.LazyAPI.ValueBool()
 	// Get data required for configuring the juju client.
 	data, diags = getJujuProviderModel(ctx, data, controllerDetailsRequired)
 	if diags.HasError() {
@@ -438,6 +448,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		CACert:              data.CACert.ValueString(),
 		ClientID:            data.ClientID.ValueString(),
 		ClientSecret:        data.ClientSecret.ValueString(),
+		IsLazyInstanciated:  lazyAPICheck,
 	}
 	client, err := juju.NewClient(ctx, controllerConfig, p.waitForResources)
 	if err != nil {
@@ -446,14 +457,16 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	}
 	providerData.Client = client
 
-	// Here we are testing that we can connect successfully to the Juju server
-	// this prevents having logic to check the connection is OK in every function
-	testConn, err := providerData.Client.Models.GetConnection(ctx, nil)
-	if err != nil {
-		resp.Diagnostics.Append(checkClientErr(err, controllerConfig)...)
-		return
+	if !lazyAPICheck {
+		// Here we are testing that we can connect successfully to the Juju server
+		// this prevents having logic to check the connection is OK in every function
+		testConn, err := providerData.Client.Models.GetConnection(ctx, nil)
+		if err != nil {
+			resp.Diagnostics.Append(checkClientErr(err, controllerConfig)...)
+			return
+		}
+		_ = testConn.Close()
 	}
-	_ = testConn.Close()
 
 	// Register additional offering controllers if configured
 	if !data.OfferingControllers.IsNull() && !data.OfferingControllers.IsUnknown() {
@@ -488,6 +501,19 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 						controllerName, err.Error()),
 				)
 				return
+			}
+			if !lazyAPICheck {
+				// Test the connection
+				conn, err := providerData.Client.Offers.GetOfferingControllerConn(ctx, controllerName)
+				if err != nil {
+					resp.Diagnostics.AddError(
+						"Error Connecting to Additional Offering Controller",
+						fmt.Sprintf("An error was encountered while connecting to additional offering controller '%s': %s",
+							controllerName, err.Error()),
+					)
+					return
+				}
+				defer func() { _ = conn.Close() }()
 			}
 
 			tflog.Info(ctx, "Successfully registered additional offering controller", map[string]interface{}{

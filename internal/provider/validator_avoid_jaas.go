@@ -57,10 +57,13 @@ func (v AvoidJAASValidator) ValidateResource(ctx context.Context, req resource.V
 // validate runs the main validation logic of the validator, reading configuration data out of `config` and returning with diagnostics.
 func (v AvoidJAASValidator) validate() diag.Diagnostics {
 	var diags diag.Diagnostics
-
-	// Return without error if a nil client is detected.
+	// Return without error if a nil client is detected, or is lazily instanciated.
 	// This is possible since validation is called at various points throughout resource creation.
-	if v.client != nil && v.client.IsJAAS() {
+	if v.client == nil || v.client.IsLazyInstanciated {
+		return diags
+	}
+
+	if v.client.IsJAAS() {
 		hint := ""
 		if v.preferredObject != "" {
 			hint = "Try the " + v.preferredObject + " resource instead."

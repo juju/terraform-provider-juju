@@ -525,6 +525,54 @@ func TestProviderConfigureControllerModeWithConnectionDetails(t *testing.T) {
 	assert.NotNil(t, providerData.Client)
 }
 
+func TestProviderConfigureLazyAPIDoesNotConnect(t *testing.T) {
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	confResp := configureProviderWithModel(t, jujuProvider, jujuProviderModel{
+		LazyAPI:             types.BoolValue(true),
+		ControllerAddrs:     types.StringValue("bogus-controller:17070"),
+		UserName:            types.StringValue("bogus-user"),
+		Password:            types.StringValue("bogus-password"),
+		OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
+	})
+
+	require.False(t, confResp.Diagnostics.HasError(), "unexpected configure error: %v", confResp.Diagnostics.Errors())
+	providerData, ok := confResp.ResourceData.(juju.ProviderData)
+	require.True(t, ok)
+	require.NotNil(t, providerData.Client)
+	assert.True(t, providerData.Client.IsLazyInstanciated)
+}
+
+func TestAccLazyAPIAllowsJAASResourceValidation(t *testing.T) {
+	SkipJAAS(t)
+
+	// Force the provider onto the username/password path. Ambient JAAS
+	// credentials would change the provider's authentication mode.
+	t.Setenv(JujuClientIDEnvKey, "")
+	t.Setenv(JujuClientSecretEnvKey, "")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `
+provider "juju" {
+  controller_addresses = "127.0.0.1:1"
+  username             = "bogus-user"
+  password             = "bogus-password"
+  lazy_api             = true
+}
+
+resource "juju_jaas_group" "test" {
+  name = "lazy-api-validation-test"
+}
+`,
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}
+
 func newConfigureRequest(t *testing.T, conf jujuProviderModel) provider.ConfigureRequest {
 	schemaResp := provider.SchemaResponse{}
 	Provider.Schema(context.Background(), provider.SchemaRequest{}, &schemaResp)
@@ -532,6 +580,7 @@ func newConfigureRequest(t *testing.T, conf jujuProviderModel) provider.Configur
 
 	mapTypes := map[string]attr.Type{
 		ControllerMode:          types.BoolType,
+		LazyAPI:                 types.BoolType,
 		JujuController:          types.StringType,
 		JujuUsername:            types.StringType,
 		JujuPassword:            types.StringType,
@@ -559,7 +608,7 @@ func TestFrameworkProviderSchema(t *testing.T) {
 	resp := provider.SchemaResponse{}
 	jujuProvider.Schema(context.Background(), req, &resp)
 	assert.Equal(t, resp.Diagnostics.HasError(), false)
-	assert.Len(t, resp.Schema.Attributes, 9)
+	assert.Len(t, resp.Schema.Attributes, 10)
 }
 
 func createOfferingControllerMap(t *testing.T, extControllers map[string]map[string]attr.Value) types.Map {

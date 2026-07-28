@@ -246,13 +246,13 @@ func (r *kubernetesCloudResource) Read(ctx context.Context, req resource.ReadReq
 
 // Update updates the kubernetes cloud on the controller used by Terraform provider.
 func (r *kubernetesCloudResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	if r.client.IsJAAS() {
-		resp.Diagnostics.AddError("Not Supported", "Cloud Update is not supported in JAAS.")
-		return
-	}
 	// Prevent panic if the provider has not been configured.
 	if r.client == nil {
 		addClientNotConfiguredError(&resp.Diagnostics, "kubernetes_cloud", "update")
+		return
+	}
+	if r.client.IsJAAS() {
+		resp.Diagnostics.AddError("Not Supported", "Cloud Update is not supported in JAAS.")
 		return
 	}
 
@@ -339,6 +339,9 @@ func (v *kuberenetesCloudJAASValidator) MarkdownDescription(_ context.Context) s
 // ValidateResource implements the ValidateResource method of the resource.ConfigValidator interface.
 func (v *kuberenetesCloudJAASValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	if v.client == nil {
+		return
+	}
+	if v.client.IsLazyInstanciated {
 		return
 	}
 
