@@ -63,21 +63,15 @@ func ipMatchesCondition(addr netip.Addr, condition string) bool {
 // MatchIPAddresses matches the machine's reported IP addresses against the
 // list of wait conditions. It returns one IP address per condition, in the
 // same order, with each condition consuming a distinct IP.
-//
-// prior, when provided (e.g. the IPs stored in Terraform state), is used to
-// keep the matched IPs as stable as possible: any prior IP that still matches
-// the current condition and is still reported by Juju is preferred over a new
-// match.
-//
 // If a condition cannot be satisfied, ErrNoMatchingIPAddress is returned.
-func MatchIPAddresses(all []string, conditions []string) ([]string, error) {
+func MatchIPAddresses(ips []string, conditions []string) ([]string, error) {
 	matched := make([]string, len(conditions))
 	used := make(map[string]bool)
 
 	for i, cond := range conditions {
 		// Pick the first candidate that matches the condition and hasn't been
 		// used by a previous condition.
-		for _, ip := range all {
+		for _, ip := range ips {
 			if used[ip] {
 				continue
 			}
@@ -94,7 +88,7 @@ func MatchIPAddresses(all []string, conditions []string) ([]string, error) {
 		}
 
 		if matched[i] == "" {
-			return nil, jujuerrors.WithType(jujuerrors.Errorf("%q among reported IPs %v", cond, all), ErrNoMatchingIPAddress)
+			return nil, jujuerrors.WithType(jujuerrors.Errorf("%q among reported IPs %v", cond, ips), ErrNoMatchingIPAddress)
 		}
 	}
 	return matched, nil

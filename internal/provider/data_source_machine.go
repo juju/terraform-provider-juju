@@ -24,12 +24,8 @@ import (
 var _ datasource.DataSource = &machineDataSource{}
 
 const (
-	// WaitForIPAddressesKey is the schema key for the list of IP address
-	// conditions the provider waits for before completing creation.
-	WaitForIPAddressesKey = "wait_for_ip_addresses"
-	// IPAddressesKey is the schema key for the computed list of IP addresses
-	// matching the wait_for_ip_addresses conditions.
-	IPAddressesKey = "ip_addresses"
+	waitForIPAddressesKey = "wait_for_ip_addresses"
+	ipAddressesKey        = "ip_addresses"
 )
 
 // NewMachineDataSource returns a new machine data source.
@@ -74,20 +70,22 @@ func (d *machineDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 				Description: "The Juju id of the machine.",
 				Required:    true,
 			},
-			WaitForIPAddressesKey: schema.ListAttribute{
+			waitForIPAddressesKey: schema.ListAttribute{
 				Description: "A list of IP address conditions the provider waits for before completing " +
-					"the creation of the machine. Each element must be one of: a CIDR (e.g. \"10.0.10.0/24\"), " +
+					"the read. Each element must be one of: a CIDR (e.g. \"10.0.10.0/24\"), " +
 					"or the aliases \"public\", \"private\", \"any\". The matching IP addresses are populated " +
-					"in the 'ip_addresses' computed field, in the same order as this list.",
+					"in the 'ip_addresses' computed field, in the same order as this list. Conditions are evaluated " +
+					"from left to right, so put narrow CIDRs first, followed by broader CIDRs or \"public\"/\"private\", " +
+					"and \"any\" last.",
 				Optional:    true,
 				ElementType: types.StringType,
 				Validators: []validator.List{
 					listvalidator.ValueStringsAre(ipAddressConditionValidator{}),
 				},
 			},
-			IPAddressesKey: schema.ListAttribute{
+			ipAddressesKey: schema.ListAttribute{
 				Description: "If `wait_for_ip_addresses` is set it will contain the IP addresses of the machine matching the 'wait_for_ip_addresses' " +
-					"conditions, in the same order. If not set this field will contains the ips fetched when the machine is read. ",
+					"conditions, in the same order. If not set this field will contain the IPs fetched when the machine is read.",
 				Computed:    true,
 				ElementType: types.StringType,
 			},
@@ -172,7 +170,15 @@ func (d *machineDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 
-	ipAddressesValue, diag := types.ListValueFrom(ctx, types.StringType, readResponse.IPAddresses)
+	ipAddresses := readResponse.IPAddresses
+	if len(conditions) > 0 {
+		ipAddresses, err = juju.MatchIPAddresses(ipAddresses, conditions)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to match machine IP addresses for machine %q, got error: %s", machineID, err))
+			return
+		}
+	}
+	ipAddressesValue, diag := types.ListValueFrom(ctx, types.StringType, ipAddresses)
 	if diag.HasError() {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to convert machine IP addresses for machine %q, got error: %v", machineID, diag.Errors()))
 		return
@@ -198,15 +204,11 @@ func (d *machineDataSource) trace(msg string, additionalFields ...map[string]int
 
 // assertIPAddressesFor returns a wait assertion ensuring that the machine's
 // reported IP addresses can satisfy all the given wait-for-ip-addresses
-// conditions. ErrNoMatchingIPAddress is treated as retriable by
-// waitForMachine (via NonFatalErrors); any other error is fatal.
+// conditions. ErrNoMatchingIPAddress is treated as retriable by WaitFor (via
+// NonFatalErrors); any other error is fatal.
 func assertIPAddressesFor(conditions []string) wait.Assert[*juju.ReadMachineResponse] {
 	return func(respFromAPI *juju.ReadMachineResponse) error {
-		ips, err := juju.MatchIPAddresses(respFromAPI.IPAddresses, conditions)
-		if err != nil {
-			return err
-		}
-		respFromAPI.IPAddresses = ips
-		return nil
+		_, err := juju.MatchIPAddresses(respFromAPI.IPAddresses, conditions)
+		return err
 	}
 }

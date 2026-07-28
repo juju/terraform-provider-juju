@@ -29,9 +29,9 @@ data "juju_machine" "this" {
 
 ### Optional
 
-- `wait_for_ip_addresses` (List of String) A list of IP address conditions the provider waits for before completing the creation of the machine. Each element must be one of: a CIDR (e.g. "10.0.10.0/24"), or the aliases "public", "private", "any". The matching IP addresses are populated in the 'ip_addresses' computed field, in the same order as this list.
+- `wait_for_ip_addresses` (List of String) A list of IP address conditions the provider waits for before completing the read. Each element must be one of: a CIDR (e.g. "10.0.10.0/24"), or the aliases "public", "private", "any". The matching IP addresses are populated in the 'ip_addresses' computed field, in the same order as this list. Conditions are evaluated from left to right, so put narrow CIDRs first, followed by broader CIDRs or "public"/"private", and "any" last.
 
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-- `ip_addresses` (List of String) If `wait_for_ip_addresses` is set it will contain the IP addresses of the machine matching the 'wait_for_ip_addresses' conditions, in the same order. If not set this field will contains the ips fetched when the machine is read.
+- `ip_addresses` (List of String) If `wait_for_ip_addresses` is set it will contain the IP addresses of the machine matching the 'wait_for_ip_addresses' conditions, in the same order. If not set this field will contain the IPs fetched when the machine is read.

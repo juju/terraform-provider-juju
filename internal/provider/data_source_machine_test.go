@@ -49,7 +49,7 @@ data "juju_machine" "machine" {
 }`, modelName)
 }
 
-func TestAcc_ResourceMachineWaitForIPAddresses(t *testing.T) {
+func TestAcc_DataSourceMachineWaitForIPAddresses(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -59,7 +59,7 @@ func TestAcc_ResourceMachineWaitForIPAddresses(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceMachineWaitForIPAddresses(modelName),
+				Config: testAccDataSourceMachineWaitForIPAddresses(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_machine.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
@@ -72,7 +72,7 @@ func TestAcc_ResourceMachineWaitForIPAddresses(t *testing.T) {
 	})
 }
 
-func testAccResourceMachineWaitForIPAddresses(modelName string) string {
+func testAccDataSourceMachineWaitForIPAddresses(modelName string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this" {
 	name = %q
