@@ -54,6 +54,7 @@ resource "juju_machine" "this_machine" {
 
 - `hostname` (String) The machine's hostname. This is set only if 'wait_for_hostname' is true.
 - `id` (String) The ID of this resource.
+- `instance_id` (String) The provider-specific instance id of the machine Juju creates.
 - `machine_id` (String) The id of the machine Juju creates.
 
 <a id="nestedblock--timeouts"></a>

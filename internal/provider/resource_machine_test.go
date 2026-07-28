@@ -29,6 +29,7 @@ func TestAcc_ResourceMachine(t *testing.T) {
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_machine.this", "model_uuid"),
 					resource.TestCheckResourceAttr("juju_machine.this", "name", "this_machine"),
 					resource.TestCheckResourceAttr("juju_machine.this", "base", "ubuntu@22.04"),
+					resource.TestCheckResourceAttrSet("juju_machine.this", "instance_id"),
 				),
 			},
 			{
