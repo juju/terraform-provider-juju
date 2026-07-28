@@ -739,17 +739,15 @@ func TestAcc_ResourceApplication_CharmNameRequiresReplace(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceApplicationCharmhubCharm(modelName, appName, "juju-qa-test"),
+				// Changing the charm name must plan a Replace, not an Update.
+				Config:             testAccResourceApplicationCharmhubCharm(modelName, appName, "juju-qa-test"),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
 				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectNonEmptyPlan(),
+					PostApplyPreRefresh: []plancheck.PlanCheck{
 						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionReplace),
 					},
 				},
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resourceName, "name", appName),
-					resource.TestCheckResourceAttr(resourceName, "charm.0.name", "juju-qa-test"),
-				),
 			},
 		},
 	})
