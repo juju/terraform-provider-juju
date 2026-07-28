@@ -1,0 +1,6 @@
+name: juju-qa-test
+summary: test charm
+description: acceptance test charm
+bases:
+  - name: ubuntu
+    channel: "22.04"

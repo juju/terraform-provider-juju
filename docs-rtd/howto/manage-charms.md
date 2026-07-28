@@ -1,7 +1,7 @@
 ---
 myst:
   html_meta:
-    description: "Learn how to deploy Charmhub charms with specific channels and revisions, including automatic revision computation examples."
+    description: "Learn how to deploy Charmhub and local charms with specific channels and revisions, including automatic revision computation examples."
 ---
 
 (manage-charms)=
@@ -11,8 +11,6 @@ myst:
 
 (deploy-a-charm)=
 ## Deploy a charm
-
-The Terraform Provider for Juju does not support deploying a local charm.
 
 To deploy a Charmhub charm, in your Terraform plan add a `juju_application` resource, specifying the target model and the charm you want to deploy:
 
@@ -50,6 +48,27 @@ This works as follows:
 If the charm has any resources, and your Terraform plan does not specify them explicitly, resources will come from the tip of the specified or inferred channel.
 
 > See more: [`juju_application` (resource)](../reference/terraform-provider//resources/application)
+
+(deploy-a-local-charm)=
+### Deploy a local charm
+
+To deploy a charm from a local `.charm` archive instead of Charmhub, use the `local_charm` block in place of the `charm` block. The `name` must match the charm name in the archive's metadata and `path` is the filesystem path to the archive. Relative paths are resolved against the Terraform working directory:
+
+```terraform
+resource "juju_application" "this" {
+  model_uuid = juju_model.development.uuid
+
+  local_charm {
+    name = "my-local-charm"
+    path = "${path.module}/my-local-charm.charm"
+    base = "ubuntu@22.04"
+  }
+}
+```
+
+The `charm` and `local_charm` blocks are mutually exclusive, only one may be set. The provider computes a content hash of the archive (`path_hash`) so that rebuilding the charm file with different content triggers an in-place refresh on the next `terraform apply`. On controllers that report a charm hash (Juju 3.6.26+ or Juju 4+), the provider also records an `origin_hash` to detect out-of-band changes made with the `juju` CLI.
+
+> See more: [`juju_application` > `local_charm` > nested schema](../reference/terraform-provider/resources/application#nested-schema-for-local_charm)
 
 (compute-a-charms-revision-automatically)=
 ### Compute a charm's revision automatically
@@ -153,6 +172,8 @@ Changing `channel` in Terraform is equivalent to refreshing the application to a
 If `revision` is unset and the `channel` stays the same, Terraform does not automatically refresh the charm to newer revisions from that same channel on later `terraform apply` runs. In that case, pin `revision` for a reproducible deployment, use the `juju_charm` data source to resolve the current revision automatically, or refresh the application manually with the `juju` CLI.
 
 Changing `channel` or `revision` updates the application in place. Changing `base` updates Kubernetes applications in place, but changing it for machine charms requires replacement.
+
+Switching an existing application between the `charm` (Charmhub) and `local_charm` blocks is not an in-place update — it destroys and recreates the application, regardless of whether the charm name or base is unchanged.
 
 When the charm is changed, its resources will also be updated unless pinned.
 
