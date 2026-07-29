@@ -88,10 +88,10 @@ type Client struct {
 	SecretBackends secretBackendsClient
 
 	isJAAS func() bool
-	// IsLazyInstanciated indicates whether the client is lazily instantiated.
+	// IsLazyInstantiated indicates whether the client is lazily instantiated.
 	// If true, the client will not attempt to connect to the controller until a method is called
 	// that requires a connection.
-	IsLazyInstanciated bool
+	IsLazyInstantiated bool
 	username           string
 }
 
@@ -213,7 +213,7 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 		Subnets:            *newSubnetsClient(sc),
 		Actions:            *newActionsClient(sc),
 		SecretBackends:     *newSecretBackendsClient(sc),
-		IsLazyInstanciated: config.IsLazyInstanciated,
+		IsLazyInstantiated: config.IsLazyInstanciated,
 		isJAAS:             func() bool { return sc.IsJAAS(ctx, defaultJAASCheck) },
 		username:           user,
 	}, nil

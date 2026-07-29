@@ -59,7 +59,7 @@ func (v AvoidJAASValidator) validate() diag.Diagnostics {
 	var diags diag.Diagnostics
 	// Return without error if a nil client is detected, or is lazily instanciated.
 	// This is possible since validation is called at various points throughout resource creation.
-	if v.client == nil || v.client.IsLazyInstanciated {
+	if v.client == nil || v.client.IsLazyInstantiated {
 		return diags
 	}
 

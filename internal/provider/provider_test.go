@@ -528,7 +528,7 @@ func TestProviderConfigureControllerModeWithConnectionDetails(t *testing.T) {
 func TestProviderConfigureLazyAPIDoesNotConnect(t *testing.T) {
 	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
 	confResp := configureProviderWithModel(t, jujuProvider, jujuProviderModel{
-		LazyAPI:             types.BoolValue(true),
+		LazyAPICheck:        types.BoolValue(true),
 		ControllerAddrs:     types.StringValue("bogus-controller:17070"),
 		UserName:            types.StringValue("bogus-user"),
 		Password:            types.StringValue("bogus-password"),
@@ -539,7 +539,7 @@ func TestProviderConfigureLazyAPIDoesNotConnect(t *testing.T) {
 	providerData, ok := confResp.ResourceData.(juju.ProviderData)
 	require.True(t, ok)
 	require.NotNil(t, providerData.Client)
-	assert.True(t, providerData.Client.IsLazyInstanciated)
+	assert.True(t, providerData.Client.IsLazyInstantiated)
 }
 
 func TestAccLazyAPIAllowsJAASResourceValidation(t *testing.T) {
@@ -559,7 +559,7 @@ provider "juju" {
   controller_addresses = "127.0.0.1:1"
   username             = "bogus-user"
   password             = "bogus-password"
-  lazy_api             = true
+  lazy_api_check             = true
 }
 
 resource "juju_jaas_group" "test" {
@@ -580,7 +580,7 @@ func newConfigureRequest(t *testing.T, conf jujuProviderModel) provider.Configur
 
 	mapTypes := map[string]attr.Type{
 		ControllerMode:          types.BoolType,
-		LazyAPI:                 types.BoolType,
+		LazyAPICheck:            types.BoolType,
 		JujuController:          types.StringType,
 		JujuUsername:            types.StringType,
 		JujuPassword:            types.StringType,

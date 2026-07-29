@@ -61,7 +61,7 @@ func (v FieldsRequireJAAS) ValidateResource(ctx context.Context, req resource.Va
 func (v FieldsRequireJAAS) validate(ctx context.Context, config tfsdk.Config) diag.Diagnostics {
 	var configuredPaths path.Paths
 	var diags diag.Diagnostics
-	if v.client == nil || v.client.IsLazyInstanciated {
+	if v.client == nil || v.client.IsLazyInstantiated {
 		return diags
 	}
 	// The logic below is mostly copied from Terraform's AtLeastOneOfValidator

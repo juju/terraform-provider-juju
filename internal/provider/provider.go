@@ -48,8 +48,8 @@ const (
 
 	// ControllerMode is the provider config key for controller mode.
 	ControllerMode = "controller_mode"
-	// LazyAPI is the provider config key for lazy API initialization.
-	LazyAPI = "lazy_api"
+	// LazyAPICheck is the provider config key for lazy API initialization.
+	LazyAPICheck = "lazy_api_check"
 	// JujuController is the provider config key for controller addresses.
 	JujuController = "controller_addresses"
 	// JujuUsername is the provider config key for username.
@@ -167,7 +167,7 @@ type offeringControllerModel struct {
 
 type jujuProviderModel struct {
 	ControllerMode  types.Bool   `tfsdk:"controller_mode"`
-	LazyAPI         types.Bool   `tfsdk:"lazy_api"`
+	LazyAPICheck    types.Bool   `tfsdk:"lazy_api_check"`
 	ControllerAddrs types.String `tfsdk:"controller_addresses"`
 	UserName        types.String `tfsdk:"username"`
 	Password        types.String `tfsdk:"password"`
@@ -257,10 +257,10 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 				Description: "If set to true, the provider will only allow managing `juju_controller` resources.",
 				Optional:    true,
 			},
-			LazyAPI: schema.BoolAttribute{
+			LazyAPICheck: schema.BoolAttribute{
 				Description: "If set to true, the provider will not connect to the controller during planning. " +
-					"This allows for planning the creation of resources without a live controller. However, for following updates of resources, " +
-					"the provider will connect to the controller also during planning." +
+					"This allows for planning the creation of resources without a live controller. However, the provider will still " +
+					"connect to the controller when planning for updates." +
 					"Note that the validators/checks (e.g. check some resources are only valid with JAAS) will not be run until apply time.",
 				Optional: true,
 			},
@@ -409,7 +409,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 	controllerDetailsRequired := !data.ControllerMode.ValueBool()
-	lazyAPICheck := data.LazyAPI.ValueBool()
+	lazyAPICheck := data.LazyAPICheck.ValueBool()
 	// Get data required for configuring the juju client.
 	data, diags = getJujuProviderModel(ctx, data, controllerDetailsRequired)
 	if diags.HasError() {

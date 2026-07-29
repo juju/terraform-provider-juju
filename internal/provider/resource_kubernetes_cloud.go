@@ -341,7 +341,7 @@ func (v *kuberenetesCloudJAASValidator) ValidateResource(ctx context.Context, re
 	if v.client == nil {
 		return
 	}
-	if v.client.IsLazyInstanciated {
+	if v.client.IsLazyInstantiated {
 		return
 	}
 
