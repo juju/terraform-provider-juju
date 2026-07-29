@@ -193,7 +193,6 @@ func (r *applicationLister) getApplicationResource(
 	appName string,
 ) (applicationResourceModelV1, diag.Diagnostics) {
 	charmType := resourceSchema.GetBlocks()[CharmKey].(schema.ListNestedBlock).NestedObject.Type()
-	localCharmType := resourceSchema.GetBlocks()[LocalCharmKey].(schema.ListNestedBlock).NestedObject.Type()
 	endpointBindingsType := resourceSchema.GetAttributes()[EndpointBindingsKey].(schema.SetNestedAttribute).NestedObject.Type()
 	exposeType := resourceSchema.GetBlocks()[ExposeKey].(schema.ListNestedBlock).NestedObject.Type()
 	resourceType := resourceSchema.GetAttributes()[ResourceKey].(schema.MapAttribute).ElementType
@@ -204,7 +203,6 @@ func (r *applicationLister) getApplicationResource(
 			Config:            types.MapNull(types.StringType),
 			EndpointBindings:  types.SetNull(endpointBindingsType),
 			Expose:            types.ListNull(exposeType),
-			LocalCharm:        types.ListNull(localCharmType),
 			Machines:          types.SetNull(types.StringType),
 			Resources:         types.MapNull(resourceType),
 			StorageDirectives: types.MapNull(types.StringType),
