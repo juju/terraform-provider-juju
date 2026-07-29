@@ -261,7 +261,7 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 				Description: "If set to true, the provider will not connect to the controller during planning for creation. " +
 					"This allows for planning the creation of resources without a live controller. However, the provider will still " +
 					"connect to the controller when planning for updates. " +
-					"Note that the validators/checks (e.g. check some resources are only valid with JAAS) will not be run until apply time.",
+					"Note that the validators/checks will not be run until apply time - this is relevant for some resources that are only valid with JAAS.",
 				Optional: true,
 			},
 			JujuController: schema.StringAttribute{
