@@ -34,7 +34,11 @@ func TestAcc_ResourceJaasAccessController(t *testing.T) {
 	accessSuccess := "administrator"
 	accessFail := "bogus"
 	user := "foo@domain.com"
-	group := acctest.RandomWithPrefix("myGroup")
+	// An empty group name elides all group resources and checks.
+	group := ""
+	if jaasGroupsEnabled() {
+		group = acctest.RandomWithPrefix("myGroup")
+	}
 	role := acctest.RandomWithPrefix("role1")
 	svcAcc := "test"
 	svcAccWithDomain := svcAcc + "@serviceaccount"
@@ -59,7 +63,9 @@ func TestAcc_ResourceJaasAccessController(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
 			testAccCheckJaasResourceAccess(accessSuccess, &userTag, &controllerTag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, &controllerTag, false),
+			checksIf(jaasGroupsEnabled(),
+				testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, &controllerTag, false),
+			),
 			testAccCheckJaasResourceAccess(accessSuccess, roleCheck.tag, &controllerTag, false),
 			testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, &controllerTag, false),
 		),
@@ -71,20 +77,22 @@ func TestAcc_ResourceJaasAccessController(t *testing.T) {
 			{
 				Config: testAccResourceJaasAccessController(accessSuccess, user, group, svcAcc, role),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckAttributeNotEmpty(groupCheck),
 					testAccCheckAttributeNotEmpty(roleCheck),
 					testAccCheckJaasResourceAccess(accessSuccess, &userTag, &controllerTag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, &controllerTag, true),
 					testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, &controllerTag, true),
 					testAccCheckJaasResourceAccess(accessSuccess, roleCheck.tag, &controllerTag, true),
 					resource.TestCheckResourceAttr(controllerAccessResourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(controllerAccessResourceName, "users.*", user),
 					resource.TestCheckResourceAttr(controllerAccessResourceName, "users.#", "1"),
-					// Wrap this check so that the pointer has deferred evaluation.
-					func(s *terraform.State) error {
-						return resource.TestCheckTypeSetElemAttr(controllerAccessResourceName, "groups.*", *groupCheck.resourceID)(s)
-					},
-					resource.TestCheckResourceAttr(controllerAccessResourceName, "groups.#", "1"),
+					checksIf(jaasGroupsEnabled(),
+						testAccCheckAttributeNotEmpty(groupCheck),
+						testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, &controllerTag, true),
+						// Wrap this check so that the pointer has deferred evaluation.
+						func(s *terraform.State) error {
+							return resource.TestCheckTypeSetElemAttr(controllerAccessResourceName, "groups.*", *groupCheck.resourceID)(s)
+						},
+						resource.TestCheckResourceAttr(controllerAccessResourceName, "groups.#", "1"),
+					),
 					resource.TestCheckTypeSetElemAttr(controllerAccessResourceName, "service_accounts.*", svcAcc),
 					resource.TestCheckResourceAttr(controllerAccessResourceName, "service_accounts.#", "1"),
 				),
@@ -149,15 +157,19 @@ func testAccResourceJaasAccessController(access, user, group, svcAcc, role strin
 resource "juju_jaas_role" "test" {
   name = "{{ .Role }}"
 }
+{{- if .Group }}
 
 resource "juju_jaas_group" "test" {
   name = "{{ .Group }}"
 }
+{{- end }}
 
 resource "juju_jaas_access_controller" "test" {
   access              = "{{.Access}}"
   users               = ["{{.User}}"]
+{{- if .Group }}
   groups              = [juju_jaas_group.test.uuid]
+{{- end }}
   roles               = [juju_jaas_role.test.uuid]
   service_accounts    = ["{{.SvcAcc}}"]
 }

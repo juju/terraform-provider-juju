@@ -37,7 +37,11 @@ func TestAcc_ResourceJaasAccessCloud(t *testing.T) {
 	accessSuccess := "can_addmodel"
 	accessFail := "bogus"
 	user := "foo@domain.com"
-	group := acctest.RandomWithPrefix("myGroup")
+	// An empty group name elides all group resources and checks.
+	group := ""
+	if jaasGroupsEnabled() {
+		group = acctest.RandomWithPrefix("myGroup")
+	}
 	role := acctest.RandomWithPrefix("role1")
 	svcAcc := "test"
 	svcAccWithDomain := svcAcc + "@serviceaccount"
@@ -60,7 +64,9 @@ func TestAcc_ResourceJaasAccessCloud(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		CheckDestroy: resource.ComposeTestCheckFunc(
 			testAccCheckJaasResourceAccess(accessSuccess, &userTag, &cloudTag, false),
-			testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, &cloudTag, false),
+			checksIf(jaasGroupsEnabled(),
+				testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, &cloudTag, false),
+			),
 			testAccCheckJaasResourceAccess(accessSuccess, roleCheck.tag, &cloudTag, false),
 			testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, &cloudTag, false),
 		),
@@ -72,20 +78,22 @@ func TestAcc_ResourceJaasAccessCloud(t *testing.T) {
 			{
 				Config: testAccResourceJaasAccessCloud(cloudName, accessSuccess, user, group, svcAcc, role),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckAttributeNotEmpty(groupCheck),
 					testAccCheckAttributeNotEmpty(roleCheck),
 					testAccCheckJaasResourceAccess(accessSuccess, &userTag, &cloudTag, true),
-					testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, &cloudTag, true),
 					testAccCheckJaasResourceAccess(accessSuccess, &svcAccTag, &cloudTag, true),
 					testAccCheckJaasResourceAccess(accessSuccess, roleCheck.tag, &cloudTag, true),
 					resource.TestCheckResourceAttr(cloudAccessResourceName, "access", accessSuccess),
 					resource.TestCheckTypeSetElemAttr(cloudAccessResourceName, "users.*", user),
 					resource.TestCheckResourceAttr(cloudAccessResourceName, "users.#", "1"),
-					// Wrap this check so that the pointer has deferred evaluation.
-					func(s *terraform.State) error {
-						return resource.TestCheckTypeSetElemAttr(cloudAccessResourceName, "groups.*", *groupCheck.resourceID)(s)
-					},
-					resource.TestCheckResourceAttr(cloudAccessResourceName, "groups.#", "1"),
+					checksIf(jaasGroupsEnabled(),
+						testAccCheckAttributeNotEmpty(groupCheck),
+						testAccCheckJaasResourceAccess(accessSuccess, groupCheck.tag, &cloudTag, true),
+						// Wrap this check so that the pointer has deferred evaluation.
+						func(s *terraform.State) error {
+							return resource.TestCheckTypeSetElemAttr(cloudAccessResourceName, "groups.*", *groupCheck.resourceID)(s)
+						},
+						resource.TestCheckResourceAttr(cloudAccessResourceName, "groups.#", "1"),
+					),
 					resource.TestCheckTypeSetElemAttr(cloudAccessResourceName, "service_accounts.*", svcAcc),
 					resource.TestCheckResourceAttr(cloudAccessResourceName, "service_accounts.#", "1"),
 				),
@@ -150,16 +158,20 @@ func testAccResourceJaasAccessCloud(cloudName, access, user, group, svcAcc, role
 resource "juju_jaas_role" "test" {
   name = "{{ .Role }}"
 }
+{{- if .Group }}
 
 resource "juju_jaas_group" "test" {
   name = "{{ .Group }}"
 }
+{{- end }}
 
 resource "juju_jaas_access_cloud" "test" {
   cloud_name          = "{{.Cloud}}"
   access              = "{{.Access}}"
   users               = ["{{.User}}"]
+{{- if .Group }}
   groups              = [juju_jaas_group.test.uuid]
+{{- end }}
   roles              = [juju_jaas_role.test.uuid]
   service_accounts    = ["{{.SvcAcc}}"]
 }
