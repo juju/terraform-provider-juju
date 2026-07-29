@@ -82,6 +82,7 @@ type ReadMachineResponse struct {
 	Constraints string
 	Hostname    string
 	Status      string
+	IPAddresses []string
 }
 
 // DestroyMachineInput contains the parameters for removing a machine.
@@ -366,6 +367,7 @@ func (c *machinesClient) ReadMachine(ctx context.Context, input *ReadMachineInpu
 		Constraints: machineStatus.Constraints,
 		Base:        base,
 		Status:      machineStatusString,
+		IPAddresses: machineStatus.IPAddresses,
 	}, nil
 }
 
