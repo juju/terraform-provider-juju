@@ -63,10 +63,6 @@ func testAccListModels() string {
 list "juju_model" "test" {
   provider         = juju
   include_resource = true
-
-  config {
-    model_uuid = juju_model.model.uuid
-  }
 }
 `
 }
