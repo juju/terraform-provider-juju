@@ -41,10 +41,9 @@ Out of the box the `terraform query` output does **not** satisfy either:
 - Other provider-specific validation or drift issues that only surface at
   `terraform plan` time.
 
-This skill guides an agent through the mechanical steps (`juju-tf-refwriter`,
-editing the query file) and the judgment steps (reading plan errors and
-patching `exported.tf`) until both goals hold, then splitting the result for
-maintainability.
+This skill guides an agent through the mechanical steps (`juju-tf-refwriter`)
+and the judgment steps (reading plan errors and patching `exported.tf`) until
+both goals hold, then splitting the result for maintainability.
 
 ## Scope boundary — mechanical vs. judgment
 
@@ -54,9 +53,8 @@ what the tools cannot do easily:
 | Concern | Handled by |
 | --- | --- |
 | Rewriting literal UUIDs/names into resource references | `juju-tf-refwriter` |
-| Filtering which resources are exported | the `.tfquery.hcl` file (edit the `list` blocks) |
 | Adding the `terraform`/`required_providers`/`provider` block | this skill |
-| Removing unmanageable resources (e.g. `alpha` space) | this skill (the `.tfquery.hcl` only supports inclusion filters, so it cannot exclude) |
+| Removing unmanageable resources (e.g. `alpha` space) | this skill |
 | Resolving plan-time validation errors and drift | this skill |
 | Splitting the single-file plan into maintainable files | this skill |
 
@@ -72,8 +70,6 @@ per-export manual step.
 
 The workspace must contain:
 
-- A query file (e.g. `examples/list-resources/export-all-model.tfquery.hcl` or
-  a copy in the working directory) listing every `list` block to export.
 - A working directory with `exported.tf` (the `--generate-config-out` output)
   and a `.terraform.lock.hcl`. The provider is `juju/juju`.
 - `juju-tf-refwriter/` — run with `go run . <path-to-exported.tf>` from that
@@ -133,12 +129,18 @@ often unnecessary.
 
 ### 3. Remove unmanageable resources from exported.tf
 
-The `.tfquery.hcl` `list` schemas only support **inclusion** filters (e.g.
-`name` on `juju_space`), not exclusion, so they cannot prevent resources like
-the `alpha` system space from being exported. Such resources must be removed
-from `exported.tf` **and** their matching `import` block. This step covers the
-*known* cases; other unmanageable resources are discovered reactively in step 4
-when the plan rejects them. Today the known cases include:
+Some exported resources cannot be managed by the provider and must be removed
+from `exported.tf` **and** their matching `import` block.
+
+To find them, compare the exported resource types against what the Terraform
+provider actually supports managing. Check `internal/provider/provider.go`
+(`Resources` and `ListResources`) for the supported set, and the resource
+schemas for per-resource constraints (e.g. `juju_space` rejects the `alpha`
+system space). Any exported resource the provider cannot manage — because the
+type isn't supported, the specific instance is rejected by validation, or the
+resource is controller-only — must be dropped.
+
+Today the known cases include:
 
 - `juju_space` with `name = "alpha"` — the system space; the provider rejects
   it with `Attribute name alpha is a system space and cannot be managed by
@@ -148,7 +150,9 @@ Delete both the `resource "juju_space" ...` block and the immediately following
 `import { to = juju_space.<same label> ... }` block. Leave user-created spaces
 untouched.
 
-Apply the same pattern to any other resource the plan rejects as unmanageable.
+Other unmanageable resources may surface reactively in step 4 when the plan
+rejects them; handle them inline there using the same pattern (remove the
+resource block and its `import` block together).
 
 ### 4. Iterate on terraform plan until both goals hold
 
@@ -159,6 +163,13 @@ terraform init
 terraform plan
 ```
 
+If `terraform init` fails (e.g. the lock file is stale after adding the
+provider block in step 2, or the provider isn't found in the registry), do not
+run `terraform init -upgrade` automatically — that can change the locked
+provider version. Tell the user what failed and ask how they want to handle it
+(e.g. `terraform init -upgrade`, pinning a different version, or fixing the
+lock file manually).
+
 It may not be practical for the agent to run `terraform plan` itself — it needs
 a reachable Juju controller, valid credentials, and the model to exist. Attempt
 to run it, but if it fails for environment reasons (no controller, auth errors,
@@ -166,138 +177,21 @@ model not found, network blocked), do not loop on retries. Ask the user to run
 `terraform plan` and paste the output, then classify and act on what they
 report.
 
-For each error or unexpected change, classify and act:
+The agent likely won't have any previous Terraform state to inspect. To
+understand the model's current shape (applications, machines, integrations,
+offers, etc.), run `juju status -m <model-name>` (or `juju status --format yaml`
+for machine-readable output) if the controller is reachable. This helps
+classify plan diffs and identify rename candidates. If the controller isn't
+reachable from the agent, ask the user to run `juju status` and paste the
+output.
 
-- **Validation error on a specific resource** (e.g. a system space, a
-  read-only field, a value the provider refuses): remove the resource or
-  field per step 3, or correct the value. Prefer removing over patching when
-  the field is not user-manageable.
-- **`model_uuid` left as a literal** (refwriter warning): check that a
-  `juju_model` resource with a matching `uuid` exists in the file. If the
-  model itself was not exported, the reference cannot be formed; add the model
-  to the query file and re-export.
-- **Drift / "1 to replace" or "1 to change"**: read the diff. Common causes:
-  - A field the provider cannot round-trip (e.g. a default the controller set
-    that the provider would not set on create). Align the config to the real
-    value so that both import and recreate are clean.
-  - `config = null` vs `{}` on resources that default to empty maps. Set the
-    field to the empty collection if the provider treats `null` and empty
-    differently.
-  - **Controller-set defaults captured by the export** (common). The export
-    captures every value the controller reports, including defaults the
-    original creation never specified. The clearest case is `juju_model.config`:
-    a model created with no `config` block still exports a full map of
-    controller defaults (`agent-stream`, `logging-config`, `firewall-mode`,
-    `lxd-snap-channel`, etc.). On import these show as drift (the state has
-    them, the config sets them to the same or `null` values); on recreate they
-    duplicate the defaults the controller would apply anyway. The same applies
-    to `annotations = {}` and to default-valued attributes on other resources.
-    The agent will not have the original config to compare against, so it
-    cannot know directly which values the user set vs. which the controller
-    defaulted. The user may know in some cases, but typically won't — since
-    the model was not made with Terraform, there is no config of record to
-    consult, and the user may not remember what they set by hand. To help
-    classify, look up the Juju model config defaults (from the Juju docs or
-    the provider schema) and mark each exported value as "likely default" when
-    it matches the documented default, or "non-default" when it differs. When
-    presenting the case-by-case choice, pre-select the likely-default keys for
-    dropping and the non-default keys for keeping, and let the user confirm or
-    override. Treat a value as a controller default when it matches the
-    provider's documented default for that field. When a value is confirmed as
-    a default the user did not set, remove it from the config so it reproduces
-    what the user actually specified, not the controller's defaults. Confirm
-    against the provider schema that a field is defaulted (not required)
-    before removing it. If removing a whole map like `config`, drop the
-    attribute entirely rather than leaving it `null` or `{}` unless the plan
-    shows the provider needs the empty collection.
-
-    For a captured-defaults map like `juju_model.config`, the goal is a plan
-    with 0 changes. Show the user the exported map with the likely-default keys
-    marked, and offer: (1) keep all keys as exported (safe default — no changes
-    to the config block), (2) "accept likely defaults" — drop the likely-default
-    keys and keep the rest, or (3) decide case by case. If the user picks (2),
-    apply it, re-run the plan, and if any changes remain for this resource, ask
-    again about the remaining keys — repeat until there are no changes or the
-    user says to accept the remaining changes. If the user picks (3), present
-    the keys in groups (or one at a time, if the set is small) and ask which to
-    keep vs. drop, then apply the selection and re-run the plan; continue
-    asking about any remaining changes until none remain or the user accepts
-    them.
-  - **Computed-only fields the export omitted** (e.g. `storage`,
-    `storage_directives`, `unit_numbers` on `juju_application`). The plan
-    shows them as `+` (known after apply) or `~` against a current value. If
-    the field is computed and not settable, leave it out of the config — do
-    not add it to silence the diff. If the export set it to a literal that
-    differs from the real value, remove the literal.
-  - **`timeouts` sub-blocks** on resources like `juju_machine`. The export
-    emits `timeouts { create = "30m" }`, which the plan may show as `+` on
-    import. Keep the block if the provider accepts it on create; remove it if
-    it only surfaces as drift on import.
-  - **`cloud` block on `juju_model`**. The export emits a `cloud { name ...
-    region ... }` block derived from the model's hosting cloud. Many users do
-    not set this explicitly — the controller infers it from the model's
-    cloud/region at creation. If the user did not set `cloud` in their original
-    config, keeping it can cause drift or force a recreate. Ask the user
-    whether they set `cloud` explicitly; if not, remove the block so the
-    provider infers it on recreate the same way it was inferred originally.
-  - **`juju_machine` resources and application `machines`**. It is common for
-    applications to be created without explicitly pinning machines — the
-    controller allocates machines automatically. The export captures those
-    auto-allocated machines as `juju_machine` resources and pins each
-    `juju_application`'s `machines` list to them. If the user did not pin
-    machines in their original config, the exported `juju_machine` resources
-    and the `machines` attributes on applications are controller-allocated
-    artifacts, not user intent. Ask the user whether it is acceptable for
-    `juju_application` to be the only thing controlling the machine indirectly
-    (i.e. drop the `juju_machine` resources and the `machines` lists, letting
-    the provider allocate machines on recreate). Ask whether they want this
-    decision applied per-application or as a blanket rule across the config.
-  - **`juju_storage_pool` resources**. It is common for a model to have an
-    implicit storage pool (e.g. the default `lxd` pool on LXD clouds) that the
-    controller creates automatically. The export captures these as explicit
-    `juju_storage_pool` resources. If the user did not define storage pools in
-    their original config, these are controller-provided defaults, not user
-    intent. Ask the user whether they want the storage pool to remain implicit
-    (drop the `juju_storage_pool` resources so the controller provides it on
-    recreate) or be explicit (keep them). Apply the decision as a blanket rule
-    unless the user asks for per-pool control.
-- **Resources to destroy ("not in configuration")**: the plan lists resources
-  for destruction because they exist in state (from a prior `apply` of a
-  different config) but not in `exported.tf`. The agent will not have the
-  prior config to compare against. This is expected when the user is replacing
-  an old config with the export. Confirm with the user that those resources
-  should indeed be removed from state — do not add them to `exported.tf` to
-  prevent destruction unless the user wants them kept. The goal is a config
-  that reproduces the *model*, not one that preserves the previous Terraform
-  state.
-
-  A common sub-case (typically encountered when developing this skill itself):
-  the model was *originally* created with Terraform, and the user is now
-  regenerating the config with `terraform query`. The export
-  produces new resources with auto-generated labels (e.g. `juju_model.model_0`,
-  `juju_application.all_apps_0`) that may refer to the same real-world objects
-  as the original hand-written resources (e.g. `juju_model.test`,
-  `juju_application.source`). The plan then shows the originals as "to
-  destroy" and the exports as "to import" — which, if they are the same
-  objects, would destroy and recreate the same infrastructure. When you see a
-  destroy for a resource whose real identity matches an imported resource in
-  `exported.tf`, figure out the rename (match by `id`/identity, not by label)
-  and suggest it to the user: rename the exported resource to the original
-  label and drop its `import` block so the existing state entry is reused. The
-  ideal outcome is that the plan shows 0 to create, 0 to destroy, 0 to change
-  for those resources — they are already in state under the original label, so
-  reusing that label means nothing needs to happen to them. If the user
-  accepts, apply the rename. If the user declines, leave the export as-is and
-  let the originals be removed from state.
-- **Import identity mismatch**: the `import` block's `identity.id` must match
-  the resource's real identity. `terraform query` generates these correctly;
-  only edit if the resource was renamed.
-
-Re-run `terraform plan` after each fix. When the plan reports `No changes.
-Your infrastructure matches the configuration.`, tell the user they are
-likely done with this step — but remind them that the entire process is
-best-effort: the resulting config may not correctly match the infrastructure,
-and the user should check it manually as well before relying on it.
+For each error or unexpected change, consult the [Common drift patterns](#common-drift-patterns)
+reference below, classify the issue, and apply the fix. Re-run `terraform plan`
+after each fix. When the plan reports `No changes. Your infrastructure matches
+the configuration.`, tell the user they are likely done with this step — but
+remind them that the entire process is best-effort: the resulting config may
+not correctly match the infrastructure, and the user should check it manually
+as well before relying on it.
 
 The skill is done only when **both** checks pass:
 
@@ -322,6 +216,164 @@ The skill is done only when **both** checks pass:
 NEVER run `terraform apply` even if the user explicitly asks. Tell the user
 that it's unsafe for an agent to do so and the user should run it themselves
 if they want it done.
+
+## Common drift patterns
+
+Consult this section when classifying a plan error or unexpected change in
+step 4. Not every pattern will appear in every export.
+
+### Validation error on a specific resource
+
+A system space, a read-only field, or a value the provider refuses. Remove the
+resource or field per step 3, or correct the value. Prefer removing over
+patching when the field is not user-manageable.
+
+### `model_uuid` left as a literal
+
+A refwriter warning. Check that a `juju_model` resource with a matching `uuid`
+exists in the file. If the model itself was not exported, the reference cannot
+be formed; this usually means the export was incomplete and the user should
+re-run `terraform query` with a query file that includes the model.
+
+### Drift / "1 to replace" or "1 to change"
+
+Read the diff. The sub-cases below cover the common causes.
+
+#### A field the provider cannot round-trip
+
+A default the controller set that the provider would not set on create. Align
+the config to the real value so that both import and recreate are clean.
+
+#### `config = null` vs `{}`
+
+On resources that default to empty maps, set the field to the empty collection
+if the provider treats `null` and empty differently.
+
+#### Controller-set defaults captured by the export (common)
+
+The export captures every value the controller reports, including defaults the
+original creation never specified. The clearest case is `juju_model.config`: a
+model created with no `config` block still exports a full map of controller
+defaults (`agent-stream`, `logging-config`, `firewall-mode`, `lxd-snap-channel`,
+etc.). On import these show as drift (the state has them, the config sets them
+to the same or `null` values); on recreate they duplicate the defaults the
+controller would apply anyway. The same applies to `annotations = {}` and to
+default-valued attributes on other resources.
+
+The agent will not have the original config to compare against, so it cannot
+know directly which values the user set vs. which the controller defaulted. The
+user may know in some cases, but typically won't — since the model was not made
+with Terraform, there is no config of record to consult, and the user may not
+remember what they set by hand. To help classify, look up the Juju model config
+defaults (from the Juju docs or the provider schema) and mark each exported
+value as "likely default" when it matches the documented default, or
+"non-default" when it differs. When presenting the case-by-case choice,
+pre-select the likely-default keys for dropping and the non-default keys for
+keeping, and let the user confirm or override. Treat a value as a controller
+default when it matches the provider's documented default for that field. When
+a value is confirmed as a default the user did not set, remove it from the
+config so it reproduces what the user actually specified, not the controller's
+defaults. Confirm against the provider schema that a field is defaulted (not
+required) before removing it. If removing a whole map like `config`, drop the
+attribute entirely rather than leaving it `null` or `{}` unless the plan shows
+the provider needs the empty collection.
+
+For a captured-defaults map like `juju_model.config`, the goal is a plan with
+0 changes. Show the user the exported map with the likely-default keys marked,
+and offer: (1) keep all keys as exported (safe default — no changes to the
+config block), (2) "accept likely defaults" — drop the likely-default keys and
+keep the rest, or (3) decide case by case. If the user picks (2), apply it,
+re-run the plan, and if any changes remain for this resource, ask again about
+the remaining keys — repeat until there are no changes or the user says to
+accept the remaining changes. If the user picks (3), present the keys in groups
+(or one at a time, if the set is small) and ask which to keep vs. drop, then
+apply the selection and re-run the plan; continue asking about any remaining
+changes until none remain or the user accepts them.
+
+#### Computed-only fields the export omitted
+
+E.g. `storage`, `storage_directives`, `unit_numbers` on `juju_application`.
+The plan shows them as `+` (known after apply) or `~` against a current value.
+If the field is computed and not settable, leave it out of the config — do not
+add it to silence the diff. If the export set it to a literal that differs from
+the real value, remove the literal.
+
+#### `timeouts` sub-blocks
+
+On resources like `juju_machine`, the export emits `timeouts { create = "30m"
+}`, which the plan may show as `+` on import. Keep the block if the provider
+accepts it on create; remove it if it only surfaces as drift on import.
+
+#### `cloud` block on `juju_model`
+
+The export emits a `cloud { name ... region ... }` block derived from the
+model's hosting cloud. Many users do not set this explicitly — the controller
+infers it from the model's cloud/region at creation. If the user did not set
+`cloud` in their original config, keeping it can cause drift or force a
+recreate. Ask the user whether they set `cloud` explicitly; if not, remove the
+block so the provider infers it on recreate the same way it was inferred
+originally.
+
+#### `juju_machine` resources and application `machines`
+
+It is common for applications to be created without explicitly pinning machines
+— the controller allocates machines automatically. The export captures those
+auto-allocated machines as `juju_machine` resources and pins each
+`juju_application`'s `machines` list to them. If the user did not pin machines
+in their original config, the exported `juju_machine` resources and the
+`machines` attributes on applications are controller-allocated artifacts, not
+user intent. Ask the user whether it is acceptable for `juju_application` to be
+the only thing controlling the machine indirectly (i.e. drop the
+`juju_machine` resources and the `machines` lists, letting the provider
+allocate machines on recreate). Ask whether they want this decision applied
+per-application or as a blanket rule across the config.
+
+#### `juju_storage_pool` resources
+
+It is common for a model to have an implicit storage pool (e.g. the default
+`lxd` pool on LXD clouds) that the controller creates automatically. The
+export captures these as explicit `juju_storage_pool` resources. If the user
+did not define storage pools in their original config, these are
+controller-provided defaults, not user intent. Ask the user whether they want
+the storage pool to remain implicit (drop the `juju_storage_pool` resources so
+the controller provides it on recreate) or be explicit (keep them). Apply the
+decision as a blanket rule unless the user asks for per-pool control.
+
+### Resources to destroy ("not in configuration")
+
+The plan lists resources for destruction because they exist in state (from a
+prior `apply` of a different config) but not in `exported.tf`. The agent will
+not have the prior config to compare against. This is expected when the user
+is replacing an old config with the export. Confirm with the user that those
+resources should indeed be removed from state — do not add them to
+`exported.tf` to prevent destruction unless the user wants them kept. The goal
+is a config that reproduces the *model*, not one that preserves the previous
+Terraform state.
+
+A common sub-case (typically encountered when developing this skill itself):
+the model was *originally* created with Terraform, and the user is now
+regenerating the config with `terraform query`. The export produces new
+resources with auto-generated labels (e.g. `juju_model.model_0`,
+`juju_application.all_apps_0`) that may refer to the same real-world objects as
+the original hand-written resources (e.g. `juju_model.test`,
+`juju_application.source`). The plan then shows the originals as "to destroy"
+and the exports as "to import" — which, if they are the same objects, would
+destroy and recreate the same infrastructure. When you see a destroy for a
+resource whose real identity matches an imported resource in `exported.tf`,
+figure out the rename (match by `id`/identity, not by label) and suggest it to
+the user: rename the exported resource to the original label and drop its
+`import` block so the existing state entry is reused. The ideal outcome is that
+the plan shows 0 to create, 0 to destroy, 0 to change for those resources —
+they are already in state under the original label, so reusing that label
+means nothing needs to happen to them. If the user accepts, apply the rename.
+If the user declines, leave the export as-is and let the originals be removed
+from state.
+
+### Import identity mismatch
+
+The `import` block's `identity.id` must match the resource's real identity.
+`terraform query` generates these correctly; only edit if the resource was
+renamed.
 
 ### 5. Split the plan for maintainability
 
@@ -353,6 +405,11 @@ that is easier to maintain:
 - Re-run `terraform plan` after the split and renames to confirm both goals
   still hold. Renames change addresses, so the import check is the real test
   that nothing was broken.
+- Run `terraform fmt -recursive` on the working directory to normalize
+  formatting after the split and edits. Generated HCL and hand-edits can leave
+  inconsistent indentation or spacing; `fmt` cleans this up without changing
+  semantics. Re-run `terraform plan` once more after formatting to confirm
+  nothing broke.
 
 ## Conventions
 
@@ -370,7 +427,7 @@ that is easier to maintain:
 
 ## Export coverage limitation
 
-The `.tfquery.hcl` only lists resources with `list` support. Anything else in
+The export only includes resources with `list` support. Anything else in
 the model — users, credentials, access grants, JAAS resources, and any other
 resource type the provider exposes without a `list` implementation — will not
 appear in `exported.tf`. The resulting config therefore reproduces only the
