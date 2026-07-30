@@ -53,9 +53,14 @@ func (v ResourceRequiresJAAS) ValidateResource(ctx context.Context, req resource
 func (v ResourceRequiresJAAS) validate() diag.Diagnostics {
 	var diags diag.Diagnostics
 
-	// Return without error if a nil client is detected.
+	// Return without error if a nil client is detected, or if the client is
+	// lazily initialized and JAAS cannot be determined without an API call.
 	// This is possible since validation is called at various points throughout resource creation.
-	if v.client != nil && !v.client.IsJAAS() {
+	if v.client == nil || v.client.IsLazyInstantiated {
+		return diags
+	}
+
+	if !v.client.IsJAAS() {
 		diags.AddError("Attempted use of resource without JAAS.",
 			"This resource can only be used with JAAS, which offers additional enterprise features - see https://jaas.ai/ for more details.")
 	}
