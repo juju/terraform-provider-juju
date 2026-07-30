@@ -201,13 +201,17 @@ model not found, network blocked), do not loop on retries. Ask the user to run
 `terraform plan` and paste the output, then classify and act on what they
 report.
 
-The agent likely won't have any previous Terraform state to inspect. To
-understand the model's current shape (applications, machines, integrations,
-offers, etc.), run `juju status -m <model-name>` (or `juju status --format yaml`
-for machine-readable output) if the controller is reachable. This helps
-classify plan diffs and identify rename candidates. If the controller isn't
-reachable from the agent, ask the user to run `juju status` and paste the
-output.
+The agent likely won't have any previous Terraform state to inspect. Whenever
+the agent needs to know whether the exported plan matches reality — to
+classify a diff, identify a rename candidate, confirm a resource exists, or
+check a value — it can query Juju's live state directly, or ask the user to do
+so. The primary tool is `juju status --format yaml -m <model-name>`, which
+reports applications, machines, integrations, offers, and their current state.
+Other useful commands include `juju model-config` (for model config values),
+`juju storage` (for storage pools), and `juju spaces` (for spaces). If the
+controller is reachable from the agent, run these directly; otherwise ask the
+user to run them and paste the output. Treat Juju's live state as the source
+of truth when the Terraform plan and the exported config disagree.
 
 For each error or unexpected change, consult the [Common drift patterns](#common-drift-patterns)
 reference below, classify the issue, and apply the fix. Re-run `terraform plan`
