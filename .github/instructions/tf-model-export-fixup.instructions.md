@@ -68,12 +68,34 @@ per-export manual step.
 
 ## Prerequisites
 
-The workspace must contain:
+This skill is intended for Terraform practitioners working with a Juju model
+that was not deployed with Terraform. The typical starting point is the
+[terraform-provider-juju](https://github.com/juju/terraform-provider-juju)
+documentation, which tells the user to:
 
-- A working directory with `exported.tf` (the `--generate-config-out` output)
-  and a `.terraform.lock.hcl`. The provider is `juju/juju`.
-- `juju-tf-refwriter/` — run with `go run . <path-to-exported.tf>` from that
-  directory.
+1. Write a `.tfquery.hcl` file (or copy
+   [`examples/list-resources/export-all-model.tfquery.hcl`](https://github.com/juju/terraform-provider-juju/blob/main/examples/list-resources/export-all-model.tfquery.hcl)
+   from the provider repo).
+2. Run `TF_VAR_model_uuid=<uuid> terraform query --generate-config-out=exported.tf`.
+3. Run `juju-tf-refwriter` over the output.
+4. Invoke this skill to finish the job.
+
+The user may not have the `terraform-provider-juju` repo checked out. The
+agent should not assume the repo is present locally; where the skill refers to
+files in that repo (e.g. `internal/provider/provider.go`, the example
+`.tfquery.hcl`), treat them as references for the agent to consult if available,
+and fall back to the published provider documentation or to asking the user
+when they are not.
+
+The working directory must contain:
+
+- `exported.tf` (the `--generate-config-out` output).
+- A `.terraform.lock.hcl` (the provider is `juju/juju`).
+- Access to `juju-tf-refwriter` — either a local checkout of
+  `terraform-provider-juju` (run with `go run ./juju-tf-refwriter
+  <path-to-exported.tf>` from the repo root) or a binary the user has built or
+  installed. If the refwriter is not available, ask the user to run it and
+  report any warnings.
 
 Confirm the controller is reachable and `TF_VAR_model_uuid` is set to the model
 being exported before running `terraform plan`.
@@ -133,12 +155,14 @@ Some exported resources cannot be managed by the provider and must be removed
 from `exported.tf` **and** their matching `import` block.
 
 To find them, compare the exported resource types against what the Terraform
-provider actually supports managing. Check `internal/provider/provider.go`
-(`Resources` and `ListResources`) for the supported set, and the resource
-schemas for per-resource constraints (e.g. `juju_space` rejects the `alpha`
-system space). Any exported resource the provider cannot manage — because the
-type isn't supported, the specific instance is rejected by validation, or the
-resource is controller-only — must be dropped.
+provider actually supports managing. If the `terraform-provider-juju` repo is
+available locally, check `internal/provider/provider.go` (`Resources` and
+`ListResources`) for the supported set, and the resource schemas for
+per-resource constraints (e.g. `juju_space` rejects the `alpha` system space).
+Otherwise consult the published provider documentation. Any exported resource
+the provider cannot manage — because the type isn't supported, the specific
+instance is rejected by validation, or the resource is controller-only — must
+be dropped.
 
 Today the known cases include:
 
@@ -215,7 +239,12 @@ The skill is done only when **both** checks pass:
 
 NEVER run `terraform apply` even if the user explicitly asks. Tell the user
 that it's unsafe for an agent to do so and the user should run it themselves
-if they want it done.
+if they want it done. This skill is intended to take a `.tf` file as input and
+produce a `.tf` file as output (changes to that file); running `apply` would
+have side-effects on real infrastructure that may be surprising. Furthermore,
+many models are very complex — the resulting plan is likely incomplete or
+subtly wrong and needs extensive review before applying, whether by an agent or
+by the user.
 
 ## Common drift patterns
 
@@ -358,16 +387,17 @@ resources with auto-generated labels (e.g. `juju_model.model_0`,
 the original hand-written resources (e.g. `juju_model.test`,
 `juju_application.source`). The plan then shows the originals as "to destroy"
 and the exports as "to import" — which, if they are the same objects, would
-destroy and recreate the same infrastructure. When you see a destroy for a
-resource whose real identity matches an imported resource in `exported.tf`,
-figure out the rename (match by `id`/identity, not by label) and suggest it to
-the user: rename the exported resource to the original label and drop its
-`import` block so the existing state entry is reused. The ideal outcome is that
-the plan shows 0 to create, 0 to destroy, 0 to change for those resources —
-they are already in state under the original label, so reusing that label
-means nothing needs to happen to them. If the user accepts, apply the rename.
-If the user declines, leave the export as-is and let the originals be removed
-from state.
+destroy and recreate the same infrastructure. To check whether a destroyed
+resource and an imported resource are the same object, run `juju status --format
+yaml -m <model-name>` (or ask the user to) and match by the real entity
+identity (application name, machine ID, etc.) that `juju status` reports — not
+by the Terraform label. When you confirm a match, suggest the rename to the
+user: rename the exported resource to the original label and drop its `import`
+block so the existing state entry is reused. The ideal outcome is that the plan
+shows 0 to create, 0 to destroy, 0 to change for those resources — they are
+already in state under the original label, so reusing that label means nothing
+needs to happen to them. If the user accepts, apply the rename. If the user
+declines, leave the export as-is and let the originals be removed from state.
 
 ### Import identity mismatch
 
