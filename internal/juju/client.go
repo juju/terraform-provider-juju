@@ -64,6 +64,7 @@ type ControllerConfiguration struct {
 	CACert              string
 	ClientID            string
 	ClientSecret        string
+	IsLazyInstanciated  bool
 }
 
 // Client holds the various juju api clients used to interact with the juju controller.
@@ -86,8 +87,12 @@ type Client struct {
 	Actions        actionsClient
 	SecretBackends secretBackendsClient
 
-	isJAAS   func() bool
-	username string
+	isJAAS func() bool
+	// IsLazyInstantiated indicates whether the client is lazily instantiated.
+	// If true, the client will not attempt to connect to the controller until a method is called
+	// that requires a connection.
+	IsLazyInstantiated bool
+	username           string
 }
 
 // Config holds configuration options for the Juju provider.
@@ -183,28 +188,34 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 		user = fmt.Sprintf("%s%s", config.ClientID, serviceAccountSuffix)
 	}
 
-	isJAAS := sc.IsJAAS(ctx, defaultJAASCheck)
+	// Determining whether the controller is JAAS requires an API call. Defer
+	// that check when the provider was configured for lazy API initialization.
+	isJAAS := defaultJAASCheck
+	if !config.IsLazyInstanciated {
+		isJAAS = sc.IsJAAS(ctx, defaultJAASCheck)
+	}
 
 	return &Client{
-		Applications:   *newApplicationClient(sc),
-		Clouds:         *newCloudsClient(sc),
-		Credentials:    *newCredentialsClient(sc),
-		Integrations:   *newIntegrationsClient(sc),
-		Machines:       newMachinesClient(sc),
-		Models:         *newModelsClient(sc, isJAAS),
-		Offers:         *newOffersClient(sc),
-		SSHKeys:        *newSSHKeysClient(sc),
-		Users:          *newUsersClient(sc),
-		Secrets:        *newSecretsClient(sc),
-		Jaas:           *newJaasClient(sc),
-		Annotations:    *newAnnotationsClient(sc),
-		Storage:        *newStorageClient(sc),
-		Spaces:         *newSpacesClient(sc),
-		Subnets:        *newSubnetsClient(sc),
-		Actions:        *newActionsClient(sc),
-		SecretBackends: *newSecretBackendsClient(sc),
-		isJAAS:         func() bool { return sc.IsJAAS(ctx, defaultJAASCheck) },
-		username:       user,
+		Applications:       *newApplicationClient(sc),
+		Clouds:             *newCloudsClient(sc),
+		Credentials:        *newCredentialsClient(sc),
+		Integrations:       *newIntegrationsClient(sc),
+		Machines:           newMachinesClient(sc),
+		Models:             *newModelsClient(sc, isJAAS),
+		Offers:             *newOffersClient(sc),
+		SSHKeys:            *newSSHKeysClient(sc),
+		Users:              *newUsersClient(sc),
+		Secrets:            *newSecretsClient(sc),
+		Jaas:               *newJaasClient(sc),
+		Annotations:        *newAnnotationsClient(sc),
+		Storage:            *newStorageClient(sc),
+		Spaces:             *newSpacesClient(sc),
+		Subnets:            *newSubnetsClient(sc),
+		Actions:            *newActionsClient(sc),
+		SecretBackends:     *newSecretBackendsClient(sc),
+		IsLazyInstantiated: config.IsLazyInstanciated,
+		isJAAS:             func() bool { return sc.IsJAAS(ctx, defaultJAASCheck) },
+		username:           user,
 	}, nil
 }
 
@@ -301,12 +312,6 @@ func (sc *sharedClient) GetOfferingControllerConn(ctx context.Context, name stri
 // to the sharedClient.
 func (sc *sharedClient) AddOfferingController(ctx context.Context, name string, conf ControllerConfiguration) error {
 	sc.offeringControllerConfigs[name] = conf
-	// Test the connection
-	conn, err := sc.GetOfferingControllerConn(ctx, name)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
 	return nil
 }
 

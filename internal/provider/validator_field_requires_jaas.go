@@ -61,7 +61,9 @@ func (v FieldsRequireJAAS) ValidateResource(ctx context.Context, req resource.Va
 func (v FieldsRequireJAAS) validate(ctx context.Context, config tfsdk.Config) diag.Diagnostics {
 	var configuredPaths path.Paths
 	var diags diag.Diagnostics
-
+	if v.client == nil || v.client.IsLazyInstantiated {
+		return diags
+	}
 	// The logic below is mostly copied from Terraform's AtLeastOneOfValidator
 	// which takes care to handle Null and Unknown values.
 	for _, expression := range v.expressions {
@@ -106,7 +108,7 @@ func (v FieldsRequireJAAS) validate(ctx context.Context, config tfsdk.Config) di
 	// If there is a configured value for any specified
 	// field, enforce that JAAS is being used.
 	if len(configuredPaths) > 0 {
-		if v.client != nil && !v.client.IsJAAS() {
+		if !v.client.IsJAAS() {
 			diags.AddError("Attempted use of field without JAAS.",
 				fmt.Sprintf("The following field(s) can only be set when using JAAS, "+
 					"which offers additional enterprise features - see https://jaas.ai/ for more details.\n"+
