@@ -1,6 +1,6 @@
 ---
 name: tf-model-export-fixup
-description: Take a `terraform query` export of a Juju model that was NOT deployed with Terraform, run juju-tf-refwriter over it, and iterate on `terraform plan` until the config both imports cleanly against the existing model (no changes, no replaces) AND would recreate every manually-created resource from scratch. Then split the single-file plan into maintainable modules. Use when the user has run `TF_VAR_model_uuid=... terraform query --generate-config-out=<file>.tf` on a hand-managed model and wants a Terraform config that reproduces it.
+description: Take a `terraform query` export of a Juju model (after juju-tf-refwriter has been run) and iterate on `terraform plan` until the config both imports cleanly against the existing model (no changes, no replaces) AND would recreate every manually-created resource from scratch. Then split the single-file plan into maintainable modules. Use when the user has followed the import-manual-model how-to and wants an AI agent to finish refining the exported config.
 applyTo: "**/*.tf"
 ---
 
@@ -28,6 +28,10 @@ recreate the model is incomplete (it omits or misrepresents manually-created
 resources). A config that recreates but does not import cleanly has drift or
 wrong values. The skill is done only when both hold.
 
+However, this is a best-effort process. It may not be possible to achieve
+both or even either goal. It will be possible to get close in all cases, 
+though.
+
 Out of the box the `terraform query` output does **not** satisfy either:
 
 - No `terraform`/`required_providers` block, so `terraform init` fails with an
@@ -41,9 +45,10 @@ Out of the box the `terraform query` output does **not** satisfy either:
 - Other provider-specific validation or drift issues that only surface at
   `terraform plan` time.
 
-This skill guides an agent through the mechanical steps (`juju-tf-refwriter`)
-and the judgment steps (reading plan errors and patching `exported.tf`) until
-both goals hold, then splitting the result for maintainability.
+This skill guides an agent through the judgment steps (reading plan errors
+and patching `exported.tf`) until both goals hold, then splitting the result
+for maintainability. The mechanical steps (`terraform query` and
+`juju-tf-refwriter`) are done by the user before invoking the agent.
 
 ## Scope boundary — mechanical vs. judgment
 
@@ -68,17 +73,23 @@ per-export manual step.
 
 ## Prerequisites
 
-This skill is intended for Terraform practitioners working with a Juju model
-that was not deployed with Terraform. The typical starting point is the
-[terraform-provider-juju](https://github.com/juju/terraform-provider-juju)
-documentation, which tells the user to:
+This skill is intended for Terraform practitioners who have followed the
+[Import a manually deployed model into a Terraform plan](https://github.com/juju/terraform-provider-juju/blob/main/docs-rtd/howto/import-manual-model.md)
+how-to. By the time the agent is invoked, the user has already:
 
-1. Write a `.tfquery.hcl` file (or copy
+1. Obtained a `.tfquery.hcl` file (e.g. copied
    [`examples/list-resources/export-all-model.tfquery.hcl`](https://github.com/juju/terraform-provider-juju/blob/main/examples/list-resources/export-all-model.tfquery.hcl)
    from the provider repo).
-2. Run `TF_VAR_model_uuid=<uuid> terraform query --generate-config-out=exported.tf`.
-3. Run `juju-tf-refwriter` over the output.
-4. Invoke this skill to finish the job.
+2. Ensured the provider can reach the controller (typically via the Juju CLI's
+   stored credentials).
+3. Run `TF_VAR_model_uuid=<uuid> terraform query --generate-config-out=exported.tf`.
+4. Run `juju-tf-refwriter` over the output (`go run
+   github.com/juju/terraform-provider-juju/juju-tf-refwriter exported.tf`).
+5. Added a `required_providers` block and run `terraform init`.
+
+The agent should assume these steps are done. If `exported.tf` still contains
+literal UUIDs (not references), the refwriter hasn't been run — ask the user
+to run it. If `terraform init` hasn't been run or fails, see step 1 below.
 
 The user may not have the `terraform-provider-juju` repo checked out. The
 agent should not assume the repo is present locally; where the skill refers to
@@ -89,67 +100,38 @@ when they are not.
 
 The working directory must contain:
 
-- `exported.tf` (the `--generate-config-out` output).
+- `exported.tf` (the `--generate-config-out` output, with references resolved).
 - A `.terraform.lock.hcl` (the provider is `juju/juju`).
-- Access to `juju-tf-refwriter` — either a local checkout of
-  `terraform-provider-juju` (run with `go run ./juju-tf-refwriter
-  <path-to-exported.tf>` from the repo root) or a binary the user has built or
-  installed. If the refwriter is not available, ask the user to run it and
-  report any warnings.
 
 Confirm the controller is reachable and `TF_VAR_model_uuid` is set to the model
 being exported before running `terraform plan`.
 
 ## Workflow
 
-### 1. Run juju-tf-refwriter
+### 1. Verify prerequisites and run terraform plan
 
-This is the first step of the flow and the user has likely already run it by
-the time they invoke an agent. Check whether the literals in `exported.tf`
-have already been rewritten into references (e.g. `model_uuid =
-juju_model.<label>.uuid` instead of a literal UUID). If so, skip this step.
+The user has followed the how-to, so `exported.tf` should already have
+references resolved and a `required_providers` block in place. Verify:
 
-Otherwise, from the `juju-tf-refwriter` directory:
+- `exported.tf` contains references (e.g. `model_uuid = juju_model.<label>.uuid`),
+  not literal UUIDs. If it doesn't, the user hasn't run `juju-tf-refwriter` —
+  ask them to run it.
+- A `required_providers` block exists. If not, add one (see the how-to step 5).
+
+Then run:
 
 ```bash
-go run . <absolute-or-relative-path-to>/exported.tf
+terraform init
+terraform plan
 ```
 
-This rewrites `model_uuid`, application `machines`, and integration
-`application.name` literals into references. It prints warnings for any literal
-it could not match; record those for step 4.
+If `terraform init` fails (e.g. the lock file is stale, or the provider isn't
+found in the registry), do not run `terraform init -upgrade` automatically —
+that can change the locked provider version. Tell the user what failed and ask
+how they want to handle it (e.g. `terraform init -upgrade`, pinning a different
+version, or fixing the lock file manually).
 
-### 2. Ensure the provider block exists
-
-`terraform query` does not emit a `terraform` block. Without it, `terraform
-init` fails with an inconsistent lock file or an unresolved
-`registry.terraform.io/hashicorp/juju` source.
-
-Prepend this to `exported.tf` (or to a sibling `versions.tf`) if no
-`required_providers` block is present anywhere in the working directory:
-
-```terraform
-terraform {
-  required_providers {
-    juju = {
-      source  = "juju/juju"
-      version = "~> 2.1"
-    }
-  }
-}
-```
-
-Pin the latest released major.minor (currently `~> 2.1`) unless the user asks
-for a different constraint. The lock file records the exact resolved version.
-
-If a `provider "juju"` block is needed for non-default auth (JAAS client
-credentials, a specific controller), add it from the user's environment rather
-than guessing. The provider reads `JUJU_CONTROLLER_ADDRESSES`,
-`JUJU_USERNAME`, `JUJU_PASSWORD`, `JUJU_CA_CERT`, `JUJU_CLIENT_ID`, and
-`JUJU_CLIENT_SECRET` from the environment by default, so a provider block is
-often unnecessary.
-
-### 3. Remove unmanageable resources from exported.tf
+### 2. Remove unmanageable resources from exported.tf
 
 Some exported resources cannot be managed by the provider and must be removed
 from `exported.tf` **and** their matching `import` block.
@@ -174,11 +156,11 @@ Delete both the `resource "juju_space" ...` block and the immediately following
 `import { to = juju_space.<same label> ... }` block. Leave user-created spaces
 untouched.
 
-Other unmanageable resources may surface reactively in step 4 when the plan
+Other unmanageable resources may surface reactively in step 3 when the plan
 rejects them; handle them inline there using the same pattern (remove the
 resource block and its `import` block together).
 
-### 4. Iterate on terraform plan until both goals hold
+### 3. Iterate on terraform plan until both goals hold
 
 Run, from the working directory containing `exported.tf`:
 
@@ -188,7 +170,7 @@ terraform plan
 ```
 
 If `terraform init` fails (e.g. the lock file is stale after adding the
-provider block in step 2, or the provider isn't found in the registry), do not
+provider block in step 1, or the provider isn't found in the registry), do not
 run `terraform init -upgrade` automatically — that can change the locked
 provider version. Tell the user what failed and ask how they want to handle it
 (e.g. `terraform init -upgrade`, pinning a different version, or fixing the
@@ -262,12 +244,12 @@ by the user.
 ## Common drift patterns
 
 Consult this section when classifying a plan error or unexpected change in
-step 4. Not every pattern will appear in every export.
+step 3. Not every pattern will appear in every export.
 
 ### Validation error on a specific resource
 
 A system space, a read-only field, or a value the provider refuses. Remove the
-resource or field per step 3, or correct the value. Prefer removing over
+resource or field per step 2, or correct the value. Prefer removing over
 patching when the field is not user-manageable.
 
 ### `model_uuid` left as a literal
@@ -420,7 +402,7 @@ The `import` block's `identity.id` must match the resource's real identity.
 `terraform query` generates these correctly; only edit if the resource was
 renamed.
 
-### 5. Split the plan for maintainability
+### 4. Split the plan for maintainability
 
 Once both goals hold, the config is correct but lives in a single generated
 file with auto-generated labels like `all_apps_0`. Split it into a structure
@@ -463,7 +445,7 @@ that is easier to maintain:
   reference pattern, note it as a follow-up rather than patching the tool
   inline.
 - Remove `# __generated__ by Terraform` and other `terraform query` boilerplate
-  during the split (step 5), not earlier — keep them while iterating on the
+  during the split (step 4), not earlier — keep them while iterating on the
   plan so diffs stay comparable to the original export.
 - Do not reformat the file beyond the edits needed until the final split; the
   user may diff against the original `terraform query` output.
