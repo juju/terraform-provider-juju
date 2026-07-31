@@ -221,11 +221,20 @@ remind them that the entire process is best-effort: the resulting config may
 not correctly match the infrastructure, and the user should check it manually
 as well before relying on it.
 
+When importing infrastructure, it is possible and common to have some spurious
+changes left (e.g. config defaults the controller reports differently from
+what the provider would set on create). If the user says they are willing to
+live with those remaining changes, that's acceptable — the goal is a usable
+config, not a perfect one. Note any accepted changes so the user is aware of
+them.
+
 The skill is done only when **both** checks pass:
 
 1. **Import check** — with `import` blocks present, `terraform plan` reports
-   `No changes. Your infrastructure matches the configuration.` No replaces,
-   no unexpected changes.
+   `No changes. Your infrastructure matches the configuration.`, or the user
+   has accepted the remaining changes as spurious (e.g. config defaults the
+   controller reports differently). No replaces, no unexpected changes the
+   user hasn't explicitly accepted.
 2. **Recreate check (best effort)** — the agent may run `terraform plan` against
    existing infrastructure, but MUST NOT create any new resources (no fresh
    model, no `apply`). So the recreate check is best-effort: remove (or comment
@@ -382,6 +391,8 @@ resources should indeed be removed from state — do not add them to
 `exported.tf` to prevent destruction unless the user wants them kept. The goal
 is a config that reproduces the *model*, not one that preserves the previous
 Terraform state.
+
+### Regenerating a config that was originally created with Terraform
 
 A common sub-case (typically encountered when developing this skill itself):
 the model was *originally* created with Terraform, and the user is now
