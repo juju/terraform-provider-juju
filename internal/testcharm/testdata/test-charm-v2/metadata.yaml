@@ -1,8 +1,0 @@
-name: test-charm
-summary: test charm
-description: acceptance test charm
-bases:
-  - name: ubuntu
-    channel: "22.04"
-  - name: ubuntu
-    channel: "24.04"

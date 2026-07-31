@@ -26,5 +26,4 @@ jobs:
           cache: true
       # run all tests in the internal directory, excluding provider tests
       # as these are acceptance tests and require a live Juju controller with env variables set up.
-      # testdata directories are also excluded as they are not Go packages.
-      - run: find ./internal/* -type d \( -not -path "./internal/provider*" -not -path "*/testdata*" \) -exec go test -v {} +
+      - run: find ./internal/* -type d \( -not -path "./internal/provider*" \) -exec go test -v {} +
