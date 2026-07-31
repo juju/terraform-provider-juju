@@ -60,6 +60,7 @@ type machineResourceModel struct {
 	Base            types.String           `tfsdk:"base"`
 	Placement       types.String           `tfsdk:"placement"`
 	MachineID       types.String           `tfsdk:"machine_id"`
+	InstanceID      types.String           `tfsdk:"instance_id"`
 	SSHAddress      types.String           `tfsdk:"ssh_address"`
 	Timeouts        timeouts.Value         `tfsdk:"timeouts"`
 	PublicKeyFile   types.String           `tfsdk:"public_key_file"`
@@ -118,6 +119,8 @@ const (
 	BaseKey = "base"
 	// MachineIDKey is the schema key for the machine ID.
 	MachineIDKey = "machine_id"
+	// InstanceIDKey is the schema key for the machine instance ID.
+	InstanceIDKey = "instance_id"
 	// SSHAddressKey is the schema key for SSH address.
 	SSHAddressKey = "ssh_address"
 	// PrivateKeyFileKey is the schema key for the private key file.
@@ -223,6 +226,10 @@ func (r *machineResource) Schema(ctx context.Context, req resource.SchemaRequest
 				Computed:    true,
 				Optional:    false,
 				Required:    false,
+			},
+			InstanceIDKey: schema.StringAttribute{
+				Description: "The provider-specific instance id of the machine Juju creates.",
+				Computed:    true,
 			},
 			SSHAddressKey: schema.StringAttribute{
 				Description: "The user@host directive for manual provisioning an existing machine via ssh. " +
@@ -383,6 +390,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 	plan.Base = types.StringValue(readResponse.Base)
 	plan.Hostname = types.StringValue(readResponse.Hostname)
 	plan.Constraints = NewNormalizedCustomConstraintsValue(readResponse.Constraints)
+	plan.InstanceID = types.StringValue(readResponse.InstanceID)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 
@@ -393,7 +401,7 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 }
 
 func waitForMachine(ctx context.Context, client *juju.Client, waitForHostname bool, modelUUID, machineID string, timeout time.Duration, logFn wait.LogFunc) (*juju.ReadMachineResponse, error) {
-	asserts := []wait.Assert[*juju.ReadMachineResponse]{assertMachineRunning}
+	asserts := []wait.Assert[*juju.ReadMachineResponse]{assertMachineRunning, assertInstanceIDPopulated}
 	if waitForHostname {
 		asserts = append(asserts, assertHostnamePopulated)
 	}
@@ -452,6 +460,7 @@ func readMachine(ctx context.Context, client *juju.Client, modelUUID, machineID 
 			Constraints: NewNormalizedCustomConstraintsValue(response.Constraints),
 			Hostname:    types.StringValue(response.Hostname),
 			MachineID:   types.StringValue(response.ID),
+			InstanceID:  types.StringValue(response.InstanceID),
 		},
 		ModelUUID: types.StringValue(modelUUID),
 	}, nil
@@ -509,6 +518,7 @@ func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, re
 	//    that means you've created a machine and then imported it immediately afterwards.
 	data.Hostname = machine.Hostname
 	data.Constraints = machine.Constraints
+	data.InstanceID = machine.InstanceID
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
 	id := newMachineID(modelUUID, machineID, machineName)
@@ -733,6 +743,15 @@ func updateAnnotations(ctx context.Context, client annotationSetter, stateAnnota
 func assertHostnamePopulated(respFromAPI *juju.ReadMachineResponse) error {
 	if respFromAPI.Hostname == "" {
 		return juju.NewRetryReadError("waiting for hostname to be set on machine")
+	}
+	return nil
+}
+
+// assertInstanceIDPopulated asserts the provider-specific instance ID is populated in the machine response.
+// Otherwise it returns a retry error to wait for the instance ID to be set.
+func assertInstanceIDPopulated(respFromAPI *juju.ReadMachineResponse) error {
+	if respFromAPI.InstanceID == "" {
+		return juju.NewRetryReadError("waiting for instance ID to be set on machine")
 	}
 	return nil
 }

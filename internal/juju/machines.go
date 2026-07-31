@@ -77,6 +77,7 @@ type ReadMachineInput struct {
 // ReadMachineResponse contains the machine details returned by ReadMachine.
 type ReadMachineResponse struct {
 	ID          string
+	InstanceID  string
 	Base        string
 	Constraints string
 	Hostname    string
@@ -361,6 +362,7 @@ func (c *machinesClient) ReadMachine(ctx context.Context, input *ReadMachineInpu
 
 	return &ReadMachineResponse{
 		ID:          machineStatus.Id,
+		InstanceID:  string(machineStatus.InstanceId),
 		Hostname:    machineStatus.Hostname,
 		Constraints: machineStatus.Constraints,
 		Base:        base,
