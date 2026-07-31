@@ -38,10 +38,8 @@ real infrastructure, and complex models need review before applying.
 - **Controller-set defaults** (e.g. `juju_model.config` full of defaults): the
   export captures every value the controller reports. Look up Juju model config
   defaults, mark likely-default keys, and offer the user: (1) keep all, (2) drop
-  likely defaults, or (3) case by case. Re-run the plan and repeat until clean
-  or accepted.
-- **Computed-only fields** (e.g. `storage`, `unit_numbers`): leave them out —
-  don't add them to silence the diff.
+  likely defaults, or (3) case by case.
+- **Computed-only fields** (e.g. `storage`, `unit_numbers`): leave them out
 - **`cloud` block on `juju_model`**: often controller-inferred, not user-set.
   Ask the user; if not set explicitly, remove it.
 - **`juju_machine` resources / application `machines`**: often auto-allocated.
@@ -61,7 +59,7 @@ real infrastructure, and complex models need review before applying.
 
 Once the plan is clean (or accepted), split for maintainability:
 
-- Move `required_providers` into `versions.tf`.
+- Move `required_providers` into `versions.tf` if not already there.
 - Group resources by concern into separate files.
 - Rename auto-generated labels to meaningful names. Update all references and
   `import` block `to` addresses in the same edit.
@@ -73,4 +71,4 @@ Once the plan is clean (or accepted), split for maintainability:
 
 Tell the user: the export only covers resources with `list` support (users,
 credentials, access grants, etc. won't appear). The config is best-effort and
-may need manual review before applying.
+**NEEDS** careful manual review before applying.
