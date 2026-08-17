@@ -187,6 +187,15 @@ func (r *spaceResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
+	// The space now exists in Juju. Persist the ID and identity to state before
+	// waiting, so a wait failure taints the resource instead of leaking it.
+	plan.ID = types.StringValue(newSpaceResourceID(plan.ModelUUID.ValueString(), plan.Name.ValueString()))
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, spaceResourceIdentityModel{ID: plan.ID})...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	if _, err := wait.WaitFor(wait.WaitForCfg[juju.ReadSpaceInput, *juju.ReadSpaceOutput]{
 		Context: ctx,
 		GetData: func(ctx context.Context, input juju.ReadSpaceInput) (*juju.ReadSpaceOutput, error) {
@@ -210,12 +219,6 @@ func (r *spaceResource) Create(ctx context.Context, req resource.CreateRequest, 
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for space, got error: %s", err))
 		return
 	}
-
-	plan.ID = types.StringValue(newSpaceResourceID(plan.ModelUUID.ValueString(), plan.Name.ValueString()))
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
-
-	identity := spaceResourceIdentityModel{ID: plan.ID}
-	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 // Read implements [resource.Resource].

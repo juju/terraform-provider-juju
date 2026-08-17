@@ -174,6 +174,16 @@ func (r *subnetResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
+	// The subnet has been moved to its target space in Juju. Persist the ID and
+	// identity to state before waiting, so a wait failure taints the resource
+	// instead of leaving the move untracked.
+	plan.ID = types.StringValue(newSubnetResourceID(plan.ModelUUID.ValueString(), plan.CIDR.ValueString()))
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, subnetResourceIdentityModel{ID: plan.ID})...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	if _, err := wait.WaitFor(wait.WaitForCfg[juju.ReadSubnetInput, *juju.SubnetInfo]{
 		Context: ctx,
 		GetData: func(ctx context.Context, input juju.ReadSubnetInput) (*juju.SubnetInfo, error) {
@@ -197,12 +207,6 @@ func (r *subnetResource) Create(ctx context.Context, req resource.CreateRequest,
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for subnet to move to space %s failed, got error: %s", plan.SpaceName.ValueString(), err))
 		return
 	}
-
-	plan.ID = types.StringValue(newSubnetResourceID(plan.ModelUUID.ValueString(), plan.CIDR.ValueString()))
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
-
-	identity := subnetResourceIdentityModel{ID: plan.ID}
-	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 // Read implements [resource.Resource].
