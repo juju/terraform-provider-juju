@@ -32,7 +32,7 @@ require (
 	github.com/juju/utils/v4 v4.0.5
 	github.com/juju/version/v2 v2.0.1
 	github.com/rs/zerolog v1.33.0
-	github.com/stretchr/testify v1.11.1
+	github.com/stretchr/testify v1.12.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/crypto v0.53.0
 	gopkg.in/httprequest.v1 v1.2.1
