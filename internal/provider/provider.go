@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/action"
@@ -25,8 +26,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-
 	"github.com/juju/juju/api"
+
 	"github.com/juju/terraform-provider-juju/internal/juju"
 )
 
@@ -66,6 +67,8 @@ const (
 	SkipFailedDeletion = "skip_failed_deletion"
 	// JujuOfferingControllers is the provider config key for offering controllers.
 	JujuOfferingControllers = "offering_controllers"
+	// DefaultTimeouts is the provider config key for default operation timeouts.
+	DefaultTimeouts = "default_timeouts"
 
 	// TwoSourcesAuthWarning is the warning message when both auth modes are set.
 	TwoSourcesAuthWarning = "Two sources of identity for controller login"
@@ -178,6 +181,16 @@ type jujuProviderModel struct {
 	SkipFailedDeletion types.Bool `tfsdk:"skip_failed_deletion"`
 
 	OfferingControllers types.Map `tfsdk:"offering_controllers"`
+
+	DefaultTimeouts *defaultTimeoutsModel `tfsdk:"default_timeouts"`
+}
+
+// defaultTimeoutsModel holds the provider-level default timeouts for
+// resource operations.
+type defaultTimeoutsModel struct {
+	Create types.String `tfsdk:"create"`
+	Update types.String `tfsdk:"update"`
+	Delete types.String `tfsdk:"delete"`
 }
 
 func (j jujuProviderModel) loginViaUsername() bool {
@@ -389,6 +402,27 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 				},
 			},
 		},
+		Blocks: map[string]schema.Block{
+			DefaultTimeouts: schema.SingleNestedBlock{
+				Description: "Default timeouts for resource operations. " +
+					"These apply to all resources unless overridden by a resource-level `timeouts` block. " +
+					"Values are duration strings, e.g. \"60m\".",
+				Attributes: map[string]schema.Attribute{
+					"create": schema.StringAttribute{
+						Description: "Default maximum time to wait for resources to become ready after creation. Defaults to 30 minutes.",
+						Optional:    true,
+					},
+					"update": schema.StringAttribute{
+						Description: "Default maximum time to wait for resources to become ready after an update. Defaults to 30 minutes.",
+						Optional:    true,
+					},
+					"delete": schema.StringAttribute{
+						Description: "Default maximum time to wait for resources to be deleted. Defaults to 15 minutes.",
+						Optional:    true,
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -418,10 +452,19 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	}
 	resp.Diagnostics.Append(diags...)
 
+	defaultTimeouts, timeoutDiags := parseDefaultTimeouts(data.DefaultTimeouts)
+	resp.Diagnostics.Append(timeoutDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	providerData := juju.ProviderData{
 		Config: juju.Config{
-			ControllerMode:     data.ControllerMode.ValueBool(),
-			SkipFailedDeletion: data.SkipFailedDeletion.ValueBool(),
+			ControllerMode:       data.ControllerMode.ValueBool(),
+			SkipFailedDeletion:   data.SkipFailedDeletion.ValueBool(),
+			DefaultCreateTimeout: defaultTimeouts.create,
+			DefaultUpdateTimeout: defaultTimeouts.update,
+			DefaultDeleteTimeout: defaultTimeouts.delete,
 		},
 	}
 
@@ -716,6 +759,43 @@ func (p *jujuProvider) ListResources(_ context.Context) []func() list.ListResour
 		func() list.ListResource { return NewStoragePoolLister() },
 		func() list.ListResource { return NewSecretLister() },
 	}
+}
+
+// defaultTimeouts holds parsed provider-level default timeout durations.
+type defaultTimeouts struct {
+	create time.Duration
+	update time.Duration
+	delete time.Duration
+}
+
+// parseDefaultTimeouts parses the provider's default_timeouts block into
+// durations. Unset values are left as zero, meaning the wait package's
+// built-in defaults apply.
+func parseDefaultTimeouts(model *defaultTimeoutsModel) (defaultTimeouts, diag.Diagnostics) {
+	var result defaultTimeouts
+	var diags diag.Diagnostics
+	if model == nil {
+		return result, diags
+	}
+	parse := func(value types.String, name string) time.Duration {
+		if value.IsNull() || value.IsUnknown() {
+			return 0
+		}
+		d, err := time.ParseDuration(value.ValueString())
+		if err != nil {
+			diags.AddAttributeError(
+				path.Root(DefaultTimeouts).AtName(name),
+				"Invalid Timeout",
+				fmt.Sprintf("The %q value %q is not a valid duration (e.g. \"60m\"): %s", name, value.ValueString(), err),
+			)
+			return 0
+		}
+		return d
+	}
+	result.create = parse(model.Create, "create")
+	result.update = parse(model.Update, "update")
+	result.delete = parse(model.Delete, "delete")
+	return result, diags
 }
 
 // checkControllerMode checks if the provider is in controller mode and if the

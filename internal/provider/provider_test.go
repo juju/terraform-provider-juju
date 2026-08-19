@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -954,4 +955,65 @@ data "juju_model" "test_model" {
   owner = "some-owner"
 }
 `
+}
+
+func TestParseDefaultTimeouts(t *testing.T) {
+	tests := []struct {
+		name    string
+		model   *defaultTimeoutsModel
+		want    defaultTimeouts
+		wantErr bool
+	}{
+		{
+			name:  "nil model leaves zero durations",
+			model: nil,
+			want:  defaultTimeouts{},
+		},
+		{
+			name: "all unset leaves zero durations",
+			model: &defaultTimeoutsModel{
+				Create: types.StringNull(),
+				Update: types.StringNull(),
+				Delete: types.StringNull(),
+			},
+			want: defaultTimeouts{},
+		},
+		{
+			name: "valid durations parse",
+			model: &defaultTimeoutsModel{
+				Create: types.StringValue("60m"),
+				Update: types.StringValue("2h"),
+				Delete: types.StringValue("15m"),
+			},
+			want: defaultTimeouts{
+				create: 60 * time.Minute,
+				update: 2 * time.Hour,
+				delete: 15 * time.Minute,
+			},
+		},
+		{
+			name: "invalid duration reports error",
+			model: &defaultTimeoutsModel{
+				Create: types.StringValue("not-a-duration"),
+			},
+			wantErr: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, diags := parseDefaultTimeouts(tc.model)
+			if tc.wantErr {
+				if !diags.HasError() {
+					t.Fatalf("expected an error diagnostic, got none")
+				}
+				return
+			}
+			if diags.HasError() {
+				t.Fatalf("unexpected error diagnostics: %v", diags)
+			}
+			if got != tc.want {
+				t.Fatalf("got %+v, want %+v", got, tc.want)
+			}
+		})
+	}
 }

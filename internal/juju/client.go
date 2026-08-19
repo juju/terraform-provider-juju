@@ -108,6 +108,21 @@ type Config struct {
 
 	// ControllerMode indicates whether the provider is operating in controller mode.
 	ControllerMode bool
+
+	// DefaultCreateTimeout is the default maximum duration to wait for
+	// resources to become ready after creation. A zero value means the
+	// built-in default of the wait package is used.
+	DefaultCreateTimeout time.Duration
+
+	// DefaultUpdateTimeout is the default maximum duration to wait for
+	// resources to become ready after an update. A zero value means the
+	// built-in default of the wait package is used.
+	DefaultUpdateTimeout time.Duration
+
+	// DefaultDeleteTimeout is the default maximum duration to wait for
+	// resources to be deleted. A zero value means the built-in default of
+	// the wait package is used.
+	DefaultDeleteTimeout time.Duration
 }
 
 // ProviderData holds data provided to resources and data sources.

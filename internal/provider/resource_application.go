@@ -715,6 +715,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 				assertEqualsUnitCount(unitCount),
 			},
 			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError, juju.ApplicationNotFoundError, juju.StorageNotFoundError},
+			RetryConf:      &wait.RetryConf{MaxDuration: r.providerConfig.DefaultCreateTimeout},
 			Logf:           r.trace,
 		},
 	)
@@ -1306,6 +1307,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 			},
 			DataAssertions: asserts,
 			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError, juju.ApplicationNotFoundError, juju.StorageNotFoundError},
+			RetryConf:      &wait.RetryConf{MaxDuration: r.providerConfig.DefaultUpdateTimeout},
 			Logf:           r.trace,
 		},
 	)
@@ -1590,6 +1592,7 @@ func (r *applicationResource) Delete(ctx context.Context, req resource.DeleteReq
 			},
 			ExpectedErr:    juju.ApplicationNotFoundError,
 			RetryAllErrors: true,
+			RetryConf:      &wait.RetryConf{MaxDuration: r.providerConfig.DefaultDeleteTimeout},
 		},
 	)
 	if err != nil {

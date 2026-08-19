@@ -423,6 +423,7 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 			},
 			ExpectedErr:    juju.IntegrationNotFoundError,
 			RetryAllErrors: true,
+			RetryConf:      &wait.RetryConf{MaxDuration: r.config.DefaultDeleteTimeout},
 		},
 	)
 	if err != nil {

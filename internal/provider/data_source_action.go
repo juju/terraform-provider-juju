@@ -28,6 +28,7 @@ func NewActionDataSource() datasource.DataSource {
 
 type actionDataSource struct {
 	client *juju.Client
+	config juju.Config
 
 	// subCtx is the context created with the new tflog subsystem for the
 	// action data source.
@@ -97,6 +98,7 @@ func (d *actionDataSource) Configure(ctx context.Context, req datasource.Configu
 	}
 
 	d.client = provider.Client
+	d.config = provider.Config
 	d.subCtx = tflog.NewSubsystem(ctx, LogDataSourceAction)
 }
 
@@ -121,7 +123,7 @@ func (d *actionDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	d.trace(fmt.Sprintf("reading juju action %q data source", actionID))
 
 	// Wait for the action to complete and populate the output.
-	actionResult, err := waitForActionResult(ctx, d.client, func(msg string, additionalFields ...map[string]any) {
+	actionResult, err := waitForActionResult(ctx, d.client, d.config.DefaultCreateTimeout, func(msg string, additionalFields ...map[string]any) {
 		tflog.SubsystemDebug(d.subCtx, LogDataSourceAction, msg, additionalFields...)
 	}, modelUUID, actionID)
 	if err != nil {
