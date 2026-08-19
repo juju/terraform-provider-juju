@@ -19,63 +19,32 @@ func TestAcc_ResourceKubernetesCloud(t *testing.T) {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
 	cloudName := acctest.RandomWithPrefix("tf-test-k8scloud")
+	cloudNameNoServiceAccount := acctest.RandomWithPrefix("tf-test-k8scloud")
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
+			// Create the cloud.
 			{
 				Config: testAccResourceKubernetesCloud(cloudName, "", false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
 				),
 			},
-		}})
-}
-
-func TestAcc_ResourceKubernetesCloudWithoutServiceAccount(t *testing.T) {
-	SkipJAAS(t)
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-	cloudName := acctest.RandomWithPrefix("tf-test-k8scloud")
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: frameworkProviderFactories,
-		Steps: []resource.TestStep{
-			{
-				Config: testAccResourceKubernetesCloud(cloudName, "", true),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
-				),
-			},
-		},
-	})
-}
-
-func TestAcc_ResourceKubernetesCloudUpdate(t *testing.T) {
-	// We don't support cloud update in JAAS.
-	SkipJAAS(t)
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-	cloudName := acctest.RandomWithPrefix("tf-test-k8scloud")
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: frameworkProviderFactories,
-		Steps: []resource.TestStep{
-			{
-				Config: testAccResourceKubernetesCloud(cloudName, "", false),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
-				),
-			},
+			// Update the cloud's kubernetes config.
 			{
 				Config: testAccResourceKubernetesCloud(cloudName, "test string", false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
 					resource.TestMatchResourceAttr("juju_kubernetes_cloud."+cloudName, "kubernetes_config", regexp.MustCompile(".*test string.*")),
+				),
+			},
+			// Create a cloud without a service account.
+			{
+				Config: testAccResourceKubernetesCloud(cloudNameNoServiceAccount, "", true),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudNameNoServiceAccount, "name", cloudNameNoServiceAccount),
 				),
 			},
 		},
@@ -93,10 +62,19 @@ func TestAcc_ResourceKubernetesCloudWithJAAS(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
+			// Create the cloud.
 			{
-				Config: testAccResourceKubernetesCloudJAAS(cloudName),
+				Config: testAccResourceKubernetesCloudJAAS(cloudName, ""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
+				),
+			},
+			// Update the cloud's kubernetes config.
+			{
+				Config: testAccResourceKubernetesCloudJAAS(cloudName, "test string"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_kubernetes_cloud."+cloudName, "name", cloudName),
+					resource.TestMatchResourceAttr("juju_kubernetes_cloud."+cloudName, "kubernetes_config", regexp.MustCompile(".*test string.*")),
 				),
 			},
 		},
@@ -138,10 +116,6 @@ resource "juju_kubernetes_cloud" "{{.CloudName}}" {
  {{ else }}
  kubernetes_config = file("~/microk8s-config.yaml")
  {{ end }}
- {{ if .JAASTest }}
- parent_cloud_name = "lxd"
- parent_cloud_region = "localhost"
- {{ end }}
  {{ if .NoServiceAccount }}
  skip_service_account_creation = true
  {{ end }}
@@ -166,15 +140,17 @@ resource "juju_model" "{{.CloudName}}-model" {
 
 // testAccResourceKubernetesCloudJAAS creates a terraform plan to test juju_kubernetes_cloud in JAAS.
 // In JAAS test we don't want to setup microk8s, so we skip the service account creation and we put
-// a fake valid k8s config.
-func testAccResourceKubernetesCloudJAAS(cloudName string) string {
+// a fake valid k8s config. stringToAppendToConfig is appended as a comment to the config to simulate
+// a change in the kubernetes config.
+func testAccResourceKubernetesCloudJAAS(cloudName string, stringToAppendToConfig string) string {
 	return internaltesting.GetStringFromTemplateWithData(
-		"testAccResourceKubernetesCloud",
+		"testAccResourceKubernetesCloudJAAS",
 		`
 resource "juju_kubernetes_cloud" "{{.CloudName}}" {
  name = "{{.CloudName}}"
  kubernetes_config = <<EOT
 {{.K8sConfig}}
+{{ if .StringToAppendToConfig }}# {{.StringToAppendToConfig}}{{ end }}
 EOT
  parent_cloud_name = "lxd"
  parent_cloud_region = "localhost"
@@ -183,8 +159,9 @@ EOT
 
 
 `, internaltesting.TemplateData{
-			"CloudName": cloudName,
-			"K8sConfig": internaltesting.FakeKubernetesConfig,
+			"CloudName":              cloudName,
+			"K8sConfig":              internaltesting.FakeKubernetesConfig,
+			"StringToAppendToConfig": stringToAppendToConfig,
 		})
 }
 
