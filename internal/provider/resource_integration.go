@@ -286,6 +286,17 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 	r.trace(fmt.Sprintf("integration created on Juju between %q at %q on model %q", appNames, endpoints, modelUUID))
 
+	// The integration now exists in Juju. Persist the ID and identity to state
+	// before enriching the plan, so any later failure taints the resource
+	// instead of leaking the integration.
+	id := newIDForIntegrationResource(modelUUID, response.Applications)
+	plan.ID = types.StringValue(id)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, integrationResourceIdentityModel{ID: plan.ID})...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	parsedApplications, err := parseApplications(r.client, response.Applications)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to parse applications, got error: %s", err))
@@ -300,17 +311,9 @@ func (r *integrationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 	plan.Application = parsedApps
 
-	id := newIDForIntegrationResource(modelUUID, response.Applications)
-	plan.ID = types.StringValue(id)
-
 	r.trace(fmt.Sprintf("integration resource created: %q", id))
-	// Write the state plan into the Response.State
+	// Overwrite state with the fully-enriched plan now that parsing succeeded.
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
-
-	identity := integrationResourceIdentityModel{
-		ID: plan.ID,
-	}
-	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 func (r *integrationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {

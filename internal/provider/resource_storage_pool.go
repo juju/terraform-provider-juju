@@ -224,6 +224,15 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
+	// The pool now exists in Juju. Persist the ID and identity to state before
+	// waiting, so a wait failure taints the resource instead of leaking it.
+	plan.ID = generateResourceID(plan)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, storagePoolResourceIdentityModel{ID: plan.ID})...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// Wait for the pool to be created.
 	if _, err := wait.WaitFor(
 		wait.WaitForCfg[juju.GetStoragePoolInput, juju.GetStoragePoolResponse]{
@@ -253,13 +262,6 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 		"model":            plan.ModelUUID.ValueString(),
 		"storage_provider": plan.StorageProvider.ValueString(),
 	})
-
-	plan.ID = generateResourceID(plan)
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
-
-	identity := storagePoolResourceIdentityModel{ID: plan.ID}
-	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
 }
 
 // Read implements resource.Resource.
