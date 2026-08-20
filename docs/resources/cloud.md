@@ -63,6 +63,7 @@ resource "juju_cloud" "this" {
 ### Optional
 
 - `ca_certificates` (Set of String, Sensitive) List of PEM-encoded X509 certificates for the cloud.
+- `controller` (String) Only used with JAAS - the name of the backing controller to which the cloud will be added. This field is required when running against a JAAS controller and must not be set otherwise. Changing this value will cause the cloud to be destroyed and recreated by terraform.
 - `endpoint` (String) Optional global endpoint for the cloud.
 - `identity_endpoint` (String) Optional global identity endpoint for the cloud.
 - `regions` (Attributes List) List of regions for the cloud. The first region in the list is the default region for the cloud. (see [below for nested schema](#nestedatt--regions))

@@ -27,6 +27,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &cloudResource{}
 var _ resource.ResourceWithConfigure = &cloudResource{}
+var _ resource.ResourceWithConfigValidators = &cloudResource{}
 
 // NewCloudResource returns a cloud resource.
 func NewCloudResource() resource.Resource {
@@ -56,6 +57,7 @@ type cloudResourceModel struct {
 	StorageEndpoint  types.String `tfsdk:"storage_endpoint"`
 	CACertificates   types.Set    `tfsdk:"ca_certificates"`
 	Regions          types.List   `tfsdk:"regions"`
+	Controller       types.String `tfsdk:"controller"`
 
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
@@ -83,6 +85,13 @@ func (r *cloudResource) Configure(ctx context.Context, req resource.ConfigureReq
 // Metadata returns the metadata for the cloud resource.
 func (r *cloudResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_cloud"
+}
+
+// ConfigValidators returns a list of functions which will all be performed during validation.
+func (r *cloudResource) ConfigValidators(context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		&cloudControllerJAASValidator{r.client},
+	}
 }
 
 // Schema returns the schema for the cloud resource.
@@ -176,6 +185,16 @@ func (r *cloudResource) Schema(_ context.Context, req resource.SchemaRequest, re
 				},
 				Default: defaultRegionForCloud{},
 			},
+			"controller": schema.StringAttribute{
+				Description: "Only used with JAAS - the name of the backing controller to which the cloud will be added." +
+					" This field is required when running against a JAAS controller and must not be set otherwise." +
+					" Changing this value will cause the cloud to be destroyed and recreated by terraform.",
+				Optional: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"id": schema.StringAttribute{
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
@@ -238,6 +257,7 @@ func (r *cloudResource) Create(ctx context.Context, req resource.CreateRequest, 
 		Regions:          regions,
 		CACertificates:   cacerts,
 		Force:            false,
+		TargetController: plan.Controller.ValueString(),
 	}
 
 	if err := r.client.Clouds.AddCloud(ctx, input); err != nil {
@@ -415,7 +435,7 @@ func (r *cloudResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := r.client.Clouds.RemoveCloud(ctx, juju.RemoveCloudInput{Name: state.Name.ValueString()}); err != nil {
+	if err := r.client.Clouds.RemoveCloud(ctx, juju.RemoveCloudInput{Name: state.Name.ValueString(), TargetController: state.Controller.ValueString()}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to remove cloud, got error %s", err))
 		return
 	}
@@ -428,6 +448,58 @@ func (r *cloudResource) trace(msg string, additionalFields ...map[string]interfa
 		return
 	}
 	tflog.SubsystemTrace(r.subCtx, LogResourceCloud, msg, additionalFields...)
+}
+
+// cloudControllerJAASValidator enforces that the `controller` field is set when
+// applying against a JAAS controller (since JIMM's AddCloudToController requires
+// a backing controller and does not select one automatically), and that it is
+// not set when applying against a regular Juju controller.
+type cloudControllerJAASValidator struct {
+	client *juju.Client
+}
+
+// Description implements the Description method of the resource.ConfigValidator interface.
+func (v *cloudControllerJAASValidator) Description(ctx context.Context) string {
+	return v.MarkdownDescription(ctx)
+}
+
+// MarkdownDescription implements the MarkdownDescription method of the resource.ConfigValidator interface.
+func (v *cloudControllerJAASValidator) MarkdownDescription(_ context.Context) string {
+	return "Enforces that the controller field is specified when, and only when, applying to a JAAS controller."
+}
+
+// ValidateResource implements the ValidateResource method of the resource.ConfigValidator interface.
+func (v *cloudControllerJAASValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	if v.client == nil {
+		return
+	}
+	if v.client.IsLazyInstantiated {
+		return
+	}
+
+	var data cloudResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Unknown values can't be validated yet.
+	if data.Controller.IsUnknown() {
+		return
+	}
+
+	controllerSet := !data.Controller.IsNull() && data.Controller.ValueString() != ""
+
+	if v.client.IsJAAS() {
+		if !controllerSet {
+			resp.Diagnostics.AddError("Plan Error", "Field `controller` must be specified when applying to a JAAS controller.")
+		}
+		return
+	}
+
+	if controllerSet {
+		resp.Diagnostics.AddError("Plan Error", "Field `controller` can only be set when applying to a JAAS controller.")
+	}
 }
 
 func expandStringList(ctx context.Context, s types.Set, resp *diag.Diagnostics) []string {

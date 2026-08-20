@@ -147,6 +147,8 @@ type SSHKeyManagerClient interface {
 // JaasAPIClient defines the set of methods that the JAAS API provides.
 type JaasAPIClient interface {
 	AddModelToController(req *jaasparams.AddModelToControllerRequest) (params.ModelInfo, error)
+	AddCloudToController(req *jaasparams.AddCloudToControllerRequest) error
+	RemoveCloudFromController(req *jaasparams.RemoveCloudFromControllerRequest) error
 	AddController(req *jaasparams.AddControllerRequest) (jaasparams.ControllerInfo, error)
 	ListControllers() ([]jaasparams.ControllerInfo, error)
 	RemoveController(req *jaasparams.RemoveControllerRequest) (jaasparams.ControllerInfo, error)

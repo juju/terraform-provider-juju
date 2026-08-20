@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"strings"
 
+	jaasapi "github.com/canonical/jimm-go-sdk/v3/api"
+	jaasparams "github.com/canonical/jimm-go-sdk/v3/api/params"
 	jujuclock "github.com/juju/clock"
 	"github.com/juju/errors"
 	"github.com/juju/juju/api"
@@ -19,6 +21,7 @@ import (
 	"github.com/juju/juju/caas/kubernetes/clientconfig"
 	k8scloud "github.com/juju/juju/caas/kubernetes/cloud"
 	jujucloud "github.com/juju/juju/cloud"
+	jujuparams "github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v6"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -42,7 +45,10 @@ var (
 type cloudsClient struct {
 	SharedClient
 
+	isJAAS bool
+
 	getCloudAPIClient func(connection api.Connection) CloudAPIClient
+	getJaasApiClient  func(connection api.Connection) JaasAPIClient
 }
 
 // AddCloudInput is the input parameters for adding a cloud.
@@ -89,6 +95,11 @@ type AddCloudInput struct {
 	// Force indicates whether to force adding the cloud.
 	// Some cloud types might not function correctly on certain controllers.
 	Force bool
+
+	// TargetController is the name of the backing controller to which the
+	// cloud should be added. It is only used when running against JAAS. If
+	// left empty, JIMM selects a controller.
+	TargetController string
 }
 
 // UpdateCloudInput is the input parameters for updating a cloud.
@@ -183,6 +194,10 @@ type ReadCloudOutput struct {
 // RemoveCloudInput is the input parameters for removing a cloud.
 type RemoveCloudInput struct {
 	Name string
+
+	// TargetController is the name of the backing controller from which the
+	// cloud should be removed. It is only used when running against JAAS.
+	TargetController string
 }
 
 // CreateKubernetesCloudInput creates a new Kubernetes cloud with juju cloud facade.
@@ -217,12 +232,56 @@ type UpdateKubernetesCloudInput struct {
 	CreateServiceAccount bool
 }
 
-func newCloudsClient(sc SharedClient) *cloudsClient {
+func newCloudsClient(sc SharedClient, isJAAS bool) *cloudsClient {
 	return &cloudsClient{
 		SharedClient: sc,
+		isJAAS:       isJAAS,
 		getCloudAPIClient: func(connection api.Connection) CloudAPIClient {
 			return cloud.NewClient(connection)
 		},
+		getJaasApiClient: func(connection api.Connection) JaasAPIClient {
+			return jaasapi.NewClient(JaasConnShim{Connection: connection})
+		},
+	}
+}
+
+// cloudToParams converts a jujucloud.Cloud into the wire params.Cloud
+// representation expected by the JIMM AddCloudToController facade. This mirrors
+// the (unexported) helper in github.com/juju/juju/api/client/cloud.
+func cloudToParams(cloud jujucloud.Cloud) jujuparams.Cloud {
+	authTypes := make([]string, len(cloud.AuthTypes))
+	for i, authType := range cloud.AuthTypes {
+		authTypes[i] = string(authType)
+	}
+	regions := make([]jujuparams.CloudRegion, len(cloud.Regions))
+	for i, region := range cloud.Regions {
+		regions[i] = jujuparams.CloudRegion{
+			Name:             region.Name,
+			Endpoint:         region.Endpoint,
+			IdentityEndpoint: region.IdentityEndpoint,
+			StorageEndpoint:  region.StorageEndpoint,
+		}
+	}
+	var regionConfig map[string]map[string]interface{}
+	for r, attr := range cloud.RegionConfig {
+		if regionConfig == nil {
+			regionConfig = make(map[string]map[string]interface{})
+		}
+		regionConfig[r] = attr
+	}
+	return jujuparams.Cloud{
+		Type:              cloud.Type,
+		HostCloudRegion:   cloud.HostCloudRegion,
+		AuthTypes:         authTypes,
+		Endpoint:          cloud.Endpoint,
+		IdentityEndpoint:  cloud.IdentityEndpoint,
+		StorageEndpoint:   cloud.StorageEndpoint,
+		Regions:           regions,
+		CACertificates:    cloud.CACertificates,
+		SkipTLSVerify:     cloud.SkipTLSVerify,
+		Config:            cloud.Config,
+		RegionConfig:      regionConfig,
+		IsControllerCloud: cloud.IsControllerCloud,
 	}
 }
 
@@ -399,6 +458,21 @@ func (c *cloudsClient) AddCloud(ctx context.Context, input AddCloudInput) error 
 		IsControllerCloud: false,
 	}
 
+	if c.isJAAS {
+		// When running against JAAS, the plain Juju AddCloud facade is not
+		// appropriate. Instead, we use the JIMM AddCloudToController facade
+		// which adds the cloud to a specific backing controller.
+		jaasClient := c.getJaasApiClient(conn)
+		return jaasClient.AddCloudToController(&jaasparams.AddCloudToControllerRequest{
+			AddCloudArgs: jujuparams.AddCloudArgs{
+				Name:  input.Name,
+				Cloud: cloudToParams(cloud),
+				Force: &input.Force,
+			},
+			ControllerName: input.TargetController,
+		})
+	}
+
 	return cloudClient.AddCloud(ctx, cloud, input.Force)
 }
 
@@ -431,6 +505,32 @@ func (c *cloudsClient) UpdateCloud(ctx context.Context, input UpdateCloudInput) 
 
 // RemoveCloud removes a cloud.
 func (c *cloudsClient) RemoveCloud(ctx context.Context, input RemoveCloudInput) error {
+	conn, err := c.GetConnection(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	if c.isJAAS {
+		// When running against JAAS, use the JIMM RemoveCloudFromController
+		// facade to remove the cloud from its backing controller.
+		jaasClient := c.getJaasApiClient(conn)
+		return jaasClient.RemoveCloudFromController(&jaasparams.RemoveCloudFromControllerRequest{
+			CloudTag:       names.NewCloudTag(input.Name).String(),
+			ControllerName: input.TargetController,
+		})
+	}
+
+	cloudClient := c.getCloudAPIClient(conn)
+
+	return cloudClient.RemoveCloud(ctx, input.Name)
+}
+
+// RemoveKubernetesCloud removes a Kubernetes cloud using the plain Juju cloud
+// facade. Unlike RemoveCloud, this does not use the JIMM facade when running
+// against JAAS, since a Kubernetes cloud is hosted and managed through its
+// parent cloud.
+func (c *cloudsClient) RemoveKubernetesCloud(ctx context.Context, input RemoveCloudInput) error {
 	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
 		return err
