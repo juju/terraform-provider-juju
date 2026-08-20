@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -124,6 +125,7 @@ type applicationResourceModel struct {
 	Trust             types.Bool             `tfsdk:"trust"`
 	UnitCount         types.Int64            `tfsdk:"units"`
 	UnitNumbers       types.Set              `tfsdk:"unit_numbers"`
+	Timeouts          timeouts.Value         `tfsdk:"timeouts"`
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
 }
@@ -178,7 +180,7 @@ func (r *applicationResource) Configure(ctx context.Context, req resource.Config
 }
 
 // Schema defines the resource schema.
-func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *applicationResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A resource that represents a single Juju application deployment from a charm. Deployment of bundles" +
 			" is not supported.",
@@ -446,6 +448,9 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 					listvalidator.SizeAtMost(1),
 				},
 			},
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{
+				Create: true,
+			}),
 		},
 	}
 }
@@ -537,6 +542,12 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	r.trace("Create", applicationResourceModelForLogging(ctx, &plan))
+
+	createTimeout, timeoutDiags := plan.Timeouts.Create(ctx, r.providerConfig.DefaultCreateTimeout)
+	resp.Diagnostics.Append(timeoutDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	charms := []nestedCharm{}
 	resp.Diagnostics.Append(plan.Charm.ElementsAs(ctx, &charms, false)...)
@@ -715,7 +726,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 				assertEqualsUnitCount(unitCount),
 			},
 			NonFatalErrors: []error{juju.ConnectionRefusedError, juju.RetryReadError, juju.ApplicationNotFoundError, juju.StorageNotFoundError},
-			RetryConf:      &wait.RetryConf{MaxDuration: r.providerConfig.DefaultCreateTimeout},
+			RetryConf:      &wait.RetryConf{MaxDuration: createTimeout},
 			Logf:           r.trace,
 		},
 	)
