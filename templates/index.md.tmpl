@@ -119,9 +119,10 @@ provider "juju" {
 }
 ```
 
-Precedence: a resource-level `timeouts` block wins over `default_timeouts`,
-which wins over the built-in defaults (30 minutes for create/update, 15
-minutes for delete).
+Precedence order:
+- Resource-level `timeouts` block
+- Global `default_timeouts` block
+- Built-in defaults (30 minutes for create/update, 15 minutes for delete).
 
 {{ .SchemaMarkdown | trimspace }}
 
