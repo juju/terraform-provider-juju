@@ -980,6 +980,7 @@ func TestParseDefaultTimeouts(t *testing.T) {
 				Create: types.StringNull(),
 				Update: types.StringNull(),
 				Delete: types.StringNull(),
+				Read:   types.StringNull(),
 			}),
 			want: defaultTimeouts{},
 		},
@@ -989,11 +990,13 @@ func TestParseDefaultTimeouts(t *testing.T) {
 				Create: types.StringValue("60m"),
 				Update: types.StringValue("2h"),
 				Delete: types.StringValue("15m"),
+				Read:   types.StringValue("5m"),
 			}),
 			want: defaultTimeouts{
 				create: 60 * time.Minute,
 				update: 2 * time.Hour,
 				delete: 15 * time.Minute,
+				read:   5 * time.Minute,
 			},
 		},
 		{

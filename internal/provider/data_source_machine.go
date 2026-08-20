@@ -162,7 +162,7 @@ func (d *machineDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		DataAssertions: asserts,
 		NonFatalErrors: []error{juju.RetryReadError, juju.ConnectionRefusedError, juju.ErrNoMatchingIPAddress},
 		RetryConf: &wait.RetryConf{
-			MaxDuration: d.config.DefaultCreateTimeout,
+			MaxDuration: d.config.DefaultReadTimeout,
 			Delay:       juju.ReadModelDefaultInterval,
 			Clock:       clock.WallClock,
 		},

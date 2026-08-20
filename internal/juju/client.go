@@ -123,6 +123,12 @@ type Config struct {
 	// resources to be deleted. A zero value means the built-in default of
 	// the wait package is used.
 	DefaultDeleteTimeout time.Duration
+
+	// DefaultReadTimeout is the default maximum duration to wait for data
+	// source reads (e.g. polling for machine IP addresses or action
+	// results). A zero value means the built-in default of the wait
+	// package is used.
+	DefaultReadTimeout time.Duration
 }
 
 // ProviderData holds data provided to resources and data sources.

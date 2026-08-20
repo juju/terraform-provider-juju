@@ -193,6 +193,7 @@ type defaultTimeoutsModel struct {
 	Create types.String `tfsdk:"create"`
 	Update types.String `tfsdk:"update"`
 	Delete types.String `tfsdk:"delete"`
+	Read   types.String `tfsdk:"read"`
 }
 
 // defaultTimeoutsObjectType is the Object type for the provider-level
@@ -202,6 +203,7 @@ var defaultTimeoutsObjectType = types.ObjectType{
 		"create": types.StringType,
 		"update": types.StringType,
 		"delete": types.StringType,
+		"read":   types.StringType,
 	},
 }
 
@@ -432,6 +434,10 @@ func (p *jujuProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp 
 						Description: "Default maximum time to wait for resources to be deleted. Defaults to 15 minutes.",
 						Optional:    true,
 					},
+					"read": schema.StringAttribute{
+						Description: "Default maximum time to wait for data source reads. Defaults to 30 minutes.",
+						Optional:    true,
+					},
 				},
 			},
 		},
@@ -477,6 +483,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 			DefaultCreateTimeout: defaultTimeouts.create,
 			DefaultUpdateTimeout: defaultTimeouts.update,
 			DefaultDeleteTimeout: defaultTimeouts.delete,
+			DefaultReadTimeout:   defaultTimeouts.read,
 		},
 	}
 
@@ -778,6 +785,7 @@ type defaultTimeouts struct {
 	create time.Duration
 	update time.Duration
 	delete time.Duration
+	read   time.Duration
 }
 
 // parseDefaultTimeouts parses the provider's default_timeouts block into
@@ -812,6 +820,7 @@ func parseDefaultTimeouts(obj types.Object) (defaultTimeouts, diag.Diagnostics) 
 	result.create = parse(model.Create, "create")
 	result.update = parse(model.Update, "update")
 	result.delete = parse(model.Delete, "delete")
+	result.read = parse(model.Read, "read")
 	return result, diags
 }
 

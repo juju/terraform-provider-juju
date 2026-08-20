@@ -319,6 +319,7 @@ Optional:
 
 - `create` (String) Default maximum time to wait for resources to become ready after creation. Defaults to 30 minutes.
 - `delete` (String) Default maximum time to wait for resources to be deleted. Defaults to 15 minutes.
+- `read` (String) Default maximum time to wait for data source reads. Defaults to 30 minutes.
 - `update` (String) Default maximum time to wait for resources to become ready after an update. Defaults to 30 minutes.
 
 
