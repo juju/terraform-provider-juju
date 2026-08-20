@@ -689,6 +689,17 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
+	// The application now exists in Juju. Persist the ID and identity to state
+	// before waiting or reading, so any later failure taints the resource
+	// instead of leaking it.
+	plan.ID = types.StringValue(newAppID(modelUUID, createResp.AppName))
+	plan.ApplicationName = types.StringValue(createResp.AppName)
+	resp.Diagnostics.Append(resp.Identity.Set(ctx, applicationResourceIdentityModel{ID: plan.ID})...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	r.trace(fmt.Sprintf("create application resource %q", createResp.AppName))
 	readResp, err := wait.WaitFor(
 		wait.WaitForCfg[*juju.ReadApplicationInput, *juju.ReadApplicationResponse]{
@@ -708,7 +719,11 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		},
 	)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read application, got error: %s", err))
+		// The application was created in Juju but failed to become ready. The
+		// ID is already saved to state above, so returning an error here marks
+		// the resource as tainted: the next apply will destroy and recreate it,
+		// or the user can fix the underlying issue and untaint it.
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Application created but failed while waiting for it to be ready, got error: %s", err))
 		return
 	}
 	r.trace(fmt.Sprintf("read application resource %q", createResp.AppName))
@@ -772,11 +787,8 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		plan.Storage = types.SetNull(storageType)
 	}
 
-	plan.ID = types.StringValue(newAppID(plan.ModelUUID.ValueString(), createResp.AppName))
-	identity := applicationResourceIdentityModel{
-		ID: plan.ID,
-	}
-	resp.Diagnostics.Append(resp.Identity.Set(ctx, identity)...)
+	// ID and identity were already persisted right after creation; here we
+	// overwrite state with the fully-enriched plan now that the read succeeded.
 	r.trace("Created", applicationResourceModelForLogging(ctx, &plan))
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
