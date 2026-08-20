@@ -18,13 +18,17 @@ to reproduce the same setup elsewhere: Terraform can't see the dependency
 between the model and the application, so it tries to create both at once and
 fails.
 
-`juju-tf-refwriter` fixes this by rewriting the literals into references:
+`juju-tf-refwriter` fixes this by rewriting the literals into references and
+pruning attributes that `terraform query` emits but that can't or shouldn't
+be set in config:
 
-| Literal | Reference |
+| Literal | Reference / action |
 | --- | --- |
 | `model_uuid = "<uuid>"` | `model_uuid = juju_model.<label>.uuid` |
 | `machines = ["1"]` | `machines = [juju_machine.<label>.machine_id]` |
 | integration `application { name = "app" }` | `application { name = juju_application.<label>.name }` |
+| `<attr> = null` | removed (the provider default is already `null`) |
+| a Computed-only attribute (e.g. model `uuid`, machine `machine_id`) | removed (cannot be set in config) |
 
 The tool reads the resource identities from the `import` blocks that
 `terraform query` always emits, so it can match literals to the right resource
@@ -71,6 +75,7 @@ import {
 }
 
 resource "juju_application" "all_apps_0" {
+  config     = null
   machines   = ["1"]
   model_uuid = "c1cecf1e-fe66-4589-8585-e579edd6f58b"
   name       = "dummy-sink"
@@ -111,9 +116,12 @@ resource "juju_application" "all_apps_0" {
 
 resource "juju_machine" "all_machines_0" {
   model_uuid = juju_model.model_0.uuid
-  machine_id = "1"
 }
 ```
+
+Note that `juju_model.model_0`'s `uuid` and `juju_machine.all_machines_0`'s
+`machine_id` are removed because they are Computed (cannot be set in config),
+and `config = null` is removed because the default is already `null`.
 
 ## What is left alone
 
@@ -121,6 +129,9 @@ resource "juju_machine" "all_machines_0" {
   `model_uuid = juju_model.m.uuid`) are not touched.
 - `model_uuid` literals with no matching `juju_model` resource in the file are
   left as literals and a warning is printed, so you can review them manually.
+- Attributes that are both `Computed` and `Optional` (e.g. an application's
+  `name`) are kept, since the user may set them. Only Computed-only
+  attributes are pruned.
 - Default/implicit resources emitted by `terraform query` (such as the `loop`
   storage pool) are kept; only their references are rewritten. Remove them
   manually if you don't want to manage them with Terraform.

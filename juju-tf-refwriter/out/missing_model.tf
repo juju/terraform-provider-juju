@@ -26,7 +26,6 @@ resource "juju_machine" "all_machines_0" {
   provider   = juju
   model_uuid = "c1cecf1e-fe66-4589-8585-e579edd6f58b"
   name       = "machine-1"
-  machine_id = "1"
 }
 
 import {

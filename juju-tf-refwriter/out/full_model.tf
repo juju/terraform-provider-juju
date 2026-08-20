@@ -2,13 +2,10 @@
 # into references by juju-tf-refwriter.
 
 resource "juju_model" "model_0" {
-  provider          = juju
-  annotations       = {}
-  constraints       = null
-  credential        = "localhost"
-  name              = "test4"
-  target_controller = null
-  uuid              = "c1cecf1e-fe66-4589-8585-e579edd6f58b"
+  provider    = juju
+  annotations = {}
+  credential  = "localhost"
+  name        = "test4"
   cloud {
     name   = "localhost"
     region = "localhost"
@@ -28,7 +25,6 @@ resource "juju_machine" "all_machines_0" {
   constraints = "arch=amd64"
   model_uuid  = juju_model.model_0.uuid
   name        = "machine-1"
-  machine_id  = "1"
 }
 
 import {
@@ -40,19 +36,15 @@ import {
 }
 
 resource "juju_application" "all_apps_0" {
-  provider          = juju
-  config            = null
-  constraints       = "arch=amd64"
-  endpoint_bindings = null
+  provider    = juju
+  constraints = "arch=amd64"
   machines = [
     juju_machine.all_machines_0.machine_id
   ]
-  model_uuid           = juju_model.model_0.uuid
-  name                 = "dummy-sink"
-  registry_credentials = null
-  resources            = null
-  storage_directives   = {}
-  trust                = false
+  model_uuid         = juju_model.model_0.uuid
+  name               = "dummy-sink"
+  storage_directives = {}
+  trust              = false
   charm {
     base     = "ubuntu@20.04"
     channel  = "latest/stable"
@@ -70,19 +62,15 @@ import {
 }
 
 resource "juju_application" "all_apps_1" {
-  provider          = juju
-  config            = null
-  constraints       = "arch=amd64"
-  endpoint_bindings = null
+  provider    = juju
+  constraints = "arch=amd64"
   machines = [
     juju_machine.all_machines_0.machine_id
   ]
-  model_uuid           = juju_model.model_0.uuid
-  name                 = "dummy-source"
-  registry_credentials = null
-  resources            = null
-  storage_directives   = {}
-  trust                = false
+  model_uuid         = juju_model.model_0.uuid
+  name               = "dummy-source"
+  storage_directives = {}
+  trust              = false
   charm {
     base     = "ubuntu@20.04"
     channel  = "latest/stable"

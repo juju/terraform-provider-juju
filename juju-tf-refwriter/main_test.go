@@ -334,5 +334,85 @@ import {
 	result, err := transformTerraformFile(src, "test.tf")
 	require.NoError(t, err)
 	assert.Contains(t, string(result.ModifiedContent), "model_uuid = juju_model.m.uuid")
-	assert.False(t, result.WasRewritten, "nothing should be rewritten")
+	// The model's computed `uuid` is still pruned, so the file is
+	// rewritten even though the already-referenced model_uuid is left alone.
+	assert.True(t, result.WasRewritten, "the computed uuid should be pruned")
+	assert.NotContains(t, string(result.ModifiedContent), `uuid = "uuid-a"`)
+}
+
+// TestPruneComputedAttributes verifies that Computed-only attributes are
+// removed for each resource kind, while Optional attributes (even Computed
+// ones like `name`) are kept.
+func TestPruneComputedAttributes(t *testing.T) {
+	src := []byte(`
+resource "juju_model" "m" {
+  name = "test"
+  uuid = "uuid-a"
+}
+
+import {
+  to       = juju_model.m
+  provider = juju
+  identity = {
+    id = "uuid-a"
+  }
+}
+
+resource "juju_machine" "mach" {
+  model_uuid = juju_model.m.uuid
+  name       = "machine-1"
+  machine_id = "1"
+}
+
+import {
+  to       = juju_machine.mach
+  provider = juju
+  identity = {
+    id = "uuid-a:1:machine-1"
+  }
+}
+`)
+	result, err := transformTerraformFile(src, "test.tf")
+	require.NoError(t, err)
+	out := string(result.ModifiedContent)
+	// Computed-only attributes are pruned.
+	assert.NotContains(t, out, `uuid = "uuid-a"`, "model uuid should be pruned")
+	assert.NotContains(t, out, `machine_id = "1"`, "machine_id should be pruned")
+	// Optional attributes are kept.
+	assert.Contains(t, out, `name = "test"`, "model name should be kept")
+	assert.Contains(t, out, `name       = "machine-1"`, "machine name should be kept")
+}
+
+// TestPruneNullAttributes verifies that attributes set to `null` are removed,
+// while non-null values (including `0`, `false`, and `{}`) are kept.
+func TestPruneNullAttributes(t *testing.T) {
+	src := []byte(`
+resource "juju_application" "a" {
+  model_uuid         = "uuid-a"
+  name               = "dummy-sink"
+  config             = null
+  endpoint_bindings  = null
+  storage_directives = {}
+  trust              = false
+}
+
+import {
+  to       = juju_application.a
+  provider = juju
+  identity = {
+    id = "uuid-a:dummy-sink"
+  }
+}
+`)
+	result, err := transformTerraformFile(src, "test.tf")
+	require.NoError(t, err)
+	out := string(result.ModifiedContent)
+	assert.NotContains(t, out, "config = null", "null config should be pruned")
+	assert.NotContains(t, out, "endpoint_bindings = null", "null endpoint_bindings should be pruned")
+	// `false` and `{}` are not `null` and must be kept. The formatter
+	// re-aligns attributes, so check the values rather than exact spacing.
+	assert.Contains(t, out, "false", "false should be kept")
+	assert.Contains(t, out, "{}", "empty map should be kept")
+	assert.Contains(t, out, "storage_directives", "storage_directives should be kept")
+	assert.Contains(t, out, "trust", "trust should be kept")
 }

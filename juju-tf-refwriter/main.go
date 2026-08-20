@@ -95,7 +95,8 @@ func transformTerraformFile(src []byte, filename string) (*transformationResult,
 	rewritten := false
 	warnings := 0
 
-	// Second pass: rewrite literal references inside resource blocks.
+	// Second pass: prune unconfigurable and redundant attributes, then
+	// rewrite literal references inside resource blocks.
 	for _, block := range f.Body().Blocks() {
 		if block.Type() != "resource" || len(block.Labels()) < 2 {
 			continue
@@ -103,6 +104,16 @@ func transformTerraformFile(src []byte, filename string) (*transformationResult,
 		resourceType := block.Labels()[0]
 		kind := kindOf(resourceType)
 
+		// Prune attributes that `terraform query` emits but that
+		// can't or shouldn't be set in config.
+		if pruneNullAttributes(block) {
+			rewritten = true
+		}
+		if pruneComputedAttributes(block, kind) {
+			rewritten = true
+		}
+
+		// Specific rewrites
 		switch kind {
 		case kindApplication:
 			rewrittenModel := rewriteModelUUID(block, idx, &warnings)
@@ -172,6 +183,108 @@ func processFile(filename string) (bool, int) {
 	}
 
 	return result.WasRewritten, result.Warnings
+}
+
+// pruneNullAttributes removes any attribute whose value is the literal `null`
+// from a resource block. `terraform query` emits every Optional attribute as
+// `null` when the value is unset, which is redundant since the provider
+// default for those attributes is already `null`. Removing them keeps the
+// rewritten config closer to hand-written Terraform. Returns true if any
+// attribute was removed.
+func pruneNullAttributes(block *hclwrite.Block) bool {
+	removed := false
+	for name := range block.Body().Attributes() {
+		if isNullAttr(block, name) {
+			block.Body().RemoveAttribute(name)
+			removed = true
+		}
+	}
+	return removed
+}
+
+// isNullAttr reports whether the named attribute on the block is a simple
+// `name = null` literal.
+func isNullAttr(block *hclwrite.Block, name string) bool {
+	attr, ok := block.Body().Attributes()[name]
+	if !ok {
+		return false
+	}
+	tokens := attr.Expr().BuildTokens(nil)
+	// hclwrite folds leading spaces into the first token, so the null
+	// literal appears as a single TokenIdent with bytes "null".
+	for _, tok := range tokens {
+		switch tok.Type {
+		case hclsyntax.TokenIdent:
+			if string(tok.Bytes) != "null" {
+				return false
+			}
+		case hclsyntax.TokenNewline, hclsyntax.TokenComment:
+			// Ignore trailing whitespace/comments.
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// computedAttributes lists the Computed-only attributes (Computed, not
+// Optional, not Required) for each resource kind. These attributes cannot be
+// set in config, so the literal values that `terraform query` emits for them
+// fail validation on apply and are pruned. Attributes that are both
+// Computed and Optional (or Computed and Required) are intentionally omitted:
+// the user may set those, so they are kept.
+//
+// Keep this in sync with the provider schemas in internal/provider.
+var computedAttributes = map[resourceKind]map[string]struct{}{
+	kindModel: {
+		"uuid": {},
+		"id":   {},
+	},
+	kindApplication: {
+		"id":           {},
+		"model_type":   {},
+		"unit_numbers": {},
+		"storage":      {},
+	},
+	kindMachine: {
+		"id":          {},
+		"machine_id":  {},
+		"instance_id": {},
+		"hostname":    {},
+	},
+	kindSecret: {
+		"id":         {},
+		"secret_id":  {},
+		"secret_uri": {},
+	},
+	kindIntegration: {
+		"id": {},
+	},
+	kindAccessModel: {
+		"id": {},
+	},
+	kindAccessSecret: {
+		"id": {},
+	},
+}
+
+// pruneComputedAttributes removes the Computed-only attributes for the given
+// resource kind from a block. Returns true if any attribute was removed.
+// Unknown kinds are left untouched, since the set of Computed attributes for
+// them is not known here.
+func pruneComputedAttributes(block *hclwrite.Block, kind resourceKind) bool {
+	names, ok := computedAttributes[kind]
+	if !ok {
+		return false
+	}
+	removed := false
+	for name := range names {
+		if block.Body().GetAttribute(name) != nil {
+			block.Body().RemoveAttribute(name)
+			removed = true
+		}
+	}
+	return removed
 }
 
 // rewriteModelUUID rewrites a literal `model_uuid = "<uuid>"` attribute into
