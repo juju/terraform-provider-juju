@@ -16,6 +16,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/action"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/list"
@@ -25,6 +26,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/juju/api"
 
@@ -182,7 +184,7 @@ type jujuProviderModel struct {
 
 	OfferingControllers types.Map `tfsdk:"offering_controllers"`
 
-	DefaultTimeouts *defaultTimeoutsModel `tfsdk:"default_timeouts"`
+	DefaultTimeouts types.Object `tfsdk:"default_timeouts"`
 }
 
 // defaultTimeoutsModel holds the provider-level default timeouts for
@@ -191,6 +193,16 @@ type defaultTimeoutsModel struct {
 	Create types.String `tfsdk:"create"`
 	Update types.String `tfsdk:"update"`
 	Delete types.String `tfsdk:"delete"`
+}
+
+// defaultTimeoutsObjectType is the Object type for the provider-level
+// default_timeouts block, used by tests to build a matching null value.
+var defaultTimeoutsObjectType = types.ObjectType{
+	AttrTypes: map[string]attr.Type{
+		"create": types.StringType,
+		"update": types.StringType,
+		"delete": types.StringType,
+	},
 }
 
 func (j jujuProviderModel) loginViaUsername() bool {
@@ -771,10 +783,15 @@ type defaultTimeouts struct {
 // parseDefaultTimeouts parses the provider's default_timeouts block into
 // durations. Unset values are left as zero, meaning the wait package's
 // built-in defaults apply.
-func parseDefaultTimeouts(model *defaultTimeoutsModel) (defaultTimeouts, diag.Diagnostics) {
+func parseDefaultTimeouts(obj types.Object) (defaultTimeouts, diag.Diagnostics) {
 	var result defaultTimeouts
 	var diags diag.Diagnostics
-	if model == nil {
+	if obj.IsNull() || obj.IsUnknown() {
+		return result, diags
+	}
+	var model defaultTimeoutsModel
+	diags.Append(obj.As(context.Background(), &model, basetypes.ObjectAsOptions{})...)
+	if diags.HasError() {
 		return result, diags
 	}
 	parse := func(value types.String, name string) time.Duration {

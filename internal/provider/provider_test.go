@@ -474,6 +474,7 @@ func validateJujuTestConfig(t *testing.T) {
 func configureProvider(t *testing.T, p provider.Provider) provider.ConfigureResponse {
 	conf := jujuProviderModel{}
 	conf.OfferingControllers = types.MapNull(offeringControllersMapType.ElemType)
+	conf.DefaultTimeouts = types.ObjectNull(defaultTimeoutsObjectType.AttrTypes)
 	return configureProviderWithModel(t, p, conf)
 }
 
@@ -500,6 +501,7 @@ func TestProviderConfigureControllerModeWithoutConnectionDetails(t *testing.T) {
 	confResp := configureProviderWithModel(t, jujuProvider, jujuProviderModel{
 		ControllerMode:      types.BoolValue(true),
 		OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
+		DefaultTimeouts:     types.ObjectNull(defaultTimeoutsObjectType.AttrTypes),
 	})
 
 	require.False(t, confResp.Diagnostics.HasError(), "unexpected configure error: %v", confResp.Diagnostics.Errors())
@@ -516,6 +518,7 @@ func TestProviderConfigureControllerModeWithConnectionDetails(t *testing.T) {
 	confResp := configureProviderWithModel(t, jujuProvider, jujuProviderModel{
 		ControllerMode:      types.BoolValue(true),
 		OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
+		DefaultTimeouts:     types.ObjectNull(defaultTimeoutsObjectType.AttrTypes),
 	})
 
 	require.False(t, confResp.Diagnostics.HasError(), "unexpected configure error: %v", confResp.Diagnostics.Errors())
@@ -534,6 +537,7 @@ func TestProviderConfigureLazyAPIDoesNotConnect(t *testing.T) {
 		UserName:            types.StringValue("bogus-user"),
 		Password:            types.StringValue("bogus-password"),
 		OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
+		DefaultTimeouts:     types.ObjectNull(defaultTimeoutsObjectType.AttrTypes),
 	})
 
 	require.False(t, confResp.Diagnostics.HasError(), "unexpected configure error: %v", confResp.Diagnostics.Errors())
@@ -590,6 +594,7 @@ func newConfigureRequest(t *testing.T, conf jujuProviderModel) provider.Configur
 		JujuClientSecret:        types.StringType,
 		SkipFailedDeletion:      types.BoolType,
 		JujuOfferingControllers: offeringControllersMapType,
+		DefaultTimeouts:         defaultTimeoutsObjectType,
 	}
 
 	val, confObjErr := types.ObjectValueFrom(context.Background(), mapTypes, conf)
@@ -960,31 +965,31 @@ data "juju_model" "test_model" {
 func TestParseDefaultTimeouts(t *testing.T) {
 	tests := []struct {
 		name    string
-		model   *defaultTimeoutsModel
+		obj     types.Object
 		want    defaultTimeouts
 		wantErr bool
 	}{
 		{
-			name:  "nil model leaves zero durations",
-			model: nil,
-			want:  defaultTimeouts{},
+			name: "null object leaves zero durations",
+			obj:  types.ObjectNull(defaultTimeoutsObjectType.AttrTypes),
+			want: defaultTimeouts{},
 		},
 		{
 			name: "all unset leaves zero durations",
-			model: &defaultTimeoutsModel{
+			obj: mustDefaultTimeoutsObject(t, defaultTimeoutsModel{
 				Create: types.StringNull(),
 				Update: types.StringNull(),
 				Delete: types.StringNull(),
-			},
+			}),
 			want: defaultTimeouts{},
 		},
 		{
 			name: "valid durations parse",
-			model: &defaultTimeoutsModel{
+			obj: mustDefaultTimeoutsObject(t, defaultTimeoutsModel{
 				Create: types.StringValue("60m"),
 				Update: types.StringValue("2h"),
 				Delete: types.StringValue("15m"),
-			},
+			}),
 			want: defaultTimeouts{
 				create: 60 * time.Minute,
 				update: 2 * time.Hour,
@@ -993,15 +998,15 @@ func TestParseDefaultTimeouts(t *testing.T) {
 		},
 		{
 			name: "invalid duration reports error",
-			model: &defaultTimeoutsModel{
+			obj: mustDefaultTimeoutsObject(t, defaultTimeoutsModel{
 				Create: types.StringValue("not-a-duration"),
-			},
+			}),
 			wantErr: true,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, diags := parseDefaultTimeouts(tc.model)
+			got, diags := parseDefaultTimeouts(tc.obj)
 			if tc.wantErr {
 				if !diags.HasError() {
 					t.Fatalf("expected an error diagnostic, got none")
@@ -1016,4 +1021,14 @@ func TestParseDefaultTimeouts(t *testing.T) {
 			}
 		})
 	}
+}
+
+// mustDefaultTimeoutsObject builds a types.Object from a defaultTimeoutsModel,
+// failing the test if conversion reports diagnostics.
+func mustDefaultTimeoutsObject(t *testing.T, model defaultTimeoutsModel) types.Object {
+	obj, diags := types.ObjectValueFrom(context.Background(), defaultTimeoutsObjectType.AttrTypes, model)
+	if diags.HasError() {
+		t.Fatalf("failed to build default_timeouts object: %v", diags)
+	}
+	return obj
 }
