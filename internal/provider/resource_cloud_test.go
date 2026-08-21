@@ -33,7 +33,7 @@ func TestAcc_ResourceCloud(t *testing.T) {
 	ca1 := newTestCA(t, "Team Manchester")
 	ca2 := newTestCA(t, "Team Rocket")
 
-	// When running against JAAS, the `controller` field is required since JIMM
+	// When running against JAAS, the `target_controller` field is required since JIMM
 	// adds the cloud to a specific backing controller. Against a regular Juju
 	// controller, the field must not be set.
 	targetController := jaasTargetController(t)
@@ -61,8 +61,7 @@ func TestAcc_ResourceCloud(t *testing.T) {
 				Config: testAccCloudFromTemplate(internaltesting.TemplateData{
 					"Name":                    cloudName,
 					"Type":                    "openstack",
-					"IncludeController":       targetController != "",
-					"Controller":              targetController,
+					"TargetController":        targetController,
 					"IncludeAuthTypes":        true,
 					"AuthTypesList":           hclList([]string{"userpass", "access-key"}),
 					"IncludeEndpoint":         true,
@@ -113,8 +112,7 @@ func TestAcc_ResourceCloud(t *testing.T) {
 				Config: testAccCloudFromTemplate(internaltesting.TemplateData{
 					"Name":                    cloudName,
 					"Type":                    "openstack",
-					"IncludeController":       targetController != "",
-					"Controller":              targetController,
+					"TargetController":        targetController,
 					"IncludeAuthTypes":        true,
 					"AuthTypesList":           hclList([]string{"userpass", "access-key"}),
 					"IncludeEndpoint":         true,
@@ -215,9 +213,9 @@ func TestAcc_ResourceCloud_CACertsValidation(t *testing.T) {
 	})
 }
 
-// TestAcc_ResourceCloud_ControllerForbiddenWithoutJAAS ensures that the
-// `controller` field cannot be set when applying against a regular Juju controller.
-func TestAcc_ResourceCloud_ControllerForbiddenWithoutJAAS(t *testing.T) {
+// TestAcc_ResourceCloud_TargetControllerForbiddenWithoutJAAS ensures that the
+// `target_controller` field cannot be set when applying against a regular Juju controller.
+func TestAcc_ResourceCloud_TargetControllerForbiddenWithoutJAAS(t *testing.T) {
 	SkipJAAS(t)
 
 	cloudName := acctest.RandomWithPrefix("tf-test-cloud")
@@ -227,26 +225,25 @@ func TestAcc_ResourceCloud_ControllerForbiddenWithoutJAAS(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccResourceCloud_OpenStack_Minimal(cloudName, "some-controller"),
-				ExpectError: regexp.MustCompile("Field `controller` can only be set when applying to a JAAS controller."),
+				ExpectError: regexp.MustCompile("Field `target_controller` can only be set when applying to a JAAS controller."),
 			},
 		},
 	})
 }
 
-func testAccResourceCloud_OpenStack_Minimal(name string, controller string) string {
+func testAccResourceCloud_OpenStack_Minimal(name string, targetController string) string {
 	return testAccCloudFromTemplate(internaltesting.TemplateData{
-		"Name":              name,
-		"Type":              "openstack",
-		"IncludeController": controller != "",
-		"Controller":        controller,
-		"IncludeAuthTypes":  true,
-		"AuthTypesList":     hclList([]string{"userpass"}),
+		"Name":             name,
+		"Type":             "openstack",
+		"TargetController": targetController,
+		"IncludeAuthTypes": true,
+		"AuthTypesList":    hclList([]string{"userpass"}),
 	})
 }
 
 // jaasTargetController returns the name of a backing controller to target when
 // running against JAAS, or an empty string when running against a regular Juju
-// controller. The `controller` field on juju_cloud is required on JAAS and must
+// controller. The `target_controller` field on juju_cloud is required on JAAS and must
 // not be set otherwise.
 func jaasTargetController(t *testing.T) string {
 	if !isJAAS() {
@@ -264,7 +261,7 @@ func jaasTargetController(t *testing.T) string {
 // Provide fields in data to control omission vs empty and list contents.
 // Supported keys in data:
 // - Name (string), Type (string)
-// - IncludeController (bool), Controller (string, the backing controller name for JAAS)
+// - TargetController (string, the backing controller name for JAAS)
 // - IncludeAuthTypes (bool), AuthTypesList (string, e.g. ["userpass", "access-key"])
 // - IncludeEndpoint (bool), Endpoint (string)
 // - IncludeIdentityEndpoint (bool), IdentityEndpoint (string)
@@ -277,8 +274,8 @@ resource "juju_cloud" "{{.Name}}" {
   name = "{{.Name}}"
   type = "{{.Type}}"
 
-  {{ if .IncludeController }}
-  controller = "{{.Controller}}"
+	{{ if .TargetController }}
+	target_controller = "{{.TargetController}}"
   {{ end }}
 
   {{ if .IncludeAuthTypes }}
