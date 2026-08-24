@@ -24,6 +24,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/juju/names/v5"
+
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/retry"
 	"github.com/juju/terraform-provider-juju/internal/wait"
@@ -42,6 +43,7 @@ func NewOfferResource() resource.Resource {
 
 type offerResource struct {
 	client *juju.Client
+	config juju.Config
 
 	// subCtx is the context created with the new tflog subsystem for applications.
 	subCtx context.Context
@@ -178,7 +180,11 @@ func (o *offerResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
-	createTimeout, diags := plan.Timeouts.Create(ctx, defaultOfferCreateTimeout)
+	defaultCreate := o.config.DefaultCreateTimeout
+	if defaultCreate == 0 {
+		defaultCreate = defaultOfferCreateTimeout
+	}
+	createTimeout, diags := plan.Timeouts.Create(ctx, defaultCreate)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -315,7 +321,11 @@ func (o *offerResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 
-	deleteTimeout, diags := state.Timeouts.Delete(ctx, defaultOfferDeleteTimeout)
+	defaultDelete := o.config.DefaultDeleteTimeout
+	if defaultDelete == 0 {
+		defaultDelete = defaultOfferDeleteTimeout
+	}
+	deleteTimeout, diags := state.Timeouts.Delete(ctx, defaultDelete)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -376,6 +386,7 @@ func (o *offerResource) Configure(ctx context.Context, req resource.ConfigureReq
 	}
 
 	o.client = provider.Client
+	o.config = provider.Config
 	// Create the local logging subsystem here, using the TF context when creating it.
 	o.subCtx = tflog.NewSubsystem(ctx, LogResourceOffer)
 }

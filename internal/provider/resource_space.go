@@ -38,6 +38,7 @@ func NewSpaceResource() resource.Resource {
 
 type spaceResource struct {
 	client *juju.Client
+	config juju.Config
 
 	// context for the logging subsystem.
 	subCtx context.Context
@@ -123,6 +124,7 @@ func (r *spaceResource) Configure(ctx context.Context, req resource.ConfigureReq
 	}
 
 	r.client = provider.Client
+	r.config = provider.Config
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceSpace)
 }
 
@@ -214,6 +216,7 @@ func (r *spaceResource) Create(ctx context.Context, req resource.CreateRequest, 
 			},
 		},
 		NonFatalErrors: []error{errors.NotFound},
+		RetryConf:      &wait.RetryConf{MaxDuration: r.config.DefaultCreateTimeout},
 		Logf:           r.trace,
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for space, got error: %s", err))
@@ -292,6 +295,7 @@ func (r *spaceResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		},
 		ExpectedErr:    errors.NotFound,
 		RetryAllErrors: true,
+		RetryConf:      &wait.RetryConf{MaxDuration: r.config.DefaultDeleteTimeout},
 		Logf:           r.trace,
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for space deletion, got error: %s", err))
