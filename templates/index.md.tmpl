@@ -100,6 +100,30 @@ Terraform 0.12 and later with client credentials:
 {{tffile "examples/provider/provider_client_credentials.tf"}}
 {{- end }}
 
+### Default timeouts
+
+The provider exposes a `default_timeouts` block that controls how long the
+provider waits for resources to reach a ready state after create, update, or
+delete operations. These defaults apply to every resource that does not
+override them with its own `timeouts` block.
+
+```terraform
+provider "juju" {
+  # connection config ...
+
+  default_timeouts {
+    create = "60m"
+    update = "60m"
+    delete = "30m"
+  }
+}
+```
+
+Precedence order:
+- Resource-level `timeouts` block
+- Global `default_timeouts` block
+- Built-in defaults (30 minutes for create/update, 15 minutes for delete).
+
 {{ .SchemaMarkdown | trimspace }}
 
 

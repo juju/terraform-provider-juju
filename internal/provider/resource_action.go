@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -33,6 +34,7 @@ func NewActionResource() resource.Resource {
 
 type actionResource struct {
 	client *juju.Client
+	config juju.Config
 
 	// subCtx is the context created with the new tflog subsystem for actions.
 	subCtx context.Context
@@ -142,6 +144,7 @@ func (r *actionResource) Configure(ctx context.Context, req resource.ConfigureRe
 		return
 	}
 	r.client = provider.Client
+	r.config = provider.Config
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceAction)
 }
 
@@ -228,7 +231,7 @@ func (r *actionResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	// Wait for the action to complete and populate the output.
-	actionResult, err := waitForActionResult(ctx, r.client, r.actionLogf(), modelUUID, actionID)
+	actionResult, err := waitForActionResult(ctx, r.client, r.config.DefaultCreateTimeout, r.actionLogf(), modelUUID, actionID)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for action %q to complete: %s", actionName, err))
 		return
@@ -261,7 +264,7 @@ func (r *actionResource) Read(ctx context.Context, req resource.ReadRequest, res
 	// this can happen when the wait fails after the action has been enqueued.
 	// Wait for the action to complete and populate the output.
 	if state.Output.IsNull() || state.Output.IsUnknown() {
-		actionResult, err := waitForActionResult(ctx, r.client, r.actionLogf(), state.ModelUUID.ValueString(), state.ActionID.ValueString())
+		actionResult, err := waitForActionResult(ctx, r.client, r.config.DefaultCreateTimeout, r.actionLogf(), state.ModelUUID.ValueString(), state.ActionID.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for action %q to complete: %s", state.ActionName.ValueString(), err))
 			return
@@ -337,6 +340,7 @@ func waitEnqueueAction(ctx context.Context, r *actionResource, modelUUID, receiv
 			return id, nil
 		},
 		NonFatalErrors: []error{juju.NoActionsDefinedError},
+		RetryConf:      &wait.RetryConf{MaxDuration: r.config.DefaultCreateTimeout},
 		Logf: func(msg string, additionalFields ...map[string]interface{}) {
 			tflog.SubsystemDebug(r.subCtx, LogResourceAction, msg, additionalFields...)
 		},
@@ -347,7 +351,7 @@ func waitEnqueueAction(ctx context.Context, r *actionResource, modelUUID, receiv
 // waitForActionResult waits for the action identified by actionID to complete
 // and returns its result. It is shared by the action resource and the action
 // data source.
-func waitForActionResult(ctx context.Context, client *juju.Client, logf wait.LogFunc, modelUUID, actionID string) (action.ActionResult, error) {
+func waitForActionResult(ctx context.Context, client *juju.Client, maxDuration time.Duration, logf wait.LogFunc, modelUUID, actionID string) (action.ActionResult, error) {
 	return wait.WaitFor(wait.WaitForCfg[juju.ActionResultArgs, action.ActionResult]{
 		Context: ctx,
 		Input: juju.ActionResultArgs{
@@ -357,6 +361,7 @@ func waitForActionResult(ctx context.Context, client *juju.Client, logf wait.Log
 		GetData:        client.Actions.ActionResult,
 		DataAssertions: []wait.Assert[action.ActionResult]{assertActionCompleted},
 		NonFatalErrors: []error{juju.RetryReadError},
+		RetryConf:      &wait.RetryConf{MaxDuration: maxDuration},
 		Logf:           logf,
 	})
 }

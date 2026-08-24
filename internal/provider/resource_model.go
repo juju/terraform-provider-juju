@@ -754,6 +754,7 @@ func (r *modelResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		Input:          modelUUID,
 		ExpectedErr:    juju.ModelNotFoundError,
 		RetryAllErrors: true,
+		RetryConf:      &wait.RetryConf{MaxDuration: r.config.DefaultDeleteTimeout},
 	})
 	if err != nil {
 		errSummary := "Client Error"

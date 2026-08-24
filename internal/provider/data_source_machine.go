@@ -13,9 +13,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-
 	"github.com/juju/clock"
 	"github.com/juju/names/v5"
+
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/wait"
 )
@@ -35,6 +35,7 @@ func NewMachineDataSource() datasource.DataSourceWithConfigure {
 
 type machineDataSource struct {
 	client *juju.Client
+	config juju.Config
 
 	// context for the logging subsystem.
 	subCtx context.Context
@@ -113,6 +114,7 @@ func (d *machineDataSource) Configure(ctx context.Context, req datasource.Config
 	}
 
 	d.client = provider.Client
+	d.config = provider.Config
 	d.subCtx = tflog.NewSubsystem(ctx, LogDataSourceMachine)
 }
 
@@ -160,8 +162,9 @@ func (d *machineDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		DataAssertions: asserts,
 		NonFatalErrors: []error{juju.RetryReadError, juju.ConnectionRefusedError, juju.ErrNoMatchingIPAddress},
 		RetryConf: &wait.RetryConf{
-			Delay: juju.ReadModelDefaultInterval,
-			Clock: clock.WallClock,
+			MaxDuration: d.config.DefaultReadTimeout,
+			Delay:       juju.ReadModelDefaultInterval,
+			Clock:       clock.WallClock,
 		},
 		Logf: d.trace,
 	})
