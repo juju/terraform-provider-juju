@@ -9,6 +9,8 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/list"
 	listschema "github.com/hashicorp/terraform-plugin-framework/list/schema"
@@ -207,7 +209,12 @@ func (r *applicationLister) getApplicationResource(
 			Resources:         types.MapNull(resourceType),
 			StorageDirectives: types.MapNull(types.StringType),
 			Storage:           types.SetNull(storageType),
-			ID:                types.StringNull(),
+			Timeouts: timeouts.Value{
+				Object: types.ObjectNull(map[string]attr.Type{
+					"create": types.StringType,
+				}),
+			},
+			ID: types.StringNull(),
 		},
 		ModelUUID: types.StringNull(),
 	}

@@ -36,6 +36,7 @@ func NewSubnetResource() resource.Resource {
 
 type subnetResource struct {
 	client *juju.Client
+	config juju.Config
 
 	// context for the logging subsystem.
 	subCtx context.Context
@@ -123,6 +124,7 @@ func (r *subnetResource) Configure(ctx context.Context, req resource.ConfigureRe
 	}
 
 	r.client = provider.Client
+	r.config = provider.Config
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceSubnet)
 }
 
@@ -202,6 +204,7 @@ func (r *subnetResource) Create(ctx context.Context, req resource.CreateRequest,
 			},
 		},
 		NonFatalErrors: []error{errors.NotFound},
+		RetryConf:      &wait.RetryConf{MaxDuration: r.config.DefaultCreateTimeout},
 		Logf:           r.trace,
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for subnet to move to space %s failed, got error: %s", plan.SpaceName.ValueString(), err))
@@ -304,6 +307,7 @@ func (r *subnetResource) Update(ctx context.Context, req resource.UpdateRequest,
 			},
 		},
 		NonFatalErrors: []error{errors.NotFound},
+		RetryConf:      &wait.RetryConf{MaxDuration: r.config.DefaultUpdateTimeout},
 		Logf:           r.trace,
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for subnet to move to space %s failed, got error: %s", plan.SpaceName.ValueString(), err))
@@ -376,6 +380,7 @@ func (r *subnetResource) Delete(ctx context.Context, req resource.DeleteRequest,
 			},
 		},
 		NonFatalErrors: []error{errors.NotFound},
+		RetryConf:      &wait.RetryConf{MaxDuration: r.config.DefaultDeleteTimeout},
 		Logf:           r.trace,
 	}); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for subnet deletion, got error: %s", err))
