@@ -32,6 +32,7 @@ func TestAcc_ResourceJaasAccessGroup(t *testing.T) {
 	ctx := t.Context()
 
 	OnlyTestAgainstJAAS(t)
+	SkipJaasGroupTests(t)
 	// Resource names, note that group two has access to group one.
 	groupAccessResourceName := "juju_jaas_access_group.test"
 
