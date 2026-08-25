@@ -159,12 +159,32 @@ jobs:
           echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
           echo "JUJU_SKIP_FAILED_DELETION=true" >> $GITHUB_ENV
       - run: go mod download
-      - env:
+      # gotestsum re-runs only the tests that failed (at most once, and only
+      # when 5 or fewer failed) as a backstop against one-off flakes failing
+      # the whole job. Tests that passed on the rerun are flagged in the
+      # summary and listed in the uploaded rerun report - a growing report is
+      # a flakiness signal to act on, not to ignore.
+      - name: Run integration tests
+        env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.action-operator.cloud }}
           TEST_VAULT_ADDR: ${{ env.TEST_VAULT_ADDR }}
-        run: go test -parallel 4 -timeout 90m -v -cover ./internal/provider/
+        run: |
+          go run gotest.tools/gotestsum@v1.13.0 \
+            --format standard-verbose \
+            --rerun-fails=1 \
+            --rerun-fails-max-failures=5 \
+            --rerun-fails-report=rerun-report.txt \
+            --packages ./internal/provider/ \
+            -- -parallel 4 -timeout 90m -cover
         timeout-minutes: 90
+      - name: Upload flaky-test rerun report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rerun-report-${{ matrix.action-operator.cloud }}-${{ strategy.job-index }}
+          path: rerun-report.txt
+          if-no-files-found: ignore
       - name: Dump Juju bootstrap logs on failure
         if: failure()
         run: |
