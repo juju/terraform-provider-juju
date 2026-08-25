@@ -85,6 +85,7 @@ resource "juju_application" "appone" {
 
 	charm {
 		name = "juju-qa-dummy-source"
+		revision = 6
 		base = "ubuntu@22.04"
 	}
 }
@@ -105,6 +106,7 @@ resource "juju_application" "apptwo" {
 
 	charm {
 		name = "juju-qa-dummy-sink"
+		revision = 7
 		base = "ubuntu@22.04"
 	}
 }
@@ -171,6 +173,7 @@ resource "juju_application" "this" {
 
 	charm {
 		name = "juju-qa-dummy-source"
+		revision = 6
 		base = "ubuntu@22.04"
 	}
 }
@@ -335,6 +338,7 @@ resource "juju_application" "haproxy" {
 
 	charm {
 		name = "juju-qa-dummy-source"
+		revision = 6
 		base = "ubuntu@22.04"
 	}
 }
@@ -345,6 +349,7 @@ resource "juju_application" "haproxy_two" {
 
 	charm {
 		name = "juju-qa-dummy-source"
+		revision = 6
 		base = "ubuntu@22.04"
 	}
 }
@@ -370,6 +375,7 @@ resource "juju_application" "haproxy" {
 
 	charm {
 		name = "juju-qa-dummy-source"
+		revision = 6
 		base = "ubuntu@22.04"
 	}
 }
@@ -380,6 +386,7 @@ resource "juju_application" "haproxy_two" {
 
 	charm {
 		name = "juju-qa-dummy-source"
+		revision = 6
 		base = "ubuntu@22.04"
 	}
 }
@@ -435,6 +442,7 @@ resource "juju_application" "haproxy" {
 
 	charm {
 		name = "juju-qa-dummy-source"
+		revision = 6
 		base = "ubuntu@22.04"
 	}
 }
@@ -551,6 +559,7 @@ resource "juju_application" "src" {
   name       = "src"
   charm {
     name = "juju-qa-dummy-source"
+    revision = 6
     base = "ubuntu@22.04"
   }
   config = {

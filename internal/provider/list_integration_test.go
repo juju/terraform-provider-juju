@@ -115,6 +115,7 @@ resource "juju_application" "one" {
 	
 	charm {
 		name = "juju-qa-dummy-sink"
+		revision = 7
 		base = "ubuntu@22.04"
 	}
 }
@@ -125,6 +126,7 @@ resource "juju_application" "two" {
 
 	charm {
 		name = "juju-qa-dummy-source"
+		revision = 6
 		base = "ubuntu@22.04"
 	}
 }

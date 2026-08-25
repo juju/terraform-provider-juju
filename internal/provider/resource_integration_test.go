@@ -210,6 +210,7 @@ resource "juju_application" "one" {
 	
 	charm {
 		name = "juju-qa-dummy-sink"
+		revision = 7
 		base = "ubuntu@22.04"
 	}
 }
@@ -220,6 +221,7 @@ resource "juju_application" "two" {
 
 	charm {
 		name = "juju-qa-dummy-source"
+		revision = 6
 		base = "ubuntu@22.04"
 	}
 }
@@ -252,6 +254,7 @@ resource "juju_application" "one" {
 	
 	charm {
 		name = "juju-qa-dummy-sink"
+		revision = 7
 		base = "ubuntu@22.04"
 	}
 }
@@ -262,6 +265,7 @@ resource "juju_application" "two" {
 
 	charm {
 		name = "juju-qa-dummy-source"
+		revision = 6
 		base = "ubuntu@22.04"
 	}
 }
@@ -310,6 +314,7 @@ resource "juju_application" "one" {
 	
 	charm {
 		name = "juju-qa-dummy-sink"
+		revision = 7
 		base = "ubuntu@22.04"
 	}
 }
@@ -320,6 +325,7 @@ resource "juju_application" "two" {
 
 	charm {
 		name = "juju-qa-dummy-source"
+		revision = 6
 		base = "ubuntu@22.04"
 	}
 }
@@ -330,6 +336,7 @@ resource "juju_application" "three" {
 
 	charm {
 		name = "juju-qa-dummy-source"
+		revision = 6
 		base = "ubuntu@22.04"
 	}
 }
@@ -365,6 +372,7 @@ resource "juju_application" "a" {
 	
 	charm {
 		name = "juju-qa-dummy-sink"
+		revision = 7
 		%s
 	}
 }
@@ -379,6 +387,7 @@ resource "juju_application" "b" {
 	
 	charm {
 		name = "juju-qa-dummy-source"
+		revision = 6
 		%s
 	}
 }
@@ -532,6 +541,7 @@ resource "juju_application" "a" {
 
         charm {
                 name    = "juju-qa-dummy-sink"
+                revision = 7
         }
 }
 
@@ -555,6 +565,7 @@ resource "juju_application" "b1" {
 
         charm {
                 name   = "juju-qa-dummy-source"
+                revision = 6
         }
 }
 
@@ -578,6 +589,7 @@ resource "juju_application" "b2" {
 
         charm {
                 name   = "juju-qa-dummy-source"
+                revision = 6
         }
 }
 
@@ -619,6 +631,7 @@ resource "juju_application" "appzero" {
 
   charm {
     name = "juju-qa-dummy-source"
+    revision = 6
   }
   config = {
   	token = "abc"
@@ -631,6 +644,7 @@ resource "juju_application" "appone" {
 
   charm {
     name = "juju-qa-dummy-source"
+    revision = 6
   }
   config = {
   	token = "abc"
@@ -667,6 +681,7 @@ resource "juju_application" "apptwo" {
 
   charm {
     name = "juju-qa-dummy-sink"
+    revision = 7
   }
   config = {
   	token = "abc"
