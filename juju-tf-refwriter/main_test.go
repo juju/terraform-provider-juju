@@ -38,14 +38,14 @@ func TestRewriteTransformation(t *testing.T) {
 			expectedContent, err := os.ReadFile(outFile)
 			require.NoError(t, err, "Error reading expected output file")
 
-			result, err := transformTerraformFile(inContent, filename)
+			result, _, err := transformTerraformFile(inContent, filename)
 			require.NoError(t, err, "Error transforming file")
 
-			if !bytes.Equal(result.ModifiedContent, expectedContent) {
+			if !bytes.Equal(result, expectedContent) {
 				actualFile := filepath.Join("actual_" + filename)
-				_ = os.WriteFile(actualFile, result.ModifiedContent, 0644)
+				_ = os.WriteFile(actualFile, result, 0644)
 
-				assert.Equal(t, string(expectedContent), string(result.ModifiedContent),
+				assert.Equal(t, string(expectedContent), string(result),
 					"Transformation does not match expected output. Actual output saved to %s", actualFile)
 			}
 		})
@@ -127,7 +127,7 @@ func TestParseIdentity(t *testing.T) {
 			id:   "c1cecf1e-fe66-4589-8585-e579edd6f58b:dummy-sink",
 			check: func(t *testing.T, e entityID) {
 				assert.Equal(t, "c1cecf1e-fe66-4589-8585-e579edd6f58b", e.modelUUID)
-				assert.Equal(t, "dummy-sink", e.appName)
+				assert.Equal(t, "dummy-sink", e.part(0))
 			},
 		},
 		{
@@ -136,8 +136,8 @@ func TestParseIdentity(t *testing.T) {
 			id:   "c1cecf1e-fe66-4589-8585-e579edd6f58b:1:machine-1",
 			check: func(t *testing.T, e entityID) {
 				assert.Equal(t, "c1cecf1e-fe66-4589-8585-e579edd6f58b", e.modelUUID)
-				assert.Equal(t, "1", e.machineID)
-				assert.Equal(t, "machine-1", e.machineName)
+				assert.Equal(t, "1", e.part(0))
+				assert.Equal(t, "machine-1", e.part(1))
 			},
 		},
 		{
@@ -145,7 +145,7 @@ func TestParseIdentity(t *testing.T) {
 			kind: kindSecret,
 			id:   "c1cecf1e-fe66-4589-8585-e579edd6f58b:db-password",
 			check: func(t *testing.T, e entityID) {
-				assert.Equal(t, "db-password", e.secretName)
+				assert.Equal(t, "db-password", e.part(0))
 			},
 		},
 		{
@@ -154,7 +154,7 @@ func TestParseIdentity(t *testing.T) {
 			id:   "sshkey:c1cecf1e-fe66-4589-8585-e579edd6f58b:abc123",
 			check: func(t *testing.T, e entityID) {
 				assert.Equal(t, "c1cecf1e-fe66-4589-8585-e579edd6f58b", e.modelUUID)
-				assert.Equal(t, "abc123", e.keyID)
+				assert.Equal(t, "abc123", e.part(0))
 			},
 		},
 		{
@@ -162,10 +162,10 @@ func TestParseIdentity(t *testing.T) {
 			kind: kindIntegration,
 			id:   "c1cecf1e-fe66-4589-8585-e579edd6f58b:dummy-sink:sink:dummy-source:source",
 			check: func(t *testing.T, e entityID) {
-				assert.Equal(t, "dummy-sink", e.app1)
-				assert.Equal(t, "sink", e.ep1)
-				assert.Equal(t, "dummy-source", e.app2)
-				assert.Equal(t, "source", e.ep2)
+				assert.Equal(t, "dummy-sink", e.part(0))
+				assert.Equal(t, "sink", e.part(1))
+				assert.Equal(t, "dummy-source", e.part(2))
+				assert.Equal(t, "source", e.part(3))
 			},
 		},
 		{
@@ -173,7 +173,7 @@ func TestParseIdentity(t *testing.T) {
 			kind: kindOffer,
 			id:   "mycontroller:test4.dummy-sink",
 			check: func(t *testing.T, e entityID) {
-				assert.Equal(t, "mycontroller:test4.dummy-sink", e.offerURL)
+				assert.Equal(t, "mycontroller:test4.dummy-sink", e.modelUUID)
 			},
 		},
 		{
@@ -273,10 +273,10 @@ import {
   }
 }
 `)
-	result, err := transformTerraformFile(src, "test.tf")
+	result, warnings, err := transformTerraformFile(src, "test.tf")
 	require.NoError(t, err)
-	assert.Contains(t, string(result.ModifiedContent), "model_uuid = juju_model.m.uuid")
-	assert.Equal(t, 0, result.Warnings)
+	assert.Contains(t, string(result), "model_uuid = juju_model.m.uuid")
+	assert.Equal(t, 0, len(warnings))
 }
 
 // TestRewriteMissingModelWarns verifies that when no juju_model resource
@@ -296,10 +296,10 @@ import {
   }
 }
 `)
-	result, err := transformTerraformFile(src, "test.tf")
+	result, warnings, err := transformTerraformFile(src, "test.tf")
 	require.NoError(t, err)
-	assert.Contains(t, string(result.ModifiedContent), `model_uuid = "uuid-a"`)
-	assert.Equal(t, 1, result.Warnings)
+	assert.Contains(t, string(result), `model_uuid = "uuid-a"`)
+	assert.Equal(t, 1, len(warnings))
 }
 
 // TestAlreadyReferencedModelUUIDIsLeftAlone verifies that a model_uuid that is
@@ -331,13 +331,13 @@ import {
   }
 }
 `)
-	result, err := transformTerraformFile(src, "test.tf")
+	result, _, err := transformTerraformFile(src, "test.tf")
 	require.NoError(t, err)
-	assert.Contains(t, string(result.ModifiedContent), "model_uuid = juju_model.m.uuid")
+	assert.Contains(t, string(result), "model_uuid = juju_model.m.uuid")
 	// The model's computed `uuid` is still pruned, so the file is
 	// rewritten even though the already-referenced model_uuid is left alone.
-	assert.True(t, result.WasRewritten, "the computed uuid should be pruned")
-	assert.NotContains(t, string(result.ModifiedContent), `uuid = "uuid-a"`)
+	assert.NotEqual(t, string(src), string(result), "the computed uuid should be pruned")
+	assert.NotContains(t, string(result), `uuid = "uuid-a"`)
 }
 
 // TestPruneComputedAttributes verifies that Computed-only attributes are
@@ -372,9 +372,9 @@ import {
   }
 }
 `)
-	result, err := transformTerraformFile(src, "test.tf")
+	result, _, err := transformTerraformFile(src, "test.tf")
 	require.NoError(t, err)
-	out := string(result.ModifiedContent)
+	out := string(result)
 	// Computed-only attributes are pruned.
 	assert.NotContains(t, out, `uuid = "uuid-a"`, "model uuid should be pruned")
 	assert.NotContains(t, out, `machine_id = "1"`, "machine_id should be pruned")
@@ -404,9 +404,9 @@ import {
   }
 }
 `)
-	result, err := transformTerraformFile(src, "test.tf")
+	result, _, err := transformTerraformFile(src, "test.tf")
 	require.NoError(t, err)
-	out := string(result.ModifiedContent)
+	out := string(result)
 	assert.NotContains(t, out, "config = null", "null config should be pruned")
 	assert.NotContains(t, out, "endpoint_bindings = null", "null endpoint_bindings should be pruned")
 	// `false` and `{}` are not `null` and must be kept. The formatter

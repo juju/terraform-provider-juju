@@ -4,42 +4,25 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 
+	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
+	"github.com/zclconf/go-cty/cty"
 )
 
-// refIndex is a lookup table built from the resource and import blocks in a
-// generated `terraform query` plan. It maps entity identifiers (model UUIDs,
-// app names within a model, machine IDs within a model, ...) to the Terraform
-// addresses of the resources that represent them, so that literal values can
-// be rewritten into references.
+// refIndex maps entity identifiers (model UUIDs, app names, machine IDs, ...)
+// to the Terraform addresses of the resources that represent them, so that
+// literal values can be rewritten into references.
 type refIndex struct {
-	// modelByUUID maps a model UUID to "juju_model.<label>".
-	modelByUUID map[string]string
-
-	// appByModelAndName maps "<model-uuid>:<app-name>" to
-	// "juju_application.<label>".
-	appByModelAndName map[string]string
-
-	// machineByModelAndID maps "<model-uuid>:<machine-id>" to
-	// "juju_machine.<label>". The machine name is intentionally not part of
-	// the key: applications reference machines by ID, not by name.
-	machineByModelAndID map[string]string
-
-	// secretByModelAndName maps "<model-uuid>:<secret-name>" to
-	// "juju_secret.<label>".
+	modelByUUID          map[string]string
+	appByModelAndName    map[string]string
+	machineByModelAndID  map[string]string
 	secretByModelAndName map[string]string
-
-	// importIDByAddr maps a resource address (e.g. "juju_application.all_apps_0")
-	// to the identity `id` found in its matching `import` block. This is the
-	// common source of composite identities in `terraform query` output.
-	importIDByAddr map[string]string
+	importIDByAddr       map[string]string
 }
 
-// newRefIndex returns an empty refIndex.
 func newRefIndex() *refIndex {
 	return &refIndex{
 		modelByUUID:          make(map[string]string),
@@ -60,53 +43,37 @@ func resourceAddress(block *hclwrite.Block) string {
 	return strings.Join(labels[:2], ".")
 }
 
-// indexResource registers a resource block in the index. Only the resource
-// kinds that can serve as rewrite targets are indexed: models, applications,
-// machines, and secrets.
-//
-// The identity is read from the matching `import` block's `identity.id`, which
-// `terraform query` always emits. indexImport must be called before
-// indexResource.
+// indexResource registers a resource block in the index. Only models,
+// applications, machines, and secrets are indexed as rewrite targets.
+// indexImport must be called first.
 func (idx *refIndex) indexResource(block *hclwrite.Block) {
 	if len(block.Labels()) < 2 {
 		return
 	}
-	resourceType := block.Labels()[0]
-	kind := kindOf(resourceType)
+	kind := kindOf(block.Labels()[0])
 	addr := resourceAddress(block)
-
 	id := idx.importIdentityID(addr)
 	if id == "" {
 		return
 	}
-
+	e, err := parseIdentity(kind, id)
+	if err != nil {
+		return
+	}
 	switch kind {
 	case kindModel:
 		idx.modelByUUID[id] = addr
 	case kindApplication:
-		e, err := parseIdentity(kind, id)
-		if err != nil {
-			return
-		}
-		idx.appByModelAndName[e.modelUUID+":"+e.appName] = addr
+		idx.appByModelAndName[e.modelUUID+":"+e.part(0)] = addr
 	case kindMachine:
-		e, err := parseIdentity(kind, id)
-		if err != nil {
-			return
-		}
-		idx.machineByModelAndID[e.modelUUID+":"+e.machineID] = addr
+		idx.machineByModelAndID[e.modelUUID+":"+e.part(0)] = addr
 	case kindSecret:
-		e, err := parseIdentity(kind, id)
-		if err != nil {
-			return
-		}
-		idx.secretByModelAndName[e.modelUUID+":"+e.secretName] = addr
+		idx.secretByModelAndName[e.modelUUID+":"+e.part(0)] = addr
 	}
 }
 
-// indexImport registers an `import` block in the index. It records the
-// mapping from the resource address (the `to` attribute) to the identity `id`
-// found in the `identity` object attribute.
+// indexImport records the mapping from a resource address (the `to`
+// attribute) to the identity `id` found in the `identity` object.
 func (idx *refIndex) indexImport(block *hclwrite.Block) {
 	if block.Type() != "import" {
 		return
@@ -115,196 +82,100 @@ func (idx *refIndex) indexImport(block *hclwrite.Block) {
 	if to == "" {
 		return
 	}
-	// The identity is an object attribute: identity = { id = "..." }.
 	id := readObjectAttrString(block, "identity", "id")
 	if id != "" {
 		idx.importIDByAddr[to] = id
 	}
 }
 
-// importIdentityID returns the identity `id` recorded for the given resource
-// address from an import block, or "" if none.
 func (idx *refIndex) importIdentityID(addr string) string {
 	return idx.importIDByAddr[addr]
 }
 
-// modelRef returns a Terraform reference to the model resource for the given
-// UUID, or "" if no model resource matches.
-func (idx *refIndex) modelRef(modelUUID string) string {
-	return idx.modelByUUID[modelUUID]
+func (idx *refIndex) modelRef(modelUUID string) string { return idx.modelByUUID[modelUUID] }
+func (idx *refIndex) appRef(mu, n string) string       { return idx.appByModelAndName[mu+":"+n] }
+func (idx *refIndex) machineRef(mu, id string) string  { return idx.machineByModelAndID[mu+":"+id] }
+func (idx *refIndex) secretRef(mu, n string) string    { return idx.secretByModelAndName[mu+":"+n] }
+
+// --- attribute evaluation via hclsyntax.ParseExpression ---
+
+// attrValue parses an attribute's expression from its raw token bytes and
+// evaluates it in an empty context. Only literal expressions produce known
+// values; references and unknowns return (NilVal, false).
+func attrValue(attr *hclwrite.Attribute) (cty.Value, bool) {
+	src := attr.Expr().BuildTokens(nil).Bytes()
+	expr, diags := hclsyntax.ParseExpression(src, "<attr>", hcl.Pos{Line: 1, Column: 1})
+	if diags.HasErrors() {
+		return cty.NilVal, false
+	}
+	v, diags := expr.Value(nil)
+	if diags.HasErrors() || !v.IsWhollyKnown() {
+		return cty.NilVal, false
+	}
+	return v, true
 }
 
-// appRef returns a Terraform reference to the application resource for the
-// given model UUID and application name, or "" if none matches.
-func (idx *refIndex) appRef(modelUUID, appName string) string {
-	return idx.appByModelAndName[modelUUID+":"+appName]
-}
-
-// machineRef returns a Terraform reference to the machine resource for the
-// given model UUID and machine ID, or "" if none matches.
-func (idx *refIndex) machineRef(modelUUID, machineID string) string {
-	return idx.machineByModelAndID[modelUUID+":"+machineID]
-}
-
-// secretRef returns a Terraform reference to the secret resource for the given
-// model UUID and secret name, or "" if none matches.
-func (idx *refIndex) secretRef(modelUUID, secretName string) string {
-	return idx.secretByModelAndName[modelUUID+":"+secretName]
-}
-
-// readAttrString reads a top-level string attribute from a block, returning
-// the unquoted value, or "" if the attribute is absent or not a simple
-// string literal.
+// readAttrString evaluates a top-level attribute as a plain string literal.
+// Returns "" if absent or not a literal string (e.g. already a reference).
 func readAttrString(block *hclwrite.Block, name string) string {
-	attrs := block.Body().Attributes()
-	attr, ok := attrs[name]
-	if !ok {
+	attr := block.Body().GetAttribute(name)
+	if attr == nil {
 		return ""
 	}
-	tokens := attr.Expr().BuildTokens(nil)
-	return tokensToQuotedString(tokens)
+	v, ok := attrValue(attr)
+	if !ok || !v.Type().Equals(cty.String) {
+		return ""
+	}
+	return v.AsString()
 }
 
 // readAttrRef reads a top-level attribute whose value is a dotted reference
-// expression (e.g. `to = juju_model.model_0`), returning the canonical
-// "type.label" form, or "" if the attribute is absent or not a simple
-// reference.
+// (e.g. `to = juju_model.model_0`), returning "type.label".
 func readAttrRef(block *hclwrite.Block, name string) string {
-	attrs := block.Body().Attributes()
-	attr, ok := attrs[name]
-	if !ok {
+	attr := block.Body().GetAttribute(name)
+	if attr == nil {
 		return ""
 	}
-	tokens := attr.Expr().BuildTokens(nil)
-	return tokensToRef(tokens)
+	// References don't evaluate to known values; parse the raw tokens as a
+	// traversal and join the steps.
+	src := attr.Expr().BuildTokens(nil).Bytes()
+	t, diags := hclsyntax.ParseTraversalAbs(src, "<attr>", hcl.Pos{Line: 1, Column: 1})
+	if diags.HasErrors() {
+		return ""
+	}
+	return traversalString(t)
 }
 
-// readObjectAttrString reads a string field from a top-level attribute whose
-// value is an object literal (e.g. `identity = { id = "..." }`). Returns ""
-// if the attribute or field is absent or not a simple string literal.
+// readObjectAttrString evaluates a top-level attribute as an object literal
+// and returns the value of the given string field.
 func readObjectAttrString(block *hclwrite.Block, objName, field string) string {
-	attrs := block.Body().Attributes()
-	attr, ok := attrs[objName]
-	if !ok {
+	attr := block.Body().GetAttribute(objName)
+	if attr == nil {
 		return ""
 	}
-	tokens := attr.Expr().BuildTokens(nil)
-	return tokensToObjectFieldString(tokens, field)
-}
-
-// tokensToQuotedString extracts a string literal from a token slice, stripping
-// the surrounding quotes. Returns "" if the tokens don't form a single quoted
-// string literal.
-func tokensToQuotedString(tokens hclwrite.Tokens) string {
-	var s strings.Builder
-	inString := false
-	started := false
-	for _, tok := range tokens {
-		switch {
-		case tok.Type == hclsyntax.TokenOQuote:
-			inString = true
-			started = true
-		case tok.Type == hclsyntax.TokenCQuote:
-			inString = false
-		case tok.Type == hclsyntax.TokenQuotedLit && inString:
-			s.WriteString(string(tok.Bytes))
-		case tok.Type == hclsyntax.TokenStringLit && inString:
-			s.WriteString(string(tok.Bytes))
-		case (tok.Type == hclsyntax.TokenOHeredoc || tok.Type == hclsyntax.TokenCHeredoc):
-			// Heredocs aren't simple literals we care about here.
-			return ""
-		}
-	}
-	if !started {
+	v, ok := attrValue(attr)
+	if !ok || !v.Type().IsObjectType() || !v.Type().HasAttribute(field) {
 		return ""
 	}
-	return s.String()
+	fv := v.GetAttr(field)
+	if !fv.IsWhollyKnown() || fv.IsNull() || !fv.Type().Equals(cty.String) {
+		return ""
+	}
+	return fv.AsString()
 }
 
-// tokensToRef extracts a dotted reference expression (e.g.
-// `juju_model.model_0`) from a token slice, returning it as "type.label".
-// Returns "" if the tokens aren't a sequence of identifiers separated by dots.
-func tokensToRef(tokens hclwrite.Tokens) string {
+// traversalString joins a traversal's steps into "root.attr.attr" form.
+func traversalString(t hcl.Traversal) string {
 	var parts []string
-	expectIdent := true
-	for _, tok := range tokens {
-		switch tok.Type {
-		case hclsyntax.TokenIdent:
-			if !expectIdent {
-				return ""
-			}
-			parts = append(parts, string(tok.Bytes))
-			expectIdent = false
-		case hclsyntax.TokenDot:
-			if expectIdent {
-				return ""
-			}
-			expectIdent = true
+	for _, step := range t {
+		switch s := step.(type) {
+		case hcl.TraverseRoot:
+			parts = append(parts, s.Name)
+		case hcl.TraverseAttr:
+			parts = append(parts, s.Name)
 		default:
-			// Any other token (whitespace is folded in by hclwrite, but
-			// be defensive) means this isn't a simple reference.
 			return ""
 		}
-	}
-	if len(parts) < 2 || expectIdent {
-		return ""
 	}
 	return strings.Join(parts, ".")
-}
-
-// tokensToObjectFieldString extracts a string field from an object literal
-// token slice of the form `{ id = "..." , ... }`. Returns "" if the field is
-// absent or not a simple string literal.
-func tokensToObjectFieldString(tokens hclwrite.Tokens, field string) string {
-	// Scan for the pattern: <OBrace> ... <Ident field> <Equals> <string> ...
-	// hclwrite folds whitespace into adjacent tokens, so we walk the raw
-	// token stream.
-	i := 0
-	// Find the opening brace.
-	for ; i < len(tokens); i++ {
-		if tokens[i].Type == hclsyntax.TokenOBrace {
-			i++
-			break
-		}
-	}
-	if i >= len(tokens) {
-		return ""
-	}
-	// Walk the object body looking for `field = "value"`.
-	for i < len(tokens) {
-		tok := tokens[i]
-		if tok.Type == hclsyntax.TokenCBrace {
-			return ""
-		}
-		if tok.Type == hclsyntax.TokenIdent && string(tok.Bytes) == field {
-			// Expect `=` then a string literal.
-			j := i + 1
-			if j >= len(tokens) || tokens[j].Type != hclsyntax.TokenEqual {
-				return ""
-			}
-			j++
-			// Skip to the first string token.
-			for j < len(tokens) {
-				switch tokens[j].Type {
-				case hclsyntax.TokenOQuote:
-					// Collect the string literal starting here.
-					rest := tokens[j:]
-					return tokensToQuotedString(rest)
-				case hclsyntax.TokenComment, hclsyntax.TokenNewline:
-					j++
-					continue
-				default:
-					return ""
-				}
-			}
-			return ""
-		}
-		i++
-	}
-	return ""
-}
-
-// formatRef formats a Terraform reference like "juju_model.model_0.uuid".
-func formatRef(addr, attr string) string {
-	return fmt.Sprintf("%s.%s", addr, attr)
 }
