@@ -22,10 +22,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-
 	"github.com/juju/clock"
 	"github.com/juju/juju/core/status"
 	"github.com/juju/names/v5"
+
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/wait"
 )
@@ -373,7 +373,11 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
-	createTimeout, diags := plan.Timeouts.Create(ctx, defaultCreateTimeout)
+	defaultCreate := r.config.DefaultCreateTimeout
+	if defaultCreate == 0 {
+		defaultCreate = defaultCreateTimeout
+	}
+	createTimeout, diags := plan.Timeouts.Create(ctx, defaultCreate)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -634,6 +638,7 @@ func (r *machineResource) Delete(ctx context.Context, req resource.DeleteRequest
 		},
 		ExpectedErr:    juju.MachineNotFoundError,
 		RetryAllErrors: true,
+		RetryConf:      &wait.RetryConf{MaxDuration: r.config.DefaultDeleteTimeout},
 	}); err != nil {
 		errSummary := "Wait Error"
 		errDetail := fmt.Sprintf("Timeout reached waiting for machine %q deletion, got error: %s.\n"+

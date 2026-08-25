@@ -144,6 +144,7 @@ Notes:
 * If a charm is refreshed, by changing the charm revision or channel and if the resource is specified by a revision in the plan, Juju will use the resource defined in the plan.
 * Resources specified by URL to an OCI image repository will never be refreshed (upgraded) by juju during a charm refresh unless explicitly changed in the plan.
 - `storage_directives` (Map of String) Storage directives (constraints) for the juju application. The map key is the label of the storage defined by the charm, the map value is the storage directive in the form [<pool>,][<count>,][<size>]  where at least one constraint must be specified. See https://documentation.ubuntu.com/juju/3.6/reference/storage/ for more details. If a pool is not specified, the model's default pool will be used. Changing an existing key/value pair will cause the application to be replaced. Adding a new key/value pair will add storage to the application on upgrade.
+- `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `trust` (Boolean) Set the trust for the application.
 - `units` (Number) The number of application units to deploy for the charm.
 
@@ -197,6 +198,14 @@ Required:
 
 - `password` (String, Sensitive) The password for authenticating to the registry.
 - `username` (String) The username for authenticating to the registry.
+
+
+<a id="nestedblock--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 
 
 <a id="nestedatt--storage"></a>

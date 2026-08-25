@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -21,6 +22,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/kubernetes"
@@ -117,6 +119,30 @@ func OnlyCrossController(t *testing.T) {
 func isJAAS() bool {
 	_, ok := os.LookupEnv(isJaasEnvKey)
 	return ok
+}
+
+// SkipJaasGroupTests should be called at the top of JAAS group
+// tests to allow skipping them via SKIP_JAAS_GROUP_TEST.
+func SkipJaasGroupTests(t *testing.T) {
+	if _, ok := os.LookupEnv("SKIP_JAAS_GROUP_TEST"); ok {
+		t.Skip("Skipping JAAS group test, SKIP_JAAS_GROUP_TEST is set")
+	}
+}
+
+// jaasGroupsEnabled reports whether JAAS group support should be
+// exercised; set SKIP_JAAS_GROUP_TEST to disable group coverage.
+func jaasGroupsEnabled() bool {
+	_, ok := os.LookupEnv("SKIP_JAAS_GROUP_TEST")
+	return !ok
+}
+
+// checksIf runs the given checks only when cond is true, allowing
+// tests to drop assertions for features disabled in the environment.
+func checksIf(cond bool, checks ...resource.TestCheckFunc) resource.TestCheckFunc {
+	if !cond {
+		return func(*terraform.State) error { return nil }
+	}
+	return resource.ComposeTestCheckFunc(checks...)
 }
 
 // OnlyTestAgainstJAAS should be called at the top of any tests that are not
@@ -473,6 +499,7 @@ func validateJujuTestConfig(t *testing.T) {
 func configureProvider(t *testing.T, p provider.Provider) provider.ConfigureResponse {
 	conf := jujuProviderModel{}
 	conf.OfferingControllers = types.MapNull(offeringControllersMapType.ElemType)
+	conf.DefaultTimeouts = types.ObjectNull(defaultTimeoutsObjectType.AttrTypes)
 	return configureProviderWithModel(t, p, conf)
 }
 
@@ -499,6 +526,7 @@ func TestProviderConfigureControllerModeWithoutConnectionDetails(t *testing.T) {
 	confResp := configureProviderWithModel(t, jujuProvider, jujuProviderModel{
 		ControllerMode:      types.BoolValue(true),
 		OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
+		DefaultTimeouts:     types.ObjectNull(defaultTimeoutsObjectType.AttrTypes),
 	})
 
 	require.False(t, confResp.Diagnostics.HasError(), "unexpected configure error: %v", confResp.Diagnostics.Errors())
@@ -515,6 +543,7 @@ func TestProviderConfigureControllerModeWithConnectionDetails(t *testing.T) {
 	confResp := configureProviderWithModel(t, jujuProvider, jujuProviderModel{
 		ControllerMode:      types.BoolValue(true),
 		OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
+		DefaultTimeouts:     types.ObjectNull(defaultTimeoutsObjectType.AttrTypes),
 	})
 
 	require.False(t, confResp.Diagnostics.HasError(), "unexpected configure error: %v", confResp.Diagnostics.Errors())
@@ -533,6 +562,7 @@ func TestProviderConfigureLazyAPIDoesNotConnect(t *testing.T) {
 		UserName:            types.StringValue("bogus-user"),
 		Password:            types.StringValue("bogus-password"),
 		OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
+		DefaultTimeouts:     types.ObjectNull(defaultTimeoutsObjectType.AttrTypes),
 	})
 
 	require.False(t, confResp.Diagnostics.HasError(), "unexpected configure error: %v", confResp.Diagnostics.Errors())
@@ -589,6 +619,7 @@ func newConfigureRequest(t *testing.T, conf jujuProviderModel) provider.Configur
 		JujuClientSecret:        types.StringType,
 		SkipFailedDeletion:      types.BoolType,
 		JujuOfferingControllers: offeringControllersMapType,
+		DefaultTimeouts:         defaultTimeoutsObjectType,
 	}
 
 	val, confObjErr := types.ObjectValueFrom(context.Background(), mapTypes, conf)
@@ -954,4 +985,78 @@ data "juju_model" "test_model" {
   owner = "some-owner"
 }
 `
+}
+
+func TestParseDefaultTimeouts(t *testing.T) {
+	tests := []struct {
+		name    string
+		obj     types.Object
+		want    defaultTimeouts
+		wantErr bool
+	}{
+		{
+			name: "null object leaves zero durations",
+			obj:  types.ObjectNull(defaultTimeoutsObjectType.AttrTypes),
+			want: defaultTimeouts{},
+		},
+		{
+			name: "all unset leaves zero durations",
+			obj: mustDefaultTimeoutsObject(t, defaultTimeoutsModel{
+				Create: types.StringNull(),
+				Update: types.StringNull(),
+				Delete: types.StringNull(),
+				Read:   types.StringNull(),
+			}),
+			want: defaultTimeouts{},
+		},
+		{
+			name: "valid durations parse",
+			obj: mustDefaultTimeoutsObject(t, defaultTimeoutsModel{
+				Create: types.StringValue("60m"),
+				Update: types.StringValue("2h"),
+				Delete: types.StringValue("15m"),
+				Read:   types.StringValue("5m"),
+			}),
+			want: defaultTimeouts{
+				create: 60 * time.Minute,
+				update: 2 * time.Hour,
+				delete: 15 * time.Minute,
+				read:   5 * time.Minute,
+			},
+		},
+		{
+			name: "invalid duration reports error",
+			obj: mustDefaultTimeoutsObject(t, defaultTimeoutsModel{
+				Create: types.StringValue("not-a-duration"),
+			}),
+			wantErr: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, diags := parseDefaultTimeouts(tc.obj)
+			if tc.wantErr {
+				if !diags.HasError() {
+					t.Fatalf("expected an error diagnostic, got none")
+				}
+				return
+			}
+			if diags.HasError() {
+				t.Fatalf("unexpected error diagnostics: %v", diags)
+			}
+			if got != tc.want {
+				t.Fatalf("got %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// mustDefaultTimeoutsObject builds a types.Object from a defaultTimeoutsModel,
+// failing the test if conversion reports diagnostics.
+func mustDefaultTimeoutsObject(t *testing.T, model defaultTimeoutsModel) types.Object {
+	obj, diags := types.ObjectValueFrom(context.Background(), defaultTimeoutsObjectType.AttrTypes, model)
+	if diags.HasError() {
+		t.Fatalf("failed to build default_timeouts object: %v", diags)
+	}
+	return obj
 }

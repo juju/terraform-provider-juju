@@ -19,8 +19,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-
 	"github.com/juju/names/v5"
+
 	"github.com/juju/terraform-provider-juju/internal/juju"
 	"github.com/juju/terraform-provider-juju/internal/wait"
 )
@@ -37,6 +37,7 @@ func NewStoragePoolResource() resource.Resource {
 
 type storagePoolResource struct {
 	client *juju.Client
+	config juju.Config
 
 	// context for the logging subsystem.
 	subCtx context.Context
@@ -68,6 +69,7 @@ func (r *storagePoolResource) Configure(ctx context.Context, req resource.Config
 		return
 	}
 	r.client = provider.Client
+	r.config = provider.Config
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceStoragePool)
 }
 
@@ -250,7 +252,8 @@ func (r *storagePoolResource) Create(ctx context.Context, req resource.CreateReq
 					return nil
 				},
 			},
-			Logf: r.trace,
+			RetryConf: &wait.RetryConf{MaxDuration: r.config.DefaultCreateTimeout},
+			Logf:      r.trace,
 		},
 	); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for storage pool, got error: %s", err))
@@ -378,7 +381,8 @@ func (r *storagePoolResource) Update(ctx context.Context, req resource.UpdateReq
 					return nil
 				},
 			},
-			Logf: r.trace,
+			RetryConf: &wait.RetryConf{MaxDuration: r.config.DefaultUpdateTimeout},
+			Logf:      r.trace,
 		},
 	); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for storage pool, got error: %s", err))
@@ -431,6 +435,7 @@ func (r *storagePoolResource) Delete(ctx context.Context, req resource.DeleteReq
 			},
 			ExpectedErr:    juju.ErrStoragePoolNotFound,
 			RetryAllErrors: true,
+			RetryConf:      &wait.RetryConf{MaxDuration: r.config.DefaultDeleteTimeout},
 		},
 	); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to wait for storage pool, got error: %s", err))
