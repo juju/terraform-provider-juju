@@ -218,7 +218,7 @@ func NewClient(ctx context.Context, config ControllerConfiguration, waitForResou
 
 	return &Client{
 		Applications:       *newApplicationClient(sc),
-		Clouds:             *newCloudsClient(sc),
+		Clouds:             *newCloudsClient(sc, isJAAS),
 		Credentials:        *newCredentialsClient(sc),
 		Integrations:       *newIntegrationsClient(sc),
 		Machines:           newMachinesClient(sc),

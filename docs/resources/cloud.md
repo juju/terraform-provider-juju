@@ -67,6 +67,7 @@ resource "juju_cloud" "this" {
 - `identity_endpoint` (String) Optional global identity endpoint for the cloud.
 - `regions` (Attributes List) List of regions for the cloud. The first region in the list is the default region for the cloud. (see [below for nested schema](#nestedatt--regions))
 - `storage_endpoint` (String) Optional global storage endpoint for the cloud.
+- `target_controller` (String) Only useful with JAAS - the backing controller where the cloud will be added. This field is required when running against a JAAS controller and must not be set otherwise. Changing this value will cause the cloud to be destroyed and recreated by terraform.
 
 ### Read-Only
 

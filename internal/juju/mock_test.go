@@ -2218,6 +2218,44 @@ func (m *MockJaasAPIClient) EXPECT() *MockJaasAPIClientMockRecorder {
 	return m.recorder
 }
 
+// AddCloudToController mocks base method.
+func (m *MockJaasAPIClient) AddCloudToController(req *params.AddCloudToControllerRequest) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddCloudToController", req)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddCloudToController indicates an expected call of AddCloudToController.
+func (mr *MockJaasAPIClientMockRecorder) AddCloudToController(req any) *MockJaasAPIClientAddCloudToControllerCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddCloudToController", reflect.TypeOf((*MockJaasAPIClient)(nil).AddCloudToController), req)
+	return &MockJaasAPIClientAddCloudToControllerCall{Call: call}
+}
+
+// MockJaasAPIClientAddCloudToControllerCall wrap *gomock.Call
+type MockJaasAPIClientAddCloudToControllerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockJaasAPIClientAddCloudToControllerCall) Return(arg0 error) *MockJaasAPIClientAddCloudToControllerCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockJaasAPIClientAddCloudToControllerCall) Do(f func(*params.AddCloudToControllerRequest) error) *MockJaasAPIClientAddCloudToControllerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockJaasAPIClientAddCloudToControllerCall) DoAndReturn(f func(*params.AddCloudToControllerRequest) error) *MockJaasAPIClientAddCloudToControllerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // AddController mocks base method.
 func (m *MockJaasAPIClient) AddController(req *params.AddControllerRequest) (params.ControllerInfo, error) {
 	m.ctrl.T.Helper()
@@ -2564,6 +2602,44 @@ func (c *MockJaasAPIClientListRelationshipTuplesCall) Do(f func(*params.ListRela
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockJaasAPIClientListRelationshipTuplesCall) DoAndReturn(f func(*params.ListRelationshipTuplesRequest) (*params.ListRelationshipTuplesResponse, error)) *MockJaasAPIClientListRelationshipTuplesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// RemoveCloudFromController mocks base method.
+func (m *MockJaasAPIClient) RemoveCloudFromController(req *params.RemoveCloudFromControllerRequest) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveCloudFromController", req)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveCloudFromController indicates an expected call of RemoveCloudFromController.
+func (mr *MockJaasAPIClientMockRecorder) RemoveCloudFromController(req any) *MockJaasAPIClientRemoveCloudFromControllerCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveCloudFromController", reflect.TypeOf((*MockJaasAPIClient)(nil).RemoveCloudFromController), req)
+	return &MockJaasAPIClientRemoveCloudFromControllerCall{Call: call}
+}
+
+// MockJaasAPIClientRemoveCloudFromControllerCall wrap *gomock.Call
+type MockJaasAPIClientRemoveCloudFromControllerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockJaasAPIClientRemoveCloudFromControllerCall) Return(arg0 error) *MockJaasAPIClientRemoveCloudFromControllerCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockJaasAPIClientRemoveCloudFromControllerCall) Do(f func(*params.RemoveCloudFromControllerRequest) error) *MockJaasAPIClientRemoveCloudFromControllerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockJaasAPIClientRemoveCloudFromControllerCall) DoAndReturn(f func(*params.RemoveCloudFromControllerRequest) error) *MockJaasAPIClientRemoveCloudFromControllerCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

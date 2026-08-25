@@ -28,12 +28,15 @@ import (
 )
 
 func TestAcc_ResourceCloud(t *testing.T) {
-	SkipJAAS(t)
-
 	cloudName := acctest.RandomWithPrefix("tf-test-cloud")
 	resourceName := "juju_cloud." + cloudName
 	ca1 := newTestCA(t, "Team Manchester")
 	ca2 := newTestCA(t, "Team Rocket")
+
+	// When running against JAAS, the `target_controller` field is required since JIMM
+	// adds the cloud to a specific backing controller. Against a regular Juju
+	// controller, the field must not be set.
+	targetController := jaasTargetController(t)
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -42,7 +45,7 @@ func TestAcc_ResourceCloud(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Only required fields.
 			{
-				Config: testAccResourceCloud_OpenStack_Minimal(cloudName),
+				Config: testAccResourceCloud_OpenStack_Minimal(cloudName, targetController),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "name", cloudName),
 					resource.TestCheckResourceAttr(resourceName, "type", "openstack"),
@@ -58,6 +61,7 @@ func TestAcc_ResourceCloud(t *testing.T) {
 				Config: testAccCloudFromTemplate(internaltesting.TemplateData{
 					"Name":                    cloudName,
 					"Type":                    "openstack",
+					"TargetController":        targetController,
 					"IncludeAuthTypes":        true,
 					"AuthTypesList":           hclList([]string{"userpass", "access-key"}),
 					"IncludeEndpoint":         true,
@@ -108,6 +112,7 @@ func TestAcc_ResourceCloud(t *testing.T) {
 				Config: testAccCloudFromTemplate(internaltesting.TemplateData{
 					"Name":                    cloudName,
 					"Type":                    "openstack",
+					"TargetController":        targetController,
 					"IncludeAuthTypes":        true,
 					"AuthTypesList":           hclList([]string{"userpass", "access-key"}),
 					"IncludeEndpoint":         true,
@@ -164,7 +169,7 @@ func TestAcc_ResourceCloud(t *testing.T) {
 			// We don't allow unsetting identity or storage endpoints. Forcing a replacement is the
 			// supported behaviour (removing the field makes the plan null).
 			{
-				Config:             testAccResourceCloud_OpenStack_Minimal(cloudName),
+				Config:             testAccResourceCloud_OpenStack_Minimal(cloudName, targetController),
 				PlanOnly:           true,
 				ExpectNonEmptyPlan: true,
 				ExpectError:        nil,
@@ -178,8 +183,9 @@ func TestAcc_ResourceCloud(t *testing.T) {
 }
 
 func TestAcc_ResourceCloud_CACertsValidation(t *testing.T) {
+	// This test only exercises CA certificate validation which happens before
+	// any API call, so there is no need to target a JAAS backing controller.
 	SkipJAAS(t)
-
 	cloudName := acctest.RandomWithPrefix("tf-test-cloud-cacerts")
 
 	// Intentionally invalid certificate content.
@@ -207,20 +213,55 @@ func TestAcc_ResourceCloud_CACertsValidation(t *testing.T) {
 	})
 }
 
-func testAccResourceCloud_OpenStack_Minimal(name string) string {
-	return `
-resource "juju_cloud" "` + name + `" {
-  name = "` + name + `"
-  type = "openstack"
-  auth_types = ["userpass"]
+// TestAcc_ResourceCloud_TargetControllerForbiddenWithoutJAAS ensures that the
+// `target_controller` field cannot be set when applying against a regular Juju controller.
+func TestAcc_ResourceCloud_TargetControllerForbiddenWithoutJAAS(t *testing.T) {
+	SkipJAAS(t)
+
+	cloudName := acctest.RandomWithPrefix("tf-test-cloud")
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccResourceCloud_OpenStack_Minimal(cloudName, "some-controller"),
+				ExpectError: regexp.MustCompile("Field `target_controller` can only be set when applying to a JAAS controller."),
+			},
+		},
+	})
 }
-`
+
+func testAccResourceCloud_OpenStack_Minimal(name string, targetController string) string {
+	return testAccCloudFromTemplate(internaltesting.TemplateData{
+		"Name":             name,
+		"Type":             "openstack",
+		"TargetController": targetController,
+		"IncludeAuthTypes": true,
+		"AuthTypesList":    hclList([]string{"userpass"}),
+	})
+}
+
+// jaasTargetController returns the name of a backing controller to target when
+// running against JAAS, or an empty string when running against a regular Juju
+// controller. The `target_controller` field on juju_cloud is required on JAAS and must
+// not be set otherwise.
+func jaasTargetController(t *testing.T) string {
+	if !isJAAS() {
+		return ""
+	}
+	testAccPreCheck(t)
+	controllers, err := TestClient.Jaas.ListControllers(t.Context())
+	if err != nil || len(controllers) == 0 {
+		t.Fatalf("unable to list controllers from JAAS: %v", err)
+	}
+	return controllers[0].Name
 }
 
 // testAccCloudFromTemplate renders a juju_cloud resource using a named template and data.
 // Provide fields in data to control omission vs empty and list contents.
 // Supported keys in data:
 // - Name (string), Type (string)
+// - TargetController (string, the backing controller name for JAAS)
 // - IncludeAuthTypes (bool), AuthTypesList (string, e.g. ["userpass", "access-key"])
 // - IncludeEndpoint (bool), Endpoint (string)
 // - IncludeIdentityEndpoint (bool), IdentityEndpoint (string)
@@ -232,6 +273,10 @@ func testAccCloudFromTemplate(data internaltesting.TemplateData) string {
 resource "juju_cloud" "{{.Name}}" {
   name = "{{.Name}}"
   type = "{{.Type}}"
+
+	{{ if .TargetController }}
+	target_controller = "{{.TargetController}}"
+  {{ end }}
 
   {{ if .IncludeAuthTypes }}
   auth_types = {{.AuthTypesList}}
