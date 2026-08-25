@@ -46,7 +46,7 @@ jobs:
         id: jaas
         with:
           juju-channel: 4.0/stable
-          jimm-version: v4.0.0-alpha1
+          jimm-version: v4.0.0-alpha2
           ghcr-pat: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup the main controller

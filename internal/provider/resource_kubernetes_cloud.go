@@ -251,10 +251,6 @@ func (r *kubernetesCloudResource) Update(ctx context.Context, req resource.Updat
 		addClientNotConfiguredError(&resp.Diagnostics, "kubernetes_cloud", "update")
 		return
 	}
-	if r.client.IsJAAS() {
-		resp.Diagnostics.AddError("Not Supported", "Cloud Update is not supported in JAAS.")
-		return
-	}
 
 	var plan kubernetesCloudResourceModel
 
@@ -301,7 +297,7 @@ func (r *kubernetesCloudResource) Delete(ctx context.Context, req resource.Delet
 	}
 
 	// Remove the kubernetes cloud.
-	err := r.client.Clouds.RemoveCloud(
+	err := r.client.Clouds.RemoveKubernetesCloud(
 		ctx,
 		juju.RemoveCloudInput{
 			Name: plan.CloudName.ValueString(),

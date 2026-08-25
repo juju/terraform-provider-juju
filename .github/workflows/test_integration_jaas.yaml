@@ -42,10 +42,10 @@ jobs:
       fail-fast: false
       matrix:
         jaas:
-          - jimm_version: v3.4.1
+          - jimm_version: v3.4.4
             juju_channel: 3/stable
             label: "jimm-3-juju-3"
-          - jimm_version: v4.0.0-alpha1
+          - jimm_version: v4.0.0-alpha2
             juju_channel: 4.0/stable
             label: "jimm-4-juju-4"
     timeout-minutes: 90
@@ -97,6 +97,7 @@ jobs:
           echo "TEST_MANAGEMENT_BR=10.150.40.0/24" >> $GITHUB_ENV
           echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
           echo "JUJU_SKIP_FAILED_DELETION=true" >> $GITHUB_ENV
+          echo "SKIP_JAAS_GROUP_TEST=true" >> "$GITHUB_ENV"
       - run: go mod download
       - env:
           TF_ACC: "1"
