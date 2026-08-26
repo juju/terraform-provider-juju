@@ -131,7 +131,9 @@ and `config = null` is removed because the default is already `null`.
   left as literals and a warning is printed, so you can review them manually.
 - Attributes that are both `Computed` and `Optional` (e.g. an application's
   `name`) are kept, since the user may set them. Only Computed-only
-  attributes are pruned.
+  attributes are pruned. The list of pruned attributes is maintained by hand
+  in `computed.go`; if you add or change a Computed-only attribute in the
+  provider schema, update that list too.
 - Default/implicit resources emitted by `terraform query` (such as the `loop`
   storage pool) are kept; only their references are rewritten. Remove them
   manually if you don't want to manage them with Terraform.

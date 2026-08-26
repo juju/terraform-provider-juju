@@ -46,9 +46,15 @@ func main() {
 
 	totalRewritten := 0
 	totalWarnings := 0
+	failed := false
 
 	for _, filename := range filesToProcess {
-		rewritten, warnings := processFile(filename)
+		rewritten, warnings, err := processFile(filename)
+		if err != nil {
+			fmt.Printf("  Error processing %s: %v\n", filename, err)
+			failed = true
+			continue
+		}
 		if rewritten {
 			totalRewritten++
 		}
@@ -58,6 +64,9 @@ func main() {
 	fmt.Printf("\nSummary: %d out of %d files were rewritten\n", totalRewritten, len(filesToProcess))
 	if totalWarnings > 0 {
 		fmt.Printf("⚠️  Total warnings: %d reference(s) left as literals for manual review\n", totalWarnings)
+	}
+	if failed {
+		os.Exit(1)
 	}
 }
 
@@ -137,25 +146,22 @@ func transformTerraformFile(src []byte, filename string) (rewritten []byte, warn
 	return f.Bytes(), warnings, nil
 }
 
-func processFile(filename string) (changed bool, warnings int) {
+func processFile(filename string) (changed bool, warnings int, err error) {
 	fmt.Printf("Processing: %s\n", filename)
 
 	fileInfo, err := os.Stat(filename)
 	if err != nil {
-		fmt.Printf("  Error getting file info: %v\n", err)
-		return false, 0
+		return false, 0, fmt.Errorf("getting file info: %w", err)
 	}
 
 	src, err := os.ReadFile(filename)
 	if err != nil {
-		fmt.Printf("  Error reading file: %v\n", err)
-		return false, 0
+		return false, 0, fmt.Errorf("reading file: %w", err)
 	}
 
 	out, w, err := transformTerraformFile(src, filename)
 	if err != nil {
-		fmt.Printf("  Error transforming file: %v\n", err)
-		return false, 0
+		return false, 0, fmt.Errorf("transforming file: %w", err)
 	}
 	for _, warn := range w {
 		fmt.Printf("  ⚠️  %s\n", warn)
@@ -166,16 +172,15 @@ func processFile(filename string) (changed bool, warnings int) {
 
 	if string(out) != string(src) {
 		if err := os.WriteFile(filename, out, fileInfo.Mode()); err != nil {
-			fmt.Printf("  Error writing file: %v\n", err)
-			return false, len(w)
+			return false, len(w), fmt.Errorf("writing file: %w", err)
 		}
 		fmt.Printf("  ✓ File updated successfully\n")
-		return true, len(w)
+		return true, len(w), nil
 	}
 	if len(w) == 0 {
 		fmt.Printf("  - No references to rewrite\n")
 	}
-	return false, len(w)
+	return false, len(w), nil
 }
 
 // pruneNullAttributes removes any attribute whose value is the literal `null`
@@ -246,7 +251,7 @@ func rewriteApplicationMachines(block *hclwrite.Block, idx *refIndex) (bool, []s
 			newItems[i] = it
 			continue
 		}
-		newItems[i] = listItem{raw: refTokens(ref, "machine_id"), isRef: true}
+		newItems[i] = listItem{raw: refTokens(ref, "machine_id")}
 		changed = true
 	}
 	if !changed {
@@ -302,8 +307,8 @@ func resolveModelUUID(block *hclwrite.Block, idx *refIndex, kind resourceKind) s
 }
 
 // attrStringList evaluates a top-level attribute as a list/tuple of strings.
-// Non-string elements are kept verbatim via their original token bytes.
-// Returns false if the attribute is not a wholly-known list/tuple.
+// Returns false if the attribute is not a wholly-known list/tuple of strings;
+// callers leave such attributes untouched.
 func attrStringList(attr *hclwrite.Attribute) ([]listItem, bool) {
 	v, ok := attrValue(attr)
 	if !ok || (!v.Type().IsListType() && !v.Type().IsTupleType()) {
@@ -312,24 +317,22 @@ func attrStringList(attr *hclwrite.Attribute) ([]listItem, bool) {
 	var items []listItem
 	for it := v.ElementIterator(); it.Next(); {
 		_, elem := it.Element()
-		if elem.Type().Equals(cty.String) {
-			items = append(items, listItem{value: elem.AsString(), isString: true})
-		} else {
-			// Non-string element: keep the original tokens verbatim.
-			items = append(items, listItem{raw: attr.Expr().BuildTokens(nil)})
+		if !elem.Type().Equals(cty.String) {
+			// Non-string element: leave the whole attribute untouched.
+			return nil, false
 		}
+		items = append(items, listItem{value: elem.AsString(), isString: true})
 	}
 	return items, true
 }
 
 // listItem represents one element of a list expression. Either a literal
-// string (isString=true, value set) or a rewritten reference (isRef=true,
-// raw holds the generated tokens).
+// string (isString=true, value set) or a rewritten reference (raw holds the
+// generated tokens).
 type listItem struct {
 	value    string
 	raw      hclwrite.Tokens
 	isString bool
-	isRef    bool
 }
 
 // listTokens builds the token slice for a list expression from items.
