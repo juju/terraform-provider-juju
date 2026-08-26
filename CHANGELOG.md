@@ -1,3 +1,36 @@
+# 2.3.0
+
+NOTES:
+
+* **This release requires Juju controller version 3 or higher. This version doesn't support 2.9.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the latest Juju.
+
+ENHANCEMENTS
+
+* Add `wait_for_ip_addresses` machine data source by @SimoneDutto in [#1323](https://github.com/juju/terraform-provider-juju/pull/1323)
+* Add `lazy_api` flag to enable planning without a real controller by @SimoneDutto in [#1324](https://github.com/juju/terraform-provider-juju/pull/1324)
+* Add `instance_id` field to `juju_machine` resource by @alexdlukens-canonical in [#1325](https://github.com/juju/terraform-provider-juju/pull/1325)
+* Add provider-level default timeouts by @luci1900 in [#1337](https://github.com/juju/terraform-provider-juju/pull/1337)
+* Allow JAAS to update Kubernetes Cloud and all clouds CRUD by @SimoneDutto in [#1338](https://github.com/juju/terraform-provider-juju/pull/1338)
+* Add `instance_id` field to `juju_machine` data object by @alexdlukens-canonical in [#1340](https://github.com/juju/terraform-provider-juju/pull/1340)
+
+BUG FIXES
+
+* Persist resource ID after creation by @SimoneDutto in [#1334](https://github.com/juju/terraform-provider-juju/pull/1334)
+
+CI & MAINTENANCE
+
+* Skip group tests by @alesstimec in [#1319](https://github.com/juju/terraform-provider-juju/pull/1319)
+* Merge v1.5 into main by @SimoneDutto in [#1342](https://github.com/juju/terraform-provider-juju/pull/1342)
+
+NEW CONTRIBUTORS
+
+* @alexdlukens-canonical made their first contribution in [#1325](https://github.com/juju/terraform-provider-juju/pull/1325)
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v2.2.1...v2.3.0
+
 # 2.2.0
 
 NOTES:
