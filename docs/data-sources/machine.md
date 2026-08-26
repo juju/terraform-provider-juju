@@ -34,4 +34,5 @@ data "juju_machine" "this" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
+- `instance_id` (String) The provider-specific instance id of the machine Juju creates.
 - `ip_addresses` (List of String) If `wait_for_ip_addresses` is set it will contain the IP addresses of the machine matching the 'wait_for_ip_addresses' conditions, in the same order. If not set this field will contain the IPs fetched when the machine is read.

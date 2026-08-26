@@ -25,6 +25,7 @@ func TestAcc_DataSourceMachine_Edge(t *testing.T) {
 				Config: testAccDataSourceMachine(modelName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.model", "uuid", "data.juju_machine.machine", "model_uuid"),
+					resource.TestCheckResourceAttrSet("data.juju_machine.machine", "instance_id"),
 				),
 			},
 		},

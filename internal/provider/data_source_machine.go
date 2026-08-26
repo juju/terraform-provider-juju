@@ -44,6 +44,7 @@ type machineDataSource struct {
 type machineDataSourceModel struct {
 	ModelUUID          types.String `tfsdk:"model_uuid"`
 	MachineID          types.String `tfsdk:"machine_id"`
+	InstanceID         types.String `tfsdk:"instance_id"`
 	WaitForIPAddresses types.List   `tfsdk:"wait_for_ip_addresses"`
 	IPAddresses        types.List   `tfsdk:"ip_addresses"`
 	// ID required by the testing framework
@@ -70,6 +71,10 @@ func (d *machineDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 			"machine_id": schema.StringAttribute{
 				Description: "The Juju id of the machine.",
 				Required:    true,
+			},
+			"instance_id": schema.StringAttribute{
+				Description: "The provider-specific instance id of the machine Juju creates.",
+				Computed:    true,
 			},
 			waitForIPAddressesKey: schema.ListAttribute{
 				Description: "A list of IP address conditions the provider waits for before completing " +
@@ -187,6 +192,7 @@ func (d *machineDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 	data.IPAddresses = ipAddressesValue
+	data.InstanceID = types.StringValue(readResponse.InstanceID)
 	// machine_id is not unique, however it matches the
 	// SDK value used. "id" is required for tests.
 	data.ID = types.StringValue(machineID)
