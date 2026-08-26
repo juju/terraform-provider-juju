@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,7 +18,9 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/charmhub/transport"
 
 	"github.com/juju/charm/v12"
+	"github.com/juju/clock"
 	"github.com/juju/errors"
+	"github.com/juju/retry"
 )
 
 const (
@@ -27,9 +30,19 @@ const (
 	refreshPath    = "/v2/charms/refresh"
 	defaultTimeout = 30 * time.Second
 	defaultArch    = "amd64"
+
+	// Requests that fail transiently (dropped connections, 429/5xx
+	// responses) are retried with doubling delays: 1s, 2s, 4s.
+	defaultRetryAttempts = 4
+	defaultRetryDelay    = time.Second
+	defaultRetryMaxDelay = 10 * time.Second
 )
 
 var refreshFields = []string{"bases", "metadata-yaml", "actions-yaml", "name", "resources", "revision"}
+
+// errTransient marks failures worth retrying: transport-level errors
+// (dropped connections, timeouts) and server-side 429/5xx responses.
+var errTransient = stderrors.New("transient charmhub error")
 
 // CharmRefreshInput contains the parameters for a charm refresh request.
 type CharmRefreshInput struct {
@@ -57,6 +70,11 @@ type CharmRefreshResult struct {
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
+
+	retryAttempts int
+	retryDelay    time.Duration
+	retryMaxDelay time.Duration
+	clock         clock.Clock
 }
 
 // New returns a Client targeting baseURL. Pass a custom *http.Client as hc to
@@ -65,7 +83,14 @@ func New(baseURL string, hc *http.Client) *Client {
 	if hc == nil {
 		hc = &http.Client{Timeout: defaultTimeout}
 	}
-	return &Client{baseURL: baseURL, httpClient: hc}
+	return &Client{
+		baseURL:       baseURL,
+		httpClient:    hc,
+		retryAttempts: defaultRetryAttempts,
+		retryDelay:    defaultRetryDelay,
+		retryMaxDelay: defaultRetryMaxDelay,
+		clock:         clock.WallClock,
+	}
 }
 
 // HasAction returns true if the charm defines an action with the given name.
@@ -113,6 +138,34 @@ func (c *Client) Refresh(ctx context.Context, input CharmRefreshInput) (*CharmRe
 	if err != nil {
 		return nil, errors.Errorf("charmhub: %s", err)
 	}
+
+	var result *CharmRefreshResult
+	retryErr := retry.Call(retry.CallArgs{
+		Func: func() error {
+			var err error
+			result, err = c.refresh(ctx, body)
+			return err
+		},
+		IsFatalError: func(err error) bool {
+			return !stderrors.Is(err, errTransient)
+		},
+		Attempts:    c.retryAttempts,
+		Delay:       c.retryDelay,
+		MaxDelay:    c.retryMaxDelay,
+		BackoffFunc: retry.DoubleDelay,
+		Clock:       c.clock,
+		Stop:        ctx.Done(),
+	})
+	if retryErr != nil {
+		return nil, retry.LastError(retryErr)
+	}
+	return result, nil
+}
+
+// refresh performs a single refresh request and parses the response.
+// Failures likely to succeed on a subsequent attempt are wrapped with
+// errTransient so Refresh's retry loop picks them up.
+func (c *Client) refresh(ctx context.Context, body []byte) (*CharmRefreshResult, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+refreshPath, bytes.NewReader(body))
 	if err != nil {
 		return nil, errors.Errorf("charmhub: %s", err)
@@ -122,15 +175,21 @@ func (c *Client) Refresh(ctx context.Context, input CharmRefreshInput) (*CharmRe
 
 	httpResp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, errors.Errorf("charmhub: %s", err)
+		if ctx.Err() != nil {
+			return nil, errors.Errorf("charmhub: %s", err)
+		}
+		return nil, fmt.Errorf("%w: %v", errTransient, err)
 	}
 	defer httpResp.Body.Close()
 
 	data, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return nil, errors.Errorf("charmhub: %s", err)
+		return nil, fmt.Errorf("%w: %v", errTransient, err)
 	}
 	if httpResp.StatusCode != http.StatusOK {
+		if httpResp.StatusCode == http.StatusTooManyRequests || httpResp.StatusCode >= http.StatusInternalServerError {
+			return nil, fmt.Errorf("%w: status %d: %s", errTransient, httpResp.StatusCode, string(data))
+		}
 		return nil, errors.Errorf("charmhub: status %d: %s", httpResp.StatusCode, string(data))
 	}
 
