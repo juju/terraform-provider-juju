@@ -51,7 +51,6 @@ func main() {
 		addr     = flag.String("addr", "127.0.0.1:8080", "address to listen on")
 		storeDir = flag.String("store", "charmhub-cache-store", "directory for the on-disk cache")
 		upstream = flag.String("upstream", "https://api.charmhub.io", "upstream CharmHub API base URL")
-		baseURL  = flag.String("base-url", "http://127.0.0.1:8080", "externally reachable base URL of this proxy, used to rewrite charm download URLs")
 	)
 	flag.Parse()
 
@@ -63,7 +62,6 @@ func main() {
 	proxy := &server{
 		store:    store,
 		upstream: strings.TrimRight(*upstream, "/"),
-		baseURL:  strings.TrimRight(*baseURL, "/"),
 	}
 
 	mux := http.NewServeMux()
@@ -89,7 +87,19 @@ func main() {
 type server struct {
 	store    *store
 	upstream string
-	baseURL  string // externally reachable URL, for rewriting download URLs
+}
+
+// proxyBaseURL derives this proxy's externally reachable base URL from the
+// incoming request, so no --base-url flag or restart is needed when the
+// controller-reachable address only becomes known later (e.g. once the LXD
+// bridge exists). Whatever host:port the client used to reach us (via
+// charmhub-url/CHARMHUB_URL) is what must be embedded in rewritten URLs.
+func proxyBaseURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
 }
 
 // handleRefresh serves POST /v2/charms/refresh. See the package comment for
@@ -160,7 +170,7 @@ func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Rewrite download URLs so blob fetches route back through this proxy.
-	rewritten, err := rewriteDownloadURLs(respBody, s.store, s.baseURL)
+	rewritten, err := rewriteDownloadURLs(respBody, s.store, proxyBaseURL(r))
 	if err != nil {
 		// Never break a deploy over a schema surprise; the blob path will
 		// hit the live CDN directly.
