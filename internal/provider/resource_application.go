@@ -1148,9 +1148,24 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		updateApplicationInput.Channel = planCharm.Channel.ValueString()
 		updateApplicationInput.Base = planCharm.Base.ValueString()
 
-		// If the revision was left empty in the plan, leave it empty here
-		// to ensure we use the latest from the channel, otherwise keep it pinned.
-		if planCharm.Revision.IsUnknown() || planCharm.Revision.IsNull() {
+		var stateCharms []nestedCharm
+		resp.Diagnostics.Append(state.Charm.ElementsAs(ctx, &stateCharms, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		var stateRevision types.Int64
+		if len(stateCharms) == 1 {
+			stateRevision = stateCharms[0].Revision
+		}
+
+		// If the revision was not changed in the plan relative to state,
+		// leave it empty so resolution floats by channel+base. Because
+		// Revision is Optional+Computed, plan.Revision inherits the state's
+		// value when the user didn't set one explicitly; treating that as
+		// "user asked to stay on the deployed revision" incorrectly pins
+		// the update to the currently-deployed revision.
+		if planCharm.Revision.IsUnknown() || planCharm.Revision.IsNull() ||
+			(!stateRevision.IsNull() && planCharm.Revision.Equal(stateRevision)) {
 			updateApplicationInput.Revision = nil
 		} else {
 			updateApplicationInput.Revision = intPtr(planCharm.Revision)
