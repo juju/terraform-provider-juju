@@ -93,6 +93,7 @@ resource "juju_application" "this" {
 
   charm {
     name     = "ubuntu"
+    revision = 77
 	channel  = "latest/stable"
   }
 }

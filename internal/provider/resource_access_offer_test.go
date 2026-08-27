@@ -257,6 +257,7 @@ resource "juju_application" "appone" {
 
   charm {
     name = "juju-qa-dummy-source"
+    revision = 6
     base = "ubuntu@22.04"
   }
 }
@@ -309,6 +310,7 @@ resource "juju_application" "appone" {
 
   charm {
     name = "juju-qa-dummy-source"
+    revision = 6
     base = "ubuntu@22.04"
   }
 }

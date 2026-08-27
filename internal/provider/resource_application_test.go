@@ -1333,10 +1333,13 @@ func testAccCheckApplicationResource(ctx context.Context, appResource string, ch
 func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	var charmName string
+	var charmRevision int
 	if testingCloud == LXDCloudTesting {
 		charmName = "juju-qa-test"
+		charmRevision = 25
 	} else {
 		charmName = "hello-juju"
+		charmRevision = 8
 	}
 	resourceName := "juju_application.testapp"
 	checkResourceAttr := []resource.TestCheckFunc{
@@ -1349,7 +1352,7 @@ func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationBasic_Minimal(modelName, charmName),
+				Config: testAccResourceApplicationBasic_Minimal(modelName, charmName, charmRevision),
 				Check: resource.ComposeTestCheckFunc(
 					checkResourceAttr...),
 			},
@@ -1400,6 +1403,7 @@ func testAccResourceApplicationBasic_ntp_Subordinates(modelName string) string {
 			name = "ntp"
 			charm {
 				name = "ntp"
+				revision = 52
 				base = "ubuntu@22.04"
 			}
 		}
@@ -1534,6 +1538,7 @@ func testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmNa
 
 		  charm {
 			name = %q
+			revision = 25
 			base = "ubuntu@22.04"
 		  }
 		}
@@ -1544,6 +1549,7 @@ func testAccResourceApplicationBasic_MachinesWithSubordinates(modelName, charmNa
 
 			charm {
 				name = "ntp"
+				revision = 52
 				base = "ubuntu@22.04"
 			}
 		}
@@ -1591,6 +1597,7 @@ func testAccResourceApplicationBasic_UnitsWithSubordinates(modelName, charmName,
 
 		  charm {
 			name = %q
+			revision = 25
 			base = "ubuntu@22.04"
 		  }
 		}
@@ -1601,6 +1608,7 @@ func testAccResourceApplicationBasic_UnitsWithSubordinates(modelName, charmName,
 
 			charm {
 				name = "ntp"
+				revision = 52
 				base = "ubuntu@22.04"
 			}
 		}
@@ -1689,6 +1697,7 @@ func testAccResourceApplicationBasic_Machines(modelName, charmName string, machi
 
 		  charm {
 			name = %q
+			revision = 25
 			base = "ubuntu@22.04"
 		  }
 		}
@@ -1973,6 +1982,7 @@ resource "juju_application" "{{.AppName}}" {
   name       = "{{.AppName}}"
   charm {
 	name = "juju-qa-dummy-source"
+	revision = 6
   }
   {{ if .IncludeConfig }}
   config = {
@@ -1988,19 +1998,20 @@ resource "juju_application" "{{.AppName}}" {
 	})
 }
 
-func testAccResourceApplicationBasic_Minimal(modelName, charmName string) string {
+func testAccResourceApplicationBasic_Minimal(modelName, charmName string, charmRevision int) string {
 	return fmt.Sprintf(`
 		resource "juju_model" "testmodel" {
 		  name = %q
 		}
-		
+
 		resource "juju_application" "testapp" {
 		  model_uuid = juju_model.testmodel.uuid
 		  charm {
 			name = %q
+			revision = %d
 		  }
 		}
-		`, modelName, charmName)
+		`, modelName, charmName, charmRevision)
 }
 
 func testAccResourceApplicationBasic(modelName, appName string) string {
@@ -2015,6 +2026,7 @@ func testAccResourceApplicationBasic(modelName, appName string) string {
 		  name = %q
 		  charm {
 			name = "ubuntu-lite"
+			revision = 4
 		  }
 		  trust = true
 		  expose{}
@@ -2032,6 +2044,7 @@ func testAccResourceApplicationBasic(modelName, appName string) string {
 		  name = %q
 		  charm {
 			name = "ubuntu-lite"
+			revision = 4
 		  }
 		  trust = true
 		  expose{}
@@ -2055,6 +2068,7 @@ func testAccResourceApplicationScaleUp(modelName, appName, numberOfUnits string)
 		  name = %q
 		  charm {
 			name = "ubuntu-lite"
+			revision = 4
 		  }
 		  trust = true
 		  expose{}
@@ -2073,6 +2087,7 @@ func testAccResourceApplicationScaleUp(modelName, appName, numberOfUnits string)
 		  name = %q
 		  charm {
 			name = "coredns"
+			revision = 204
 		  }
 		  trust = true
 		  units = %q
@@ -2780,6 +2795,7 @@ resource "juju_application" "{{.AppName1}}" {
   name = "{{.AppName1}}"
   charm {
     name = "{{.CharmName}}"
+    revision = 25
     channel = "{{.CharmChannel}}"
   }
   # No units needed: test only checks model_uuid attribute pair.
@@ -2791,6 +2807,7 @@ resource "juju_application" "{{.AppName2}}" {
   name = "{{.AppName2}}"
   charm {
     name = "{{.CharmName}}"
+    revision = 25
     channel = "{{.CharmChannel}}"
   }
   # No units needed: test only checks model_uuid attribute pair.
@@ -2944,6 +2961,7 @@ resource "juju_application" "this" {
   name = %q
   charm {
 	name = "conserver"
+	revision = 12
   }
   trust = %t
   config = {
@@ -2966,6 +2984,7 @@ resource "juju_application" "this" {
   name = %q
   charm {
 	name = "conserver"
+	revision = 12
   }
   trust = false
   # No units needed: test only checks config and trust attributes.
@@ -3001,6 +3020,7 @@ resource "juju_application" "this" {
   name = %q
   charm {
 	name = "ubuntu-lite"
+	revision = 4
   }
   # No units needed: test only checks that the apply succeeds.
   units = 0
@@ -3027,6 +3047,7 @@ resource "juju_application" "this" {
   name = "test-app"
   charm {
 	name = "ubuntu-lite"
+	revision = 4
   }
 }
 `, modelName),
@@ -3296,6 +3317,7 @@ func testAccResourceApplicationUnknownMachines(modelName string) string {
 		  machines   = toset(terraform_data.machine_ids.output)
 		  charm {
 			name = "juju-qa-test"
+			revision = 25
 			base = "ubuntu@22.04"
 		  }
 		}

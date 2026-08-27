@@ -84,6 +84,7 @@ resource "juju_application" "this" {
 
   charm {
     name = "{{.CharmName}}"
+    revision = 6
   }
 }
 

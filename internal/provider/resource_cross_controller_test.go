@@ -80,6 +80,7 @@ resource "juju_application" "consumer" {
 	
 	charm {
 		name = "juju-qa-dummy-sink"
+		revision = 7
 	}
 }
 

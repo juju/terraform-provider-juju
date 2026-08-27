@@ -42,6 +42,7 @@ resource "juju_application" "this" {
 
 	charm {
 		name = "juju-qa-dummy-source"
+		revision = 6
 		%s
 	}
 }

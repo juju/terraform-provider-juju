@@ -74,6 +74,7 @@ resource "juju_application" "this" {
 
   charm {
     name = "{{.CharmName}}"
+    revision = 25
     {{ if .Base }}base = "{{.Base}}"{{ end }}
   }
   {{ if .Trust }}trust = true{{ end }}

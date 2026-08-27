@@ -104,6 +104,7 @@ resource "juju_application" "jul" {
 
   charm {
 	name     = "ubuntu-lite"
+	revision = 4
 	channel  = "latest/stable"
   }
 
@@ -117,6 +118,7 @@ resource "juju_application" "jul2" {
 
   charm {
 	name     = "ubuntu-lite"
+	revision = 4
 	channel  = "latest/stable"
   }
 
