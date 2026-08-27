@@ -146,6 +146,36 @@ func TestParseRefreshActions(t *testing.T) {
 	}
 }
 
+// TestRewriteInstanceKey verifies that the instance-key in a cached response
+// is rewritten to match the current request. Without this, the client's
+// Ensure() rejects the response with "install action key not valid" because
+// the cached response carries a stale per-request UUID.
+func TestRewriteInstanceKey(t *testing.T) {
+	body := []byte(`{"results":[{"instance-key":"old-uuid","charm":{"name":"ubuntu","revision":77}}]}`)
+	rewritten := rewriteInstanceKey(body, "new-uuid")
+
+	var doc struct {
+		Results []struct {
+			InstanceKey string `json:"instance-key"`
+			Charm       struct {
+				Name string `json:"name"`
+			} `json:"charm"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(rewritten, &doc); err != nil {
+		t.Fatalf("rewritten body is not valid JSON: %v", err)
+	}
+	if len(doc.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(doc.Results))
+	}
+	if doc.Results[0].InstanceKey != "new-uuid" {
+		t.Fatalf("instance-key = %q, want %q", doc.Results[0].InstanceKey, "new-uuid")
+	}
+	if doc.Results[0].Charm.Name != "ubuntu" {
+		t.Fatalf("charm name not preserved: %q", doc.Results[0].Charm.Name)
+	}
+}
+
 // TestRewriteDownloadURLs verifies that:
 //   - the download.url in each result is rewritten to an absolute proxy URL,
 //   - the real upstream URL is recorded in the store for backfill,

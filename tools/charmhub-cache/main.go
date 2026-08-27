@@ -154,9 +154,14 @@ func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	// replay; multi-action requests fall through to upstream.
 	if len(actions) == 1 {
 		if cached, ok := s.store.LookupRefresh(actions[0]); ok {
+			// Rewrite the instance-key in the cached response to match the
+			// current request. The instance-key is a per-request UUID; the
+			// cached response carries the original request's key, which won't
+			// match and causes the client's Ensure() to reject it.
+			replayed := rewriteInstanceKey(cached, actions[0].InstanceKey)
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("X-Charmhub-Cache", "HIT")
-			_, _ = w.Write(cached)
+			_, _ = w.Write(replayed)
 			return
 		}
 	}
@@ -323,11 +328,12 @@ func contentLength(resp *http.Response) (int64, bool) {
 //     carries only ID; Revision/Channel/Base live in the matching context
 //     entry (keyed by instance-key).
 type action struct {
-	ID       string // charmhub charm ID (refresh-by-id); empty for by-name
-	Name     string // charm name (by-name); empty for by-id
-	Channel  string
-	Revision *int
-	Base     string // "arch/os/channel", empty if absent
+	ID          string // charmhub charm ID (refresh-by-id); empty for by-name
+	Name        string // charm name (by-name); empty for by-id
+	Channel     string
+	Revision    *int
+	Base        string // "arch/os/channel", empty if absent
+	InstanceKey string // per-request unique key; must match in the response
 }
 
 // parseRefreshActions extracts the actions from a refresh request body,
@@ -381,7 +387,7 @@ func parseRefreshActions(body []byte) ([]action, error) {
 
 	actions := make([]action, 0, len(req.Actions))
 	for _, a := range req.Actions {
-		act := action{ID: a.ID, Name: a.Name, Channel: a.Channel, Revision: a.Revision}
+		act := action{ID: a.ID, Name: a.Name, Channel: a.Channel, Revision: a.Revision, InstanceKey: a.InstanceKey}
 		if a.Base != nil {
 			act.Base = fmt.Sprintf("%s/%s/%s", a.Base.Architecture, a.Base.Name, a.Base.Channel)
 		}
@@ -400,6 +406,40 @@ func parseRefreshActions(body []byte) ([]action, error) {
 		actions = append(actions, act)
 	}
 	return actions, nil
+}
+
+// rewriteDownloadURLs rewrites the download.url field in each refresh result
+// to point at this proxy's /blob/<hash> endpoint, recording the real upstream
+// rewriteInstanceKey replaces the instance-key in each refresh result with the
+// given key. The instance-key is a per-request UUID; a cached response carries
+// the original request's key, which won't match the current request and causes
+// the client's Ensure() to reject it ("install action key not valid"). Uses
+// map[string]any to preserve all other fields verbatim. If parsing fails the
+// original body is returned unchanged (best-effort).
+func rewriteInstanceKey(body []byte, instanceKey string) []byte {
+	if instanceKey == "" {
+		return body
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return body
+	}
+	results, ok := doc["results"].([]any)
+	if !ok {
+		return body
+	}
+	for _, res := range results {
+		result, ok := res.(map[string]any)
+		if !ok {
+			continue
+		}
+		result["instance-key"] = instanceKey
+	}
+	rewritten, err := json.Marshal(doc)
+	if err != nil {
+		return body
+	}
+	return rewritten
 }
 
 // rewriteDownloadURLs rewrites the download.url field in each refresh result
