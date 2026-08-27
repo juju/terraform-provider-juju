@@ -72,29 +72,22 @@ jobs:
         with:
           path: charmhub-cache-store
           key: charmhub-cache-${{ matrix.action-operator.cloud }}-${{ matrix.action-operator.juju }}
-      # Start the charmhub cache proxy before bootstrap so it serves every charm
-      # fetch, including the k8s bootstrap's juju-controller charm. Advertise the
-      # host's primary IP (reachable from LXD/microk8s, known before LXD exists)
-      # and pass it to bootstrap via bootstrap-options.
+      # Start the charmhub cache proxy before bootstrap so it's ready when
+      # needed. The proxy derives its externally reachable base URL from each
+      # request's Host header, so it never needs restarting once the
+      # controller-reachable address is known (see the "Configure charmhub
+      # cache proxy URL" step below).
       - name: Start charmhub cache proxy
         # language=bash
         run: |
-          PROXY_HOST=$(hostname -I | awk '{print $1}')
-          PROXY_URL="http://${PROXY_HOST}:8080"
-
           go build -o /tmp/charmhub-cache ./tools/charmhub-cache/
           /tmp/charmhub-cache \
             --addr "0.0.0.0:8080" \
-            --base-url "$PROXY_URL" \
             --store "charmhub-cache-store" &
 
-          # Wait for the proxy's readiness endpoint.
-          curl --retry 30 --retry-delay 1 --retry-connrefused -fsS "$PROXY_URL/healthz"
-          echo "charmhub-cache proxy is ready at $PROXY_URL"
-
-          # Expose the URL for bootstrap-options and for the provider's
-          # direct charmhub client.
-          echo "CHARMHUB_URL=$PROXY_URL" >> $GITHUB_ENV
+          # Wait for the proxy's readiness endpoint (on localhost).
+          curl --retry 30 --retry-delay 1 --retry-connrefused -fsS "http://127.0.0.1:8080/healthz"
+          echo "charmhub-cache proxy is ready"
       # This step fails intermittently on Juju 2.9 (mongodb fails to start up).
       # In that case, it'll retry a little in order to improve CI UX.
       - name: Setup operator environment
@@ -106,7 +99,6 @@ jobs:
           channel: ${{ matrix.action-operator.cloud-channel }}
           juju-channel: ${{ matrix.action-operator.juju }}
           lxd-channel: ${{ matrix.action-operator.lxd-channel }}
-          bootstrap-options: "--config charmhub-url=${{ env.CHARMHUB_URL }}"
       - name: Setup operator environment (retry 1)
         id: setup-op-1
         continue-on-error: true
@@ -117,7 +109,6 @@ jobs:
           channel: ${{ matrix.action-operator.cloud-channel }}
           juju-channel: ${{ matrix.action-operator.juju }}
           lxd-channel: ${{ matrix.action-operator.lxd-channel }}
-          bootstrap-options: "--config charmhub-url=${{ env.CHARMHUB_URL }}"
       - name: Setup operator environment (retry 2)
         id: setup-op-2
         continue-on-error: true
@@ -128,7 +119,6 @@ jobs:
           channel: ${{ matrix.action-operator.cloud-channel }}
           juju-channel: ${{ matrix.action-operator.juju }}
           lxd-channel: ${{ matrix.action-operator.lxd-channel }}
-          bootstrap-options: "--config charmhub-url=${{ env.CHARMHUB_URL }}"
       - name: Setup operator environment (set status)
         if: always()
         run: |
@@ -192,6 +182,22 @@ jobs:
           echo "TEST_MANAGEMENT_BR=10.150.40.0/24" >> $GITHUB_ENV
           echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
           echo "JUJU_SKIP_FAILED_DELETION=true" >> $GITHUB_ENV
+      - name: Configure charmhub cache proxy URL
+        # language=bash
+        # Now that LXD/microk8s is up, compute the controller-reachable address
+        # and point the controller and provider at the proxy. The proxy itself
+        # doesn't need restarting: it derives its base URL from each request's
+        # Host header.
+        run: |
+          if [ "${{ matrix.action-operator.cloud }}" = "lxd" ]; then
+            PROXY_HOST=$(ip -4 addr show lxdbr0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+          else
+            PROXY_HOST=$(hostname -I | awk '{print $1}')
+          fi
+          PROXY_URL="http://${PROXY_HOST}:8080"
+
+          juju model-config charmhub-url="$PROXY_URL"
+          echo "CHARMHUB_URL=$PROXY_URL" >> $GITHUB_ENV
       - run: go mod download
       # gotestsum re-runs only the tests that failed (at most once, and only
       # when 5 or fewer failed) as a backstop against one-off flakes failing
