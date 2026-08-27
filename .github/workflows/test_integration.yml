@@ -64,6 +64,37 @@ jobs:
         with:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
+      # Cache charmhub refresh responses and charm blobs across runs.
+      # Pinned revisions are immutable, so the cache key is stable.
+      - name: Restore charmhub cache
+        id: charmhub-cache
+        uses: actions/cache@v4
+        with:
+          path: charmhub-cache-store
+          key: charmhub-cache-${{ matrix.action-operator.cloud }}-${{ matrix.action-operator.juju }}
+      # Start the charmhub cache proxy before bootstrap so it serves every charm
+      # fetch, including the k8s bootstrap's juju-controller charm. Advertise the
+      # host's primary IP (reachable from LXD/microk8s, known before LXD exists)
+      # and pass it to bootstrap via bootstrap-options.
+      - name: Start charmhub cache proxy
+        # language=bash
+        run: |
+          PROXY_HOST=$(hostname -I | awk '{print $1}')
+          PROXY_URL="http://${PROXY_HOST}:8080"
+
+          go build -o /tmp/charmhub-cache ./tools/charmhub-cache/
+          /tmp/charmhub-cache \
+            --addr "0.0.0.0:8080" \
+            --base-url "$PROXY_URL" \
+            --store "charmhub-cache-store" &
+
+          # Wait for the proxy's readiness endpoint.
+          curl --retry 30 --retry-delay 1 --retry-connrefused -fsS "$PROXY_URL/healthz"
+          echo "charmhub-cache proxy is ready at $PROXY_URL"
+
+          # Expose the URL for bootstrap-options and for the provider's
+          # direct charmhub client.
+          echo "CHARMHUB_URL=$PROXY_URL" >> $GITHUB_ENV
       # This step fails intermittently on Juju 2.9 (mongodb fails to start up).
       # In that case, it'll retry a little in order to improve CI UX.
       - name: Setup operator environment
@@ -75,6 +106,7 @@ jobs:
           channel: ${{ matrix.action-operator.cloud-channel }}
           juju-channel: ${{ matrix.action-operator.juju }}
           lxd-channel: ${{ matrix.action-operator.lxd-channel }}
+          bootstrap-options: "--config charmhub-url=${{ env.CHARMHUB_URL }}"
       - name: Setup operator environment (retry 1)
         id: setup-op-1
         continue-on-error: true
@@ -85,6 +117,7 @@ jobs:
           channel: ${{ matrix.action-operator.cloud-channel }}
           juju-channel: ${{ matrix.action-operator.juju }}
           lxd-channel: ${{ matrix.action-operator.lxd-channel }}
+          bootstrap-options: "--config charmhub-url=${{ env.CHARMHUB_URL }}"
       - name: Setup operator environment (retry 2)
         id: setup-op-2
         continue-on-error: true
@@ -95,6 +128,7 @@ jobs:
           channel: ${{ matrix.action-operator.cloud-channel }}
           juju-channel: ${{ matrix.action-operator.juju }}
           lxd-channel: ${{ matrix.action-operator.lxd-channel }}
+          bootstrap-options: "--config charmhub-url=${{ env.CHARMHUB_URL }}"
       - name: Setup operator environment (set status)
         if: always()
         run: |
@@ -169,6 +203,7 @@ jobs:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.action-operator.cloud }}
           TEST_VAULT_ADDR: ${{ env.TEST_VAULT_ADDR }}
+          CHARMHUB_URL: ${{ env.CHARMHUB_URL }}
         run: |
           go run gotest.tools/gotestsum@v1.13.0 \
             --format standard-verbose \
