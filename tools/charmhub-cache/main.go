@@ -469,7 +469,9 @@ func isHex(s string) bool {
 		return false
 	}
 	for _, r := range s {
-		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')) {
+		isDigit := r >= '0' && r <= '9'
+		isLowerHex := r >= 'a' && r <= 'f'
+		if !isDigit && !isLowerHex {
 			return false
 		}
 	}
