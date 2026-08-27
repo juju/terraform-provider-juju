@@ -196,7 +196,11 @@ jobs:
           fi
           PROXY_URL="http://${PROXY_HOST}:8080"
 
-          juju model-config charmhub-url="$PROXY_URL"
+          # model-defaults (not model-config) because no model is selected yet
+          # at this point — bootstrap only creates the controller model. This
+          # sets charmhub-url as an inherited default for every model the
+          # tests create afterwards.
+          juju model-defaults charmhub-url="$PROXY_URL"
           echo "CHARMHUB_URL=$PROXY_URL" >> $GITHUB_ENV
       - run: go mod download
       # gotestsum re-runs only the tests that failed (at most once, and only
