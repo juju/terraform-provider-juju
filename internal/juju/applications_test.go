@@ -13,11 +13,13 @@ import (
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
 	apiapplication "github.com/juju/juju/api/client/application"
+	apicharms "github.com/juju/juju/api/client/charms"
 	apiresources "github.com/juju/juju/api/client/resources"
 	apicharm "github.com/juju/juju/api/common/charm"
 	corebase "github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/resource"
+	charmURL "github.com/juju/juju/domain/deployment/charm"
 	charmresources "github.com/juju/juju/domain/deployment/charm/resource"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/utils/v4"
@@ -550,6 +552,88 @@ func (s *ApplicationSuite) TestPartialApplicationDeployError() {
 		}},
 	})
 	s.Assert().ErrorAs(err, &ApplicationPartiallyCreatedError{})
+}
+
+// fakeCharmsResolver is a hand-written fake implementing CharmsAPIResolver
+// for unit tests, avoiding mockgen churn for a two-method interface.
+type fakeCharmsResolver struct {
+	resolveResult  []apicharms.ResolvedCharm
+	resolveErr     error
+	addCharmResult apicharm.Origin
+	addCharmErr    error
+
+	gotResolveURL *charmURL.URL
+	gotAddOrigin  apicharm.Origin
+}
+
+func (f *fakeCharmsResolver) ResolveCharms(_ context.Context, charms []apicharms.CharmToResolve) ([]apicharms.ResolvedCharm, error) {
+	if len(charms) == 1 {
+		f.gotResolveURL = charms[0].URL
+	}
+	return f.resolveResult, f.resolveErr
+}
+
+func (f *fakeCharmsResolver) AddCharm(_ context.Context, curl *charmURL.URL, origin apicharm.Origin, _ bool) (apicharm.Origin, error) {
+	f.gotAddOrigin = origin
+	return f.addCharmResult, f.addCharmErr
+}
+
+// TestComputeCharmIDBaseChangeWithoutRevisionResolution tests that when
+// base changes and revision is not pinned, resolution floats by channel+base
+// and the base-compat guard does not block the update.
+func (s *ApplicationSuite) TestComputeCharmIDBaseChangeWithoutRevisionResolution() {
+	defer s.setupMocks(s.T()).Finish()
+	appName := "traefik"
+
+	oldRev := 377
+	oldURL := charmURL.MustParseURL("ch:amd64/traefik-k8s-377")
+	oldOrigin := apicharm.Origin{
+		Source:       "charm-hub",
+		Risk:         "stable",
+		Revision:     &oldRev,
+		Architecture: "amd64",
+		Base: corebase.Base{
+			OS:      "ubuntu",
+			Channel: corebase.Channel{Track: "20.04", Risk: "stable"},
+		},
+	}
+
+	s.mockApplicationClient.EXPECT().GetCharmURLOrigin(gomock.Any(), appName).Return(oldURL, oldOrigin, nil)
+
+	newBase := corebase.Base{OS: "ubuntu", Channel: corebase.Channel{Track: "26.04", Risk: "stable"}}
+	supportedBases := []corebase.Base{newBase}
+	resolvedOrigin := oldOrigin
+	resolvedOrigin.Base = newBase
+	resolvedOrigin.Revision = nil
+	resolvedURL := charmURL.MustParseURL("ch:amd64/traefik-k8s-378")
+
+	fake := &fakeCharmsResolver{
+		resolveResult: []apicharms.ResolvedCharm{
+			{
+				URL:            resolvedURL,
+				Origin:         resolvedOrigin,
+				SupportedBases: supportedBases,
+			},
+		},
+		addCharmResult: resolvedOrigin,
+	}
+
+	client := s.getApplicationsClient()
+	charmID, err := client.computeCharmID(s.T().Context(), &UpdateApplicationInput{
+		AppName: appName,
+		Channel: "latest/stable",
+		Base:    "ubuntu@26.04",
+	}, s.mockApplicationClient, fake)
+
+	s.Assert().NoError(err)
+	s.Assert().Equal("ch:amd64/traefik-k8s-378", charmID.URL)
+	s.Assert().Equal(newBase, charmID.Origin.Base)
+	// Resolve was asked with the revision dropped so the resolver can float
+	// by channel+base rather than pinning the currently-deployed revision.
+	s.Assert().Equal(-1, fake.gotResolveURL.Revision)
+	// AddCharm received the origin with the resolved revision so the apiserver
+	// is not silently re-resolved to the pre-update revision.
+	s.Assert().Equal(resolvedOrigin.Revision, fake.gotAddOrigin.Revision)
 }
 
 // In order for 'go test' to run this suite, we need to create

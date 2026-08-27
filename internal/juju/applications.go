@@ -1380,7 +1380,7 @@ func (c applicationsClient) computeCharmID(
 	ctx context.Context,
 	input *UpdateApplicationInput,
 	applicationAPIClient ApplicationAPIClient,
-	charmsAPIClient *apicharms.Client,
+	charmsAPIClient CharmsAPIResolver,
 ) (apiapplication.CharmID, error) {
 	oldURL, oldOrigin, err := applicationAPIClient.GetCharmURLOrigin(ctx, input.AppName)
 	if err != nil {
@@ -1423,6 +1423,14 @@ func (c applicationsClient) computeCharmID(
 			return apiapplication.CharmID{}, err
 		}
 		newOrigin.Base = base
+		// When base changes and revision is not pinned, drop the revision from
+		// the URL so resolution floats by channel+base instead of pinning the
+		// currently-deployed revision (whose supported bases, used by the
+		// validation below, would incorrectly reject the base change).
+		if input.Revision == nil && input.Channel != "" {
+			newURL = newURL.WithRevision(-1)
+			newOrigin.Revision = nil
+		}
 	}
 	resolvedURL, resolvedOrigin, supportedBases, err := resolveCharm(ctx, charmsAPIClient, newURL, newOrigin)
 	if err != nil {
@@ -1452,6 +1460,9 @@ func (c applicationsClient) computeCharmID(
 	}
 	if input.Base != "" {
 		oldOrigin.Base = newOrigin.Base
+		if input.Revision == nil && input.Channel != "" {
+			oldOrigin.Revision = resolvedOrigin.Revision
+		}
 	}
 
 	if !basesContain(oldOrigin.Base, supportedBases) {
@@ -1470,7 +1481,12 @@ func (c applicationsClient) computeCharmID(
 	}, nil
 }
 
-func resolveCharm(ctx context.Context, charmsAPIClient *apicharms.Client, curl *charm.URL, origin apicommoncharm.Origin) (*charm.URL, apicommoncharm.Origin, []corebase.Base, error) {
+type CharmsAPIResolver interface {
+	ResolveCharms(ctx context.Context, charms []apicharms.CharmToResolve) ([]apicharms.ResolvedCharm, error)
+	AddCharm(ctx context.Context, url *charm.URL, origin apicommoncharm.Origin, dry bool) (apicommoncharm.Origin, error)
+}
+
+func resolveCharm(ctx context.Context, charmsAPIClient CharmsAPIResolver, curl *charm.URL, origin apicommoncharm.Origin) (*charm.URL, apicommoncharm.Origin, []corebase.Base, error) {
 	// Charm or bundle has been supplied as a URL, so we resolve and
 	// deploy using the store but pass in the origin command line
 	// argument so users can target a specific origin.
