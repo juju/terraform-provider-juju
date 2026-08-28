@@ -41,7 +41,7 @@ func TestPutRefreshRejectsMultiResult(t *testing.T) {
 	}
 
 	body := multiResultRefreshResponse("ubuntu", "postgresql", 77, 10)
-	if err := st.PutRefresh(body); err == nil {
+	if err := st.PutRefresh(body, ""); err == nil {
 		t.Fatalf("PutRefresh accepted a multi-result response; must reject it")
 	}
 
@@ -66,7 +66,7 @@ func TestCrossClientConvergence(t *testing.T) {
 
 	// Charmhub answers a resolve for ubuntu with revision 77.
 	resp := refreshResponse("ubuntu", 77, "abc123", "https://cdn.example/ubuntu_77.charm")
-	if err := st.PutRefresh(resp); err != nil {
+	if err := st.PutRefresh(resp, ""); err != nil {
 		t.Fatalf("PutRefresh: %v", err)
 	}
 
@@ -135,7 +135,7 @@ func TestChannelOnlyNeverCached(t *testing.T) {
 	}
 
 	resp := refreshResponse("ubuntu", 77, "abc123", "https://cdn.example/ubuntu_77.charm")
-	if err := st.PutRefresh(resp); err != nil {
+	if err := st.PutRefresh(resp, ""); err != nil {
 		t.Fatalf("PutRefresh: %v", err)
 	}
 
@@ -157,7 +157,7 @@ func TestRefreshByIDOffline(t *testing.T) {
 	// Store a response (as if from a deploy) — it carries the charmhub id.
 	resp := refreshResponse("ubuntu", 77, "abc123", "https://cdn.example/ubuntu_77.charm")
 	rev := 77
-	if err := st.PutRefresh(resp); err != nil {
+	if err := st.PutRefresh(resp, ""); err != nil {
 		t.Fatalf("PutRefresh: %v", err)
 	}
 
@@ -372,7 +372,7 @@ func TestStorePutRefreshThenRead(t *testing.T) {
 	rev := 77
 	a := action{Name: "ubuntu", Revision: &rev}
 	body := refreshResponse("ubuntu", 77, "abc123", "https://cdn.example/u.charm")
-	if err := st.PutRefresh(body); err != nil {
+	if err := st.PutRefresh(body, ""); err != nil {
 		t.Fatalf("PutRefresh: %v", err)
 	}
 	got, ok := st.LookupRefresh(a)
@@ -383,8 +383,46 @@ func TestStorePutRefreshThenRead(t *testing.T) {
 		t.Fatalf("LookupRefresh body mismatch: got %q want %q", got, body)
 	}
 	// Confirm it landed on disk under the canonical path.
-	if _, err := os.Stat(filepath.Join(dir, "refresh", canonicalKey("ubuntu", 77)+".json")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "refresh", canonicalKey("ubuntu", 77, "")+".json")); err != nil {
 		t.Fatalf("refresh file not on disk: %v", err)
+	}
+}
+
+// TestFieldsMismatchNotServedFromCache is a regression test for a real CI
+// failure: the provider's ActionExists requests "actions-yaml" (needed to
+// check for a defined action) while the controller's own deploy-time resolve
+// does not. If a response cached for one field set were replayed to a
+// request needing a different field set, the response could be missing
+// fields the caller depends on (e.g. actions-yaml), causing ActionExists to
+// incorrectly report the action as undefined. The cache must key on the
+// requested fields so these never conflate.
+func TestFieldsMismatchNotServedFromCache(t *testing.T) {
+	st, err := newStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("newStore: %v", err)
+	}
+
+	// Controller-style resolve: no actions-yaml in the response, cached
+	// under the controller's field set.
+	resp := refreshResponse("juju-qa-dummy-source", 6, "abc123", "https://cdn.example/dummy_6.charm")
+	const controllerFields = "bases,config-yaml,download,id,license,metadata-yaml,name,publisher,resources,revision,summary,type,version"
+	if err := st.PutRefresh(resp, controllerFields); err != nil {
+		t.Fatalf("PutRefresh: %v", err)
+	}
+
+	// Provider's ActionExists requests a different field set (includes
+	// actions-yaml). It must NOT hit the controller's cache entry.
+	rev := 6
+	const providerFields = "actions-yaml,bases,metadata-yaml,name,resources,revision"
+	providerAction := action{Name: "juju-qa-dummy-source", Revision: &rev, FieldsKey: providerFields}
+	if _, ok := st.LookupRefresh(providerAction); ok {
+		t.Fatalf("provider request with different fields incorrectly hit the controller's cache entry")
+	}
+
+	// A request with the SAME field set as what was cached still hits.
+	controllerAction := action{Name: "juju-qa-dummy-source", Revision: &rev, FieldsKey: controllerFields}
+	if _, ok := st.LookupRefresh(controllerAction); !ok {
+		t.Fatalf("request with matching fields unexpectedly missed cache")
 	}
 }
 

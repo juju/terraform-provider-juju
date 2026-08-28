@@ -3,16 +3,19 @@
 
 // Command charmhub-cache is a caching reverse proxy for the CharmHub refresh
 // API and charm blob downloads, designed for CI. Responses are cached by the
-// resolved charm identity (name + revision), which is immutable, so entries
-// never expire. Requests pinned to a revision (or an id+revision) are served
-// from cache; channel-only requests always go upstream, since their entire
-// purpose is to learn the CURRENT revision for a channel, which can change at
-// any time — caching that would serve stale revisions.
+// resolved charm identity (name + revision) plus the requested fields, since
+// different callers (e.g. the provider's ActionExists vs. the controller's
+// deploy resolve) request different field sets for the same charm+revision;
+// the identity portion is immutable, so entries never expire. Requests
+// pinned to a revision (or an id+revision) are served from cache;
+// channel-only requests always go upstream, since their entire purpose is to
+// learn the CURRENT revision for a channel, which can change at any time —
+// caching that would serve stale revisions.
 //
 // Store layout:
 //
-//	<store>/refresh/<key>.json   # response keyed by resolved name@revision
-//	<store>/ids/<key>.name       # charmhub id+revision -> name index
+//	<store>/refresh/<key>.json   # response keyed by name@revision#fields
+//	<store>/ids/<key>.name       # charmhub id+revision+fields -> name index
 //	<store>/blobs/<hash>         # charm blob bytes
 //	<store>/blobs/<hash>.url     # real upstream URL for cold backfill
 package main
@@ -31,6 +34,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -224,7 +228,7 @@ func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	// exactly one result, which the client rejects ("more than 1 result
 	// found"). Best-effort: a store failure must not fail the deploy.
 	if len(actions) == 1 {
-		if err := s.store.PutRefresh(rewritten); err != nil {
+		if err := s.store.PutRefresh(rewritten, actions[0].FieldsKey); err != nil {
 			log.Printf("charmhub-cache: store refresh failed: %v", err)
 		}
 	}
@@ -335,13 +339,21 @@ type action struct {
 	Revision    *int
 	Base        string // "arch/os/channel", empty if absent
 	InstanceKey string // per-request unique key; must match in the response
+	// FieldsKey is a signature of the requested "fields" array. Different
+	// callers request different fields for the same charm+revision (e.g.
+	// ActionExists needs "actions-yaml", the controller's deploy resolve
+	// doesn't), so this must be part of the cache key or a response cached
+	// for one field set gets replayed to a caller needing another.
+	FieldsKey string
 }
 
 // parseRefreshActions extracts the actions from a refresh request body,
 // merging revision/channel/base from the context array (matched by
-// instance-key) for by-id requests.
+// instance-key) for by-id requests. The top-level "fields" array is folded
+// into each action's FieldsKey (see action.FieldsKey for why this matters).
 func parseRefreshActions(body []byte) ([]action, error) {
 	var req struct {
+		Fields  []string `json:"fields"`
 		Context []struct {
 			InstanceKey     string `json:"instance-key"`
 			Revision        *int   `json:"revision"`
@@ -369,6 +381,8 @@ func parseRefreshActions(body []byte) ([]action, error) {
 		return nil, err
 	}
 
+	fieldsKey := normalizeFields(req.Fields)
+
 	// Index context entries by instance-key so by-id actions can pick up
 	// their revision/channel/base.
 	type ctxInfo struct {
@@ -387,7 +401,7 @@ func parseRefreshActions(body []byte) ([]action, error) {
 
 	actions := make([]action, 0, len(req.Actions))
 	for _, a := range req.Actions {
-		act := action{ID: a.ID, Name: a.Name, Channel: a.Channel, Revision: a.Revision, InstanceKey: a.InstanceKey}
+		act := action{ID: a.ID, Name: a.Name, Channel: a.Channel, Revision: a.Revision, InstanceKey: a.InstanceKey, FieldsKey: fieldsKey}
 		if a.Base != nil {
 			act.Base = fmt.Sprintf("%s/%s/%s", a.Base.Architecture, a.Base.Name, a.Base.Channel)
 		}
@@ -406,6 +420,18 @@ func parseRefreshActions(body []byte) ([]action, error) {
 		actions = append(actions, act)
 	}
 	return actions, nil
+}
+
+// normalizeFields returns a stable, order-independent signature for a
+// refresh request's "fields" array, used to key the cache so responses
+// fetched with different field sets are never conflated.
+func normalizeFields(fields []string) string {
+	if len(fields) == 0 {
+		return ""
+	}
+	sorted := append([]string(nil), fields...)
+	sort.Strings(sorted)
+	return strings.Join(sorted, ",")
 }
 
 // rewriteInstanceKey replaces the instance-key in each result with the given
@@ -523,14 +549,16 @@ func newStore(dir string) (*store, error) {
 	return &store{dir: dir}, nil
 }
 
-// canonicalKey returns the on-disk key for a resolved charm identity.
-func canonicalKey(name string, revision int) string {
-	sum := sha256.Sum256(fmt.Appendf(nil, "%s@%d", name, revision))
+// canonicalKey returns the on-disk key for a resolved charm identity,
+// scoped by fieldsKey so responses fetched with different requested fields
+// are never conflated (see action.FieldsKey).
+func canonicalKey(name string, revision int, fieldsKey string) string {
+	sum := sha256.Sum256(fmt.Appendf(nil, "%s@%d#%s", name, revision, fieldsKey))
 	return hex.EncodeToString(sum[:])
 }
 
-func idKey(id string, revision int) string {
-	sum := sha256.Sum256(fmt.Appendf(nil, "%s@%d", id, revision))
+func idKey(id string, revision int, fieldsKey string) string {
+	sum := sha256.Sum256(fmt.Appendf(nil, "%s@%d#%s", id, revision, fieldsKey))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -550,7 +578,7 @@ func (s *store) LookupRefresh(a action) ([]byte, bool) {
 	defer s.refreshMu.Unlock()
 
 	if a.Name == "" && a.ID != "" {
-		nameBytes, err := os.ReadFile(filepath.Join(s.dir, "ids", idKey(a.ID, *a.Revision)+".name"))
+		nameBytes, err := os.ReadFile(filepath.Join(s.dir, "ids", idKey(a.ID, *a.Revision, a.FieldsKey)+".name"))
 		if err != nil {
 			return nil, false
 		}
@@ -558,29 +586,30 @@ func (s *store) LookupRefresh(a action) ([]byte, bool) {
 		if name == "" {
 			return nil, false
 		}
-		b, err := os.ReadFile(filepath.Join(s.dir, "refresh", canonicalKey(name, *a.Revision)+".json"))
+		b, err := os.ReadFile(filepath.Join(s.dir, "refresh", canonicalKey(name, *a.Revision, a.FieldsKey)+".json"))
 		if err != nil {
 			return nil, false
 		}
 		return b, true
 	}
 
-	b, err := os.ReadFile(filepath.Join(s.dir, "refresh", canonicalKey(a.Name, *a.Revision)+".json"))
+	b, err := os.ReadFile(filepath.Join(s.dir, "refresh", canonicalKey(a.Name, *a.Revision, a.FieldsKey)+".json"))
 	if err != nil {
 		return nil, false
 	}
 	return b, true
 }
 
-// PutRefresh stores a response under the resolved (name, revision) identity
-// read back from the response body, and records the id index so future by-id
-// requests for the same immutable id+revision resolve offline.
+// PutRefresh stores a response under the resolved (name, revision, fields)
+// identity read back from the response body and the requesting action's
+// FieldsKey, and records the id index so future by-id requests for the same
+// immutable id+revision+fields resolve offline.
 //
 // body must contain exactly one result. A multi-result (batched) response
 // must never be cached here: it would later be replayed verbatim to an
 // unrelated single-action request, which the Juju client rejects with
 // "more than 1 result found" (it requires exactly one result per action).
-func (s *store) PutRefresh(body []byte) error {
+func (s *store) PutRefresh(body []byte, fieldsKey string) error {
 	s.refreshMu.Lock()
 	defer s.refreshMu.Unlock()
 
@@ -597,7 +626,7 @@ func (s *store) PutRefresh(body []byte) error {
 
 	// Only single-action requests are cached, so there is exactly one result.
 	name, rev := resolved[0].name, resolved[0].revision
-	path := filepath.Join(s.dir, "refresh", canonicalKey(name, rev)+".json")
+	path := filepath.Join(s.dir, "refresh", canonicalKey(name, rev, fieldsKey)+".json")
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, body, 0o644); err != nil {
 		return err
@@ -607,7 +636,7 @@ func (s *store) PutRefresh(body []byte) error {
 	}
 
 	if id := resolved[0].id; id != "" {
-		idPath := filepath.Join(s.dir, "ids", idKey(id, rev)+".name")
+		idPath := filepath.Join(s.dir, "ids", idKey(id, rev, fieldsKey)+".name")
 		if err := os.WriteFile(idPath, []byte(name), 0o644); err != nil {
 			return err
 		}
