@@ -5,6 +5,8 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -18,31 +20,25 @@ func refreshResponse(name string, revision int, hash, url string) []byte {
 		strconv.Itoa(revision) + `,"download":{"hash-sha-256":"` + hash + `","size":1,"url":"` + url + `"}},"effective-channel":"latest/stable"}]}`)
 }
 
-// TestCrossClientConvergence is the core offline guarantee: a charm the
-// provider deploys by pinned revision and the SAME charm the controller
-// resolves by channel must converge on the same cache entry, so a warm cache
-// serves both offline.
+// TestCrossClientConvergence is the core offline guarantee for pinned
+// revisions: once a (name, revision) has been resolved once, any later
+// request pinned to that SAME revision hits the same cache entry, regardless
+// of which client asked. Channel-only requests are never cached (see
+// TestChannelOnlyNeverCached) since the resolved revision can change.
 func TestCrossClientConvergence(t *testing.T) {
 	st, err := newStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("newStore: %v", err)
 	}
 
-	// The controller resolves ubuntu via channel latest/stable (no revision).
-	controllerAction := action{Name: "ubuntu", Channel: "latest/stable", Base: "amd64/ubuntu/22.04"}
-	// Charmhub answers with resolved revision 77.
+	// Charmhub answers a resolve for ubuntu with revision 77.
 	resp := refreshResponse("ubuntu", 77, "abc123", "https://cdn.example/ubuntu_77.charm")
-	if err := st.PutRefresh([]action{controllerAction}, resp); err != nil {
+	if err := st.PutRefresh(resp); err != nil {
 		t.Fatalf("PutRefresh: %v", err)
 	}
 
-	// 1. The controller's channel-only request resolves offline via the index.
-	if _, ok := st.LookupRefresh(controllerAction); !ok {
-		t.Fatalf("channel-only request did not resolve from cache")
-	}
-
-	// 2. The provider's pinned-revision request for the SAME charm hits the
-	//    SAME canonical entry.
+	// A later pinned-revision request for the SAME charm+revision hits the
+	// SAME canonical entry, regardless of which client asked.
 	rev := 77
 	providerAction := action{Name: "ubuntu", Revision: &rev}
 	got, ok := st.LookupRefresh(providerAction)
@@ -53,10 +49,66 @@ func TestCrossClientConvergence(t *testing.T) {
 		t.Fatalf("provider got different body than stored")
 	}
 
-	// 3. A different revision is a distinct entry (miss).
+	// A different revision is a distinct entry (miss).
 	rev78 := 78
 	if _, ok := st.LookupRefresh(action{Name: "ubuntu", Revision: &rev78}); ok {
 		t.Fatalf("revision 78 unexpectedly resolved from cache")
+	}
+}
+
+// TestHandlePassthrough verifies that requests to Charmhub API paths this
+// proxy doesn't cache (e.g. resource revision lookups) are forwarded to
+// upstream with status, body and content-type preserved. Without this, an
+// unhandled path 404s with a plain-text body, which the Juju client rejects
+// with "unexpected charm-hub url ... when parsing headers".
+func TestHandlePassthrough(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/charms/resources/juju-qa-test/foo-file/revisions" {
+			t.Errorf("unexpected upstream path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"revisions":[]}`))
+	}))
+	defer upstream.Close()
+
+	s := &server{store: nil, upstream: upstream.URL}
+
+	req := httptest.NewRequest(http.MethodGet, "/v2/charms/resources/juju-qa-test/foo-file/revisions", nil)
+	rec := httptest.NewRecorder()
+	s.handlePassthrough(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("content-type = %q, want application/json", ct)
+	}
+	if rec.Body.String() != `{"revisions":[]}` {
+		t.Fatalf("body = %q", rec.Body.String())
+	}
+}
+
+// TestChannelOnlyNeverCached verifies that channel-only requests (no pinned
+// revision) are never served from cache, even after the same charm has been
+// resolved and stored under a pinned revision. A channel's resolved revision
+// can change at any time, so serving it from cache would return stale data
+// once Charmhub advances the channel — this caused a real test failure
+// ("expected charm revision to be updated ... but it is still N").
+func TestChannelOnlyNeverCached(t *testing.T) {
+	st, err := newStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("newStore: %v", err)
+	}
+
+	resp := refreshResponse("ubuntu", 77, "abc123", "https://cdn.example/ubuntu_77.charm")
+	if err := st.PutRefresh(resp); err != nil {
+		t.Fatalf("PutRefresh: %v", err)
+	}
+
+	channelOnly := action{Name: "ubuntu", Channel: "latest/stable", Base: "amd64/ubuntu/22.04"}
+	if _, ok := st.LookupRefresh(channelOnly); ok {
+		t.Fatalf("channel-only request unexpectedly resolved from cache; must always miss to upstream")
 	}
 }
 
@@ -72,8 +124,7 @@ func TestRefreshByIDOffline(t *testing.T) {
 	// Store a response (as if from a deploy) — it carries the charmhub id.
 	resp := refreshResponse("ubuntu", 77, "abc123", "https://cdn.example/ubuntu_77.charm")
 	rev := 77
-	deployAction := action{Name: "ubuntu", Channel: "latest/stable", Revision: &rev}
-	if err := st.PutRefresh([]action{deployAction}, resp); err != nil {
+	if err := st.PutRefresh(resp); err != nil {
 		t.Fatalf("PutRefresh: %v", err)
 	}
 
@@ -288,7 +339,7 @@ func TestStorePutRefreshThenRead(t *testing.T) {
 	rev := 77
 	a := action{Name: "ubuntu", Revision: &rev}
 	body := refreshResponse("ubuntu", 77, "abc123", "https://cdn.example/u.charm")
-	if err := st.PutRefresh([]action{a}, body); err != nil {
+	if err := st.PutRefresh(body); err != nil {
 		t.Fatalf("PutRefresh: %v", err)
 	}
 	got, ok := st.LookupRefresh(a)
