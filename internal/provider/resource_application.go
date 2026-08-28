@@ -398,7 +398,7 @@ func (r *applicationResource) Schema(ctx context.Context, _ resource.SchemaReque
 							Computed:    true,
 							PlanModifiers: []planmodifier.Int64{
 								int64planmodifier.UseStateForUnknown(),
-								InvalidateRevisionIfChannelChanges(),
+								InvalidateRevisionIfChannelOrBaseChanges(),
 							},
 						},
 						BaseKey: schema.StringAttribute{
