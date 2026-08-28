@@ -20,6 +20,39 @@ func refreshResponse(name string, revision int, hash, url string) []byte {
 		strconv.Itoa(revision) + `,"download":{"hash-sha-256":"` + hash + `","size":1,"url":"` + url + `"}},"effective-channel":"latest/stable"}]}`)
 }
 
+// multiResultRefreshResponse builds a batched refresh response containing
+// results for two charms, as the charmrevisioner's RefreshMany can produce.
+func multiResultRefreshResponse(a, b string, revA, revB int) []byte {
+	one := `{"charm":{"id":"charm-id-` + a + `","name":"` + a + `","revision":` + strconv.Itoa(revA) + `},"effective-channel":"latest/stable"}`
+	two := `{"charm":{"id":"charm-id-` + b + `","name":"` + b + `","revision":` + strconv.Itoa(revB) + `},"effective-channel":"latest/stable"}`
+	return []byte(`{"results":[` + one + `,` + two + `]}`)
+}
+
+// TestPutRefreshRejectsMultiResult is a regression test: caching a batched
+// (multi-result) response under one canonical key would later be replayed
+// verbatim to an unrelated single-action request expecting exactly one
+// result. The Juju client rejects that with "more than 1 result found"
+// (core/charm/repository.(*CharmHubRepository).refreshOne requires len==1).
+// PutRefresh must refuse to store multi-result bodies.
+func TestPutRefreshRejectsMultiResult(t *testing.T) {
+	st, err := newStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("newStore: %v", err)
+	}
+
+	body := multiResultRefreshResponse("ubuntu", "postgresql", 77, 10)
+	if err := st.PutRefresh(body); err == nil {
+		t.Fatalf("PutRefresh accepted a multi-result response; must reject it")
+	}
+
+	// Confirm nothing was cached: a later single-action lookup for either
+	// charm must miss (go to upstream), not return the batched body.
+	rev := 77
+	if _, ok := st.LookupRefresh(action{Name: "ubuntu", Revision: &rev}); ok {
+		t.Fatalf("multi-result response was cached despite PutRefresh rejecting it")
+	}
+}
+
 // TestCrossClientConvergence is the core offline guarantee for pinned
 // revisions: once a (name, revision) has been resolved once, any later
 // request pinned to that SAME revision hits the same cache entry, regardless
