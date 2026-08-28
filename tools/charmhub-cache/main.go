@@ -218,9 +218,15 @@ func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Best-effort: a store failure must not fail the deploy.
-	if err := s.store.PutRefresh(rewritten); err != nil {
-		log.Printf("charmhub-cache: store refresh failed: %v", err)
+	// Only cache single-action responses. A batched (multi-action) response
+	// contains multiple results; storing it under one canonical key would
+	// later be replayed to an unrelated single-action request expecting
+	// exactly one result, which the client rejects ("more than 1 result
+	// found"). Best-effort: a store failure must not fail the deploy.
+	if len(actions) == 1 {
+		if err := s.store.PutRefresh(rewritten); err != nil {
+			log.Printf("charmhub-cache: store refresh failed: %v", err)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -569,6 +575,11 @@ func (s *store) LookupRefresh(a action) ([]byte, bool) {
 // PutRefresh stores a response under the resolved (name, revision) identity
 // read back from the response body, and records the id index so future by-id
 // requests for the same immutable id+revision resolve offline.
+//
+// body must contain exactly one result. A multi-result (batched) response
+// must never be cached here: it would later be replayed verbatim to an
+// unrelated single-action request, which the Juju client rejects with
+// "more than 1 result found" (it requires exactly one result per action).
 func (s *store) PutRefresh(body []byte) error {
 	s.refreshMu.Lock()
 	defer s.refreshMu.Unlock()
@@ -579,6 +590,9 @@ func (s *store) PutRefresh(body []byte) error {
 	}
 	if len(resolved) == 0 {
 		return errors.New("no resolved results in response")
+	}
+	if len(resolved) > 1 {
+		return fmt.Errorf("refusing to cache a multi-result response (%d results)", len(resolved))
 	}
 
 	// Only single-action requests are cached, so there is exactly one result.
