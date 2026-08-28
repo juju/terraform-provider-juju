@@ -3,20 +3,18 @@
 
 // Command charmhub-cache is a caching reverse proxy for the CharmHub refresh
 // API and charm blob downloads, designed for CI. Responses are cached by the
-// resolved charm identity (name + revision) so a charm deployed by pinned
-// revision (the provider) and the same charm resolved by channel (the Juju
-// controller) share one cache entry. Once warm, the proxy serves entirely
-// offline. The on-disk store is trivially cacheable via actions/cache.
+// resolved charm identity (name + revision), which is immutable, so entries
+// never expire. Requests pinned to a revision (or an id+revision) are served
+// from cache; channel-only requests always go upstream, since their entire
+// purpose is to learn the CURRENT revision for a channel, which can change at
+// any time — caching that would serve stale revisions.
 //
 // Store layout:
 //
 //	<store>/refresh/<key>.json   # response keyed by resolved name@revision
-//	<store>/channels/<key>.rev   # channel+base -> resolved revision index
 //	<store>/ids/<key>.name       # charmhub id+revision -> name index
 //	<store>/blobs/<hash>         # charm blob bytes
 //	<store>/blobs/<hash>.url     # real upstream URL for cold backfill
-//
-// Charm revisions are immutable, so entries never expire.
 package main
 
 import (
@@ -70,6 +68,10 @@ func main() {
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	// Anything else under the Charmhub API (e.g. resource revision lookups)
+	// isn't cached; pass it straight through to upstream so the client sees a
+	// real Charmhub response instead of this proxy's 404.
+	mux.Handle("/", http.HandlerFunc(proxy.handlePassthrough))
 
 	srv := &http.Server{
 		Addr:              *addr,
@@ -100,6 +102,41 @@ func proxyBaseURL(r *http.Request) string {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host
+}
+
+// handlePassthrough forwards any request not otherwise cached (e.g.
+// /v2/charms/resources/<charm>/<resource>/revisions) straight to upstream,
+// preserving method, headers, and body. Not cached: these are outside the
+// refresh/blob paths this proxy understands.
+func (s *server) handlePassthrough(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("read body: %v", err), http.StatusBadRequest)
+		return
+	}
+	_ = r.Body.Close()
+
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, s.upstream+r.URL.RequestURI(), bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("build upstream request: %v", err), http.StatusBadGateway)
+		return
+	}
+	for k, v := range r.Header {
+		req.Header[k] = v
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("upstream unreachable: %v", err), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	for k, v := range resp.Header {
+		w.Header()[k] = v
+	}
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
 }
 
 // handleRefresh serves POST /v2/charms/refresh. See the package comment for
@@ -182,7 +219,7 @@ func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Best-effort: a store failure must not fail the deploy.
-	if err := s.store.PutRefresh(actions, rewritten); err != nil {
+	if err := s.store.PutRefresh(rewritten); err != nil {
 		log.Printf("charmhub-cache: store refresh failed: %v", err)
 	}
 
@@ -472,7 +509,7 @@ type store struct {
 }
 
 func newStore(dir string) (*store, error) {
-	for _, sub := range []string{"refresh", "blobs", "channels", "ids"} {
+	for _, sub := range []string{"refresh", "blobs", "ids"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			return nil, err
 		}
@@ -486,11 +523,6 @@ func canonicalKey(name string, revision int) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func channelKey(name, channel, base string) string {
-	sum := sha256.Sum256(fmt.Appendf(nil, "%s|%s|%s", name, channel, base))
-	return hex.EncodeToString(sum[:])
-}
-
 func idKey(id string, revision int) string {
 	sum := sha256.Sum256(fmt.Appendf(nil, "%s@%d", id, revision))
 	return hex.EncodeToString(sum[:])
@@ -498,16 +530,20 @@ func idKey(id string, revision int) string {
 
 // LookupRefresh returns the cached response for a single action, resolving:
 //   - pinned-revision requests via the canonical (name, revision) key,
-//   - channel-only requests via the channel->revision index,
 //   - by-id requests via the id->name index (requires a revision).
+//
+// Channel-only requests (no revision) are never served from cache: a
+// channel's resolved revision can change at any time, so caching it would
+// serve stale revisions once the channel advances upstream.
 func (s *store) LookupRefresh(a action) ([]byte, bool) {
+	if a.Revision == nil {
+		return nil, false
+	}
+
 	s.refreshMu.Lock()
 	defer s.refreshMu.Unlock()
 
 	if a.Name == "" && a.ID != "" {
-		if a.Revision == nil {
-			return nil, false
-		}
 		nameBytes, err := os.ReadFile(filepath.Join(s.dir, "ids", idKey(a.ID, *a.Revision)+".name"))
 		if err != nil {
 			return nil, false
@@ -523,24 +559,7 @@ func (s *store) LookupRefresh(a action) ([]byte, bool) {
 		return b, true
 	}
 
-	var key string
-	if a.Revision != nil {
-		key = canonicalKey(a.Name, *a.Revision)
-	} else if a.Channel != "" {
-		revBytes, err := os.ReadFile(filepath.Join(s.dir, "channels", channelKey(a.Name, a.Channel, a.Base)+".rev"))
-		if err != nil {
-			return nil, false
-		}
-		var rev int
-		if _, err := fmt.Sscanf(strings.TrimSpace(string(revBytes)), "%d", &rev); err != nil {
-			return nil, false
-		}
-		key = canonicalKey(a.Name, rev)
-	} else {
-		return nil, false
-	}
-
-	b, err := os.ReadFile(filepath.Join(s.dir, "refresh", key+".json"))
+	b, err := os.ReadFile(filepath.Join(s.dir, "refresh", canonicalKey(a.Name, *a.Revision)+".json"))
 	if err != nil {
 		return nil, false
 	}
@@ -548,9 +567,9 @@ func (s *store) LookupRefresh(a action) ([]byte, bool) {
 }
 
 // PutRefresh stores a response under the resolved (name, revision) identity
-// read back from the response body, and records the channel and id indexes
-// so future channel-only and by-id requests resolve offline.
-func (s *store) PutRefresh(actions []action, body []byte) error {
+// read back from the response body, and records the id index so future by-id
+// requests for the same immutable id+revision resolve offline.
+func (s *store) PutRefresh(body []byte) error {
 	s.refreshMu.Lock()
 	defer s.refreshMu.Unlock()
 
@@ -576,21 +595,6 @@ func (s *store) PutRefresh(actions []action, body []byte) error {
 	if id := resolved[0].id; id != "" {
 		idPath := filepath.Join(s.dir, "ids", idKey(id, rev)+".name")
 		if err := os.WriteFile(idPath, []byte(name), 0o644); err != nil {
-			return err
-		}
-	}
-
-	for _, a := range actions {
-		if a.Channel == "" {
-			continue
-		}
-		// By-id actions have no name; use the resolved name.
-		chName := a.Name
-		if chName == "" {
-			chName = name
-		}
-		revPath := filepath.Join(s.dir, "channels", channelKey(chName, a.Channel, a.Base)+".rev")
-		if err := os.WriteFile(revPath, fmt.Appendf(nil, "%d", rev), 0o644); err != nil {
 			return err
 		}
 	}
