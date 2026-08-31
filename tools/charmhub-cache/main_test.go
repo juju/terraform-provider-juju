@@ -426,6 +426,33 @@ func TestFieldsMismatchNotServedFromCache(t *testing.T) {
 	}
 }
 
+// TestRevisionWithChannelNeverCached is a regression test for a real CI
+// failure: RefreshOne (juju3/charmhub/refresh.go) sends BOTH the currently
+// installed revision AND the tracking channel, to ask "has this channel
+// advanced past what I have installed?". That answer changes as the channel
+// advances, exactly like a channel-only resolve. The proxy previously only
+// treated a nil Revision as "never cache", so this shape (revision set,
+// channel also set) was wrongly served from cache: after switching to a new
+// channel at the same starting revision, the update check kept replaying
+// the stale "no update available" response recorded under the old channel.
+func TestRevisionWithChannelNeverCached(t *testing.T) {
+	st, err := newStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("newStore: %v", err)
+	}
+
+	resp := refreshResponse("ubuntu", 25, "abc123", "https://cdn.example/ubuntu_25.charm")
+	if err := st.PutRefresh(resp, ""); err != nil {
+		t.Fatalf("PutRefresh: %v", err)
+	}
+
+	rev := 25
+	updateCheck := action{Name: "ubuntu", Revision: &rev, Channel: "2.0/stable"}
+	if _, ok := st.LookupRefresh(updateCheck); ok {
+		t.Fatalf("revision+channel request unexpectedly resolved from cache; must always miss to upstream")
+	}
+}
+
 // TestStoreBlobURLRoundTrip verifies the blob URL index persists.
 func TestStoreBlobURLRoundTrip(t *testing.T) {
 	st, err := newStore(t.TempDir())
