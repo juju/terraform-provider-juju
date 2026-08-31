@@ -105,9 +105,11 @@ func (idx *refIndex) modelUUIDFor(block *hclwrite.Block) string {
 
 // --- attribute evaluation via hclsyntax.ParseExpression ---
 
-// attrValue parses an attribute's expression from its raw token bytes and
-// evaluates it in an empty context. Only literal expressions produce known
-// values; references and unknowns return (NilVal, false).
+// attrValue evaluates an attribute's literal value. hclwrite only exposes an
+// attribute's raw tokens, not its value, so we re-serialize those tokens and
+// parse them with hclsyntax to get an expression we can evaluate. Only
+// literal expressions produce known values; references and unknowns return
+// (NilVal, false), which callers treat as "leave this attribute alone".
 func attrValue(attr *hclwrite.Attribute) (cty.Value, bool) {
 	src := attr.Expr().BuildTokens(nil).Bytes()
 	expr, diags := hclsyntax.ParseExpression(src, "<attr>", hcl.Pos{Line: 1, Column: 1})
@@ -136,14 +138,14 @@ func readAttrString(block *hclwrite.Block, name string) string {
 }
 
 // readAttrRef reads a top-level attribute whose value is a dotted reference
-// (e.g. `to = juju_model.model_0`), returning "type.label".
+// (e.g. `to = juju_model.model_0`), returning "type.label". A reference
+// can't be evaluated by attrValue (it has no literal value until Terraform
+// applies), so instead we parse its tokens as a traversal and join the steps.
 func readAttrRef(block *hclwrite.Block, name string) string {
 	attr := block.Body().GetAttribute(name)
 	if attr == nil {
 		return ""
 	}
-	// References don't evaluate to known values; parse the raw tokens as a
-	// traversal and join the steps.
 	src := attr.Expr().BuildTokens(nil).Bytes()
 	t, diags := hclsyntax.ParseTraversalAbs(src, "<attr>", hcl.Pos{Line: 1, Column: 1})
 	if diags.HasErrors() {
