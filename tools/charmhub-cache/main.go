@@ -241,12 +241,16 @@ func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 }
 
 // isCacheable reports whether an action's response may be safely stored and
-// later replayed. It must mirror the read-side check in LookupRefresh: a
-// request with no revision, or with a revision AND a channel (an
-// "is there an update?" check whose response reflects the current channel
-// head), must never be cached.
+// later replayed. It must mirror the read-side check in LookupRefresh. Never
+// cached:
+//   - no revision (channel-only resolve; the revision can change);
+//   - revision AND channel (an "is there an update?" check whose response
+//     reflects the current channel head);
+//   - a resource-revisions discriminator, since the cache key ignores it and
+//     would conflate different requested resource revisions of the same
+//     charm+revision (see action.HasResourceRevisions).
 func isCacheable(a action) bool {
-	return a.Revision != nil && a.Channel == ""
+	return a.Revision != nil && a.Channel == "" && !a.HasResourceRevisions
 }
 
 // handleBlob serves GET /blob/<hash>, where <hash> is the blob's sha256 as
@@ -356,6 +360,16 @@ type action struct {
 	// doesn't), so this must be part of the cache key or a response cached
 	// for one field set gets replayed to a caller needing another.
 	FieldsKey string
+	// HasResourceRevisions is set when the action carries a
+	// "resource-revisions" discriminator (charmhub.AddResource). The
+	// controller uses this to resolve a SPECIFIC resource revision for the
+	// same charm+revision (e.g. coredns@191 with coredns-image rev 59 vs
+	// 70); the response's embedded resources reflect that requested
+	// resource revision. Our cache key does NOT include it, so such a
+	// request must never be cached — otherwise coredns@191+res59 and
+	// coredns@191+res70 collide on one entry and the first to populate it
+	// wins, serving the wrong resource revision.
+	HasResourceRevisions bool
 }
 
 // parseRefreshActions extracts the actions from a refresh request body,
@@ -386,6 +400,7 @@ func parseRefreshActions(body []byte) ([]action, error) {
 				Name         string `json:"name"`
 				Channel      string `json:"channel"`
 			} `json:"base"`
+			ResourceRevisions []json.RawMessage `json:"resource-revisions"`
 		} `json:"actions"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -412,7 +427,7 @@ func parseRefreshActions(body []byte) ([]action, error) {
 
 	actions := make([]action, 0, len(req.Actions))
 	for _, a := range req.Actions {
-		act := action{ID: a.ID, Name: a.Name, Channel: a.Channel, Revision: a.Revision, InstanceKey: a.InstanceKey, FieldsKey: fieldsKey}
+		act := action{ID: a.ID, Name: a.Name, Channel: a.Channel, Revision: a.Revision, InstanceKey: a.InstanceKey, FieldsKey: fieldsKey, HasResourceRevisions: len(a.ResourceRevisions) > 0}
 		if a.Base != nil {
 			act.Base = fmt.Sprintf("%s/%s/%s", a.Base.Architecture, a.Base.Name, a.Base.Channel)
 		}

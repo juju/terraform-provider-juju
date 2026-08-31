@@ -6,6 +6,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -510,6 +512,68 @@ func TestUpdateCheckDoesNotPoisonPinnedRevisionCache(t *testing.T) {
 	s.handleRefresh(rec2, req2)
 	if rec2.Header().Get("X-Charmhub-Cache") == "HIT" {
 		t.Fatalf("pinned-revision resolve was served from cache; the update-check response poisoned the entry")
+	}
+}
+
+// TestResourceRevisionRequestsNotConflated is the end-to-end regression test
+// for the real CI failure in TestAcc_ResourceRevisionUpdatesMicrok8s
+// (coredns-image "70" -> "59"). To resolve a SPECIFIC k8s image resource
+// revision, the controller (juju3 core/charm/repository.configsByName ->
+// charmhub.AddResource) sends a refresh with revision pinned (191, no
+// channel) plus a "resource-revisions" discriminator naming the wanted
+// resource revision. Two such requests for the SAME charm+revision but
+// DIFFERENT resource revisions (59 vs 70) differ ONLY in resource-revisions,
+// which the cache key ignores — so without excluding them from the cache the
+// first to populate coredns@191#fields wins and is replayed to the other,
+// serving the wrong resource revision. This is why the test failed on the
+// proxy branch but not on main (live Charmhub honours each request).
+func TestResourceRevisionRequestsNotConflated(t *testing.T) {
+	st, err := newStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("newStore: %v", err)
+	}
+
+	// Upstream echoes back the requested resource revision so we can tell
+	// which request a response actually came from.
+	var upstreamHits int
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		body, _ := io.ReadAll(r.Body)
+		rev := 70
+		if bytes.Contains(body, []byte(`"revision":59`)) {
+			rev = 59
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprintf(w, `{"results":[{"charm":{"id":"charm-id-coredns","name":"coredns","revision":191,`+
+			`"resources":[{"name":"coredns-image","revision":%d}]}}]}`, rev)
+	}))
+	defer upstream.Close()
+
+	s := &server{store: st, upstream: upstream.URL}
+
+	resReq := func(resRev int) *httptest.ResponseRecorder {
+		body := []byte(fmt.Sprintf(`{"actions":[{"action":"install","instance-key":"ik","name":"coredns","revision":191,`+
+			`"resource-revisions":[{"name":"coredns-image","revision":%d}]}]}`, resRev))
+		req := httptest.NewRequest(http.MethodPost, refreshPath, bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		s.handleRefresh(rec, req)
+		return rec
+	}
+
+	// Resolve resource rev 70 first (populates any cache), then rev 59.
+	_ = resReq(70)
+	rec := resReq(59)
+
+	// The rev-59 request must NOT be served the rev-70 cached response.
+	if rec.Header().Get("X-Charmhub-Cache") == "HIT" {
+		t.Fatalf("resource-revision request was served from cache, conflating different resource revisions")
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"revision":59`)) {
+		t.Fatalf("resource rev 59 request got wrong response body: %s", rec.Body.String())
+	}
+	if upstreamHits != 2 {
+		t.Fatalf("expected both resource-revision requests to reach upstream, got %d hits", upstreamHits)
 	}
 }
 
