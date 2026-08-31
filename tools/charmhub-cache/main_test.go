@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -450,6 +451,65 @@ func TestRevisionWithChannelNeverCached(t *testing.T) {
 	updateCheck := action{Name: "ubuntu", Revision: &rev, Channel: "2.0/stable"}
 	if _, ok := st.LookupRefresh(updateCheck); ok {
 		t.Fatalf("revision+channel request unexpectedly resolved from cache; must always miss to upstream")
+	}
+}
+
+// TestUpdateCheckDoesNotPoisonPinnedRevisionCache is an end-to-end
+// regression test for a real CI failure: LookupRefresh correctly refuses to
+// SERVE a revision+channel ("is there an update?") response from cache, but
+// handleRefresh still unconditionally STORED every single-action cache miss
+// — including that same revision+channel shape. Since it always misses on
+// lookup, it always falls through to upstream and gets written to the store
+// under the SAME canonical key a later plain pinned-revision request uses.
+// The update-check response reflects the CURRENT channel head (e.g.
+// embedded resource revisions), so it poisoned the entry for a later plain
+// resolve of that same revision: coredns@191's deploy-time resolve was
+// served a resources array reflecting whatever coredns-image the channel
+// currently points to (70) instead of resolving fresh, producing the wrong
+// resource revision deterministically on every run.
+func TestUpdateCheckDoesNotPoisonPinnedRevisionCache(t *testing.T) {
+	st, err := newStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("newStore: %v", err)
+	}
+
+	// The upstream always resolves coredns@191 with whatever the CURRENT
+	// channel-head image resource revision is (70), simulating Charmhub's
+	// real behaviour: the charm revision is pinned, but embedded resource
+	// revisions still reflect the channel's current state.
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"results":[{"charm":{"id":"charm-id-coredns","name":"coredns","revision":191,` +
+			`"resources":[{"name":"coredns-image","revision":70}]}}]}`))
+	}))
+	defer upstream.Close()
+
+	s := &server{store: st, upstream: upstream.URL}
+
+	// Step 1: an "is there an update?" check — revision AND channel both
+	// set, as RefreshOne sends. This must miss the (empty) cache, go
+	// upstream, and — critically — must NOT be stored afterwards.
+	updateCheckBody := []byte(`{
+		"context":[{"instance-key":"ik-1","id":"charm-id-coredns","revision":191,"tracking-channel":"latest/stable"}],
+		"actions":[{"action":"refresh","instance-key":"ik-1","id":"charm-id-coredns"}]
+	}`)
+	req := httptest.NewRequest(http.MethodPost, refreshPath, bytes.NewReader(updateCheckBody))
+	rec := httptest.NewRecorder()
+	s.handleRefresh(rec, req)
+	if rec.Header().Get("X-Charmhub-Cache") != "MISS" {
+		t.Fatalf("update-check: X-Charmhub-Cache = %q, want MISS", rec.Header().Get("X-Charmhub-Cache"))
+	}
+
+	// Step 2: a plain pinned-revision resolve for the SAME revision, no
+	// channel — the deploy's actual charm resolve. It must resolve fresh
+	// (cache miss), not be served the update-check's poisoned response.
+	pinnedBody := []byte(`{"actions":[{"action":"install","instance-key":"ik-2","name":"coredns","revision":191}]}`)
+	req2 := httptest.NewRequest(http.MethodPost, refreshPath, bytes.NewReader(pinnedBody))
+	rec2 := httptest.NewRecorder()
+	s.handleRefresh(rec2, req2)
+	if rec2.Header().Get("X-Charmhub-Cache") == "HIT" {
+		t.Fatalf("pinned-revision resolve was served from cache; the update-check response poisoned the entry")
 	}
 }
 
