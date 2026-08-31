@@ -127,7 +127,7 @@ func TestParseIdentity(t *testing.T) {
 			id:   "c1cecf1e-fe66-4589-8585-e579edd6f58b:dummy-sink",
 			check: func(t *testing.T, e entityID) {
 				assert.Equal(t, "c1cecf1e-fe66-4589-8585-e579edd6f58b", e.modelUUID)
-				assert.Equal(t, "dummy-sink", e.part(0))
+				assert.Equal(t, "dummy-sink", e.name)
 			},
 		},
 		{
@@ -136,36 +136,15 @@ func TestParseIdentity(t *testing.T) {
 			id:   "c1cecf1e-fe66-4589-8585-e579edd6f58b:1:machine-1",
 			check: func(t *testing.T, e entityID) {
 				assert.Equal(t, "c1cecf1e-fe66-4589-8585-e579edd6f58b", e.modelUUID)
-				assert.Equal(t, "1", e.part(0))
-				assert.Equal(t, "machine-1", e.part(1))
+				assert.Equal(t, "1", e.name)
 			},
 		},
 		{
-			name: "secret",
-			kind: kindSecret,
-			id:   "c1cecf1e-fe66-4589-8585-e579edd6f58b:db-password",
-			check: func(t *testing.T, e entityID) {
-				assert.Equal(t, "db-password", e.part(0))
-			},
-		},
-		{
-			name: "ssh_key",
-			kind: kindSSHKey,
-			id:   "sshkey:c1cecf1e-fe66-4589-8585-e579edd6f58b:abc123",
-			check: func(t *testing.T, e entityID) {
-				assert.Equal(t, "c1cecf1e-fe66-4589-8585-e579edd6f58b", e.modelUUID)
-				assert.Equal(t, "abc123", e.part(0))
-			},
-		},
-		{
-			name: "integration",
+			name: "integration (only model UUID is used)",
 			kind: kindIntegration,
 			id:   "c1cecf1e-fe66-4589-8585-e579edd6f58b:dummy-sink:sink:dummy-source:source",
 			check: func(t *testing.T, e entityID) {
-				assert.Equal(t, "dummy-sink", e.part(0))
-				assert.Equal(t, "sink", e.part(1))
-				assert.Equal(t, "dummy-source", e.part(2))
-				assert.Equal(t, "source", e.part(3))
+				assert.Equal(t, "c1cecf1e-fe66-4589-8585-e579edd6f58b", e.modelUUID)
 			},
 		},
 		{
@@ -185,19 +164,7 @@ func TestParseIdentity(t *testing.T) {
 		{
 			name:    "malformed machine",
 			kind:    kindMachine,
-			id:      "uuid:1",
-			wantErr: true,
-		},
-		{
-			name:    "malformed ssh_key missing prefix",
-			kind:    kindSSHKey,
-			id:      "uuid:abc",
-			wantErr: true,
-		},
-		{
-			name:    "malformed integration",
-			kind:    kindIntegration,
-			id:      "uuid:app:ep:app",
+			id:      "",
 			wantErr: true,
 		},
 	}

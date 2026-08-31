@@ -56,77 +56,40 @@ func kindOf(resourceType string) resourceKind {
 	}
 }
 
-// entityID is the parsed components of a Juju resource identity.
+// entityID holds the model UUID and, where relevant, the name parsed from a
+// Juju resource import identity. The refwriter only rewrites model,
+// application, and machine references, so only those identities need a
+// name:
+//
+//	model:       "<modelUUID>"              (opaque)
+//	offer:       "<controller>:<model.app>" (opaque)
+//	application: "<modelUUID>:<name>"
+//	machine:     "<modelUUID>:<machineID>[:...]"
+//
+// Other kinds (secret, integration, ...) only ever need the model UUID,
+// which is always the part before the first colon.
 type entityID struct {
 	kind      resourceKind
 	modelUUID string
-	parts     []string
-}
-
-// identityShape describes how a resource kind's import identity decomposes
-// into colon-separated parts. Zero-length partCount means the identity is
-// opaque (model UUID / offer URL - the whole string is treated as the model
-// UUID).
-type identityShape struct {
-	partCount int
-	prefix    string
-}
-
-// shapeFor returns the expected identity format for a given resource kind.
-// Returns nil for kinds whose identities are opaque (model UUID, offer URL).
-func shapeFor(kind resourceKind) *identityShape {
-	switch kind {
-	case kindModel, kindOffer:
-		return nil
-	case kindApplication, kindSecret, kindSpace, kindStoragePool,
-		kindAccessModel, kindAccessSecret:
-		return &identityShape{partCount: 2}
-	case kindMachine:
-		return &identityShape{partCount: 3}
-	case kindSSHKey:
-		return &identityShape{partCount: 2, prefix: "sshkey:"}
-	case kindIntegration:
-		return &identityShape{partCount: 5}
-	default:
-		return nil
-	}
+	name      string
 }
 
 // parseIdentity parses a Juju resource identity string for the given kind.
-// Returns an error if the identity is malformed.
+// Model and offer identities are opaque and stored whole as the model UUID.
+// Every other kind's identity starts with "<modelUUID>:", with the name (if
+// any) being the next colon-separated component. Returns an error if a
+// non-opaque identity has no model UUID component.
 func parseIdentity(kind resourceKind, id string) (entityID, error) {
 	e := entityID{kind: kind}
-	shape := shapeFor(kind)
-	if shape == nil {
+	if kind == kindModel || kind == kindOffer {
 		e.modelUUID = id
 		return e, nil
 	}
-	s := id
-	if shape.prefix != "" {
-		if !strings.HasPrefix(s, shape.prefix) {
-			return e, fmt.Errorf("malformed %s identity %q: expected prefix %q", kind, id, shape.prefix)
-		}
-		s = strings.TrimPrefix(s, shape.prefix)
+	modelUUID, rest, ok := strings.Cut(id, ":")
+	if !ok || modelUUID == "" {
+		return e, fmt.Errorf("malformed %s identity %q: expected \"<modelUUID>:...\"", kind, id)
 	}
-	parts := strings.Split(s, ":")
-	if len(parts) != shape.partCount {
-		return e, fmt.Errorf("malformed %s identity %q: expected %d colon-separated parts", kind, id, shape.partCount)
-	}
-	for _, p := range parts {
-		if p == "" {
-			return e, fmt.Errorf("malformed %s identity %q: empty component", kind, id)
-		}
-	}
-	e.modelUUID, e.parts = parts[0], parts[1:]
+	e.modelUUID = modelUUID
+	e.name, _, _ = strings.Cut(rest, ":")
 	return e, nil
-}
-
-// part returns the i-th sub-component (app name for application, machine id
-// for machine, secret/pool name for secret/storage_pool, app names for
-// integration, etc.), or "" if out of range.
-func (e entityID) part(i int) string {
-	if len(e.parts) <= i {
-		return ""
-	}
-	return e.parts[i]
 }

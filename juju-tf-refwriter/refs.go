@@ -62,9 +62,9 @@ func (idx *refIndex) indexResource(block *hclwrite.Block) {
 	case kindModel:
 		idx.modelByUUID[id] = addr
 	case kindApplication:
-		idx.appByModelAndName[e.modelUUID+":"+e.part(0)] = addr
+		idx.appByModelAndName[e.modelUUID+":"+e.name] = addr
 	case kindMachine:
-		idx.machineByModelAndID[e.modelUUID+":"+e.part(0)] = addr
+		idx.machineByModelAndID[e.modelUUID+":"+e.name] = addr
 	}
 }
 
