@@ -43,7 +43,7 @@ resource "juju_machine" "this_machine" {
 - `constraints` (String) Machine constraints that overwrite those available from 'juju get-model-constraints' and provider's defaults. Changing this value will cause the application to be destroyed and recreated by terraform.
 - `disks` (String) Storage constraints for disks to attach to the machine(s). Changing this value will cause the machine to be destroyed and recreated by terraform.
 - `name` (String) A name for the machine resource in Terraform.
-- `placement` (String) Additional information about how to allocate the machine in the cloud. Changing this value will cause the application to be destroyed and recreated by terraform.
+- `placement` (String) Additional information about how to allocate the machine in the cloud. Changing this value on a machine that already tracks a placement directive will cause the machine to be destroyed and recreated by terraform. Note that Juju does not expose the placement directive, so it cannot be read back: an imported machine has an empty placement in state and will not be recreated when a placement is set in configuration.
 - `private_key_file` (String) The file path to read the private key from.
 - `public_key_file` (String) The file path to read the public key from.
 - `ssh_address` (String) The user@host directive for manual provisioning an existing machine via ssh. Requires public_key_file & private_key_file arguments. Changing this value will cause the machine to be destroyed and recreated by terraform.
