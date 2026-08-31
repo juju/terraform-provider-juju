@@ -20,6 +20,9 @@ type refIndex struct {
 	appByModelAndName   map[string]string
 	machineByModelAndID map[string]string
 	importIDByAddr      map[string]string
+	// modelUUIDByAddr caches the model UUID each resource belongs to, parsed
+	// once from its import identity, so rewrites don't need to re-parse it.
+	modelUUIDByAddr map[string]string
 }
 
 func newRefIndex() *refIndex {
@@ -28,6 +31,7 @@ func newRefIndex() *refIndex {
 		appByModelAndName:   make(map[string]string),
 		machineByModelAndID: make(map[string]string),
 		importIDByAddr:      make(map[string]string),
+		modelUUIDByAddr:     make(map[string]string),
 	}
 }
 
@@ -58,6 +62,7 @@ func (idx *refIndex) indexResource(block *hclwrite.Block) {
 	if err != nil {
 		return
 	}
+	idx.modelUUIDByAddr[addr] = e.modelUUID
 	switch kind {
 	case kindModel:
 		idx.modelByUUID[id] = addr
@@ -91,6 +96,12 @@ func (idx *refIndex) importIdentityID(addr string) string {
 func (idx *refIndex) modelRef(modelUUID string) string { return idx.modelByUUID[modelUUID] }
 func (idx *refIndex) appRef(mu, n string) string       { return idx.appByModelAndName[mu+":"+n] }
 func (idx *refIndex) machineRef(mu, id string) string  { return idx.machineByModelAndID[mu+":"+id] }
+
+// modelUUIDFor returns the model UUID a resource block belongs to, resolved
+// once during indexing from its import identity.
+func (idx *refIndex) modelUUIDFor(block *hclwrite.Block) string {
+	return idx.modelUUIDByAddr[resourceAddress(block)]
+}
 
 // --- attribute evaluation via hclsyntax.ParseExpression ---
 

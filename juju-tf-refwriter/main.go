@@ -223,7 +223,7 @@ func rewriteModelUUID(block *hclwrite.Block, idx *refIndex) (bool, []string) {
 // to scope the lookup.
 func rewriteApplicationMachines(block *hclwrite.Block, idx *refIndex) (bool, []string) {
 	addr := resourceAddress(block)
-	modelUUID := resolveModelUUID(block, idx, kindApplication)
+	modelUUID := idx.modelUUIDFor(block)
 	if modelUUID == "" {
 		return false, nil
 	}
@@ -262,7 +262,7 @@ func rewriteApplicationMachines(block *hclwrite.Block, idx *refIndex) (bool, []s
 // the corresponding juju_application resource.
 func rewriteIntegrationApplications(block *hclwrite.Block, idx *refIndex) (bool, []string) {
 	addr := resourceAddress(block)
-	modelUUID := resolveModelUUID(block, idx, kindIntegration)
+	modelUUID := idx.modelUUIDFor(block)
 	if modelUUID == "" {
 		return false, nil
 	}
@@ -286,20 +286,6 @@ func rewriteIntegrationApplications(block *hclwrite.Block, idx *refIndex) (bool,
 		changed = true
 	}
 	return changed, warnings
-}
-
-// resolveModelUUID determines the model UUID that a resource block belongs to,
-// read from the matching import block's identity.
-func resolveModelUUID(block *hclwrite.Block, idx *refIndex, kind resourceKind) string {
-	id := idx.importIdentityID(resourceAddress(block))
-	if id == "" {
-		return ""
-	}
-	e, err := parseIdentity(kind, id)
-	if err != nil {
-		return ""
-	}
-	return e.modelUUID
 }
 
 // attrStringList evaluates a top-level attribute as a list/tuple of strings.
