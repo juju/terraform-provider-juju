@@ -3,20 +3,21 @@
 
 // Command charmhub-cache is a caching reverse proxy for the CharmHub refresh
 // API and charm blob downloads, designed for CI. Responses are cached by the
-// resolved charm identity (name + revision) plus the requested fields, since
-// different callers (e.g. the provider's ActionExists vs. the controller's
-// deploy resolve) request different field sets for the same charm+revision;
-// the identity portion is immutable, so entries never expire. Requests
-// pinned to a revision (or an id+revision) and carrying no channel are
-// served from cache; requests with no revision, or with a revision AND a
-// channel (an "is there an update?" check), always go upstream, since their
-// purpose is to learn the CURRENT revision for a channel, which can change
-// at any time — caching that would serve stale revisions.
+// resolved charm identity (name + revision) plus a variant key covering the
+// requested fields AND resource revisions, since different callers (e.g. the
+// provider's ActionExists vs. the controller's deploy resolve) request
+// different field/resource sets for the same charm+revision; the identity
+// portion is immutable, so entries never expire. Requests pinned to a
+// revision (or an id+revision) and carrying no channel are served from
+// cache; requests with no revision, or with a revision AND a channel (an
+// "is there an update?" check), always go upstream, since their purpose is
+// to learn the CURRENT revision for a channel, which can change at any time
+// — caching that would serve stale revisions.
 //
 // Store layout:
 //
-//	<store>/refresh/<key>.json   # response keyed by name@revision#fields
-//	<store>/ids/<key>.name       # charmhub id+revision+fields -> name index
+//	<store>/refresh/<key>.json   # response keyed by name@revision#variant
+//	<store>/ids/<key>.name       # charmhub id+revision+variant -> name index
 //	<store>/blobs/<hash>         # charm blob bytes
 //	<store>/blobs/<hash>.url     # real upstream URL for cold backfill
 package main
@@ -230,7 +231,7 @@ func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	// action responses are excluded here and rejected again in PutRefresh.
 	// Best-effort: a store failure must not fail the deploy.
 	if len(actions) == 1 && isCacheable(actions[0]) {
-		if err := s.store.PutRefresh(rewritten, actions[0].FieldsKey); err != nil {
+		if err := s.store.PutRefresh(rewritten, variantKey(actions[0])); err != nil {
 			log.Printf("charmhub-cache: store refresh failed: %v", err)
 		}
 	}
@@ -245,12 +246,25 @@ func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 // cached:
 //   - no revision (channel-only resolve; the revision can change);
 //   - revision AND channel (an "is there an update?" check whose response
-//     reflects the current channel head);
-//   - a resource-revisions discriminator, since the cache key ignores it and
-//     would conflate different requested resource revisions of the same
-//     charm+revision (see action.HasResourceRevisions).
+//     reflects the current channel head).
+//
+// A resource-revisions discriminator does NOT make a request uncacheable:
+// it is folded into the cache key via variantKey, so requests for different
+// resource revisions of the same charm+revision get distinct entries.
 func isCacheable(a action) bool {
-	return a.Revision != nil && a.Channel == "" && !a.HasResourceRevisions
+	return a.Revision != nil && a.Channel == ""
+}
+
+// variantKey combines every request-side discriminator the cache key must
+// vary on beyond (name/id, revision): the requested fields and the requested
+// resource revisions. Two requests that agree on identity but differ in
+// either must not share a cache entry (their responses differ). Returns ""
+// when neither is present, so the common no-variant case keys cleanly.
+func variantKey(a action) string {
+	if a.FieldsKey == "" && a.ResourcesKey == "" {
+		return ""
+	}
+	return a.FieldsKey + "|" + a.ResourcesKey
 }
 
 // handleBlob serves GET /blob/<hash>, where <hash> is the blob's sha256 as
@@ -360,16 +374,15 @@ type action struct {
 	// doesn't), so this must be part of the cache key or a response cached
 	// for one field set gets replayed to a caller needing another.
 	FieldsKey string
-	// HasResourceRevisions is set when the action carries a
-	// "resource-revisions" discriminator (charmhub.AddResource). The
-	// controller uses this to resolve a SPECIFIC resource revision for the
-	// same charm+revision (e.g. coredns@191 with coredns-image rev 59 vs
-	// 70); the response's embedded resources reflect that requested
-	// resource revision. Our cache key does NOT include it, so such a
-	// request must never be cached — otherwise coredns@191+res59 and
-	// coredns@191+res70 collide on one entry and the first to populate it
-	// wins, serving the wrong resource revision.
-	HasResourceRevisions bool
+	// ResourcesKey is a signature of the action's "resource-revisions"
+	// discriminator (charmhub.AddResource), used to resolve a SPECIFIC
+	// resource revision for the same charm+revision (e.g. coredns@191 with
+	// coredns-image rev 59 vs 70). The response's embedded resources reflect
+	// that requested resource revision, so it must be part of the cache key
+	// or coredns@191+res59 and coredns@191+res70 would collide on one entry
+	// and the first to populate it would win, serving the wrong revision.
+	// Empty when the action carries no resource-revisions.
+	ResourcesKey string
 }
 
 // parseRefreshActions extracts the actions from a refresh request body,
@@ -400,7 +413,10 @@ func parseRefreshActions(body []byte) ([]action, error) {
 				Name         string `json:"name"`
 				Channel      string `json:"channel"`
 			} `json:"base"`
-			ResourceRevisions []json.RawMessage `json:"resource-revisions"`
+			ResourceRevisions []struct {
+				Name     string `json:"name"`
+				Revision int    `json:"revision"`
+			} `json:"resource-revisions"`
 		} `json:"actions"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -427,7 +443,16 @@ func parseRefreshActions(body []byte) ([]action, error) {
 
 	actions := make([]action, 0, len(req.Actions))
 	for _, a := range req.Actions {
-		act := action{ID: a.ID, Name: a.Name, Channel: a.Channel, Revision: a.Revision, InstanceKey: a.InstanceKey, FieldsKey: fieldsKey, HasResourceRevisions: len(a.ResourceRevisions) > 0}
+		resourcesKey := ""
+		if len(a.ResourceRevisions) > 0 {
+			pairs := make([]string, 0, len(a.ResourceRevisions))
+			for _, rr := range a.ResourceRevisions {
+				pairs = append(pairs, fmt.Sprintf("%s@%d", rr.Name, rr.Revision))
+			}
+			sort.Strings(pairs)
+			resourcesKey = strings.Join(pairs, ",")
+		}
+		act := action{ID: a.ID, Name: a.Name, Channel: a.Channel, Revision: a.Revision, InstanceKey: a.InstanceKey, FieldsKey: fieldsKey, ResourcesKey: resourcesKey}
 		if a.Base != nil {
 			act.Base = fmt.Sprintf("%s/%s/%s", a.Base.Architecture, a.Base.Name, a.Base.Channel)
 		}
@@ -576,15 +601,16 @@ func newStore(dir string) (*store, error) {
 }
 
 // canonicalKey returns the on-disk key for a resolved charm identity,
-// scoped by fieldsKey so responses fetched with different requested fields
-// are never conflated (see action.FieldsKey).
-func canonicalKey(name string, revision int, fieldsKey string) string {
-	sum := sha256.Sum256(fmt.Appendf(nil, "%s@%d#%s", name, revision, fieldsKey))
+// scoped by variant (requested fields + resource revisions) so responses
+// fetched with different request-side discriminators are never conflated
+// (see variantKey).
+func canonicalKey(name string, revision int, variant string) string {
+	sum := sha256.Sum256(fmt.Appendf(nil, "%s@%d#%s", name, revision, variant))
 	return hex.EncodeToString(sum[:])
 }
 
-func idKey(id string, revision int, fieldsKey string) string {
-	sum := sha256.Sum256(fmt.Appendf(nil, "%s@%d#%s", id, revision, fieldsKey))
+func idKey(id string, revision int, variant string) string {
+	sum := sha256.Sum256(fmt.Appendf(nil, "%s@%d#%s", id, revision, variant))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -597,17 +623,20 @@ func idKey(id string, revision int, fieldsKey string) string {
 // (juju3/charmhub/refresh.go) sends BOTH the installed revision AND the
 // tracking channel to ask "has this channel advanced?" — that answer
 // changes as the channel advances, so it must never be served from a cache
-// keyed on the (stale) installed revision.
+// keyed on the (stale) installed revision. Cacheable requests are scoped by
+// variantKey so different fields/resource-revisions get distinct entries.
 func (s *store) LookupRefresh(a action) ([]byte, bool) {
 	if !isCacheable(a) {
 		return nil, false
 	}
 
+	variant := variantKey(a)
+
 	s.refreshMu.Lock()
 	defer s.refreshMu.Unlock()
 
 	if a.Name == "" && a.ID != "" {
-		nameBytes, err := os.ReadFile(filepath.Join(s.dir, "ids", idKey(a.ID, *a.Revision, a.FieldsKey)+".name"))
+		nameBytes, err := os.ReadFile(filepath.Join(s.dir, "ids", idKey(a.ID, *a.Revision, variant)+".name"))
 		if err != nil {
 			return nil, false
 		}
@@ -615,30 +644,31 @@ func (s *store) LookupRefresh(a action) ([]byte, bool) {
 		if name == "" {
 			return nil, false
 		}
-		b, err := os.ReadFile(filepath.Join(s.dir, "refresh", canonicalKey(name, *a.Revision, a.FieldsKey)+".json"))
+		b, err := os.ReadFile(filepath.Join(s.dir, "refresh", canonicalKey(name, *a.Revision, variant)+".json"))
 		if err != nil {
 			return nil, false
 		}
 		return b, true
 	}
 
-	b, err := os.ReadFile(filepath.Join(s.dir, "refresh", canonicalKey(a.Name, *a.Revision, a.FieldsKey)+".json"))
+	b, err := os.ReadFile(filepath.Join(s.dir, "refresh", canonicalKey(a.Name, *a.Revision, variant)+".json"))
 	if err != nil {
 		return nil, false
 	}
 	return b, true
 }
 
-// PutRefresh stores a response under the resolved (name, revision, fields)
+// PutRefresh stores a response under the resolved (name, revision, variant)
 // identity read back from the response body and the requesting action's
-// FieldsKey, and records the id index so future by-id requests for the same
-// immutable id+revision+fields resolve offline.
+// variant key (fields + resource revisions), and records the id index so
+// future by-id requests for the same immutable id+revision+variant resolve
+// offline.
 //
 // body must contain exactly one result. A multi-result (batched) response
 // must never be cached here: it would later be replayed verbatim to an
 // unrelated single-action request, which the Juju client rejects with
 // "more than 1 result found" (it requires exactly one result per action).
-func (s *store) PutRefresh(body []byte, fieldsKey string) error {
+func (s *store) PutRefresh(body []byte, variant string) error {
 	s.refreshMu.Lock()
 	defer s.refreshMu.Unlock()
 
@@ -655,7 +685,7 @@ func (s *store) PutRefresh(body []byte, fieldsKey string) error {
 
 	// Only single-action requests are cached, so there is exactly one result.
 	name, rev := resolved[0].name, resolved[0].revision
-	path := filepath.Join(s.dir, "refresh", canonicalKey(name, rev, fieldsKey)+".json")
+	path := filepath.Join(s.dir, "refresh", canonicalKey(name, rev, variant)+".json")
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, body, 0o644); err != nil {
 		return err
@@ -665,7 +695,7 @@ func (s *store) PutRefresh(body []byte, fieldsKey string) error {
 	}
 
 	if id := resolved[0].id; id != "" {
-		idPath := filepath.Join(s.dir, "ids", idKey(id, rev, fieldsKey)+".name")
+		idPath := filepath.Join(s.dir, "ids", idKey(id, rev, variant)+".name")
 		if err := os.WriteFile(idPath, []byte(name), 0o644); err != nil {
 			return err
 		}

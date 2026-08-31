@@ -406,16 +406,17 @@ func TestFieldsMismatchNotServedFromCache(t *testing.T) {
 	}
 
 	// Controller-style resolve: no actions-yaml in the response, cached
-	// under the controller's field set.
+	// under the controller's field set (via the same variantKey lookups use).
 	resp := refreshResponse("juju-qa-dummy-source", 6, "abc123", "https://cdn.example/dummy_6.charm")
+	rev := 6
 	const controllerFields = "bases,config-yaml,download,id,license,metadata-yaml,name,publisher,resources,revision,summary,type,version"
-	if err := st.PutRefresh(resp, controllerFields); err != nil {
+	controllerAction := action{Name: "juju-qa-dummy-source", Revision: &rev, FieldsKey: controllerFields}
+	if err := st.PutRefresh(resp, variantKey(controllerAction)); err != nil {
 		t.Fatalf("PutRefresh: %v", err)
 	}
 
 	// Provider's ActionExists requests a different field set (includes
 	// actions-yaml). It must NOT hit the controller's cache entry.
-	rev := 6
 	const providerFields = "actions-yaml,bases,metadata-yaml,name,resources,revision"
 	providerAction := action{Name: "juju-qa-dummy-source", Revision: &rev, FieldsKey: providerFields}
 	if _, ok := st.LookupRefresh(providerAction); ok {
@@ -423,7 +424,6 @@ func TestFieldsMismatchNotServedFromCache(t *testing.T) {
 	}
 
 	// A request with the SAME field set as what was cached still hits.
-	controllerAction := action{Name: "juju-qa-dummy-source", Revision: &rev, FieldsKey: controllerFields}
 	if _, ok := st.LookupRefresh(controllerAction); !ok {
 		t.Fatalf("request with matching fields unexpectedly missed cache")
 	}
@@ -522,11 +522,12 @@ func TestUpdateCheckDoesNotPoisonPinnedRevisionCache(t *testing.T) {
 // charmhub.AddResource) sends a refresh with revision pinned (191, no
 // channel) plus a "resource-revisions" discriminator naming the wanted
 // resource revision. Two such requests for the SAME charm+revision but
-// DIFFERENT resource revisions (59 vs 70) differ ONLY in resource-revisions,
-// which the cache key ignores — so without excluding them from the cache the
-// first to populate coredns@191#fields wins and is replayed to the other,
-// serving the wrong resource revision. This is why the test failed on the
-// proxy branch but not on main (live Charmhub honours each request).
+// DIFFERENT resource revisions (59 vs 70) differ ONLY in resource-revisions.
+// These ARE cached (folded into the cache key via variantKey), so this test
+// asserts correct partitioning: distinct resource revisions get distinct
+// entries (never conflated), while a repeat of the SAME resource revision is
+// served the correct cached body. Conflating them was why the test failed on
+// the proxy branch but not on main (live Charmhub honours each request).
 func TestResourceRevisionRequestsNotConflated(t *testing.T) {
 	st, err := newStore(t.TempDir())
 	if err != nil {
@@ -534,7 +535,8 @@ func TestResourceRevisionRequestsNotConflated(t *testing.T) {
 	}
 
 	// Upstream echoes back the requested resource revision so we can tell
-	// which request a response actually came from.
+	// which request a response actually came from, and counts hits so we can
+	// confirm the repeat is served from cache (not re-fetched).
 	var upstreamHits int
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upstreamHits++
@@ -561,19 +563,35 @@ func TestResourceRevisionRequestsNotConflated(t *testing.T) {
 		return rec
 	}
 
-	// Resolve resource rev 70 first (populates any cache), then rev 59.
-	_ = resReq(70)
+	// Resolve resource rev 70 first (populates the cache), then rev 59.
+	if rec := resReq(70); rec.Header().Get("X-Charmhub-Cache") != "MISS" {
+		t.Fatalf("first rev-70 request: X-Charmhub-Cache = %q, want MISS", rec.Header().Get("X-Charmhub-Cache"))
+	}
 	rec := resReq(59)
 
-	// The rev-59 request must NOT be served the rev-70 cached response.
+	// The rev-59 request must NOT be served the rev-70 cached response: it
+	// must resolve fresh and return the rev-59 body.
 	if rec.Header().Get("X-Charmhub-Cache") == "HIT" {
-		t.Fatalf("resource-revision request was served from cache, conflating different resource revisions")
+		t.Fatalf("rev-59 request was served the rev-70 cache entry (resource revisions conflated)")
 	}
 	if !bytes.Contains(rec.Body.Bytes(), []byte(`"revision":59`)) {
 		t.Fatalf("resource rev 59 request got wrong response body: %s", rec.Body.String())
 	}
 	if upstreamHits != 2 {
-		t.Fatalf("expected both resource-revision requests to reach upstream, got %d hits", upstreamHits)
+		t.Fatalf("expected both distinct resource-revision requests to reach upstream, got %d hits", upstreamHits)
+	}
+
+	// A REPEAT of rev 70 must now be served from cache (proving resource
+	// revisions are cached, not skipped) and return the rev-70 body.
+	repeat := resReq(70)
+	if repeat.Header().Get("X-Charmhub-Cache") != "HIT" {
+		t.Fatalf("repeated rev-70 request: X-Charmhub-Cache = %q, want HIT", repeat.Header().Get("X-Charmhub-Cache"))
+	}
+	if !bytes.Contains(repeat.Body.Bytes(), []byte(`"revision":70`)) {
+		t.Fatalf("repeated rev-70 request got wrong body: %s", repeat.Body.String())
+	}
+	if upstreamHits != 2 {
+		t.Fatalf("repeat should have been served from cache, but upstream was hit again (%d)", upstreamHits)
 	}
 }
 
