@@ -223,12 +223,13 @@ func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Only cache single-action responses. A batched (multi-action) response
-	// contains multiple results; storing it under one canonical key would
-	// later be replayed to an unrelated single-action request expecting
-	// exactly one result, which the client rejects ("more than 1 result
-	// found"). Best-effort: a store failure must not fail the deploy.
-	if len(actions) == 1 {
+	// Only store responses that are safe to replay: single-action, and
+	// cacheable per isCacheable (which must mirror the LookupRefresh gate,
+	// else a revision+channel "update check" response — reflecting the
+	// current channel head — poisons the pinned-revision entry). Multi-
+	// action responses are excluded here and rejected again in PutRefresh.
+	// Best-effort: a store failure must not fail the deploy.
+	if len(actions) == 1 && isCacheable(actions[0]) {
 		if err := s.store.PutRefresh(rewritten, actions[0].FieldsKey); err != nil {
 			log.Printf("charmhub-cache: store refresh failed: %v", err)
 		}
@@ -237,6 +238,15 @@ func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Charmhub-Cache", "MISS")
 	_, _ = w.Write(rewritten)
+}
+
+// isCacheable reports whether an action's response may be safely stored and
+// later replayed. It must mirror the read-side check in LookupRefresh: a
+// request with no revision, or with a revision AND a channel (an
+// "is there an update?" check whose response reflects the current channel
+// head), must never be cached.
+func isCacheable(a action) bool {
+	return a.Revision != nil && a.Channel == ""
 }
 
 // handleBlob serves GET /blob/<hash>, where <hash> is the blob's sha256 as
@@ -568,12 +578,13 @@ func idKey(id string, revision int, fieldsKey string) string {
 //   - by-id requests via the id->name index (requires a revision).
 //
 // Requests with no revision, OR with a revision but also a channel, are
-// never served from cache. RefreshOne (juju3/charmhub/refresh.go) sends
-// BOTH the installed revision AND the tracking channel to ask "has this
-// channel advanced?" — that answer changes as the channel advances, so it
-// must never be served from a cache keyed on the (stale) installed revision.
+// never served from cache (see isCacheable). RefreshOne
+// (juju3/charmhub/refresh.go) sends BOTH the installed revision AND the
+// tracking channel to ask "has this channel advanced?" — that answer
+// changes as the channel advances, so it must never be served from a cache
+// keyed on the (stale) installed revision.
 func (s *store) LookupRefresh(a action) ([]byte, bool) {
-	if a.Revision == nil || a.Channel != "" {
+	if !isCacheable(a) {
 		return nil, false
 	}
 
