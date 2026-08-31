@@ -484,7 +484,9 @@ func TestAcc_ResourceApplication_UpdatesRevisionConfig(t *testing.T) {
 	})
 }
 
-func TestAcc_CharmUpdatesNoRevision(t *testing.T) {
+// TestAcc_CharmUpdatesNoRevisionChannelChange tests that when the charm
+// revision is not pinned, changing the channel recomputes the charm revision.
+func TestAcc_CharmUpdatesNoRevisionChannelChange(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-charmupdates")
 	initialVersion := 0
 	channelOne := "latest/stable"
@@ -533,6 +535,85 @@ func TestAcc_CharmUpdatesNoRevision(t *testing.T) {
 				Config: testAccResourceApplicationUpdatesCharm(modelName, channelTwo),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", channelTwo),
+					func(s *terraform.State) error {
+						// Check that the charm revision has been updated to a new revision different from the initialVersion.
+						rs, ok := s.RootModule().Resources["juju_application.this"]
+						if !ok {
+							return fmt.Errorf("not found: juju_application.this")
+						}
+						newVersionStr := rs.Primary.Attributes["charm.0.revision"]
+						var err error
+						newVersion, err := strconv.Atoi(newVersionStr)
+						if err != nil {
+							return fmt.Errorf("error converting revision to int: %v", err)
+						}
+						if newVersion == initialVersion {
+							return fmt.Errorf("expected charm revision to be updated from %d, but it is still %d", initialVersion, newVersion)
+						}
+						return nil
+					},
+				),
+			},
+		},
+	})
+}
+
+// TestAcc_CharmUpdatesNoRevisionBaseChange tests that when the charm revision
+// is not pinned, changing the base recomputes the charm revision and the
+// update succeeds. This is the base-change equivalent of the channel change
+// tested in TestAcc_CharmUpdatesNoRevisionChannelChange.
+//
+// The test only runs on MicroK8s because changing the base requires replacement
+// for machines. The traefik-k8s charm is used because in the latest/stable
+// channel different revisions support different bases (revision 377 supports
+// ubuntu@20.04 while revisions 378+ support ubuntu@26.04), so a base change
+// should result in a different charm revision. Since the revision is not pinned,
+// the test relies on Charmhub state; if traefik-k8s ever drops ubuntu@20.04
+// support from latest/stable, the first step will fail.
+func TestAcc_CharmUpdatesNoRevisionBaseChange(t *testing.T) {
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with Microk8s")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-charmupdates")
+	baseChannel := "latest/stable"
+	initialVersion := 0
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationUpdatesCharmWithBase(modelName, baseChannel, "ubuntu@20.04"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", baseChannel),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.base", "ubuntu@20.04"),
+					func(s *terraform.State) error {
+						// Use a check to grab the application revision and set it to initialVersion variable to be used in the next step.
+						rs, ok := s.RootModule().Resources["juju_application.this"]
+						if !ok {
+							return fmt.Errorf("not found: juju_application.this")
+						}
+						initialVersionStr := rs.Primary.Attributes["charm.0.revision"]
+						var err error
+						initialVersion, err = strconv.Atoi(initialVersionStr)
+						if err != nil {
+							return fmt.Errorf("error converting revision to int: %v", err)
+						}
+						if initialVersion == 0 {
+							return fmt.Errorf("expected initial charm revision to be non-zero, got %d", initialVersion)
+						}
+						return nil
+					},
+				),
+			},
+			{
+				// Update the base while the channel stays the same and the
+				// revision is not pinned. The update should succeed with the
+				// revision recomputed for the new base.
+				Config: testAccResourceApplicationUpdatesCharmWithBase(modelName, baseChannel, "ubuntu@26.04"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", baseChannel),
+					resource.TestCheckResourceAttr("juju_application.this", "charm.0.base", "ubuntu@26.04"),
 					func(s *terraform.State) error {
 						// Check that the charm revision has been updated to a new revision different from the initialVersion.
 						rs, ok := s.RootModule().Resources["juju_application.this"]
@@ -2352,6 +2433,24 @@ func testAccResourceApplicationUpdatesCharmWithRevision(modelName string, channe
 		"Channel":   channel,
 		"Revision":  revision,
 	})
+}
+
+func testAccResourceApplicationUpdatesCharmWithBase(modelName string, channel string, base string) string {
+	return fmt.Sprintf(`
+		resource "juju_model" "this" {
+		  name = %q
+		}
+
+		resource "juju_application" "this" {
+		  model_uuid = juju_model.this.uuid
+		  name = "test-app"
+		  charm {
+			name     = "traefik-k8s"
+			channel  = %q
+			base     = %q
+		  }
+		}
+		`, modelName, channel, base)
 }
 
 func testAccApplicationUpdateBaseCharm(modelName string, base string) string {
