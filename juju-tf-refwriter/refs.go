@@ -12,17 +12,15 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
-// refIndex maps entity identifiers (model UUIDs, app names, machine IDs, ...)
-// to the Terraform addresses of the resources that represent them, so that
-// literal values can be rewritten into references.
+// refIndex maps model UUIDs, app names, and machine IDs to the Terraform
+// addresses of the resources that represent them, so literals can be
+// rewritten into references.
 type refIndex struct {
 	modelByUUID         map[string]string
 	appByModelAndName   map[string]string
 	machineByModelAndID map[string]string
 	importIDByAddr      map[string]string
-	// modelUUIDByAddr caches the model UUID each resource belongs to, parsed
-	// once from its import identity, so rewrites don't need to re-parse it.
-	modelUUIDByAddr map[string]string
+	modelUUIDByAddr     map[string]string
 }
 
 func newRefIndex() *refIndex {
@@ -45,9 +43,8 @@ func resourceAddress(block *hclwrite.Block) string {
 	return strings.Join(labels[:2], ".")
 }
 
-// indexResource registers a resource block in the index. Only models,
-// applications, and machines are indexed as rewrite targets. indexImport
-// must be called first.
+// indexResource registers a model, application, or machine resource in the
+// index. indexImport must be called first.
 func (idx *refIndex) indexResource(block *hclwrite.Block) {
 	if len(block.Labels()) < 2 {
 		return
@@ -89,27 +86,17 @@ func (idx *refIndex) indexImport(block *hclwrite.Block) {
 	}
 }
 
-func (idx *refIndex) importIdentityID(addr string) string {
-	return idx.importIDByAddr[addr]
-}
-
-func (idx *refIndex) modelRef(modelUUID string) string { return idx.modelByUUID[modelUUID] }
-func (idx *refIndex) appRef(mu, n string) string       { return idx.appByModelAndName[mu+":"+n] }
-func (idx *refIndex) machineRef(mu, id string) string  { return idx.machineByModelAndID[mu+":"+id] }
-
-// modelUUIDFor returns the model UUID a resource block belongs to, resolved
-// once during indexing from its import identity.
+func (idx *refIndex) importIdentityID(addr string) string { return idx.importIDByAddr[addr] }
+func (idx *refIndex) modelRef(modelUUID string) string    { return idx.modelByUUID[modelUUID] }
+func (idx *refIndex) appRef(mu, n string) string          { return idx.appByModelAndName[mu+":"+n] }
+func (idx *refIndex) machineRef(mu, id string) string     { return idx.machineByModelAndID[mu+":"+id] }
 func (idx *refIndex) modelUUIDFor(block *hclwrite.Block) string {
 	return idx.modelUUIDByAddr[resourceAddress(block)]
 }
 
-// --- attribute evaluation via hclsyntax.ParseExpression ---
-
-// attrValue evaluates an attribute's literal value. hclwrite only exposes an
-// attribute's raw tokens, not its value, so we re-serialize those tokens and
-// parse them with hclsyntax to get an expression we can evaluate. Only
-// literal expressions produce known values; references and unknowns return
-// (NilVal, false), which callers treat as "leave this attribute alone".
+// attrValue evaluates an attribute's literal value. hclwrite exposes only
+// raw tokens, so we re-parse them with hclsyntax to get a value. References
+// and unknowns return (NilVal, false), callers leave those attributes alone.
 func attrValue(attr *hclwrite.Attribute) (cty.Value, bool) {
 	src := attr.Expr().BuildTokens(nil).Bytes()
 	expr, diags := hclsyntax.ParseExpression(src, "<attr>", hcl.Pos{Line: 1, Column: 1})
@@ -124,7 +111,7 @@ func attrValue(attr *hclwrite.Attribute) (cty.Value, bool) {
 }
 
 // readAttrString evaluates a top-level attribute as a plain string literal.
-// Returns "" if absent or not a literal string (e.g. already a reference).
+// Returns "" if absent or not a literal string (already a reference).
 func readAttrString(block *hclwrite.Block, name string) string {
 	attr := block.Body().GetAttribute(name)
 	if attr == nil {
@@ -137,10 +124,9 @@ func readAttrString(block *hclwrite.Block, name string) string {
 	return v.AsString()
 }
 
-// readAttrRef reads a top-level attribute whose value is a dotted reference
-// (e.g. `to = juju_model.model_0`), returning "type.label". A reference
-// can't be evaluated by attrValue (it has no literal value until Terraform
-// applies), so instead we parse its tokens as a traversal and join the steps.
+// readAttrRef reads an attribute holding a dotted reference (e.g.
+// `to = juju_model.model_0`) as "type.label". References have no literal
+// value, so unlike attrValue this parses the tokens as a traversal.
 func readAttrRef(block *hclwrite.Block, name string) string {
 	attr := block.Body().GetAttribute(name)
 	if attr == nil {

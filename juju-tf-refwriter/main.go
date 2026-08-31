@@ -71,8 +71,7 @@ func main() {
 }
 
 // transformTerraformFile processes Terraform file content and returns the
-// rewritten content. This function is the core transformation logic that can
-// be tested independently.
+// rewritten content.
 func transformTerraformFile(src []byte, filename string) (rewritten []byte, warnings []string, err error) {
 	f, diags := hclwrite.ParseConfig(src, filename, hcl.Pos{Line: 1, Column: 1})
 	if diags.HasErrors() {
@@ -82,7 +81,7 @@ func transformTerraformFile(src []byte, filename string) (rewritten []byte, warn
 	// First pass: build an index of resources that can serve as rewrite
 	// targets (models, applications, machines, secrets). Import blocks are
 	// indexed first because `terraform query` output puts the composite
-	// identity in the import block's `identity`, not on the resource block.
+	// identity in the import block's `identity`.
 	idx := newRefIndex()
 	for _, block := range f.Body().Blocks() {
 		if block.Type() == "import" {
@@ -185,10 +184,7 @@ func processFile(filename string) (changed bool, warnings int, err error) {
 
 // pruneNullAttributes removes any attribute whose value is the literal `null`
 // from a resource block. `terraform query` emits every Optional attribute as
-// `null` when the value is unset, which is redundant since the provider
-// default for those attributes is already `null`. Removing them keeps the
-// rewritten config closer to hand-written Terraform. Returns true if any
-// attribute was removed.
+// `null` when the value is unset, which is redundant.
 func pruneNullAttributes(block *hclwrite.Block) bool {
 	removed := false
 	for name, attr := range block.Body().Attributes() {
@@ -200,9 +196,7 @@ func pruneNullAttributes(block *hclwrite.Block) bool {
 	return removed
 }
 
-// rewriteModelUUID rewrites a literal `model_uuid = "<uuid>"` attribute into
-// `model_uuid = juju_model.<label>.uuid` when a matching juju_model resource
-// exists in the index. Returns true and any warning emitted.
+// rewriteModelUUID rewrites a literal model_uuid into a juju_model reference.
 func rewriteModelUUID(block *hclwrite.Block, idx *refIndex) (bool, []string) {
 	addr := resourceAddress(block)
 	uuid := readAttrString(block, "model_uuid")
@@ -217,10 +211,8 @@ func rewriteModelUUID(block *hclwrite.Block, idx *refIndex) (bool, []string) {
 	return true, nil
 }
 
-// rewriteApplicationMachines rewrites literal machine IDs in an application's
-// `machines = ["1", "2"]` attribute into references like
-// `juju_machine.<label>.machine_id`. The application's model UUID is used
-// to scope the lookup.
+// rewriteApplicationMachines rewrites literal machine IDs in `machines = [...]`
+// into juju_machine references.
 func rewriteApplicationMachines(block *hclwrite.Block, idx *refIndex) (bool, []string) {
 	addr := resourceAddress(block)
 	modelUUID := idx.modelUUIDFor(block)
@@ -257,9 +249,8 @@ func rewriteApplicationMachines(block *hclwrite.Block, idx *refIndex) (bool, []s
 	return true, warnings
 }
 
-// rewriteIntegrationApplications rewrites literal application `name` attributes
-// inside a juju_integration resource's `application` blocks into references to
-// the corresponding juju_application resource.
+// rewriteIntegrationApplications rewrites literal application names in an
+// integration's `application` blocks into juju_application references.
 func rewriteIntegrationApplications(block *hclwrite.Block, idx *refIndex) (bool, []string) {
 	addr := resourceAddress(block)
 	modelUUID := idx.modelUUIDFor(block)
@@ -288,9 +279,8 @@ func rewriteIntegrationApplications(block *hclwrite.Block, idx *refIndex) (bool,
 	return changed, warnings
 }
 
-// attrStringList evaluates a top-level attribute as a list/tuple of strings.
-// Returns false if the attribute is not a wholly-known list/tuple of strings;
-// callers leave such attributes untouched.
+// attrStringList evaluates an attribute as a list/tuple of strings, or
+// returns false if it isn't one.
 func attrStringList(attr *hclwrite.Attribute) ([]string, bool) {
 	v, ok := attrValue(attr)
 	if !ok || (!v.Type().IsListType() && !v.Type().IsTupleType()) {
@@ -308,8 +298,7 @@ func attrStringList(attr *hclwrite.Attribute) ([]string, bool) {
 	return items, true
 }
 
-// multilineListTokens builds a bracketed list expression with one element
-// per line, matching the layout `terraform query` itself uses for lists.
+// multilineListTokens builds `[elem, elem, ...]` with one element per line
 func multilineListTokens(elems []hclwrite.Tokens) hclwrite.Tokens {
 	tokens := hclwrite.Tokens{{Type: hclsyntax.TokenOBrack, Bytes: []byte("[")}}
 	for _, elem := range elems {
@@ -322,8 +311,7 @@ func multilineListTokens(elems []hclwrite.Tokens) hclwrite.Tokens {
 	return append(tokens, &hclwrite.Token{Type: hclsyntax.TokenCBrack, Bytes: []byte("]")})
 }
 
-// refTokens builds the token slice for a bare reference expression like
-// `juju_model.model_0.uuid` (no quotes).
+// refTokens builds a bare reference expression like juju_model.model_0.uuid.
 func refTokens(addr, attr string) hclwrite.Tokens {
 	return hclwrite.TokensForTraversal(hcl.Traversal{
 		hcl.TraverseRoot{Name: addr},
@@ -331,8 +319,7 @@ func refTokens(addr, attr string) hclwrite.Tokens {
 	})
 }
 
-// discoverTerraformFiles finds all .tf files to process from a given target
-// path. Returns a slice of file paths and any error encountered.
+// discoverTerraformFiles finds all .tf files under target
 func discoverTerraformFiles(target string) ([]string, error) {
 	info, err := os.Stat(target)
 	if err != nil {

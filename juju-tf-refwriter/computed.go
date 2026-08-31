@@ -5,14 +5,12 @@ package main
 
 import "github.com/hashicorp/hcl/v2/hclwrite"
 
-// computedAttributes lists the Computed-only attributes (Computed, not
-// Optional, not Required) for each resource kind. These attributes cannot be
-// set in config, so the literal values that `terraform query` emits for them
-// fail validation on apply and are pruned. Attributes that are both
-// Computed and Optional (or Computed and Required) are intentionally omitted:
-// the user may set those, so they are kept.
+// computedAttributes lists attributes that are not settable in config per
+// resource kind. terraform query emits literal values for these, which
+// then get ignored on apply.
 //
-// Keep this in sync with the provider schemas in internal/provider.
+// Keep in sync with the provider schemas in internal/provider to keep the
+// output easier to read.
 var computedAttributes = map[resourceKind]map[string]struct{}{
 	kindModel: {
 		"uuid": {},

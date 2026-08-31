@@ -57,28 +57,16 @@ func kindOf(resourceType string) resourceKind {
 }
 
 // entityID holds the model UUID and, where relevant, the name parsed from a
-// Juju resource import identity. The refwriter only rewrites model,
-// application, and machine references, so only those identities need a
-// name:
-//
-//	model:       "<modelUUID>"              (opaque)
-//	offer:       "<controller>:<model.app>" (opaque)
-//	application: "<modelUUID>:<name>"
-//	machine:     "<modelUUID>:<machineID>[:...]"
-//
-// Other kinds (secret, integration, ...) only ever need the model UUID,
-// which is always the part before the first colon.
+// Juju resource import identity ("<modelUUID>:<name>..."). Model and offer
+// identities are opaque, so the whole string is the model UUID.
 type entityID struct {
 	kind      resourceKind
 	modelUUID string
 	name      string
 }
 
-// parseIdentity parses a Juju resource identity string for the given kind.
-// Model and offer identities are opaque and stored whole as the model UUID.
-// Every other kind's identity starts with "<modelUUID>:", with the name (if
-// any) being the next colon-separated component. Returns an error if a
-// non-opaque identity has no model UUID component.
+// parseIdentity splits a Juju resource identity into its model UUID and
+// name. Model/offer identities are opaque and stored whole as the UUID.
 func parseIdentity(kind resourceKind, id string) (entityID, error) {
 	e := entityID{kind: kind}
 	if kind == kindModel || kind == kindOffer {
