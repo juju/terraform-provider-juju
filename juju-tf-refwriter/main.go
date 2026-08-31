@@ -232,32 +232,28 @@ func rewriteApplicationMachines(block *hclwrite.Block, idx *refIndex) (bool, []s
 	if machinesAttr == nil {
 		return false, nil
 	}
-	items, ok := attrStringList(machinesAttr)
-	if !ok || len(items) == 0 {
+	machines, ok := attrStringList(machinesAttr)
+	if !ok || len(machines) == 0 {
 		return false, nil
 	}
 
 	var warnings []string
 	changed := false
-	newItems := make([]listItem, len(items))
-	for i, it := range items {
-		if !it.isString {
-			newItems[i] = it
-			continue
-		}
-		ref := idx.machineRef(modelUUID, it.value)
+	elems := make([]hclwrite.Tokens, len(machines))
+	for i, id := range machines {
+		ref := idx.machineRef(modelUUID, id)
 		if ref == "" {
-			warnings = append(warnings, fmt.Sprintf("%s: machine %q has no matching juju_machine resource; left as literal", addr, it.value))
-			newItems[i] = it
+			warnings = append(warnings, fmt.Sprintf("%s: machine %q has no matching juju_machine resource; left as literal", addr, id))
+			elems[i] = hclwrite.TokensForValue(cty.StringVal(id))
 			continue
 		}
-		newItems[i] = listItem{raw: refTokens(ref, "machine_id")}
+		elems[i] = refTokens(ref, "machine_id")
 		changed = true
 	}
 	if !changed {
 		return false, warnings
 	}
-	block.Body().SetAttributeRaw("machines", listTokens(newItems))
+	block.Body().SetAttributeRaw("machines", multilineListTokens(elems))
 	return true, warnings
 }
 
@@ -309,57 +305,35 @@ func resolveModelUUID(block *hclwrite.Block, idx *refIndex, kind resourceKind) s
 // attrStringList evaluates a top-level attribute as a list/tuple of strings.
 // Returns false if the attribute is not a wholly-known list/tuple of strings;
 // callers leave such attributes untouched.
-func attrStringList(attr *hclwrite.Attribute) ([]listItem, bool) {
+func attrStringList(attr *hclwrite.Attribute) ([]string, bool) {
 	v, ok := attrValue(attr)
 	if !ok || (!v.Type().IsListType() && !v.Type().IsTupleType()) {
 		return nil, false
 	}
-	var items []listItem
+	var items []string
 	for it := v.ElementIterator(); it.Next(); {
 		_, elem := it.Element()
 		if !elem.Type().Equals(cty.String) {
 			// Non-string element: leave the whole attribute untouched.
 			return nil, false
 		}
-		items = append(items, listItem{value: elem.AsString(), isString: true})
+		items = append(items, elem.AsString())
 	}
 	return items, true
 }
 
-// listItem represents one element of a list expression. Either a literal
-// string (isString=true, value set) or a rewritten reference (raw holds the
-// generated tokens).
-type listItem struct {
-	value    string
-	raw      hclwrite.Tokens
-	isString bool
-}
-
-// listTokens builds the token slice for a list expression from items.
-func listTokens(items []listItem) hclwrite.Tokens {
+// multilineListTokens builds a bracketed list expression with one element
+// per line, matching the layout `terraform query` itself uses for lists.
+func multilineListTokens(elems []hclwrite.Tokens) hclwrite.Tokens {
 	tokens := hclwrite.Tokens{{Type: hclsyntax.TokenOBrack, Bytes: []byte("[")}}
-	for _, it := range items {
-		tokens = append(tokens,
-			&hclwrite.Token{Type: hclsyntax.TokenNewline, Bytes: []byte("\n")})
-		tokens = append(tokens, itemTokens(it)...)
+	for _, elem := range elems {
+		tokens = append(tokens, &hclwrite.Token{Type: hclsyntax.TokenNewline, Bytes: []byte("\n")})
+		tokens = append(tokens, elem...)
 	}
-	if len(items) > 0 {
+	if len(elems) > 0 {
 		tokens = append(tokens, &hclwrite.Token{Type: hclsyntax.TokenNewline, Bytes: []byte("\n")})
 	}
-	tokens = append(tokens, &hclwrite.Token{Type: hclsyntax.TokenCBrack, Bytes: []byte("]")})
-	return tokens
-}
-
-// itemTokens builds the token slice for a single list item.
-func itemTokens(it listItem) hclwrite.Tokens {
-	if it.isString {
-		return hclwrite.Tokens{
-			{Type: hclsyntax.TokenOQuote, Bytes: []byte("\"")},
-			{Type: hclsyntax.TokenQuotedLit, Bytes: []byte(it.value)},
-			{Type: hclsyntax.TokenCQuote, Bytes: []byte("\"")},
-		}
-	}
-	return it.raw
+	return append(tokens, &hclwrite.Token{Type: hclsyntax.TokenCBrack, Bytes: []byte("]")})
 }
 
 // refTokens builds the token slice for a bare reference expression like
