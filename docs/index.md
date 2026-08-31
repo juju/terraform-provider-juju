@@ -35,7 +35,8 @@ Work is ongoing to include support for more of the juju CLIs capabilities within
 
 ## Prerequisites
 
-* [Juju][0] `2.9.49+`
+* [Juju][0] `3.x` or higher
+* If using [JAAS][1], Juju controller `3.6.5` or higher
 
 ## Authentication
 
