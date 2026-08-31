@@ -7,10 +7,11 @@
 // different callers (e.g. the provider's ActionExists vs. the controller's
 // deploy resolve) request different field sets for the same charm+revision;
 // the identity portion is immutable, so entries never expire. Requests
-// pinned to a revision (or an id+revision) are served from cache;
-// channel-only requests always go upstream, since their entire purpose is to
-// learn the CURRENT revision for a channel, which can change at any time —
-// caching that would serve stale revisions.
+// pinned to a revision (or an id+revision) and carrying no channel are
+// served from cache; requests with no revision, or with a revision AND a
+// channel (an "is there an update?" check), always go upstream, since their
+// purpose is to learn the CURRENT revision for a channel, which can change
+// at any time — caching that would serve stale revisions.
 //
 // Store layout:
 //
@@ -566,11 +567,13 @@ func idKey(id string, revision int, fieldsKey string) string {
 //   - pinned-revision requests via the canonical (name, revision) key,
 //   - by-id requests via the id->name index (requires a revision).
 //
-// Channel-only requests (no revision) are never served from cache: a
-// channel's resolved revision can change at any time, so caching it would
-// serve stale revisions once the channel advances upstream.
+// Requests with no revision, OR with a revision but also a channel, are
+// never served from cache. RefreshOne (juju3/charmhub/refresh.go) sends
+// BOTH the installed revision AND the tracking channel to ask "has this
+// channel advanced?" — that answer changes as the channel advances, so it
+// must never be served from a cache keyed on the (stale) installed revision.
 func (s *store) LookupRefresh(a action) ([]byte, bool) {
-	if a.Revision == nil {
+	if a.Revision == nil || a.Channel != "" {
 		return nil, false
 	}
 
