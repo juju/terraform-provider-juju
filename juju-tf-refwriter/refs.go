@@ -16,20 +16,18 @@ import (
 // to the Terraform addresses of the resources that represent them, so that
 // literal values can be rewritten into references.
 type refIndex struct {
-	modelByUUID          map[string]string
-	appByModelAndName    map[string]string
-	machineByModelAndID  map[string]string
-	secretByModelAndName map[string]string
-	importIDByAddr       map[string]string
+	modelByUUID         map[string]string
+	appByModelAndName   map[string]string
+	machineByModelAndID map[string]string
+	importIDByAddr      map[string]string
 }
 
 func newRefIndex() *refIndex {
 	return &refIndex{
-		modelByUUID:          make(map[string]string),
-		appByModelAndName:    make(map[string]string),
-		machineByModelAndID:  make(map[string]string),
-		secretByModelAndName: make(map[string]string),
-		importIDByAddr:       make(map[string]string),
+		modelByUUID:         make(map[string]string),
+		appByModelAndName:   make(map[string]string),
+		machineByModelAndID: make(map[string]string),
+		importIDByAddr:      make(map[string]string),
 	}
 }
 
@@ -44,8 +42,8 @@ func resourceAddress(block *hclwrite.Block) string {
 }
 
 // indexResource registers a resource block in the index. Only models,
-// applications, machines, and secrets are indexed as rewrite targets.
-// indexImport must be called first.
+// applications, and machines are indexed as rewrite targets. indexImport
+// must be called first.
 func (idx *refIndex) indexResource(block *hclwrite.Block) {
 	if len(block.Labels()) < 2 {
 		return
@@ -67,8 +65,6 @@ func (idx *refIndex) indexResource(block *hclwrite.Block) {
 		idx.appByModelAndName[e.modelUUID+":"+e.part(0)] = addr
 	case kindMachine:
 		idx.machineByModelAndID[e.modelUUID+":"+e.part(0)] = addr
-	case kindSecret:
-		idx.secretByModelAndName[e.modelUUID+":"+e.part(0)] = addr
 	}
 }
 
@@ -95,7 +91,6 @@ func (idx *refIndex) importIdentityID(addr string) string {
 func (idx *refIndex) modelRef(modelUUID string) string { return idx.modelByUUID[modelUUID] }
 func (idx *refIndex) appRef(mu, n string) string       { return idx.appByModelAndName[mu+":"+n] }
 func (idx *refIndex) machineRef(mu, id string) string  { return idx.machineByModelAndID[mu+":"+id] }
-func (idx *refIndex) secretRef(mu, n string) string    { return idx.secretByModelAndName[mu+":"+n] }
 
 // --- attribute evaluation via hclsyntax.ParseExpression ---
 
