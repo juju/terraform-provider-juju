@@ -22,6 +22,10 @@ import (
 
 	"github.com/juju/collections/set"
 	jujuerrors "github.com/juju/errors"
+	"github.com/juju/names/v6"
+	"github.com/juju/terraform-provider-juju/internal/charmhub"
+	goyaml "gopkg.in/yaml.v2"
+
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
 	apiapplication "github.com/juju/juju/api/client/application"
@@ -42,10 +46,6 @@ import (
 	charmresources "github.com/juju/juju/domain/deployment/charm/resource"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
-	"github.com/juju/names/v6"
-	goyaml "gopkg.in/yaml.v2"
-
-	"github.com/juju/terraform-provider-juju/internal/charmhub"
 )
 
 // NewApplicationNotFoundError returns a new error indicating that the
@@ -911,7 +911,8 @@ func (c applicationsClient) ActionExists(ctx context.Context, modelUUID, appName
 	}
 	charmhubURL, _ := modelConfig.CharmHubURL()
 	if charmhubURL == "" {
-		charmhubURL = charmhub.ProductionURL
+		// Fall back to CHARMHUB_URL (CI cache proxy) then production.
+		charmhubURL = charmhub.DefaultURL()
 	}
 
 	// Parse the charm URL to extract the charm name (without revision).

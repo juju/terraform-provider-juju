@@ -12,15 +12,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
-
-	"github.com/juju/terraform-provider-juju/internal/charmhub/transport"
 
 	"github.com/juju/charm/v12"
 	"github.com/juju/clock"
 	"github.com/juju/errors"
 	"github.com/juju/retry"
+	"github.com/juju/terraform-provider-juju/internal/charmhub/transport"
 )
 
 const (
@@ -39,6 +39,16 @@ const (
 )
 
 var refreshFields = []string{"bases", "metadata-yaml", "actions-yaml", "name", "resources", "revision"}
+
+// DefaultURL returns the base URL clients should use when no explicit URL is
+// provided. It honors the CHARMHUB_URL environment variable (used in CI to
+// route refresh calls through a caching proxy), falling back to ProductionURL.
+func DefaultURL() string {
+	if u := strings.TrimSpace(os.Getenv("CHARMHUB_URL")); u != "" {
+		return u
+	}
+	return ProductionURL
+}
 
 // errTransient marks failures worth retrying: transport-level errors
 // (dropped connections, timeouts) and server-side 429/5xx responses.
