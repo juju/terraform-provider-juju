@@ -31,28 +31,52 @@ func multiResultRefreshResponse(a, b string, revA, revB int) []byte {
 	return []byte(`{"results":[` + one + `,` + two + `]}`)
 }
 
+// putRefresh stores a response the way handleRefresh does in production:
+// extract the resolved identity via rewriteDownloadURLs (the same single
+// parse), then PutRefresh. Fails the test if the response doesn't resolve
+// to exactly one identity.
+func putRefresh(t *testing.T, st *store, body []byte, variant string) {
+	t.Helper()
+	_, identities, err := rewriteDownloadURLs(body, st, "http://127.0.0.1:8080")
+	if err != nil {
+		t.Fatalf("rewriteDownloadURLs: %v", err)
+	}
+	if len(identities) != 1 {
+		t.Fatalf("expected exactly 1 resolved identity, got %d", len(identities))
+	}
+	if err := st.PutRefresh(body, identities[0], variant); err != nil {
+		t.Fatalf("PutRefresh: %v", err)
+	}
+}
+
 // TestPutRefreshRejectsMultiResult is a regression test: caching a batched
 // (multi-result) response under one canonical key would later be replayed
 // verbatim to an unrelated single-action request expecting exactly one
 // result. The Juju client rejects that with "more than 1 result found"
 // (core/charm/repository.(*CharmHubRepository).refreshOne requires len==1).
-// PutRefresh must refuse to store multi-result bodies.
+// handleRefresh must refuse to store multi-result bodies.
 func TestPutRefreshRejectsMultiResult(t *testing.T) {
 	st, err := newStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("newStore: %v", err)
 	}
 
+	// The production store path: rewriteDownloadURLs extracts the
+	// identities, and handleRefresh only stores when there is exactly one.
 	body := multiResultRefreshResponse("ubuntu", "postgresql", 77, 10)
-	if err := st.PutRefresh(body, ""); err == nil {
-		t.Fatalf("PutRefresh accepted a multi-result response; must reject it")
+	_, identities, err := rewriteDownloadURLs(body, st, "http://127.0.0.1:8080")
+	if err != nil {
+		t.Fatalf("rewriteDownloadURLs: %v", err)
+	}
+	if len(identities) != 2 {
+		t.Fatalf("expected 2 resolved identities from a batched response, got %d", len(identities))
 	}
 
 	// Confirm nothing was cached: a later single-action lookup for either
 	// charm must miss (go to upstream), not return the batched body.
 	rev := 77
 	if _, ok := st.LookupRefresh(action{Name: "ubuntu", Revision: &rev}); ok {
-		t.Fatalf("multi-result response was cached despite PutRefresh rejecting it")
+		t.Fatalf("multi-result response was cached despite the store gate rejecting it")
 	}
 }
 
@@ -69,9 +93,7 @@ func TestCrossClientConvergence(t *testing.T) {
 
 	// Charmhub answers a resolve for ubuntu with revision 77.
 	resp := refreshResponse("ubuntu", 77, "abc123", "https://cdn.example/ubuntu_77.charm")
-	if err := st.PutRefresh(resp, ""); err != nil {
-		t.Fatalf("PutRefresh: %v", err)
-	}
+	putRefresh(t, st, resp, "")
 
 	// A later pinned-revision request for the SAME charm+revision hits the
 	// SAME canonical entry, regardless of which client asked.
@@ -138,81 +160,37 @@ func TestChannelOnlyNeverCached(t *testing.T) {
 	}
 
 	resp := refreshResponse("ubuntu", 77, "abc123", "https://cdn.example/ubuntu_77.charm")
-	if err := st.PutRefresh(resp, ""); err != nil {
-		t.Fatalf("PutRefresh: %v", err)
-	}
+	putRefresh(t, st, resp, "")
 
-	channelOnly := action{Name: "ubuntu", Channel: "latest/stable", Base: "amd64/ubuntu/22.04"}
+	channelOnly := action{Name: "ubuntu", Channel: "latest/stable"}
 	if _, ok := st.LookupRefresh(channelOnly); ok {
 		t.Fatalf("channel-only request unexpectedly resolved from cache; must always miss to upstream")
 	}
 }
 
-// TestRefreshByIDOffline verifies the charmrevisioner path: a refresh-by-id
-// request (no name, revision in the context) resolves offline via the id
-// index populated from a prior response.
-func TestRefreshByIDOffline(t *testing.T) {
+// TestByIDNeverCached verifies that by-id refreshes (the charmrevisioner
+// worker, which never fires within a CI job's lifetime) are never served
+// from cache: they carry no name, so they fail isCacheable and always pass
+// through to upstream.
+func TestByIDNeverCached(t *testing.T) {
 	st, err := newStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("newStore: %v", err)
 	}
 
-	// Store a response (as if from a deploy) — it carries the charmhub id.
 	resp := refreshResponse("ubuntu", 77, "abc123", "https://cdn.example/ubuntu_77.charm")
+	putRefresh(t, st, resp, "")
+
 	rev := 77
-	if err := st.PutRefresh(resp, ""); err != nil {
-		t.Fatalf("PutRefresh: %v", err)
-	}
-
-	// The charmrevisioner sends refresh-by-id: action has only id, revision in
-	// context. The proxy parses this into action{ID, Revision} (name empty).
-	workerAction := action{ID: "charm-id-ubuntu", Revision: &rev}
-	got, ok := st.LookupRefresh(workerAction)
-	if !ok {
-		t.Fatalf("refresh-by-id did not resolve from cache")
-	}
-	if string(got) != string(resp) {
-		t.Fatalf("refresh-by-id got different body than stored")
-	}
-
-	// A refresh-by-id for a revision we haven't seen must miss.
-	rev99 := 99
-	if _, ok := st.LookupRefresh(action{ID: "charm-id-ubuntu", Revision: &rev99}); ok {
-		t.Fatalf("refresh-by-id for unseen revision unexpectedly resolved")
-	}
-}
-
-// TestParseRefreshByIDAction verifies that refresh-by-id requests pull
-// revision/channel/base from the context array (matched by instance-key),
-// since the action itself carries only the id.
-func TestParseRefreshByIDAction(t *testing.T) {
-	body := []byte(`{
-		"context":[{"instance-key":"ik-1","id":"charm-id-ubuntu","revision":77,"tracking-channel":"latest/stable","base":{"architecture":"amd64","name":"ubuntu","channel":"22.04"}}],
-		"actions":[{"action":"refresh","instance-key":"ik-1","id":"charm-id-ubuntu"}]
-	}`)
-	acts, err := parseRefreshActions(body)
-	if err != nil {
-		t.Fatalf("parse refresh-by-id: %v", err)
-	}
-	if len(acts) != 1 {
-		t.Fatalf("expected 1 action, got %d", len(acts))
-	}
-	a := acts[0]
-	if a.ID != "charm-id-ubuntu" || a.Name != "" {
-		t.Fatalf("id/name parsed wrong: %+v", a)
-	}
-	if a.Revision == nil || *a.Revision != 77 {
-		t.Fatalf("revision not pulled from context: %+v", a)
-	}
-	if a.Channel != "latest/stable" || a.Base != "amd64/ubuntu/22.04" {
-		t.Fatalf("channel/base not pulled from context: %+v", a)
+	if _, ok := st.LookupRefresh(action{Revision: &rev}); ok {
+		t.Fatalf("by-id request (no name) unexpectedly resolved from cache; must always miss to upstream")
 	}
 }
 
 // TestParseRefreshActions verifies action extraction across the different
 // serialisations the provider and controller produce.
 func TestParseRefreshActions(t *testing.T) {
-	// Provider style: pinned revision, no channel/base.
+	// Provider style: pinned revision, no channel.
 	p := []byte(`{"context":[],"actions":[{"action":"install","instance-key":"key-0","name":"ubuntu","revision":77}],"fields":["revision"]}`)
 	acts, err := parseRefreshActions(p)
 	if err != nil {
@@ -222,13 +200,14 @@ func TestParseRefreshActions(t *testing.T) {
 		t.Fatalf("provider action parsed wrong: %+v", acts)
 	}
 
-	// Controller style: channel + base, no revision.
+	// Controller style: channel, no revision (base is ignored by the
+	// parser — it doesn't feed the cacheability check or key).
 	c := []byte(`{"actions":[{"action":"install","instance-key":"k","name":"ubuntu","channel":"latest/stable","base":{"architecture":"amd64","name":"ubuntu","channel":"22.04"}}]}`)
 	acts, err = parseRefreshActions(c)
 	if err != nil {
 		t.Fatalf("parse controller request: %v", err)
 	}
-	if len(acts) != 1 || acts[0].Channel != "latest/stable" || acts[0].Revision != nil || acts[0].Base != "amd64/ubuntu/22.04" {
+	if len(acts) != 1 || acts[0].Channel != "latest/stable" || acts[0].Revision != nil {
 		t.Fatalf("controller action parsed wrong: %+v", acts)
 	}
 }
@@ -296,9 +275,14 @@ func TestRewriteDownloadURLs(t *testing.T) {
 		]
 	}`)
 
-	rewritten, err := rewriteDownloadURLs(body, st, "http://127.0.0.1:8080")
+	rewritten, identities, err := rewriteDownloadURLs(body, st, "http://127.0.0.1:8080")
 	if err != nil {
 		t.Fatalf("rewriteDownloadURLs: %v", err)
+	}
+
+	// The resolved identity is extracted from the same single parse.
+	if len(identities) != 1 || identities[0].name != "ubuntu" || identities[0].revision != 77 {
+		t.Errorf("resolved identity = %+v, want ubuntu@77", identities)
 	}
 
 	var doc map[string]any
@@ -350,9 +334,13 @@ func TestRewriteDownloadURLsNoResults(t *testing.T) {
 		t.Fatalf("newStore: %v", err)
 	}
 	body := []byte(`{"error-list":[{"code":"not-found","message":"no such charm"}]}`)
-	rewritten, err := rewriteDownloadURLs(body, st, "http://127.0.0.1:8080")
+	rewritten, identities, err := rewriteDownloadURLs(body, st, "http://127.0.0.1:8080")
 	if err != nil {
 		t.Fatalf("rewriteDownloadURLs: %v", err)
+	}
+	// No results means no identity: such responses are never cacheable.
+	if len(identities) != 0 {
+		t.Errorf("expected no identities from an error-list response, got %d", len(identities))
 	}
 	// The body should be semantically identical (key present, no results key).
 	var doc map[string]any
@@ -375,9 +363,7 @@ func TestStorePutRefreshThenRead(t *testing.T) {
 	rev := 77
 	a := action{Name: "ubuntu", Revision: &rev}
 	body := refreshResponse("ubuntu", 77, "abc123", "https://cdn.example/u.charm")
-	if err := st.PutRefresh(body, ""); err != nil {
-		t.Fatalf("PutRefresh: %v", err)
-	}
+	putRefresh(t, st, body, "")
 	got, ok := st.LookupRefresh(a)
 	if !ok {
 		t.Fatalf("LookupRefresh miss after PutRefresh")
@@ -411,9 +397,7 @@ func TestFieldsMismatchNotServedFromCache(t *testing.T) {
 	rev := 6
 	const controllerFields = "bases,config-yaml,download,id,license,metadata-yaml,name,publisher,resources,revision,summary,type,version"
 	controllerAction := action{Name: "juju-qa-dummy-source", Revision: &rev, FieldsKey: controllerFields}
-	if err := st.PutRefresh(resp, variantKey(controllerAction)); err != nil {
-		t.Fatalf("PutRefresh: %v", err)
-	}
+	putRefresh(t, st, resp, variantKey(controllerAction))
 
 	// Provider's ActionExists requests a different field set (includes
 	// actions-yaml). It must NOT hit the controller's cache entry.
@@ -445,9 +429,7 @@ func TestRevisionWithChannelNeverCached(t *testing.T) {
 	}
 
 	resp := refreshResponse("ubuntu", 25, "abc123", "https://cdn.example/ubuntu_25.charm")
-	if err := st.PutRefresh(resp, ""); err != nil {
-		t.Fatalf("PutRefresh: %v", err)
-	}
+	putRefresh(t, st, resp, "")
 
 	rev := 25
 	updateCheck := action{Name: "ubuntu", Revision: &rev, Channel: "2.0/stable"}

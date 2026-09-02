@@ -7,17 +7,19 @@
 // requested fields AND resource revisions, since different callers (e.g. the
 // provider's ActionExists vs. the controller's deploy resolve) request
 // different field/resource sets for the same charm+revision; the identity
-// portion is immutable, so entries never expire. Requests pinned to a
-// revision (or an id+revision) and carrying no channel are served from
-// cache; requests with no revision, or with a revision AND a channel (an
-// "is there an update?" check), always go upstream, since their purpose is
-// to learn the CURRENT revision for a channel, which can change at any time
-// — caching that would serve stale revisions.
+// portion is immutable, so entries never expire. Only by-name requests
+// pinned to a revision and carrying no channel are served from cache;
+// requests with no revision, or with a revision AND a channel (an "is there
+// an update?" check), always go upstream, since their purpose is to learn
+// the CURRENT revision for a channel, which can change at any time — caching
+// that would serve stale revisions. By-id refreshes (the controller's
+// charmrevisioner worker, which first fires ~24h after model creation) are
+// deliberately not cached and always pass through; they never occur within
+// a CI job's lifetime.
 //
 // Store layout:
 //
 //	<store>/refresh/<key>.json   # response keyed by name@revision#variant
-//	<store>/ids/<key>.name       # charmhub id+revision+variant -> name index
 //	<store>/blobs/<hash>         # charm blob bytes
 //	<store>/blobs/<hash>.url     # real upstream URL for cold backfill
 package main
@@ -212,8 +214,9 @@ func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Rewrite download URLs so blob fetches route back through this proxy.
-	rewritten, err := rewriteDownloadURLs(respBody, s.store, proxyBaseURL(r))
+	// Rewrite download URLs so blob fetches route back through this proxy,
+	// and extract the resolved identity from the same single parse.
+	rewritten, identities, err := rewriteDownloadURLs(respBody, s.store, proxyBaseURL(r))
 	if err != nil {
 		// Never break a deploy over a schema surprise; the blob path will
 		// hit the live CDN directly.
@@ -224,14 +227,16 @@ func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Only store responses that are safe to replay: single-action, and
-	// cacheable per isCacheable (which must mirror the LookupRefresh gate,
-	// else a revision+channel "update check" response — reflecting the
-	// current channel head — poisons the pinned-revision entry). Multi-
-	// action responses are excluded here and rejected again in PutRefresh.
-	// Best-effort: a store failure must not fail the deploy.
-	if len(actions) == 1 && isCacheable(actions[0]) {
-		if err := s.store.PutRefresh(rewritten, variantKey(actions[0])); err != nil {
+	// Only store responses that are safe to replay: single-action, cacheable
+	// per isCacheable (which must mirror the LookupRefresh gate, else a
+	// revision+channel "update check" response — reflecting the current
+	// channel head — poisons the pinned-revision entry), and carrying
+	// exactly one resolved identity. A batched (multi-result) response must
+	// never be cached: it would later be replayed verbatim to an unrelated
+	// single-action request, which the Juju client rejects ("more than 1
+	// result found"). Best-effort: a store failure must not fail the deploy.
+	if len(actions) == 1 && isCacheable(actions[0]) && len(identities) == 1 {
+		if err := s.store.PutRefresh(rewritten, identities[0], variantKey(actions[0])); err != nil {
 			log.Printf("charmhub-cache: store refresh failed: %v", err)
 		}
 	}
@@ -244,6 +249,8 @@ func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 // isCacheable reports whether an action's response may be safely stored and
 // later replayed. It must mirror the read-side check in LookupRefresh. Never
 // cached:
+//   - no name (by-id refreshes: the charmrevisioner worker, which never
+//     fires within a CI job's lifetime — always pass through);
 //   - no revision (channel-only resolve; the revision can change);
 //   - revision AND channel (an "is there an update?" check whose response
 //     reflects the current channel head).
@@ -252,11 +259,11 @@ func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 // it is folded into the cache key via variantKey, so requests for different
 // resource revisions of the same charm+revision get distinct entries.
 func isCacheable(a action) bool {
-	return a.Revision != nil && a.Channel == ""
+	return a.Name != "" && a.Revision != nil && a.Channel == ""
 }
 
 // variantKey combines every request-side discriminator the cache key must
-// vary on beyond (name/id, revision): the requested fields and the requested
+// vary on beyond (name, revision): the requested fields and the requested
 // resource revisions. Two requests that agree on identity but differ in
 // either must not share a cache entry (their responses differ). Returns ""
 // when neither is present, so the common no-variant case keys cleanly.
@@ -354,19 +361,13 @@ func contentLength(resp *http.Response) (int64, bool) {
 	return 0, false
 }
 
-// action is a single parsed refresh request action.
-//
-// Two wire shapes exist:
-//   - by-name (provider, controller fresh deploy): Name plus optional
-//     Revision/Channel/Base in the action.
-//   - by-id (controller re-resolve, charmrevisioner): only ID in the action;
-//     Revision/Channel/Base live in the matching context entry.
+// action is a single parsed refresh request action. Only the fields that
+// feed the cacheability check and the cache key are captured; everything
+// else in the request body is irrelevant to caching and ignored.
 type action struct {
-	ID          string
 	Name        string
 	Channel     string
 	Revision    *int
-	Base        string // "arch/os/channel", empty if absent
 	InstanceKey string // per-request unique key; must match in the response
 	// FieldsKey is a signature of the requested "fields" array. Different
 	// callers request different fields for the same charm+revision (e.g.
@@ -385,34 +386,18 @@ type action struct {
 	ResourcesKey string
 }
 
-// parseRefreshActions extracts the actions from a refresh request body,
-// merging revision/channel/base from the context array (matched by
-// instance-key) for by-id requests. The top-level "fields" array is folded
-// into each action's FieldsKey (see action.FieldsKey for why this matters).
+// parseRefreshActions extracts the actions from a refresh request body.
+// The top-level "fields" array is folded into each action's FieldsKey (see
+// action.FieldsKey for why this matters). By-id actions carry no name, so
+// they fail the isCacheable check and pass through to upstream.
 func parseRefreshActions(body []byte) ([]action, error) {
 	var req struct {
 		Fields  []string `json:"fields"`
-		Context []struct {
-			InstanceKey     string `json:"instance-key"`
-			Revision        *int   `json:"revision"`
-			TrackingChannel string `json:"tracking-channel"`
-			Base            *struct {
-				Architecture string `json:"architecture"`
-				Name         string `json:"name"`
-				Channel      string `json:"channel"`
-			} `json:"base"`
-		} `json:"context"`
 		Actions []struct {
-			InstanceKey string `json:"instance-key"`
-			ID          string `json:"id"`
-			Name        string `json:"name"`
-			Channel     string `json:"channel"`
-			Revision    *int   `json:"revision"`
-			Base        *struct {
-				Architecture string `json:"architecture"`
-				Name         string `json:"name"`
-				Channel      string `json:"channel"`
-			} `json:"base"`
+			InstanceKey       string `json:"instance-key"`
+			Name              string `json:"name"`
+			Channel           string `json:"channel"`
+			Revision          *int   `json:"revision"`
 			ResourceRevisions []struct {
 				Name     string `json:"name"`
 				Revision int    `json:"revision"`
@@ -425,22 +410,6 @@ func parseRefreshActions(body []byte) ([]action, error) {
 
 	fieldsKey := normalizeFields(req.Fields)
 
-	// Index context entries by instance-key so by-id actions can pick up
-	// their revision/channel/base.
-	type ctxInfo struct {
-		revision *int
-		channel  string
-		base     string
-	}
-	ctxByKey := make(map[string]ctxInfo, len(req.Context))
-	for _, c := range req.Context {
-		base := ""
-		if c.Base != nil {
-			base = fmt.Sprintf("%s/%s/%s", c.Base.Architecture, c.Base.Name, c.Base.Channel)
-		}
-		ctxByKey[c.InstanceKey] = ctxInfo{revision: c.Revision, channel: c.TrackingChannel, base: base}
-	}
-
 	actions := make([]action, 0, len(req.Actions))
 	for _, a := range req.Actions {
 		resourcesKey := ""
@@ -452,23 +421,14 @@ func parseRefreshActions(body []byte) ([]action, error) {
 			sort.Strings(pairs)
 			resourcesKey = strings.Join(pairs, ",")
 		}
-		act := action{ID: a.ID, Name: a.Name, Channel: a.Channel, Revision: a.Revision, InstanceKey: a.InstanceKey, FieldsKey: fieldsKey, ResourcesKey: resourcesKey}
-		if a.Base != nil {
-			act.Base = fmt.Sprintf("%s/%s/%s", a.Base.Architecture, a.Base.Name, a.Base.Channel)
-		}
-		// For by-id requests, revision/channel/base come from the context.
-		if ci, ok := ctxByKey[a.InstanceKey]; ok {
-			if act.Revision == nil {
-				act.Revision = ci.revision
-			}
-			if act.Channel == "" {
-				act.Channel = ci.channel
-			}
-			if act.Base == "" {
-				act.Base = ci.base
-			}
-		}
-		actions = append(actions, act)
+		actions = append(actions, action{
+			Name:         a.Name,
+			Channel:      a.Channel,
+			Revision:     a.Revision,
+			InstanceKey:  a.InstanceKey,
+			FieldsKey:    fieldsKey,
+			ResourcesKey: resourcesKey,
+		})
 	}
 	return actions, nil
 }
@@ -517,20 +477,26 @@ func rewriteInstanceKey(body []byte, instanceKey string) []byte {
 
 // rewriteDownloadURLs rewrites each result's download.url to point at this
 // proxy's /blob/<hash> endpoint, recording the real upstream URL for later
-// backfill. Uses map[string]any so unmodelled fields are preserved verbatim.
-// Juju's charm downloader requires absolute URLs, hence proxyBase.
-func rewriteDownloadURLs(body []byte, st *store, proxyBase string) ([]byte, error) {
+// backfill, and returns the rewritten body together with the resolved
+// (name, revision) identity of each result — extracted from the same single
+// parse, so callers don't need to unmarshal the body again. Uses
+// map[string]any so unmodelled fields are preserved verbatim. Juju's charm
+// downloader requires absolute URLs, hence proxyBase. Responses without a
+// results array (e.g. error-list responses) are returned unchanged with a
+// nil identity.
+func rewriteDownloadURLs(body []byte, st *store, proxyBase string) ([]byte, []resolvedIdentity, error) {
 	var doc map[string]any
 	if err := json.Unmarshal(body, &doc); err != nil {
-		return nil, fmt.Errorf("unmarshal refresh response: %w", err)
+		return nil, nil, fmt.Errorf("unmarshal refresh response: %w", err)
 	}
 
 	results, ok := doc["results"].([]any)
 	if !ok {
 		// No results array (e.g. an error-list response): nothing to rewrite.
-		return body, nil
+		return body, nil, nil
 	}
 
+	identities := make([]resolvedIdentity, 0, len(results))
 	for _, res := range results {
 		result, ok := res.(map[string]any)
 		if !ok {
@@ -539,6 +505,10 @@ func rewriteDownloadURLs(body []byte, st *store, proxyBase string) ([]byte, erro
 		entity, ok := result["charm"].(map[string]any)
 		if !ok {
 			continue
+		}
+		if name, _ := entity["name"].(string); name != "" {
+			rev, _ := entity["revision"].(float64)
+			identities = append(identities, resolvedIdentity{name: name, revision: int(rev)})
 		}
 		download, ok := entity["download"].(map[string]any)
 		if !ok {
@@ -554,12 +524,16 @@ func rewriteDownloadURLs(body []byte, st *store, proxyBase string) ([]byte, erro
 			hash = hex.EncodeToString(sum[:])
 		}
 		if err := st.PutBlobURL(hash, realURL); err != nil {
-			return nil, fmt.Errorf("record blob url: %w", err)
+			return nil, nil, fmt.Errorf("record blob url: %w", err)
 		}
 		download["url"] = proxyBase + blobPathPrefix + hash
 	}
 
-	return json.Marshal(doc)
+	rewritten, err := json.Marshal(doc)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rewritten, identities, nil
 }
 
 // httpClient follows redirects (the CharmHub blob CDN issues 302s) and uses
@@ -592,7 +566,7 @@ type store struct {
 }
 
 func newStore(dir string) (*store, error) {
-	for _, sub := range []string{"refresh", "blobs", "ids"} {
+	for _, sub := range []string{"refresh", "blobs"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			return nil, err
 		}
@@ -609,127 +583,52 @@ func canonicalKey(name string, revision int, variant string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func idKey(id string, revision int, variant string) string {
-	sum := sha256.Sum256(fmt.Appendf(nil, "%s@%d#%s", id, revision, variant))
-	return hex.EncodeToString(sum[:])
-}
-
-// LookupRefresh returns the cached response for a single action, resolving:
-//   - pinned-revision requests via the canonical (name, revision) key,
-//   - by-id requests via the id->name index (requires a revision).
-//
-// Requests with no revision, OR with a revision but also a channel, are
-// never served from cache (see isCacheable). RefreshOne
-// (juju3/charmhub/refresh.go) sends BOTH the installed revision AND the
-// tracking channel to ask "has this channel advanced?" — that answer
-// changes as the channel advances, so it must never be served from a cache
-// keyed on the (stale) installed revision. Cacheable requests are scoped by
-// variantKey so different fields/resource-revisions get distinct entries.
+// LookupRefresh returns the cached response for a single action, keyed by
+// (name, revision, variant). Requests failing isCacheable are never served
+// from cache. RefreshOne (juju3/charmhub/refresh.go) sends BOTH the installed
+// revision AND the tracking channel to ask "has this channel advanced?" —
+// that answer changes as the channel advances, so it must never be served
+// from a cache keyed on the (stale) installed revision.
 func (s *store) LookupRefresh(a action) ([]byte, bool) {
 	if !isCacheable(a) {
 		return nil, false
 	}
 
-	variant := variantKey(a)
-
 	s.refreshMu.Lock()
 	defer s.refreshMu.Unlock()
 
-	if a.Name == "" && a.ID != "" {
-		nameBytes, err := os.ReadFile(filepath.Join(s.dir, "ids", idKey(a.ID, *a.Revision, variant)+".name"))
-		if err != nil {
-			return nil, false
-		}
-		name := strings.TrimSpace(string(nameBytes))
-		if name == "" {
-			return nil, false
-		}
-		b, err := os.ReadFile(filepath.Join(s.dir, "refresh", canonicalKey(name, *a.Revision, variant)+".json"))
-		if err != nil {
-			return nil, false
-		}
-		return b, true
-	}
-
-	b, err := os.ReadFile(filepath.Join(s.dir, "refresh", canonicalKey(a.Name, *a.Revision, variant)+".json"))
+	b, err := os.ReadFile(filepath.Join(s.dir, "refresh", canonicalKey(a.Name, *a.Revision, variantKey(a))+".json"))
 	if err != nil {
 		return nil, false
 	}
 	return b, true
 }
 
-// PutRefresh stores a response under the resolved (name, revision, variant)
-// identity read back from the response body and the requesting action's
-// variant key (fields + resource revisions), and records the id index so
-// future by-id requests for the same immutable id+revision+variant resolve
-// offline.
+// PutRefresh stores a response under the given resolved (name, revision)
+// identity — extracted by rewriteDownloadURLs from the same single parse —
+// and the requesting action's variant key (fields + resource revisions).
 //
 // body must contain exactly one result. A multi-result (batched) response
 // must never be cached here: it would later be replayed verbatim to an
 // unrelated single-action request, which the Juju client rejects with
 // "more than 1 result found" (it requires exactly one result per action).
-func (s *store) PutRefresh(body []byte, variant string) error {
+func (s *store) PutRefresh(body []byte, identity resolvedIdentity, variant string) error {
 	s.refreshMu.Lock()
 	defer s.refreshMu.Unlock()
 
-	resolved, err := resolvedIdentities(body)
-	if err != nil {
-		return fmt.Errorf("parse resolved identities: %w", err)
-	}
-	if len(resolved) == 0 {
-		return errors.New("no resolved results in response")
-	}
-	if len(resolved) > 1 {
-		return fmt.Errorf("refusing to cache a multi-result response (%d results)", len(resolved))
+	if identity.name == "" {
+		return errors.New("no resolved result in response")
 	}
 
-	// Only single-action requests are cached, so there is exactly one result.
-	name, rev := resolved[0].name, resolved[0].revision
-	path := filepath.Join(s.dir, "refresh", canonicalKey(name, rev, variant)+".json")
+	path := filepath.Join(s.dir, "refresh", canonicalKey(identity.name, identity.revision, variant)+".json")
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, body, 0o644); err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		return err
-	}
-
-	if id := resolved[0].id; id != "" {
-		idPath := filepath.Join(s.dir, "ids", idKey(id, rev, variant)+".name")
-		if err := os.WriteFile(idPath, []byte(name), 0o644); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// resolvedIdentities parses a refresh response and returns the resolved
-// (id, name, revision) for each result.
-func resolvedIdentities(body []byte) ([]resolvedIdentity, error) {
-	var doc struct {
-		Results []struct {
-			Entity struct {
-				ID       string `json:"id"`
-				Name     string `json:"name"`
-				Revision int    `json:"revision"`
-			} `json:"charm"`
-		} `json:"results"`
-	}
-	if err := json.Unmarshal(body, &doc); err != nil {
-		return nil, err
-	}
-	out := make([]resolvedIdentity, 0, len(doc.Results))
-	for _, r := range doc.Results {
-		if r.Entity.Name == "" {
-			continue
-		}
-		out = append(out, resolvedIdentity{id: r.Entity.ID, name: r.Entity.Name, revision: r.Entity.Revision})
-	}
-	return out, nil
+	return os.Rename(tmp, path)
 }
 
 type resolvedIdentity struct {
-	id       string
 	name     string
 	revision int
 }
