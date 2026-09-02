@@ -1123,6 +1123,11 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 	updateApplicationInput := juju.UpdateApplicationInput{
 		ModelUUID: state.ModelUUID.ValueString(),
 		AppName:   state.ApplicationName.ValueString(),
+		// Juju 3 did not require the force-base flag to be true to change
+		// the base of a Kubernetes charm, but Juju 4 does, so we always
+		// set it. A machine application with a new base requires
+		// recreation, so we shouldn't reach this code path if the base changes.
+		ForceBase: true,
 	}
 
 	if !plan.ApplicationName.IsUnknown() && !plan.ApplicationName.Equal(state.ApplicationName) {
