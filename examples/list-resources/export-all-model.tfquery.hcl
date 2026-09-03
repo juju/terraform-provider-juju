@@ -7,7 +7,7 @@
 #
 # Then use an AI agent with the model export fixup skill to rewrite literal
 # UUIDs/names into cross-resource references and get `terraform plan` clean.
-# See docs-rtd/howto/import-manual-model.md for the full workflow.
+# See the "Export a model" how-to in the provider docs for the full workflow.
 
 variable "model_uuid" {
   description = "UUID of the model to export"

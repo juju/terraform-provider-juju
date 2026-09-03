@@ -1,7 +1,7 @@
 ---
 myst:
   html_meta:
-    description: "Learn how to reference, add, configure, and manage Juju models with constraints and configuration keys using Terraform."
+    description: "Learn how to reference, add, configure, and manage Juju models with constraints and configuration keys using Terraform, and how to export and import them."
 ---
 
 (manage-models)=
@@ -20,7 +20,7 @@ data "juju_model" "mymodel" {
 }
 ```
 
-> See more: [`juju_model` (data source)](../reference/terraform-provider/data-sources/model)
+> See more: [`juju_model` (data source)](../reference/terraform-provid`er/data-sources/model)
 
 (access-the-controller-model)=
 ## Access the controller model
@@ -314,15 +314,17 @@ To destroy a model, remove its resource definition from your Terraform plan.
 
 ## Export a model
 
-To export the Terraform configuration from a model, you can use `terraform query`.
-
-If you want to import a manually deployed model into a Terraform plan, see {ref}`import-a-manually-created-model`.
+To export the Terraform configuration from a model, you can use `terraform query`: it generates a Terraform config (plus `import` blocks) that reproduces the model's current resources, so you can bring it under Terraform management.
 
 > See also: [terraform query](https://developer.hashicorp.com/terraform/language/v1.14.x/import/bulk?page=import&page=bulk)
 
 ### Ensure the provider is connected to the model's host controller
 
 To export the Terraform configuration for a model, configure the provider to connect to the controller that hosts the model.
+
+```{tip}
+Consider using read-only credentials for the export, to ensure no changes can be accidentally made to the model during the process. See [Juju | User access levels](https://documentation.ubuntu.com/juju/latest/reference/user/#valid-access-levels-for-models).
+```
 
 For example:
 
@@ -359,6 +361,8 @@ For example, create `example.tfquery.hcl` with:
 - storage pools
 - integrations
 - offers
+- secrets
+- spaces
 
 ```{code-block} terraform
 :caption: `example.tfquery.hcl`
@@ -465,6 +469,30 @@ list "juju_storage_pool" "all_storage_pools" {
     model_uuid = var.model_uuid
   }
 }
+
+# ---------------------------------------------------------------------------
+# List all secrets in the test model
+# ---------------------------------------------------------------------------
+list "juju_secret" "all_secrets" {
+  provider         = juju
+  include_resource = true
+
+  config {
+    model_uuid = var.model_uuid
+  }
+}
+
+# ---------------------------------------------------------------------------
+# List all spaces in the test model
+# ---------------------------------------------------------------------------
+list "juju_space" "all_spaces" {
+  provider         = juju
+  include_resource = true
+
+  config {
+    model_uuid = var.model_uuid
+  }
+}
 ```
 
 ### Query and generate the configuration file
@@ -472,6 +500,10 @@ list "juju_storage_pool" "all_storage_pools" {
 To generate the config with the specified list resources into the `test.tf` file, run:
 
 `TF_VAR_model_uuid="<model-uuid>" terraform query --generate-config-out=test.tf`
+
+```{tip}
+You can get the model UUID with `juju show-model <model-name> --format yaml | grep model-uuid` or `juju models --format yaml`.
+```
 
 An example of the generated config:
 
@@ -605,3 +637,18 @@ juju_storage_pool.all_storage_pools_3: Destroying... [id=c1cecf1e-fe66-4589-8585
 ```
 
 It is advisable to either remove these resources from the generated configuration before importing, or to simply avoid deleting them via Terraform.
+
+(refine-the-generated-config-with-an-ai-agent)=
+### Refine the generated config with an AI agent
+
+Instead of fixing these up by hand, you can let an AI agent do it. The `model export fixup` ({download}`download <../skills/tf-model-export-fixup.md>`) skill guides an agent through the whole refinement: rewriting literal UUIDs and names into cross-resource references, pruning attributes that can't be set in config, removing unmanageable resources, handling controller-set defaults, and iterating on `terraform plan` until the config imports cleanly (no changes, no replaces) and would also recreate the model from scratch.
+
+Download the skill file (or point your agent at the URL) and invoke it on the generated config.
+
+The agent will ask you to confirm judgment calls (e.g., whether to keep controller-set config defaults, whether machines should be implicit) and may ask you to run `terraform plan` or `juju status` and paste the output if it can't reach the controller itself.
+
+```{note}
+Just because the skill tries to constrain the agent's behaviour doesn't mean it's impossible for it to do something dangerous. Always review what commands it's trying to run, even if it's only supposed to run `terraform plan`.
+```
+
+The goal is a plan with no unexpected changes, but some spurious diffs (e.g., config defaults) may remain. When you are satisfied, review the final config carefully before applying. This process is best-effort and complex models may need manual adjustments.

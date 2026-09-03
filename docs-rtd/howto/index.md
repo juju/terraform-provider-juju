@@ -26,7 +26,6 @@ manage-roles
 manage-groups
 create-deployment-dependencies
 manage-models
-import-manual-model
 manage-charms
 manage-charm-resources
 manage-applications
