@@ -1,44 +1,28 @@
 ---
 name: tf-model-export-fixup
-description: Take a `terraform query` export of a Juju model and turn it into a clean, maintainable Terraform config. Rewrite literal UUIDs and names into cross-resource references, prune attributes that can't or shouldn't be set, then iterate on `terraform plan` until the config both imports cleanly against the existing model (no changes, no replaces) AND would recreate every resource from scratch. Finally split the single-file plan into maintainable modules.
+description: Turn a `terraform query` export of a Juju model into a clean, maintainable Terraform config. Rewrite literals into cross-resource references, prune attributes that can't be set, iterate `terraform plan` to no changes, then split into modules.
 ---
 
 # Terraform model export fixup
 
-The user has a `terraform query` export of a Juju model (`exported.tf`), generated with
-`terraform query --generate-config-out`. Every field in it is a literal value, and it
-has no `terraform`/`required_providers` block yet. The goal is a config that **both**
+The user has a `terraform query` export of a Juju model — the exported file
+(`exported.tf` unless the user says otherwise). The goal is a config that **both**
 imports cleanly (`terraform plan` → no changes) **and** would recreate the model from
-scratch (remove `import` blocks → only creates). This is best-effort; some spurious
-diffs may remain and the user may accept them.
+scratch (see section 5). This is best-effort; some spurious diffs may remain and the
+user may accept them.
 
-**NEVER run `terraform apply`.** This skill takes a `.tf` file as input and produces a
-`.tf` file as output. Applying would have surprising side-effects on real
+**NEVER run `terraform apply`.** Applying would have surprising side-effects on real
 infrastructure, and complex models need review before applying.
 
 ## 1. Set up the config for `terraform plan`
 
-The generated file has no `terraform`/`required_providers` block. Add one in a sibling
-`versions.tf`:
-
-```terraform
-terraform {
-  required_providers {
-    juju = {
-      source  = "juju/juju"
-      version = "~> 2.1"
-    }
-  }
-}
-```
-
-Then run `terraform init`.
+If there's no `terraform`/`required_providers` block yet (the user may have added one
+following the how-to), add one for `juju/juju` in a sibling `versions.tf`,
+then run `terraform init`.
 
 ## 2. Rewrite literals into references
 
-`terraform query` emits every field as a literal: `model_uuid` is a hard-coded UUID,
-an application's `machines` list holds literal machine IDs, and an integration's
-`application` blocks use literal application names. Rewrite them so Terraform can see
+`terraform query` emits every field as a literal. Rewrite them so Terraform can see
 the dependency graph:
 
 | Literal | Reference |
@@ -55,11 +39,6 @@ To match a literal to the right resource, use the `import` blocks, which
 - `juju_application`: `<model-uuid>:<app-name>`
 - `juju_machine`: `<model-uuid>:<machine-id>:<machine-name>`
 - `juju_integration`: `<model-uuid>:<app1>:<ep1>:<app2>:<ep2>`
-
-So, for example, an application whose `import` identity is
-`<model-uuid>:dummy-sink` matches the `juju_application` block whose `name` is
-`dummy-sink` in the model with that UUID, and a `machines = ["1"]` entry matches the
-`juju_machine` whose identity has machine ID `1` in the same model.
 
 Rules:
 
@@ -81,6 +60,10 @@ Rules:
   - `juju_machine`: `id`, `machine_id`, `instance_id`, `hostname`
   - `juju_secret`: `id`, `secret_id`, `secret_uri`
   - `juju_integration`, `juju_access_model`, `juju_access_secret`: `id`
+
+  Computed-only attributes can still be *referenced* from other resources (that's
+  what section 2 does with `juju_model.<label>.uuid`); they just can't be set in
+  config.
 - Attributes that are both Computed and Optional (e.g. application `name`) are kept;
   the user may set those.
 
@@ -96,7 +79,8 @@ Rules:
 
 Common cases:
 
-- **Unmanageable resources** (e.g. `juju_space` with `name = "alpha"`): remove the
+- **Unmanageable resources** — resources the controller creates automatically and
+  that can't be imported or managed (e.g. the default `alpha` space): remove the
   resource block and its `import` block together.
 - **Controller-set defaults** (e.g. `juju_model.config` full of defaults): the export
   captures every value the controller reports. Look up Juju model config defaults,
@@ -116,6 +100,11 @@ Common cases:
 
 ## 5. When done
 
+First, verify the config would also recreate the model from scratch: temporarily
+move the `import` blocks out of the config (e.g. into a scratch file), run
+`terraform plan`, and confirm it shows only creates. Then restore the `import`
+blocks.
+
 Once the plan is clean (or accepted), split for maintainability:
 
 - Move `required_providers` into `versions.tf` if not already there.
@@ -123,11 +112,12 @@ Once the plan is clean (or accepted), split for maintainability:
 - Rename auto-generated labels to meaningful names. Update all references and
   `import` block `to` addresses in the same edit.
 - Collect all `import` blocks into `imports.tf`.
-- Remove `# __generated__` headers and other boilerplate. Drop redundant
-  `provider = juju` attributes. Only remove `null`/empty attributes confirmed
-  redundant by the schema, the user, or the plan.
+- Remove generated-by comments and other boilerplate. Drop redundant
+  `provider = juju` attributes. Empty collections (e.g. `annotations = {}`) may be
+  meaningful — only remove them if the schema, the user, or the plan confirms
+  they're redundant.
 - Run `terraform fmt -recursive`, then `terraform plan` once more to confirm.
 
 Tell the user: the export only covers resources with `list` support (users,
-credentials, access grants, etc. won't appear). The config is best-effort and
-**NEEDS** careful manual review before applying.
+credentials, etc. won't appear). The config is best-effort and **NEEDS** careful
+manual review before applying.
