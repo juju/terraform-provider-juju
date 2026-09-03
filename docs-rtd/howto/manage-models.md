@@ -641,14 +641,12 @@ It is advisable to either remove these resources from the generated configuratio
 (refine-the-generated-config-with-an-ai-agent)=
 ### Refine the generated config with an AI agent
 
-Instead of fixing these up by hand, you can let an AI agent do it. The `model export fixup` ({download}`download <../skills/tf-model-export-fixup.md>`) skill guides an agent through the whole refinement: rewriting literal UUIDs and names into cross-resource references, pruning attributes that can't be set in config, removing unmanageable resources, handling controller-set defaults, and iterating on `terraform plan` until the config imports cleanly (no changes, no replaces) and would also recreate the model from scratch.
+The `model export fixup` skill ({download skill}`download <../skills/tf-model-export-fixup.md>`) guides an AI agent through the fixes described above: cross-referencing resources (UUIDs and names), pruning unsettable attributes and defaults, removing unmanageable resources, and iterating on `terraform plan` until it reports no changes and would re-create the model from scratch.
 
-Download the skill file (or point your agent at the URL) and invoke it on the generated config.
+Download the skill file (or point your agent at the URL) and invoke it on the generated config. The agent will ask you to confirm judgment calls and may ask you to run `terraform plan` or `juju status` and paste the output if it can't reach the controller itself.
 
-The agent will ask you to confirm judgment calls (e.g., whether to keep controller-set config defaults, whether machines should be implicit) and may ask you to run `terraform plan` or `juju status` and paste the output if it can't reach the controller itself.
-
-```{note}
-Just because the skill tries to constrain the agent's behaviour doesn't mean it's impossible for it to do something dangerous. Always review what commands it's trying to run, even if it's only supposed to run `terraform plan`.
+```{warning}
+Always review what commands the agent is trying to run before letting it proceed. The skill instructs the agent to never run `terraform apply`, but that is not a guarantee.
 ```
 
-The goal is a plan with no unexpected changes, but some spurious diffs (e.g., config defaults) may remain. When you are satisfied, review the final config carefully before applying. This process is best-effort and complex models may need manual adjustments.
+Some spurious diffs (e.g., config defaults) may remain. When you are satisfied, review the final config before applying.

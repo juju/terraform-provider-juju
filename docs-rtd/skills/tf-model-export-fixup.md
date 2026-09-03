@@ -12,7 +12,8 @@ scratch (see section 5). This is best-effort; some spurious diffs may remain and
 user may accept them.
 
 **NEVER run `terraform apply`.** Applying would have surprising side-effects on real
-infrastructure, and complex models need review before applying.
+infrastructure, and complex models need review before applying. The same applies to 
+any other commands that may mutate infrastructure.
 
 ## 1. Set up the config for `terraform plan`
 
