@@ -337,6 +337,7 @@ markdown_http_base = "https://documentation.ubuntu.com/terraform-provider-juju/l
 exclude_patterns = [
     "doc-cheat-sheet*",
     ".venv*",  # Exclude virtual environment
+    "skills/*", # Agent skills
 ]
 
 # Adds custom CSS files, located under 'html_static_path'
