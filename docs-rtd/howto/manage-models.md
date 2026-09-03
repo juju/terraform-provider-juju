@@ -69,7 +69,8 @@ resource "juju_integration" "juju-dashboard" {
 }
 ```
 
-```{note} Note that JAAS does not expose the controller model for controllers that it manages.
+```{note}
+JAAS does not expose the controller model for controllers that it manages.
 ```
 
 > See more: [`juju_model` (data source)](../reference/terraform-provider/data-sources/model), [`juju_application` (resource)](../reference/terraform-provider/resources/application), [`juju_integration` (resource)](../reference/terraform-provider/resources/integration)
