@@ -16,9 +16,8 @@ infrastructure, and complex models need review before applying.
 
 ## 1. Set up the config for `terraform plan`
 
-If there's no `terraform`/`required_providers` block yet (the user may have added one
-following the how-to), add one for `juju/juju` in a sibling `versions.tf`,
-then run `terraform init`.
+If there's no `terraform`/`required_providers` block yet, add one for `juju/juju` in a
+sibling `versions.tf`, then run `terraform init`.
 
 ## 2. Rewrite literals into references
 
