@@ -313,7 +313,7 @@ To destroy a model, remove its resource definition from your Terraform plan.
 
 > See more: [`juju_model` (resource)](../reference/terraform-provider/resources/model)
 
-## Export a model
+## Export a manually deployed model to a Terraform plan
 
 To export the Terraform configuration from a model, you can use `terraform query`: it generates a Terraform config (plus `import` blocks) that reproduces the model's current resources, so you can bring it under Terraform management.
 
