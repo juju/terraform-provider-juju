@@ -316,6 +316,8 @@ To destroy a model, remove its resource definition from your Terraform plan.
 
 To export the Terraform configuration from a model, you can use `terraform query`.
 
+If you want to import a manually deployed model into a Terraform plan, see {ref}`import-a-manually-created-model`.
+
 > See also: [terraform query](https://developer.hashicorp.com/terraform/language/v1.14.x/import/bulk?page=import&page=bulk)
 
 ### Ensure the provider is connected to the model's host controller
