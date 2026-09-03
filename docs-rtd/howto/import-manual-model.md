@@ -33,36 +33,18 @@ TF_VAR_model_uuid="<model-uuid>" terraform query --generate-config-out=exported.
 
 > **Tip**: Get the model UUID with `juju show-model <model-name> --format yaml | grep model-uuid` or `juju models --format yaml`.
 
-## 4. Set up the exported config for `terraform plan`
+## 4. Load the model export fixup skill
 
-The generated file has no `terraform`/`required_providers` block. Place it in a sibling `versions.tf`:
-
-```terraform
-terraform {
-  required_providers {
-    juju = {
-      source  = "juju/juju"
-      version = "~> 2.1"
-    }
-  }
-}
-```
-
-Then run `terraform init` to install the provider.
-
-## 5. Load the model export fixup skill
-
-The [model export fixup skill](https://github.com/juju/terraform-provider-juju/blob/main/docs-rtd/skills/tf-model-export-fixup.md) guides an AI agent through the whole refinement: rewriting literal UUIDs and names into cross-resource references, pruning attributes that can't be set in config, removing unmanageable resources, resolving drift, handling controller-set defaults, and splitting the result into maintainable files.
+The [model export fixup skill](https://github.com/juju/terraform-provider-juju/blob/main/docs-rtd/skills/tf-model-export-fixup.md) guides an AI agent through the whole refinement: setting up the config for `terraform plan`, rewriting literal UUIDs and names into cross-resource references, pruning attributes that can't be set in config, removing unmanageable resources, resolving drift, handling controller-set defaults, and splitting the result into maintainable files.
 
 Download the skill file (or point your agent at the URL) and invoke it on `exported.tf`.
 
-## 6. Iterate with the agent
+## 5. Iterate with the agent
 
 The agent will run `terraform plan`, classify any errors or drift, and apply fixes — asking you to confirm judgment calls (e.g. whether to keep controller-set config defaults, whether machines should be implicit). It may ask you to run `terraform plan` or `juju status` and paste the output if it can't reach the controller itself.
 
 Note that just because the skill tries to constrain its behaviour doesn't mean it's impossible for it to do something dangerous. Always review what commands it's trying to run.
 
-
-## 7. Decide when it's good enough
+## 6. Decide when it's good enough
 
 The goal is a plan with no unexpected changes, but some spurious diffs (e.g. config defaults) may remain. When you are satisfied, review the final config carefully before applying — the process is best-effort and complex models may need manual adjustments. The agent will not run `terraform apply`; that's your call.

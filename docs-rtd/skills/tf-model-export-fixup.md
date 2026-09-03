@@ -6,7 +6,7 @@ description: Turn a `terraform query` export of a Juju model into a clean, maint
 # Terraform model export fixup
 
 The user has a `terraform query` export of a Juju model — the exported file
-(`exported.tf` unless the user says otherwise). The goal is a config that **both**
+(`exported.tf unless the user says otherwise). The goal is a config that **both**
 imports cleanly (`terraform plan` → no changes) **and** would recreate the model from
 scratch (see section 5). This is best-effort; some spurious diffs may remain and the
 user may accept them.
