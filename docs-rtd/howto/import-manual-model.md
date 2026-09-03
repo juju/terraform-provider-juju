@@ -7,7 +7,7 @@ myst:
 (import-a-manually-created-model)=
 # Import a manually deployed model into a Terraform plan
 
-If you have a Juju model that was created outside Terraform (e.g. with the Juju CLI) and you want to bring it under Terraform management, `terraform query` can generate the configuration, and an AI agent using the [model export fixup](https://github.com/juju/terraform-provider-juju/blob/main/docs-rtd/howto/skills/tf-model-export-fixup.md) skill can refine it into a clean, maintainable plan.
+If you have a Juju model that was created outside Terraform (e.g. with the Juju CLI) and you want to bring it under Terraform management, `terraform query` can generate the configuration, and an AI agent using the [model export fixup](https://github.com/juju/terraform-provider-juju/blob/main/docs-rtd/skills/tf-model-export-fixup.md) skill can refine it into a clean, maintainable plan.
 
 This is a subset of what `terraform query` can do. See {ref}`manage-models` for the full export workflow and other model management tasks.
 
@@ -52,7 +52,7 @@ Then run `terraform init` to install the provider.
 
 ## 5. Load the model export fixup skill
 
-The [model export fixup skill](https://github.com/juju/terraform-provider-juju/blob/main/docs-rtd/howto/skills/tf-model-export-fixup.md) guides an AI agent through the whole refinement: rewriting literal UUIDs and names into cross-resource references, pruning attributes that can't be set in config, removing unmanageable resources, resolving drift, handling controller-set defaults, and splitting the result into maintainable files.
+The [model export fixup skill](https://github.com/juju/terraform-provider-juju/blob/main/docs-rtd/skills/tf-model-export-fixup.md) guides an AI agent through the whole refinement: rewriting literal UUIDs and names into cross-resource references, pruning attributes that can't be set in config, removing unmanageable resources, resolving drift, handling controller-set defaults, and splitting the result into maintainable files.
 
 Download the skill file (or point your agent at the URL) and invoke it on `exported.tf`.
 
