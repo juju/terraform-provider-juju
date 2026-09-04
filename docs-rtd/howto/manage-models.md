@@ -1,7 +1,7 @@
 ---
 myst:
   html_meta:
-    description: "Learn how to reference, add, configure, and manage Juju models with constraints and configuration keys using Terraform."
+    description: "Learn how to reference, add, configure, and manage Juju models with constraints and configuration keys using Terraform, and how to export and import them."
 ---
 
 (manage-models)=
@@ -69,7 +69,8 @@ resource "juju_integration" "juju-dashboard" {
 }
 ```
 
-```{note} Note that JAAS does not expose the controller model for controllers that it manages.
+```{note}
+JAAS does not expose the controller model for controllers that it manages.
 ```
 
 > See more: [`juju_model` (data source)](../reference/terraform-provider/data-sources/model), [`juju_application` (resource)](../reference/terraform-provider/resources/application), [`juju_integration` (resource)](../reference/terraform-provider/resources/integration)
@@ -312,15 +313,19 @@ To destroy a model, remove its resource definition from your Terraform plan.
 
 > See more: [`juju_model` (resource)](../reference/terraform-provider/resources/model)
 
-## Export a model
+## Export a manually deployed model to a Terraform plan
 
-To export the Terraform configuration from a model, you can use `terraform query`.
+To export the Terraform configuration from a model, you can use `terraform query`: it generates a Terraform config (plus `import` blocks) that reproduces the model's current resources, so you can bring it under Terraform management.
 
 > See also: [terraform query](https://developer.hashicorp.com/terraform/language/v1.14.x/import/bulk?page=import&page=bulk)
 
 ### Ensure the provider is connected to the model's host controller
 
 To export the Terraform configuration for a model, configure the provider to connect to the controller that hosts the model.
+
+```{tip}
+Consider using read-only credentials for the export, to ensure no changes can be accidentally made to the model during the process. See [Juju | User access levels](https://documentation.ubuntu.com/juju/latest/reference/user/#valid-access-levels-for-models).
+```
 
 For example:
 
@@ -357,6 +362,8 @@ For example, create `example.tfquery.hcl` with:
 - storage pools
 - integrations
 - offers
+- secrets
+- spaces
 
 ```{code-block} terraform
 :caption: `example.tfquery.hcl`
@@ -463,6 +470,30 @@ list "juju_storage_pool" "all_storage_pools" {
     model_uuid = var.model_uuid
   }
 }
+
+# ---------------------------------------------------------------------------
+# List all secrets in the test model
+# ---------------------------------------------------------------------------
+list "juju_secret" "all_secrets" {
+  provider         = juju
+  include_resource = true
+
+  config {
+    model_uuid = var.model_uuid
+  }
+}
+
+# ---------------------------------------------------------------------------
+# List all spaces in the test model
+# ---------------------------------------------------------------------------
+list "juju_space" "all_spaces" {
+  provider         = juju
+  include_resource = true
+
+  config {
+    model_uuid = var.model_uuid
+  }
+}
 ```
 
 ### Query and generate the configuration file
@@ -470,6 +501,10 @@ list "juju_storage_pool" "all_storage_pools" {
 To generate the config with the specified list resources into the `test.tf` file, run:
 
 `TF_VAR_model_uuid="<model-uuid>" terraform query --generate-config-out=test.tf`
+
+```{tip}
+You can get the model UUID with `juju show-model <model-name> --format yaml | grep model-uuid` or `juju models --format yaml`.
+```
 
 An example of the generated config:
 
@@ -603,3 +638,16 @@ juju_storage_pool.all_storage_pools_3: Destroying... [id=c1cecf1e-fe66-4589-8585
 ```
 
 It is advisable to either remove these resources from the generated configuration before importing, or to simply avoid deleting them via Terraform.
+
+(refine-the-generated-config-with-an-ai-agent)=
+### Refine the generated config with an AI agent
+
+The `model export fixup` skill ({download skill}`download <../skills/tf-model-export-fixup.md>`) guides an AI agent through the fixes described above: cross-referencing resources (UUIDs and names), pruning unsettable attributes and defaults, removing unmanageable resources, and iterating on `terraform plan` until it reports no changes and would re-create the model from scratch.
+
+Download the skill file (or point your agent at the URL) and invoke it on the generated config. The agent will ask you to confirm judgment calls and may ask you to run `terraform plan` or `juju status` and paste the output if it can't reach the controller itself.
+
+```{warning}
+Always review what commands the agent is trying to run before letting it proceed. The skill instructs the agent to never run `terraform apply`, but that is not a guarantee.
+```
+
+Some spurious diffs (e.g., config defaults) may remain. When you are satisfied, review the final config before applying.
