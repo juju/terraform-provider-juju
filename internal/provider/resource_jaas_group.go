@@ -47,7 +47,9 @@ func (r *jaasGroupResource) Metadata(_ context.Context, req resource.MetadataReq
 // Schema defines the schema for JAAS groups.
 func (r *jaasGroupResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A resource that represents a group in JAAS",
+		Description: "A resource that represents a group in JAAS. Note: user-managed " +
+			"groups have been removed in JAAS version 4+ in favour of identity-provider " +
+			"(IdP) authoritative groups; this resource will return an error against JAAS 4+.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Description: "Name of the group",
