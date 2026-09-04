@@ -54,6 +54,26 @@ func TestAcc_ResourceJaasGroup(t *testing.T) {
 	})
 }
 
+// TestAcc_ResourceJaasGroupRemovedInJAAS4 verifies that attempting to manage a
+// group against a JAAS 4+ controller (where user-managed groups have been
+// removed in favour of IdP-authoritative groups) surfaces a clear error.
+func TestAcc_ResourceJaasGroupRemovedInJAAS4(t *testing.T) {
+	OnlyTestAgainstJAAS(t)
+	OnlyTestJaasGroupsRemoved(t)
+	groupName := acctest.RandomWithPrefix("tf-jaas-group")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccResourceJaasGroup(groupName),
+				ExpectError: regexp.MustCompile("removed in JAAS version 4"),
+			},
+		},
+	})
+}
+
 func testAccResourceJaasGroup(name string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceJaasGroup",
