@@ -6,11 +6,36 @@ package juju
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/canonical/jimm-go-sdk/v3/api"
 	"github.com/canonical/jimm-go-sdk/v3/api/params"
 	jujuapi "github.com/juju/juju/api"
 )
+
+// ErrJAASGroupsRemoved indicates that user-managed groups are no longer
+// supported by the connected JAAS controller. Groups were removed in JAAS
+// version 4+ in favour of identity-provider (IdP) authoritative groups.
+var ErrJAASGroupsRemoved = errors.New(
+	"user-managed groups have been removed in JAAS version 4+; " +
+		"groups are now managed by the identity provider (IdP)",
+)
+
+// wrapGroupRemovedErr wraps err with ErrJAASGroupsRemoved when the error
+// indicates the group facade method is not implemented, which happens when a
+// v4+ JAAS controller no longer supports user-managed groups. Any other error
+// (including from an older JAAS 3 controller that still supports groups) is
+// returned unchanged to preserve backwards compatibility.
+func wrapGroupRemovedErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(err.Error(), "not implemented") {
+		return fmt.Errorf("%w: %w", ErrJAASGroupsRemoved, err)
+	}
+	return err
+}
 
 type jaasClient struct {
 	SharedClient
@@ -162,7 +187,7 @@ func (jc *jaasClient) AddGroup(ctx context.Context, name string) (string, error)
 
 	resp, err := client.AddGroup(&req)
 	if err != nil {
-		return "", err
+		return "", wrapGroupRemovedErr(err)
 	}
 	return resp.UUID, nil
 }
@@ -187,7 +212,7 @@ func (jc *jaasClient) readGroup(ctx context.Context, req *params.GetGroupRequest
 	client := jc.getJaasApiClient(conn)
 	resp, err := client.GetGroup(req)
 	if err != nil {
-		return nil, err
+		return nil, wrapGroupRemovedErr(err)
 	}
 	return &JaasGroup{Name: resp.Name, UUID: resp.UUID}, nil
 }
@@ -202,7 +227,7 @@ func (jc *jaasClient) RenameGroup(ctx context.Context, name, newName string) err
 
 	client := jc.getJaasApiClient(conn)
 	req := params.RenameGroupRequest{Name: name, NewName: newName}
-	return client.RenameGroup(&req)
+	return wrapGroupRemovedErr(client.RenameGroup(&req))
 }
 
 // RemoveGroup attempts to remove a group that matches the provided name.
@@ -215,7 +240,7 @@ func (jc *jaasClient) RemoveGroup(ctx context.Context, name string) error {
 
 	client := jc.getJaasApiClient(conn)
 	req := params.RemoveGroupRequest{Name: name}
-	return client.RemoveGroup(&req)
+	return wrapGroupRemovedErr(client.RemoveGroup(&req))
 }
 
 // JaasRole represents a JAAS role used for permissions management.
