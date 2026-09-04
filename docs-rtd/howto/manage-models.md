@@ -20,7 +20,7 @@ data "juju_model" "mymodel" {
 }
 ```
 
-> See more: [`juju_model` (data source)](../reference/terraform-provid`er/data-sources/model)
+> See more: [`juju_model` (data source)](../reference/terraform-provider/data-sources/model)
 
 (access-the-controller-model)=
 ## Access the controller model
