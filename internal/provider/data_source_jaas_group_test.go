@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -31,6 +32,38 @@ func TestAcc_DataSourceJAASGroup(t *testing.T) {
 			},
 		},
 	})
+}
+
+// TestAcc_DataSourceJAASGroupRemovedInJAAS4 verifies that reading a group data
+// source against a JAAS 4+ controller (where user-managed groups have been
+// removed in favour of IdP-authoritative groups) surfaces a clear error.
+func TestAcc_DataSourceJAASGroupRemovedInJAAS4(t *testing.T) {
+	OnlyTestAgainstJAAS(t)
+	OnlyTestJaasGroupsRemoved(t)
+	groupName := acctest.RandomWithPrefix("tf-jaas-group")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccDataSourceJAASGroupOnly(groupName),
+				ExpectError: regexp.MustCompile("removed in JAAS version 4"),
+			},
+		},
+	})
+}
+
+func testAccDataSourceJAASGroupOnly(name string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccDataSourceJAASGroupOnly",
+		`
+data "juju_jaas_group" "test" {
+	name = "{{ .Name }}"
+}
+`, internaltesting.TemplateData{
+			"Name": name,
+		})
 }
 
 func testAccDataSourceJAASGroup(name string) string {
