@@ -223,16 +223,16 @@ func (s *JaasSuite) TestRemoveGroup() {
 	s.Require().NoError(err)
 }
 
-// notImplementedErr mimics the error returned by a JAAS 4+ controller that no
+// errGroupNotImplemented mimics the error returned by a JAAS 4+ controller that no
 // longer supports the user-managed group facade methods.
-var notImplementedErr = errors.New(`no such request - method "AddGroup" is not implemented`)
+var errGroupNotImplemented = errors.New(`no such request - method "AddGroup" is not implemented`)
 
 func (s *JaasSuite) TestAddGroupRemovedInJAAS4() {
 	defer s.setupMocks(s.T()).Finish()
 
 	name := "group"
 	req := &params.AddGroupRequest{Name: name}
-	s.mockJaasClient.EXPECT().AddGroup(req).Return(params.AddGroupResponse{}, notImplementedErr)
+	s.mockJaasClient.EXPECT().AddGroup(req).Return(params.AddGroupResponse{}, errGroupNotImplemented)
 
 	client := s.getJaasClient()
 	_, err := client.AddGroup(s.T().Context(), name)
@@ -244,7 +244,7 @@ func (s *JaasSuite) TestReadGroupRemovedInJAAS4() {
 
 	uuid := "uuid"
 	req := &params.GetGroupRequest{UUID: uuid}
-	s.mockJaasClient.EXPECT().GetGroup(req).Return(params.GetGroupResponse{}, notImplementedErr)
+	s.mockJaasClient.EXPECT().GetGroup(req).Return(params.GetGroupResponse{}, errGroupNotImplemented)
 
 	client := s.getJaasClient()
 	_, err := client.ReadGroupByUUID(s.T().Context(), uuid)
@@ -257,7 +257,7 @@ func (s *JaasSuite) TestRenameGroupRemovedInJAAS4() {
 	name := "name"
 	newName := "new-name"
 	req := &params.RenameGroupRequest{Name: name, NewName: newName}
-	s.mockJaasClient.EXPECT().RenameGroup(req).Return(notImplementedErr)
+	s.mockJaasClient.EXPECT().RenameGroup(req).Return(errGroupNotImplemented)
 
 	client := s.getJaasClient()
 	err := client.RenameGroup(s.T().Context(), name, newName)
@@ -269,7 +269,7 @@ func (s *JaasSuite) TestRemoveGroupRemovedInJAAS4() {
 
 	name := "group"
 	req := &params.RemoveGroupRequest{Name: name}
-	s.mockJaasClient.EXPECT().RemoveGroup(req).Return(notImplementedErr)
+	s.mockJaasClient.EXPECT().RemoveGroup(req).Return(errGroupNotImplemented)
 
 	client := s.getJaasClient()
 	err := client.RemoveGroup(s.T().Context(), name)
