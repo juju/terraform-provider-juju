@@ -400,7 +400,7 @@ func (r *applicationResource) Schema(_ context.Context, _ resource.SchemaRequest
 							Computed:    true,
 							PlanModifiers: []planmodifier.Int64{
 								int64planmodifier.UseStateForUnknown(),
-								InvalidateRevisionIfChannelChanges(),
+								InvalidateRevisionIfChannelOrBaseChanges(),
 							},
 						},
 						BaseKey: schema.StringAttribute{
