@@ -351,6 +351,7 @@ type UpdateApplicationInput struct {
 	Revision  *int
 	Channel   string
 	Trust     *bool
+	ForceBase bool
 	Expose    map[string]interface{}
 	// Unexpose indicates what endpoints to unexpose
 	Unexpose          []string
@@ -1339,6 +1340,7 @@ func (c applicationsClient) UpdateCharmAndResources(
 			CharmID:           charmID,
 			ResourceIDs:       resourceIds,
 			StorageDirectives: input.StorageDirectives,
+			ForceBase:         input.ForceBase,
 		}
 		err = applicationAPIClient.SetCharm(ctx, charmConfig)
 		if err != nil {
