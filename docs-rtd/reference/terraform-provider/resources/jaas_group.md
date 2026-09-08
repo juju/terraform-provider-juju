@@ -3,12 +3,12 @@
 page_title: "juju_jaas_group Resource - terraform-provider-juju"
 subcategory: ""
 description: |-
-  A resource that represents a group in JAAS
+  A resource that represents a group in JAAS. Note: user-managed groups have been removed in JAAS version 4+ in favour of identity-provider (IdP) authoritative groups; this resource will return an error against JAAS 4+.
 ---
 
 # juju_jaas_group (Resource)
 
-A resource that represents a group in JAAS
+A resource that represents a group in JAAS. Note: user-managed groups have been removed in JAAS version 4+ in favour of identity-provider (IdP) authoritative groups; this resource will return an error against JAAS 4+.
 
 ## Example Usage
 

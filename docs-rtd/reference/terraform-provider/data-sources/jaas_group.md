@@ -3,12 +3,12 @@
 page_title: "juju_jaas_group Data Source - terraform-provider-juju"
 subcategory: ""
 description: |-
-  A data source representing a Juju JAAS Group.
+  A data source representing a Juju JAAS Group. Note: user-managed groups have been removed in JAAS version 4+ in favour of identity-provider (IdP) authoritative groups; this data source will return an error against JAAS 4+.
 ---
 
 # juju_jaas_group (Data Source)
 
-A data source representing a Juju JAAS Group.
+A data source representing a Juju JAAS Group. Note: user-managed groups have been removed in JAAS version 4+ in favour of identity-provider (IdP) authoritative groups; this data source will return an error against JAAS 4+.
 
 ## Example Usage
 

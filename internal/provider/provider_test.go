@@ -136,6 +136,15 @@ func jaasGroupsEnabled() bool {
 	return !ok
 }
 
+// OnlyTestJaasGroupsRemoved should be called at the top of tests that assert
+// user-managed groups are no longer supported (JAAS 4+). These tests only run
+// when group support is disabled via SKIP_JAAS_GROUP_TEST.
+func OnlyTestJaasGroupsRemoved(t *testing.T) {
+	if jaasGroupsEnabled() {
+		t.Skip("Skipping JAAS groups-removed test, SKIP_JAAS_GROUP_TEST is not set")
+	}
+}
+
 // checksIf runs the given checks only when cond is true, allowing
 // tests to drop assertions for features disabled in the environment.
 func checksIf(cond bool, checks ...resource.TestCheckFunc) resource.TestCheckFunc {

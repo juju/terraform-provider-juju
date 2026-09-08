@@ -40,7 +40,9 @@ func (d *jaasGroupDataSource) Metadata(_ context.Context, req datasource.Metadat
 // Schema defines the schema for JAAS groups.
 func (d *jaasGroupDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A data source representing a Juju JAAS Group.",
+		Description: "A data source representing a Juju JAAS Group. Note: user-managed " +
+			"groups have been removed in JAAS version 4+ in favour of identity-provider " +
+			"(IdP) authoritative groups; this data source will return an error against JAAS 4+.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Description: "The name of the group.",
