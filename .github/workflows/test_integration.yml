@@ -103,6 +103,26 @@ jobs:
           else
              exit 1
           fi
+      # The LXD matrix rows configure the mirror themselves when installing
+      # microk8s below; here we cover the microk8s matrix rows, where microk8s
+      # was installed by actions-operator without a mirror and image pulls go
+      # straight to docker.io (and its rate limits).
+      - name: Configure Docker Hub mirror for microk8s
+        if: ${{ matrix.action-operator.cloud == 'microk8s' }}
+        run: |
+          if [ -z "$DOCKERHUB_MIRROR" ]; then
+            echo "DOCKERHUB_MIRROR is not set; leaving microk8s pulling from docker.io"
+            exit 0
+          fi
+          sudo mkdir -p /var/snap/microk8s/current/args/certs.d/docker.io
+          cat <<EOF | sudo tee /var/snap/microk8s/current/args/certs.d/docker.io/hosts.toml
+          server = "$DOCKERHUB_MIRROR"
+          [host."$DOCKERHUB_MIRROR"]
+          capabilities = ["pull", "resolve"]
+          EOF
+          # No restart needed: containerd reads certs.d hosts.toml at pull
+          # time, and a restart here would bounce the Juju controller that
+          # actions-operator already bootstrapped on this microk8s.
       - name: In case of LXD setup also microk8s
         if: ${{ matrix.action-operator.cloud == 'lxd' }}
         run: |
