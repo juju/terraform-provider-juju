@@ -76,6 +76,15 @@ User-managed groups have been removed in JAAS version 4 and later. Groups are
 now authoritative in your identity provider (IdP), and membership is managed
 through the IdP rather than through Terraform.
 
+```{important}
+By the time you migrate to JAAS 4+, you are expected to have already removed all
+user-managed groups from your Terraform plan and migrated them to your identity
+provider (IdP). This means the situation described below should not normally
+occur. This guide is provided only as a fallback in the event that a
+`juju_jaas_group` resource or data source is still present in your plan when you
+reach a JAAS 4+ controller.
+```
+
 If your Terraform plan contains a `juju_jaas_group` resource or data source and
 you are targeting a JAAS 4+ controller, Terraform operations will fail with an
 error similar to:
