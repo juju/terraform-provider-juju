@@ -47,6 +47,11 @@ jobs:
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "4.0/edge" }
           - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.32-strict", juju: "3" }
           - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.32-strict", juju: "4.0/edge" }
+        # Each environment is split into shards that run concurrently.
+        # Environment setup (~8 min) is duplicated per shard; the test step
+        # (~50 min unsharded) is roughly divided by the shard count. Keep
+        # this list in sync with TEST_SHARD_COUNT in the test step below.
+        test-shard: [1, 2]
     timeout-minutes: 90
     steps:
       - name: Free Disk Space (Ubuntu)
@@ -164,19 +169,30 @@ jobs:
       # the whole job. Tests that passed on the rerun are flagged in the
       # summary and listed in the uploaded rerun report - a growing report is
       # a flakiness signal to act on, not to ignore.
+      #
+      # Tests are assigned to shards round-robin over the sorted test list,
+      # so the split stays balanced (by count) as tests are added or removed.
+      # The list is computed here rather than in a separate job because
+      # TestMain needs TEST_CLOUD to be set even for -list.
       - name: Run integration tests
         env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.action-operator.cloud }}
           TEST_VAULT_ADDR: ${{ env.TEST_VAULT_ADDR }}
+          TEST_SHARD: ${{ matrix.test-shard }}
+          TEST_SHARD_COUNT: 2
         run: |
+          ALL_TESTS=$(go test -list '.*' ./internal/provider/ | grep '^Test' | LC_ALL=C sort)
+          SHARD_TESTS=$(echo "$ALL_TESTS" | awk -v n="$TEST_SHARD_COUNT" -v i="$TEST_SHARD" 'NR % n == i % n')
+          echo "Shard $TEST_SHARD/$TEST_SHARD_COUNT: running $(echo "$SHARD_TESTS" | wc -l) of $(echo "$ALL_TESTS" | wc -l) tests"
           go run gotest.tools/gotestsum@v1.13.0 \
             --format standard-verbose \
             --rerun-fails=1 \
             --rerun-fails-max-failures=5 \
             --rerun-fails-report=rerun-report.txt \
             --packages ./internal/provider/ \
-            -- -parallel 4 -timeout 90m -cover
+            -- -parallel 4 -timeout 90m -cover \
+            -run "^($(echo "$SHARD_TESTS" | paste -sd '|' -))$"
         timeout-minutes: 90
       - name: Upload flaky-test rerun report
         if: always()
