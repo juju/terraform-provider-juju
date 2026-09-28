@@ -386,14 +386,26 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 		t.Error("environment variable JUJU_AGENT_VERSION must be set for this test")
 		return
 	}
-	jujuMajor := version.MustParse(agentVersion).Major
+	parsedVersion := version.MustParse(agentVersion)
+	jujuMajor := parsedVersion.Major
+	jujuMinor := parsedVersion.Minor
 	switch jujuMajor {
 	case 3:
 		initialAgentVersion = "3.6.21"
 		updatedAgentVersion = "3.6.23"
 	case 4:
-		initialAgentVersion = "4.0.12"
-		updatedAgentVersion = "4.0.14" // No released controller binaries for 4.0.13
+		switch jujuMinor {
+		case 0: // 4.0
+			initialAgentVersion = "4.0.12"
+			updatedAgentVersion = "4.0.14" // No released controller binaries for 4.0.13
+		case 1: // 4.1
+			t.Skipf("Waiting for multiple versions of 4.1 to be released to test upgrades")
+			return
+		default:
+			// Skipping for now.
+			t.Skipf("unsupported Juju %q version for testing upgrades", agentVersion)
+			return
+		}
 	default:
 		t.Errorf("unsupported Juju agent version %q for this test", agentVersion)
 	}

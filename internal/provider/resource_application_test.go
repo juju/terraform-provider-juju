@@ -502,7 +502,7 @@ func TestAcc_ResourceApplication_UpdatesRevisionConfig(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/edge", 88, "", "", ""),
+				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/edge", 88, "ubuntu@22.04", "", "", ""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model."+modelName, "uuid", "juju_application."+appName, "model_uuid"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "charm.#", "1"),
@@ -511,7 +511,7 @@ func TestAcc_ResourceApplication_UpdatesRevisionConfig(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/edge", 96, configParamName, "", ""),
+				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/edge", 96, "ubuntu@22.04", configParamName, "", ""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application."+appName, "charm.0.revision", "96"),
 					resource.TestCheckResourceAttr("juju_application."+appName, "config."+configParamName, configParamName+"-value"),
@@ -685,7 +685,7 @@ func TestAcc_ConfigChangeKeepsCharm(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationCharmWithRevisionAndConfig(modelName, "latest/stable", "20", nil),
+				Config: testAccResourceApplicationCharmWithRevisionAndConfig(modelName, "latest/stable", "26", "ubuntu@20.04", nil),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.channel", "latest/stable"),
 					func(s *terraform.State) error {
@@ -709,7 +709,7 @@ func TestAcc_ConfigChangeKeepsCharm(t *testing.T) {
 			},
 			{
 				// Remove the revision from the plan.
-				Config: testAccResourceApplicationCharmWithRevisionAndConfig(modelName, "latest/stable", "", nil),
+				Config: testAccResourceApplicationCharmWithRevisionAndConfig(modelName, "latest/stable", "", "ubuntu@20.04", nil),
 				PreConfig: func() {
 					// This sleep is necessary because without it, Juju does not update the charm revision and the test fails.
 					// It is unclear where exactly the problem is, but it is almost certainly in the computeCharmID logic,
@@ -725,7 +725,7 @@ func TestAcc_ConfigChangeKeepsCharm(t *testing.T) {
 			},
 			{
 				// Add a config key the plan.
-				Config: testAccResourceApplicationCharmWithRevisionAndConfig(modelName, "latest/stable", "", map[string]string{"thing": "foo"}),
+				Config: testAccResourceApplicationCharmWithRevisionAndConfig(modelName, "latest/stable", "", "ubuntu@20.04", map[string]string{"thing": "foo"}),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectNonEmptyPlan(),
@@ -835,21 +835,21 @@ func TestAcc_ResourceRevisionUpdatesLXD(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, "juju-qa-test", "latest/edge", 21, "", "foo-file", "4"),
+				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, "juju-qa-test", "latest/edge", 21, "ubuntu@20.04", "", "foo-file", "4"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "4"),
 				),
 			},
 			{
 				// change resource revision to 3
-				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, "juju-qa-test", "latest/edge", 21, "", "foo-file", "3"),
+				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, "juju-qa-test", "latest/edge", 21, "ubuntu@20.04", "", "foo-file", "3"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "3"),
 				),
 			},
 			{
 				// change back to 4
-				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, "juju-qa-test", "latest/edge", 21, "", "foo-file", "4"),
+				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, "juju-qa-test", "latest/edge", 21, "ubuntu@20.04", "", "foo-file", "4"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "4"),
 				),
@@ -869,13 +869,13 @@ func TestAcc_ResourceRevisionAddedToPlanLXD(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, "juju-qa-test", "latest/edge", 20, "", "", ""),
+				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, "juju-qa-test", "latest/edge", 21, "ubuntu@20.04", "", "", ""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.juju-qa-test", "resources"),
 				),
 			},
 			{
-				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, "juju-qa-test", "latest/edge", 21, "", "foo-file", "4"),
+				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, "juju-qa-test", "latest/edge", 21, "ubuntu@20.04", "", "foo-file", "4"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "4"),
 				),
@@ -896,14 +896,14 @@ func TestAcc_ResourceRevisionRemovedFromPlanLXD(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// we specify the resource revision 4
-				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, "juju-qa-test", "latest/edge", 20, "", "foo-file", "4"),
+				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, "juju-qa-test", "latest/edge", 21, "ubuntu@20.04", "", "foo-file", "4"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.juju-qa-test", "resources.foo-file", "4"),
 				),
 			},
 			{
 				// then remove the resource revision and update the charm revision
-				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, "juju-qa-test", "latest/edge", 21, "", "", ""),
+				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, "juju-qa-test", "latest/edge", 21, "ubuntu@20.04", "", "", ""),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.juju-qa-test", "resources"),
 				),
@@ -925,21 +925,21 @@ func TestAcc_ResourceRevisionUpdatesMicrok8s(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/stable", 191, "", "coredns-image", "59"),
+				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/stable", 191, "ubuntu@22.04", "", "coredns-image", "59"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(appResourceName, "resources.coredns-image", "59"),
 					testAccCheckApplicationIdle(t.Context(), appResourceName),
 				),
 			},
 			{
-				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/stable", 191, "", "coredns-image", "60"),
+				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/stable", 191, "ubuntu@22.04", "", "coredns-image", "60"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(appResourceName, "resources.coredns-image", "60"),
 					testAccCheckApplicationIdle(t.Context(), appResourceName),
 				),
 			},
 			{
-				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/stable", 191, "", "coredns-image", "59"),
+				Config: testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, "latest/stable", 191, "ubuntu@22.04", "", "coredns-image", "59"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(appResourceName, "resources.coredns-image", "59"),
 					testAccCheckApplicationIdle(t.Context(), appResourceName),
@@ -2045,7 +2045,7 @@ func TestAcc_ResourceApplicationChangingChannel(t *testing.T) {
 				Config: testAccResourceApplicationWithChannelAndRevision(modelName, "latest/candidate", 20),
 			},
 			{
-				Config: testAccResourceApplicationWithChannelAndRevision(modelName, "latest/stable", 20),
+				Config: testAccResourceApplicationWithChannelAndRevision(modelName, "latest/beta", 20),
 			},
 		}})
 }
@@ -2175,7 +2175,9 @@ func testAccResourceApplicationScaleUp(modelName, appName, numberOfUnits string)
 	}
 }
 
-func testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, channel string, revision int, configParamName string, resourceName string, resourceRevision string) string {
+// Pin a base supported by each revision to avoid Juju selecting an unsupported one:
+// https://github.com/juju/juju/issues/23433
+func testAccResourceApplicationWithRevisionChannelAndConfig(modelName, appName, channel string, revision int, base, configParamName, resourceName, resourceRevision string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceApplicationWithRevisionChannelAndConfig",
 		`
@@ -2190,7 +2192,8 @@ resource "juju_application" "{{.AppName}}" {
   charm {
     name     = "{{.AppName}}"
     revision = {{.Revision}}
-		channel  = "{{.Channel}}"
+    channel  = "{{.Channel}}"
+    base     = "{{.Base}}"
   }
 
   {{ if ne .ConfigParamName "" }}
@@ -2212,6 +2215,7 @@ resource "juju_application" "{{.AppName}}" {
 			"AppName":               appName,
 			"Channel":               channel,
 			"Revision":              revision,
+			"Base":                  base,
 			"ConfigParamName":       configParamName,
 			"ResourceParamName":     resourceName,
 			"ResourceParamRevision": resourceRevision,
@@ -2431,7 +2435,7 @@ func testAccResourceApplicationUpdatesCharm(modelName string, channel string) st
 	}
 }
 
-func testAccResourceApplicationCharmWithRevisionAndConfig(modelName, channel, revision string, config map[string]string) string {
+func testAccResourceApplicationCharmWithRevisionAndConfig(modelName, channel, revision, base string, config map[string]string) string {
 	return internaltesting.GetStringFromTemplateWithData("testAccResourceApplicationUpdatesCharm", `
 		resource "juju_model" "this" {
 		  name = "{{.ModelName}}"
@@ -2443,6 +2447,7 @@ func testAccResourceApplicationCharmWithRevisionAndConfig(modelName, channel, re
 		  charm {
 			name    = "juju-qa-test"
 			channel = "{{.Channel}}"
+			base    = "{{.Base}}"
 			{{- if .Revision }}
 			revision = "{{.Revision}}"
 			{{- end }}
@@ -2459,6 +2464,7 @@ func testAccResourceApplicationCharmWithRevisionAndConfig(modelName, channel, re
 		"ModelName": modelName,
 		"Channel":   channel,
 		"Revision":  revision,
+		"Base":      base,
 		"Config":    config,
 	})
 }
