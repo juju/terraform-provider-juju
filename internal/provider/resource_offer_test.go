@@ -179,7 +179,6 @@ resource "juju_offer" "this" {
 }
 
 func TestAcc_ResourceOfferMultipleEndpoints(t *testing.T) {
-	SkipAgainstJuju4WithReason(t, "See https://github.com/juju/juju/issues/22213")
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
@@ -465,7 +464,6 @@ func TestAcc_ResourceOffer_DeleteTimeout(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
-	SkipAgainstJuju4WithReason(t, "Offer can sometimes be removed without force even with active connections.")
 
 	srcModelName := acctest.RandomWithPrefix("tf-test-offer-src-delete")
 	dstModelName := acctest.RandomWithPrefix("tf-test-offer-dst-delete")

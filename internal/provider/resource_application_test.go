@@ -35,7 +35,6 @@ import (
 )
 
 func TestAcc_ResourceApplication(t *testing.T) {
-	SkipAgainstJuju4WithReason(t, "See  https://github.com/juju/juju/issues/21717")
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 
@@ -1851,7 +1850,6 @@ func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
-	SkipAgainstJuju4WithReason(t, "See https://github.com/juju/juju/issues/22233.")
 	ctx := t.Context()
 
 	if testingCloud != LXDCloudTesting {
