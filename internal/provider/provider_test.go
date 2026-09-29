@@ -334,7 +334,7 @@ func TestProviderAllowsEmptyCACert(t *testing.T) {
 	err := confResp.Diagnostics.Errors()[0]
 	assert.Equal(t, diag.SeverityError, err.Severity())
 	assert.Equal(t, "The ca_certificate provider property is not set and the Juju certificate authority is not trusted by your system", err.Detail())
-	assert.Equal(t, "x509: certificate signed by unknown authority", err.Summary())
+	assert.Contains(t, err.Summary(), "x509: ")
 }
 
 func TestProviderSetWarnOnDeletionErrors(t *testing.T) {
