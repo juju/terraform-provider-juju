@@ -77,9 +77,9 @@ jobs:
           go-version-file: "go.mod"
           cache: false
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.11.4
+          version: v2.14.0
 
   # This runs copyright-check against the codebase
   copyright-check:
