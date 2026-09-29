@@ -1777,9 +1777,6 @@ func testAccResourceApplicationBasic_Machines(modelName, charmName string, machi
 }
 
 func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
-	// This skip is temporary until we have a stable version of the provider that supports
-	// Juju 4.0.0 and above, at which point we can re-enable it.
-	SkipAgainstJuju4(t)
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 
@@ -1918,9 +1915,6 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
-	// Storage is not supported in Juju 4.
-	SkipAgainstJuju4(t)
-
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -1949,8 +1943,6 @@ func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_StorageK8s(t *testing.T) {
-	// Storage is not supported in Juju 4.
-	SkipAgainstJuju4(t)
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
