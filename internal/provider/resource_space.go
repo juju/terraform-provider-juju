@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -16,7 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"github.com/juju/errors"
+	jujuerrors "github.com/juju/errors"
 	"github.com/juju/names/v5"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -215,7 +216,7 @@ func (r *spaceResource) Create(ctx context.Context, req resource.CreateRequest, 
 				return nil
 			},
 		},
-		NonFatalErrors: []error{errors.NotFound},
+		NonFatalErrors: []error{jujuerrors.NotFound},
 		RetryConf:      &wait.RetryConf{MaxDuration: r.config.DefaultCreateTimeout},
 		Logf:           r.trace,
 	}); err != nil {
@@ -242,7 +243,8 @@ func (r *spaceResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		Name:      state.Name.ValueString(),
 	})
 	if err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, jujuerrors.NotFound) {
+			resp.Diagnostics.AddWarning("Space removed from state", fmt.Sprintf("The space was removed from Terraform state after a read error: %s", err))
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -277,7 +279,7 @@ func (r *spaceResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		ModelUUID: state.ModelUUID.ValueString(),
 		Name:      state.Name.ValueString(),
 	}); err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, jujuerrors.NotFound) {
 			return
 		}
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete space resource, got error: %s", err))
@@ -293,7 +295,7 @@ func (r *spaceResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 			ModelUUID: state.ModelUUID.ValueString(),
 			Name:      state.Name.ValueString(),
 		},
-		ExpectedErr:    errors.NotFound,
+		ExpectedErr:    jujuerrors.NotFound,
 		RetryAllErrors: true,
 		RetryConf:      &wait.RetryConf{MaxDuration: r.config.DefaultDeleteTimeout},
 		Logf:           r.trace,

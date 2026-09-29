@@ -49,8 +49,6 @@ func TestHandleModelNotFoundError(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			internaljuju.ModelNotFoundError = modelNotFound
-			t.Cleanup(func() { internaljuju.ModelNotFoundError = modelNotFound })
 			ctx := t.Context()
 			state := tfsdk.State{
 				Schema: schema.Schema{Attributes: map[string]schema.Attribute{

@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 	"os"
 	"regexp"
@@ -243,6 +244,27 @@ func TestProviderConfigureClientIDAndSecretFromEnv(t *testing.T) {
 	err := confResp.Diagnostics.Errors()[0]
 	assert.Equal(t, diag.SeverityError, err.Severity())
 	assert.Equal(t, "this version of Juju does not support login from old clients (not supported) (not supported)", err.Detail())
+}
+
+func TestCheckClientErrCertificate(t *testing.T) {
+	hostnameErr := x509.HostnameError{
+		Certificate: &x509.Certificate{DNSNames: []string{"controller.example"}},
+		Host:        "other.example",
+	}
+	for _, test := range []struct {
+		name string
+		err  error
+	}{
+		{"hostname mismatch", hostnameErr},
+		{"unknown authority", x509.UnknownAuthorityError{}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			diags := checkClientErr(fmt.Errorf("connecting: %w", test.err), juju.ControllerConfiguration{})
+
+			require.Len(t, diags.Errors(), 1)
+			assert.Equal(t, test.err.Error(), diags.Errors()[0].Summary())
+		})
+	}
 }
 
 func TestProviderConfigureAddresses(t *testing.T) {

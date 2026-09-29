@@ -4,9 +4,9 @@
 package provider
 
 import (
+	"errors"
 	"testing"
 
-	jujuerrors "github.com/juju/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -64,7 +64,7 @@ func TestAssertEqualsUnitCount(t *testing.T) {
 			err := assertEqualsUnitCount(tc.units)(tc.response)
 			if tc.expectError {
 				require.Error(t, err)
-				require.True(t, jujuerrors.Is(err, juju.RetryReadError), "expected RetryReadError, got %v", err)
+				require.True(t, errors.Is(err, juju.RetryReadError), "expected RetryReadError, got %v", err)
 				return
 			}
 
