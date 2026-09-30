@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -25,7 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 	gomock "go.uber.org/mock/gomock"
 
-	jujuerrors "github.com/juju/errors"
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/api/client/modelmanager"
@@ -114,14 +114,14 @@ func TestAcc_ResourceController(t *testing.T) {
 		},
 	).DoAndReturn(func(context.Context, *juju.ControllerConnectionInformation) (map[string]any, map[string]any, error) {
 		return map[string]any{
-				"agent-logfile-max-backups": "3",
-				"audit-log-capture-args":    "true",
-				"autocert-dns-name":         "test-external-name",
-			}, map[string]any{
-				"agent-version":            currentAgentVersion,
-				"enable-os-refresh-update": "false",
-				"http-proxy":               "fake-proxy",
-			}, nil
+			"agent-logfile-max-backups": "3",
+			"audit-log-capture-args":    "true",
+			"autocert-dns-name":         "test-external-name",
+		}, map[string]any{
+			"agent-version":            currentAgentVersion,
+			"enable-os-refresh-update": "false",
+			"http-proxy":               "fake-proxy",
+		}, nil
 	}).AnyTimes()
 
 	mockJujuCommand.EXPECT().ControllerVersion(
@@ -664,7 +664,7 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 				},
 			})
 			if err != nil {
-				if jujuerrors.Is(err, juju.RetryReadError) {
+				if errors.Is(err, juju.RetryReadError) {
 					return fmt.Errorf("controller remained reachable for 10s after destroy: %w", err)
 				}
 				return err
