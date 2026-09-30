@@ -72,7 +72,10 @@ func TestAcc_ResourceModel(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	logLevelInfo := "INFO"
 	logLevelDebug := "DEBUG"
-	validVersion := regexp.MustCompile(`\d+\.\d+\.\d+`)
+	// Match against release and beta tags e.g.
+	// 4.2-beta1.1
+	// 4.2.3
+	validVersion := regexp.MustCompile(`\d+\.\d+(\.\d+|.*)`)
 
 	resourceName := "juju_model.model"
 	resource.ParallelTest(t, resource.TestCase{
