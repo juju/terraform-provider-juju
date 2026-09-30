@@ -1915,6 +1915,9 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
+	// The Postgresql charm does not yet support Juju 4.
+	SkipAgainstJuju4(t)
+
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -1943,6 +1946,9 @@ func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_StorageK8s(t *testing.T) {
+	// The Postgresql-k8s charm does not yet support Juju 4.
+	SkipAgainstJuju4(t)
+
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
