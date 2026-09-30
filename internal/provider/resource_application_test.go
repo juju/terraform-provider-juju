@@ -2625,9 +2625,11 @@ resource "juju_application" "subordinate" {
   model_uuid = juju_model.this.uuid
   name = "test-subordinate"
   charm {
-    name = "nrpe"
+    name     = "nrpe"
     revision = 96
-    }
+    channel  = "latest/stable"
+    base     = "ubuntu@22.04"
+  }
 } 
 `, modelName, constraints)
 }
