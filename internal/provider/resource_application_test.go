@@ -248,10 +248,8 @@ func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
 				resource.TestCheckResourceAttr("juju_application.this", "unit_numbers.#", "1"),
 			),
 		}, {
-			// Scale back up to 2. On IAAS, unit numbers are never reused, so
-			// the new unit gets /2 (after /0 and /1 were taken). On CAAS,
-			// unit numbers are not auto-incremented the same way, so the
-			// new unit gets /1.
+			// Scale back up to 2. IAAS and Juju 4 CAAS do not reuse unit numbers;
+			// Juju 3 CAAS reuses /1.
 			Config: testAccResourceApplicationScaleUp(modelName, appName, "2"),
 			Check: resource.ComposeTestCheckFunc(
 				resource.TestCheckResourceAttr("juju_application.this", "units", "2"),
@@ -263,11 +261,10 @@ func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
 }
 
 // expectedSecondUnitNumber returns the unit number expected for the second
-// unit after a scale-down-then-up cycle. On IAAS, Juju never reuses unit
-// numbers, so after /0 and /1 were taken the new unit gets /2. On CAAS,
-// unit numbers are not auto-incremented the same way, so the new unit gets /1.
+// unit after a scale-down-then-up cycle. IAAS and Juju 4 CAAS allocate /2;
+// Juju 3 CAAS reuses /1.
 func expectedSecondUnitNumber() string {
-	if testingCloud != LXDCloudTesting {
+	if testingCloud != LXDCloudTesting && internaltesting.CompareVersions(os.Getenv(TestJujuAgentVersion), "4.0.0") < 0 {
 		return "1"
 	}
 	return "2"
@@ -343,7 +340,7 @@ func TestAcc_ResourceApplication_RefreshCharmUpdatesResources(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationRefreshCharmUpdatesResources(modelName, 191),
+				Config: testAccResourceApplicationRefreshCharmUpdatesResources(modelName, "1.34/stable", "ubuntu@22.04", 191),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrPair("juju_model.this", "uuid", "juju_application.this", "model_uuid"),
 					// Use a check to grab the model UUID and update the application's resource
@@ -393,7 +390,7 @@ func TestAcc_ResourceApplication_RefreshCharmUpdatesResources(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceApplicationRefreshCharmUpdatesResources(modelName, 199),
+				Config: testAccResourceApplicationRefreshCharmUpdatesResources(modelName, "latest/edge", "ubuntu@22.04", 199),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "charm.0.revision", "199"),
 					// Use a check to grab the model UUID and verify that the application's
@@ -1411,15 +1408,12 @@ func testAccCheckApplicationResource(ctx context.Context, appResource string, ch
 
 func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application")
-	var charmName string
-	var charmRevision int
-	if testingCloud == LXDCloudTesting {
-		charmName = "juju-qa-test"
-		charmRevision = 25
-	} else {
-		charmName = "hello-juju"
-		charmRevision = 8
-	}
+
+	charmName := "juju-qa-test"
+	charmRevision := 25
+	charmChannel := "latest/stable"
+	charmBase := "ubuntu@22.04"
+
 	resourceName := "juju_application.testapp"
 	checkResourceAttr := []resource.TestCheckFunc{
 		resource.TestCheckResourceAttr(resourceName, "name", charmName),
@@ -1431,7 +1425,7 @@ func TestAcc_ResourceApplication_Minimal(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationBasic_Minimal(modelName, charmName, charmRevision),
+				Config: testAccResourceApplicationBasic_Minimal(modelName, charmName, charmChannel, charmBase, charmRevision),
 				Check: resource.ComposeTestCheckFunc(
 					checkResourceAttr...),
 			},
@@ -2077,7 +2071,7 @@ resource "juju_application" "{{.AppName}}" {
 	})
 }
 
-func testAccResourceApplicationBasic_Minimal(modelName, charmName string, charmRevision int) string {
+func testAccResourceApplicationBasic_Minimal(modelName, charmName, charmChannel, base string, charmRevision int) string {
 	return fmt.Sprintf(`
 		resource "juju_model" "testmodel" {
 		  name = %q
@@ -2088,9 +2082,11 @@ func testAccResourceApplicationBasic_Minimal(modelName, charmName string, charmR
 		  charm {
 			name = %q
 			revision = %d
+			channel = %q
+			base = %q
 		  }
 		}
-		`, modelName, charmName, charmRevision)
+		`, modelName, charmName, charmRevision, charmChannel, base)
 }
 
 func testAccResourceApplicationBasic(modelName, appName string) string {
@@ -2384,7 +2380,7 @@ func testAccResourceApplicationUpdates(modelName string, units int, expose bool,
 	}
 }
 
-func testAccResourceApplicationRefreshCharmUpdatesResources(modelName string, revision int) string {
+func testAccResourceApplicationRefreshCharmUpdatesResources(modelName, channel, base string, revision int) string {
 	return fmt.Sprintf(`
 		resource "juju_model" "this" {
 		  name = %q
@@ -2396,9 +2392,11 @@ func testAccResourceApplicationRefreshCharmUpdatesResources(modelName string, re
 		  charm {
 			name     = "coredns"
 			revision = %d
+			channel  = %q
+			base     = %q
 		  }
 		}
-		`, modelName, revision)
+		`, modelName, revision, channel, base)
 }
 
 func testAccResourceApplicationUpdatesCharm(modelName string, channel string) string {
@@ -2930,8 +2928,6 @@ func TestAcc_ResourceApplication_CustomOCIForResource(t *testing.T) {
 		t.Skip(t.Name() + " only runs with MIcroK8s")
 	}
 	modelName := acctest.RandomWithPrefix("tf-test-custom-oci-resource")
-	charm := "coredns"
-	resourceName := "coredns-image"
 	ociImage := "ghcr.io/canonical/test:6a873fb35b0170dfe49ed27ba8ee6feb8e475131"
 	ociImage2 := "ghcr.io/canonical/test:ab0b183f22db2959e0350f54d92f9ed3583c4167"
 	resource.ParallelTest(t, resource.TestCase{
@@ -2939,22 +2935,22 @@ func TestAcc_ResourceApplication_CustomOCIForResource(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceOciImage(modelName, charm, resourceName, ociImage),
+				Config: testAccResourceOciImage(modelName, ociImage),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.test", "resources."+resourceName, ociImage),
+					resource.TestCheckResourceAttr("juju_application.test", "resources.coredns-image", ociImage),
 				),
 			},
 			{
-				Config: testAccResourceOciImage(modelName, charm, resourceName, ociImage2),
+				Config: testAccResourceOciImage(modelName, ociImage2),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("juju_application.test", "resources."+resourceName, ociImage2),
+					resource.TestCheckResourceAttr("juju_application.test", "resources.coredns-image", ociImage2),
 				),
 			},
 		},
 	})
 }
 
-func testAccResourceOciImage(modelName, charm, resourceName, ociImage string) string {
+func testAccResourceOciImage(modelName, ociImage string) string {
 	return internaltesting.GetStringFromTemplateWithData("testAccResourceApplicationStorage", `
 resource "juju_model" "{{.ModelName}}" {
   name = "{{.ModelName}}"
@@ -2964,19 +2960,19 @@ resource "juju_application" "test" {
   model_uuid = juju_model.{{.ModelName}}.uuid
   name = "test"
   charm {
-	name = "{{.CharmName}}"
+	name = "coredns"
 	revision = 18
+	channel = "1.24/stable"
+	base = "ubuntu@20.04"
   }
   resources = {
-	"{{.ResourceName}}" = "{{.OciImage}}"
+	"coredns-image" = "{{.OciImage}}"
   }
   units = 1
 }
 `, internaltesting.TemplateData{
-		"ModelName":    modelName,
-		"CharmName":    charm,
-		"ResourceName": resourceName,
-		"OciImage":     ociImage,
+		"ModelName": modelName,
+		"OciImage":  ociImage,
 	})
 }
 
@@ -3309,16 +3305,16 @@ func TestAcc_ResourceApplication_RemoveConfigNotExistingAnymore(t *testing.T) {
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccResourceApplicationWithChannelRevisionAndConfig(modelName, appName, "juju-jimm-k8s", "3/stable", 90, true),
+				Config: testAccResourceApplicationWithChannelRevisionAndConfig(modelName, appName, "juju-jimm-k8s", "3/stable", "ubuntu@22.04", 90, true),
 			},
 			{
-				Config: testAccResourceApplicationWithChannelRevisionAndConfig(modelName, appName, "juju-jimm-k8s", "3/stable", 50, false),
+				Config: testAccResourceApplicationWithChannelRevisionAndConfig(modelName, appName, "juju-jimm-k8s", "3/candidate", "ubuntu@22.04", 50, false),
 			},
 		},
 	})
 }
 
-func testAccResourceApplicationWithChannelRevisionAndConfig(modelName, appName, charmName, channel string, revision int, configNew bool) string {
+func testAccResourceApplicationWithChannelRevisionAndConfig(modelName, appName, charmName, channel, base string, revision int, configNew bool) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceApplicationWithChannelRevisionAndConfig",
 		`
@@ -3334,6 +3330,7 @@ resource "juju_application" "test_app" {
     name     = "{{.CharmName}}"
     channel  = "{{.Channel}}"
     revision = {{.Revision}}
+    base     = "{{.Base}}"
   }
   config = {
    {{- if .ConfigNew }}
@@ -3349,6 +3346,7 @@ resource "juju_application" "test_app" {
 			"AppName":   appName,
 			"CharmName": charmName,
 			"Channel":   channel,
+			"Base":      base,
 			"Revision":  revision,
 			"ConfigNew": configNew,
 		})
