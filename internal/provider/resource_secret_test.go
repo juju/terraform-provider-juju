@@ -313,6 +313,75 @@ func TestAcc_ResourceSecret_WriteOnlyConfigValidation(t *testing.T) {
 	})
 }
 
+// TestAcc_ResourceSecret_NullValueRejected asserts that a null element in the
+// value or value_wo map is rejected at plan time (PlanOnly) with a clear,
+// key-specific diagnostic rather than the opaque framework error.
+func TestAcc_ResourceSecret_NullValueRejected(t *testing.T) {
+	skipTestIfSecretsNotSupported(t)
+
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+	secretName := "tf-test-secret"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// A null element in value_wo must be rejected at plan time.
+				Config:      testAccResourceSecretWriteOnlyNullValue(modelName, secretName),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`(?s)Null Secret Value.*key "password" must not be null`),
+			},
+			{
+				// A null element in the plain (non write-only) value must also be
+				// rejected at plan time.
+				Config:      testAccResourceSecretNullValue(modelName, secretName),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`(?s)Null Secret Value.*key "password" must not be null`),
+			},
+		},
+	})
+}
+
+// TestAcc_ResourceSecret_NullValueRejectedOnUpdate asserts that the null-element
+// validation also fires on update: a valid write-only secret is created, then
+// bumping value_wo_version with a null element is rejected at plan time.
+func TestAcc_ResourceSecret_NullValueRejectedOnUpdate(t *testing.T) {
+	skipTestIfSecretsNotSupported(t)
+
+	modelName := acctest.RandomWithPrefix("tf-test-model")
+	secretName := "tf-test-secret"
+	secretValue := map[string]string{"password": "s3cret"}
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				// Create a valid write-only secret at version 1.
+				Config: testAccResourceSecretWriteOnly(modelName, secretName, secretValue, 1, ""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_secret."+secretName, "value_wo_version", "1"),
+				),
+			},
+			{
+				// Bumping value_wo_version to 2 with a null element must be
+				// rejected on update.
+				Config:      testAccResourceSecretWriteOnlyNullValueVersion(modelName, secretName, 2),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`(?s)Null Secret Value.*key "password" must not be null`),
+			},
+			// Update plan back to a destroyable state
+			{
+				Config: testAccResourceSecretWriteOnly(modelName, secretName, secretValue, 1, ""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_secret."+secretName, "value_wo_version", "1"),
+				),
+			},
+		},
+	})
+}
+
 func testAccResourceSecret(modelName, secretName string, secretValue map[string]string, secretInfo string) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceSecret",
@@ -466,5 +535,71 @@ resource "juju_secret" "{{.SecretName}}" {
 			"ModelName":   modelName,
 			"SecretName":  secretName,
 			"SecretValue": secretValue,
+		})
+}
+
+func testAccResourceSecretWriteOnlyNullValue(modelName, secretName string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceSecretWriteOnlyNullValue",
+		`
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_secret" "{{.SecretName}}" {
+  model_uuid = juju_model.{{.ModelName}}.uuid
+  name  = "{{.SecretName}}"
+  value_wo =  {
+    "password" = null
+  }
+  value_wo_version = 1
+}
+`, internaltesting.TemplateData{
+			"ModelName":  modelName,
+			"SecretName": secretName,
+		})
+}
+
+func testAccResourceSecretNullValue(modelName, secretName string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceSecretNullValue",
+		`
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_secret" "{{.SecretName}}" {
+  model_uuid = juju_model.{{.ModelName}}.uuid
+  name  = "{{.SecretName}}"
+  value =  {
+    "password" = null
+  }
+}
+`, internaltesting.TemplateData{
+			"ModelName":  modelName,
+			"SecretName": secretName,
+		})
+}
+
+func testAccResourceSecretWriteOnlyNullValueVersion(modelName, secretName string, version int) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceSecretWriteOnlyNullValueVersion",
+		`
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_secret" "{{.SecretName}}" {
+  model_uuid = juju_model.{{.ModelName}}.uuid
+  name  = "{{.SecretName}}"
+  value_wo =  {
+    "password" = null
+  }
+  value_wo_version = {{.Version}}
+}
+`, internaltesting.TemplateData{
+			"ModelName":  modelName,
+			"SecretName": secretName,
+			"Version":    version,
 		})
 }

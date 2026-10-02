@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -11,8 +12,32 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 
+	"github.com/juju/terraform-provider-juju/internal/juju"
 	internaltesting "github.com/juju/terraform-provider-juju/internal/testing"
 )
+
+func TestAssertInstanceIDPopulated(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		instanceID string
+		wantRetry  bool
+	}{
+		{name: "empty", wantRetry: true},
+		{name: "pending", instanceID: "pending", wantRetry: true},
+		{name: "provisioned", instanceID: "juju-b0b108-0"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := assertInstanceIDPopulated(&juju.ReadMachineResponse{InstanceID: testCase.instanceID})
+			if testCase.wantRetry {
+				if !errors.Is(err, juju.RetryReadError) {
+					t.Fatalf("expected retry error, got %v", err)
+				}
+			} else if err != nil {
+				t.Fatalf("expected provisioned instance ID to be accepted, got %v", err)
+			}
+		})
+	}
+}
 
 func TestAcc_ResourceMachine(t *testing.T) {
 	if testingCloud != LXDCloudTesting {

@@ -957,7 +957,7 @@ func GetCloudInformation(ctx context.Context, connInfo *ControllerConnectionInfo
 	}
 
 	if credentials[0].Error != nil {
-		return nil, fmt.Errorf("error in cloud credential contents: %w", credentials[0].Error)
+		return nil, fmt.Errorf("error in cloud credential contents: %w", *credentials[0].Error)
 	}
 
 	authType := string(credentials[0].Result.Content.AuthType)

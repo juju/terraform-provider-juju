@@ -777,11 +777,11 @@ func (r *modelResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 }
 
 func handleModelNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
-	// This should not happen anymore, because Delete waits for the model to be destroyed.
-	if errors.As(err, &juju.ModelNotFoundError) {
-		// Model manually removed
+	if errors.Is(err, juju.ModelNotFoundError) {
+		var diags diag.Diagnostics
+		diags.AddWarning("Model removed from state", fmt.Sprintf("The model was removed from Terraform state after a read error: %s", err))
 		st.RemoveResource(ctx)
-		return diag.Diagnostics{}
+		return diags
 	}
 
 	var diags diag.Diagnostics

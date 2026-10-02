@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -17,7 +18,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"github.com/juju/errors"
 
 	"github.com/juju/names/v5"
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -213,6 +213,7 @@ func (s *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 	})
 	if err != nil {
 		if errors.Is(err, juju.SSHKeyNotFoundError) {
+			resp.Diagnostics.AddWarning("SSH key removed from state", fmt.Sprintf("The SSH key was removed from Terraform state after a read error: %s", err))
 			resp.State.RemoveResource(ctx)
 			return
 		}

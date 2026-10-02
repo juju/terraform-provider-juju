@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -18,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	jujuerrors "github.com/juju/errors"
 	"github.com/juju/juju/api/client/modelconfig"
 	"github.com/juju/juju/rpc/params"
 	"github.com/stretchr/testify/assert"
@@ -28,11 +30,52 @@ import (
 
 var validUUID = regexp.MustCompile(`[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}`)
 
+func TestHandleModelNotFoundError(t *testing.T) {
+	modelNotFound := internaljuju.ModelNotFoundError
+	missingFromJIMM := &params.Error{Code: params.CodeNotFound, Message: "failed to find model: database unavailable"}
+	tests := []struct {
+		name        string
+		err         error
+		wantRemoved bool
+	}{
+		{"model not found", modelNotFound, true},
+		{"wrapped model not found", fmt.Errorf("reading model: %w", modelNotFound), true},
+		{"unrelated typed not found", jujuerrors.NotFound, false},
+		{"JIMM coded not found", missingFromJIMM, false},
+		{"JIMM coded not found wrapped by ReadModel", jujuerrors.WithType(missingFromJIMM, modelNotFound), true},
+		{"typed not found wrapped by ReadModel", jujuerrors.WithType(jujuerrors.NotFound, modelNotFound), true},
+		{"other error", fmt.Errorf("database unavailable"), false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := t.Context()
+			state := tfsdk.State{
+				Schema: schema.Schema{Attributes: map[string]schema.Attribute{
+					"id": schema.StringAttribute{Computed: true},
+				}},
+				Raw: tftypes.NewValue(tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+					"id": tftypes.String,
+				}}, map[string]tftypes.Value{"id": tftypes.NewValue(tftypes.String, "existing")}),
+			}
+
+			diags := handleModelNotFoundError(ctx, test.err, &state)
+
+			assert.Equal(t, test.wantRemoved, state.Raw.IsNull())
+			assert.Equal(t, !test.wantRemoved, diags.HasError())
+			assert.Equal(t, modelNotFound, internaljuju.ModelNotFoundError)
+		})
+	}
+}
+
 func TestAcc_ResourceModel(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	logLevelInfo := "INFO"
 	logLevelDebug := "DEBUG"
-	validVersion := regexp.MustCompile(`\d+\.\d+\.\d+`)
+	// Match against release and beta tags e.g.
+	// 4.2-beta1.1
+	// 4.2.3
+	validVersion := regexp.MustCompile(`\d+\.\d+(\.\d+|.*)`)
 
 	resourceName := "juju_model.model"
 	resource.ParallelTest(t, resource.TestCase{

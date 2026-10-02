@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -29,7 +30,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"github.com/juju/errors"
 	"github.com/juju/juju/core/constraints"
 	jujustorage "github.com/juju/juju/core/storage"
 	"github.com/juju/names/v5"
@@ -684,8 +684,7 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	)
 	// If the application was partially created, record it to state
 	// and return with an error so that TF marks it as tainted.
-	var partialApp juju.ApplicationPartiallyCreatedError
-	if errors.As(err, &partialApp) {
+	if partialApp, ok := errors.AsType[juju.ApplicationPartiallyCreatedError](err); ok {
 		plan.ID = types.StringValue(newAppID(plan.ModelUUID.ValueString(), partialApp.AppName))
 		identity := applicationResourceIdentityModel{
 			ID: plan.ID,
@@ -871,9 +870,10 @@ func transformSizeToHumanizedFormat(size uint64) string {
 
 func handleApplicationNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
 	if errors.Is(err, juju.ApplicationNotFoundError) {
-		// Application manually removed
+		var diags diag.Diagnostics
+		diags.AddWarning("Application removed from state", fmt.Sprintf("The application was removed from Terraform state after a read error: %s", err))
 		st.RemoveResource(ctx)
-		return diag.Diagnostics{}
+		return diags
 	}
 	var diags diag.Diagnostics
 	diags.AddError("Not Found", err.Error())

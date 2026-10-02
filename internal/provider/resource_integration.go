@@ -447,9 +447,10 @@ func (r *integrationResource) Delete(ctx context.Context, req resource.DeleteReq
 
 func handleIntegrationNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
 	if errors.Is(err, juju.IntegrationNotFoundError) {
-		// Integration manually removed
+		var diags diag.Diagnostics
+		diags.AddWarning("Integration removed from state", fmt.Sprintf("The integration was removed from Terraform state after a read error: %s", err))
 		st.RemoveResource(ctx)
-		return diag.Diagnostics{}
+		return diags
 	}
 	var diags diag.Diagnostics
 	diags.AddError("Client Error", err.Error())
