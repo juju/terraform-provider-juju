@@ -22,7 +22,7 @@ resource "juju_application" "this" {
     name     = "ubuntu"
     channel  = "latest/stable"
     revision = 24
-    base     = "ubuntu@24.04"
+    base     = "ubuntu@22.04"
   }
 
   units = 3
