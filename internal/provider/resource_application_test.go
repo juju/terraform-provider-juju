@@ -199,6 +199,9 @@ func TestAcc_ResourceApplication_ConstraintsNormalization(t *testing.T) {
 }
 
 func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
+	// Skip until a new version of the 4.1 docker image has been released
+	// which contains a fix for scaling on K8s. The latest image 4.1-beta1 fails.
+	SkipAgainstJuju4(t)
 	modelName := acctest.RandomWithPrefix("tf-test-application-scale-up")
 	appName := "test-app"
 

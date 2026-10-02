@@ -17,6 +17,7 @@ import (
 
 func TestAcc_ResourceStoragePool(t *testing.T) {
 	// Storage pools are not yet supported in Juju 4.
+	// See https://github.com/juju/juju/pull/23450
 	SkipAgainstJuju4(t)
 
 	modelName := acctest.RandomWithPrefix("test-model")
@@ -137,6 +138,7 @@ func TestAcc_ResourceStoragePool(t *testing.T) {
 // Tests that creating a pool with no attributes (nulled in state) works as expected when updated to a value.
 func TestAcc_ResourceStoragePool_ImportState(t *testing.T) {
 	// Storage pools are not yet supported in Juju 4.
+	// See https://github.com/juju/juju/pull/23450
 	SkipAgainstJuju4(t)
 
 	modelName := acctest.RandomWithPrefix("test-model")

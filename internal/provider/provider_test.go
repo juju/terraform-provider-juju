@@ -161,7 +161,7 @@ func SkipAgainstJuju4(t *testing.T) {
 	if agentVersion == "" {
 		t.Errorf("%s is not set", TestJujuAgentVersion)
 	} else if internaltesting.CompareVersions(agentVersion, "4.0.0") >= 0 {
-		t.Skipf("%s is not set or is below 4.0.0", TestJujuAgentVersion)
+		t.Skipf("%s is not set or is above 4.0.0", TestJujuAgentVersion)
 	}
 }
 
