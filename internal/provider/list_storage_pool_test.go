@@ -17,8 +17,9 @@ import (
 )
 
 func TestAccListStoragePools_query(t *testing.T) {
-	// Storage is not supported in Juju 4.
+	// Storage pools are not yet supported in Juju 4.
 	SkipAgainstJuju4(t)
+
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}

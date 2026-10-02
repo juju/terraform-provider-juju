@@ -302,9 +302,6 @@ resource "juju_model" "testmodel" {
 }
 
 func TestAcc_ResourceModel_UpgradeProvider(t *testing.T) {
-	// This skip is temporary until we have a stable version of the provider that supports
-	// Juju 4.0.0 and above, at which point we can re-enable it.
-	SkipAgainstJuju4(t)
 	modelName := acctest.RandomWithPrefix("tf-test-model")
 	logLevelDebug := "DEBUG"
 
@@ -430,6 +427,7 @@ func TestAcc_ResourceModel_WaitForDelete(t *testing.T) {
 }
 
 func TestAcc_ResourceModel_UpgradeAgentVersion(t *testing.T) {
+	// Check that setting the agent version is supported on Juju 4.
 	SkipAgainstJuju4(t)
 	testAccPreCheck(t)
 
