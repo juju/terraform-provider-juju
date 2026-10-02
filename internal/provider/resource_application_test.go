@@ -199,6 +199,61 @@ func TestAcc_ResourceApplication_ConstraintsNormalization(t *testing.T) {
 	})
 }
 
+// TestAcc_ResourceApplication_ConstraintsWithModelConstraints proves that when
+// both the model and the application have constraints, Juju merging the model
+// constraints into the application constraints (as Juju 4 does at deploy time)
+// does not cause a "Provider produced inconsistent result after apply" error or
+// a diff.
+func TestAcc_ResourceApplication_ConstraintsWithModelConstraints(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+
+	modelName := acctest.RandomWithPrefix("tf-test-application-model-constraints")
+	// Written in Juju's canonical form as juju_model does not normalize constraints.
+	modelConstraints := "cores=1 root-disk-source=default"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceApplicationWithModelConstraints(modelName, modelConstraints, "mem=1G"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "constraints", "mem=1G"),
+				),
+			},
+			{
+				// Overriding a model constraint on the application.
+				Config: testAccResourceApplicationWithModelConstraints(modelName, modelConstraints, "mem=1G cores=2"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("juju_application.this", "constraints", "mem=1G cores=2"),
+				),
+			},
+		},
+	})
+}
+
+func testAccResourceApplicationWithModelConstraints(modelName, modelConstraints, appConstraints string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+  name = %q
+  constraints = %q
+}
+
+resource "juju_application" "this" {
+  model_uuid = juju_model.this.uuid
+  units = 1
+  name = "test-app"
+  charm {
+    name     = "ubuntu-lite"
+    revision = 2
+  }
+  constraints = %q
+}
+`, modelName, modelConstraints, appConstraints)
+}
+
 func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
 	modelName := acctest.RandomWithPrefix("tf-test-application-scale-up")
 	appName := "test-app"

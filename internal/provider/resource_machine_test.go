@@ -369,6 +369,57 @@ func TestAcc_ResourceMachine_InheritsModelConstraints(t *testing.T) {
 	})
 }
 
+// TestAcc_ResourceMachine_ConstraintsWithModelConstraints proves that when both
+// the model and the machine have constraints, Juju merging the model constraints
+// into the machine constraints does not cause a "Provider produced inconsistent
+// result after apply" error or a diff.
+func TestAcc_ResourceMachine_ConstraintsWithModelConstraints(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-machine-model-constraints")
+	resourceName := "juju_machine.this"
+	// Written in Juju's canonical form as juju_model does not normalize constraints.
+	modelConstraints := "cores=1 root-disk-source=default"
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceMachineWithModelAndMachineConstraints(modelName, modelConstraints, "mem=1G"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "constraints", "mem=1G"),
+					resource.TestCheckResourceAttr(resourceName, "machine_id", "0"),
+				),
+			},
+			{
+				// Overriding a model constraint on the machine.
+				Config: testAccResourceMachineWithModelAndMachineConstraints(modelName, modelConstraints, "mem=1G cores=2"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "constraints", "mem=1G cores=2"),
+					resource.TestCheckResourceAttr(resourceName, "machine_id", "1"), // Ensure machine is replaced
+				),
+			},
+		},
+	})
+}
+
+func testAccResourceMachineWithModelAndMachineConstraints(modelName, modelConstraints, machineConstraints string) string {
+	return fmt.Sprintf(`
+resource "juju_model" "this" {
+	name = %q
+	constraints = %q
+}
+
+resource "juju_machine" "this" {
+	name = "this_machine"
+	model_uuid = juju_model.this.uuid
+	base = "ubuntu@22.04"
+	constraints = %q
+}
+`, modelName, modelConstraints, machineConstraints)
+}
+
 func testAccResourceMachineAddMachine(modelName string, IP string, pubKeyPath string, privKeyPath string) string {
 	return fmt.Sprintf(`
 resource "juju_model" "this_model" {
