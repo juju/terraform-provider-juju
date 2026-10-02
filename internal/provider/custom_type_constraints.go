@@ -129,99 +129,124 @@ func (v CustomConstraintsValue) Type(ctx context.Context) attr.Type {
 
 var _ basetypes.StringValuableWithSemanticEquals = CustomConstraintsValue{}
 
-// StringSemanticEquals checks if the CustomConstraintsValue is semantically
-// equal to another basetypes.StringValuable. It parses the constraints strings
-// and compares them for equality, allowing for normalization of the constraints
-// before comparison.
-// This is useful for ensuring that different representations of the same
-// constraints (e.g., different order of constraints) are considered equal.
+// StringSemanticEquals compares the constraints Juju returned with the
+// constraints the user asked for.
 //
-// The provider internals call StringSemanticEquals so we can't rely on the order
-// of the values, i.e. we don't know which is the prior value so we just compare
-// the constraint strings in a normalized way.
+// Juju can add constraints from the model, so it may return more than the
+// user asked for. That's fine: as long as everything the user asked for is
+// there with the same value, they match and we keep what the user wrote.
+// For example, the user asks for "mem=4G" and Juju returns
+// "cores=1 mem=4096M": that's a match.
 //
-// The comparison allows for certain auto-added constraint keys (like "arch")
-// to be present in either value. This also means that the constraint can be
-// dropped by the user without triggering a diff.
-func (v CustomConstraintsValue) StringSemanticEquals(ctx context.Context, newValuable basetypes.StringValuable) (bool, diag.Diagnostics) {
+// "arch" can be missing, because Juju drops it when constraints are updated.
+//
+// Note: this is only used when reading constraints back from Juju. Deciding
+// whether a change to constraints needs a replace uses constraintsEqual.
+func (v CustomConstraintsValue) StringSemanticEquals(ctx context.Context, priorValuable basetypes.StringValuable) (bool, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	// The framework should always pass the correct value type, but always check
-	newValue, ok := newValuable.(CustomConstraintsValue)
+	priorValue, ok := priorValuable.(CustomConstraintsValue)
 	if !ok {
 		diags.AddError(
 			"Semantic Equality Check Error",
 			"An unexpected value type was received while performing semantic equality checks. "+
 				"Please report this to the provider developers.\n\n"+
 				"Expected Value Type: "+fmt.Sprintf("%T", v)+"\n"+
-				"Got Value Type: "+fmt.Sprintf("%T", newValuable),
+				"Got Value Type: "+fmt.Sprintf("%T", priorValuable),
 		)
 
 		return false, diags
 	}
 
-	// Parse and normalize constraints for semantic comparison
-	leftRaw := v.ValueString()
-	rightRaw := newValue.ValueString()
-	if leftRaw == rightRaw { // exact match
+	if v.ValueString() == priorValue.ValueString() { // exact match
 		return true, diags
 	}
-
-	leftConstraints, err := constraints.Parse(leftRaw)
-	if err != nil {
-		diags.AddError(
-			"Constraint Parsing Error",
-			fmt.Sprintf("Failed to parse prior constraints: %v", err),
-		)
-		return false, diags
-	}
-	rightConstraints, err := constraints.Parse(rightRaw)
-	if err != nil {
-		diags.AddError(
-			"Constraint Parsing Error",
-			fmt.Sprintf("Failed to parse new constraints: %v", err),
-		)
+	actualMap, priorMap, diags := parseConstraintsPair(v.ValueString(), priorValue.ValueString())
+	if diags.HasError() {
 		return false, diags
 	}
 
-	leftCanonical := leftConstraints.String()
-	rightCanonical := rightConstraints.String()
-	if leftCanonical == rightCanonical { // normalized equal
-		return true, diags
-	}
-
-	leftMap := parseConstraintTokens(leftCanonical)
-	rightMap := parseConstraintTokens(rightCanonical)
-
-	// Build union of keys
-	union := make(map[string]struct{}, len(leftMap)+len(rightMap))
-	for k := range leftMap {
-		union[k] = struct{}{}
-	}
-	for k := range rightMap {
-		union[k] = struct{}{}
-	}
-
-	for k := range union {
-		lv, lOk := leftMap[k]
-		rv, rOk := rightMap[k]
-		if !lOk || !rOk { // key only on one side
-			if _, auto := autoAddedConstraintKeys[k]; auto {
-				// allowed missing on one side
+	// Keys only present in actualMap are allowed, e.g. merged model constraints.
+	for k, pv := range priorMap {
+		av, ok := actualMap[k]
+		if !ok {
+			if _, optional := optionalConstraintKeys[k]; optional {
 				continue
 			}
 			return false, diags
 		}
-		if lv != rv { // both present but different
+		if av != pv {
 			return false, diags
 		}
 	}
 	return true, diags
 }
 
-// autoAddedConstraintKeys lists constraint keys Juju may inject implicitly
-// when not provided by the user. These should not trigger diffs if absent.
-var autoAddedConstraintKeys = map[string]struct{}{
+// constraintsEqual checks whether two constraints strings ask for the same
+// constraints. The order and units don't matter, so "mem=4G cores=1" and
+// "cores=1 mem=4096M" are equal. Any constraint on only one side makes them
+// different, except "arch", which may be missing from either side.
+func constraintsEqual(a, b string) (bool, diag.Diagnostics) {
+	if a == b { // exact match
+		return true, nil
+	}
+	aMap, bMap, diags := parseConstraintsPair(a, b)
+	if diags.HasError() {
+		return false, diags
+	}
+
+	union := make(map[string]struct{}, len(aMap)+len(bMap))
+	for k := range aMap {
+		union[k] = struct{}{}
+	}
+	for k := range bMap {
+		union[k] = struct{}{}
+	}
+
+	for k := range union {
+		av, aOk := aMap[k]
+		bv, bOk := bMap[k]
+		if !aOk || !bOk { // key only on one side
+			if _, optional := optionalConstraintKeys[k]; optional {
+				continue
+			}
+			return false, diags
+		}
+		if av != bv {
+			return false, diags
+		}
+	}
+	return true, diags
+}
+
+// optionalConstraintKeys lists constraint keys Juju adds or drops by itself,
+// e.g. "arch" is added when an application is deployed and removed when its
+// constraints are replaced without it. These should not trigger diffs.
+var optionalConstraintKeys = map[string]struct{}{
 	"arch": {},
+}
+
+// parseConstraintsPair parses two constraints strings and returns each as a
+// map of key to normalized value, so they can be compared.
+func parseConstraintsPair(a, b string) (map[string]string, map[string]string, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	aConstraints, err := constraints.Parse(a)
+	if err != nil {
+		diags.AddError(
+			"Constraint Parsing Error",
+			fmt.Sprintf("Failed to parse constraints %q: %v", a, err),
+		)
+		return nil, nil, diags
+	}
+	bConstraints, err := constraints.Parse(b)
+	if err != nil {
+		diags.AddError(
+			"Constraint Parsing Error",
+			fmt.Sprintf("Failed to parse constraints %q: %v", b, err),
+		)
+		return nil, nil, diags
+	}
+	return parseConstraintTokens(aConstraints.String()), parseConstraintTokens(bConstraints.String()), diags
 }
 
 // parseConstraintTokens converts a constraints string (canonical form
@@ -245,7 +270,8 @@ func parseConstraintTokens(raw string) map[string]string {
 
 // constraintsRequiresReplacefunc checks if the constraints in the plan
 // require a resource replacement. It compares the constraints from the
-// plan and the state, and sets RequiresReplace to true if they differ.
+// plan and the state, and sets RequiresReplace to true if they differ
+// (see constraintsEqual).
 // It is used to ensure that changes to constraints trigger a resource
 // replacement, as constraints are a fundamental part of the resource's
 // configuration and cannot be updated in place.
@@ -257,12 +283,7 @@ func constraintsRequiresReplacefunc(ctx context.Context, req planmodifier.String
 		return
 	}
 
-	oldVal := req.StateValue.ValueString()
-	newVal := req.ConfigValue.ValueString()
-	oldConstraints := NewCustomConstraintsValue(oldVal)
-	newConstraints := NewCustomConstraintsValue(newVal)
-
-	equal, diags := oldConstraints.StringSemanticEquals(ctx, newConstraints)
+	equal, diags := constraintsEqual(req.StateValue.ValueString(), req.ConfigValue.ValueString())
 	if diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
