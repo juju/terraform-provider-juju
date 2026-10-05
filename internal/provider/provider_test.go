@@ -34,8 +34,7 @@ import (
 )
 
 const (
-	TestProviderStableVersion = "1.2.0"
-	TestProviderPreV1Version  = "0.20.0"
+	TestProviderStableVersion = "2.3.1"
 	isJaasEnvKey              = "IS_JAAS"
 )
 
@@ -162,18 +161,7 @@ func SkipAgainstJuju4(t *testing.T) {
 	if agentVersion == "" {
 		t.Errorf("%s is not set", TestJujuAgentVersion)
 	} else if internaltesting.CompareVersions(agentVersion, "4.0.0") >= 0 {
-		t.Skipf("%s is not set or is below 4.0.0", TestJujuAgentVersion)
-	}
-}
-
-// SkipAgainstJuju4WithReason should be called at the top of any tests
-// that are not appropriate to run against Juju 4, with a reason provided.
-func SkipAgainstJuju4WithReason(t *testing.T, reason string) {
-	agentVersion := os.Getenv(TestJujuAgentVersion)
-	if agentVersion == "" {
-		t.Errorf("%s is not set", TestJujuAgentVersion)
-	} else if internaltesting.CompareVersions(agentVersion, "4.0.0") >= 0 {
-		t.Skipf("Skipping test against Juju 4.0.0 and above: %s", reason)
+		t.Skipf("%s is not set or is above 4.0.0", TestJujuAgentVersion)
 	}
 }
 
