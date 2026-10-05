@@ -35,7 +35,6 @@ import (
 )
 
 func TestAcc_ResourceApplication(t *testing.T) {
-	SkipAgainstJuju4WithReason(t, "See  https://github.com/juju/juju/issues/21717")
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 
@@ -200,6 +199,9 @@ func TestAcc_ResourceApplication_ConstraintsNormalization(t *testing.T) {
 }
 
 func TestAcc_ResourceApplicationScaleUp(t *testing.T) {
+	// Skip until a new version of the 4.1 docker image has been released
+	// which contains a fix for scaling on K8s. The latest image 4.1-beta1 fails.
+	SkipAgainstJuju4(t)
 	modelName := acctest.RandomWithPrefix("tf-test-application-scale-up")
 	appName := "test-app"
 
@@ -1778,9 +1780,6 @@ func testAccResourceApplicationBasic_Machines(modelName, charmName string, machi
 }
 
 func TestAcc_ResourceApplication_UpgradeProvider(t *testing.T) {
-	// This skip is temporary until we have a stable version of the provider that supports
-	// Juju 4.0.0 and above, at which point we can re-enable it.
-	SkipAgainstJuju4(t)
 	modelName := acctest.RandomWithPrefix("tf-test-application")
 	appName := "test-app"
 
@@ -1851,7 +1850,6 @@ func TestAcc_ResourceApplication_EndpointBindings(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
-	SkipAgainstJuju4WithReason(t, "See https://github.com/juju/juju/issues/22233.")
 	ctx := t.Context()
 
 	if testingCloud != LXDCloudTesting {
@@ -1920,7 +1918,7 @@ func TestAcc_ResourceApplication_UpdateEndpointBindings(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
-	// Storage is not supported in Juju 4.
+	// The Postgresql charm does not yet support Juju 4.
 	SkipAgainstJuju4(t)
 
 	if testingCloud != LXDCloudTesting {
@@ -1951,8 +1949,9 @@ func TestAcc_ResourceApplication_StorageLXD(t *testing.T) {
 }
 
 func TestAcc_ResourceApplication_StorageK8s(t *testing.T) {
-	// Storage is not supported in Juju 4.
+	// The Postgresql-k8s charm does not yet support Juju 4.
 	SkipAgainstJuju4(t)
+
 	if testingCloud != MicroK8sTesting {
 		t.Skip(t.Name() + " only runs with Microk8s")
 	}
@@ -2629,9 +2628,11 @@ resource "juju_application" "subordinate" {
   model_uuid = juju_model.this.uuid
   name = "test-subordinate"
   charm {
-    name = "nrpe"
+    name     = "nrpe"
     revision = 96
-    }
+    channel  = "latest/stable"
+    base     = "ubuntu@22.04"
+  }
 } 
 `, modelName, constraints)
 }
