@@ -13,10 +13,8 @@ import (
 )
 
 // TestValidateSecretValueMap covers the shared null-element check used by the
-// plan-time SecretValueMapValidator and the apply-time secretValueMap. It
-// confirms a null element is rejected, while unknown elements (e.g. a value_wo
-// element fed by an ephemeral variable resolved only at apply), known strings, a
-// null map and an unknown map are all tolerated.
+// secret resource's plan-time validation. It confirms a null element is rejected,
+// while unknown elements, known strings, a null map and an unknown map are tolerated.
 func TestValidateSecretValueMap(t *testing.T) {
 	basePath := path.Root("value_wo")
 
