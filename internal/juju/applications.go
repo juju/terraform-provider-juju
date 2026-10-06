@@ -1410,16 +1410,25 @@ func (c applicationsClient) computeCharmID(
 		newOrigin.Hash = ""
 	}
 	if input.Channel != "" {
+		// Parse the channel and set the track/risk/branch.
 		parsedChannel, err := charm.ParseChannel(input.Channel)
 		if err != nil {
 			return apiapplication.CharmID{}, err
 		}
-		if parsedChannel.Track != "" {
-			newOrigin.Track = strPtr(parsedChannel.Track)
-		}
+
+		// The risk is not optional, it must be set, e.g. "stable".
 		newOrigin.Risk = string(parsedChannel.Risk)
+
+		// The track is optional, use nil in case it is no longer set.
+		newOrigin.Track = nil
+		if parsedChannel.Track != "" {
+			newOrigin.Track = new(parsedChannel.Track)
+		}
+
+		// The branch is optional, use nil in case it is no longer set.
+		newOrigin.Branch = nil
 		if parsedChannel.Branch != "" {
-			newOrigin.Branch = strPtr(parsedChannel.Branch)
+			newOrigin.Branch = new(parsedChannel.Branch)
 		}
 	}
 	if input.Base != "" {
