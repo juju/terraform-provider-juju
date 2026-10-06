@@ -42,7 +42,7 @@ jobs:
         uses: docker/setup-compose-action@v1
 
       - name: Setup JAAS
-        uses: canonical/jimm/.github/actions/test-server@v3
+        uses: canonical/jimm/.github/actions/test-server@v4
         id: jaas
         with:
           juju-channel: 4.0/stable
