@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -17,7 +18,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"github.com/juju/errors"
 	"github.com/juju/names/v5"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -203,7 +203,7 @@ func (r *subnetResource) Create(ctx context.Context, req resource.CreateRequest,
 				return nil
 			},
 		},
-		NonFatalErrors: []error{errors.NotFound},
+		NonFatalErrors: []error{juju.SubnetNotFoundError},
 		RetryConf:      &wait.RetryConf{MaxDuration: r.config.DefaultCreateTimeout},
 		Logf:           r.trace,
 	}); err != nil {
@@ -249,7 +249,8 @@ func (r *subnetResource) Read(ctx context.Context, req resource.ReadRequest, res
 		CIDR:      cidr,
 	})
 	if err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, juju.SubnetNotFoundError) {
+			resp.Diagnostics.AddWarning("Subnet removed from state", fmt.Sprintf("The subnet was removed from Terraform state after a read error: %s", err))
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -306,7 +307,7 @@ func (r *subnetResource) Update(ctx context.Context, req resource.UpdateRequest,
 				return nil
 			},
 		},
-		NonFatalErrors: []error{errors.NotFound},
+		NonFatalErrors: []error{juju.SubnetNotFoundError},
 		RetryConf:      &wait.RetryConf{MaxDuration: r.config.DefaultUpdateTimeout},
 		Logf:           r.trace,
 	}); err != nil {
@@ -339,7 +340,7 @@ func (r *subnetResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		CIDR:      state.CIDR.ValueString(),
 	})
 	if err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, juju.SubnetNotFoundError) {
 			return
 		}
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read subnet before delete, got error: %s", err))
@@ -355,7 +356,7 @@ func (r *subnetResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		SpaceName: alphaSpaceName,
 		CIDR:      state.CIDR.ValueString(),
 	}); err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, juju.SubnetNotFoundError) {
 			return
 		}
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete subnet resource, got error: %s", err))
@@ -379,7 +380,7 @@ func (r *subnetResource) Delete(ctx context.Context, req resource.DeleteRequest,
 				return nil
 			},
 		},
-		NonFatalErrors: []error{errors.NotFound},
+		NonFatalErrors: []error{juju.SubnetNotFoundError},
 		RetryConf:      &wait.RetryConf{MaxDuration: r.config.DefaultDeleteTimeout},
 		Logf:           r.trace,
 	}); err != nil {

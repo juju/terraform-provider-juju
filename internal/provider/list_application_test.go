@@ -177,6 +177,7 @@ resource "juju_application" "test" {
 		name     = "ubuntu"
 		channel  = "latest/stable"
 		revision = 24
+		base     = "ubuntu@22.04"
 	}
 
 	config = {

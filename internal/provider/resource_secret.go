@@ -217,6 +217,9 @@ func (s *secretResource) Schema(_ context.Context, req resource.SchemaRequest, r
 				ElementType: types.StringType,
 				Optional:    true,
 				Sensitive:   true,
+				Validators: []validator.Map{
+					SecretValueMapValidator{},
+				},
 			},
 			"value_wo": schema.MapAttribute{
 				Description: "The write-only value map of the secret. Its content is never persisted to" +
@@ -226,6 +229,9 @@ func (s *secretResource) Schema(_ context.Context, req resource.SchemaRequest, r
 				Optional:    true,
 				WriteOnly:   true,
 				Sensitive:   true,
+				Validators: []validator.Map{
+					SecretValueMapValidator{},
+				},
 			},
 			"value_wo_version": schema.Int64Attribute{
 				Description: "The version of value_wo. Increment this value to trigger an update of the" +

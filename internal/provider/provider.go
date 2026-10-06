@@ -737,20 +737,23 @@ func checkClientErr(err error, config juju.ControllerConfiguration) diag.Diagnos
 	var errDetail string
 	var diags diag.Diagnostics
 
-	x509error := &x509.UnknownAuthorityError{}
-	x509HostError := &x509.HostnameError{}
-	netOpError := &net.OpError{}
-	if errors.As(err, x509error) || errors.As(err, x509HostError) {
+	unknownAuthorityErr, isUnknownAuthority := errors.AsType[x509.UnknownAuthorityError](err)
+	hostnameErr, isHostname := errors.AsType[x509.HostnameError](err)
+	if isUnknownAuthority || isHostname {
 		errDetail = "Verify the ca_certificate property set on the provider"
 
 		if config.CACert == "" {
 			errDetail = "The ca_certificate provider property is not set and the Juju certificate authority is not trusted by your system"
 		}
 
-		diags.AddError(x509error.Error(), errDetail)
+		if isHostname {
+			diags.AddError(hostnameErr.Error(), errDetail)
+		} else {
+			diags.AddError(unknownAuthorityErr.Error(), errDetail)
+		}
 		return diags
 	}
-	if errors.As(err, &netOpError) {
+	if netOpError, ok := errors.AsType[*net.OpError](err); ok {
 		errDetail = "Connection error, please check the controller_addresses property set on the provider"
 		diags.AddError(netOpError.Error(), errDetail)
 		return diags

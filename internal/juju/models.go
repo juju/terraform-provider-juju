@@ -29,7 +29,7 @@ const TransactionError = errors.ConstError("transaction-aborted")
 
 // ModelNotFoundError is returned when a model cannot be found
 // when contacting the Juju API.
-var ModelNotFoundError = errors.ConstError("model-not-found")
+const ModelNotFoundError = errors.ConstError("model-not-found")
 
 type modelsClient struct {
 	SharedClient
