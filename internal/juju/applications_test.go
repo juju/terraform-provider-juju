@@ -13,11 +13,13 @@ import (
 	"github.com/juju/juju/api"
 	"github.com/juju/juju/api/base"
 	apiapplication "github.com/juju/juju/api/client/application"
+	apicharms "github.com/juju/juju/api/client/charms"
 	apiresources "github.com/juju/juju/api/client/resources"
 	apicharm "github.com/juju/juju/api/common/charm"
 	corebase "github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/resource"
+	"github.com/juju/juju/domain/deployment/charm"
 	charmresources "github.com/juju/juju/domain/deployment/charm/resource"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/rpc/params"
@@ -551,6 +553,99 @@ func (s *ApplicationSuite) TestPartialApplicationDeployError() {
 		}},
 	})
 	s.Assert().ErrorAs(err, &ApplicationPartiallyCreatedError{})
+}
+
+func (s *ApplicationSuite) TestComputeCharmIDChannel() {
+	revision := 94
+	tests := []struct {
+		name            string
+		oldChannel      string
+		newChannel      string
+		revision        *int
+		expectedChannel string
+	}{
+		{name: "change track", oldChannel: "latest/edge", newChannel: "2.0/edge", expectedChannel: "2.0/edge"},
+		{name: "change risk", oldChannel: "latest/edge", newChannel: "latest/stable", expectedChannel: "latest/stable"},
+		{name: "remove branch", oldChannel: "latest/edge/testing", newChannel: "latest/edge", expectedChannel: "latest/edge"},
+		{name: "remove branch with revision", oldChannel: "latest/edge/testing", newChannel: "latest/edge", revision: &revision, expectedChannel: "latest/edge"},
+		{name: "remove branch and channel", oldChannel: "2.0/edge/testing", newChannel: "stable", expectedChannel: "stable"},
+		{name: "change branch", oldChannel: "latest/edge/testing", newChannel: "latest/edge/other", expectedChannel: "latest/edge/other"},
+		{name: "add branch", oldChannel: "latest/edge", newChannel: "latest/edge/testing", expectedChannel: "latest/edge/testing"},
+		{name: "change full channel", oldChannel: "latest/edge/testing", newChannel: "2.0/beta/other", expectedChannel: "2.0/beta/other"},
+		{name: "revision only preserves channel", oldChannel: "2.0/beta/testing", revision: &revision, expectedChannel: "2.0/beta/testing"},
+	}
+	for _, test := range tests {
+		s.Run(test.name, func() {
+			s.setupMocks(s.T())
+
+			client := s.getApplicationsClient()
+			oldChannel, err := charm.ParseChannel(test.oldChannel)
+			s.Require().NoError(err)
+
+			assertChannel := func(origin params.CharmOrigin) {
+				channel := charm.Channel{Risk: charm.Risk(origin.Risk)}
+				if origin.Track != nil {
+					channel.Track = *origin.Track
+				}
+				if origin.Branch != nil {
+					channel.Branch = *origin.Branch
+				}
+				s.Assert().Equal(test.expectedChannel, channel.String())
+			}
+
+			oldURL, err := charm.ParseURL("ch:amd64/test-charm-93")
+			s.Require().NoError(err)
+			oldRevision := 93
+			oldOrigin := apicharm.Origin{
+				Source:       "charm-hub",
+				Type:         "charm",
+				Track:        new(oldChannel.Track),
+				Risk:         string(oldChannel.Risk),
+				Revision:     &oldRevision,
+				Architecture: "amd64",
+				Base: corebase.Base{
+					OS:      "ubuntu",
+					Channel: corebase.Channel{Track: "22.04", Risk: "stable"},
+				},
+			}
+			if oldChannel.Branch != "" {
+				oldOrigin.Branch = new(oldChannel.Branch)
+			}
+			s.mockApplicationClient.EXPECT().GetCharmURLOrigin(gomock.Any(), "testapplication").Return(oldURL, oldOrigin, nil)
+			s.mockConnection.EXPECT().BestFacadeVersion("Charms").Return(7)
+			s.mockConnection.EXPECT().APICall(gomock.Any(), "Charms", 7, "", "ResolveCharms", gomock.Any(), gomock.Any()).
+				DoAndReturn(func(ctx context.Context, objType string, version int, id, request string, args, response any) error {
+					resolveArgs := args.(params.ResolveCharmsWithChannel)
+					s.Require().Len(resolveArgs.Resolve, 1)
+					requested := resolveArgs.Resolve[0]
+					assertChannel(requested.Origin)
+					if test.revision != nil {
+						s.Assert().Equal(test.revision, requested.Origin.Revision)
+					}
+					response.(*params.ResolveCharmWithChannelResults).Results = []params.ResolveCharmWithChannelResult{{
+						URL:            requested.Reference,
+						Origin:         requested.Origin,
+						SupportedBases: []params.Base{{Name: "ubuntu", Channel: "22.04/stable"}},
+					}}
+					return nil
+				})
+			s.mockConnection.EXPECT().APICall(gomock.Any(), "Charms", 7, "", "AddCharm", gomock.Any(), gomock.Any()).
+				DoAndReturn(func(ctx context.Context, objType string, version int, id, request string, args, response any) error {
+					addArgs := args.(params.AddCharmWithOrigin)
+					assertChannel(addArgs.Origin)
+					response.(*params.CharmOriginResult).Origin = addArgs.Origin
+					return nil
+				})
+
+			charmID, err := client.computeCharmID(s.T().Context(), &UpdateApplicationInput{
+				AppName:  "testapplication",
+				Channel:  test.newChannel,
+				Revision: test.revision,
+			}, s.mockApplicationClient, apicharms.NewClient(s.mockConnection))
+			s.Require().NoError(err)
+			assertChannel(charmID.Origin.ParamsCharmOrigin())
+		})
+	}
 }
 
 func (s *ApplicationSuite) TestReadApplicationPreservesDeadApplicationError() {
