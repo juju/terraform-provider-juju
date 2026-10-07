@@ -208,17 +208,16 @@ func (s *secretResource) ModifyPlan(ctx context.Context, req resource.ModifyPlan
 			return
 		}
 
-		versionChanged := req.State.Raw.IsNull()
-		if !versionChanged {
+		if !req.State.Raw.IsNull() {
 			var state secretResourceModelV1
 			resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 			if resp.Diagnostics.HasError() {
 				return
 			}
-			versionChanged = !plan.ValueWOVersion.Equal(state.ValueWOVersion)
-		}
-		if !versionChanged {
-			return
+
+			if plan.ValueWOVersion.Equal(state.ValueWOVersion) {
+				return
+			}
 		}
 		valuePath = path.Root("value_wo")
 	}
