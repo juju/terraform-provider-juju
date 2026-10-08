@@ -26,6 +26,142 @@ func TestNewNormalizedCustomConstraintsValue(t *testing.T) {
 func TestCustomConstraintsValue_StringSemanticEquals(t *testing.T) {
 	ctx := t.Context()
 
+	// actual is the value reported by Juju (the receiver) and prior is the
+	// planned or prior state value (the argument), matching how the
+	// framework calls StringSemanticEquals.
+	tests := []struct {
+		name      string
+		actual    string
+		prior     string
+		wantEqual bool
+		wantError bool
+	}{
+		{
+			name:      "identical strings",
+			actual:    "cpu-cores=2 mem=4G",
+			prior:     "cpu-cores=2 mem=4G",
+			wantEqual: true,
+		},
+		{
+			name:      "different order, semantically equal",
+			actual:    "mem=4G cpu-cores=2",
+			prior:     "cpu-cores=2 mem=4G",
+			wantEqual: true,
+		},
+		{
+			name:      "different values",
+			actual:    "cpu-cores=2 mem=4G",
+			prior:     "cpu-cores=4 mem=4G",
+			wantEqual: false,
+		},
+		{
+			name:      "different memory values, semantically equal",
+			actual:    "cpu-cores=2 mem=4096M",
+			prior:     "cpu-cores=2 mem=4G",
+			wantEqual: true,
+		},
+		{
+			name:      "extra constraint reported by juju",
+			actual:    "cpu-cores=2 mem=4G root-disk=10G",
+			prior:     "cpu-cores=2 mem=4G",
+			wantEqual: true,
+		},
+		{
+			name:      "prior constraint missing from juju",
+			actual:    "cpu-cores=2 mem=4G",
+			prior:     "cpu-cores=2 mem=4G root-disk=10G",
+			wantEqual: false,
+		},
+		{
+			name:      "model constraints merged into machine constraints",
+			actual:    "arch=amd64 cores=1 mem=2048M root-disk=10240M root-disk-source=volume",
+			prior:     "arch=amd64 cores=1 mem=2048M root-disk=10240M",
+			wantEqual: true,
+		},
+		{
+			name:      "model constraints merged into application constraints",
+			actual:    "arch=amd64 cores=1 mem=4096M root-disk-source=default",
+			prior:     "mem=4G",
+			wantEqual: true,
+		},
+		{
+			name:      "model constraint overridden by prior",
+			actual:    "arch=amd64 cores=2 mem=4096M root-disk-source=default",
+			prior:     "mem=4G cores=2",
+			wantEqual: true,
+		},
+		{
+			name:      "arch added by juju",
+			actual:    "cpu-cores=2 mem=4G arch=amd64",
+			prior:     "cpu-cores=2 mem=4G",
+			wantEqual: true,
+		},
+		{
+			name:      "arch dropped by juju",
+			actual:    "cpu-cores=2 mem=4G",
+			prior:     "cpu-cores=2 mem=4G arch=amd64",
+			wantEqual: true,
+		},
+		{
+			name:      "arch present but different",
+			actual:    "cpu-cores=2 mem=4G arch=arm64",
+			prior:     "cpu-cores=2 mem=4G arch=amd64",
+			wantEqual: false,
+		},
+		{
+			name:      "empty prior",
+			actual:    "arch=amd64 mem=4G",
+			prior:     "",
+			wantEqual: true,
+		},
+		{
+			name:      "empty actual",
+			actual:    "",
+			prior:     "mem=4G",
+			wantEqual: false,
+		},
+		{
+			name:      "malformed actual constraint",
+			actual:    "cpu-cores=2 mem=4G badtoken",
+			prior:     "cpu-cores=2 mem=4G",
+			wantError: true,
+		},
+		{
+			name:      "malformed prior constraint",
+			actual:    "cpu-cores=2 mem=4G",
+			prior:     "cpu-cores=2 mem=4G badtoken",
+			wantError: true,
+		},
+		{
+			name:      "completely invalid actual constraint",
+			actual:    "!!!",
+			prior:     "cpu-cores=2",
+			wantError: true,
+		},
+		{
+			name:      "completely invalid prior constraint",
+			actual:    "cpu-cores=2",
+			prior:     "!!!",
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := NewCustomConstraintsValue(tt.actual)
+			prior := NewCustomConstraintsValue(tt.prior)
+			equal, diags := actual.StringSemanticEquals(ctx, prior)
+			assert.Equal(t, tt.wantEqual, equal)
+			if tt.wantError {
+				assert.True(t, diags.HasError())
+			} else {
+				assert.False(t, diags.HasError())
+			}
+		})
+	}
+}
+
+func TestConstraintsEqual(t *testing.T) {
 	tests := []struct {
 		name      string
 		left      string
@@ -64,59 +200,43 @@ func TestCustomConstraintsValue_StringSemanticEquals(t *testing.T) {
 			wantEqual: false,
 		},
 		{
-			name:      "auto-added constraint key missing on one side",
+			name:      "arch missing on one side",
 			left:      "cpu-cores=2 mem=4G",
 			right:     "cpu-cores=2 mem=4G arch=amd64",
 			wantEqual: true,
 		},
 		{
-			name:      "auto-added constraint key present but different",
+			name:      "arch present but different",
 			left:      "cpu-cores=2 mem=4G arch=amd64",
 			right:     "cpu-cores=2 mem=4G arch=arm64",
 			wantEqual: false,
 		},
 		{
-			name:      "malformed left constraint",
+			name:      "malformed constraint",
 			left:      "cpu-cores=2 mem=4G badtoken",
 			right:     "cpu-cores=2 mem=4G",
 			wantError: true,
 		},
 		{
-			name:      "malformed right constraint",
-			left:      "cpu-cores=2 mem=4G",
-			right:     "cpu-cores=2 mem=4G badtoken",
-			wantError: true,
-		},
-		{
-			name:      "completely invalid left constraint",
+			name:      "completely invalid constraint",
 			left:      "!!!",
 			right:     "cpu-cores=2",
-			wantError: true,
-		},
-		{
-			name:      "completely invalid right constraint",
-			left:      "cpu-cores=2",
-			right:     "!!!",
 			wantError: true,
 		},
 	}
 
 	for _, tt := range tests {
-		left := NewCustomConstraintsValue(tt.left)
-		right := NewCustomConstraintsValue(tt.right)
-		for i := range 2 {
-			// Reverse the order for the second iteration
-			// to test both directions of comparison.
-			var name string
-			if i == 0 {
-				name = tt.name + "/forward"
-			} else {
-				name = tt.name + "/reverse"
-				left, right = right, left // swap for reverse test
-			}
-			t.Run(name, func(t *testing.T) {
-				equal, diags := left.StringSemanticEquals(ctx, right)
-				assert.Equal(t, tt.wantEqual, equal, "equality mismatch for %s", name)
+		// Run each case in both directions, as the comparison is symmetric.
+		for _, dir := range []struct {
+			name string
+			a, b string
+		}{
+			{"forward", tt.left, tt.right},
+			{"reverse", tt.right, tt.left},
+		} {
+			t.Run(tt.name+"/"+dir.name, func(t *testing.T) {
+				equal, diags := constraintsEqual(dir.a, dir.b)
+				assert.Equal(t, tt.wantEqual, equal)
 				if tt.wantError {
 					assert.True(t, diags.HasError())
 				} else {
