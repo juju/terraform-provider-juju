@@ -11,29 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAcc_DataSourceApplicationLXD_Edge(t *testing.T) {
-	if testingCloud != LXDCloudTesting {
-		t.Skip(t.Name() + " only runs with LXD")
-	}
-	modelName := acctest.RandomWithPrefix("tf-datasource-application-test-model")
-	applicationName := acctest.RandStringFromCharSet(10, acctest.CharSetAlpha)
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: frameworkProviderFactories,
-		Steps: []resource.TestStep{
-			{
-				Config: testAccDataSourceApplicationLXD(modelName, applicationName),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrPair("juju_model.model", "uuid", "data.juju_application.this", "model_uuid"),
-					resource.TestCheckResourceAttr("data.juju_application.this", "name", applicationName),
-				),
-			},
-		},
-	})
-}
-
-func TestAcc_DataSourceApplicationLXD_Machines_Edge(t *testing.T) {
+func TestAcc_DataSourceApplicationLXD(t *testing.T) {
 	if testingCloud != LXDCloudTesting {
 		t.Skip(t.Name() + " only runs with LXD")
 	}
@@ -93,8 +71,9 @@ resource "juju_application" "this" {
 
   charm {
     name     = "ubuntu"
-    revision = 77
-	channel  = "latest/stable"
+    revision = 24
+    channel  = "latest/stable"
+    base     = "ubuntu@22.04"
   }
 }
 

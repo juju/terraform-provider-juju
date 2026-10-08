@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"testing"
@@ -183,7 +184,7 @@ func testAccCheckSpaceAbsent(spaceName string) resource.TestCheckFunc {
 		if err == nil {
 			return fmt.Errorf("space %q still exists in model %q", spaceName, modelUUID)
 		}
-		if jujuerrors.Is(err, jujuerrors.NotFound) {
+		if errors.Is(err, jujuerrors.NotFound) {
 			return nil
 		}
 

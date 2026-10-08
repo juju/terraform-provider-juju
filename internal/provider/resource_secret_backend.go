@@ -270,6 +270,7 @@ func (r *secretBackendResource) Read(ctx context.Context, req resource.ReadReque
 		// elsewhere in the provider.
 		if errors.Is(err, juju.ErrSecretBackendNotFound) {
 			r.trace(fmt.Sprintf("secret backend %q not found, removing from state", state.Name.ValueString()))
+			resp.Diagnostics.AddWarning("Secret backend removed from state", fmt.Sprintf("The secret backend was removed from Terraform state after a read error: %s", err))
 			resp.State.RemoveResource(ctx)
 			return
 		}

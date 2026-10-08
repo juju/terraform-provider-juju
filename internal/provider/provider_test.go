@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 	"os"
 	"regexp"
@@ -33,8 +34,7 @@ import (
 )
 
 const (
-	TestProviderStableVersion = "1.2.0"
-	TestProviderPreV1Version  = "0.20.0"
+	TestProviderStableVersion = "2.3.1"
 	isJaasEnvKey              = "IS_JAAS"
 )
 
@@ -161,18 +161,7 @@ func SkipAgainstJuju4(t *testing.T) {
 	if agentVersion == "" {
 		t.Errorf("%s is not set", TestJujuAgentVersion)
 	} else if internaltesting.CompareVersions(agentVersion, "4.0.0") >= 0 {
-		t.Skipf("%s is not set or is below 4.0.0", TestJujuAgentVersion)
-	}
-}
-
-// SkipAgainstJuju4WithReason should be called at the top of any tests
-// that are not appropriate to run against Juju 4, with a reason provided.
-func SkipAgainstJuju4WithReason(t *testing.T, reason string) {
-	agentVersion := os.Getenv(TestJujuAgentVersion)
-	if agentVersion == "" {
-		t.Errorf("%s is not set", TestJujuAgentVersion)
-	} else if internaltesting.CompareVersions(agentVersion, "4.0.0") >= 0 {
-		t.Skipf("Skipping test against Juju 4.0.0 and above: %s", reason)
+		t.Skipf("%s is not set or is above 4.0.0", TestJujuAgentVersion)
 	}
 }
 
@@ -245,6 +234,27 @@ func TestProviderConfigureClientIDAndSecretFromEnv(t *testing.T) {
 	assert.Equal(t, "this version of Juju does not support login from old clients (not supported) (not supported)", err.Detail())
 }
 
+func TestCheckClientErrCertificate(t *testing.T) {
+	hostnameErr := x509.HostnameError{
+		Certificate: &x509.Certificate{DNSNames: []string{"controller.example"}},
+		Host:        "other.example",
+	}
+	for _, test := range []struct {
+		name string
+		err  error
+	}{
+		{"hostname mismatch", hostnameErr},
+		{"unknown authority", x509.UnknownAuthorityError{}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			diags := checkClientErr(fmt.Errorf("connecting: %w", test.err), juju.ControllerConfiguration{})
+
+			require.Len(t, diags.Errors(), 1)
+			assert.Equal(t, test.err.Error(), diags.Errors()[0].Summary())
+		})
+	}
+}
+
 func TestProviderConfigureAddresses(t *testing.T) {
 	testAccPreCheck(t)
 	os.Setenv("JUJU_CONNECTION_TIMEOUT", "1") // 1s timeout
@@ -312,7 +322,7 @@ func TestProviderAllowsEmptyCACert(t *testing.T) {
 	err := confResp.Diagnostics.Errors()[0]
 	assert.Equal(t, diag.SeverityError, err.Severity())
 	assert.Equal(t, "The ca_certificate provider property is not set and the Juju certificate authority is not trusted by your system", err.Detail())
-	assert.Equal(t, "x509: certificate signed by unknown authority", err.Summary())
+	assert.Contains(t, err.Summary(), "x509: ")
 }
 
 func TestProviderSetWarnOnDeletionErrors(t *testing.T) {

@@ -343,9 +343,8 @@ func TestAcc_ResourceSecret_NullValueRejected(t *testing.T) {
 	})
 }
 
-// TestAcc_ResourceSecret_NullValueRejectedOnUpdate asserts that the null-element
-// validation also fires on update: a valid write-only secret is created, then
-// bumping value_wo_version with a null element is rejected at plan time.
+// TestAcc_ResourceSecret_NullValueRejectedOnUpdate asserts that null-element
+// validation runs only when value_wo_version changes.
 func TestAcc_ResourceSecret_NullValueRejectedOnUpdate(t *testing.T) {
 	skipTestIfSecretsNotSupported(t)
 
@@ -363,6 +362,11 @@ func TestAcc_ResourceSecret_NullValueRejectedOnUpdate(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_secret."+secretName, "value_wo_version", "1"),
 				),
+			},
+			{
+				// A null element is ignored when the write-only value version is unchanged.
+				Config:   testAccResourceSecretWriteOnlyNullValueVersion(modelName, secretName, 1),
+				PlanOnly: true,
 			},
 			{
 				// Bumping value_wo_version to 2 with a null element must be

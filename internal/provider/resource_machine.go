@@ -755,7 +755,7 @@ func assertHostnamePopulated(respFromAPI *juju.ReadMachineResponse) error {
 // assertInstanceIDPopulated asserts the provider-specific instance ID is populated in the machine response.
 // Otherwise it returns a retry error to wait for the instance ID to be set.
 func assertInstanceIDPopulated(respFromAPI *juju.ReadMachineResponse) error {
-	if respFromAPI.InstanceID == "" {
+	if respFromAPI.InstanceID == "" || respFromAPI.InstanceID == "pending" {
 		return juju.NewRetryReadError("waiting for instance ID to be set on machine")
 	}
 	return nil

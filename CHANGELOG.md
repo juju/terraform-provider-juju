@@ -1,3 +1,80 @@
+# 2.4.1
+
+NOTES:
+
+* **This release requires Juju controller version 3 or higher. This version doesn't support 2.9.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 4.0.12 release.
+
+ENHANCEMENTS
+
+* Allow null write-only secret values when `value_wo_version` is unchanged, validating them only on creation or a version change by @SimoneDutto in [#1391](https://github.com/juju/terraform-provider-juju/pull/1391)
+
+BUG FIXES
+
+* Fix model-not-found and wrapped error handling, improve certificate error diagnostics, and warn when missing resources are removed from Terraform state by @kian99 in [#1383](https://github.com/juju/terraform-provider-juju/pull/1383)
+* Correctly clear charm channel track and branch values when they are removed from the configuration by @kian99 in [#1392](https://github.com/juju/terraform-provider-juju/pull/1392)
+
+DOCUMENTATION
+
+* Fix the Ubuntu charm base in the application resource example by @ale8k in [#1387](https://github.com/juju/terraform-provider-juju/pull/1387)
+
+CI & MAINTENANCE
+
+* Re-enable JAAS group tests and update the JIMM test version to v4.0.0-alpha4 by @SimoneDutto in [#1379](https://github.com/juju/terraform-provider-juju/pull/1379)
+* Update Go to 1.27 and upgrade golangci-lint and its GitHub Action by @kian99 in [#1383](https://github.com/juju/terraform-provider-juju/pull/1383)
+* Fix acceptance tests for Juju 4.1 compatibility by @kian99 in [#1384](https://github.com/juju/terraform-provider-juju/pull/1384)
+* Re-enable supported acceptance tests against Juju 4 by @kian99 in [#1385](https://github.com/juju/terraform-provider-juju/pull/1385)
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v2.4.0...v2.4.1
+
+# 2.4.0
+
+NOTES:
+
+* **This release requires Juju controller version 3 or higher. This version doesn't support 2.9.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 4.0.12 release.
+
+ENHANCEMENTS
+
+* Enable controller high availability on Juju 4 by @SimoneDutto in [#1369](https://github.com/juju/terraform-provider-juju/pull/1369)
+
+BUG FIXES
+
+* Recompute unpinned charm revisions when the charm base changes by @kian99 in [#1355](https://github.com/juju/terraform-provider-juju/pull/1355)
+* Wait for application removal after an application-dead error and preserve `allow_force_destroy` when importing offers by @kian99 in [#1370](https://github.com/juju/terraform-provider-juju/pull/1370)
+* Reject null secret map values with clear diagnostics instead of conversion errors by @ale8k in [#1375](https://github.com/juju/terraform-provider-juju/pull/1375)
+
+DOCUMENTATION
+
+* Update the minimum supported Juju version by @luci1900 in [#1358](https://github.com/juju/terraform-provider-juju/pull/1358)
+* Document how to use `terraform query` to import a manual deployment by @luci1900 in [#1360](https://github.com/juju/terraform-provider-juju/pull/1360)
+
+CI & MAINTENANCE
+
+* Re-enable acceptance tests for resolved Juju issues and update the controller upgrade test version by @kian99 in [#1370](https://github.com/juju/terraform-provider-juju/pull/1370)
+* Merge the 2.3 branch into main by @ale8k in [#1382](https://github.com/juju/terraform-provider-juju/pull/1382)
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v2.3.1...v2.4.0
+
+# 2.3.1
+
+NOTES:
+
+* **This release requires Juju controller version 3 or higher. This version doesn't support 2.9.**
+* **If using JAAS, this release requires Juju controller version 3.6.5 or higher.**
+* This release uses Juju client api code from the Juju 4.0.12 release.
+
+BUG FIXES
+
+* Recompute unpinned charm revisions when the charm base changes and correctly handle Kubernetes charm base updates by @kian99 in [#1359](https://github.com/juju/terraform-provider-juju/pull/1359)
+
+
+**Full Changelog**: https://github.com/juju/terraform-provider-juju/compare/v2.3.0...v2.3.1
+
 # 2.3.0
 
 NOTES:

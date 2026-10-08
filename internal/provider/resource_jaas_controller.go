@@ -263,6 +263,7 @@ func (r *jaasControllerResource) Read(ctx context.Context, req resource.ReadRequ
 		}
 	}
 	if found == nil {
+		resp.Diagnostics.AddWarning("JAAS controller removed from state", fmt.Sprintf("Controller %q was removed from Terraform state because it was not found in the JAAS controller list", state.ID.ValueString()))
 		resp.State.RemoveResource(ctx)
 		return
 	}

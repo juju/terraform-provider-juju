@@ -420,9 +420,10 @@ func isOfferNotFound(err error) bool {
 
 func handleOfferNotFoundError(ctx context.Context, err error, st *tfsdk.State) diag.Diagnostics {
 	if isOfferNotFound(err) {
-		// Offer manually removed
+		var diags diag.Diagnostics
+		diags.AddWarning("Offer removed from state", fmt.Sprintf("The offer was removed from Terraform state after a read error: %s", err))
 		st.RemoveResource(ctx)
-		return diag.Diagnostics{}
+		return diags
 	}
 
 	var diags diag.Diagnostics
