@@ -31,6 +31,7 @@ var _ resource.ResourceWithConfigure = &secretResource{}
 var _ resource.ResourceWithImportState = &secretResource{}
 var _ resource.ResourceWithIdentity = &secretResource{}
 var _ resource.ResourceWithConfigValidators = &secretResource{}
+var _ resource.ResourceWithModifyPlan = &secretResource{}
 
 // NewSecretResource returns a secret resource.
 func NewSecretResource() resource.Resource {
@@ -189,6 +190,46 @@ func (s *secretResource) ConfigValidators(_ context.Context) []resource.ConfigVa
 	}
 }
 
+// ModifyPlan validates write-only secret values only when their version changes.
+func (s *secretResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var plan secretResourceModelV1
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	valuePath := path.Root("value")
+	if !plan.ValueWOVersion.IsNull() {
+		if plan.ValueWOVersion.IsUnknown() {
+			return
+		}
+
+		if !req.State.Raw.IsNull() {
+			var state secretResourceModelV1
+			resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+
+			if plan.ValueWOVersion.Equal(state.ValueWOVersion) {
+				return
+			}
+		}
+		valuePath = path.Root("value_wo")
+	}
+
+	var value types.Map
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, valuePath, &value)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(validateSecretValueMap(value, valuePath)...)
+}
+
 // Schema implements resource.ResourceWithConfigure interface.
 func (s *secretResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
@@ -217,9 +258,6 @@ func (s *secretResource) Schema(_ context.Context, req resource.SchemaRequest, r
 				ElementType: types.StringType,
 				Optional:    true,
 				Sensitive:   true,
-				Validators: []validator.Map{
-					SecretValueMapValidator{},
-				},
 			},
 			"value_wo": schema.MapAttribute{
 				Description: "The write-only value map of the secret. Its content is never persisted to" +
@@ -229,9 +267,6 @@ func (s *secretResource) Schema(_ context.Context, req resource.SchemaRequest, r
 				Optional:    true,
 				WriteOnly:   true,
 				Sensitive:   true,
-				Validators: []validator.Map{
-					SecretValueMapValidator{},
-				},
 			},
 			"value_wo_version": schema.Int64Attribute{
 				Description: "The version of value_wo. Increment this value to trigger an update of the" +
