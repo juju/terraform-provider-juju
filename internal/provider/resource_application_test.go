@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -21,6 +22,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 	apiapplication "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/api/client/resources"
@@ -1342,6 +1344,137 @@ func TestAcc_CustomResourcesFromPrivateRegistry(t *testing.T) {
 	})
 }
 
+// TestAcc_CustomResourcesFromPrivateRegistryWriteOnly mirrors
+// TestAcc_CustomResourcesFromPrivateRegistry using the write-only
+// registry_credentials_wo attribute. The credentials must reach Juju (image
+// pull secret created) while never being stored in Terraform state.
+func TestAcc_CustomResourcesFromPrivateRegistryWriteOnly(t *testing.T) {
+	ctx := t.Context()
+
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with Microk8s")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-custom-resource-file")
+	appName := "test-app"
+	appResourceFullName := "juju_application." + appName
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckWithK8s(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
+			tfversion.SkipBelow(version.Must(version.NewVersion("1.11.0"))),
+		},
+		Steps: []resource.TestStep{
+			{
+				// A custom resource from a private registry, with write-only
+				// credentials.
+				Config: testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "user", "pass", 1, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
+						fingerprintJuju3: "1b94afe549b44328f2350ae24633b31265a01e466cf0469faa798acb9c637bea30c3c711f25937795eff34d2f920e074",
+						fingerprintJuju4: "2f4df0e226b8e3599dc0e7cae663046fb113e155e72f25325d02c9671f9eb9fd61ddb75c2958cef850745b94431d44b8",
+						origin:           "upload",
+						revision:         "0",
+					}),
+					// Verify that Juju created an image pull secret in the
+					// model's k8s namespace with the correct credentials.
+					testAccCheckImagePullSecretCreated(ctx, appResourceFullName, modelName, "coredns", "user", "pass"),
+					// The write-only credentials must never be stored in state.
+					resource.TestCheckNoResourceAttr(appResourceFullName, "registry_credentials_wo"),
+					resource.TestCheckNoResourceAttr(appResourceFullName, "registry_credentials.%"),
+					resource.TestCheckResourceAttr(appResourceFullName, "registry_credentials_wo_version", "1"),
+				),
+			},
+			{
+				// Unchanged credentials and version: no perpetual diff.
+				Config:   testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "user", "pass", 1, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
+				PlanOnly: true,
+			},
+			{
+				// Bumping registry_credentials_wo_version re-sends the
+				// credentials to Juju.
+				Config: testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "user2", "pass2", 2, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(appResourceFullName, plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
+						fingerprintJuju3: "953991156cf1e0a601f52b2b2b16c7042ad13bf765655c024f384385306404b7eb30bf72bdfcfda3c570b076b3aa96dc",
+						fingerprintJuju4: "33d64f169e84ad1ba0f8ebcb6f5e8c1a135b85a9115b3f5c9f664b013b8facb46dfe0493402d4865e4eebc2843fbca15",
+						origin:           "upload",
+						revision:         "0",
+					}),
+					// Verify the secret was updated with the new credentials.
+					testAccCheckImagePullSecretCreated(ctx, appResourceFullName, modelName, "coredns", "user2", "pass2"),
+					resource.TestCheckResourceAttr(appResourceFullName, "registry_credentials_wo_version", "2"),
+				),
+			},
+			{
+				// Changing the credentials (here: to empty strings) without
+				// bumping the version is invisible to Terraform: write-only
+				// values cannot be diffed, so the plan must be empty.
+				Config:   testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "", "", 2, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
+				PlanOnly: true,
+			},
+			{
+				// Removed write-only registry credentials.
+				Config: testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "", "", 0, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(appResourceFullName, plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
+						fingerprintJuju3: "591c30e2a2730c206d65771cfa2302c90a2c90b0860207d82f041d24b7c16409e35465d2be987c4bf562734b9e62f248",
+						fingerprintJuju4: "fc15a3374f0051849b218544ad39e3c6b6446d7ac411a9843c0f0f7102587219c1716dd4a217fbba1519b182e89cfda9",
+						origin:           "upload",
+						revision:         "0",
+					}),
+					resource.TestCheckNoResourceAttr(appResourceFullName, "registry_credentials_wo_version"),
+				),
+			},
+		},
+	})
+}
+
+// TestAcc_ResourceApplication_WriteOnlyRegistryCredentialsValidation asserts
+// the config validators on the registry credential attributes.
+func TestAcc_ResourceApplication_WriteOnlyRegistryCredentialsValidation(t *testing.T) {
+	modelName := acctest.RandomWithPrefix("tf-test-wo-registry-validation")
+	appName := "test-app"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
+			tfversion.SkipBelow(version.Must(version.NewVersion("1.11.0"))),
+		},
+		Steps: []resource.TestStep{
+			{
+				// Both registry_credentials and registry_credentials_wo set ->
+				// Conflicting violation.
+				Config:      testAccResourceApplicationBothRegistryCredentials(modelName, appName),
+				ExpectError: regexp.MustCompile(`(?s)These attributes cannot be configured together:\s*\[registry_credentials,registry_credentials_wo\]`),
+			},
+			{
+				// registry_credentials_wo without
+				// registry_credentials_wo_version -> RequiredTogether violation.
+				Config:      testAccResourceApplicationWORegistryCredentialsNoVersion(modelName, appName),
+				ExpectError: regexp.MustCompile(`(?s)These attributes must be configured together:\s*\[registry_credentials_wo,registry_credentials_wo_version\]`),
+			},
+			{
+				// registry_credentials with registry_credentials_wo_version but
+				// no registry_credentials_wo -> RequiredTogether violation.
+				Config:      testAccResourceApplicationRegistryCredentialsWithWOVersion(modelName, appName),
+				ExpectError: regexp.MustCompile(`(?s)These attributes must be configured together:\s*\[registry_credentials_wo,registry_credentials_wo_version\]`),
+			},
+		},
+	})
+}
+
 type charmResourceChecks struct {
 	// fingerprintJuju3 is a SHA384 fingerprint of the resource as computed by Juju 3.
 	// Juju 3 and Juju 4 compute fingerprints differently for container image resources
@@ -2259,6 +2392,157 @@ resource "juju_application" "{{.AppName}}" {
 			"Username":              username,
 			"Password":              password,
 			"ResourceParamRevision": resourceRevision,
+		})
+}
+
+func testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, username, password string, credentialsVersion int, resourceRevision string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceApplicationFromPrivateRegistryWO",
+		`
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_application" "{{.AppName}}" {
+  name  = "{{.AppName}}"
+  model_uuid = juju_model.{{.ModelName}}.uuid
+
+  charm {
+    name     = "coredns"
+    revision = 191
+    channel  = "latest/stable"
+  }
+
+  {{ if .UseWOCredentials }}
+  registry_credentials_wo = {
+    "ghcr.io/canonical" = {
+      username = "{{.Username}}"
+      password = "{{.Password}}"
+    }
+  }
+  registry_credentials_wo_version = {{.CredentialsVersion}}
+  {{ end }}
+
+  {{ if ne .ResourceParamRevision "" }}
+  resources = {
+    "coredns-image" = "{{.ResourceParamRevision}}"
+  }
+  {{ end }}
+
+  units = 1
+}
+`, internaltesting.TemplateData{
+			"ModelName":             modelName,
+			"AppName":               appName,
+			"UseWOCredentials":      credentialsVersion > 0,
+			"Username":              username,
+			"Password":              password,
+			"CredentialsVersion":    credentialsVersion,
+			"ResourceParamRevision": resourceRevision,
+		})
+}
+
+func testAccResourceApplicationBothRegistryCredentials(modelName, appName string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceApplicationBothRegistryCredentials",
+		`
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_application" "{{.AppName}}" {
+  name  = "{{.AppName}}"
+  model_uuid = juju_model.{{.ModelName}}.uuid
+
+  charm {
+    name     = "ubuntu-lite"
+    revision = 4
+  }
+
+  registry_credentials = {
+    "ghcr.io/canonical" = {
+      username = "user"
+      password = "pass"
+    }
+  }
+  registry_credentials_wo = {
+    "ghcr.io/canonical" = {
+      username = "user"
+      password = "pass"
+    }
+  }
+  registry_credentials_wo_version = 1
+
+  units = 1
+}
+`, internaltesting.TemplateData{
+			"ModelName": modelName,
+			"AppName":   appName,
+		})
+}
+
+func testAccResourceApplicationRegistryCredentialsWithWOVersion(modelName, appName string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceApplicationRegistryCredentialsWithWOVersion",
+		`
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_application" "{{.AppName}}" {
+  name  = "{{.AppName}}"
+  model_uuid = juju_model.{{.ModelName}}.uuid
+
+  charm {
+    name     = "ubuntu-lite"
+    revision = 4
+  }
+
+  registry_credentials = {
+    "ghcr.io/canonical" = {
+      username = "user"
+      password = "pass"
+    }
+  }
+  registry_credentials_wo_version = 1
+
+  units = 1
+}
+`, internaltesting.TemplateData{
+			"ModelName": modelName,
+			"AppName":   appName,
+		})
+}
+
+func testAccResourceApplicationWORegistryCredentialsNoVersion(modelName, appName string) string {
+	return internaltesting.GetStringFromTemplateWithData(
+		"testAccResourceApplicationWORegistryCredentialsNoVersion",
+		`
+resource "juju_model" "{{.ModelName}}" {
+  name = "{{.ModelName}}"
+}
+
+resource "juju_application" "{{.AppName}}" {
+  name  = "{{.AppName}}"
+  model_uuid = juju_model.{{.ModelName}}.uuid
+
+  charm {
+    name     = "ubuntu-lite"
+    revision = 4
+  }
+
+  registry_credentials_wo = {
+    "ghcr.io/canonical" = {
+      username = "user"
+      password = "pass"
+    }
+  }
+
+  units = 1
+}
+`, internaltesting.TemplateData{
+			"ModelName": modelName,
+			"AppName":   appName,
 		})
 }
 

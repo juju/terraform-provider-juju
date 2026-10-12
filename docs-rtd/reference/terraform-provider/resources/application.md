@@ -120,6 +120,8 @@ resource "juju_application" "this" {
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `charm` (Block List) The charm installed from Charmhub. (see [below for nested schema](#nestedblock--charm))
 - `config` (Map of String) Application specific configuration. Must evaluate to a string, integer or boolean.
 - `constraints` (String) Constraints imposed on this application. Changing this value will cause the application to be destroyed and recreated by terraform. Multiple constraints can be provided as a space-separated list.
@@ -132,9 +134,17 @@ resource "juju_application" "this" {
 	If the charm resource requires authentication, supply a username and password that will be passed to the Juju API and added to the Kubernetes cluster.
 
 	The registry credentials will only be used if the URL of the registry is a partial match for the OCI image URL specified in the charm resources.
-	An OCI image URL is considered a match for a registry URL if the URL without the OCI image tag matches the registry URL. For example, 
-	a charm OCI resource specified as "registry.example.com:5000/path/image:tag" will match a registry entry with key "registry.example.com:5000/path" 
-	but not "registry.example.com:5000" nor "registry.example.com". (see [below for nested schema](#nestedatt--registry_credentials))
+	An OCI image URL is considered a match for a registry URL if the URL without the OCI image tag matches the registry URL. For example,
+	a charm OCI resource specified as "registry.example.com:5000/path/image:tag" will match a registry entry with key "registry.example.com:5000/path"
+	but not "registry.example.com:5000" nor "registry.example.com".
+
+	Conflicts with registry_credentials_wo; prefer registry_credentials_wo for credentials that should not be stored in Terraform state. (see [below for nested schema](#nestedatt--registry_credentials))
+- `registry_credentials_wo` (Attributes Map, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The write-only equivalent of registry_credentials. The credentials are never persisted to Terraform state. The map key is the registry URL,
+	matched against OCI image URLs the same way as registry_credentials.
+
+	Requires registry_credentials_wo_version to be set; bump registry_credentials_wo_version to apply changes to these credentials.
+	Requires Terraform >= 1.11. (see [below for nested schema](#nestedatt--registry_credentials_wo))
+- `registry_credentials_wo_version` (Number) The version of registry_credentials_wo. Increment this value to trigger an update of the write-only registry credentials.
 - `resources` (Map of String) Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
 Specify a resource other than the default for a charm. Note that not all charms have resources.
 
@@ -198,6 +208,15 @@ Required:
 
 - `password` (String, Sensitive) The password for authenticating to the registry.
 - `username` (String) The username for authenticating to the registry.
+
+
+<a id="nestedatt--registry_credentials_wo"></a>
+### Nested Schema for `registry_credentials_wo`
+
+Required:
+
+- `password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The password for authenticating to the registry.
+- `username` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The username for authenticating to the registry.
 
 
 <a id="nestedblock--timeouts"></a>
