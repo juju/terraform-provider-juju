@@ -15,7 +15,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-
 	"github.com/juju/terraform-provider-juju/internal/charmhub"
 )
 
@@ -121,7 +120,7 @@ func (d *charmDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
-	storeURL := charmhub.ProductionURL
+	storeURL := charmhub.DefaultURL()
 	if !data.StoreURL.IsNull() && data.StoreURL.ValueString() != "" {
 		storeURL = data.StoreURL.ValueString()
 	}
