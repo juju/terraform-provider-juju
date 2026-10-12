@@ -37,6 +37,70 @@ import (
 	"github.com/juju/version/v2"
 )
 
+func TestAcc_ResourceControllerAPIAddressesRefresh(t *testing.T) {
+	command := NewMockJujuCommand(gomock.NewController(t))
+	addresses := []string{"10.0.0.1:17070"}
+
+	command.EXPECT().Bootstrap(gomock.Any(), gomock.Any()).Return(&juju.ControllerConnectionInformation{
+		Addresses: addresses, CACert: "test-cert", Username: "admin",
+		Password: "test-password", AgentVersion: "3.6.12",
+	}, nil)
+
+	command.EXPECT().Config(gomock.Any(), gomock.Any()).Return(map[string]any{
+		"agent-logfile-max-backups": "3",
+		"audit-log-capture-args":    "true",
+		"autocert-dns-name":         "test-external-name",
+	}, map[string]any{
+		"enable-os-refresh-update": "false",
+		"http-proxy":               "fake-proxy",
+	}, nil).AnyTimes()
+
+	command.EXPECT().ControllerVersion(gomock.Any(), gomock.Any()).
+		Return(version.MustParse("3.6.12"), nil).AnyTimes()
+	command.EXPECT().ControllerAPIAddresses(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(context.Context, *juju.ControllerConnectionInformation) ([]string, error) {
+			return addresses, nil
+		}).AnyTimes()
+	command.EXPECT().Destroy(gomock.Any(), gomock.Any()).Return(nil)
+
+	const resourceName = "juju_controller.controller"
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev", ProviderConfiguration{
+				NewJujuCommand: func(string) (JujuCommand, error) { return command, nil },
+			})),
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceController("test-controller", "localhost", "3.6.12"),
+				Check:  resource.TestCheckResourceAttr(resourceName, "api_addresses.#", "1"),
+			},
+			{
+				PreConfig: func() {
+					addresses = []string{"10.0.0.1:17070", "10.0.0.2:17070", "10.0.0.3:17070"}
+				},
+				RefreshState: true,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "api_addresses.#", "3"),
+					resource.TestCheckResourceAttr(resourceName, "api_addresses.0", "10.0.0.1:17070"),
+					resource.TestCheckResourceAttr(resourceName, "api_addresses.1", "10.0.0.2:17070"),
+					resource.TestCheckResourceAttr(resourceName, "api_addresses.2", "10.0.0.3:17070"),
+				),
+			},
+			{
+				PreConfig: func() {
+					addresses = []string{"10.0.0.2:17070"}
+				},
+				RefreshState: true,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "api_addresses.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "api_addresses.0", "10.0.0.2:17070"),
+				),
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceController(t *testing.T) {
 	SkipJAAS(t)
 	controllerName := acctest.RandomWithPrefix("tf-test-controller")
@@ -46,6 +110,9 @@ func TestAcc_ResourceController(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockJujuCommand := NewMockJujuCommand(mockCtrl)
 	defer mockCtrl.Finish()
+
+	mockJujuCommand.EXPECT().ControllerAPIAddresses(gomock.Any(), gomock.Any()).
+		Return([]string{"127.0.0.1:17070"}, nil).AnyTimes()
 
 	mockJujuCommand.EXPECT().Bootstrap(gomock.Any(), juju.BootstrapArguments{
 		Name:       controllerName,

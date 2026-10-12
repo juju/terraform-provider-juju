@@ -37,6 +37,8 @@ import (
 type JujuCommand interface {
 	// Bootstrap creates a new controller and returns connection information.
 	Bootstrap(ctx context.Context, model juju.BootstrapArguments) (*juju.ControllerConnectionInformation, error)
+	// ControllerAPIAddresses retrieves the API endpoints advertised by the controller.
+	ControllerAPIAddresses(ctx context.Context, connInfo *juju.ControllerConnectionInformation) ([]string, error)
 	// ControllerVersion retrieves the agent version of the controller.
 	ControllerVersion(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (version.Number, error)
 	// UpgradeController upgrades an existing controller to the requested target version.
@@ -213,7 +215,8 @@ func (r *controllerResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				},
 			},
 			"api_addresses": schema.ListAttribute{
-				Description: "API addresses of the controller.",
+				Description: "API addresses of the controller, including HA units. Refreshed from the controller " +
+					"on subsequent plans and applies once the units are ready. Addresses include the API port.",
 				Computed:    true,
 				ElementType: types.StringType,
 				PlanModifiers: []planmodifier.List{
@@ -544,6 +547,8 @@ func (r *controllerResource) Configure(ctx context.Context, req resource.Configu
 // Metadata returns the resource type name.
 func (r *controllerResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_controller"
+	// The identity includes API addresses, which change when HA units are added or removed.
+	resp.ResourceBehavior.MutableIdentity = true
 }
 
 // stateSetter interface allows setting attributes on either State or response objects
@@ -980,6 +985,21 @@ func (r *controllerResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 	state.AgentVersion = types.StringValue(agentVersion.String())
+
+	addresses, err = command.ControllerAPIAddresses(ctx, connInfo)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Controller API Addresses Read Error",
+			fmt.Sprintf("Unable to read controller %q API addresses: %s", state.Name.ValueString(), err),
+		)
+		return
+	}
+	apiAddresses, addressDiags := types.ListValueFrom(ctx, types.StringType, addresses)
+	resp.Diagnostics.Append(addressDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	state.APIAddresses = apiAddresses
 
 	cfg, diags := newConfigFromModelConfigAPI(ctx, controllerConfig, state.ControllerConfig)
 	resp.Diagnostics.Append(diags...)

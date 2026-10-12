@@ -104,7 +104,7 @@ resource "juju_controller" "this" {
 
 ### Read-Only
 
-- `api_addresses` (List of String) API addresses of the controller.
+- `api_addresses` (List of String) API addresses of the controller, including HA units. Refreshed from the controller on subsequent plans and applies once the units are ready. Addresses include the API port.
 - `ca_cert` (String) CA certificate for the controller.
 - `controller_uuid` (String) The UUID of the controller.
 - `id` (String) The ID of this resource.
