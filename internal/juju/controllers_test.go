@@ -12,12 +12,96 @@ import (
 	"testing"
 
 	"github.com/juju/juju/api/jujuclient"
+	"github.com/juju/juju/core/network"
 	"github.com/juju/juju/juju/osenv"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
 
 var jujuDataHomeLock sync.Mutex
+
+func TestControllerAPIAddresses(t *testing.T) {
+	tests := []struct {
+		name             string
+		hostPorts        []network.MachineHostPorts
+		connectedAddress string
+		want             []string
+		wantError        bool
+	}{
+		{
+			name: "all HA endpoints sorted and deduplicated",
+			hostPorts: []network.MachineHostPorts{
+				network.NewMachineHostPorts(17070, "10.0.0.3", "2001:db8::3"),
+				network.NewMachineHostPorts(17070, "10.0.0.1", "controller.example.com"),
+				network.NewMachineHostPorts(17070, "10.0.0.2", "10.0.0.1"),
+			},
+			want: []string{"10.0.0.1:17070", "10.0.0.2:17070", "10.0.0.3:17070", "[2001:db8::3]:17070", "controller.example.com:17070"},
+		},
+		{
+			name: "single controller with nondefault port",
+			hostPorts: []network.MachineHostPorts{
+				network.NewMachineHostPorts(17777, "10.0.0.1"),
+			},
+			want: []string{"10.0.0.1:17777"},
+		},
+		{
+			name: "connected address combined with advertised endpoints",
+			hostPorts: []network.MachineHostPorts{
+				network.NewMachineHostPorts(17070, "10.0.0.3"),
+			},
+			connectedAddress: "10.0.0.1:17070",
+			want:             []string{"10.0.0.1:17070", "10.0.0.3:17070"},
+		},
+		{
+			name: "connected address already advertised",
+			hostPorts: []network.MachineHostPorts{
+				network.NewMachineHostPorts(17070, "10.0.0.1"),
+			},
+			connectedAddress: "10.0.0.1:17070",
+			want:             []string{"10.0.0.1:17070"},
+		},
+		{
+			name:             "connected IPv6 address without advertised endpoints",
+			connectedAddress: "[2001:db8::1]:17777",
+			want:             []string{"[2001:db8::1]:17777"},
+		},
+		{
+			name: "connected address retained when advertised endpoints are unusable",
+			hostPorts: []network.MachineHostPorts{
+				network.NewMachineHostPorts(17070, "127.0.0.1", "fe80::1"),
+			},
+			connectedAddress: "127.0.0.1:17070",
+			want:             []string{"127.0.0.1:17070"},
+		},
+		{
+			name: "unusable endpoints excluded",
+			hostPorts: []network.MachineHostPorts{
+				network.NewMachineHostPorts(17070, "127.0.0.1", "::1", "169.254.1.1", "fe80::1", "10.0.0.1"),
+			},
+			want: []string{"10.0.0.1:17070"},
+		},
+		{name: "no endpoints", wantError: true},
+		{
+			name: "only unusable endpoints",
+			hostPorts: []network.MachineHostPorts{
+				network.NewMachineHostPorts(17070, "127.0.0.1", "fe80::1"),
+			},
+			wantError: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			addresses, err := controllerAPIAddresses(test.hostPorts, test.connectedAddress)
+			if test.wantError {
+				assert.EqualError(t, err, "controller has no usable API addresses")
+				assert.Nil(t, addresses)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, test.want, addresses)
+		})
+	}
+}
 
 func TestConvertToCloudAuthTypes(t *testing.T) {
 	tests := []struct {

@@ -121,6 +121,45 @@ func (c *MockJujuCommandConfigCall) DoAndReturn(f func(context.Context, *juju.Co
 	return c
 }
 
+// ControllerAPIAddresses mocks base method.
+func (m *MockJujuCommand) ControllerAPIAddresses(ctx context.Context, connInfo *juju.ControllerConnectionInformation) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ControllerAPIAddresses", ctx, connInfo)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ControllerAPIAddresses indicates an expected call of ControllerAPIAddresses.
+func (mr *MockJujuCommandMockRecorder) ControllerAPIAddresses(ctx, connInfo any) *MockJujuCommandControllerAPIAddressesCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ControllerAPIAddresses", reflect.TypeOf((*MockJujuCommand)(nil).ControllerAPIAddresses), ctx, connInfo)
+	return &MockJujuCommandControllerAPIAddressesCall{Call: call}
+}
+
+// MockJujuCommandControllerAPIAddressesCall wrap *gomock.Call
+type MockJujuCommandControllerAPIAddressesCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockJujuCommandControllerAPIAddressesCall) Return(arg0 []string, arg1 error) *MockJujuCommandControllerAPIAddressesCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockJujuCommandControllerAPIAddressesCall) Do(f func(context.Context, *juju.ControllerConnectionInformation) ([]string, error)) *MockJujuCommandControllerAPIAddressesCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockJujuCommandControllerAPIAddressesCall) DoAndReturn(f func(context.Context, *juju.ControllerConnectionInformation) ([]string, error)) *MockJujuCommandControllerAPIAddressesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // ControllerVersion mocks base method.
 func (m *MockJujuCommand) ControllerVersion(ctx context.Context, connInfo *juju.ControllerConnectionInformation) (version.Number, error) {
 	m.ctrl.T.Helper()

@@ -312,6 +312,23 @@ terraform apply -invoke=action.juju_enable_ha.this
 
 Terraform will execute the `juju_enable_ha` action and ensure the controller has the requested number of units.
 
+The action requests the additional units but does not wait for them to become ready
+or update the controller resource's state. Once the new units are ready, run
+`terraform apply` again. The controller resource refreshes `api_addresses` from
+the controller's advertised API endpoints, including the new HA units, so
+resources referencing this attribute can use the updated addresses. Removed endpoints
+are also reflected on subsequent refreshes.
+
+To update only Terraform state and outputs, without changing downstream resources,
+run `terraform apply -refresh-only` instead.
+
+```{note}
+`api_addresses` contains endpoints with ports (for example, `10.0.0.1:17070`
+or `[2001:db8::1]:17070`), not bare IP addresses. It reflects the endpoints
+advertised by Juju, which may also include DNS names or load-balancer endpoints.
+The refreshed list is sorted and deduplicated.
+```
+
 To scale out the number of units after HA is enabled, update the `units` value in your `juju_enable_ha` action and run the `terraform apply -invoke=action.juju_enable_ha.this` command again. The number of units must always be an odd number.
 
 ```{note}

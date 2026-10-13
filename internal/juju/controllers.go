@@ -24,6 +24,7 @@ import (
 	controllerapi "github.com/juju/juju/api/controller/controller"
 	"github.com/juju/juju/api/jujuclient"
 	jujucloud "github.com/juju/juju/cloud"
+	"github.com/juju/juju/core/network"
 	"github.com/juju/juju/core/semversion"
 	"github.com/juju/juju/environs/config"
 	"github.com/juju/juju/juju/osenv"
@@ -392,6 +393,42 @@ func (d *DefaultJujuCommand) UpdateConfig(
 	}
 
 	return nil
+}
+
+// ControllerAPIAddresses retrieves the advertised API endpoints and the address used to connect.
+func (d *DefaultJujuCommand) ControllerAPIAddresses(
+	ctx context.Context,
+	connInfo *ControllerConnectionInformation,
+) ([]string, error) {
+	connr, err := connector.NewSimple(connector.SimpleConfig{
+		ControllerAddresses: connInfo.Addresses,
+		CACert:              connInfo.CACert,
+		Username:            connInfo.Username,
+		Password:            connInfo.Password,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := connr.Connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	return controllerAPIAddresses(conn.APIHostPorts(), conn.Addr().Host)
+}
+
+func controllerAPIAddresses(hostPorts []network.MachineHostPorts, connectedAddress string) ([]string, error) {
+	addresses := network.CollapseToHostPorts(hostPorts).FilterUnusable().Unique().Strings()
+	if connectedAddress != "" {
+		addresses = append(addresses, connectedAddress)
+	}
+	if len(addresses) == 0 {
+		return nil, fmt.Errorf("controller has no usable API addresses")
+	}
+	slices.Sort(addresses)
+	return slices.Compact(addresses), nil
 }
 
 // ControllerVersion retrieves the controller's agent version.
