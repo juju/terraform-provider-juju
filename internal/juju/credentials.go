@@ -32,6 +32,7 @@ type CreateCredentialInput struct {
 type CreateCredentialResponse struct {
 	CloudCredential jujucloud.Credential
 	CloudName       string
+	Owner           string
 }
 
 // ListCredentialResponse is the response from listing credentials.
@@ -43,6 +44,7 @@ type ListCredentialResponse struct {
 // ReadCredentialInput contains the parameters for reading a credential.
 type ReadCredentialInput struct {
 	Name                 string
+	Owner                string
 	ClientCredential     bool
 	CloudName            string
 	ControllerCredential bool
@@ -51,6 +53,7 @@ type ReadCredentialInput struct {
 // ReadCredentialResponse contains the credential returned by a read request.
 type ReadCredentialResponse struct {
 	CloudCredential jujucloud.Credential
+	Owner           string
 }
 
 // UpdateCredentialInput contains the parameters for updating a credential.
@@ -61,6 +64,12 @@ type UpdateCredentialInput struct {
 	CloudName            string
 	ControllerCredential bool
 	Name                 string
+	Owner                string
+}
+
+// UpdateCredentialResponse contains the owner of the updated controller credential.
+type UpdateCredentialResponse struct {
+	Owner string
 }
 
 // DestroyCredentialInput contains the parameters for deleting a credential.
@@ -69,6 +78,7 @@ type DestroyCredentialInput struct {
 	CloudName            string
 	ControllerCredential bool
 	Name                 string
+	Owner                string
 }
 
 func newCredentialsClient(sc SharedClient) *credentialsClient {
@@ -85,6 +95,14 @@ func GetCloudCredentialTag(cloudName, currentUser, name string) (*names.CloudCre
 	}
 	cloudCredentialTag := names.NewCloudCredentialTag(id)
 	return &cloudCredentialTag, nil
+}
+
+func checkCredentialOwner(owner, currentUser, cloudName, credentialName string) error {
+	if owner != "" && owner != currentUser {
+		return fmt.Errorf("credential %q on cloud %q belongs to Juju user %q, but the authenticated user is %q; authenticate as %q to manage this credential",
+			credentialName, cloudName, owner, currentUser, owner)
+	}
+	return nil
 }
 
 // Based on:
@@ -173,7 +191,11 @@ func (c *credentialsClient) CreateCredential(ctx context.Context, input CreateCr
 		}
 	}
 
-	return &CreateCredentialResponse{CloudCredential: cloudCredential, CloudName: cloudName}, nil
+	response := &CreateCredentialResponse{CloudCredential: cloudCredential, CloudName: cloudName}
+	if input.ControllerCredential {
+		response.Owner = currentUser
+	}
+	return response, nil
 }
 
 // ListClientCredentials lists all credentials on the client.
@@ -234,6 +256,11 @@ func (c *credentialsClient) ReadCredential(ctx context.Context, input ReadCreden
 	}
 	defer func() { _ = conn.Close() }()
 
+	currentUser := getCurrentJujuUser(conn)
+	if err := checkCredentialOwner(input.Owner, currentUser, cloudName, credentialName); err != nil {
+		return nil, err
+	}
+
 	client := cloudapi.NewClient(conn)
 
 	var clientCredentialFound jujucloud.Credential
@@ -252,9 +279,13 @@ func (c *credentialsClient) ReadCredential(ctx context.Context, input ReadCreden
 			return nil, err
 		}
 
+		found := false
 		for _, content := range credentialContents {
 			if content.Error != nil {
-				continue
+				return nil, errors.Annotatef(content.Error, "reading credential %q on cloud %q for Juju user %q", credentialName, cloudName, currentUser)
+			}
+			if content.Result == nil {
+				return nil, fmt.Errorf("missing result when reading credential %q on cloud %q for Juju user %q", credentialName, cloudName, currentUser)
 			}
 			remoteCredential := content.Result.Content
 			if remoteCredential.Name == credentialName {
@@ -264,8 +295,12 @@ func (c *credentialsClient) ReadCredential(ctx context.Context, input ReadCreden
 					remoteCredential.Attributes,
 					false, //  CredentialContents does not provides this field
 				)
+				found = true
 				break
 			}
+		}
+		if !found {
+			return nil, errors.NotFoundf("credential %q on cloud %q for Juju user %q", credentialName, cloudName, currentUser)
 		}
 	}
 
@@ -280,6 +315,7 @@ func (c *credentialsClient) ReadCredential(ctx context.Context, input ReadCreden
 	if controllerCredential {
 		return &ReadCredentialResponse{
 			CloudCredential: controllerCredentialFound,
+			Owner:           currentUser,
 		}, nil
 	}
 
@@ -293,34 +329,36 @@ func (c *credentialsClient) ReadCredential(ctx context.Context, input ReadCreden
 }
 
 // UpdateCredential updates an existing credential.
-func (c *credentialsClient) UpdateCredential(ctx context.Context, input UpdateCredentialInput) error {
+func (c *credentialsClient) UpdateCredential(ctx context.Context, input UpdateCredentialInput) (*UpdateCredentialResponse, error) {
 	if !input.ControllerCredential && !input.ClientCredential {
 		// Just in case none of them are set
-		return fmt.Errorf("controller_credential or/and client_credential must be set to true")
+		return nil, fmt.Errorf("controller_credential or/and client_credential must be set to true")
 	}
 
 	credentialName := input.Name
 	if !names.IsValidCloudCredentialName(credentialName) {
-		return errors.Errorf("%q is not a valid credential name", credentialName)
+		return nil, errors.Errorf("%q is not a valid credential name", credentialName)
 	}
 
 	cloudName := input.CloudName
 
-	if err := c.ValidateCredentialForCloud(ctx, cloudName, input.AuthType); err != nil {
-		return err
-	}
-
 	conn, err := c.GetConnection(ctx, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() { _ = conn.Close() }()
 
 	currentUser := getCurrentJujuUser(conn)
+	if err := checkCredentialOwner(input.Owner, currentUser, cloudName, credentialName); err != nil {
+		return nil, err
+	}
+	if err := c.ValidateCredentialForCloud(ctx, cloudName, input.AuthType); err != nil {
+		return nil, err
+	}
 
 	cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	cloudCredential := jujucloud.NewNamedCredential(
@@ -332,7 +370,7 @@ func (c *credentialsClient) UpdateCredential(ctx context.Context, input UpdateCr
 
 	if input.ClientCredential {
 		if err := updateClientCredential(cloudName, credentialName, cloudCredential); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -340,11 +378,15 @@ func (c *credentialsClient) UpdateCredential(ctx context.Context, input UpdateCr
 		client := cloudapi.NewClient(conn)
 
 		if _, err := client.UpdateCredentialsCheckModels(ctx, *cloudCredTag, cloudCredential); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	response := &UpdateCredentialResponse{}
+	if input.ControllerCredential {
+		response.Owner = currentUser
+	}
+	return response, nil
 }
 
 func getExistingClientCredentials() (map[string]jujucloud.CloudCredential, error) {
@@ -393,9 +435,12 @@ func (c *credentialsClient) DestroyCredential(ctx context.Context, input Destroy
 	}
 	defer func() { _ = conn.Close() }()
 
-	client := cloudapi.NewClient(conn)
-
 	currentUser := getCurrentJujuUser(conn)
+	if err := checkCredentialOwner(input.Owner, currentUser, cloudName, credentialName); err != nil {
+		return err
+	}
+
+	client := cloudapi.NewClient(conn)
 
 	cloudCredTag, err := GetCloudCredentialTag(cloudName, currentUser, credentialName)
 	if err != nil {

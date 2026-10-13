@@ -50,6 +50,7 @@ type credentialResourceModel struct {
 	ClientCredential     types.Bool   `tfsdk:"client_credential"`
 	ControllerCredential types.Bool   `tfsdk:"controller_credential"`
 	Name                 types.String `tfsdk:"name"`
+	Owner                types.String `tfsdk:"owner"`
 
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
@@ -105,6 +106,10 @@ func (c *credentialResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Optional:    true,
 				Computed:    true,
 				Default:     booldefault.StaticBool(true),
+			},
+			"owner": schema.StringAttribute{
+				Description: "The authenticated Juju user who owns the controller credential. Subsequent operations must use this user. For existing state and imports, ownership is recorded after the first successful refresh. Client-only credentials have no owner.",
+				Computed:    true,
 			},
 			"name": schema.StringAttribute{
 				Description: "The name to be assigned to the credential. Changing this value will cause the" +
@@ -186,6 +191,7 @@ func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequ
 	c.trace(fmt.Sprintf("created credential resource %q", credentialName))
 
 	data.ID = types.StringValue(newCredentialIDFrom(credentialName, response.CloudName, clientCredential, controllerCredential))
+	data.Owner = credentialOwnerValue(response.Owner)
 
 	// Write the state data into the Response.State
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -220,6 +226,7 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 		CloudName:            cloudName,
 		ControllerCredential: controllerCredential,
 		Name:                 credentialName,
+		Owner:                data.Owner.ValueString(),
 	})
 	if err != nil {
 		// TODO (cderici): call resp.State.RemoveResource() if NotFound
@@ -227,6 +234,7 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 	c.trace(fmt.Sprintf("read credential resource %q", credentialName))
+	data.Owner = credentialOwnerValue(response.Owner)
 
 	// cloud
 	cloud, errDiag := newCredentialCloudFromCloudName(ctx, cloudName, resp.Diagnostics)
@@ -300,6 +308,8 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 		data.ClientCredential.Equal(state.ClientCredential) &&
 		data.ControllerCredential.Equal(state.ControllerCredential) &&
 		data.Attributes.Equal(state.Attributes) {
+		data.Owner = state.Owner
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 		return
 	}
 
@@ -325,13 +335,14 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 
 	// Perform external call to modify resource
-	err := c.client.Credentials.UpdateCredential(ctx, juju.UpdateCredentialInput{
+	response, err := c.client.Credentials.UpdateCredential(ctx, juju.UpdateCredentialInput{
 		Attributes:           newAttributes,
 		AuthType:             newAuthType,
 		ClientCredential:     newClientCredential,
 		CloudName:            cloudName,
 		ControllerCredential: newControllerCredential,
 		Name:                 credentialName,
+		Owner:                state.Owner.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update credential resource, got error: %s", err))
@@ -340,6 +351,7 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 	c.trace(fmt.Sprintf("updated credential resource %q", credentialName))
 
 	data.ID = types.StringValue(newCredentialIDFrom(credentialName, cloudName, newClientCredential, newControllerCredential))
+	data.Owner = credentialOwnerValue(response.Owner)
 
 	// Write the updated state data into the Response.State
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -377,6 +389,7 @@ func (c *credentialResource) Delete(ctx context.Context, req resource.DeleteRequ
 			CloudName:            cloudName,
 			ControllerCredential: controllerCredential,
 			Name:                 credentialName,
+			Owner:                data.Owner.ValueString(),
 		},
 	)
 	if err != nil {
@@ -454,6 +467,13 @@ func newCredentialCloudFromCloudName(ctx context.Context, cloudName string, diag
 
 func newCredentialIDFrom(credentialName string, cloudName string, clientCredential bool, controllerCredential bool) string {
 	return fmt.Sprintf("%s:%s:%t:%t", credentialName, cloudName, clientCredential, controllerCredential)
+}
+
+func credentialOwnerValue(owner string) types.String {
+	if owner == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(owner)
 }
 
 func retrieveCredentialDataFromID(idStr string, diag *diag.Diagnostics, method string) (string, string, bool, bool) {
