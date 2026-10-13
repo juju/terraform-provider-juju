@@ -395,7 +395,7 @@ func (d *DefaultJujuCommand) UpdateConfig(
 	return nil
 }
 
-// ControllerAPIAddresses retrieves the API endpoints advertised by the controller.
+// ControllerAPIAddresses retrieves the advertised API endpoints and the address used to connect.
 func (d *DefaultJujuCommand) ControllerAPIAddresses(
 	ctx context.Context,
 	connInfo *ControllerConnectionInformation,
@@ -416,16 +416,19 @@ func (d *DefaultJujuCommand) ControllerAPIAddresses(
 	}
 	defer conn.Close()
 
-	return controllerAPIAddresses(conn.APIHostPorts())
+	return controllerAPIAddresses(conn.APIHostPorts(), conn.Addr().Host)
 }
 
-func controllerAPIAddresses(hostPorts []network.MachineHostPorts) ([]string, error) {
+func controllerAPIAddresses(hostPorts []network.MachineHostPorts, connectedAddress string) ([]string, error) {
 	addresses := network.CollapseToHostPorts(hostPorts).FilterUnusable().Unique().Strings()
+	if connectedAddress != "" {
+		addresses = append(addresses, connectedAddress)
+	}
 	if len(addresses) == 0 {
-		return nil, fmt.Errorf("controller advertised no usable API addresses")
+		return nil, fmt.Errorf("controller has no usable API addresses")
 	}
 	slices.Sort(addresses)
-	return addresses, nil
+	return slices.Compact(addresses), nil
 }
 
 // ControllerVersion retrieves the controller's agent version.

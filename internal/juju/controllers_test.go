@@ -22,10 +22,11 @@ var jujuDataHomeLock sync.Mutex
 
 func TestControllerAPIAddresses(t *testing.T) {
 	tests := []struct {
-		name      string
-		hostPorts []network.MachineHostPorts
-		want      []string
-		wantError bool
+		name             string
+		hostPorts        []network.MachineHostPorts
+		connectedAddress string
+		want             []string
+		wantError        bool
 	}{
 		{
 			name: "all HA endpoints sorted and deduplicated",
@@ -42,6 +43,35 @@ func TestControllerAPIAddresses(t *testing.T) {
 				network.NewMachineHostPorts(17777, "10.0.0.1"),
 			},
 			want: []string{"10.0.0.1:17777"},
+		},
+		{
+			name: "connected address combined with advertised endpoints",
+			hostPorts: []network.MachineHostPorts{
+				network.NewMachineHostPorts(17070, "10.0.0.3"),
+			},
+			connectedAddress: "10.0.0.1:17070",
+			want:             []string{"10.0.0.1:17070", "10.0.0.3:17070"},
+		},
+		{
+			name: "connected address already advertised",
+			hostPorts: []network.MachineHostPorts{
+				network.NewMachineHostPorts(17070, "10.0.0.1"),
+			},
+			connectedAddress: "10.0.0.1:17070",
+			want:             []string{"10.0.0.1:17070"},
+		},
+		{
+			name:             "connected IPv6 address without advertised endpoints",
+			connectedAddress: "[2001:db8::1]:17777",
+			want:             []string{"[2001:db8::1]:17777"},
+		},
+		{
+			name: "connected address retained when advertised endpoints are unusable",
+			hostPorts: []network.MachineHostPorts{
+				network.NewMachineHostPorts(17070, "127.0.0.1", "fe80::1"),
+			},
+			connectedAddress: "127.0.0.1:17070",
+			want:             []string{"127.0.0.1:17070"},
 		},
 		{
 			name: "unusable endpoints excluded",
@@ -61,9 +91,10 @@ func TestControllerAPIAddresses(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			addresses, err := controllerAPIAddresses(test.hostPorts)
+			addresses, err := controllerAPIAddresses(test.hostPorts, test.connectedAddress)
 			if test.wantError {
-				assert.EqualError(t, err, "controller advertised no usable API addresses")
+				assert.EqualError(t, err, "controller has no usable API addresses")
+				assert.Nil(t, addresses)
 				return
 			}
 			assert.NoError(t, err)
