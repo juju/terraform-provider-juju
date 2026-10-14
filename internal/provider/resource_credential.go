@@ -289,49 +289,36 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
-	var data, state credentialResourceModel
+	var plan, state credentialResourceModel
 
-	// Read current state of resource prior to the update into the 'state' model
+	// Read current state of resource prior to the update
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Read desired state of resource after the update into the 'data' model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	// Read desired state of resource after the update
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Return early if no change
-	// No need to check the name and cloud.name because they can't be updated in-place without recreating the resource
-	// i.e. their change will force recreation of the resource (see the schema)
-	if data.AuthType.Equal(state.AuthType) &&
-		data.ClientCredential.Equal(state.ClientCredential) &&
-		data.ControllerCredential.Equal(state.ControllerCredential) &&
-		data.Attributes.Equal(state.Attributes) {
-		data.Owner = state.Owner
-		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 		return
 	}
 
 	// Extract fields from the ID for the UpdateCredentialInput call
 	// name & cloud.name fields
-	credentialName, cloudName, _, _ := retrieveCredentialDataFromID(data.ID.ValueString(), &resp.Diagnostics, "update")
+	credentialName, cloudName, _, _ := retrieveCredentialDataFromID(state.ID.ValueString(), &resp.Diagnostics, "update")
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// auth_type
-	newAuthType := data.AuthType.ValueString()
-
-	// client_credential & controller_credential
-	newClientCredential := data.ClientCredential.ValueBool()
-	newControllerCredential := data.ControllerCredential.ValueBool()
+	// Update changeable fields
+	state.AuthType = plan.AuthType
+	state.ClientCredential = plan.ClientCredential
+	state.ControllerCredential = plan.ControllerCredential
+	state.Attributes = plan.Attributes
 
 	// attributes
 	var newAttributes map[string]string
-	resp.Diagnostics.Append(data.Attributes.ElementsAs(ctx, &newAttributes, false)...)
+	resp.Diagnostics.Append(plan.Attributes.ElementsAs(ctx, &newAttributes, false)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -339,10 +326,10 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 	// Perform external call to modify resource
 	response, err := c.client.Credentials.UpdateCredential(ctx, juju.UpdateCredentialInput{
 		Attributes:           newAttributes,
-		AuthType:             newAuthType,
-		ClientCredential:     newClientCredential,
+		AuthType:             state.AuthType.ValueString(),
+		ClientCredential:     state.ClientCredential.ValueBool(),
 		CloudName:            cloudName,
-		ControllerCredential: newControllerCredential,
+		ControllerCredential: state.ControllerCredential.ValueBool(),
 		Name:                 credentialName,
 		Owner:                state.Owner.ValueString(),
 	})
@@ -352,11 +339,14 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 	c.trace(fmt.Sprintf("updated credential resource %q", credentialName))
 
-	data.ID = types.StringValue(newCredentialIDFrom(credentialName, cloudName, newClientCredential, newControllerCredential))
-	data.Owner = credentialOwnerValue(response.Owner)
+	state.ID = types.StringValue(newCredentialIDFrom(credentialName, cloudName, state.ClientCredential.ValueBool(), state.ControllerCredential.ValueBool()))
+	// The owner field can change during an update if the plan changes the resource
+	// from managing a controller credential to managing a client-only credential.
+	// This is pretty niche and ideally we can just remove management of client details in the future.
+	state.Owner = credentialOwnerValue(response.Owner)
 
 	// Write the updated state data into the Response.State
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 func (c *credentialResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
