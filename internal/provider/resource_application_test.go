@@ -1368,7 +1368,7 @@ func TestAcc_CustomResourcesFromPrivateRegistryWriteOnly(t *testing.T) {
 			{
 				// A custom resource from a private registry, with write-only
 				// credentials.
-				Config: testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "user", "pass", 1, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
+				Config: testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "user", "pass", 1, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f", false),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
 						fingerprintJuju3: "1b94afe549b44328f2350ae24633b31265a01e466cf0469faa798acb9c637bea30c3c711f25937795eff34d2f920e074",
@@ -1387,13 +1387,13 @@ func TestAcc_CustomResourcesFromPrivateRegistryWriteOnly(t *testing.T) {
 			},
 			{
 				// Unchanged credentials and version: no perpetual diff.
-				Config:   testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "user", "pass", 1, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
+				Config:   testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "user", "pass", 1, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f", false),
 				PlanOnly: true,
 			},
 			{
 				// Bumping registry_credentials_wo_version re-sends the
 				// credentials to Juju.
-				Config: testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "user2", "pass2", 2, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
+				Config: testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "user2", "pass2", 2, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f", false),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectResourceAction(appResourceFullName, plancheck.ResourceActionUpdate),
@@ -1415,12 +1415,54 @@ func TestAcc_CustomResourcesFromPrivateRegistryWriteOnly(t *testing.T) {
 				// Changing the credentials (here: to empty strings) without
 				// bumping the version is invisible to Terraform: write-only
 				// values cannot be diffed, so the plan must be empty.
-				Config:   testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "", "", 2, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
+				Config:   testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "", "", 2, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f", false),
 				PlanOnly: true,
 			},
 			{
+				// An unrelated trust update must not replace existing image
+				// credentials with the empty write-only values from config.
+				Config: testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "", "", 2, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f", true),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(appResourceFullName, plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
+						fingerprintJuju3: "953991156cf1e0a601f52b2b2b16c7042ad13bf765655c024f384385306404b7eb30bf72bdfcfda3c570b076b3aa96dc",
+						fingerprintJuju4: "33d64f169e84ad1ba0f8ebcb6f5e8c1a135b85a9115b3f5c9f664b013b8facb46dfe0493402d4865e4eebc2843fbca15",
+						origin:           "upload",
+						revision:         "0",
+					}),
+					testAccCheckImagePullSecretCreated(ctx, appResourceFullName, modelName, "coredns", "user2", "pass2"),
+					resource.TestCheckResourceAttr(appResourceFullName, "trust", "true"),
+					resource.TestCheckResourceAttr(appResourceFullName, "registry_credentials_wo_version", "2"),
+					resource.TestCheckNoResourceAttr(appResourceFullName, "registry_credentials_wo"),
+				),
+			},
+			{
+				// A version bump must explicitly clear authentication even
+				// though both synthetic resource maps have empty credentials.
+				Config: testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "", "", 3, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f", true),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckApplicationResource(ctx, appResourceFullName, charmResourceChecks{
+						fingerprintJuju3: "591c30e2a2730c206d65771cfa2302c90a2c90b0860207d82f041d24b7c16409e35465d2be987c4bf562734b9e62f248",
+						fingerprintJuju4: "fc15a3374f0051849b218544ad39e3c6b6446d7ac411a9843c0f0f7102587219c1716dd4a217fbba1519b182e89cfda9",
+						origin:           "upload",
+						revision:         "0",
+					}),
+					resource.TestCheckResourceAttr(appResourceFullName, "registry_credentials_wo_version", "3"),
+				),
+			},
+			{
+				// Restore authentication before testing removal of the
+				// write-only attributes.
+				Config: testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "user2", "pass2", 4, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f", true),
+				Check:  testAccCheckImagePullSecretCreated(ctx, appResourceFullName, modelName, "coredns", "user2", "pass2"),
+			},
+			{
 				// Removed write-only registry credentials.
-				Config: testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "", "", 0, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"),
+				Config: testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "", "", 0, "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f", true),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectResourceAction(appResourceFullName, plancheck.ResourceActionUpdate),
@@ -2395,7 +2437,7 @@ resource "juju_application" "{{.AppName}}" {
 		})
 }
 
-func testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, username, password string, credentialsVersion int, resourceRevision string) string {
+func testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, username, password string, credentialsVersion int, resourceRevision string, trust bool) string {
 	return internaltesting.GetStringFromTemplateWithData(
 		"testAccResourceApplicationFromPrivateRegistryWO",
 		`
@@ -2423,6 +2465,8 @@ resource "juju_application" "{{.AppName}}" {
   registry_credentials_wo_version = {{.CredentialsVersion}}
   {{ end }}
 
+  trust = {{.Trust}}
+
   {{ if ne .ResourceParamRevision "" }}
   resources = {
     "coredns-image" = "{{.ResourceParamRevision}}"
@@ -2439,6 +2483,7 @@ resource "juju_application" "{{.AppName}}" {
 			"Password":              password,
 			"CredentialsVersion":    credentialsVersion,
 			"ResourceParamRevision": resourceRevision,
+			"Trust":                 trust,
 		})
 }
 

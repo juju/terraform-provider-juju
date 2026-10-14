@@ -143,6 +143,9 @@ resource "juju_application" "this" {
 	matched against OCI image URLs the same way as registry_credentials.
 
 	Requires registry_credentials_wo_version to be set; bump registry_credentials_wo_version to apply changes to these credentials.
+	Unrelated application updates preserve credentials for unchanged OCI image URLs, even if the supplied credentials are empty.
+	Changing an OCI image URL uses the currently supplied credentials. Removing both the write-only credentials and their version
+	re-sends configured OCI images without authentication, unless registry_credentials supplies replacement credentials.
 	Requires Terraform >= 1.11. (see [below for nested schema](#nestedatt--registry_credentials_wo))
 - `registry_credentials_wo_version` (Number) The version of registry_credentials_wo. Increment this value to trigger an update of the write-only registry credentials.
 - `resources` (Map of String) Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
