@@ -27,10 +27,10 @@ func credentialTestClient(t *testing.T, user string) (*credentialsClient, *MockC
 	return newCredentialsClient(shared), conn
 }
 
-// TestCredentialReadOwnership verifies that successful controller credential reads
+// TestReadCredential verifies that successful controller credential reads
 // return the authenticated owner for both legacy and owner-aware inputs. API errors,
 // missing results, and mismatched credential names must fail without returning a credential.
-func TestCredentialReadOwnership(t *testing.T) {
+func TestReadCredential(t *testing.T) {
 	content := params.CredentialContentResult{Result: &params.ControllerCredentialInfo{
 		Content: params.CredentialContent{
 			Name: "prod", Cloud: "openstack", AuthType: "userpass", Attributes: map[string]string{"password": "old"},
@@ -73,6 +73,17 @@ func TestCredentialReadOwnership(t *testing.T) {
 			require.Equal(t, "old", response.CloudCredential.Attributes()["password"])
 		})
 	}
+}
+
+func TestReadCredentialMismatchedOwner(t *testing.T) {
+	client, _ := credentialTestClient(t, "bob@external")
+
+	response, err := client.ReadCredential(context.Background(), ReadCredentialInput{
+		CloudName: "openstack", Name: "prod", Owner: "alice@external", ControllerCredential: true,
+	})
+
+	require.EqualError(t, err, `credential "prod" on cloud "openstack" belongs to Juju user "alice@external", but the authenticated user is "bob@external"; authenticate as "alice@external" to manage this credential`)
+	require.Nil(t, response)
 }
 
 // TestCredentialOwnerClientOnly verifies that creating, updating, and reading local
