@@ -80,6 +80,9 @@ const (
 	matched against OCI image URLs the same way as registry_credentials.
 
 	Requires registry_credentials_wo_version to be set; bump registry_credentials_wo_version to apply changes to these credentials.
+	Unrelated application updates preserve credentials for unchanged OCI image URLs, even if the supplied credentials are empty.
+	Changing an OCI image URL uses the currently supplied credentials. Removing both the write-only credentials and their version
+	re-sends configured OCI images without authentication, unless registry_credentials supplies replacement credentials.
 	Requires Terraform >= 1.11.
 `
 	resourceKeyMarkdownDescription = `
@@ -946,6 +949,24 @@ func createCharmResources(planResources map[string]string, imageRegistries map[s
 	return jujuResources, nil
 }
 
+func computeResourceUpdates(plan, state juju.CharmResources, credentialsVersionChanged bool) juju.CharmResources {
+	updates := make(juju.CharmResources)
+	for name, resource := range plan {
+		previous, exists := state[name]
+		// Numeric revisions must remain pinned during charm refreshes. Unchanged
+		// OCI images are already pinned in Juju; supplying their URL re-uploads them.
+		if resource.RevisionNumber != "" || !exists || resource != previous || credentialsVersionChanged {
+			updates[name] = resource
+		}
+	}
+	for name := range state {
+		if _, exists := plan[name]; !exists {
+			updates[name] = juju.CharmResource{RevisionNumber: "-1"}
+		}
+	}
+	return updates
+}
+
 func transformSizeToHumanizedFormat(size uint64) string {
 	// remove the decimal point and the trailing zero
 	formattedSize := strings.ReplaceAll(humanize.Bytes(size*humanize.MByte), ".0", "")
@@ -1324,17 +1345,13 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 
 	// The write-only registry_credentials_wo is always null in plan and state,
 	// so a credential change cannot be detected by comparing the two. Instead,
-	// a change to registry_credentials_wo_version forces the OCI image
-	// resources to be re-sent with the credentials read from config. When the
-	// version is unchanged, the same credentials are applied to both sides so
-	// that the comparison below is decided by revisions and image URLs alone.
+	// the same credentials are applied to both sides so that the comparison
+	// is decided by revisions and image URLs alone. Version changes, including
+	// removal, explicitly force OCI images to be re-sent.
+	credentialsVersionChanged := !plan.RegistryCredentialsWOVersion.Equal(state.RegistryCredentialsWOVersion)
 	stateRegistryCredentials := state.RegistryCredentials
 	if !plan.RegistryCredentialsWOVersion.IsNull() {
-		if plan.RegistryCredentialsWOVersion.Equal(state.RegistryCredentialsWOVersion) {
-			stateRegistryCredentials = planRegistryCredentials
-		} else {
-			stateRegistryCredentials = nil
-		}
+		stateRegistryCredentials = planRegistryCredentials
 	}
 
 	planResources, err := createCharmResources(planResourceRevisions, planRegistryCredentials)
@@ -1348,42 +1365,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	// if resources in the plan are equal to resources stored in the state,
-	// we pass on the resources specified in the plan, which tells the provider
-	// NOT to update resources, because we want resources fixed to those
-	// specified in the plan.
-	if planResources.Equal(stateResources) {
-		planResourceMap := make(map[string]string)
-		resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &planResourceMap, false)...)
-		updateApplicationInput.Resources = planResources
-	} else {
-		// what happens when the plan suddenly does not specify resource
-		// revisions, but state does.
-		for k, v := range planResources {
-			if stateResources[k] != v {
-				if updateApplicationInput.Resources == nil {
-					// initialize just in case
-					updateApplicationInput.Resources = make(juju.CharmResources)
-				}
-				updateApplicationInput.Resources[k] = v
-			}
-		}
-		// Check for any removed resources.
-		// Then, the resources get updated to the latest resource revision according to channel
-		for k := range stateResources {
-			if _, found := planResources[k]; found {
-				continue
-			}
-			if updateApplicationInput.Resources == nil {
-				// initialize the resources
-				updateApplicationInput.Resources = make(juju.CharmResources)
-			}
-			// Set resource revision to -1 gets the latest resource revision from CharmHub
-			updateApplicationInput.Resources[k] = juju.CharmResource{
-				RevisionNumber: "-1",
-			}
-		}
-	}
+	updateApplicationInput.Resources = computeResourceUpdates(planResources, stateResources, credentialsVersionChanged)
 
 	// Do not use .Equal() here as we should consider null constraints the same
 	// as empty-string constraints. Terraform considers them different, so will

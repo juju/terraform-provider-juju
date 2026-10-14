@@ -555,6 +555,17 @@ func (s *ApplicationSuite) TestPartialApplicationDeployError() {
 	s.Assert().ErrorAs(err, &ApplicationPartiallyCreatedError{})
 }
 
+func (s *ApplicationSuite) TestUpdateCharmAndResourcesWithoutChanges() {
+	defer s.setupMocks(s.T()).Finish()
+	client := s.getApplicationsClient()
+
+	err := client.UpdateCharmAndResources(s.T().Context(), &UpdateApplicationInput{
+		AppName:   "testapplication",
+		Resources: CharmResources{},
+	}, s.mockApplicationClient, nil, s.mockResourceAPIClient)
+	s.Require().NoError(err)
+}
+
 func (s *ApplicationSuite) TestComputeCharmIDChannel() {
 	revision := 94
 	tests := []struct {
