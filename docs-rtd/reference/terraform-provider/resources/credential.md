@@ -60,7 +60,7 @@ resource "juju_credential" "this" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-- `owner` (String) The authenticated Juju user who owns the controller credential. Subsequent operations must use this user. For existing state and imports, ownership is recorded after the first successful refresh. Client-only credentials have no owner.
+- `owner` (String) The authenticated Juju user who owns the controller credential. Subsequent operations must use this user. For existing state and imports, ownership is recorded after the first successful refresh. Client-only credentials (i.e. modifying the CLI store when client_credential is true) have no owner.
 
 <a id="nestedblock--cloud"></a>
 ### Nested Schema for `cloud`

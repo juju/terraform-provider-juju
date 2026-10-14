@@ -108,8 +108,10 @@ func (c *credentialResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Default:     booldefault.StaticBool(true),
 			},
 			"owner": schema.StringAttribute{
-				Description: "The authenticated Juju user who owns the controller credential. Subsequent operations must use this user. For existing state and imports, ownership is recorded after the first successful refresh. Client-only credentials have no owner.",
-				Computed:    true,
+				Description: "The authenticated Juju user who owns the controller credential." +
+					" Subsequent operations must use this user. For existing state and imports, ownership is recorded after the first successful refresh." +
+					" Client-only credentials (i.e. modifying the CLI store when client_credential is true) have no owner.",
+				Computed: true,
 			},
 			"name": schema.StringAttribute{
 				Description: "The name to be assigned to the credential. Changing this value will cause the" +
