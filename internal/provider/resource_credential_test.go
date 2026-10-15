@@ -20,7 +20,9 @@ func TestAcc_ResourceCredential(t *testing.T) {
 	token := "123abc"
 
 	resourceName := "juju_credential.test-credential"
-	resource.ParallelTest(t, resource.TestCase{
+	// Adding a localhost credential makes Juju's default credential ambiguous
+	// for concurrent tests that create models without an explicit credential.
+	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -61,7 +63,8 @@ func TestAcc_ResourceCredential_UpgradeProvider(t *testing.T) {
 	authType := "certificate"
 
 	resourceName := "juju_credential.test-credential"
-	resource.ParallelTest(t, resource.TestCase{
+	// Keep the extra localhost credential isolated from model-creation tests.
+	resource.Test(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
 
 		Steps: []resource.TestStep{
