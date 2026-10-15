@@ -12,6 +12,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/juju/juju/rpc/params"
 
 	"github.com/juju/terraform-provider-juju/internal/juju"
@@ -26,7 +27,9 @@ func TestAcc_ResourceCredential(t *testing.T) {
 	token := "123abc"
 
 	resourceName := "juju_credential.test-credential"
-	resource.ParallelTest(t, resource.TestCase{
+	// Adding a localhost credential makes Juju's default credential ambiguous
+	// for concurrent tests that create models without an explicit credential.
+	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: frameworkProviderFactories,
 		Steps: []resource.TestStep{
@@ -61,6 +64,54 @@ func TestAcc_ResourceCredential(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceCredential_RecreateAfterExternalDeletion(t *testing.T) {
+	if testingCloud != LXDCloudTesting {
+		t.Skip(t.Name() + " only runs with LXD")
+	}
+	credentialName := acctest.RandomWithPrefix("tf-test-credential")
+	authType := "certificate"
+	resourceName := "juju_credential.test-credential"
+	config := testAccResourceCredential(credentialName, authType)
+
+	// Keep the extra localhost credential isolated from model-creation tests.
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", credentialName),
+					resource.TestCheckResourceAttrSet(resourceName, "owner"),
+				),
+			},
+			{
+				PreConfig: func() {
+					err := TestClient.Credentials.DestroyCredential(t.Context(), juju.DestroyCredentialInput{
+						CloudName:            "localhost",
+						Name:                 credentialName,
+						ControllerCredential: true,
+					})
+					if err != nil {
+						t.Fatalf("failed to delete credential directly from controller: %v", err)
+					}
+				},
+				Config: config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionCreate),
+					},
+				},
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "name", credentialName),
+					resource.TestCheckResourceAttr(resourceName, "auth_type", authType),
+					resource.TestCheckResourceAttrSet(resourceName, "owner"),
+				),
+			},
+		},
+	})
+}
+
 func TestAcc_ResourceCredential_ErrorWhenAuthenticatedUserChanges(t *testing.T) {
 	SkipJAAS(t)
 	if testingCloud != LXDCloudTesting {
@@ -73,7 +124,8 @@ func TestAcc_ResourceCredential_ErrorWhenAuthenticatedUserChanges(t *testing.T) 
 	ownerConfig := testAccResourceCredentialWithUser(credentialName, userName, userPassword, false)
 	otherUserConfig := testAccResourceCredentialWithUser(credentialName, userName, userPassword, true)
 
-	resource.ParallelTest(t, resource.TestCase{
+	// Keep the extra localhost credential isolated from model-creation tests.
+	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
 			client := TestClient
@@ -129,7 +181,8 @@ func TestAcc_ResourceCredential_UpgradeProvider(t *testing.T) {
 	authType := "certificate"
 
 	resourceName := "juju_credential.test-credential"
-	resource.ParallelTest(t, resource.TestCase{
+	// Keep the extra localhost credential isolated from model-creation tests.
+	resource.Test(t, resource.TestCase{
 		PreCheck: func() { testAccPreCheck(t) },
 
 		Steps: []resource.TestStep{
