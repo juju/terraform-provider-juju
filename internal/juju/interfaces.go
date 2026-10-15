@@ -82,7 +82,6 @@ type SharedClient interface {
 	Warnf(msg string, additionalFields ...map[string]interface{})
 
 	JujuLogger() *jujuLoggerShim
-	WaitForResource() bool
 }
 
 // ClientAPIClient defines the subset of client API methods used by the provider.

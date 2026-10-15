@@ -57,10 +57,6 @@ var offeringControllersMapType = types.MapType{
 // acceptance testing.
 var frameworkProviderFactories map[string]func() (tfprotov6.ProviderServer, error)
 
-// frameworkProviderFactoriesNoResourceWait are used to instantiate the Framework provider during
-// acceptance testing but configures the provider to not wait for resources to be ready or destroyed.
-var frameworkProviderFactoriesNoResourceWait map[string]func() (tfprotov6.ProviderServer, error)
-
 // Provider makes a separate provider available for tests.
 // Note that testAccPreCheck needs to invoked before use.
 var Provider provider.Provider
@@ -79,22 +75,14 @@ var TestK8sClientset *kubernetes.Clientset
 var setupAccTestsOnce sync.Once
 
 func init() {
-	waitForResources := true
 	Provider = NewJujuProvider(
 		"dev",
 		ProviderConfiguration{
-			WaitForResources: waitForResources,
 		},
 	)
 
 	frameworkProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev", ProviderConfiguration{
-			WaitForResources: true,
-		})),
-	}
-	frameworkProviderFactoriesNoResourceWait = map[string]func() (tfprotov6.ProviderServer, error){
-		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev", ProviderConfiguration{
-			WaitForResources: false,
 		})),
 	}
 }
@@ -179,7 +167,7 @@ func jujuExternalHostname() string {
 
 func TestProviderConfigure(t *testing.T) {
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{})
 	confResp := configureProvider(t, jujuProvider)
 	assert.Equal(t, confResp.Diagnostics.HasError(), false)
 }
@@ -187,7 +175,7 @@ func TestProviderConfigure(t *testing.T) {
 func TestProviderConfigureUsernameFromEnv(t *testing.T) {
 	SkipJAAS(t)
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{})
 	userNameValue := "the-username"
 	t.Setenv(JujuUsernameEnvKey, userNameValue)
 
@@ -202,7 +190,7 @@ func TestProviderConfigureUsernameFromEnv(t *testing.T) {
 func TestProviderConfigurePasswordFromEnv(t *testing.T) {
 	SkipJAAS(t)
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{})
 	passwordValue := "the-password"
 	t.Setenv(JujuPasswordEnvKey, passwordValue)
 	confResp := configureProvider(t, jujuProvider)
@@ -216,7 +204,7 @@ func TestProviderConfigurePasswordFromEnv(t *testing.T) {
 func TestProviderConfigureClientIDAndSecretFromEnv(t *testing.T) {
 	SkipJAAS(t)
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{})
 	emptyValue := ""
 	t.Setenv(JujuUsernameEnvKey, emptyValue)
 	t.Setenv(JujuPasswordEnvKey, emptyValue)
@@ -259,7 +247,7 @@ func TestProviderConfigureAddresses(t *testing.T) {
 	testAccPreCheck(t)
 	os.Setenv("JUJU_CONNECTION_TIMEOUT", "1") // 1s timeout
 	defer os.Unsetenv("JUJU_CONNECTION_TIMEOUT")
-	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{})
 	// This IP is from a test network that should never be routed. https://www.rfc-editor.org/rfc/rfc5737#section-3
 	t.Setenv(JujuControllerEnvKey, "127.0.0.1:1")
 	confResp := configureProvider(t, jujuProvider)
@@ -283,7 +271,7 @@ func TestProviderConfigurex509FromEnv(t *testing.T) {
 		//https://github.com/golang/go/issues/52010
 		t.Skip("This test does not work on MacOS")
 	}
-	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{})
 	t.Setenv(JujuCACertEnvKey, invalidCA)
 	confResp := configureProvider(t, jujuProvider)
 	// This is a live test, expect that the client connection will fail.
@@ -296,7 +284,7 @@ func TestProviderConfigurex509FromEnv(t *testing.T) {
 
 func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
 	SkipJAAS(t)
-	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{})
 	//Set the CA to the invalid one above
 	//Juju will ignore the system trust store if we set the CA property
 	t.Setenv(JujuCACertEnvKey, invalidCA)
@@ -312,7 +300,7 @@ func TestProviderConfigurex509InvalidFromEnv(t *testing.T) {
 
 func TestProviderAllowsEmptyCACert(t *testing.T) {
 	SkipJAAS(t)
-	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{})
 	//Set the CA cert to be empty and check that the provider still tries to connect.
 	t.Setenv(JujuCACertEnvKey, "")
 	t.Setenv("JUJU_CA_CERT_FILE", "")
@@ -326,7 +314,7 @@ func TestProviderAllowsEmptyCACert(t *testing.T) {
 }
 
 func TestProviderSetWarnOnDeletionErrors(t *testing.T) {
-	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{})
 	t.Setenv(SkipFailedDeletionEnvKey, "false")
 	confResp := configureProvider(t, jujuProvider)
 	providerData, ok := confResp.ResourceData.(juju.ProviderData)
@@ -532,7 +520,7 @@ func TestProviderConfigureControllerModeWithoutConnectionDetails(t *testing.T) {
 	t.Setenv(JujuClientSecretEnvKey, "")
 	t.Setenv("PATH", "")
 
-	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{})
 	confResp := configureProviderWithModel(t, jujuProvider, jujuProviderModel{
 		ControllerMode:      types.BoolValue(true),
 		OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
@@ -549,7 +537,7 @@ func TestProviderConfigureControllerModeWithoutConnectionDetails(t *testing.T) {
 
 // This test verifies that when the controller-mode flag is set, connection details can be provided.
 func TestProviderConfigureControllerModeWithConnectionDetails(t *testing.T) {
-	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{})
 	confResp := configureProviderWithModel(t, jujuProvider, jujuProviderModel{
 		ControllerMode:      types.BoolValue(true),
 		OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
@@ -565,7 +553,7 @@ func TestProviderConfigureControllerModeWithConnectionDetails(t *testing.T) {
 }
 
 func TestProviderConfigureLazyAPIDoesNotConnect(t *testing.T) {
-	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{})
 	confResp := configureProviderWithModel(t, jujuProvider, jujuProviderModel{
 		LazyAPICheck:        types.BoolValue(true),
 		ControllerAddrs:     types.StringValue("bogus-controller:17070"),
@@ -645,7 +633,7 @@ func newConfigureRequest(t *testing.T, conf jujuProviderModel) provider.Configur
 
 func TestFrameworkProviderSchema(t *testing.T) {
 	testAccPreCheck(t)
-	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{WaitForResources: true})
+	jujuProvider := NewJujuProvider("dev", ProviderConfiguration{})
 	req := provider.SchemaRequest{}
 	resp := provider.SchemaResponse{}
 	jujuProvider.Schema(context.Background(), req, &resp)

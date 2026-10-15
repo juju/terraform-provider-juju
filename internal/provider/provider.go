@@ -136,25 +136,19 @@ var _ provider.ProviderWithActions = &jujuProvider{}
 
 // ProviderConfiguration contains optional provider setup hooks.
 type ProviderConfiguration struct {
-	WaitForResources bool
-	NewJujuCommand   func(string) (JujuCommand, error)
+	NewJujuCommand func(string) (JujuCommand, error)
 }
 
 // NewJujuProvider returns a framework style terraform provider.
 func NewJujuProvider(version string, config ProviderConfiguration) provider.Provider {
 	return &jujuProvider{
-		version:          version,
-		waitForResources: config.WaitForResources,
-		newJujuCommand:   config.NewJujuCommand,
+		version:        version,
+		newJujuCommand: config.NewJujuCommand,
 	}
 }
 
 type jujuProvider struct {
 	version string
-
-	// waitForResources is used to determine if the provider should wait for
-	// resources to be created/destroyed before proceeding.
-	waitForResources bool
 
 	// newJujuCommand returns the implementation of the JujuCommand interface based on the provided Juju binary
 	// to be used for controller management.
@@ -512,7 +506,7 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		ClientSecret:        data.ClientSecret.ValueString(),
 		IsLazyInstanciated:  lazyAPICheck,
 	}
-	client, err := juju.NewClient(ctx, controllerConfig, p.waitForResources)
+	client, err := juju.NewClient(ctx, controllerConfig)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create juju client, got error: %s", err))
 		return

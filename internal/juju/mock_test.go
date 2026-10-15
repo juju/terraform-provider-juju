@@ -712,44 +712,6 @@ func (c *MockSharedClientTracefCall) DoAndReturn(f func(string, ...map[string]an
 	return c
 }
 
-// WaitForResource mocks base method.
-func (m *MockSharedClient) WaitForResource() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitForResource")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// WaitForResource indicates an expected call of WaitForResource.
-func (mr *MockSharedClientMockRecorder) WaitForResource() *MockSharedClientWaitForResourceCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForResource", reflect.TypeOf((*MockSharedClient)(nil).WaitForResource))
-	return &MockSharedClientWaitForResourceCall{Call: call}
-}
-
-// MockSharedClientWaitForResourceCall wrap *gomock.Call
-type MockSharedClientWaitForResourceCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockSharedClientWaitForResourceCall) Return(arg0 bool) *MockSharedClientWaitForResourceCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockSharedClientWaitForResourceCall) Do(f func() bool) *MockSharedClientWaitForResourceCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSharedClientWaitForResourceCall) DoAndReturn(f func() bool) *MockSharedClientWaitForResourceCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Warnf mocks base method.
 func (m *MockSharedClient) Warnf(msg string, additionalFields ...map[string]any) {
 	m.ctrl.T.Helper()

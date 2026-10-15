@@ -238,8 +238,7 @@ func TestAcc_ResourceController(t *testing.T) {
 	frameworkProviderFactoriesWithMockJujuCommand := map[string]func() (tfprotov6.ProviderServer, error){
 		"juju": providerserver.NewProtocol6WithError(
 			NewJujuProvider("dev", ProviderConfiguration{
-				WaitForResources: false,
-				NewJujuCommand:   func(_ string) (JujuCommand, error) { return mockJujuCommand, nil },
+				NewJujuCommand: func(_ string) (JujuCommand, error) { return mockJujuCommand, nil },
 			}),
 		),
 	}
@@ -510,7 +509,6 @@ func TestAcc_ResourceControllerWithJujuBinary(t *testing.T) {
 	frameworkProviderFactoriesControllerMode := map[string]func() (tfprotov6.ProviderServer, error){
 		"juju": providerserver.NewProtocol6WithError(
 			NewJujuProvider("dev", ProviderConfiguration{
-				WaitForResources: false,
 				NewJujuCommand: func(binaryPath string) (JujuCommand, error) {
 					return juju.NewDefaultJujuCommand(binaryPath)
 				},

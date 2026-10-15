@@ -50,11 +50,9 @@ func main() {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 
-	waitForResources := true
 	if err := tf6server.Serve(
 		"registry.terraform.io/juju/juju",
 		providerserver.NewProtocol6(provider.NewJujuProvider(version, provider.ProviderConfiguration{
-			WaitForResources: waitForResources,
 			NewJujuCommand: func(binaryPath string) (provider.JujuCommand, error) {
 				return juju.NewDefaultJujuCommand(binaryPath)
 			},
