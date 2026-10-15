@@ -50,6 +50,7 @@ type credentialResourceModel struct {
 	ClientCredential     types.Bool   `tfsdk:"client_credential"`
 	ControllerCredential types.Bool   `tfsdk:"controller_credential"`
 	Name                 types.String `tfsdk:"name"`
+	Owner                types.String `tfsdk:"owner"`
 
 	// ID required by the testing framework
 	ID types.String `tfsdk:"id"`
@@ -105,6 +106,12 @@ func (c *credentialResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Optional:    true,
 				Computed:    true,
 				Default:     booldefault.StaticBool(true),
+			},
+			"owner": schema.StringAttribute{
+				Description: "The authenticated Juju user who owns the controller credential." +
+					" Subsequent operations must use this user. For existing state and imports, ownership is recorded after the first successful refresh." +
+					" Client-only credentials (i.e. modifying the CLI store when client_credential is true) have no owner.",
+				Computed: true,
 			},
 			"name": schema.StringAttribute{
 				Description: "The name to be assigned to the credential. Changing this value will cause the" +
@@ -186,6 +193,7 @@ func (c *credentialResource) Create(ctx context.Context, req resource.CreateRequ
 	c.trace(fmt.Sprintf("created credential resource %q", credentialName))
 
 	data.ID = types.StringValue(newCredentialIDFrom(credentialName, response.CloudName, clientCredential, controllerCredential))
+	data.Owner = credentialOwnerValue(response.Owner)
 
 	// Write the state data into the Response.State
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -220,6 +228,7 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 		CloudName:            cloudName,
 		ControllerCredential: controllerCredential,
 		Name:                 credentialName,
+		Owner:                data.Owner.ValueString(),
 	})
 	if err != nil {
 		// TODO (cderici): call resp.State.RemoveResource() if NotFound
@@ -227,6 +236,7 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 	c.trace(fmt.Sprintf("read credential resource %q", credentialName))
+	data.Owner = credentialOwnerValue(response.Owner)
 
 	// cloud
 	cloud, errDiag := newCredentialCloudFromCloudName(ctx, cloudName, resp.Diagnostics)
@@ -279,59 +289,49 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
-	var data, state credentialResourceModel
+	var plan, state credentialResourceModel
 
-	// Read current state of resource prior to the update into the 'state' model
+	// Read current state of resource prior to the update
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Read desired state of resource after the update into the 'data' model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	// Read desired state of resource after the update
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Return early if no change
-	// No need to check the name and cloud.name because they can't be updated in-place without recreating the resource
-	// i.e. their change will force recreation of the resource (see the schema)
-	if data.AuthType.Equal(state.AuthType) &&
-		data.ClientCredential.Equal(state.ClientCredential) &&
-		data.ControllerCredential.Equal(state.ControllerCredential) &&
-		data.Attributes.Equal(state.Attributes) {
 		return
 	}
 
 	// Extract fields from the ID for the UpdateCredentialInput call
 	// name & cloud.name fields
-	credentialName, cloudName, _, _ := retrieveCredentialDataFromID(data.ID.ValueString(), &resp.Diagnostics, "update")
+	credentialName, cloudName, _, _ := retrieveCredentialDataFromID(state.ID.ValueString(), &resp.Diagnostics, "update")
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// auth_type
-	newAuthType := data.AuthType.ValueString()
-
-	// client_credential & controller_credential
-	newClientCredential := data.ClientCredential.ValueBool()
-	newControllerCredential := data.ControllerCredential.ValueBool()
+	// Update changeable fields
+	state.AuthType = plan.AuthType
+	state.ClientCredential = plan.ClientCredential
+	state.ControllerCredential = plan.ControllerCredential
+	state.Attributes = plan.Attributes
 
 	// attributes
 	var newAttributes map[string]string
-	resp.Diagnostics.Append(data.Attributes.ElementsAs(ctx, &newAttributes, false)...)
+	resp.Diagnostics.Append(plan.Attributes.ElementsAs(ctx, &newAttributes, false)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// Perform external call to modify resource
-	err := c.client.Credentials.UpdateCredential(ctx, juju.UpdateCredentialInput{
+	response, err := c.client.Credentials.UpdateCredential(ctx, juju.UpdateCredentialInput{
 		Attributes:           newAttributes,
-		AuthType:             newAuthType,
-		ClientCredential:     newClientCredential,
+		AuthType:             state.AuthType.ValueString(),
+		ClientCredential:     state.ClientCredential.ValueBool(),
 		CloudName:            cloudName,
-		ControllerCredential: newControllerCredential,
+		ControllerCredential: state.ControllerCredential.ValueBool(),
 		Name:                 credentialName,
+		Owner:                state.Owner.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update credential resource, got error: %s", err))
@@ -339,10 +339,14 @@ func (c *credentialResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 	c.trace(fmt.Sprintf("updated credential resource %q", credentialName))
 
-	data.ID = types.StringValue(newCredentialIDFrom(credentialName, cloudName, newClientCredential, newControllerCredential))
+	state.ID = types.StringValue(newCredentialIDFrom(credentialName, cloudName, state.ClientCredential.ValueBool(), state.ControllerCredential.ValueBool()))
+	// The owner field can change during an update if the plan changes the resource
+	// from managing a controller credential to managing a client-only credential.
+	// This is pretty niche and ideally we can just remove management of client details in the future.
+	state.Owner = credentialOwnerValue(response.Owner)
 
 	// Write the updated state data into the Response.State
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 func (c *credentialResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -377,6 +381,7 @@ func (c *credentialResource) Delete(ctx context.Context, req resource.DeleteRequ
 			CloudName:            cloudName,
 			ControllerCredential: controllerCredential,
 			Name:                 credentialName,
+			Owner:                data.Owner.ValueString(),
 		},
 	)
 	if err != nil {
@@ -454,6 +459,13 @@ func newCredentialCloudFromCloudName(ctx context.Context, cloudName string, diag
 
 func newCredentialIDFrom(credentialName string, cloudName string, clientCredential bool, controllerCredential bool) string {
 	return fmt.Sprintf("%s:%s:%t:%t", credentialName, cloudName, clientCredential, controllerCredential)
+}
+
+func credentialOwnerValue(owner string) types.String {
+	if owner == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(owner)
 }
 
 func retrieveCredentialDataFromID(idStr string, diag *diag.Diagnostics, method string) (string, string, bool, bool) {
