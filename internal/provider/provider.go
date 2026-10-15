@@ -137,18 +137,22 @@ var _ provider.ProviderWithActions = &jujuProvider{}
 // ProviderConfiguration contains optional provider setup hooks.
 type ProviderConfiguration struct {
 	NewJujuCommand func(string) (JujuCommand, error)
+	// defaultDestroyTimeout applies when default_timeouts.delete is unset.
+	defaultDestroyTimeout time.Duration
 }
 
 // NewJujuProvider returns a framework style terraform provider.
 func NewJujuProvider(version string, config ProviderConfiguration) provider.Provider {
 	return &jujuProvider{
-		version:        version,
-		newJujuCommand: config.NewJujuCommand,
+		version:               version,
+		newJujuCommand:        config.NewJujuCommand,
+		defaultDestroyTimeout: config.defaultDestroyTimeout,
 	}
 }
 
 type jujuProvider struct {
-	version string
+	version               string
+	defaultDestroyTimeout time.Duration
 
 	// newJujuCommand returns the implementation of the JujuCommand interface based on the provided Juju binary
 	// to be used for controller management.
@@ -468,6 +472,11 @@ func (p *jujuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	resp.Diagnostics.Append(timeoutDiags...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	if data.DefaultTimeouts.IsNull() || data.DefaultTimeouts.IsUnknown() ||
+		data.DefaultTimeouts.Attributes()["delete"].IsNull() {
+		defaultTimeouts.delete = p.defaultDestroyTimeout
 	}
 
 	providerData := juju.ProviderData{

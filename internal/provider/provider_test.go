@@ -75,15 +75,11 @@ var TestK8sClientset *kubernetes.Clientset
 var setupAccTestsOnce sync.Once
 
 func init() {
-	Provider = NewJujuProvider(
-		"dev",
-		ProviderConfiguration{
-		},
-	)
+	config := ProviderConfiguration{defaultDestroyTimeout: 5 * time.Minute}
+	Provider = NewJujuProvider("dev", config)
 
 	frameworkProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
-		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev", ProviderConfiguration{
-		})),
+		"juju": providerserver.NewProtocol6WithError(NewJujuProvider("dev", config)),
 	}
 }
 
@@ -568,6 +564,82 @@ func TestProviderConfigureLazyAPIDoesNotConnect(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, providerData.Client)
 	assert.True(t, providerData.Client.IsLazyInstantiated)
+}
+
+func TestProviderConfigureDefaultDeleteTimeout(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider provider.Provider
+		timeouts types.Object
+		want     time.Duration
+	}{
+		{
+			name:     "production default is unchanged",
+			provider: NewJujuProvider("dev", ProviderConfiguration{}),
+			timeouts: types.ObjectNull(defaultTimeoutsObjectType.AttrTypes),
+		},
+		{
+			name:     "acceptance provider uses five minutes",
+			provider: Provider,
+			timeouts: types.ObjectNull(defaultTimeoutsObjectType.AttrTypes),
+			want:     5 * time.Minute,
+		},
+		{
+			name:     "empty timeout block uses five minutes",
+			provider: Provider,
+			timeouts: mustDefaultTimeoutsObject(t, defaultTimeoutsModel{}),
+			want:     5 * time.Minute,
+		},
+		{
+			name:     "explicit delete timeout takes precedence",
+			provider: Provider,
+			timeouts: mustDefaultTimeoutsObject(t, defaultTimeoutsModel{
+				Delete: types.StringValue("10m"),
+			}),
+			want: 10 * time.Minute,
+		},
+		{
+			name:     "explicit zero delete timeout takes precedence",
+			provider: Provider,
+			timeouts: mustDefaultTimeoutsObject(t, defaultTimeoutsModel{
+				Delete: types.StringValue("0s"),
+			}),
+		},
+		{
+			name:     "other timeouts do not suppress delete default",
+			provider: Provider,
+			timeouts: mustDefaultTimeoutsObject(t, defaultTimeoutsModel{
+				Create: types.StringValue("45m"),
+				Update: types.StringValue("20m"),
+				Read:   types.StringValue("2m"),
+			}),
+			want: 5 * time.Minute,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := configureProviderWithModel(t, tt.provider, jujuProviderModel{
+				LazyAPICheck:        types.BoolValue(true),
+				ControllerAddrs:     types.StringValue("bogus-controller:17070"),
+				UserName:            types.StringValue("bogus-user"),
+				Password:            types.StringValue("bogus-password"),
+				OfferingControllers: types.MapNull(offeringControllersMapType.ElemType),
+				DefaultTimeouts:     tt.timeouts,
+			})
+			require.False(t, resp.Diagnostics.HasError(), "unexpected configure error: %v", resp.Diagnostics.Errors())
+			for _, data := range []any{resp.ResourceData, resp.DataSourceData, resp.ActionData} {
+				providerData, ok := data.(juju.ProviderData)
+				require.True(t, ok)
+				assert.Equal(t, tt.want, providerData.Config.DefaultDeleteTimeout)
+				timeouts, diags := parseDefaultTimeouts(tt.timeouts)
+				require.False(t, diags.HasError())
+				assert.Equal(t, timeouts.create, providerData.Config.DefaultCreateTimeout)
+				assert.Equal(t, timeouts.update, providerData.Config.DefaultUpdateTimeout)
+				assert.Equal(t, timeouts.read, providerData.Config.DefaultReadTimeout)
+			}
+		})
+	}
 }
 
 func TestAccLazyAPIAllowsJAASResourceValidation(t *testing.T) {
