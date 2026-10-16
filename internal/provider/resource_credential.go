@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -231,7 +232,11 @@ func (c *credentialResource) Read(ctx context.Context, req resource.ReadRequest,
 		Owner:                data.Owner.ValueString(),
 	})
 	if err != nil {
-		// TODO (cderici): call resp.State.RemoveResource() if NotFound
+		if errors.Is(err, juju.CredentialNotFoundError) {
+			resp.Diagnostics.AddWarning("Credential removed from state", fmt.Sprintf("The credential was removed from Terraform state after a read error: %s", err))
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read credential resource, got error: %s", err))
 		return
 	}

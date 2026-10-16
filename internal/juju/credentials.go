@@ -11,8 +11,20 @@ import (
 	cloudapi "github.com/juju/juju/api/client/cloud"
 	"github.com/juju/juju/api/jujuclient"
 	jujucloud "github.com/juju/juju/cloud"
+	"github.com/juju/juju/rpc/params"
 	"github.com/juju/names/v6"
 )
+
+// CredentialNotFoundError is returned when a credential cannot be found.
+var CredentialNotFoundError = errors.ConstError("credential-not-found")
+
+// NewCredentialNotFoundError returns a credential-specific error preserving the underlying cause.
+func NewCredentialNotFoundError(err error, cloudName, credentialName, owner string) error {
+	return errors.WithType(
+		errors.Annotatef(err, "reading credential %q on cloud %q for Juju user %q", credentialName, cloudName, owner),
+		CredentialNotFoundError,
+	)
+}
 
 type credentialsClient struct {
 	SharedClient
@@ -276,12 +288,18 @@ func (c *credentialsClient) ReadCredential(ctx context.Context, input ReadCreden
 	if controllerCredential {
 		credentialContents, err := client.CredentialContents(ctx, cloudName, credentialName, true)
 		if err != nil {
+			if params.IsCodeNotFound(err) || errors.Is(err, errors.NotFound) {
+				return nil, NewCredentialNotFoundError(err, cloudName, credentialName, currentUser)
+			}
 			return nil, err
 		}
 
 		found := false
 		for _, content := range credentialContents {
 			if content.Error != nil {
+				if params.IsCodeNotFound(content.Error) {
+					return nil, NewCredentialNotFoundError(content.Error, cloudName, credentialName, currentUser)
+				}
 				return nil, errors.Annotatef(content.Error, "reading credential %q on cloud %q for Juju user %q", credentialName, cloudName, currentUser)
 			}
 			if content.Result == nil {
@@ -300,7 +318,7 @@ func (c *credentialsClient) ReadCredential(ctx context.Context, input ReadCreden
 			}
 		}
 		if !found {
-			return nil, errors.NotFoundf("credential %q on cloud %q for Juju user %q", credentialName, cloudName, currentUser)
+			return nil, NewCredentialNotFoundError(errors.NotFoundf("credential"), cloudName, credentialName, currentUser)
 		}
 	}
 
