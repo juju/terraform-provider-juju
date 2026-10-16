@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Test integration diagnostics collector
+        run: bash tools/collect_integration_diagnostics_test.sh
       - uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
