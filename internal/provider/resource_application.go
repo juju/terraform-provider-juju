@@ -14,6 +14,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -68,9 +69,25 @@ const (
 	If the charm resource requires authentication, supply a username and password that will be passed to the Juju API and added to the Kubernetes cluster.
 
 	The registry credentials will only be used if the URL of the registry is a partial match for the OCI image URL specified in the charm resources.
-	An OCI image URL is considered a match for a registry URL if the URL without the OCI image tag matches the registry URL. For example, 
-	a charm OCI resource specified as "registry.example.com:5000/path/image:tag" will match a registry entry with key "registry.example.com:5000/path" 
+	An OCI image URL is considered a match for a registry URL if the URL without the OCI image tag matches the registry URL. For example,
+	a charm OCI resource specified as "registry.example.com:5000/path/image:tag" will match a registry entry with key "registry.example.com:5000/path"
 	but not "registry.example.com:5000" nor "registry.example.com".
+
+	Conflicts with registry_credentials_wo; prefer registry_credentials_wo for credentials that should not be stored in Terraform state.
+`
+	imageRegistriesWOMarkdownDescription = `
+	The write-only equivalent of registry_credentials. The credentials are never persisted to Terraform state. The map key is the registry URL,
+	matched against OCI image URLs the same way as registry_credentials.
+
+	Requires registry_credentials_wo_version to be set; bump registry_credentials_wo_version to apply changes to these credentials.
+	Changing other application fields like "config" or "trust" will preserve the existing credentials provided that the OCI image registry URLs
+	and pinned images remain the same, even if the supplied credentials are empty. This is useful for scenarios where you stop supplying the 
+	credential to the plan or if you use [ephemeral](https://developer.hashicorp.com/terraform/language/manage-sensitive-data/ephemeral) 
+	resources.
+
+	Be cautious when changing the OCI image URL or a pinned image as this will send the currently supplied credentials. If the supplied 
+	credentials are empty, OCI images will be configured without authentication.
+	Requires Terraform >= 1.11.
 `
 	resourceKeyMarkdownDescription = `
 Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
@@ -89,6 +106,7 @@ var _ resource.Resource = &applicationResource{}
 var _ resource.ResourceWithConfigure = &applicationResource{}
 var _ resource.ResourceWithImportState = &applicationResource{}
 var _ resource.ResourceWithIdentity = &applicationResource{}
+var _ resource.ResourceWithConfigValidators = &applicationResource{}
 
 // NewApplicationResource returns a new instance of the application resource responsible
 // for managing Juju applications, including their configuration, charm, constraints, and
@@ -135,7 +153,15 @@ type applicationResourceModel struct {
 type applicationResourceModelV1 struct {
 	applicationResourceModel
 	RegistryCredentials map[string]registryDetails `tfsdk:"registry_credentials"`
-	ModelUUID           types.String               `tfsdk:"model_uuid"`
+	// RegistryCredentialsWO is the write-only equivalent of
+	// RegistryCredentials. Its content is never persisted to Terraform state,
+	// so it is always null in plan and state and must be read from config.
+	RegistryCredentialsWO map[string]registryDetails `tfsdk:"registry_credentials_wo"`
+	// RegistryCredentialsWOVersion triggers an update of the write-only
+	// RegistryCredentialsWO. Bump this value to re-send the credentials.
+	RegistryCredentialsWOVersion types.Int64 `tfsdk:"registry_credentials_wo_version"`
+
+	ModelUUID types.String `tfsdk:"model_uuid"`
 }
 
 type applicationResourceIdentityModel struct {
@@ -177,6 +203,23 @@ func (r *applicationResource) Configure(ctx context.Context, req resource.Config
 	r.providerConfig = provider.Config
 	// Create the local logging subsystem here, using the TF context when creating it.
 	r.subCtx = tflog.NewSubsystem(ctx, LogResourceApplication)
+}
+
+// ConfigValidators returns the resource-level config validators. It enforces
+// that at most one of registry_credentials or registry_credentials_wo is
+// supplied, and that registry_credentials_wo_version is set whenever
+// registry_credentials_wo is used.
+func (r *applicationResource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		resourcevalidator.Conflicting(
+			path.MatchRoot("registry_credentials"),
+			path.MatchRoot("registry_credentials_wo"),
+		),
+		resourcevalidator.RequiredTogether(
+			path.MatchRoot("registry_credentials_wo"),
+			path.MatchRoot("registry_credentials_wo_version"),
+		),
+	}
 }
 
 // Schema defines the resource schema.
@@ -358,6 +401,32 @@ func (r *applicationResource) Schema(ctx context.Context, _ resource.SchemaReque
 						},
 					},
 				},
+			},
+			"registry_credentials_wo": schema.MapNestedAttribute{
+				// The key of this map is the registry URL.
+				Optional:            true,
+				WriteOnly:           true,
+				MarkdownDescription: imageRegistriesWOMarkdownDescription,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"username": schema.StringAttribute{
+							Description: "The username for authenticating to the registry.",
+							Required:    true,
+							WriteOnly:   true,
+						},
+						"password": schema.StringAttribute{
+							Description: "The password for authenticating to the registry.",
+							Required:    true,
+							WriteOnly:   true,
+							Sensitive:   true,
+						},
+					},
+				},
+			},
+			"registry_credentials_wo_version": schema.Int64Attribute{
+				Description: "The version of registry_credentials_wo. Increment this value to trigger" +
+					" an update of the write-only registry credentials.",
+				Optional: true,
 			},
 			ResourceKey: schema.MapAttribute{
 				Optional:    true,
@@ -656,7 +725,13 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 		unitCount = len(machines)
 	}
 
-	charmResources, err := createCharmResources(resourceRevisions, plan.RegistryCredentials)
+	registryCredentials, credDiags := resolveRegistryCredentials(ctx, plan, req.Config)
+	resp.Diagnostics.Append(credDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	charmResources, err := createCharmResources(resourceRevisions, registryCredentials)
 	if err != nil {
 		resp.Diagnostics.AddError("Input Error", fmt.Sprintf("Unable to process charm resources, got error: %s", err))
 		return
@@ -805,6 +880,26 @@ func (r *applicationResource) Create(ctx context.Context, req resource.CreateReq
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
+// resolveRegistryCredentials returns the registry credentials to send to Juju,
+// reading from the write-only registry_credentials_wo attribute (via config)
+// when registry_credentials_wo_version is set, and otherwise from the plain
+// registry_credentials attribute in the plan. The write-only attribute is
+// always null in plan and state, so config is the only place it can be read.
+func resolveRegistryCredentials(
+	ctx context.Context,
+	plan applicationResourceModelV1,
+	config tfsdk.Config,
+) (map[string]registryDetails, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	if plan.RegistryCredentialsWOVersion.IsNull() {
+		return plan.RegistryCredentials, diags
+	}
+
+	var credentials map[string]registryDetails
+	diags.Append(config.GetAttribute(ctx, path.Root("registry_credentials_wo"), &credentials)...)
+	return credentials, diags
+}
+
 // createCharmResources processes the resources map specified
 // and combines it with information on image registries.
 // Each resource can be either a revision number or an OCI image URL.
@@ -856,6 +951,40 @@ func createCharmResources(planResources map[string]string, imageRegistries map[s
 	}
 
 	return jujuResources, nil
+}
+
+// computeResourceUpdates returns the charm resources to send to Juju on
+// update, by comparing the resources in the plan against those in the state:
+//   - Numeric resource revisions are always included, so that pinned
+//     revisions are preserved when the charm is refreshed.
+//   - OCI image resources are included only when they are new, changed
+//     (image URL or credentials), or when credentialsVersionChanged forces a
+//     re-send; unchanged images are omitted because supplying their URL would
+//     needlessly re-upload them with the currently supplied credentials.
+//   - Resources present in the state but absent from the plan are reset to
+//     revision -1, which tells Juju to use the latest revision for the
+//     channel.
+//
+// credentialsVersionChanged reports whether registry_credentials_wo_version
+// changed (including being set or removed); plan and state entries then
+// carry identical credentials, so it is the only signal that write-only
+// credentials must be re-sent.
+func computeResourceUpdates(plan, state juju.CharmResources, credentialsVersionChanged bool) juju.CharmResources {
+	updates := make(juju.CharmResources)
+	for name, resource := range plan {
+		previous, exists := state[name]
+		// Numeric revisions must remain pinned during charm refreshes. Unchanged
+		// OCI images are already pinned in Juju; supplying their URL re-uploads them.
+		if resource.RevisionNumber != "" || !exists || resource != previous || credentialsVersionChanged {
+			updates[name] = resource
+		}
+	}
+	for name := range state {
+		if _, exists := plan[name]; !exists {
+			updates[name] = juju.CharmResource{RevisionNumber: "-1"}
+		}
+	}
+	return updates
 }
 
 func transformSizeToHumanizedFormat(size uint64) string {
@@ -1228,53 +1357,35 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	planResources, err := createCharmResources(planResourceRevisions, plan.RegistryCredentials)
+	planRegistryCredentials, credDiags := resolveRegistryCredentials(ctx, plan, req.Config)
+	resp.Diagnostics.Append(credDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// The write-only registry_credentials_wo is always null in plan and state,
+	// so a credential change cannot be detected by comparing the two. Instead,
+	// the same credentials are applied to both sides so that the comparison
+	// is decided by revisions and image URLs alone. Version changes, including
+	// removal, explicitly force OCI images to be re-sent.
+	credentialsVersionChanged := !plan.RegistryCredentialsWOVersion.Equal(state.RegistryCredentialsWOVersion)
+	stateRegistryCredentials := state.RegistryCredentials
+	if !plan.RegistryCredentialsWOVersion.IsNull() {
+		stateRegistryCredentials = planRegistryCredentials
+	}
+
+	planResources, err := createCharmResources(planResourceRevisions, planRegistryCredentials)
 	if err != nil {
 		resp.Diagnostics.AddError("Input Error", fmt.Sprintf("Unable to process charm resources, got error: %s", err))
 		return
 	}
-	stateResources, err := createCharmResources(stateResourceRevisions, state.RegistryCredentials)
+	stateResources, err := createCharmResources(stateResourceRevisions, stateRegistryCredentials)
 	if err != nil {
 		resp.Diagnostics.AddError("Input Error", fmt.Sprintf("Unable to process charm resources, got error: %s", err))
 		return
 	}
 
-	// if resources in the plan are equal to resources stored in the state,
-	// we pass on the resources specified in the plan, which tells the provider
-	// NOT to update resources, because we want resources fixed to those
-	// specified in the plan.
-	if planResources.Equal(stateResources) {
-		planResourceMap := make(map[string]string)
-		resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &planResourceMap, false)...)
-		updateApplicationInput.Resources = planResources
-	} else {
-		// what happens when the plan suddenly does not specify resource
-		// revisions, but state does.
-		for k, v := range planResources {
-			if stateResources[k] != v {
-				if updateApplicationInput.Resources == nil {
-					// initialize just in case
-					updateApplicationInput.Resources = make(juju.CharmResources)
-				}
-				updateApplicationInput.Resources[k] = v
-			}
-		}
-		// Check for any removed resources.
-		// Then, the resources get updated to the latest resource revision according to channel
-		for k := range stateResources {
-			if _, found := planResources[k]; found {
-				continue
-			}
-			if updateApplicationInput.Resources == nil {
-				// initialize the resources
-				updateApplicationInput.Resources = make(juju.CharmResources)
-			}
-			// Set resource revision to -1 gets the latest resource revision from CharmHub
-			updateApplicationInput.Resources[k] = juju.CharmResource{
-				RevisionNumber: "-1",
-			}
-		}
-	}
+	updateApplicationInput.Resources = computeResourceUpdates(planResources, stateResources, credentialsVersionChanged)
 
 	// Do not use .Equal() here as we should consider null constraints the same
 	// as empty-string constraints. Terraform considers them different, so will
