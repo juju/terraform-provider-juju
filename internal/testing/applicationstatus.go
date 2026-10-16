@@ -15,8 +15,8 @@ import (
 	"github.com/juju/terraform-provider-juju/internal/wait"
 )
 
-// WaitForApplicationIdle waits until an application in the given model is present
-// in status, is not erroring, and all of its units are idle.
+// WaitForApplicationIdle waits up to five minutes until an application in the given
+// model is present in status, is not erroring, and all of its units are idle.
 func WaitForApplicationIdle(ctx context.Context, sc internaljuju.SharedClient, modelUUID, appName string) error {
 	conn, err := sc.GetConnection(ctx, &modelUUID)
 	if err != nil {
@@ -52,8 +52,9 @@ func WaitForApplicationIdle(ctx context.Context, sc internaljuju.SharedClient, m
 		Input:          struct{}{},
 		NonFatalErrors: []error{internaljuju.RetryReadError},
 		RetryConf: &wait.RetryConf{
-			Delay:    1 * time.Second,
-			MaxDelay: 5 * time.Second,
+			Delay:       1 * time.Second,
+			MaxDelay:    5 * time.Second,
+			MaxDuration: 5 * time.Minute,
 		},
 	})
 	return err

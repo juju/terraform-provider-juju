@@ -47,7 +47,6 @@ const (
 	// UnspecifiedRevision indicates that no revision was provided.
 	UnspecifiedRevision                  = -1
 	customTimeoutKey                     = "JUJU_CONNECTION_TIMEOUT"
-	waitForResourcesKey                  = "JUJU_WAIT_FOR_RESOURCES"
 	connectionTimeout                    = 30 * time.Second
 	serviceAccountSuffix                 = "@serviceaccount"
 	defaultModelStatusCacheInterval      = 5 * time.Second
@@ -168,7 +167,6 @@ func (j jujuModel) String() string {
 
 type sharedClient struct {
 	controllerConfig ControllerConfiguration
-	waitForResources bool
 
 	modelCacheOnce sync.Once
 	modelUUIDcache map[string]jujuModel
@@ -188,13 +186,12 @@ type sharedClient struct {
 // NewClient returns a client which can talk to the juju controller
 // represented by controllerConfig. A context is required for logging in the
 // terraform framework.
-func NewClient(ctx context.Context, config ControllerConfiguration, waitForResources bool) (*Client, error) {
+func NewClient(ctx context.Context, config ControllerConfiguration) (*Client, error) {
 	if ctx == nil {
 		return nil, errors.NotValidf("missing context")
 	}
 	sc := &sharedClient{
 		controllerConfig:          config,
-		waitForResources:          waitForResources,
 		modelUUIDcache:            make(map[string]jujuModel),
 		modelStatusCache:          cache.New(defaultModelStatusCacheInterval),
 		subCtx:                    tflog.NewSubsystem(ctx, LogJujuClient),
@@ -304,12 +301,6 @@ func getConnectionTimeout() time.Duration {
 		})
 	}
 	return connectionTimeout
-}
-
-// WaitForResource returns a bool indicating whether the client
-// should wait for resources to be available/destroyed before proceeding.
-func (sc *sharedClient) WaitForResource() bool {
-	return sc.waitForResources
 }
 
 // GetOfferingControllerConn returns a connection to a controller

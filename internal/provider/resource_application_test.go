@@ -1065,21 +1065,15 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 				Config: testAccResourceApplicationWithoutCustomResources(modelName, "latest/stable"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
+					// Avoid a Juju race before the next step checks for an unchanged plan.
+					testAccCheckApplicationIdle(t.Context(), "juju_application.this"),
 				),
 			},
-			// In the next step we verify the plan has no changes. Wait for idle
-			// to avoid a race condition in Juju where updating the resource revision too
-			// quickly means that the change doesn't take immediate effect.
 			{
 				Config: testAccResourceApplicationWithoutCustomResources(modelName, "latest/stable"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
-				PreConfig: func() {
-					if err := testAccWaitForApplicationIdle(t.Context(), modelName, "test-app"); err != nil {
-						t.Fatal(err)
-					}
-				},
 			},
 			{
 				// Add a custom resource
@@ -1100,6 +1094,7 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 				Config: testAccResourceApplicationWithCustomResources(modelName, "latest/stable", "coredns-image", "69"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("juju_application.this", "resources.coredns-image", "69"),
+					testAccCheckApplicationIdle(t.Context(), "juju_application.this"),
 				),
 			},
 			{
@@ -1108,43 +1103,9 @@ func TestAcc_CustomResourcesAddedToPlanMicrok8s(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckNoResourceAttr("juju_application.this", "resources"),
 				),
-				// We wait for idleness. Otherwise, after we try to destroy the application the
-				// agent can go into `lost` state, making the test waits on application destroy
-				// until the timeout is reached.
-				// This is not an issue because if we reach the timeout we don't error out,
-				// but it slows down the test suite.
-				PreConfig: func() {
-					if err := testAccWaitForApplicationIdle(t.Context(), modelName, "test-app"); err != nil {
-						t.Fatal(err)
-					}
-				},
 			},
 		},
 	})
-}
-
-func testAccWaitForApplicationIdle(ctx context.Context, modelName, appName string) error {
-	modelUUIDs, err := TestClient.Models.ListModels(ctx)
-	if err != nil {
-		return err
-	}
-
-	var modelUUID string
-	for _, candidateUUID := range modelUUIDs {
-		model, err := TestClient.Models.ReadModel(ctx, candidateUUID)
-		if err != nil {
-			return err
-		}
-		if model.ModelInfo.Name == modelName {
-			modelUUID = candidateUUID
-			break
-		}
-	}
-	if modelUUID == "" {
-		return fmt.Errorf("model %q not found", modelName)
-	}
-
-	return internaltesting.WaitForApplicationIdle(ctx, TestClient.Models, modelUUID, appName)
 }
 
 func TestAcc_CustomResourceUpdatesMicrok8s(t *testing.T) {
