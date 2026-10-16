@@ -7,6 +7,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/juju/errors"
 	"github.com/juju/juju/api/jujuclient"
 	jujucloud "github.com/juju/juju/cloud"
 	"github.com/juju/juju/juju/osenv"
@@ -37,19 +38,24 @@ func TestReadCredential(t *testing.T) {
 		},
 	}}
 	for _, tc := range []struct {
-		name   string
-		owner  string
-		result params.CredentialContentResult
-		error  string
+		name     string
+		owner    string
+		result   params.CredentialContentResult
+		apiError error
+		error    string
+		notFound bool
 	}{
 		{name: "adopt legacy owner", result: content},
 		{name: "preserve recorded owner", owner: "bob@external", result: content},
-		{name: "not found", result: params.CredentialContentResult{Error: &params.Error{Message: "credential not found", Code: "not found"}}, error: "credential not found"},
+		{name: "not found", result: params.CredentialContentResult{Error: &params.Error{Message: "credential not found", Code: params.CodeNotFound}}, error: "credential not found", notFound: true},
+		{name: "API not found", apiError: &params.Error{Message: "credential not found", Code: params.CodeNotFound}, error: "credential not found", notFound: true},
+		{name: "typed not found", apiError: errors.NotFoundf("credential"), error: "credential not found", notFound: true},
+		{name: "API failure", apiError: errors.New("connection lost"), error: "connection lost"},
 		{name: "permission denied", result: params.CredentialContentResult{Error: &params.Error{Message: "permission denied"}}, error: "permission denied"},
 		{name: "missing result", error: "missing result"},
 		{name: "wrong credential", result: params.CredentialContentResult{Result: &params.ControllerCredentialInfo{
 			Content: params.CredentialContent{Name: "different"},
-		}}, error: "not found"},
+		}}, error: "not found", notFound: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			client, conn := credentialTestClient(t, "bob@external")
@@ -57,7 +63,7 @@ func TestReadCredential(t *testing.T) {
 			conn.EXPECT().APICall(gomock.Any(), "Cloud", 7, "", "CredentialContents", gomock.Any(), gomock.Any()).
 				DoAndReturn(func(_ context.Context, _ string, _ int, _, _ string, _, response interface{}) error {
 					response.(*params.CredentialContentResults).Results = []params.CredentialContentResult{tc.result}
-					return nil
+					return tc.apiError
 				})
 			response, err := client.ReadCredential(context.Background(), ReadCredentialInput{
 				CloudName: "openstack", Name: "prod", Owner: tc.owner, ControllerCredential: true,
@@ -65,6 +71,7 @@ func TestReadCredential(t *testing.T) {
 			if tc.error != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tc.error)
+				require.Equal(t, tc.notFound, errors.Is(err, CredentialNotFoundError))
 				require.Nil(t, response)
 				return
 			}
