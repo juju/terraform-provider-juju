@@ -180,18 +180,20 @@ jobs:
             -- -parallel 4 -timeout 90m -cover
         timeout-minutes: 90
       - name: Collect integration diagnostics
+        id: diagnostics
         if: always()
         continue-on-error: true
         timeout-minutes: 10
+        env:
+          DIAGNOSTICS_VARIANT: ${{ matrix.action-operator.cloud }}-juju${{ matrix.action-operator.juju }}-${{ strategy.job-index }}
+          DIAGNOSTICS_MATRIX: ${{ toJSON(matrix) }}
         run: bash tools/collect_integration_diagnostics.sh "$RUNNER_TEMP/juju-diagnostics"
       - name: Upload integration diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: integration-diagnostics-${{ matrix.action-operator.cloud }}-${{ strategy.job-index }}
-          path: |
-            ${{ runner.temp }}/juju-diagnostics/
-            integration-test.json
+          name: ${{ steps.diagnostics.outputs.artifact-name || format('juju-diag-{0}-{1}-{2}', github.job, github.run_id, strategy.job-index) }}
+          path: ${{ runner.temp }}/juju-diagnostics/
           retention-days: 7
       - name: Upload flaky-test rerun report
         if: always()
@@ -308,16 +310,18 @@ jobs:
           go test ./... -timeout 90m -v -test.run TestAcc_ResourceMachine_AddMachine | tee "$GITHUB_WORKSPACE/integration-test.log"
         timeout-minutes: 90
       - name: Collect integration diagnostics
+        id: diagnostics
         if: always()
         continue-on-error: true
         timeout-minutes: 10
+        env:
+          DIAGNOSTICS_VARIANT: add-machine-juju${{ matrix.juju }}-${{ strategy.job-index }}
+          DIAGNOSTICS_MATRIX: ${{ toJSON(matrix) }}
         run: bash tools/collect_integration_diagnostics.sh "$RUNNER_TEMP/juju-diagnostics"
       - name: Upload integration diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: integration-diagnostics-add-machine-${{ strategy.job-index }}
-          path: |
-            ${{ runner.temp }}/juju-diagnostics/
-            integration-test.log
+          name: ${{ steps.diagnostics.outputs.artifact-name || format('juju-diag-{0}-{1}-{2}', github.job, github.run_id, strategy.job-index) }}
+          path: ${{ runner.temp }}/juju-diagnostics/
           retention-days: 7
