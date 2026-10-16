@@ -80,9 +80,13 @@ const (
 	matched against OCI image URLs the same way as registry_credentials.
 
 	Requires registry_credentials_wo_version to be set; bump registry_credentials_wo_version to apply changes to these credentials.
-	Unrelated application updates preserve credentials for unchanged OCI image URLs, even if the supplied credentials are empty.
-	Changing an OCI image URL uses the currently supplied credentials. Removing both the write-only credentials and their version
-	re-sends configured OCI images without authentication, unless registry_credentials supplies replacement credentials.
+	Changing other application fields like "config" or "trust" will preserve the existing credentials provided that the OCI image registry URLs
+	and pinned images remain the same, even if the supplied credentials are empty. This is useful for scenarios where you stop supplying the 
+	credential to the plan or if you use [ephemeral](https://developer.hashicorp.com/terraform/language/manage-sensitive-data/ephemeral) 
+	resources.
+
+	Be cautious when changing the OCI image URL or a pinned image as this will send the currently supplied credentials. If the supplied 
+	credentials are empty, OCI images will be configured without authentication.
 	Requires Terraform >= 1.11.
 `
 	resourceKeyMarkdownDescription = `
@@ -949,6 +953,22 @@ func createCharmResources(planResources map[string]string, imageRegistries map[s
 	return jujuResources, nil
 }
 
+// computeResourceUpdates returns the charm resources to send to Juju on
+// update, by comparing the resources in the plan against those in the state:
+//   - Numeric resource revisions are always included, so that pinned
+//     revisions are preserved when the charm is refreshed.
+//   - OCI image resources are included only when they are new, changed
+//     (image URL or credentials), or when credentialsVersionChanged forces a
+//     re-send; unchanged images are omitted because supplying their URL would
+//     needlessly re-upload them with the currently supplied credentials.
+//   - Resources present in the state but absent from the plan are reset to
+//     revision -1, which tells Juju to use the latest revision for the
+//     channel.
+//
+// credentialsVersionChanged reports whether registry_credentials_wo_version
+// changed (including being set or removed); plan and state entries then
+// carry identical credentials, so it is the only signal that write-only
+// credentials must be re-sent.
 func computeResourceUpdates(plan, state juju.CharmResources, credentialsVersionChanged bool) juju.CharmResources {
 	updates := make(juju.CharmResources)
 	for name, resource := range plan {
