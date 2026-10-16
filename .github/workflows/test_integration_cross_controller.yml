@@ -33,7 +33,7 @@ jobs:
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "3" }
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "4.0/edge" }
           - { lxd-channel: "5.21/stable", cloud: "lxd", cloud-channel: "6", juju: "4.1/edge" }
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -61,9 +61,7 @@ jobs:
       
       - name: "Set environment to configure provider"
         # language=bash
-        # JUJU_SKIP_FAILED_DELETION is set to avoid issues with tests failing
-        # on resource deletion. The issue in Juju is unclear but models and apps
-        # fail to be removed sometimes.
+        # Failed resource deletion must fail tests; collect diagnostics afterwards.
         # CONTROLLER_NAME is set by the charmed-kubernetes/actions-operator
         run: |
           MAIN_CONTROLLER=$CONTROLLER_NAME
@@ -91,10 +89,26 @@ jobs:
           # switch back to main controller, this is not strictly necessary, but it is to make we are not using
           # the offering controller.
           juju switch $MAIN_CONTROLLER
-      - env:
+      - name: Run integration tests
+        shell: bash
+        env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.action-operator.cloud }}
           CROSS_CONTROLLERS_TESTS: "1"
         run: |
-          go test -parallel 3 -timeout 90m -v -cover -run "^TestAcc_(ResourceIntegration|DataOffer)_CrossControllers" ./internal/provider/
+          go test -parallel 3 -timeout 90m -v -cover -run "^TestAcc_(ResourceIntegration|DataOffer)_CrossControllers" ./internal/provider/ | tee integration-test.log
         timeout-minutes: 90
+      - name: Collect integration diagnostics
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 10
+        run: bash tools/collect_integration_diagnostics.sh "$RUNNER_TEMP/juju-diagnostics"
+      - name: Upload integration diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-diagnostics-cross-controller-${{ strategy.job-index }}
+          path: |
+            ${{ runner.temp }}/juju-diagnostics/
+            integration-test.log
+          retention-days: 7
