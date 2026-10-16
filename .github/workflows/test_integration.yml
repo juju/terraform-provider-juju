@@ -49,7 +49,7 @@ jobs:
           - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.32-strict", juju: "3" }
           - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.32-strict", juju: "4.0/edge" }
           - { lxd-channel: "5.21/stable", cloud: "microk8s", cloud-channel: "1.32-strict", juju: "4.1/edge" }
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@v1.3.1
@@ -144,9 +144,7 @@ jobs:
       
       - name: "Set environment to configure provider"
         # language=bash
-        # JUJU_SKIP_FAILED_DELETION is set to avoid issues with tests failing
-        # on resource deletion. The issue in Juju is unclear but models and apps
-        # fail to be removed sometimes.
+        # Failed resource deletion must fail tests; collect diagnostics afterwards.
         run: |
           CONTROLLER=$(juju whoami --format yaml | yq .controller)
 
@@ -159,7 +157,7 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
           echo "TEST_MANAGEMENT_BR=10.150.40.0/24" >> $GITHUB_ENV
           echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
-          echo "JUJU_SKIP_FAILED_DELETION=true" >> $GITHUB_ENV
+          echo "JUJU_SKIP_FAILED_DELETION=false" >> $GITHUB_ENV
       - run: go mod download
       # gotestsum re-runs only the tests that failed (at most once, and only
       # when 5 or fewer failed) as a backstop against one-off flakes failing
@@ -177,9 +175,24 @@ jobs:
             --rerun-fails=1 \
             --rerun-fails-max-failures=5 \
             --rerun-fails-report=rerun-report.txt \
+            --jsonfile=integration-test.json \
             --packages ./internal/provider/ \
             -- -parallel 4 -timeout 90m -cover
         timeout-minutes: 90
+      - name: Collect integration diagnostics
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 10
+        run: bash tools/collect_integration_diagnostics.sh "$RUNNER_TEMP/juju-diagnostics"
+      - name: Upload integration diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-diagnostics-${{ matrix.action-operator.cloud }}-${{ strategy.job-index }}
+          path: |
+            ${{ runner.temp }}/juju-diagnostics/
+            integration-test.json
+          retention-days: 7
       - name: Upload flaky-test rerun report
         if: always()
         uses: actions/upload-artifact@v4
@@ -222,7 +235,7 @@ jobs:
         juju:
           - "3/stable"
           - "4.0/edge"
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -262,6 +275,7 @@ jobs:
           sleep 10
           echo "Container for test is ready"
       - name: Final setup and test
+        shell: bash
         env:
           TF_ACC: "1"
           TEST_CLOUD: ${{ matrix.cloud }}
@@ -291,5 +305,19 @@ jobs:
 
           echo "Running the test"
           cd ./internal/provider/
-          go test ./... -timeout 90m -v -test.run TestAcc_ResourceMachine_AddMachine
+          go test ./... -timeout 90m -v -test.run TestAcc_ResourceMachine_AddMachine | tee "$GITHUB_WORKSPACE/integration-test.log"
         timeout-minutes: 90
+      - name: Collect integration diagnostics
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 10
+        run: bash tools/collect_integration_diagnostics.sh "$RUNNER_TEMP/juju-diagnostics"
+      - name: Upload integration diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-diagnostics-add-machine-${{ strategy.job-index }}
+          path: |
+            ${{ runner.temp }}/juju-diagnostics/
+            integration-test.log
+          retention-days: 7

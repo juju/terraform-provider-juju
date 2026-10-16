@@ -48,7 +48,7 @@ jobs:
           - jimm_version: v4.0.0-alpha4
             juju_channel: 4.0/stable
             label: "jimm-4-juju-4"
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@v1.3.1
@@ -96,7 +96,7 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
           echo "TEST_MANAGEMENT_BR=10.150.40.0/24" >> $GITHUB_ENV
           echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
-          echo "JUJU_SKIP_FAILED_DELETION=true" >> $GITHUB_ENV
+          echo "JUJU_SKIP_FAILED_DELETION=false" >> $GITHUB_ENV
       - run: go mod download
       # gotestsum re-runs only the tests that failed (at most once, and only
       # when 5 or fewer failed) as a backstop against one-off flakes failing
@@ -113,9 +113,24 @@ jobs:
             --rerun-fails=1 \
             --rerun-fails-max-failures=5 \
             --rerun-fails-report=rerun-report.txt \
+            --jsonfile=integration-test.json \
             --packages ./internal/provider/ \
             -- -parallel 4 -timeout 90m -cover
         timeout-minutes: 90
+      - name: Collect integration diagnostics
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 10
+        run: bash tools/collect_integration_diagnostics.sh "$RUNNER_TEMP/juju-diagnostics"
+      - name: Upload integration diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-diagnostics-jaas-${{ strategy.job-index }}
+          path: |
+            ${{ runner.temp }}/juju-diagnostics/
+            integration-test.json
+          retention-days: 7
       - name: Upload flaky-test rerun report
         if: always()
         uses: actions/upload-artifact@v4
