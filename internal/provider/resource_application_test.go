@@ -1482,6 +1482,59 @@ func TestAcc_CustomResourcesFromPrivateRegistryWriteOnly(t *testing.T) {
 	})
 }
 
+func TestAcc_ResourceApplication_MigrateRegistryCredentialsToWriteOnlyAndBack(t *testing.T) {
+	ctx := t.Context()
+
+	if testingCloud != MicroK8sTesting {
+		t.Skip(t.Name() + " only runs with Microk8s")
+	}
+	modelName := acctest.RandomWithPrefix("tf-test-registry-credentials-migration")
+	appName := "test-app"
+	appResourceFullName := "juju_application." + appName
+	image := "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckWithK8s(t) },
+		ProtoV6ProviderFactories: frameworkProviderFactories,
+		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
+			tfversion.SkipBelow(version.Must(version.NewVersion("1.11.0"))),
+		},
+		Steps: []resource.TestStep{
+			{
+				// Create with regular credentials, which are persisted in state.
+				Config: testAccResourceApplicationFromPrivateRegistry(modelName, appName, "user", "pass", image),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckImagePullSecretCreated(ctx, appResourceFullName, modelName, "coredns", "user", "pass"),
+					resource.TestCheckResourceAttr(appResourceFullName, "registry_credentials.%", "1"),
+					resource.TestCheckNoResourceAttr(appResourceFullName, "registry_credentials_wo"),
+					resource.TestCheckNoResourceAttr(appResourceFullName, "registry_credentials_wo_version"),
+				),
+			},
+			{
+				// Migrate to write-only credentials. The credentials must reach
+				// Juju while both credential attributes remain absent from state.
+				Config: testAccResourceApplicationFromPrivateRegistryWO(modelName, appName, "user2", "pass2", 1, image, false),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckImagePullSecretCreated(ctx, appResourceFullName, modelName, "coredns", "user2", "pass2"),
+					resource.TestCheckNoResourceAttr(appResourceFullName, "registry_credentials.%"),
+					resource.TestCheckNoResourceAttr(appResourceFullName, "registry_credentials_wo"),
+					resource.TestCheckResourceAttr(appResourceFullName, "registry_credentials_wo_version", "1"),
+				),
+			},
+			{
+				// Migrate back to regular credentials.
+				Config: testAccResourceApplicationFromPrivateRegistry(modelName, appName, "user3", "pass3", image),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckImagePullSecretCreated(ctx, appResourceFullName, modelName, "coredns", "user3", "pass3"),
+					resource.TestCheckResourceAttr(appResourceFullName, "registry_credentials.%", "1"),
+					resource.TestCheckNoResourceAttr(appResourceFullName, "registry_credentials_wo"),
+					resource.TestCheckNoResourceAttr(appResourceFullName, "registry_credentials_wo_version"),
+				),
+			},
+		},
+	})
+}
+
 // TestAcc_ResourceApplication_WriteOnlyRegistryCredentialsValidation asserts
 // the config validators on the registry credential attributes.
 func TestAcc_ResourceApplication_WriteOnlyRegistryCredentialsValidation(t *testing.T) {

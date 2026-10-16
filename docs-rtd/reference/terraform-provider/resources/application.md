@@ -98,12 +98,15 @@ resource "juju_application" "this" {
   trust = true
   expose {}
 
-  registry_credentials = {
+  # Write-only credentials require Terraform >= 1.11. Increment the version
+  # whenever the credentials change so Terraform sends the new values to Juju.
+  registry_credentials_wo = {
     "ghcr.io/canonical" = {
       username = "username"
       password = "password"
     }
   }
+  registry_credentials_wo_version = 1
 
   resources = {
     "coredns-image" : "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"
@@ -143,9 +146,13 @@ resource "juju_application" "this" {
 	matched against OCI image URLs the same way as registry_credentials.
 
 	Requires registry_credentials_wo_version to be set; bump registry_credentials_wo_version to apply changes to these credentials.
-	Unrelated application updates preserve credentials for unchanged OCI image URLs, even if the supplied credentials are empty.
-	Changing an OCI image URL uses the currently supplied credentials. Removing both the write-only credentials and their version
-	re-sends configured OCI images without authentication, unless registry_credentials supplies replacement credentials.
+	Changing other application fields like "config" or "trust" will preserve the existing credentials provided that the OCI image registry URLs
+	and pinned images remain the same, even if the supplied credentials are empty. This is useful for scenarios where you stop supplying the
+	credential to the plan or if you use [ephemeral](https://developer.hashicorp.com/terraform/language/manage-sensitive-data/ephemeral)
+	resources.
+
+	Be cautious when changing the OCI image URL or a pinned image as this will send the currently supplied credentials. If the supplied
+	credentials are empty, OCI images will be configured without authentication.
 	Requires Terraform >= 1.11. (see [below for nested schema](#nestedatt--registry_credentials_wo))
 - `registry_credentials_wo_version` (Number) The version of registry_credentials_wo. Increment this value to trigger an update of the write-only registry credentials.
 - `resources` (Map of String) Charm resources. Must evaluate to a string. A resource could be a resource revision number from CharmHub or a custom OCI image resource.
