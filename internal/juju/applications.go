@@ -1292,9 +1292,10 @@ func (c applicationsClient) UpdateCharmAndResources(
 	charmsAPIClient *apicharms.Client,
 	resourcesAPIClient ResourceAPIClient,
 ) error {
-	// If the input has no revision, channel, or base, and has resources, we can skip
-	// the charm and resources update.
-	if input.Revision == nil && input.Channel == "" && input.Base == "" && len(input.Resources) == 0 {
+	// If the input has no revision, channel, or base, and no resources or
+	// storage directives to update, we can skip the charm and resources update.
+	if input.Revision == nil && input.Channel == "" && input.Base == "" &&
+		len(input.Resources) == 0 && len(input.StorageDirectives) == 0 {
 		return nil
 	}
 	var err error
@@ -1337,7 +1338,11 @@ func (c applicationsClient) UpdateCharmAndResources(
 		updateCharm = true
 	}
 
-	if updateCharm {
+	// New storage directives are applied via SetCharm, so a charm update is
+	// required even when the charm and resources are unchanged. Resources are
+	// deliberately not refreshed in that case, to avoid upgrading unpinned
+	// resources as a side effect of a storage-only change.
+	if updateCharm || len(input.StorageDirectives) > 0 {
 		charmConfig := apiapplication.SetCharmConfig{
 			ApplicationName:   input.AppName,
 			CharmID:           charmID,

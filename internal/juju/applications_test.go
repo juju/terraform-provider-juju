@@ -19,6 +19,7 @@ import (
 	corebase "github.com/juju/juju/core/base"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/resource"
+	jujustorage "github.com/juju/juju/core/storage"
 	"github.com/juju/juju/domain/deployment/charm"
 	charmresources "github.com/juju/juju/domain/deployment/charm/resource"
 	"github.com/juju/juju/environs/config"
@@ -553,6 +554,44 @@ func (s *ApplicationSuite) TestPartialApplicationDeployError() {
 		}},
 	})
 	s.Assert().ErrorAs(err, &ApplicationPartiallyCreatedError{})
+}
+
+func (s *ApplicationSuite) TestUpdateCharmAndResourcesWithoutChanges() {
+	defer s.setupMocks(s.T()).Finish()
+	client := s.getApplicationsClient()
+
+	err := client.UpdateCharmAndResources(s.T().Context(), &UpdateApplicationInput{
+		AppName:   "testapplication",
+		Resources: CharmResources{},
+	}, s.mockApplicationClient, nil, s.mockResourceAPIClient)
+	s.Require().NoError(err)
+}
+
+func (s *ApplicationSuite) TestUpdateCharmAndResourcesStorageDirectivesOnly() {
+	defer s.setupMocks(s.T()).Finish()
+	client := s.getApplicationsClient()
+
+	directives := map[string]jujustorage.Directive{
+		"data": {Pool: "lxd", Size: 1024, Count: 1},
+	}
+	curURL, err := charm.ParseURL("ch:amd64/test-charm-93")
+	s.Require().NoError(err)
+	curOrigin := apicharm.Origin{Source: "charm-hub", Type: "charm"}
+	s.mockApplicationClient.EXPECT().GetCharmURLOrigin(gomock.Any(), "testapplication").Return(curURL, curOrigin, nil)
+	// New storage directives must reach SetCharm even when the charm and
+	// resources are unchanged, without triggering a resource refresh.
+	s.mockApplicationClient.EXPECT().SetCharm(gomock.Any(), apiapplication.SetCharmConfig{
+		ApplicationName:   "testapplication",
+		CharmID:           apiapplication.CharmID{URL: curURL.String(), Origin: curOrigin},
+		StorageDirectives: directives,
+	}).Return(nil)
+
+	err = client.UpdateCharmAndResources(s.T().Context(), &UpdateApplicationInput{
+		AppName:           "testapplication",
+		Resources:         CharmResources{},
+		StorageDirectives: directives,
+	}, s.mockApplicationClient, nil, s.mockResourceAPIClient)
+	s.Require().NoError(err)
 }
 
 func (s *ApplicationSuite) TestComputeCharmIDChannel() {

@@ -84,12 +84,15 @@ resource "juju_application" "this" {
   trust = true
   expose {}
 
-  registry_credentials = {
+  # Write-only credentials require Terraform >= 1.11. Increment the version
+  # whenever the credentials change so Terraform sends the new values to Juju.
+  registry_credentials_wo = {
     "ghcr.io/canonical" = {
       username = "username"
       password = "password"
     }
   }
+  registry_credentials_wo_version = 1
 
   resources = {
     "coredns-image" : "ghcr.io/canonical/test:dfb5e3fa84d9476c492c8693d7b2417c0de8742f"
