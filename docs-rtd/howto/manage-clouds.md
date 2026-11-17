@@ -1,7 +1,7 @@
 ---
 myst:
   html_meta:
-    description: "Learn how to add machine and Kubernetes clouds to Juju controllers and manage cloud access permissions with JAAS."
+    description: "Learn how to add, update, and remove machine and Kubernetes clouds on Juju controllers and manage cloud access permissions with JAAS."
 ---
 
 (manage-clouds)=
@@ -74,6 +74,33 @@ resource "juju_model" "my-model" {
 ```
 
 > See more: [`juju_kubernetes_cloud`](../reference/terraform-provider/resources/kubernetes_cloud)
+
+(update-a-cloud)=
+## Update a cloud
+
+To update a cloud on the controller that your Terraform plan is connected to, in your Terraform plan change the arguments of the cloud's `juju_cloud` or `juju_kubernetes_cloud` resource, then apply the plan. The provider updates the cloud on the controller in place. For example, to point the machine cloud above at a new endpoint, change `endpoint`:
+
+```terraform
+resource "juju_cloud" "this" {
+  name = "my-cloud"
+  type = "openstack"
+
+  auth_types = ["userpass"]
+
+  endpoint = "https://new-cloud.example.com"
+
+  # ... the other arguments as before
+}
+```
+
+A change to some arguments makes Terraform destroy the cloud and create a new one instead: `name` on either resource, and, on a `juju_cloud` resource, `target_controller` and removing an `identity_endpoint` or `storage_endpoint` that was set. Terraform removes the old cloud first, so such a change fails while any model uses the cloud (see {ref}`remove-a-cloud`).
+
+(remove-a-cloud)=
+## Remove a cloud
+
+To remove a cloud from the controller that your Terraform plan is connected to, in your Terraform plan delete the cloud's `juju_cloud` or `juju_kubernetes_cloud` resource, then apply the plan. The provider removes the cloud from the controller.
+
+Juju refuses to remove a cloud that any model uses, including the controller's own model, and the provider reports the controller's error. Remove those models first. If they are in the same plan and refer to the cloud, as the `cloud` block of the model in the Kubernetes example above does, Terraform removes them before the cloud.
 
 (manage-access-to-a-cloud)=
 ## Manage access to a cloud
