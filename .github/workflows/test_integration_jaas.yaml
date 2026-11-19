@@ -94,20 +94,41 @@ jobs:
       - name: "Create lxd config for bootstrap tests"
         run: ./tools/create_lxd_config.sh
       - name: "Set environment to configure provider"
+        shell: bash
         env:
-          JUJU_CLIENT_ID: ${{ steps.jaas-v3.outputs.client-id || steps.jaas-v4.outputs.client-id }}
-          JUJU_CLIENT_SECRET: ${{ steps.jaas-v3.outputs.client-secret || steps.jaas-v4.outputs.client-secret }}
-          JUJU_CA_CERT: ${{ steps.jaas-v3.outputs.ca-cert || steps.jaas-v4.outputs.ca-cert }}
-        # language=bash
+          BACKING_CONTROLLER_NAME: ${{ steps.jaas-v3.outputs.backing-controller-name || steps.jaas-v4.outputs.backing-controller-name }}
+          JIMM_CONTROLLER_NAME: ${{ steps.jaas-v3.outputs.jimm-controller-name || steps.jaas-v4.outputs.jimm-controller-name }}
+          # Keep provider credentials out of the Juju CLI's login environment during discovery.
+          PROVIDER_CLIENT_ID: ${{ steps.jaas-v3.outputs.client-id || steps.jaas-v4.outputs.client-id }}
+          PROVIDER_CLIENT_SECRET: ${{ steps.jaas-v3.outputs.client-secret || steps.jaas-v4.outputs.client-secret }}
+          PROVIDER_CA_CERT: ${{ steps.jaas-v3.outputs.ca-cert || steps.jaas-v4.outputs.ca-cert }}
         run: |
-          CONTROLLER=$(juju whoami --format yaml | yq .controller)
+          if [[ -z "$BACKING_CONTROLLER_NAME" ]]; then
+            echo "JAAS setup did not report a backing controller name" >&2
+            exit 1
+          fi
+          if [[ -z "$JIMM_CONTROLLER_NAME" ]]; then
+            echo "JAAS setup did not report a JIMM controller name" >&2
+            exit 1
+          fi
+
+          if ! agent_version=$(juju show-controller "$BACKING_CONTROLLER_NAME" --format yaml |
+            yq -er '.[strenv(BACKING_CONTROLLER_NAME)].details."agent-version" | select(tag == "!!str" and . != "")'); then
+            echo "Could not read the Juju agent version from $BACKING_CONTROLLER_NAME" >&2
+            exit 1
+          fi
+          if ! controller_addresses=$(juju show-controller "$JIMM_CONTROLLER_NAME" --format yaml |
+            yq -er '.[strenv(JIMM_CONTROLLER_NAME)].details."api-endpoints" | select(tag == "!!seq" and length > 0) | join(",")'); then
+            echo "Could not read the JIMM API endpoints from $JIMM_CONTROLLER_NAME" >&2
+            exit 1
+          fi
 
           {
             echo "IS_JAAS=true"
-            echo "JUJU_AGENT_VERSION=$(juju show-controller | yq ".$CONTROLLER.details.agent-version" | tr -d '"')"
-            echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq ".$CONTROLLER.details.api-endpoints" | yq -r '. | join(",")')"
-            printf 'JUJU_CLIENT_ID=%s\nJUJU_CLIENT_SECRET=%s\n' "$JUJU_CLIENT_ID" "$JUJU_CLIENT_SECRET"
-            printf 'JUJU_CA_CERT<<EOF\n%s\nEOF\n' "$JUJU_CA_CERT"
+            printf 'JUJU_AGENT_VERSION=%s\n' "$agent_version"
+            printf 'JUJU_CONTROLLER_ADDRESSES=%s\n' "$controller_addresses"
+            printf 'JUJU_CLIENT_ID=%s\nJUJU_CLIENT_SECRET=%s\n' "$PROVIDER_CLIENT_ID" "$PROVIDER_CLIENT_SECRET"
+            printf 'JUJU_CA_CERT<<EOF\n%s\nEOF\n' "$PROVIDER_CA_CERT"
             echo "TEST_MANAGEMENT_BR=10.150.40.0/24"
             echo "TEST_PUBLIC_BR=10.170.80.0/24"
             echo "JUJU_SKIP_FAILED_DELETION=true"
