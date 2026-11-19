@@ -458,6 +458,7 @@ func TestAcc_ResourceApplication_UpdateImportedSubordinate(t *testing.T) {
 		CharmChannel:    "latest/stable",
 		CharmRevision:   73,
 		Units:           0,
+		CharmBase:       "ubuntu@22.04",
 	})
 	if err != nil {
 		t.Fatal(err)
