@@ -42,10 +42,12 @@ jobs:
       fail-fast: false
       matrix:
         jaas:
-          - jimm_version: v3.4.4
+          - jimm_version: v3.6.2
+            jimm_action_ref: v3
             juju_channel: 3/stable
             label: "jimm-3-juju-3"
           - jimm_version: v4.0.0-alpha4
+            jimm_action_ref: v4
             juju_channel: 4.0/stable
             label: "jimm-4-juju-4"
     timeout-minutes: 90
@@ -68,9 +70,19 @@ jobs:
       - name: Set up Docker Compose
         uses: docker/setup-compose-action@v1
       # Starting JAAS will start the JIMM controller and dependencies and create a Juju controller on LXD and connect it to JIMM.
-      - name: Setup JAAS
+      # GitHub Actions requires a literal ref in uses, so select the action with if.
+      - name: Setup JAAS (JIMM v3)
+        if: matrix.jaas.jimm_action_ref == 'v3'
         uses: canonical/jimm/.github/actions/test-server@v3
-        id: jaas
+        id: jaas-v3
+        with:
+          juju-channel: ${{ matrix.jaas.juju_channel }}
+          jimm-version: ${{ matrix.jaas.jimm_version }}
+          ghcr-pat: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup JAAS (JIMM v4)
+        if: matrix.jaas.jimm_action_ref == 'v4'
+        uses: canonical/jimm/.github/actions/test-server@v4
+        id: jaas-v4
         with:
           juju-channel: ${{ matrix.jaas.juju_channel }}
           jimm-version: ${{ matrix.jaas.jimm_version }}
@@ -82,21 +94,24 @@ jobs:
       - name: "Create lxd config for bootstrap tests"
         run: ./tools/create_lxd_config.sh
       - name: "Set environment to configure provider"
+        env:
+          JUJU_CLIENT_ID: ${{ steps.jaas-v3.outputs.client-id || steps.jaas-v4.outputs.client-id }}
+          JUJU_CLIENT_SECRET: ${{ steps.jaas-v3.outputs.client-secret || steps.jaas-v4.outputs.client-secret }}
+          JUJU_CA_CERT: ${{ steps.jaas-v3.outputs.ca-cert || steps.jaas-v4.outputs.ca-cert }}
         # language=bash
         run: |
           CONTROLLER=$(juju whoami --format yaml | yq .controller)
-          
-          echo "IS_JAAS=true" >> $GITHUB_ENV
-          echo "JUJU_AGENT_VERSION=$(juju show-controller | yq .$CONTROLLER.details.agent-version |tr -d '"')" >> $GITHUB_ENV
-          echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq .$CONTROLLER.details.api-endpoints | yq -r '. | join(",")')" >> $GITHUB_ENV
-          echo "JUJU_CLIENT_ID=${{ steps.jaas.outputs.client-id }}"  >> $GITHUB_ENV
-          echo "JUJU_CLIENT_SECRET=${{ steps.jaas.outputs.client-secret }}"  >> $GITHUB_ENV
-          echo "JUJU_CA_CERT<<EOF" >> $GITHUB_ENV
-          echo "${{ steps.jaas.outputs.ca-cert }}" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-          echo "TEST_MANAGEMENT_BR=10.150.40.0/24" >> $GITHUB_ENV
-          echo "TEST_PUBLIC_BR=10.170.80.0/24" >> $GITHUB_ENV
-          echo "JUJU_SKIP_FAILED_DELETION=true" >> $GITHUB_ENV
+
+          {
+            echo "IS_JAAS=true"
+            echo "JUJU_AGENT_VERSION=$(juju show-controller | yq ".$CONTROLLER.details.agent-version" | tr -d '"')"
+            echo "JUJU_CONTROLLER_ADDRESSES=$(juju show-controller | yq ".$CONTROLLER.details.api-endpoints" | yq -r '. | join(",")')"
+            printf 'JUJU_CLIENT_ID=%s\nJUJU_CLIENT_SECRET=%s\n' "$JUJU_CLIENT_ID" "$JUJU_CLIENT_SECRET"
+            printf 'JUJU_CA_CERT<<EOF\n%s\nEOF\n' "$JUJU_CA_CERT"
+            echo "TEST_MANAGEMENT_BR=10.150.40.0/24"
+            echo "TEST_PUBLIC_BR=10.170.80.0/24"
+            echo "JUJU_SKIP_FAILED_DELETION=true"
+          } >> "$GITHUB_ENV"
       - run: go mod download
       # gotestsum re-runs only the tests that failed (at most once, and only
       # when 5 or fewer failed) as a backstop against one-off flakes failing
