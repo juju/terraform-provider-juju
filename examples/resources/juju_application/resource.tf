@@ -33,11 +33,10 @@ resource "juju_application" "this" {
   }
 
   storage_directives = {
+    # Map keys must be unique, so use only one of the following forms:
     "pgdata" = "4G" # 4 gigabytes of storage for pgdata using the model's default storage pool
-    # or
-    "pgdata" = "2,4G" # 2 instances of 4 gigabytes of storage for pgdata using the model's default storage pool
-    # or
-    "pgdata" = "ebs,2,4G" # 2 instances of 4 gigabytes of storage for pgdata on the ebs storage pool
+    # "pgdata" = "2,4G"     # 2 instances of 4 gigabytes of storage for pgdata using the model's default storage pool
+    # "pgdata" = "ebs,2,4G" # 2 instances of 4 gigabytes of storage for pgdata on the ebs storage pool
   }
 }
 

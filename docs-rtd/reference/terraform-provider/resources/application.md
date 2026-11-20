@@ -47,11 +47,10 @@ resource "juju_application" "this" {
   }
 
   storage_directives = {
+    # Map keys must be unique, so use only one of the following forms:
     "pgdata" = "4G" # 4 gigabytes of storage for pgdata using the model's default storage pool
-    # or
-    "pgdata" = "2,4G" # 2 instances of 4 gigabytes of storage for pgdata using the model's default storage pool
-    # or
-    "pgdata" = "ebs,2,4G" # 2 instances of 4 gigabytes of storage for pgdata on the ebs storage pool
+    # "pgdata" = "2,4G"     # 2 instances of 4 gigabytes of storage for pgdata using the model's default storage pool
+    # "pgdata" = "ebs,2,4G" # 2 instances of 4 gigabytes of storage for pgdata on the ebs storage pool
   }
 }
 
@@ -143,7 +142,7 @@ Notes:
 * A resource can be added or changed at any time. If the charm has resources and None is specified in the plan, Juju will use the resource defined in the charm's specified channel.
 * If a charm is refreshed, by changing the charm revision or channel and if the resource is specified by a revision in the plan, Juju will use the resource defined in the plan.
 * Resources specified by URL to an OCI image repository will never be refreshed (upgraded) by juju during a charm refresh unless explicitly changed in the plan.
-- `storage_directives` (Map of String) Storage directives (constraints) for the juju application. The map key is the label of the storage defined by the charm, the map value is the storage directive in the form [<pool>,][<count>,][<size>]  where at least one constraint must be specified. See https://documentation.ubuntu.com/juju/3.6/reference/storage/ for more details. If a pool is not specified, the model's default pool will be used. Changing an existing key/value pair will cause the application to be replaced. Adding a new key/value pair will add storage to the application on upgrade.
+- `storage_directives` (Map of String) Storage directives (constraints) for the juju application. The map key is the label of the storage defined by the charm, the map value is the storage directive in the form [<pool>,][<count>,][<size>]  where at least one constraint must be specified. See https://documentation.ubuntu.com/juju/3.6/reference/storage/ for more details. If a pool is not specified, the model's default pool will be used. Changing or removing an existing key/value pair will cause the application to be replaced. Adding a new key/value pair does not change the deployed application by itself: it is passed to Juju only when the charm is refreshed (e.g. a new revision or channel), and only takes effect for storage that the new charm revision adds.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `trust` (Boolean) Set the trust for the application.
 - `units` (Number) The number of application units to deploy for the charm.
