@@ -858,6 +858,34 @@ func createCharmResources(planResources map[string]string, imageRegistries map[s
 	return jujuResources, nil
 }
 
+// computeResourceUpdates returns the charm resources to send to Juju on
+// update, by comparing the resources in the plan against those in the state:
+//   - Numeric resource revisions are always included, so that pinned
+//     revisions are preserved when the charm is refreshed.
+//   - OCI image resources are included only when they are new or changed
+//     (image URL or credentials); unchanged images are omitted because
+//     supplying their URL would needlessly re-upload them.
+//   - Resources present in the state but absent from the plan are reset to
+//     revision -1, which tells Juju to use the latest revision for the
+//     channel.
+func computeResourceUpdates(plan, state juju.CharmResources) juju.CharmResources {
+	updates := make(juju.CharmResources)
+	for name, resource := range plan {
+		previous, exists := state[name]
+		// Numeric revisions must remain pinned during charm refreshes. Unchanged
+		// OCI images are already pinned in Juju; supplying their URL re-uploads them.
+		if resource.RevisionNumber != "" || !exists || resource != previous {
+			updates[name] = resource
+		}
+	}
+	for name := range state {
+		if _, exists := plan[name]; !exists {
+			updates[name] = juju.CharmResource{RevisionNumber: "-1"}
+		}
+	}
+	return updates
+}
+
 func transformSizeToHumanizedFormat(size uint64) string {
 	// remove the decimal point and the trailing zero
 	formattedSize := strings.ReplaceAll(humanize.Bytes(size*humanize.MByte), ".0", "")
@@ -1239,42 +1267,7 @@ func (r *applicationResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	// if resources in the plan are equal to resources stored in the state,
-	// we pass on the resources specified in the plan, which tells the provider
-	// NOT to update resources, because we want resources fixed to those
-	// specified in the plan.
-	if planResources.Equal(stateResources) {
-		planResourceMap := make(map[string]string)
-		resp.Diagnostics.Append(plan.Resources.ElementsAs(ctx, &planResourceMap, false)...)
-		updateApplicationInput.Resources = planResources
-	} else {
-		// what happens when the plan suddenly does not specify resource
-		// revisions, but state does.
-		for k, v := range planResources {
-			if stateResources[k] != v {
-				if updateApplicationInput.Resources == nil {
-					// initialize just in case
-					updateApplicationInput.Resources = make(juju.CharmResources)
-				}
-				updateApplicationInput.Resources[k] = v
-			}
-		}
-		// Check for any removed resources.
-		// Then, the resources get updated to the latest resource revision according to channel
-		for k := range stateResources {
-			if _, found := planResources[k]; found {
-				continue
-			}
-			if updateApplicationInput.Resources == nil {
-				// initialize the resources
-				updateApplicationInput.Resources = make(juju.CharmResources)
-			}
-			// Set resource revision to -1 gets the latest resource revision from CharmHub
-			updateApplicationInput.Resources[k] = juju.CharmResource{
-				RevisionNumber: "-1",
-			}
-		}
-	}
+	updateApplicationInput.Resources = computeResourceUpdates(planResources, stateResources)
 
 	// Do not use .Equal() here as we should consider null constraints the same
 	// as empty-string constraints. Terraform considers them different, so will
