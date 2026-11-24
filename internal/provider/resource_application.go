@@ -268,8 +268,12 @@ func (r *applicationResource) Schema(ctx context.Context, _ resource.SchemaReque
 					" where at least one constraint must be specified." +
 					" See https://documentation.ubuntu.com/juju/3.6/reference/storage/ for more details." +
 					" If a pool is not specified, the model's default pool will be used." +
-					" Changing an existing key/value pair will cause the application to be replaced." +
-					" Adding a new key/value pair will add storage to the application on upgrade.",
+					" Changing or removing an existing key/value pair will cause the application to be replaced." +
+					" Renaming a key (removing one key and adding another in the same change)" +
+					" is treated as an addition and does not replace the application." +
+					" Adding a new key/value pair does not change the deployed application by itself:" +
+					" it is passed to Juju only when the charm is refreshed (e.g. a new revision or channel)," +
+					" and only takes effect for storage that the new charm revision adds.",
 				ElementType: types.StringType,
 				Optional:    true,
 				Validators: []validator.Map{
