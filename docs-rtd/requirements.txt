@@ -30,7 +30,6 @@ sphinx-last-updated-by-git
 sphinx-sitemap
 
 # Vale dependencies
-rst2html
 vale
 
 # SPECIFIC TO THIS PROJECT:
